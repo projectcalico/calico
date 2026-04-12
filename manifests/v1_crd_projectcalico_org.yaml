@@ -1100,37 +1100,6 @@ spec:
                                       APIServerDeploymentContainer is an
                                       API server Deployment container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the API server Deployment container by name.
@@ -1167,37 +1136,6 @@ spec:
                                             - name
                                           type: object
                                         type: array
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -1390,10 +1328,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -2651,37 +2588,6 @@ spec:
                                       CalicoWebhooksDeploymentContainer is
                                       a calico-webhooks Deployment container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-webhooks Deployment container by name.
@@ -2720,37 +2626,6 @@ spec:
                                             - name
                                           type: object
                                         type: array
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -2861,10 +2736,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -4123,72 +3997,10 @@ spec:
                                       GatewayCertgenJobContainer allows customization of the gateway certgen job's resource
                                       requirements.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         enum:
                                           - envoy-gateway-certgen
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           If non-nil, Resources sets the ResourceRequirements of the job's "envoy-gateway-certgen"
@@ -4283,10 +4095,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -5393,76 +5204,14 @@ spec:
                                             GatewayDaemonSetContainer allows customization of the resource requirements of gateway
                                             daemonsets.
                                           properties:
-                                            livenessProbe:
-                                              description: |-
-                                                LivenessProbe allows customization of the liveness probe timing parameters.
-                                                The probe handler is set by the operator and cannot be overridden.
-                                              properties:
-                                                failureThreshold:
-                                                  description: |-
-                                                    FailureThreshold is the minimum consecutive failures for the probe
-                                                    to be considered failed after having succeeded.
-                                                  format: int32
-                                                  type: integer
-                                                initialDelaySeconds:
-                                                  description: |-
-                                                    InitialDelaySeconds is the number of seconds after the container
-                                                    starts before the probe is initiated.
-                                                  format: int32
-                                                  type: integer
-                                                periodSeconds:
-                                                  description:
-                                                    PeriodSeconds is how
-                                                    often (in seconds) to perform the
-                                                    probe.
-                                                  format: int32
-                                                  type: integer
-                                                timeoutSeconds:
-                                                  description:
-                                                    TimeoutSeconds is the
-                                                    number of seconds after which the
-                                                    probe times out.
-                                                  format: int32
-                                                  type: integer
-                                              type: object
                                             name:
                                               enum:
                                                 - envoy
                                               type: string
-                                            readinessProbe:
-                                              description: |-
-                                                ReadinessProbe allows customization of the readiness probe timing parameters.
-                                                The probe handler is set by the operator and cannot be overridden.
-                                              properties:
-                                                failureThreshold:
-                                                  description: |-
-                                                    FailureThreshold is the minimum consecutive failures for the probe
-                                                    to be considered failed after having succeeded.
-                                                  format: int32
-                                                  type: integer
-                                                initialDelaySeconds:
-                                                  description: |-
-                                                    InitialDelaySeconds is the number of seconds after the container
-                                                    starts before the probe is initiated.
-                                                  format: int32
-                                                  type: integer
-                                                periodSeconds:
-                                                  description:
-                                                    PeriodSeconds is how
-                                                    often (in seconds) to perform the
-                                                    probe.
-                                                  format: int32
-                                                  type: integer
-                                                timeoutSeconds:
-                                                  description:
-                                                    TimeoutSeconds is the
-                                                    number of seconds after which the
-                                                    probe times out.
-                                                  format: int32
-                                                  type: integer
-                                              type: object
                                             resources:
-                                              description: container.
+                                              description: |-
+                                                If non-nil, Resources sets the ResourceRequirements of the daemonset's "envoy"
+                                                container.
                                               properties:
                                                 claims:
                                                   description: |-
@@ -5553,10 +5302,9 @@ spec:
                                             operator:
                                               description: |-
                                                 Operator represents a key's relationship to the value.
-                                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                                Valid operators are Exists and Equal. Defaults to Equal.
                                                 Exists is equivalent to wildcard for value, so that a pod can
                                                 tolerate all taints of a particular category.
-                                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                               type: string
                                             tolerationSeconds:
                                               description: |-
@@ -6860,74 +6608,10 @@ spec:
                                             GatewayDeploymentContainer allows customization of the resource requirements of gateway
                                             deployments.
                                           properties:
-                                            livenessProbe:
-                                              description: |-
-                                                LivenessProbe allows customization of the liveness probe timing parameters.
-                                                The probe handler is set by the operator and cannot be overridden.
-                                              properties:
-                                                failureThreshold:
-                                                  description: |-
-                                                    FailureThreshold is the minimum consecutive failures for the probe
-                                                    to be considered failed after having succeeded.
-                                                  format: int32
-                                                  type: integer
-                                                initialDelaySeconds:
-                                                  description: |-
-                                                    InitialDelaySeconds is the number of seconds after the container
-                                                    starts before the probe is initiated.
-                                                  format: int32
-                                                  type: integer
-                                                periodSeconds:
-                                                  description:
-                                                    PeriodSeconds is how
-                                                    often (in seconds) to perform the
-                                                    probe.
-                                                  format: int32
-                                                  type: integer
-                                                timeoutSeconds:
-                                                  description:
-                                                    TimeoutSeconds is the
-                                                    number of seconds after which the
-                                                    probe times out.
-                                                  format: int32
-                                                  type: integer
-                                              type: object
                                             name:
                                               enum:
                                                 - envoy
                                               type: string
-                                            readinessProbe:
-                                              description: |-
-                                                ReadinessProbe allows customization of the readiness probe timing parameters.
-                                                The probe handler is set by the operator and cannot be overridden.
-                                              properties:
-                                                failureThreshold:
-                                                  description: |-
-                                                    FailureThreshold is the minimum consecutive failures for the probe
-                                                    to be considered failed after having succeeded.
-                                                  format: int32
-                                                  type: integer
-                                                initialDelaySeconds:
-                                                  description: |-
-                                                    InitialDelaySeconds is the number of seconds after the container
-                                                    starts before the probe is initiated.
-                                                  format: int32
-                                                  type: integer
-                                                periodSeconds:
-                                                  description:
-                                                    PeriodSeconds is how
-                                                    often (in seconds) to perform the
-                                                    probe.
-                                                  format: int32
-                                                  type: integer
-                                                timeoutSeconds:
-                                                  description:
-                                                    TimeoutSeconds is the
-                                                    number of seconds after which the
-                                                    probe times out.
-                                                  format: int32
-                                                  type: integer
-                                              type: object
                                             resources:
                                               description: |-
                                                 If non-nil, Resources sets the ResourceRequirements of the deployment's "envoy"
@@ -7023,10 +6707,9 @@ spec:
                                             operator:
                                               description: |-
                                                 Operator represents a key's relationship to the value.
-                                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                                Valid operators are Exists and Equal. Defaults to Equal.
                                                 Exists is equivalent to wildcard for value, so that a pod can
                                                 tolerate all taints of a particular category.
-                                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                               type: string
                                             tolerationSeconds:
                                               description: |-
@@ -8346,72 +8029,10 @@ spec:
                                       GatewayControllerDeploymentContainer allows customization of the gateway controller's resource
                                       requirements.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         enum:
                                           - envoy-gateway
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           If non-nil, Resources sets the ResourceRequirements of the controller's "envoy-gateway"
@@ -8506,10 +8127,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -9852,72 +9472,10 @@ spec:
                                     If omitted, the goldmane Deployment will use its default values for its containers.
                                   items:
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         enum:
                                           - goldmane
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description:
                                           ResourceRequirements describes
@@ -10026,10 +9584,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -10331,7 +9888,7 @@ spec:
             ImageSet is used to specify image digests for the images that the operator deploys.
             The name of the ImageSet is expected to be in the format `<variant>-<release>`.
             The `variant` used is `enterprise` if the InstallationSpec Variant is
-            `CalicoEnterprise` or `TigeraSecureEnterprise`, otherwise it is `calico`.
+            `TigeraSecureEnterprise` otherwise it is `calico`.
             The `release` must match the version of the variant that the operator is built to deploy,
             this version can be obtained by passing the `--version` flag to the operator binary.
           properties:
@@ -11509,37 +11066,6 @@ spec:
                                       CalicoKubeControllersDeploymentContainer
                                       is a calico-kube-controllers Deployment container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-kube-controllers Deployment container by name.
@@ -11548,37 +11074,6 @@ spec:
                                           - calico-kube-controllers
                                           - es-calico-kube-controllers
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -11683,10 +11178,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -11929,15 +11423,6 @@ spec:
                             the given regex.
                           type: string
                       type: object
-                      x-kubernetes-map-type: atomic
-                      x-kubernetes-validations:
-                        - message: no more than one autodetection method can be specified
-                          rule:
-                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
-                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
-                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
-                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
-                            <= 1"
                     nodeAddressAutodetectionV6:
                       description: |-
                         NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -11978,15 +11463,6 @@ spec:
                             the given regex.
                           type: string
                       type: object
-                      x-kubernetes-map-type: atomic
-                      x-kubernetes-validations:
-                        - message: no more than one autodetection method can be specified
-                          rule:
-                            "[has(self.firstFound) && self.firstFound == true, has(self.kubernetes),
-                            has(self.interface) && size(self.interface) > 0, has(self.skipInterface)
-                            && size(self.skipInterface) > 0, has(self.canReach) && size(self.canReach)
-                            > 0, has(self.cidrs) && size(self.cidrs) > 0].filter(x, x).size()
-                            <= 1"
                     sysctl:
                       description: Sysctl configures sysctl parameters for tuning plugin
                       items:
@@ -13071,37 +12547,6 @@ spec:
                                       CalicoNodeDaemonSetContainer is a calico-node
                                       DaemonSet container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node DaemonSet container by name.
@@ -13109,37 +12554,6 @@ spec:
                                         enum:
                                           - calico-node
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -13390,10 +12804,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -14474,37 +13887,6 @@ spec:
                                       CalicoNodeWindowsDaemonSetContainer
                                       is a calico-node-windows DaemonSet container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node-windows DaemonSet container by name.
@@ -14516,37 +13898,6 @@ spec:
                                           - felix
                                           - confd
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -14736,10 +14087,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -15820,37 +15170,6 @@ spec:
                                       CalicoWindowsUpgradeDaemonSetContainer
                                       is a calico-windows-upgrade DaemonSet container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description:
                                           Name is an enum which identifies
@@ -15859,37 +15178,6 @@ spec:
                                         enum:
                                           - calico-windows-upgrade
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -15990,10 +15278,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -16250,10 +15537,9 @@ spec:
                       operator:
                         description: |-
                           Operator represents a key's relationship to the value.
-                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                          Valid operators are Exists and Equal. Defaults to Equal.
                           Exists is equivalent to wildcard for value, so that a pod can
                           tolerate all taints of a particular category.
-                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                         type: string
                       tolerationSeconds:
                         description: |-
@@ -17328,37 +16614,6 @@ spec:
                                       CSINodeDriverDaemonSetContainer is
                                       a csi-node-driver DaemonSet container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the csi-node-driver DaemonSet container by name.
@@ -17368,37 +16623,6 @@ spec:
                                           - csi-node-driver-registrar
                                           - csi-node-driver
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -17499,10 +16723,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -19095,37 +18318,6 @@ spec:
                                       TyphaDeploymentContainer is a typha
                                       Deployment container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the typha Deployment container by name.
@@ -19133,37 +18325,6 @@ spec:
                                         enum:
                                           - calico-typha
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -19361,10 +18522,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -19570,12 +18730,10 @@ spec:
                   type: integer
                 variant:
                   description: |-
-                    Variant is the product to install - one of Calico or CalicoEnterprise.
-                    TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
+                    Variant is the product to install - one of Calico or TigeraSecureEnterprise
                     Default: Calico
                   enum:
                     - Calico
-                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
                 windowsNodes:
@@ -20731,37 +19889,6 @@ spec:
                                           CalicoKubeControllersDeploymentContainer
                                           is a calico-kube-controllers Deployment container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-kube-controllers Deployment container by name.
@@ -20770,37 +19897,6 @@ spec:
                                               - calico-kube-controllers
                                               - es-calico-kube-controllers
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -20905,10 +20001,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -21151,15 +20246,6 @@ spec:
                                 the given regex.
                               type: string
                           type: object
-                          x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: no more than one autodetection method can be specified
-                              rule:
-                                "[has(self.firstFound) && self.firstFound == true,
-                                has(self.kubernetes), has(self.interface) && size(self.interface)
-                                > 0, has(self.skipInterface) && size(self.skipInterface)
-                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
-                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         nodeAddressAutodetectionV6:
                           description: |-
                             NodeAddressAutodetectionV6 specifies an approach to automatically detect node IPv6 addresses. If not specified,
@@ -21200,15 +20286,6 @@ spec:
                                 the given regex.
                               type: string
                           type: object
-                          x-kubernetes-map-type: atomic
-                          x-kubernetes-validations:
-                            - message: no more than one autodetection method can be specified
-                              rule:
-                                "[has(self.firstFound) && self.firstFound == true,
-                                has(self.kubernetes), has(self.interface) && size(self.interface)
-                                > 0, has(self.skipInterface) && size(self.skipInterface)
-                                > 0, has(self.canReach) && size(self.canReach) > 0, has(self.cidrs)
-                                && size(self.cidrs) > 0].filter(x, x).size() <= 1"
                         sysctl:
                           description:
                             Sysctl configures sysctl parameters for tuning
@@ -22320,37 +21397,6 @@ spec:
                                           CalicoNodeDaemonSetContainer is
                                           a calico-node DaemonSet container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node DaemonSet container by name.
@@ -22358,37 +21404,6 @@ spec:
                                             enum:
                                               - calico-node
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -22639,10 +21654,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -23746,37 +22760,6 @@ spec:
                                           CalicoNodeWindowsDaemonSetContainer
                                           is a calico-node-windows DaemonSet container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node-windows DaemonSet container by name.
@@ -23788,37 +22771,6 @@ spec:
                                               - felix
                                               - confd
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -24008,10 +22960,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -25115,37 +24066,6 @@ spec:
                                           CalicoWindowsUpgradeDaemonSetContainer
                                           is a calico-windows-upgrade DaemonSet container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description:
                                               Name is an enum which identifies
@@ -25154,37 +24074,6 @@ spec:
                                             enum:
                                               - calico-windows-upgrade
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -25285,10 +24174,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -25550,10 +24438,9 @@ spec:
                           operator:
                             description: |-
                               Operator represents a key's relationship to the value.
-                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                              Valid operators are Exists and Equal. Defaults to Equal.
                               Exists is equivalent to wildcard for value, so that a pod can
                               tolerate all taints of a particular category.
-                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                             type: string
                           tolerationSeconds:
                             description: |-
@@ -26653,37 +25540,6 @@ spec:
                                           CSINodeDriverDaemonSetContainer
                                           is a csi-node-driver DaemonSet container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description: |-
                                               Name is an enum which identifies the csi-node-driver DaemonSet container by name.
@@ -26693,37 +25549,6 @@ spec:
                                               - csi-node-driver-registrar
                                               - csi-node-driver
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -26824,10 +25649,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -28445,37 +27269,6 @@ spec:
                                           TyphaDeploymentContainer is a typha
                                           Deployment container.
                                         properties:
-                                          livenessProbe:
-                                            description: |-
-                                              LivenessProbe allows customization of the liveness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           name:
                                             description: |-
                                               Name is an enum which identifies the typha Deployment container by name.
@@ -28483,37 +27276,6 @@ spec:
                                             enum:
                                               - calico-typha
                                             type: string
-                                          readinessProbe:
-                                            description: |-
-                                              ReadinessProbe allows customization of the readiness probe timing parameters.
-                                              The probe handler is set by the operator and cannot be overridden.
-                                            properties:
-                                              failureThreshold:
-                                                description: |-
-                                                  FailureThreshold is the minimum consecutive failures for the probe
-                                                  to be considered failed after having succeeded.
-                                                format: int32
-                                                type: integer
-                                              initialDelaySeconds:
-                                                description: |-
-                                                  InitialDelaySeconds is the number of seconds after the container
-                                                  starts before the probe is initiated.
-                                                format: int32
-                                                type: integer
-                                              periodSeconds:
-                                                description:
-                                                  PeriodSeconds is how often
-                                                  (in seconds) to perform the probe.
-                                                format: int32
-                                                type: integer
-                                              timeoutSeconds:
-                                                description:
-                                                  TimeoutSeconds is the number
-                                                  of seconds after which the probe times
-                                                  out.
-                                                format: int32
-                                                type: integer
-                                            type: object
                                           resources:
                                             description: |-
                                               Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -28711,10 +27473,9 @@ spec:
                                           operator:
                                             description: |-
                                               Operator represents a key's relationship to the value.
-                                              Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                              Valid operators are Exists and Equal. Defaults to Equal.
                                               Exists is equivalent to wildcard for value, so that a pod can
                                               tolerate all taints of a particular category.
-                                              Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                             type: string
                                           tolerationSeconds:
                                             description: |-
@@ -28922,12 +27683,10 @@ spec:
                       type: integer
                     variant:
                       description: |-
-                        Variant is the product to install - one of Calico or CalicoEnterprise.
-                        TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
+                        Variant is the product to install - one of Calico or TigeraSecureEnterprise
                         Default: Calico
                       enum:
                         - Calico
-                        - CalicoEnterprise
                         - TigeraSecureEnterprise
                       type: string
                     windowsNodes:
@@ -29039,12 +27798,11 @@ spec:
                   format: int32
                   type: integer
                 variant:
-                  description: |-
-                    Variant is the most recently observed installed variant - one of Calico or CalicoEnterprise.
-                    TigeraSecureEnterprise is a deprecated alias for CalicoEnterprise.
+                  description:
+                    Variant is the most recently observed installed variant
+                    - one of Calico or TigeraSecureEnterprise
                   enum:
                     - Calico
-                    - CalicoEnterprise
                     - TigeraSecureEnterprise
                   type: string
               type: object
@@ -30191,10 +28949,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -31299,10 +30056,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -32407,10 +31163,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -32574,37 +31329,6 @@ spec:
                                       GuardianDeploymentContainer is a guardian
                                       Deployment container.
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         description: |-
                                           Name is an enum which identifies the guardian Deployment container by name.
@@ -32612,37 +31336,6 @@ spec:
                                         enum:
                                           - tigera-guardian
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description: |-
                                           Resources allows customization of limits and requests for compute resources such as cpu and memory.
@@ -34189,73 +32882,11 @@ spec:
                                     If omitted, the whisker Deployment will use its default values for its containers.
                                   items:
                                     properties:
-                                      livenessProbe:
-                                        description: |-
-                                          LivenessProbe allows customization of the liveness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       name:
                                         enum:
                                           - whisker
                                           - whisker-backend
                                         type: string
-                                      readinessProbe:
-                                        description: |-
-                                          ReadinessProbe allows customization of the readiness probe timing parameters.
-                                          The probe handler is set by the operator and cannot be overridden.
-                                        properties:
-                                          failureThreshold:
-                                            description: |-
-                                              FailureThreshold is the minimum consecutive failures for the probe
-                                              to be considered failed after having succeeded.
-                                            format: int32
-                                            type: integer
-                                          initialDelaySeconds:
-                                            description: |-
-                                              InitialDelaySeconds is the number of seconds after the container
-                                              starts before the probe is initiated.
-                                            format: int32
-                                            type: integer
-                                          periodSeconds:
-                                            description:
-                                              PeriodSeconds is how often
-                                              (in seconds) to perform the probe.
-                                            format: int32
-                                            type: integer
-                                          timeoutSeconds:
-                                            description:
-                                              TimeoutSeconds is the number
-                                              of seconds after which the probe times
-                                              out.
-                                            format: int32
-                                            type: integer
-                                        type: object
                                       resources:
                                         description:
                                           ResourceRequirements describes
@@ -34364,10 +32995,9 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
-                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
