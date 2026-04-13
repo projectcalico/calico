@@ -1027,7 +1027,9 @@ func requireCalicoAPIServer(cfg *rest.Config) {
 	cs, err := kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
-	pods, err := cs.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
 		LabelSelector: "k8s-app=calico-apiserver",
 	})
 	Expect(err).NotTo(HaveOccurred())

@@ -426,25 +426,25 @@ func TestGlobalNetworkPolicyDenied(t *testing.T) {
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned creating GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+		t.Fatalf("No error returned creating GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC")
 	} else if err.Error() != createGlobalNetworkPolicyError("create", false) {
-		t.Fatalf("Incorrect error message creating GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
+		t.Fatalf("Incorrect error message creating GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("get"), "test-tier.test-gnp", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned deleting GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+		t.Fatalf("No error returned deleting GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC")
 	} else if err.Error() != createGlobalNetworkPolicyError("get", false) {
-		t.Fatalf("Incorrect error message getting GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
+		t.Fatalf("Incorrect error message getting GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC: %v", err)
 	}
 
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("list"), "", "test-tier",
 	); err == nil {
-		t.Fatalf("No error returned listing GlobalNetworkPolicy when not permitted by GlobalNetworkPolicyRBAC")
+		t.Fatalf("No error returned listing GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC")
 	} else if err.Error() != createGlobalNetworkPolicyError("list", false) {
-		t.Fatalf("Incorrect error message listing GlobalNetworkPolicy when not permitted by NetworkPolicy RBAC: %v", err)
+		t.Fatalf("Incorrect error message listing GlobalNetworkPolicy when not permitted by GlobalNetworkPolicy RBAC: %v", err)
 	}
 }
 
@@ -518,6 +518,14 @@ func makeNetworkPolicyError(verb, policyName string, cannotGetTier bool) string 
 // TestNewStyleNetworkPolicyByName verifies that a bare (new-style) policy name
 // works with exact resource name matching. The RBAC resourceName is "test-np"
 // (the bare policy name), not "test-tier.test-np".
+//
+// Note: create is not exercised here. K8s RBAC pulls the resource name from
+// the URL path at authz time, and create POSTs have no name segment in the
+// path — the name lives in the request body, which isn't parsed yet. So on
+// create, both old-style and new-style modes pass Name="" to the underlying
+// authorizer, and a resourceNames-restricted rule can never match. Create
+// authorization is covered by TestNewStyleNetworkPolicyTierWildcard via the
+// tier.* wildcard, which is the only way to restrict creates to a tier.
 func TestNewStyleNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
 		getAttributesMapkey(getTierAttr):                              k8sauth.DecisionAllow,
