@@ -74,6 +74,7 @@ func (c ipamConfigurationVersionConverter) ConvertFromK8s(r Resource) (Resource,
 				AutoAllocateBlocks:           o.Spec.AutoAllocateBlocks,
 				MaxBlocksPerHost:             int32(o.Spec.MaxBlocksPerHost),
 				KubeVirtVMAddressPersistence: kubeVirtVMAddressPersistence,
+				MinIPReclaimAgeSeconds:       int32(o.Spec.MinIPReclaimAgeSeconds),
 			},
 		}, nil
 	case *v3.IPAMConfiguration:
