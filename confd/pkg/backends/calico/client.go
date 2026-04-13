@@ -1241,6 +1241,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getProgramClusterRoutesKVPair(v3res, model.GlobalBGPConfigKey{})
 
 		// Update service load balancer aggregation setting
 		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != nil {
@@ -1535,6 +1536,15 @@ func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key a
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
 	} else {
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredIfacesKey))
+	}
+}
+
+func (c *client) getProgramClusterRoutesKVPair(v3res *apiv3.BGPConfiguration, key any) {
+	programClusterRoutesKey := getBGPConfigKey("program_cluster_routes", key)
+	if v3res != nil && v3res.Spec.ProgramClusterRoutes != nil {
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(programClusterRoutesKey, *v3res.Spec.ProgramClusterRoutes))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(programClusterRoutesKey))
 	}
 }
 
