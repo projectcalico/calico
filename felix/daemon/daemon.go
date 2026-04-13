@@ -25,7 +25,6 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -1073,8 +1072,9 @@ func loadSelectorScopedFelixConfig(
 		return nil, fmt.Errorf("failed to list FelixConfiguration resources: %w", err)
 	}
 
-	// Collect matching selector-scoped configs, then merge in alphabetical
-	// order by resource name for determinism.
+	// Collect matching selector-scoped configs. If more than one matches,
+	// treat it as a misconfiguration and return empty (fall back to
+	// default + per-host config only).
 	type matchEntry struct {
 		name   string
 		config map[string]string
@@ -1125,11 +1125,19 @@ func loadSelectorScopedFelixConfig(
 			})
 		}
 	}
-	slices.SortFunc(matches, func(a, b matchEntry) int {
-		return strings.Compare(a.name, b.name)
-	})
-	for _, m := range matches {
-		maps.Copy(result, m.config)
+	switch len(matches) {
+	case 0:
+		// No selector-scoped configs match.
+	case 1:
+		maps.Copy(result, matches[0].config)
+	default:
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = m.name
+		}
+		log.WithField("matching", names).Warn(
+			"Multiple selector-scoped FelixConfigurations match this node at startup; " +
+				"this is a misconfiguration. Ignoring all selector-scoped config.")
 	}
 
 	return result, nil
