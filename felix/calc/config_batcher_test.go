@@ -342,30 +342,24 @@ var _ = Describe("ConfigBatcher", func() {
 
 		Context("with multiple overlapping selector-scoped FelixConfigurations", func() {
 			BeforeEach(func() {
-				// Config "b-config" sets BPFEnabled=true and BPFLogLevel=debug.
-				fcB := apiv3.NewFelixConfiguration()
-				fcB.Name = "b-config"
-				enabled := true
-				fcB.Spec.NodeSelector = "role == 'gpu'"
-				fcB.Spec.BPFEnabled = &enabled
-				fcB.Spec.BPFLogLevel = "debug"
-				sendFelixConfigResource("b-config", fcB)
-
-				// Config "a-config" sets BPFLogLevel=info (should be overridden by
-				// b-config because "b" > "a" alphabetically).
 				fcA := apiv3.NewFelixConfiguration()
 				fcA.Name = "a-config"
 				fcA.Spec.NodeSelector = "role == 'gpu'"
 				fcA.Spec.BPFLogLevel = "info"
 				sendFelixConfigResource("a-config", fcA)
 
+				fcB := apiv3.NewFelixConfiguration()
+				fcB.Name = "b-config"
+				enabled := true
+				fcB.Spec.NodeSelector = "role == 'gpu'"
+				fcB.Spec.BPFEnabled = &enabled
+				sendFelixConfigResource("b-config", fcB)
+
 				cb.OnDatamodelStatus(api.InSync)
 			})
-			It("should merge in alphabetical order (later names win)", func() {
+			It("should treat overlap as misconfiguration and ignore all selector config", func() {
 				Expect(recorder.Updates).To(HaveLen(1))
-				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFEnabled", "true"))
-				// "b-config" is merged after "a-config", so its BPFLogLevel wins.
-				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFLogLevel", "debug"))
+				Expect(recorder.Updates[0].selector).To(BeEmpty())
 			})
 		})
 

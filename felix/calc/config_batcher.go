@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -268,13 +267,13 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 }
 
 // mergeMatchingSelectorConfigs evaluates all selector-scoped FelixConfiguration
-// resources against the local node's labels and merges matching configs into a
-// single map. When multiple resources match, they are merged in alphabetical
-// order by resource name for determinism.
+// resources against the local node's labels. If exactly one resource matches,
+// its config is returned. If multiple resources match, this is treated as a
+// misconfiguration: a warning is logged and an empty map is returned (falling
+// back to default + per-host config only).
 func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
-	merged := make(map[string]string)
 	if cb.nodeLabels == nil {
-		return merged
+		return make(map[string]string)
 	}
 	var matchingNames []string
 	for name, entry := range cb.selectorConfigs {
@@ -285,12 +284,18 @@ func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 			matchingNames = append(matchingNames, name)
 		}
 	}
-	slices.Sort(matchingNames)
-	for _, name := range matchingNames {
-		log.WithField("name", name).Debug("Selector-scoped FelixConfiguration matches local node")
-		maps.Copy(merged, cb.selectorConfigs[name].config)
+	switch len(matchingNames) {
+	case 0:
+		return make(map[string]string)
+	case 1:
+		log.WithField("name", matchingNames[0]).Debug("Selector-scoped FelixConfiguration matches local node")
+		return maps.Clone(cb.selectorConfigs[matchingNames[0]].config)
+	default:
+		log.WithField("matching", matchingNames).Warn(
+			"Multiple selector-scoped FelixConfigurations match this node; " +
+				"this is a misconfiguration. Ignoring all selector-scoped config.")
+		return make(map[string]string)
 	}
-	return merged
 }
 
 // AnnotationConfigPrefix is the prefix for config override annotations on
