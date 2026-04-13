@@ -118,8 +118,10 @@ type NamePatternEntry struct {
 	Patterns []string `yaml:"patterns,omitempty"`
 }
 
-// Validate checks that the entry has either a single pattern with a reason,
-// or a group with patterns.
+// Validate checks that the entry has either a single pattern (which must
+// carry a reason) or a group with patterns (where the group name itself
+// documents the shared reason, supplemented by an optional link). Both forms
+// satisfy the requirement that every exclusion is documented.
 func (e *NamePatternEntry) Validate() error {
 	hasSingle := e.Pattern != ""
 	hasGroup := e.Group != "" || len(e.Patterns) > 0
