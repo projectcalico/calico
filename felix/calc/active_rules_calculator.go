@@ -91,6 +91,9 @@ type ActiveRulesCalculator struct {
 	// log out those profiles at the end of the resync.
 	missingProfiles set.Set[string]
 
+	// Tracks components that have called AddExtraComputedSelector.
+	computedSelectorCallers map[string]set.Set[any]
+
 	// Callback objects.
 	RuleScanner           ruleScanner
 	PolicyMatchListeners  []PolicyMatchListener
@@ -117,6 +120,8 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
+
+		computedSelectorCallers: make(map[string]set.Set[any]),
 	}
 	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc
@@ -288,19 +293,43 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 	return
 }
 
-// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives OnComputedSelectorMatch
-// and OnComputedSelectorMatchStopped callbacks when that selector matches/stops matching local endpoints.  Allows for
-// sharing the expensive selector index.
-func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string) {
-	sel, err := selector.Parse(cs)
-	if err != nil {
-		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
+// AddExtraComputedSelector adds an extra non-policy selector to the label index and gives
+// OnComputedSelectorMatch and OnComputedSelectorMatchStopped callbacks when that selector
+// matches/stops matching local endpoints, allowing the expensive selector index to be shared.
+//
+// Registration is tracked per caller.  The caller identity must therefore be stable, and the
+// same caller value (including the same inferred type T) must be passed to
+// RemoveExtraComputedSelector to remove that caller's registration.  Repeated adds from the same
+// caller are deduplicated.
+//
+// The underlying selector is added to the label index when the first caller registers it, and it
+// is only removed after the last caller removes its registration.  Callbacks for matches/stops
+// matching continue to be delivered to all registered PolicyMatchListeners while the selector is
+// present.
+func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
+	callers := arc.computedSelectorCallers[cs]
+	if callers == nil {
+		arc.computedSelectorCallers[cs] = set.New[any]()
+		callers = arc.computedSelectorCallers[cs]
+		sel, err := selector.Parse(cs)
+		if err != nil {
+			log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
+		}
+		arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
 	}
-	arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
+	callers.Add(any(caller))
 }
 
-func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string) {
-	arc.labelIndex.DeleteSelector(computedSelector(cs))
+func RemoveExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
+	callers := arc.computedSelectorCallers[cs]
+	if callers == nil {
+		return
+	}
+	callers.Discard(any(caller))
+	if callers.Len() == 0 {
+		arc.labelIndex.DeleteSelector(computedSelector(cs))
+		delete(arc.computedSelectorCallers, cs)
+	}
 }
 
 func policyForceProgrammed(policy *model.Policy) bool {
