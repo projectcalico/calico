@@ -137,6 +137,27 @@ var _ = Describe("Constructor test", func() {
 		})
 	})
 
+	Context("when NFTablesSupported feature is disabled", func() {
+		var requestedFamilies []knftables.Family
+
+		BeforeEach(func() {
+			requestedFamilies = nil
+			nftablesDataplane = func(family knftables.Family, name string, opts ...knftables.Option) (knftables.Interface, error) {
+				requestedFamilies = append(requestedFamilies, family)
+				return nil, nil
+			}
+		})
+
+		It("should not attempt to create an ARP family nftables table", func() {
+			dpConfig.FeatureDetectOverrides = map[string]string{
+				"NFTablesSupported": "false",
+			}
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp).ToNot(BeNil())
+			Expect(requestedFamilies).NotTo(ContainElement(knftables.ARPFamily))
+		})
+	})
+
 	Context("with health aggregator", func() {
 		BeforeEach(func() {
 			healthAggregator = health.NewHealthAggregator()

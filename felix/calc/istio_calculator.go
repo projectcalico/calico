@@ -67,7 +67,7 @@ func NewIstioCalculator(
 	// IP set.  This will include local and remote endpoints.
 	ipSetCallbacks.OnIPSetAdded(rules.IPSetIDAllIstioWEPs, proto.IPSetUpdate_IP)
 	ipsetMemberIndex.UpdateIPSet(rules.IPSetIDAllIstioWEPs, sel, ipsetmember.ProtocolNone, "")
-	activeRulesCalc.AddExtraComputedSelector(istioSelector)
+	AddExtraComputedSelector(activeRulesCalc, istioSelector, ic)
 	// Piggy-back on the active rules calculator's index of local endpoints
 	// to give us callbacks when a local endpoint is an Istio endpoint. (The
 	// index is expensive so we don't want a second copy here.)

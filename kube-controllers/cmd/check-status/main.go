@@ -21,10 +21,8 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
-
-// VERSION is filled out during the build process (using git describe output)
-var VERSION string
 
 // main is the main entry point into the anx controller.
 func main() {
@@ -42,7 +40,7 @@ func main() {
 		os.Exit(1)
 	}
 	if *version {
-		fmt.Println(VERSION)
+		buildinfo.PrintVersion()
 		os.Exit(0)
 	}
 

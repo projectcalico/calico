@@ -1949,6 +1949,23 @@ determines the CTLB behavior.
 | Default value (YAML) | `Enabled` |
 | Notes | Required. | 
 
+### `BPFIPFragTimeout` (config file) / `bpfIPFragTimeout` (YAML)
+
+In BPF mode, controls the timeout for IP fragment reassembly.
+This is the maximum time that the BPF dataplane will wait for all fragments of a
+fragmented IP packet to arrive before discarding them. If left unset, the value
+is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+seconds).
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFIPFragTimeout` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `0` (0s) |
+| `FelixConfiguration` field | `bpfIPFragTimeout` (YAML) `BPFIPFragTimeout` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `0s` |
+
 ### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
 
 Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
@@ -2297,7 +2314,7 @@ Disabled or Enabled.
 ### `BPFRedirectToPeer` (config file) / `bpfRedirectToPeer` (YAML)
 
 Controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
 Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
 which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
 As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic.

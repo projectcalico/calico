@@ -1,0 +1,25 @@
+@theme {
+    /**
+   * Link colour tokens
+   *
+   * Reference: https://designsystem.backbase.com/latest/design-tokens/semantic-colors/link-colors-Yd7FLT6y
+   */
+
+    --color-tigera-token-link: var(--color-tigera-color-blue-900);
+    --color-tigera-token-link-hovered: var(
+        --color-tigera-color-medium-blue-700
+    );
+    --color-tigera-token-link-pressed: var(
+        --color-tigera-color-medium-blue-600
+    );
+}
+
+.dark {
+    --color-tigera-token-link: var(--color-tigera-color-medium-gold-400);
+    --color-tigera-token-link-hovered: var(
+        --color-tigera-color-medium-gold-300
+    );
+    --color-tigera-token-link-pressed: var(
+        --color-tigera-color-medium-gold-200
+    );
+}

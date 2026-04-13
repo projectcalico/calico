@@ -28,6 +28,11 @@ const (
 	RapidClient   = "quay.io/tigeradev/rapidclient"
 	Iperf3        = "docker.io/networkstatic/iperf3:latest"
 	Netutils      = "calico/k8s-e2e-netutils:stable"
+	Socat         = "docker.io/alpine/socat:1.8.0.1"
+	Netshoot      = "docker.io/nicolaka/netshoot:v0.13"
+	// EchoServer is an alias for Agnhost, used as a convention indicator.
+	// Use with `netexec --http-port=PORT` args. Hit /clientip for source IP.
+	EchoServer = Agnhost
 )
 
 // Get client image and powershell command based on windows OS version

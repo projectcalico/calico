@@ -205,9 +205,9 @@ func formatOwnerAttrs(title string, attrs map[string]string) string {
 	sort.Strings(keys)
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("%s:\n", title))
+	fmt.Fprintf(&b, "%s:\n", title)
 	for _, k := range keys {
-		b.WriteString(fmt.Sprintf("  %v: %v\n", k, attrs[k]))
+		fmt.Fprintf(&b, "  %v: %v\n", k, attrs[k])
 	}
 	return b.String()
 }

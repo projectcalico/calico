@@ -4,13 +4,11 @@ const $arrowBg = cssVar('popper-arrow-bg');
 
 export default {
     baseStyle: {
-        bg: 'tigeraGrey.800',
-        [$arrowBg.variable]: 'var(--chakra-colors-tigeraGrey-800)',
-        color: 'tigeraWhite',
-        _dark: {
-            bg: 'tigeraGrey.1000',
-            [$arrowBg.variable]: 'var(--chakra-colors-tigeraGrey-1000)',
-            color: 'tigeraGrey.100',
-        },
+        bg: 'experimental-token-elevation-overlay-inverted',
+        [$arrowBg.variable]:
+            'var(--chakra-colors-experimental-token-elevation-overlay-inverted)',
+        color: 'experimental-token-fg-inverted',
+        fontSize: 'sm',
+        px: 2,
     },
 };

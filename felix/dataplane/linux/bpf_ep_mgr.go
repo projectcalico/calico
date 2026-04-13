@@ -47,6 +47,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/sys/unix"
+	googleproto "google.golang.org/protobuf/proto"
 	k8sv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -402,11 +403,13 @@ type bpfEndpointManager struct {
 	v6 *bpfEndpointManagerDataplane
 
 	healthAggregator     *health.HealthAggregator
+	permanentBPFErr      error // set when BPF programs fail to load permanently; prevents retries
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 	istioDSCP            uint8
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
+	ipFragTimeout uint32
 
 	workloadSourceSpoofing bool
 }
@@ -440,6 +443,45 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
+}
+
+// getIPFragTimeout returns the IP fragment timeout in seconds.
+// If configuredTimeout is 0, it reads the value from the Linux kernel sysctl
+// net.ipv4.ipfrag_time. Otherwise, it converts the configured duration to seconds.
+func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
+	var timeoutSecs int64
+
+	if configuredTimeout == 0 {
+		// Try to read from /proc/sys/net/ipv4/ipfrag_time
+		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutStr := strings.TrimSpace(string(data))
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutSecs = int64(timeout)
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+	} else {
+		timeoutSecs = int64(configuredTimeout.Seconds())
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
+	}
+
+	if timeoutSecs < 1 {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too low, clamping to 1 second")
+		timeoutSecs = 1
+	} else if timeoutSecs > int64(^uint32(0)) {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too high, clamping to max uint32")
+		timeoutSecs = int64(^uint32(0))
+	}
+
+	return uint32(timeoutSecs)
 }
 
 func NewBPFEndpointManager(
@@ -534,6 +576,7 @@ func NewBPFEndpointManager(
 
 		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize:          config.BPFMaglevLUTSize,
+		ipFragTimeout:          getIPFragTimeout(config.BPFIPFragTimeout),
 		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
 	}
 
@@ -1266,7 +1309,7 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.isUP = true
 			m.updateIfaceStateMap(update.Name, iface)
 		} else {
-			if m.wildcardExists && reflect.DeepEqual(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
+			if m.wildcardExists && googleproto.Equal(m.hostIfaceToEpMap[update.Name], m.wildcardHostEndpoint) {
 				logrus.Debugf("Unmap host-* endpoint for %v", update.Name)
 				m.removeHEPFromIndexes(update.Name, m.wildcardHostEndpoint)
 				delete(m.hostIfaceToEpMap, update.Name)
@@ -1710,10 +1753,19 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 
 		for _, hk := range []hook.Hook{hook.Ingress, hook.Egress} {
 			if err := m.dp.loadDefaultPolicies(hk); err != nil {
+				if hook.IsPermanentLoadFailure(err) {
+					m.permanentBPFErr = fmt.Errorf("%w: %w", hook.ErrPermanentLoadFailure, err)
+					logrus.WithError(err).Error(
+						"Failed to load default BPF policies (kernel BPF verifier rejected the program). " +
+							"Calico eBPF dataplane requires kernel 5.10+.")
+					break
+				}
 				logrus.WithError(err).Warn("Failed to load default policies, some programs may default to DENY.")
 			}
 		}
-		logrus.Info("Default BPF policy programs loaded.")
+		if m.permanentBPFErr == nil {
+			logrus.Info("Default BPF policy programs loaded.")
+		}
 
 		m.initUnknownIfaces = nil
 
@@ -1774,7 +1826,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 	})
 
-	if m.dirtyIfaceNames.Len() == 0 {
+	if m.permanentBPFErr != nil {
+		m.reportHealth(false,
+			"BPF program load failed: program rejected by kernel BPF verifier. "+
+				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
+	} else if m.dirtyIfaceNames.Len() == 0 {
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
 			if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
@@ -2078,7 +2134,13 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 			logrus.WithField("id", iface).Info("Applied program to host interface")
 			m.dirtyIfaceNames.Discard(iface)
 		} else {
-			if isLinkNotFoundError(err) {
+			if errors.Is(err, hook.ErrPermanentLoadFailure) {
+				logrus.WithField("iface", iface).WithError(err).Error(
+					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
+						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(iface)
+			} else if isLinkNotFoundError(err) {
 				logrus.WithField("iface", iface).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
 						"Will retry if it shows up.")
@@ -2162,7 +2224,13 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 				m.happyWEPsDirty = true
 			}
 
-			if isLinkNotFoundError(err) {
+			if errors.Is(err, hook.ErrPermanentLoadFailure) {
+				logrus.WithField("wep", wlID).WithError(err).Error(
+					"BPF program load failed permanently (kernel BPF verifier rejected the program). " +
+						"Calico eBPF dataplane requires kernel 5.10+. See logs above for verifier output.")
+				m.permanentBPFErr = err
+				m.dirtyIfaceNames.Discard(ifaceName)
+			} else if isLinkNotFoundError(err) {
 				logrus.WithField("wep", wlID).Debug(
 					"Tried to apply BPF program to interface but the interface wasn't present.  " +
 						"Will retry if it shows up.")
@@ -3096,6 +3164,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
+	ap.IPFragTimeout = m.ipFragTimeout
 	ap.RedirectPeer = true
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
@@ -3424,7 +3493,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// to change as to make this worthwhile.
 
 	// If the host-* endpoint is changing, mark all workload interfaces as dirty.
-	if (wildcardExists != m.wildcardExists) || !reflect.DeepEqual(wildcardHostEndpoint, m.wildcardHostEndpoint) {
+	if (wildcardExists != m.wildcardExists) || !googleproto.Equal(wildcardHostEndpoint, m.wildcardHostEndpoint) {
 		logrus.Infof("Host-* endpoint is changing; was %v, now %v", m.wildcardHostEndpoint, wildcardHostEndpoint)
 		m.removeHEPFromIndexes(allInterfaces, m.wildcardHostEndpoint)
 		m.wildcardHostEndpoint = wildcardHostEndpoint
@@ -3441,7 +3510,7 @@ func (m *bpfEndpointManager) OnHEPUpdate(hostIfaceToEpMap map[string]*proto.Host
 	// Loop through existing host endpoints, in case they are changing or disappearing.
 	for ifaceName, existingEp := range m.hostIfaceToEpMap {
 		newEp, stillExists := hostIfaceToEpMap[ifaceName]
-		if stillExists && reflect.DeepEqual(newEp, existingEp) {
+		if stillExists && googleproto.Equal(newEp, existingEp) {
 			logrus.Debugf("No change to host endpoint for ifaceName=%v", ifaceName)
 		} else {
 			m.removeHEPFromIndexes(ifaceName, existingEp)
@@ -4926,12 +4995,22 @@ func (trees bpfIfaceTrees) addIface(link netlink.Link) {
 		children:    make(map[int]*bpfIfaceNode),
 	}
 
-	if attrs.MasterIndex == 0 && attrs.ParentIndex == 0 {
-		trees.addIfaceStandAlone(intf)
-	} else if attrs.MasterIndex != 0 {
+	// Veth and netkit devices use ParentIndex to reference their peer, not a
+	// real parent in a device hierarchy (bond/bridge). Ignore ParentIndex
+	// for these types, but still respect MasterIndex — a veth can be
+	// genuinely enslaved to a bond or bridge.
+	isVethLike := false
+	switch link.Type() {
+	case "veth", "netkit":
+		isVethLike = true
+	}
+
+	if attrs.MasterIndex != 0 {
 		trees.addIfaceWithMaster(intf, attrs.MasterIndex)
-	} else if attrs.ParentIndex != 0 {
+	} else if attrs.ParentIndex != 0 && !isVethLike {
 		trees.addIfaceWithChild(intf, attrs.ParentIndex)
+	} else {
+		trees.addIfaceStandAlone(intf)
 	}
 }
 

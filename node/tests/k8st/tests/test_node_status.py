@@ -41,7 +41,10 @@ EOF
 def read_status(name):
     status_json = kubectl("get caliconodestatus %s -o json" % name)
     status_dict = json.loads(status_json)
-    return status_dict['status']
+    status = status_dict.get('status')
+    if not status:
+        raise Exception("status not yet populated for %s" % name)
+    return status
 
 def delete_status(name):
     kubectl("delete caliconodestatus %s" % name)
@@ -68,7 +71,7 @@ class TestNodeMeshStatus(TestBase):
         delete_status(self.status_name)
 
     def test_dual_stack_status(self):
-        retry_until_success(lambda: read_status(self.status_name), retries=5, wait_time=1)
+        retry_until_success(lambda: read_status(self.status_name), timeout=10)
         status = read_status(self.status_name)
 
         # Should have correct agent status.

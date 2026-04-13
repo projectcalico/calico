@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,17 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"Istio":           true,
+}
+
+// RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
+// server (calico-apiserver) being deployed. In v3 CRD mode, Calico resources
+// are served directly by the K8s CRD controller, and GET/LIST/WATCH requests
+// bypass tier RBAC entirely because the admission webhook only covers mutating
+// operations. These tests verify read-path tier RBAC enforcement, which only
+// works when the aggregated API server is handling requests.
+func RequiresCalicoAPIServer() any {
+	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
@@ -84,12 +95,35 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed
+// in the cluster. These tests read flow logs via the Whisker API, which requires
+// the Goldmane flow aggregation backend. Skip on clusters without Goldmane
+// via --ginkgo.skip=RequiresGoldmane.
+func RequiresGoldmane() any {
+	return framework.WithLabel("RequiresGoldmane")
+}
+
+// RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
+// routing mechanism. These tests disable the mesh and expect connectivity to break, which
+// only works when there's no other routing path (e.g., VXLAN). Skip these on VXLAN clusters
+// via --ginkgo.skip=RequiresBGPMesh.
+func RequiresBGPMesh() any {
+	return framework.WithLabel("RequiresBGPMesh")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
 		framework.Failf("%s is not a supported feature", feature)
 	}
 	return framework.WithLabel(fmt.Sprintf("Feature:%s", feature))
+}
+
+// WithNoTierPrefix marks tests that use bare policy names (without tier prefix).
+// This naming style is only supported in v3.32+. Older branches should skip
+// these tests via -skip=NoTierPrefix.
+func WithNoTierPrefix() any {
+	return framework.WithLabel("NoTierPrefix")
 }
 
 // WithWindows marks tests that can run on clusters with Windows nodes.

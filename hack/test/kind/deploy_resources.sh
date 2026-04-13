@@ -88,7 +88,9 @@ function collect_diags() {
       echo "  -- Description --"
       ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
       echo "  -- Logs --"
-      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+      echo "  -- Previous Logs --"
+      ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
     fi
   done
 
@@ -103,7 +105,9 @@ function collect_diags() {
         echo "  -- Description --"
         ${kctl} describe pod -n "${ns}" "${name}" 2>&1 || true
         echo "  -- Logs --"
-        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=100 2>&1 || true
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --tail=200 2>&1 || true
+        echo "  -- Previous Logs --"
+        ${kctl} logs -n "${ns}" "${name}" --all-containers --previous --tail=200 2>&1 || true
       fi
     fi
   done
@@ -165,6 +169,11 @@ echo
 echo "Install Calico using the helm chart"
 ${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
+if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
+  echo "Patching installation resource to Felix cluster routing mode"
+  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
+fi
+
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
@@ -194,14 +203,6 @@ wait_pod_ready calicoctl -n kube-system
 echo "Calico is running."
 echo
 
-if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching FelixConfiguration to configure Felix program cluster routes"
-  ${kubectl} patch felixconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Enabled"}}'
-
-  echo "Patching BGPConfiguration to configure BIRD to not program cluster routes"
-  ${kubectl} patch bgpconfiguration default --type='merge' -p '{"spec":{"programClusterRoutes":"Disabled"}}'
-fi
-
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
@@ -214,7 +215,38 @@ echo
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
 
-# Scale down the operator so that it doesn't make changes to the cluster.
-# Some of our tests modify calico/node, etc. We should remove this once we
-# fix up those tests.
-${kubectl} scale deployment -n tigera-operator tigera-operator --replicas=0
+# Wait for ALL tigerastatus resources to become Available. This ensures every
+# component the operator manages is fully ready before tests begin.
+echo "Wait for all TigeraStatus resources to become Available"
+for attempt in $(seq 1 120); do
+  # Get all tigerastatus resources and check if any are not Available.
+  not_ready=$(${kubectl} get tigerastatus -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.conditions[?(@.type=="Available")]}{.status}{end}{"\n"}{end}' 2>/dev/null \
+    | grep -v "True$" || true)
+
+  if [ -z "$not_ready" ]; then
+    # All are Available — but make sure at least the critical ones exist.
+    count=$(${kubectl} get tigerastatus --no-headers 2>/dev/null | wc -l)
+    if [ "$count" -ge 1 ]; then
+      echo "All $count TigeraStatus resources are Available"
+      ${kubectl} get tigerastatus 2>&1
+      break
+    fi
+  fi
+
+  if [ "$attempt" -eq 120 ]; then
+    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after 600s"
+    ${kubectl} get tigerastatus 2>&1 || true
+    echo "Not ready:"
+    echo "$not_ready"
+    exit 1
+  fi
+
+  # Every 60s, poke the operator to re-reconcile in case it's in backoff.
+  if (( attempt % 12 == 0 )); then
+    echo "Still waiting (${attempt}x5s)... poking operator to re-reconcile"
+    ${kubectl} get tigerastatus 2>&1 || true
+    ${kubectl} annotate installation default --overwrite triggerReconcile=$(date +%s) 2>/dev/null || true
+  fi
+
+  sleep 5
+done

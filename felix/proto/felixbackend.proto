@@ -430,6 +430,7 @@ message WorkloadEndpoint {
   bool is_istio_ambient = 16;
   LiveMigrationRole live_migration_role = 17;
   string live_migration_uid = 18;
+  string live_migration_vmi_name = 19;
 }
 
 message QoSControls {

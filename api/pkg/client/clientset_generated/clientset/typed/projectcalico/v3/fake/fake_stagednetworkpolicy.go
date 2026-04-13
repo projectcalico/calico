@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeStagedNetworkPolicies implements StagedNetworkPolicyInterface
 type fakeStagedNetworkPolicies struct {
-	*gentype.FakeClientWithList[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList]
+	*gentype.FakeClientWithListAndApply[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList, *projectcalicov3.StagedNetworkPolicyApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeStagedNetworkPolicies(fake *FakeProjectcalicoV3, namespace string) projectcalicov3.StagedNetworkPolicyInterface {
+func newFakeStagedNetworkPolicies(fake *FakeProjectcalicoV3, namespace string) typedprojectcalicov3.StagedNetworkPolicyInterface {
 	return &fakeStagedNetworkPolicies{
-		gentype.NewFakeClientWithList[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList](
+		gentype.NewFakeClientWithListAndApply[*v3.StagedNetworkPolicy, *v3.StagedNetworkPolicyList, *projectcalicov3.StagedNetworkPolicyApplyConfiguration](
 			fake.Fake,
 			namespace,
 			v3.SchemeGroupVersion.WithResource("stagednetworkpolicies"),

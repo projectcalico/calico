@@ -30,7 +30,7 @@ const (
 // CalicoNodeStatusList is a list of CalicoNodeStatus resources.
 type CalicoNodeStatusList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []CalicoNodeStatus `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -39,6 +39,7 @@ type CalicoNodeStatusList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The name of the node"
 // +kubebuilder:printcolumn:name="Classes",type=string,JSONPath=".spec.classes",description="The types of information to monitor for this calico/node"
 
@@ -59,6 +60,7 @@ type CalicoNodeStatusSpec struct {
 
 	// Classes declares the types of information to monitor for this calico/node,
 	// and allows for selective status reporting about certain subsets of information.
+	// +listType=set
 	Classes []NodeStatusClassType `json:"classes,omitempty" validate:"required,unique"`
 
 	// UpdatePeriodSeconds is the period at which CalicoNodeStatus should be updated.
@@ -114,18 +116,22 @@ type CalicoNodeBGPStatus struct {
 	NumberNotEstablishedV6 int `json:"numberNotEstablishedV6"`
 
 	// PeersV4 represents IPv4 BGP peers status on the node.
+	// +listType=atomic
 	PeersV4 []CalicoNodePeer `json:"peersV4,omitempty"`
 
 	// PeersV6 represents IPv6 BGP peers status on the node.
+	// +listType=atomic
 	PeersV6 []CalicoNodePeer `json:"peersV6,omitempty"`
 }
 
 // CalicoNodeBGPRouteStatus defines the observed state of routes status on the node.
 type CalicoNodeBGPRouteStatus struct {
 	// RoutesV4 represents IPv4 routes on the node.
+	// +listType=atomic
 	RoutesV4 []CalicoNodeRoute `json:"routesV4,omitempty"`
 
 	// RoutesV6 represents IPv6 routes on the node.
+	// +listType=atomic
 	RoutesV6 []CalicoNodeRoute `json:"routesV6,omitempty"`
 }
 
@@ -153,7 +159,7 @@ type CalicoNodePeer struct {
 	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,ip"`
 
 	// Type indicates whether this peer is configured via the node-to-node mesh,
-	// or via en explicit global or per-node BGPPeer object.
+	// or via an explicit global or per-node BGPPeer object.
 	Type BGPPeerType `json:"type,omitempty"`
 
 	// State is the BGP session state.

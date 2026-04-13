@@ -30,7 +30,7 @@ const (
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []HostEndpoint `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -93,6 +93,7 @@ type HostEndpointSpec struct {
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	// +listType=atomic
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 

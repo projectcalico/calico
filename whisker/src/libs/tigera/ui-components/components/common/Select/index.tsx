@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as ReactSelect from 'chakra-react-select';
 import styles from './styles';
 import type { GroupBase, Props } from 'react-select';
-import { Box, Flex, Icon, Image, forwardRef } from '@chakra-ui/react';
+import { Box, Flex, Icon, Image } from '@chakra-ui/react';
 
 type Option = any;
 type IsMulti = boolean;
@@ -28,35 +28,37 @@ export type SelectOption = {
 // its not styled in the same way as a standard Chakra component...
 // see here for more: https://github.com/csandman/chakra-react-select#readme
 
-const Select: React.FC<React.PropsWithChildren<SelectType>> = forwardRef(
-    ({ sx, isMulti = false, options, ...rest }, ref) => {
-        const hasIcons = options?.every(
-            (option: Option) =>
-                option.icon !== undefined || option.iconUrl !== undefined,
-        );
+const Select = React.forwardRef<
+    ReactSelect.SelectInstance,
+    React.PropsWithChildren<SelectType>
+>(({ sx, isMulti = false, options, ...rest }, ref) => {
+    const hasIcons = options?.every(
+        (option: Option) =>
+            option.icon !== undefined || option.iconUrl !== undefined,
+    );
 
-        return (
-            <ReactSelect.Select
-                ref={ref}
-                isMulti={isMulti}
-                options={options}
-                {...((hasIcons
-                    ? {
-                          formatOptionLabel: (e: any) => (
-                              <SelectIconOption
-                                  icon={e.icon}
-                                  iconUrl={e.iconUrl}
-                                  label={e.label}
-                              />
-                          ),
-                      }
-                    : {}) as any)}
-                {...rest}
-                chakraStyles={{ ...styles, ...sx }}
-            />
-        );
-    },
-);
+    return (
+        <ReactSelect.Select
+            ref={ref}
+            isMulti={isMulti}
+            options={options}
+            selectedOptionStyle='check'
+            {...((hasIcons
+                ? {
+                      formatOptionLabel: (e: any) => (
+                          <SelectIconOption
+                              icon={e.icon}
+                              iconUrl={e.iconUrl}
+                              label={e.label}
+                          />
+                      ),
+                  }
+                : {}) as any)}
+            {...rest}
+            chakraStyles={{ ...styles, ...sx }}
+        />
+    );
+});
 
 export const CreatableSelect: React.FC<CreatableSelectType> = ({
     sx,

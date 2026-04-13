@@ -226,7 +226,9 @@ promotions:
 blocks:
   - name: Check images availability
     run:
-      when: "true or (branch !~ 'build-v.*' and change_in(['/charts/', '/manifests/'], {pipeline_file: 'ignore'}))"
+      when: >-
+        true or (branch !~ 'build-v.*' and change_in(['/charts/', '/manifests/'],
+        {pipeline_file: 'ignore'}))
     dependencies: []
     task:
       jobs:
@@ -311,9 +313,10 @@ blocks:
       jobs:
         - name: Check language/Dockerfiles
           commands:
-            # Both of these are very quick grep checks so we combine them into one job.
+            # These are very quick grep checks so we combine them into one job.
             - make check-language
             - make check-dockerfiles
+            - make check-mockery-config
   - name: Check protobufs
     run:
       when: >-
@@ -380,7 +383,9 @@ blocks:
             - "true"
   - name: API
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/api/', '/test/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/api/', '/test/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -578,11 +583,14 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "E2E tests on GCP kubeadm (local binary)"
     run:
-      when: "true or change_in(['/e2e/**'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/e2e/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
     task:
       secrets:
+        - name: marvin-github-ssh-private-key
         - name: banzai-secrets
       prologue:
         commands:
@@ -606,7 +614,14 @@ blocks:
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+          # Label filter selects sig-calico tests and excludes:
+          # - Slow: long-running tests not suitable for CI
+          # - Disruptive: tests that break cluster state for other tests
+          # - RequiresBGPMesh: requires BGP routing, but this cluster uses VXLAN
+          # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
+          # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
+          # - ExternalNode: requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured
+          value: "--ginkgo.label-filter=sig-calico&&!Slow&&!Disruptive&&!RequiresBGPMesh&&!NoEncap&&!Feature:Istio&&!ExternalNode"
         - name: USE_API_SERVER
           value: "false"
       jobs:
@@ -626,7 +641,9 @@ blocks:
               values: ["CalicoBPF"]
   - name: E2E script & pipeline validations
     run:
-      when: "true or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/.semaphore/end-to-end/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 5
     dependencies:
@@ -649,6 +666,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -675,6 +696,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
@@ -682,8 +707,10 @@ blocks:
           env_vars:
             - name: CLUSTER_ROUTING
               value: "FELIX"
-            - name: E2E_SKIP
-              value: "BGP"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind-felix-routing.yaml"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
@@ -692,7 +719,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Envoy Gateway
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -716,7 +745,9 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: Envoy Proxy
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-proxy'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -740,7 +771,9 @@ blocks:
             - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Envoy Ratelimit"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-ratelimit'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -929,6 +962,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "22.04-ipt"
           commands:
@@ -954,6 +989,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "22.04-nft"
           commands:
@@ -979,6 +1016,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-24.04-ipt-with-ut"
           commands:
@@ -1004,6 +1043,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-22.04-nft-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
@@ -1037,6 +1078,8 @@ blocks:
               value: "bpf-25.10-nft-no-fv-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
+            - name: JOB_TIMEOUT_MINUTES
+              value: "30"
           commands:
             - source felix/.semaphore/fv-prologue
             # Only run the UT that checks that the precompiled BPF binaries are loadable.
@@ -1061,6 +1104,8 @@ blocks:
           execution_time_limit:
             minutes: 60
           env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "60"
             - name: FELIX_TEST_GROUP
               value: "bpf-25.10-nft-with-ut-jitharden"
             - name: FELIX_FV_BPFATTACHTYPE
@@ -1151,37 +1196,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: Istio Ztunnel
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux amd64"
-          commands:
-            - ../../.semaphore/run-and-monitor build.log make build
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../../.semaphore/run-and-monitor build-arm64.log make build
   - name: Istio
     run:
       when: "true"
@@ -1190,20 +1204,37 @@ blocks:
     task:
       prologue:
         commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd istio
       jobs:
         - name: "Istio: CI"
           commands:
-            # build all images except ztunnel, which is built in the previous step
-            - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+            # Include the istio ztunnel build in the amd64 CI job.
+            - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
           matrix:
             - env_var: ARCH
               values:
                 - arm64
           commands:
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            # Skip istio ztunnel in this arm64 cross-build job.
+            # ztunnel is built separately in the native arm64 runner block below.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
+  - name: Istio Ztunnel - native arm64 runner
+    run:
+      when: "true"
+    dependencies:
+      - Istio
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      prologue:
+        commands:
+          - cd istio
+      jobs:
+        - name: "Linux arm64"
+          commands:
+            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
   - name: kube-controllers
     run:
       when: "true"
@@ -1238,7 +1269,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Libraries (lib)
     run:
-      when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
+      when: >-
+        true or change_in(['/lib/'],
+        {pipeline_file: 'ignore'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1394,6 +1427,9 @@ blocks:
         - name: "Node: kind-cluster tests"
           execution_time_limit:
             minutes: 120
+          env_vars:
+            - name: JOB_TIMEOUT_MINUTES
+              value: "120"
           commands:
             - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       epilogue:
@@ -1419,7 +1455,9 @@ blocks:
             - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
   - name: "Tools (hack directory)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/hack/', '/api/', '/libcalico-go/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
     task:
@@ -1514,7 +1552,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: Whisker
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1567,7 +1607,9 @@ blocks:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: "OpenStack integration (Caracal)"
     run:
-      when: "true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'], {pipeline_file: 'ignore'})"
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/networking-calico/', '/.semaphore/semaphore.yml.d/blocks/40-openstack.yml'],
+        {pipeline_file: 'ignore'})
     dependencies:
       - Prerequisites
     task:

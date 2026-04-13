@@ -15,14 +15,12 @@
 import json
 import logging
 import subprocess
-from kubernetes import client
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import \
     retry_until_success, \
     DiagsCollector, \
     calicoctl, \
-    calicoctl_apply_dict, \
     kubectl, \
     node_info, \
     generate_unique_id
@@ -35,62 +33,79 @@ class ConnectionError(Exception):
 
 
 class TestSpoof(TestBase):
-    def setUp(self):
-        TestBase.setUp(self)
-        self.ns_name = generate_unique_id(5, prefix="spoof")
-        self.create_namespace(self.ns_name)
-        # Create two client pods that live for the duration of the
-        # test.  We will use 'kubectl exec' to try sending/receiving
-        # from these at particular times.
-        #
-        # We do it this way because it takes a
-        # relatively long time (7 seconds?) in this test setup for
-        # Calico routing and policy to be set up correctly for a newly
-        # created pod.
+    @classmethod
+    def setUpClass(cls):
+        # Create namespace and pods once for all spoof tests.
+        cls.ns_name = generate_unique_id(5, prefix="spoof")
+        kubectl("create ns %s" % cls.ns_name)
         nodes, _, _ = node_info()
         kubectl("run "
                 "access "
                 "-n %s "
                 "--image busybox "
                 "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
-                "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % (self.ns_name, nodes[1]))
+                "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % (cls.ns_name, nodes[1]))
         kubectl("run "
                 "scapy "
                 "-n %s "
                 "--image calico/scapy:v2.4.0 "
                 "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
-                "--command /bin/sleep -- 3600" % (self.ns_name, nodes[2]))
+                "--command /bin/sleep -- 3600" % (cls.ns_name, nodes[2]))
 
         kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/scapy -n %s" % self.ns_name)
+                " pod/scapy -n %s" % cls.ns_name)
         kubectl("wait --timeout=2m --for=condition=ready" +
-                " pod/access -n %s" % self.ns_name)
+                " pod/access -n %s" % cls.ns_name)
 
-    def tearDown(self):
-        # Delete deployment
-        self.delete_and_confirm(self.ns_name, "ns")
-        # Change pool to use IPIP
-        default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
-        default_pool["spec"]["vxlanMode"] = "Never"
-        default_pool["spec"]["ipipMode"] = "Always"
-        calicoctl_apply_dict(default_pool)
-        # restart calico-nodes
+    @classmethod
+    def tearDownClass(cls):
+        # Delete namespace.
+        kubectl("delete ns %s" % cls.ns_name)
+        # Restore pool to IPIP mode and restart calico-nodes.
+        cls._set_encapsulation("IPIP")
+
+    @classmethod
+    def _set_encapsulation(cls, encap):
+        """Set the cluster's encapsulation mode via the Installation resource.
+
+        Patches the Installation CR so the operator reconciles the IPPool.
+        Skips the change if the pool is already in the desired mode.
+        """
+        encap_to_modes = {
+            "IPIP": ("Always", "Never"),
+            "VXLAN": ("Never", "Always"),
+        }
+        ipip_mode, vxlan_mode = encap_to_modes[encap]
+
+        pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
+        if pool["spec"]["ipipMode"] == ipip_mode and pool["spec"]["vxlanMode"] == vxlan_mode:
+            _log.info("Encapsulation already set to %s, skipping", encap)
+            return
+
+        _log.info("Setting encapsulation to %s via Installation", encap)
+        patch_payload = json.dumps([{
+            "op": "add",
+            "path": "/spec/calicoNetwork/ipPools/0/encapsulation",
+            "value": encap,
+        }])
+        kubectl("patch installation default --type=json -p '%s'" % patch_payload)
+
+        # Wait for the operator to reconcile the IPPool before restarting pods.
+        def pool_reconciled():
+            p = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
+            if p["spec"]["ipipMode"] != ipip_mode or p["spec"]["vxlanMode"] != vxlan_mode:
+                raise Exception("IPPool not yet reconciled: ipipMode=%s vxlanMode=%s" %
+                                (p["spec"]["ipipMode"], p["spec"]["vxlanMode"]))
+        retry_until_success(pool_reconciled, timeout=60)
+
+        # Restart calico-node to cleanly apply the new encapsulation.
         kubectl("delete po -n calico-system -l k8s-app=calico-node")
-        kubectl("wait --timeout=2m --for=condition=ready" +
+        kubectl("wait --timeout=2m --for=condition=ready"
                 " pods -l k8s-app=calico-node -n calico-system")
 
     def test_ipip_spoof(self):
         with DiagsCollector():
-            # Change pool to use IPIP if necessary
-            default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
-            if default_pool["spec"]["vxlanMode"] != "Never" or default_pool["spec"]["ipipMode"] != "Always":
-                default_pool["spec"]["vxlanMode"] = "Never"
-                default_pool["spec"]["ipipMode"] = "Always"
-                calicoctl_apply_dict(default_pool)
-                # restart calico-nodes
-                kubectl("delete po -n calico-system -l k8s-app=calico-node")
-                kubectl("wait --timeout=2m --for=condition=ready" +
-                        " pods -l k8s-app=calico-node -n calico-system")
+            self._set_encapsulation("IPIP")
 
             # get busybox pod IP
             remote_pod_ip = retry_until_success(self.get_pod_ip, function_args=["access", self.ns_name])
@@ -123,16 +138,8 @@ class TestSpoof(TestBase):
 
     def test_vxlan_spoof(self):
         with DiagsCollector():
-            # Change pool to use VXLAN if necessary
-            default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
-            if default_pool["spec"]["vxlanMode"] != "Always" or default_pool["spec"]["ipipMode"] != "Never":
-                default_pool["spec"]["vxlanMode"] = "Always"
-                default_pool["spec"]["ipipMode"] = "Never"
-                calicoctl_apply_dict(default_pool)
-                # restart calico-nodes
-                kubectl("delete po -n calico-system -l k8s-app=calico-node")
-                kubectl("wait --timeout=2m --for=condition=ready" +
-                        " pods -l k8s-app=calico-node -n calico-system")
+            self._set_encapsulation("VXLAN")
+
             # get busybox pod IP
             remote_pod_ip = retry_until_success(self.get_pod_ip, function_args=["access", self.ns_name])
             print(remote_pod_ip)

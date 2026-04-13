@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,14 +18,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"runtime"
 	"strconv"
 	"unsafe"
 
 	"github.com/pkg/errors"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
-	"github.com/projectcalico/calico/felix/bpf/perf"
+	"github.com/projectcalico/calico/felix/bpf/ringbuf"
 	"github.com/projectcalico/calico/felix/bpf/state"
 )
 
@@ -33,10 +32,8 @@ import (
 type Type uint16
 
 const (
-	// MaxCPUs is the currenty supported max number of CPUs
-	MaxCPUs = 512
-
-	// TypeLostEvents does not carry any other information except the number of lost events.
+	// TypeLostEvents is emitted by the BPF side when accumulated drop count
+	// is flushed through the ring buffer.
 	TypeLostEvents Type = 0
 	// TypeProtoStats protocol v4 stats
 	TypeProtoStats Type = 1
@@ -79,14 +76,12 @@ func (e Event) Data() []byte {
 type Source string
 
 const (
-	// SourcePerfEvents consumes events using the perf event ring buffer
-	SourcePerfEvents Source = "perf-events"
+	// SourceRingBuffer consumes events using the BPF ring buffer
+	SourceRingBuffer Source = "ring-buffer"
 )
 
 type eventRaw interface {
-	CPU() int
 	Data() []byte
-	LostEvents() int
 }
 
 // Events is an interface for consuming events
@@ -99,73 +94,71 @@ type Events interface {
 // New creates a new Events object to consume events.
 func New(src Source, size int) (Events, error) {
 	switch src {
-	case SourcePerfEvents:
-		return newPerfEvents(size)
+	case SourceRingBuffer:
+		return newRingBufferEvents(size)
 	}
 
 	return nil, fmt.Errorf("unknown events source: %s", src)
 }
 
-type perfEventsReader struct {
-	events perf.Perf
+type ringBufferEventsReader struct {
+	rb     *ringbuf.RingBuffer
 	bpfMap maps.Map
-
-	next func() (Event, error)
 }
 
-func newPerfEvents(size int) (Events, error) {
-	if runtime.NumCPU() > MaxCPUs {
-		return nil, fmt.Errorf("more cpus (%d) than the max supported (%d)", runtime.NumCPU(), 128)
+func newRingBufferEvents(size int) (Events, error) {
+	rbMap := ringbuf.Map("rb_evnt", size)
+	if err := rbMap.EnsureExists(); err != nil {
+		return nil, errors.Wrap(err, "failed to ensure ring buffer map exists")
 	}
 
-	perfMap := perf.Map("perf_evnt", MaxCPUs)
-	if err := perfMap.EnsureExists(); err != nil {
-		return nil, err
+	dropsMap := ringbuf.DropsMap()
+	if err := dropsMap.EnsureExists(); err != nil {
+		return nil, errors.Wrap(err, "failed to ensure ring buffer drops map exists")
 	}
 
-	perfEvents, err := perf.New(perfMap, size)
+	rb, err := ringbuf.New(rbMap, size)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create ring buffer reader")
 	}
 
-	rd := &perfEventsReader{
-		events: perfEvents,
-		bpfMap: perfMap,
+	return &ringBufferEventsReader{
+		rb:     rb,
+		bpfMap: rbMap,
+	}, nil
+}
+
+func (r *ringBufferEventsReader) Next() (Event, error) {
+	e, err := r.rb.Next()
+	if err != nil {
+		return Event{}, errors.WithMessage(err, "failed to get next event")
 	}
 
-	rd.next = func() (Event, error) {
-		e, err := rd.events.Next()
-		if err != nil {
-			return Event{}, errors.WithMessage(err, "failed to get next event")
+	evt, err := parseEventData(e.Data())
+	if err != nil {
+		return Event{}, err
+	}
+
+	// The BPF side emits TYPE_LOST_EVENTS with a u64 count payload when
+	// accumulated drops are flushed. Convert to ErrLostEvents so callers
+	// (bpfEventPoller) handle it the same way as the old perf lost records.
+	if evt.typ == TypeLostEvents {
+		count := uint64(0)
+		if len(evt.data) >= 8 {
+			count = binary.LittleEndian.Uint64(evt.data[:8])
 		}
-
-		if e.LostEvents() != 0 {
-			lost := e.LostEvents()
-			if len(e.Data()) != 0 {
-				// XXX This should not happen, but if it happens, for the sake
-				// of simplicity, treat it as another lost event.
-				lost++
-			}
-
-			return Event{}, ErrLostEvents(lost)
-		}
-
-		return ParseEvent(e)
+		return Event{}, ErrLostEvents(count)
 	}
 
-	return rd, nil
+	return evt, nil
 }
 
-func (e *perfEventsReader) Close() error {
-	return e.events.Close()
+func (r *ringBufferEventsReader) Close() error {
+	return r.rb.Close()
 }
 
-func (e *perfEventsReader) Next() (Event, error) {
-	return e.next()
-}
-
-func (e *perfEventsReader) Map() maps.Map {
-	return e.bpfMap
+func (r *ringBufferEventsReader) Map() maps.Map {
+	return r.bpfMap
 }
 
 type eventHdr struct {
@@ -173,11 +166,9 @@ type eventHdr struct {
 	Len  uint32
 }
 
-func ParseEvent(raw eventRaw) (Event, error) {
-
+func parseEventData(data []byte) (Event, error) {
 	var hdr eventHdr
 	hdrBytes := (*[unsafe.Sizeof(eventHdr{})]byte)((unsafe.Pointer)(&hdr))
-	data := raw.Data()
 	consumed := copy(hdrBytes[:], data)
 	l := len(data)
 	if int(hdr.Len) > l {
@@ -189,7 +180,13 @@ func ParseEvent(raw eventRaw) (Event, error) {
 	}, nil
 }
 
-// ErrLostEvents reports how many events were lost
+// ParseEvent reads the event header and returns a typed Event.
+func ParseEvent(raw eventRaw) (Event, error) {
+	return parseEventData(raw.Data())
+}
+
+// ErrLostEvents reports how many events were lost (dropped by the BPF program
+// because the ring buffer was full).
 type ErrLostEvents int
 
 func (e ErrLostEvents) Error() string {

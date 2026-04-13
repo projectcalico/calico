@@ -37,8 +37,8 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 	c := &client{
 		cache:        cache,
 		peeringCache: peeringCache,
+		configCache:  make(map[int]*bgpConfigCache),
 	}
-	// Ensure waitForSync doesn't block - it's a zero-value WaitGroup which is already "done"
 	return c
 }
 
@@ -80,12 +80,12 @@ func TestBuildExportFilter_SameAS(t *testing.T) {
 	assert.Contains(t, result, "reject;")
 }
 
-func TestBuildExportFilter_DifferentAS_NoLocalPref(t *testing.T) {
+func TestBuildExportFilter_DifferentAS_StillLocalPref(t *testing.T) {
 	c := &client{}
 
-	// Different AS = eBGP — should NOT include LOCAL_PREF conversion
+	// Different AS = eBGP — still includes LOCAL_PREF conversion
 	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
-	assert.NotContains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
@@ -2518,11 +2518,6 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 
 	_ = os.Unsetenv("CALICO_ROUTER_ID")
 
-	// Clear the global configCache to start fresh
-	configCacheMutex.Lock()
-	configCache = make(map[int]*bgpConfigCache)
-	configCacheMutex.Unlock()
-
 	// Enable mesh for more realistic scenario
 	meshConfig := map[string]any{
 		"enabled": true,
@@ -2584,9 +2579,9 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 					// Periodically clear the cache to force re-computation and increase
 					// the likelihood of hitting the race condition
 					if iterationCount%5 == 0 {
-						configCacheMutex.Lock()
-						delete(configCache, ipVersion)
-						configCacheMutex.Unlock()
+						c.configCacheMutex.Lock()
+						delete(c.configCache, ipVersion)
+						c.configCacheMutex.Unlock()
 					}
 
 					iterationCount++
@@ -2601,11 +2596,9 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 func TestBuildImportFilter_iBGP(t *testing.T) {
 	c := &client{}
 
-	// Same AS = iBGP — should default krt_metric, convert from bgp_local_pref, and set preference
+	// Same AS = iBGP — should set preference for a higher priority route
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
-	assert.Contains(t, result, "krt_metric = 1024;")
-	assert.Contains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
-	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then")
 	assert.Contains(t, result, "preference = 200;")
 	assert.Contains(t, result, "accept;")
 }
@@ -2613,11 +2606,9 @@ func TestBuildImportFilter_iBGP(t *testing.T) {
 func TestBuildImportFilter_eBGP(t *testing.T) {
 	c := &client{}
 
-	// Different AS = eBGP — should default krt_metric and set preference, but no LOCAL_PREF conversion
+	// Different AS = eBGP — should set preference for a higher priority route
 	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
-	assert.Contains(t, result, "krt_metric = 1024;")
-	assert.NotContains(t, result, "krt_metric = 2147483647 - bgp_local_pref")
-	assert.Contains(t, result, "if (krt_metric < 1024) then")
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then")
 	assert.Contains(t, result, "preference = 200;")
 	assert.Contains(t, result, "accept;")
 }
@@ -2627,8 +2618,7 @@ func TestBuildImportFilter_CustomPriority(t *testing.T) {
 
 	// Custom priority should appear in both the default and the preference check
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 2000)
-	assert.Contains(t, result, "krt_metric = 2000;")
-	assert.Contains(t, result, "if (krt_metric < 2000) then")
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147481647)) then")
 }
 
 func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {

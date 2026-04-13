@@ -37,6 +37,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
+	describe.RequiresGoldmane(),
 	"staged network policy",
 	func() {
 		var (
@@ -232,6 +233,11 @@ var _ = describe.CalicoDescribe(
 				tierObj.Name = customTier
 				tierObj.Spec.Order = ptr.To[float64](200)
 				Expect(cli.Create(context.TODO(), tierObj)).ToNot(HaveOccurred())
+				DeferCleanup(func() {
+					Eventually(func() error {
+						return cli.Delete(context.TODO(), tierObj)
+					}, 30*time.Second, 1*time.Second).Should(Succeed(), "Failed to delete tier %s", tierObj.Name)
+				})
 
 				// Create server
 				server = conncheck.NewServer(utils.GenerateRandomName(serverPodNamePrefix), f.Namespace)
@@ -242,7 +248,6 @@ var _ = describe.CalicoDescribe(
 			})
 
 			AfterEach(func() {
-				Expect(cli.Delete(context.TODO(), tierObj)).ShouldNot(HaveOccurred())
 				checker.Stop()
 			})
 

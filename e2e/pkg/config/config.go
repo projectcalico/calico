@@ -44,6 +44,8 @@ const (
 	externalNodeIP       = "EXT_IP"
 	externalNodeSSHKey   = "EXT_KEY"
 	externalNodeUsername = "EXT_USER"
+
+	testConfig = "TEST_CONFIG"
 )
 
 var allConfigOptions = map[string]*configOption{
@@ -72,6 +74,12 @@ var allConfigOptions = map[string]*configOption{
 	externalNodeIP: {
 		envVarName:   externalNodeIP,
 		helpText:     "The IP address of the external node.",
+		defaultValue: "",
+	},
+
+	testConfig: {
+		envVarName:   testConfig,
+		helpText:     "Path to a YAML test selection config file.",
 		defaultValue: "",
 	},
 }
@@ -112,6 +120,12 @@ func init() {
 			c.actualValue = os.ExpandEnv(c.defaultValue)
 		}
 	}
+}
+
+// TestConfigPath returns the path to the test selection config file, or empty
+// if none was specified.
+func TestConfigPath() string {
+	return allConfigOptions[testConfig].actualValue
 }
 
 func RegisterFlags(flags *flag.FlagSet) {

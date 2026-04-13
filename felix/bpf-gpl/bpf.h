@@ -19,6 +19,8 @@
  */
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
+#define __unused __attribute__((unused))
+
 #include "globals.h"
 
 #define BPF_REDIR_EGRESS 0
@@ -255,23 +257,15 @@ static CALI_BPF_INLINE __attribute__((noreturn)) void bpf_exit(int rc) {
 
 #ifdef IPVER6
 
-#ifdef BPF_CORE_SUPPORTED
 #define IP_FMT "[%pI6]"
 #define debug_ip(ip) (&(ip))
-#else
-#define debug_ip(ip) (bpf_htonl((ip).d))
-#endif
 #define ip_is_dnf(ip) (true)
 #define ip_is_frag(ip) (false)
 
 #else
 
-#ifdef BPF_CORE_SUPPORTED
 #define IP_FMT "%pI4"
 #define debug_ip(ip) (&(ip))
-#else
-#define debug_ip(ip) bpf_htonl(ip)
-#endif
 
 #define ip_is_dnf(ip) ((ip)->frag_off & bpf_htons(0x4000))
 #define ip_is_frag(ip) ((ip)->frag_off & bpf_htons(0x3fff))
@@ -342,13 +336,16 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define OVERLAY_TUNNEL_ID CALI_CONFIGURABLE(overlay_tunnel_id)
 #define EGRESS_DSCP CALI_CONFIGURABLE(dscp)
 #define ISTIO_DSCP CALI_CONFIGURABLE(istio_dscp)
+#define MAGLEV_LUT_SIZE CALI_CONFIGURABLE(maglev_lut_size)
+#define IPFRAG_TIMEOUT CALI_CONFIGURABLE(ipfrag_timeout)
 
 #define FLOWLOGS_ENABLED (GLOBAL_FLAGS & CALI_GLOBALS_FLOWLOGS_ENABLED)
 #define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)
 #define WORKLOAD_SRC_SPOOFING_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED)
 
-#define map_symbol(name, ver) name##ver
+#define MAP_VERSIONED(name, ver) name##ver
+#define map_symbol(name, ver)  MAP_VERSIONED(name, ver)
 
 #define MAP_LOOKUP_FN(fname, name, ver) \
 static CALI_BPF_INLINE void * fname##_lookup_elem(const void* key)	\

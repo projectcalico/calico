@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func init() {
 		Entry("should accept 65535 port as int", "65535", portType, numorstring.SinglePort(65535)),
 		Entry("should accept 0:65535 port range as string", "\"0:65535\"", portType, portFromRange(0, 65535)),
 		Entry("should accept 1:10 port range as string", "\"1:10\"", portType, portFromRange(1, 10)),
-		Entry("should accept foo-bar as named port", "\"foo-bar\"", portType, numorstring.NamedPort("foo-bar")),
+		Entry("should accept foo-bar as named port", "\"foo-bar\"", portType, numorstring.Port{PortName: "foo-bar"}),
 		Entry("should reject -1 port as int", "-1", portType, nil),
 		Entry("should reject 65536 port as int", "65536", portType, nil),
 		Entry("should reject 0:65536 port range as string", "\"0:65536\"", portType, nil),
@@ -122,7 +122,7 @@ func init() {
 		Entry("should marshal port of 10", portFromString("10"), "10"),
 		Entry("should marshal port range of 10:20", portFromRange(10, 20), "\"10:20\""),
 		Entry("should marshal port range of 20:30", portFromRange(20, 30), "\"20:30\""),
-		Entry("should marshal named port", numorstring.NamedPort("foobar"), `"foobar"`),
+		Entry("should marshal named port", numorstring.Port{PortName: "foobar"}, `"foobar"`),
 
 		// Protocol tests.
 		Entry("should marshal protocol of 0", numorstring.ProtocolFromInt(0), "0"),
@@ -205,6 +205,23 @@ func init() {
 		// Protocol tests.
 		Entry("protocol udp -> UDP", numorstring.ProtocolFromInt(2), numorstring.ProtocolFromInt(2)),
 		Entry("protocol tcp -> TCP", numorstring.ProtocolFromString("TCP"), numorstring.ProtocolFromStringV1("TCP")),
+	)
+
+	DescribeTable("NumOrString named ports",
+		func(input string, expected numorstring.Port, valid bool) {
+			p, err := numorstring.NamedPort(input)
+			if valid {
+				Expect(err).To(BeNil())
+			} else {
+				Expect(err).ToNot(BeNil())
+			}
+			Expect(p).To(Equal(expected), "expected parsed named ports to match")
+		},
+		// Named port tests.
+		Entry("named port http-port", "http-port", numorstring.Port{PortName: "http-port"}, true),
+		Entry("named port 8080", "8080", numorstring.Port{PortName: "8080"}, true),
+		Entry("named port with space", "http port", numorstring.Port{}, false),
+		Entry("named port with invalid chars", "http%port", numorstring.Port{}, false),
 	)
 
 	// Perform tests of DSCP FromString method.

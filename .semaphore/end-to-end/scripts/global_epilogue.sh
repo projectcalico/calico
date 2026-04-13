@@ -38,7 +38,7 @@ run_non_hcp_reports_and_diags() {
     echo "[INFO] global_epilogue: capturing diags"
     bz diags $VERBOSE |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
     artifact push job ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} --destination semaphore/diags.tgz || true
-    upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "diags.tgz"
+    upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${DIAGS_ARCHIVE_FILENAME}"
   fi
 
   delete_artifacts; delete_calicoctl
@@ -46,6 +46,7 @@ run_non_hcp_reports_and_diags() {
   REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
   echo "[INFO] global_epilogue: pushing report artifacts"
   artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+  upload_to_gcs "${REPORT_DIR}/junit.xml" "junit.xml"
   cp ${REPORT_DIR}/junit.xml . || true
 
   echo "[INFO] publish new semaphore test results"
@@ -75,12 +76,21 @@ upload_to_gcs() {
   gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
 }
 
-# Create a logs tarball and upload it to GCS.
+# Upload log files to a logs/ subdirectory in GCS.
 upload_logs_to_gcs() {
-  local logs_tgz="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
-  tar czf "${logs_tgz}" -C "${BZ_LOGS_DIR}" . || true
-  upload_to_gcs "${logs_tgz}" "logs.tgz"
-  rm -f "${logs_tgz}" || true
+  if [[ -z "${GS_BUCKET}" ]]; then
+    return
+  fi
+  if [[ -z "${BZ_LOGS_DIR}" || ! -d "${BZ_LOGS_DIR}" ]]; then
+    echo "[WARN] BZ_LOGS_DIR is unset or not a directory, skipping log upload to GCS."
+    return
+  fi
+  local gcs_dir="${SEMAPHORE_JOB_ID}"
+  if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" ]]; then
+    gcs_dir="${METADATA}"
+  fi
+  echo "[INFO] bucket_upload: uploading logs to gs://${GS_BUCKET}/${gcs_dir}/logs/"
+  gsutil -m cp -r "${BZ_LOGS_DIR}/." "gs://${GS_BUCKET}/${gcs_dir}/logs/" || true
 }
 
 echo "[INFO] starting global_epilogue"
@@ -146,6 +156,7 @@ if [[ "${HCP_ENABLED}" == "true" ]]; then
 
   echo "[INFO] global_epilogue: hcp: pushing report artifacts"
   artifact push job ${BZ_PROFILES_PATH}/.report --destination semaphore/test-results || true
+  upload_to_gcs "${BZ_PROFILES_PATH}/.report/junit.xml" "junit.xml"
 
   echo "[INFO] publish new semaphore test results"
   test-results publish semaphore/test-results/junit.xml || true

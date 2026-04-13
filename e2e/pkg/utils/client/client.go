@@ -21,6 +21,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
@@ -102,6 +103,9 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := rbacv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

@@ -15,9 +15,8 @@
 package net
 
 import (
+	"encoding/json"
 	"net"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 )
 
 // Sub class net.HardwareAddr so that we can add JSON marshalling and unmarshalling.

@@ -54,6 +54,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -65,6 +66,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -76,6 +78,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -87,6 +90,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -98,6 +102,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -109,6 +114,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -120,6 +126,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -131,6 +138,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -143,6 +151,7 @@ func TestFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken:    true,
 				NFLogSize:                true,
 				KernelSideRouteFiltering: true,
+				NFTablesSupported:        true,
 			},
 		},
 		{
@@ -154,6 +163,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -165,6 +175,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -176,6 +187,7 @@ func TestFeatureDetection(t *testing.T) {
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 		},
 		{
@@ -189,6 +201,7 @@ func TestFeatureDetection(t *testing.T) {
 				NFLogSize:                true,
 				IPIPDeviceIsL3:           false,
 				KernelSideRouteFiltering: false,
+				NFTablesSupported:        true,
 			},
 		},
 	} {
@@ -240,6 +253,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				MASQFullyRandom:       true,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -252,6 +266,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"RestoreSupportsLock": "true",
@@ -266,6 +281,7 @@ func TestFeatureDetectionOverride(t *testing.T) {
 				MASQFullyRandom:       false,
 				ChecksumOffloadBroken: true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"RestoreSupportsLock":   "true",
@@ -557,6 +573,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -566,6 +583,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -575,6 +593,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -584,6 +603,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        true,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -595,6 +615,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -606,6 +627,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:             true,
 				IPIPDeviceIsL3:        false,
 				ChecksumOffloadBroken: false,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -617,6 +639,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -626,6 +649,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -635,6 +659,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{},
 		},
@@ -644,6 +669,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        true,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "true",
@@ -655,6 +681,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -666,6 +693,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				ChecksumOffloadBroken: true,
 				IPIPDeviceIsL3:        false,
 				NFLogSize:             true,
+				NFTablesSupported:     true,
 			},
 			map[string]string{
 				"IPIPDeviceIsL3": "false",
@@ -677,6 +705,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:          true,
 				IPIPDeviceIsL3:     true,
 				KernelHasUDPGSOFix: false,
+				NFTablesSupported:  true,
 			},
 			map[string]string{},
 		},
@@ -686,6 +715,7 @@ func TestBPFFeatureDetection(t *testing.T) {
 				NFLogSize:          true,
 				IPIPDeviceIsL3:     true,
 				KernelHasUDPGSOFix: true,
+				NFTablesSupported:  true,
 			},
 			map[string]string{},
 		},
