@@ -58,4 +58,9 @@ type IPAMConfig struct {
 	// maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction).
 	// Valid values: "Enabled", "Disabled". Default: "Enabled" if not specified.
 	KubeVirtVMAddressPersistence *string `json:"kubeVirtVMAddressPersistence,omitempty"`
+
+	// MinIPReclaimAgeSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immeduately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	MinIPReclaimAgeSeconds int `json:"minIPReclaimAgeSeconds,omitempty"`
 }

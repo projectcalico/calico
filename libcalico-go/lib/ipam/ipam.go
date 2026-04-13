@@ -2116,6 +2116,7 @@ func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
 					AutoAllocateBlocks:           true,
 					MaxBlocksPerHost:             0,
 					KubeVirtVMAddressPersistence: &enabled, // Default: enabled for auto-detection
+					MinIPReclaimAgeSeconds:       0,
 				},
 			}
 
@@ -2213,6 +2214,7 @@ func (c ipamClient) convertIPAMConfigToBackend(cfg *IPAMConfig) *model.IPAMConfi
 		AutoAllocateBlocks:           cfg.AutoAllocateBlocks,
 		MaxBlocksPerHost:             cfg.MaxBlocksPerHost,
 		KubeVirtVMAddressPersistence: persistence,
+		MinIPReclaimAgeSeconds:       cfg.MinIPReclaimAgeSeconds,
 	}
 }
 
@@ -2227,6 +2229,7 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 		AutoAllocateBlocks:           cfg.AutoAllocateBlocks,
 		MaxBlocksPerHost:             cfg.MaxBlocksPerHost,
 		KubeVirtVMAddressPersistence: persistence,
+		MinIPReclaimAgeSeconds:       cfg.MinIPReclaimAgeSeconds,
 	}
 }
 
