@@ -9,7 +9,7 @@ execution_time_limit:
 global_job_config:
   env_vars:
     - name: DEV_REGISTRIES
-      value: quay.io/calico
+      value: quay.io/calico docker.io/calico
   secrets:
     - name: docker
     - name: quay-robot-calico+semaphoreci
@@ -24,17 +24,16 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish tigera/istio-ztunnel images
+  - name: Publish istio images
+    dependencies: []
     skip:
       when: "branch !~ '.+'"
-    dependencies: []
     task:
       jobs:
         - name: Linux amd64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd CONFIRM=true; fi
-
-  - name: Publish tigera/istio-ztunnel images - native arm64 runner
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd ARCHES=amd64 CONFIRM=true; fi
+  - name: Publish istio images - native arm64 runner
     skip:
       when: "branch !~ '.+'"
     dependencies: []
@@ -45,29 +44,15 @@ blocks:
       jobs:
         - name: Linux arm64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd CONFIRM=true; fi
-
-  - name: Publish calico/istio-ztunnel multi-arch manifests
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd ARCHES=arm64 CONFIRM=true; fi
+  - name: Publish istio multi-arch manifests
     dependencies:
-      - Publish tigera/istio-ztunnel images
-      - Publish tigera/istio-ztunnel images - native arm64 runner
+      - Publish istio images
+      - Publish istio images - native arm64 runner
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
         - name: Linux multi-arch manifests
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C third_party/istio-ztunnel cd push-manifest CONFIRM=true; fi
-  - name: Publish istio images and multi-arch manifests
-    dependencies:
-      - Publish calico/istio-ztunnel multi-arch manifests
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      env_vars:
-        - name: DEV_REGISTRIES
-          value: quay.io/calico docker.io/calico
-      jobs:
-        - name: Linux multi-arch
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio push-manifests-with-tag CONFIRM=true; fi

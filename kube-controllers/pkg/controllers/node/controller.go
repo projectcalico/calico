@@ -51,7 +51,7 @@ type NodeController struct {
 	// For syncing node objects from the k8s API.
 	nodeInformer cache.SharedIndexInformer
 	podInformer  cache.SharedIndexInformer
-	k8sClientset *kubernetes.Clientset
+	k8sClientset kubernetes.Interface
 
 	// For accessing Calico datastore.
 	calicoClient client.Interface
@@ -65,7 +65,7 @@ type NodeController struct {
 
 // NewNodeController Constructor for NodeController
 func NewNodeController(ctx context.Context,
-	k8sClientset *kubernetes.Clientset,
+	k8sClientset kubernetes.Interface,
 	calicoClient client.Interface,
 	cfg config.NodeControllerConfig,
 	nodeInformer, podInformer cache.SharedIndexInformer,
