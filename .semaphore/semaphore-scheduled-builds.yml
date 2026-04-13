@@ -607,16 +607,14 @@ blocks:
           value: calico
         - name: FUNCTIONAL_AREA
           value: "e2e-gcp.yml"
-        - name: RUN_LOCAL_TESTS
-          value: "true"
         - name: USE_PRIVATE_REGISTRY
           value: "true"
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
-        - name: K8S_E2E_FLAGS
+        - name: E2E_TEST_CONFIG
           # Test selection is driven by the config file; see gcp-bpf.yaml for the
           # include/exclude rationale.
-          value: "--calico.test-config=e2e/config/gcp-bpf.yaml"
+          value: "e2e/config/gcp-bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
       jobs:
