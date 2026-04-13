@@ -1042,13 +1042,14 @@ blocks:
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
         - name: K8S_E2E_FLAGS
-          # Skipped test labels:
+          # Label filter selects sig-calico tests and excludes:
           # - Slow: long-running tests not suitable for CI
           # - Disruptive: tests that break cluster state for other tests
           # - RequiresBGPMesh: requires BGP routing, but this cluster uses VXLAN
           # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
           # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
-          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[RequiresBGPMesh\]|\[NoEncap\]|\[Feature:Istio\])
+          # - ExternalNode: requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured
+          value: "--ginkgo.label-filter=sig-calico&&!Slow&&!Disruptive&&!RequiresBGPMesh&&!NoEncap&&!Feature:Istio&&!ExternalNode"
         - name: USE_API_SERVER
           value: "false"
       jobs:
@@ -1412,6 +1413,7 @@ blocks:
         '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/pkg/nodeinit/*.go',
+        '/node/pkg/nodeservices/*.go',
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
@@ -1512,6 +1514,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -1857,6 +1863,7 @@ blocks:
         '/node/pkg/lifecycle/startup/autodetection/ipv4/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/pkg/nodeinit/*.go',
+        '/node/pkg/nodeservices/*.go',
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
@@ -1957,6 +1964,10 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
@@ -1964,6 +1975,10 @@ blocks:
           env_vars:
             - name: CLUSTER_ROUTING
               value: "FELIX"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_FOCUS
+              value: "sig-network.*Conformance|sig-calico.*Conformance|BGP|RequiresCalicoAPIServer"
             - name: E2E_SKIP
               value: "BGP"
             - name: STORE_BUILD_CACHE
@@ -3834,73 +3849,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: Istio Ztunnel
-    run:
-      when: >-
-        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
-        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
-        '/.semaphore/semaphore.yml.d/03-promotions.yml',
-        '/.semaphore/semaphore.yml.d/09-blocks.yml',
-        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
-        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
-        '/hack/test/certs/',
-        '/lib.Makefile',
-        '/metadata.mk',
-        '/third_party/istio-ztunnel/**'],
-        {pipeline_file: 'ignore', exclude: ['/**/*.md',
-        '/**/.gitignore',
-        '/**/AUTHORS*',
-        '/**/CONTRIBUTING*',
-        '/**/DEVELOPER_GUIDE*',
-        '/**/LICENSE*',
-        '/**/README*',
-        '/**/SECURITY.md']})
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux amd64"
-          commands:
-            - ../../.semaphore/run-and-monitor build.log make build
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: >-
-        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
-        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
-        '/.semaphore/semaphore.yml.d/03-promotions.yml',
-        '/.semaphore/semaphore.yml.d/09-blocks.yml',
-        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
-        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
-        '/hack/test/certs/',
-        '/lib.Makefile',
-        '/metadata.mk',
-        '/third_party/istio-ztunnel/**'],
-        {pipeline_file: 'ignore', exclude: ['/**/*.md',
-        '/**/.gitignore',
-        '/**/AUTHORS*',
-        '/**/CONTRIBUTING*',
-        '/**/DEVELOPER_GUIDE*',
-        '/**/LICENSE*',
-        '/**/README*',
-        '/**/SECURITY.md']})
-    dependencies:
-      - Prerequisites
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../../.semaphore/run-and-monitor build-arm64.log make build
   - name: Istio
     run:
       when: >-
@@ -3927,20 +3875,55 @@ blocks:
     task:
       prologue:
         commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd istio
       jobs:
         - name: "Istio: CI"
           commands:
-            # build all images except ztunnel, which is built in the previous step
-            - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+            # Include the istio ztunnel build in the amd64 CI job.
+            - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
           matrix:
             - env_var: ARCH
               values:
                 - arm64
           commands:
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            # Skip istio ztunnel in this arm64 cross-build job.
+            # ztunnel is built separately in the native arm64 runner block below.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
+  - name: Istio Ztunnel - native arm64 runner
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
+        '/hack/test/certs/',
+        '/istio/**',
+        '/lib.Makefile',
+        '/metadata.mk'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md']})
+    dependencies:
+      - Istio
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      prologue:
+        commands:
+          - cd istio
+      jobs:
+        - name: "Linux arm64"
+          commands:
+            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
   - name: kube-controllers
     run:
       when: >-
@@ -4040,6 +4023,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/*.go',
         '/libcalico-go/lib/testutils/stacktrace/*.go',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',

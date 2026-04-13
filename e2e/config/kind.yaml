@@ -22,3 +22,6 @@ exclude:
 
     - label: ExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
+
+    - label: RequiresCalicoAPIServer
+      reason: "kind clusters use v3 CRD mode without the aggregated Calico API server"

@@ -33,6 +33,7 @@ endif
 	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
 
 clean:
+	rm -rf .dev-stamps/
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
 	$(MAKE) -C app-policy clean
@@ -128,7 +129,7 @@ GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
-	$(MAKE) -j $(DEP_FILES)
+	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
 $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
 	@{ \
@@ -167,17 +168,59 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
-# Build all Calico images for the current architecture.
-image:
-	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C key-cert-provisioner image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C apiserver image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C kube-controllers image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C app-policy image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+###############################################################################
+# Build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a remote registry.
+#
+# Images are only re-tagged / re-pushed when their docker image ID changes,
+# and the operator is only rebuilt when its inputs change. This makes repeated
+# runs fast when only one component has been modified.
+#
+# Usage:
+#   make image                                              # build + tag as calico/<name>:<version>
+#   make push DEV_IMAGE_PATH=myuser DEV_IMAGE_TAG=latest    # build + tag + push to myuser/<name>:latest
+#
+# Component images are independent targets, so `make -jN` builds them in
+# parallel (e.g., `make -j4 push DEV_IMAGE_PATH=myuser`).
+#
+# To force a full rebuild, remove the stamp directory:
+#   rm -rf .dev-stamps && make push ...
+###############################################################################
+
+.PHONY: image
+## Build all component images and tag for dev registry. Supports make -jN for parallel builds.
+image: $(KIND_IMAGE_MARKERS)
+	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
+	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  ARCH="$(ARCH)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --tag
+	@STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
+	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
+	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --operator
+	@echo "image complete"
+
+.PHONY: push
+## Push all tagged images to the remote registry.
+push: image
+	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --push
+
+.PHONY: push-chart
+## Package the tigera-operator helm chart with custom image refs and push to OCI registry.
+push-chart: bin/helm
+	@TAG="$(DEV_IMAGE_TAG)" \
+	  REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  HELM="$(REPO_ROOT)/bin/helm" \
+	  $(REPO_ROOT)/.github/scripts/package-helm-chart.sh
 
 ###############################################################################
 # Run local e2e smoke test against the checked-out code
@@ -192,7 +235,7 @@ CLUSTER_ROUTING ?= BIRD
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
-	$(MAKE) -j$(shell nproc) kind-build-images
+	$(MAKE) -j$$(nproc) kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
@@ -235,16 +278,21 @@ e2e-run-cnp-test:
 release/bin/release: $(shell find ./release -type f -name '*.go')
 	$(MAKE) -C release
 
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release prep
+
 # Install ghr for publishing to github.
 bin/ghr:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm bin/gh.tgz
+	@mkdir -p bin
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@chmod +x $@
+	@rm bin/gh.tgz
 
 # Build a release.
 release: release/bin/release
@@ -320,5 +368,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

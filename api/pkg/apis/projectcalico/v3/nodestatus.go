@@ -39,6 +39,7 @@ type CalicoNodeStatusList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Node",type=string,JSONPath=".spec.node",description="The name of the node"
 // +kubebuilder:printcolumn:name="Classes",type=string,JSONPath=".spec.classes",description="The types of information to monitor for this calico/node"
 
@@ -158,7 +159,7 @@ type CalicoNodePeer struct {
 	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,ip"`
 
 	// Type indicates whether this peer is configured via the node-to-node mesh,
-	// or via en explicit global or per-node BGPPeer object.
+	// or via an explicit global or per-node BGPPeer object.
 	Type BGPPeerType `json:"type,omitempty"`
 
 	// State is the BGP session state.

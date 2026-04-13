@@ -20,6 +20,17 @@ import (
 // NewIPPoolStorage creates a new libcalico-based storage.Interface implementation for IPPools
 func NewIPPoolStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
+	return newIPPoolStorage(opts, c, false)
+}
+
+// NewIPPoolStatusStorage creates a storage that uses the UpdateStatus method for
+// writes, ensuring the status subresource is used when persisting changes.
+func NewIPPoolStatusStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
+	c := CreateClientFromConfig()
+	return newIPPoolStorage(opts, c, true)
+}
+
+func newIPPoolStorage(opts Options, c clientv3.Interface, forStatus bool) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.IPPool)
@@ -28,6 +39,9 @@ func NewIPPoolStorage(opts Options) (registry.DryRunnableStorage, factory.Destro
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.IPPool)
+		if forStatus {
+			return c.IPPools().UpdateStatus(ctx, res, oso)
+		}
 		return c.IPPools().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -78,6 +92,7 @@ func (gc IPPoolConverter) convertToLibcalico(aapiObj runtime.Object) resourceObj
 	lcgIPPool.Kind = api.KindIPPool
 	lcgIPPool.APIVersion = api.GroupVersionCurrent
 	lcgIPPool.Spec = aapiIPPool.Spec
+	lcgIPPool.Status = aapiIPPool.Status
 	return lcgIPPool
 }
 
@@ -85,6 +100,7 @@ func (gc IPPoolConverter) convertToAAPI(libcalicoObject resourceObject, aapiObj 
 	lcgIPPool := libcalicoObject.(*api.IPPool)
 	aapiIPPool := aapiObj.(*api.IPPool)
 	aapiIPPool.Spec = lcgIPPool.Spec
+	aapiIPPool.Status = lcgIPPool.Status
 	aapiIPPool.TypeMeta = lcgIPPool.TypeMeta
 	aapiIPPool.ObjectMeta = lcgIPPool.ObjectMeta
 }
