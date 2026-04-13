@@ -547,7 +547,7 @@ func TestUpdateBGPConfigCache_ProgramClusterRoutes_UpdateThenDelete(t *testing.T
 	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
 	require.Equal(t, "Disabled", c.cache[programClusterRoutesCacheKey])
 
-	// Seconf: set ProgramClusterRoutes=Enabled and confirm cache is populated
+	// Second: set ProgramClusterRoutes=Enabled and confirm cache is populated
 	// via the full updateBGPConfigCache entrypoint (exercises wiring at
 	// client.go's global branch).
 	res = &v3.BGPConfiguration{
