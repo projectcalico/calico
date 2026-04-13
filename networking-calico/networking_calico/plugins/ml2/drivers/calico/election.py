@@ -36,6 +36,7 @@ from oslo_log import log
 
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
+from networking_calico.monotonic import monotonic_time
 
 
 LOG = log.getLogger(__name__)
@@ -101,6 +102,13 @@ class Elector(object):
         # Is this the master? To start with, no
         self._master = False
 
+        # Monotonic timestamp of the last successful lease refresh while
+        # master.  Used by healthy() to detect a silently dead election
+        # greenlet - if _master stays True but the greenlet has stopped
+        # refreshing the lease, we are no longer actually the master even
+        # though self._master says we are.
+        self._last_refresh = 0.0
+
         # Keep the greenlet ID handy to ease UT.
         self._greenlet = eventlet.spawn(self._run)
 
@@ -147,7 +155,7 @@ class Elector(object):
             value, mod_revision = etcdv3.get(self._key)
             mod_revision = int(mod_revision)
         except etcdv3.KeyNotFound:
-            LOG.debug("Try to become the master - key not found")
+            LOG.info("Try to become the master - key not found")
             self._become_master()
             assert False, "_become_master() should not return."
         except Etcd3Exception as e:
@@ -155,7 +163,7 @@ class Elector(object):
             self._log_exception("read current master", e)
             return
 
-        LOG.debug("ID of elected master is : %s", value)
+        LOG.info("ID of elected master is : %s", value)
         if value:
             # If we happen to be on the same server, check if the master
             # process is still alive.
@@ -186,7 +194,7 @@ class Elector(object):
                     timeout=self._interval * 2,
                     start_revision=mod_revision + 1,
                 )
-                LOG.debug("election event: %s", event)
+                LOG.info("election event: %s", event)
                 action = event.get("type", "SET").lower()
                 value = event["kv"].get("value")
                 mod_revision = int(event["kv"].get("mod_revision", "0"))
@@ -199,7 +207,7 @@ class Elector(object):
                 # Something bad and unexpected. Log and reconnect.
                 self._log_exception("wait for master change", e)
                 return
-            LOG.debug("Election key action: %s; new value %s", action, value)
+            LOG.info("Election key action: %s; new value %s", action, value)
             if action in ETCD_DELETE_ACTIONS or value is None:
                 # Deleted - try and become the master.
                 LOG.info(
@@ -223,12 +231,12 @@ class Elector(object):
             return
         host = match.group("host")
         pid = int(match.group("pid"))
-        LOG.debug("Parsed key as host = %s, PID = %s", host, pid)
+        LOG.info("Parsed key as host = %s, PID = %s", host, pid)
         if host == self._server_id:
             # Check if the PID is still running.
-            LOG.debug("Previous master was on this server %s", host)
+            LOG.info("Previous master was on this server %s", host)
             if os.path.exists("/proc/%s" % pid):
-                LOG.debug("Master still running")
+                LOG.info("Master still running")
             else:
                 LOG.warning(
                     "Master was on this server but cannot find its "
@@ -271,6 +279,10 @@ class Elector(object):
             LOG.info("Race: someone else beat us to be master")
             raise RestartElection()
 
+        # We are now master; start the healthy() watchdog clock.  This must
+        # be kept up to date by the lease-refresh loop below.
+        self._last_refresh = monotonic_time()
+
         LOG.info(
             "Successfully become master - key %s, value %s", self._key, self.id_string
         )
@@ -281,7 +293,7 @@ class Elector(object):
         try:
             while not self._stopped:
                 try:
-                    LOG.debug("Refreshing master role")
+                    LOG.info("Refreshing master role")
                     # Refresh the lease.
                     ttl = ttl_lease.refresh()
                     # Also rewrite the key, so that non-masters see an event on
@@ -294,7 +306,10 @@ class Elector(object):
                     ):
                         LOG.warning("Key changed or deleted; restart election")
                         raise RestartElection()
-                    LOG.debug("Refreshed master role, TTL now is %d", ttl)
+                    LOG.info("Refreshed master role, TTL now is %d", ttl)
+                    # Record that the refresh succeeded.  healthy() uses this
+                    # to detect if the refresh loop silently stops running.
+                    self._last_refresh = monotonic_time()
                 except RestartElection:
                     raise
                 except Exception as e:
@@ -361,6 +376,90 @@ class Elector(object):
         returns: True if this is the master.
         """
         return self._master and not self._stopped
+
+    def confirmed_master(self):
+        """Am I healthily the master AND does etcd still agree?
+
+        Performs a healthy() check first (cheap, local).  If that passes,
+        also re-reads the election key from etcd and confirms that its
+        value matches our id_string.  Intended for callers that are about
+        to start expensive master-only work (e.g. a periodic resync)
+        and want an extra belt-and-braces check against an in-process
+        state disagreement with etcd.
+
+        This involves a synchronous etcd GET, so do not call in a hot
+        loop - use healthy() for that.
+
+        returns: True if we are confirmed master according to both our
+        own local state and etcd's current view.
+        """
+        if not self.healthy():
+            return False
+        try:
+            value, _mod_revision = etcdv3.get(self._key)
+        except etcdv3.KeyNotFound:
+            LOG.warning(
+                "Election key %s not present in etcd but _master is True; "
+                "treating as no longer master",
+                self._key,
+            )
+            self._master = False
+            return False
+        except Etcd3Exception as e:
+            # Treat a transient etcd error as "don't know"; be conservative
+            # and skip master-only work this time.  We will retry soon.
+            self._log_exception("confirm master", e)
+            return False
+        if value != self.id_string:
+            LOG.warning(
+                "Election key %s in etcd has value %r but we expected %r; "
+                "treating as no longer master",
+                self._key,
+                value,
+                self.id_string,
+            )
+            self._master = False
+            return False
+        return True
+
+    def healthy(self):
+        """Am I healthily the master?
+
+        Stricter than master().  Returns True only if (a) _master is set,
+        (b) we have not been stopped, (c) the election greenlet is still
+        alive, and (d) the lease was refreshed within the last self._ttl
+        seconds.
+
+        master() alone is unsafe because self._master is a local Python
+        flag that is set to True when we win the election and only cleared
+        if the greenlet exits normally via _attempt_step_down() or the
+        refresh loop's finally clause.  If the greenlet dies silently -
+        e.g. due to an eventlet-level issue that drops the frame without
+        unwinding Python exceptions - _master stays True indefinitely.
+        healthy() catches that case by cross-checking the greenlet state
+        and the refresh timestamp.
+
+        returns: True if this is the master and the election greenlet is
+        confirmed to still be working.
+        """
+        if not self._master or self._stopped:
+            return False
+        if self._greenlet is None or self._greenlet.dead:
+            LOG.warning(
+                "Election greenlet is dead but _master is still True; "
+                "treating as no longer master"
+            )
+            return False
+        since_refresh = monotonic_time() - self._last_refresh
+        if since_refresh > self._ttl:
+            LOG.warning(
+                "Election lease has not been refreshed for %.1fs (ttl %ds); "
+                "treating as no longer master",
+                since_refresh,
+                self._ttl,
+            )
+            return False
+        return True
 
     def stop(self):
         self._stopped = True

@@ -493,8 +493,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("STATUS_UPDATING")
         LOG.info("Status updating thread started.")
         while self._epoch == expected_epoch:
-            # Only handle updates if we are the master node.
-            if self.elector.master():
+            # Only handle updates if we are healthily the master node.  See
+            # Elector.healthy() for why we use healthy() rather than master().
+            if self.elector.healthy():
                 if self._etcd_watcher is None:
                     LOG.info("Became the master, starting StatusWatcher")
                     self._etcd_watcher = StatusWatcher(self)
@@ -1232,8 +1233,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Resync monitor thread started")
 
             while self._epoch == launch_epoch:
-                # Only monitor the resync if we are the master node.
-                if self.elector.master():
+                # Only monitor the resync if we are healthily the master node.
+                if self.elector.healthy():
                     LOG.info("I am master: monitoring periodic resync")
 
                     curr_time = datetime.now()
@@ -1276,8 +1277,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         try:
             LOG.info("Periodic resync thread started")
             while self._epoch == launch_epoch:
-                # Only do the resync if we are the master node.
-                if self.elector.master():
+                # Only do the resync if we are healthily the master node AND
+                # etcd still agrees that we are the master.  The extra etcd
+                # read (vs. plain healthy()) defends against the in-process
+                # flag disagreeing with etcd's ground truth; resync is much
+                # more expensive than a single etcd GET, so the extra check
+                # is cheap by comparison.
+                if self.elector.confirmed_master():
                     LOG.info("I am master: doing periodic resync")
                     start_time = datetime.now()
 
@@ -1343,8 +1349,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         try:
             LOG.info("Periodic compaction thread started")
             while self._epoch == launch_epoch:
-                # Only do the compaction if we are the master node.
-                if self.elector.master():
+                # Only do the compaction if we are healthily the master node.
+                if self.elector.healthy():
                     LOG.info("I am master: doing periodic compaction")
 
                     try:
