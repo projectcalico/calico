@@ -62,7 +62,7 @@ gen-crds:
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Patch in manual tweaks to the generated CRDs.
-	patch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
 ./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
