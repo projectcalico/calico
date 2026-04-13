@@ -372,10 +372,15 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	}
 
 	// Reconcile listeners: start new ones, stop removed ones.
+	var startErr error
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
 			if err := m.startListener(ifaceName); err != nil {
-				log.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener")
+				log.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
+				// Re-mark dirty so the next CompleteDeferredWork retries,
+				// and remember the error to surface it to the dataplane loop.
+				m.dirty = true
+				startErr = err
 			}
 		}
 	}
@@ -403,7 +408,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		}
 	}
 
-	return nil
+	return startErr
 }
 
 // addMatchingIPs adds the IP to the desired set for every host interface whose subnet
@@ -534,8 +539,19 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 			continue
 		}
 
+		// If the NS source is the unspecified address (::), this is a
+		// Duplicate Address Detection probe (RFC 4862). We can't unicast
+		// back to ::, so reply to the all-nodes multicast address and
+		// clear the Solicited flag (RFC 4861 §4.4).
+		dst := srcAddr
+		solicited := true
+		if !srcAddr.IsValid() || srcAddr.IsUnspecified() {
+			dst = netip.MustParseAddr("ff02::1")
+			solicited = false
+		}
+
 		na := &ndp.NeighborAdvertisement{
-			Solicited:     true,
+			Solicited:     solicited,
 			Override:      true,
 			TargetAddress: ns.TargetAddress,
 			Options: []ndp.Option{
@@ -545,7 +561,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 				},
 			},
 		}
-		if err := l.ndpCli.WriteTo(na, nil, srcAddr); err != nil {
+		if err := l.ndpCli.WriteTo(na, nil, dst); err != nil {
 			log.WithError(err).WithFields(log.Fields{
 				"iface": l.ifaceName,
 				"ip":    targetIP,
@@ -576,7 +592,7 @@ func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 			log.WithFields(log.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
-			}).Info("Sent gratuitous ARP")
+			}).Debug("Sent gratuitous ARP")
 		}
 	} else {
 		addr, err := netip.ParseAddr(ipStr)
@@ -603,7 +619,7 @@ func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 			log.WithFields(log.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
-			}).Info("Sent unsolicited NA")
+			}).Debug("Sent unsolicited NA")
 		}
 	}
 }

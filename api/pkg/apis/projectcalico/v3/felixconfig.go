@@ -1088,10 +1088,10 @@ type FelixConfigurationSpec struct {
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
-	// HostSubnetNeighResponses controls whether Felix automatically programs per-IP
-	// proxy ARP (IPv4) and proxy NDP (IPv6) neighbour entries on host interfaces for
-	// local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as
-	// the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// HostSubnetNeighResponses controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
 	// subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]
 	// +optional
 	HostSubnetNeighResponses *HostSubnetNeighResponsesMode `json:"hostSubnetNeighResponses,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`

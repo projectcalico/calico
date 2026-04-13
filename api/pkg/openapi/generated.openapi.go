@@ -4281,7 +4281,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"hostSubnetNeighResponses": {
 						SchemaProps: spec.SchemaProps{
-							Description: "HostSubnetNeighResponses controls whether Felix automatically programs per-IP proxy ARP (IPv4) and proxy NDP (IPv6) neighbour entries on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]",
+							Description: "HostSubnetNeighResponses controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]",
 							Type:        []string{"string"},
 							Format:      "",
 						},

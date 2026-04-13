@@ -665,10 +665,10 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
 	// floating IPs are always programmed, regardless of this setting.)
 	FloatingIPs *projectcalicov3.FloatingIPType `json:"floatingIPs,omitempty"`
-	// HostSubnetNeighResponses controls whether Felix automatically programs per-IP
-	// proxy ARP (IPv4) and proxy NDP (IPv6) neighbour entries on host interfaces for
-	// local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as
-	// the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// HostSubnetNeighResponses controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
 	// subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]
 	HostSubnetNeighResponses *projectcalicov3.HostSubnetNeighResponsesMode `json:"hostSubnetNeighResponses,omitempty"`
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
