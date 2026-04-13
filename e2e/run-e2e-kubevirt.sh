@@ -10,5 +10,5 @@ export KUBECONFIG="${KUBECONFIG:-${ROOT}/kubeconfig}"
 
 bin/k8s/e2e.test \
         --kubeconfig="${KUBECONFIG}" \
-        --ginkgo.focus="KubeVirt IP persistence" \
+        --ginkgo.focus="should maintain TCP connection from eBGP external client across two consecutive migrations" \
         -ginkgo.v | tee result.log

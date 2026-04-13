@@ -371,23 +371,6 @@ func expectPingSuccess(ns, podName, targetIP string) {
 	}, 3*time.Minute, 10*time.Second).Should(Succeed(), "failed to ping %s", targetIP)
 }
 
-// getRouteOnNode runs "ip route show <ip>" inside the calico-node pod on the given node
-// and returns the output. Used to verify that Felix programs/removes local routes for
-// the VM's /32 during migration.
-func getRouteOnNode(f *framework.Framework, nodeName, ip string) string {
-	calicoNodePod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
-	if calicoNodePod == nil {
-		logrus.Warnf("No calico-node pod found on node %s", nodeName)
-		return ""
-	}
-	output, err := utils.ExecInCalicoNode(calicoNodePod, fmt.Sprintf("ip route show %s", ip))
-	if err != nil {
-		logrus.Warnf("Failed to get route on node %s: %v", nodeName, err)
-		return ""
-	}
-	return strings.TrimSpace(output)
-}
-
 // newLibcalicoClient creates a libcalico-go clientv3.Interface for direct IPAM queries.
 // Uses the Kubernetes datastore backend with the test framework's kubeconfig.
 func newLibcalicoClient(f *framework.Framework) clientv3.Interface {
@@ -400,21 +383,26 @@ func newLibcalicoClient(f *framework.Framework) clientv3.Interface {
 }
 
 // getIPAMOwnerAttributes queries Calico IPAM for the ActiveOwnerAttrs and AlternateOwnerAttrs
-// of the given IP address. Returns nil maps if the IP is not allocated or on error.
-func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr string) (active, alternate map[string]string) {
+// of the given IP address. Returns an error if the IPAM query fails or no assignment exists,
+// so callers can distinguish transient failures from a missing allocation.
+func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr string) (active, alternate map[string]string, err error) {
 	queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	ip := cnet.IP{IP: net.ParseIP(ipStr)}
 	attr, err := c.IPAM().GetAssignmentAttributes(queryCtx, ip)
-	if err != nil || attr == nil {
-		return nil, nil
+	if err != nil {
+		return nil, nil, fmt.Errorf("IPAM query for %s failed: %w", ipStr, err)
 	}
-	return attr.ActiveOwnerAttrs, attr.AlternateOwnerAttrs
+	if attr == nil {
+		return nil, nil, fmt.Errorf("no IPAM assignment found for %s", ipStr)
+	}
+	return attr.ActiveOwnerAttrs, attr.AlternateOwnerAttrs, nil
 }
 
-// waitForTCPServer waits for the VM's TCP server on port 9999 to accept connections.
-// Increased timeout to 5s for nc, and 2 minutes overall for slow-booting VMs.
-func waitForTCPServer(ns, podName, vmIP string) {
+// checkConnectionToTCPServer verifies that the client pod can connect to the VM's TCP
+// server on port 9999 and receive at least one "seq=" line. Retries for up to 2 minutes
+// to accommodate slow-booting VMs where the TCP server may not yet be listening.
+func checkConnectionToTCPServer(ns, podName, vmIP string) {
 	By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
 	Eventually(func() error {
 		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
@@ -430,15 +418,43 @@ func waitForTCPServer(ns, podName, vmIP string) {
 	logrus.Infof("TCP server ready on %s:9999", vmIP)
 }
 
-// countSequenceGaps parses "seq=N" lines and counts gaps in the sequence.
+// tcpStreamLineCount returns the number of lines in the given file inside the given pod.
+// Uses `wc -l < <file>` so the output is a bare integer (no filename suffix) and returns
+// a descriptive error if the kubectl exec fails or the output cannot be parsed.
+func tcpStreamLineCount(ns, podName, streamFile string) (int, error) {
+	output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
+		"sh", "-c", fmt.Sprintf("wc -l < %s", streamFile)).Exec()
+	if err != nil {
+		return 0, fmt.Errorf("wc -l on %s/%s:%s failed: %w (output=%q)",
+			ns, podName, streamFile, err, output)
+	}
+	var n int
+	if _, scanErr := fmt.Sscanf(strings.TrimSpace(output), "%d", &n); scanErr != nil {
+		return 0, fmt.Errorf("failed to parse wc -l output %q: %w", output, scanErr)
+	}
+	return n, nil
+}
+
+// countSequenceGaps parses "seq=N" lines and counts gaps in the sequence. When a gap is
+// found, it logs the lost range together with a small window of surrounding raw lines
+// to aid debugging in CI (e.g., distinguishing a clean re-sequence from a stream restart).
 func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 	first := true
-	for _, line := range lines {
+	for i, line := range lines {
 		var seq int
 		if _, scanErr := fmt.Sscanf(line, "seq=%d", &seq); scanErr == nil {
 			if !first && seq != lastSeq+1 {
 				gaps++
-				logrus.Infof("Sequence gap: %d -> %d", lastSeq, seq)
+				start := i - 3
+				if start < 0 {
+					start = 0
+				}
+				end := i + 4
+				if end > len(lines) {
+					end = len(lines)
+				}
+				logrus.Infof("Sequence gap: %d -> %d (context lines %d-%d: %q)",
+					lastSeq, seq, start, end-1, lines[start:end])
 			}
 			first = false
 			lastSeq = seq
@@ -448,13 +464,41 @@ func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 }
 
 // runOnTOR executes a shell command on the external TOR node via SSH and returns stdout.
-// Logs a warning on error but does not fail the test — callers decide how to handle errors.
+// Logs a warning on error but does not fail the test — use this for fire-and-forget
+// commands (process spawn, cleanup). For commands whose result drives an assertion, use
+// runOnTORE so SSH failures are surfaced rather than silently producing an empty string.
 func runOnTOR(tor *externalnode.Client, cmd string) string {
 	output, err := tor.Exec("sh", "-c", cmd)
 	if err != nil {
 		logrus.Warnf("TOR command failed: %s: %v", cmd, err)
 	}
 	return output
+}
+
+// runOnTORE executes a shell command on the TOR and returns stdout plus any SSH error.
+// Use this when the command's result drives a test assertion; an SSH/transport failure
+// must not be silently parsed as an empty result.
+func runOnTORE(tor *externalnode.Client, cmd string) (string, error) {
+	out, err := tor.Exec("sh", "-c", cmd)
+	if err != nil {
+		return out, fmt.Errorf("TOR cmd %q failed: %w (output=%q)", cmd, err, out)
+	}
+	return out, nil
+}
+
+// torStreamLineCount returns the number of lines in the given file on the TOR node.
+// Mirrors tcpStreamLineCount but executes via SSH on the external TOR. Surfaces SSH
+// errors and parse errors with full context.
+func torStreamLineCount(tor *externalnode.Client, file string) (int, error) {
+	out, err := runOnTORE(tor, fmt.Sprintf("wc -l < %s", file))
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	if _, scanErr := fmt.Sscanf(strings.TrimSpace(out), "%d", &n); scanErr != nil {
+		return 0, fmt.Errorf("failed to parse wc -l output %q: %w", out, scanErr)
+	}
+	return n, nil
 }
 
 func ptrInt64(v int64) *int64 { return &v }

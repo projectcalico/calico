@@ -84,10 +84,10 @@ var _ = describe.CalicoDescribe(
 			By("Verifying connectivity to VM before migration")
 			expectPingSuccess(ns, pingPod.Name, originalIP)
 
-			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			mig.Create(ctx)
-			DeferCleanup(mig.Delete)
-			mig.WaitForSuccess(ctx)
+			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			migration.Create(ctx)
+			DeferCleanup(migration.Delete)
+			migration.WaitForSuccess(ctx)
 
 			By("Verifying VMI IP is preserved after migration")
 			// Use Eventually to avoid reading stale VMI status after migration.

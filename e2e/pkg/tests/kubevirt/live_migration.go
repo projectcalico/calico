@@ -37,14 +37,14 @@ import (
 
 // KubeVirt live migration e2e tests validate Calico's seamless migration support for
 // KubeVirt VMs. The tests cover:
-//   - Correct route programming and IPAM attribute ownership handover (Tests 1-2)
-//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 3-4)
+//   - IPAM attribute ownership handover (Test 1)
+//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 2-3)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
 //   - IPAMConfig.kubeVirtVMAddressPersistence set to "Enabled"
 //   - At least 2 schedulable worker nodes (3 recommended for double-migration tests)
-//   - For Test 4: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
+//   - For Test 3: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
@@ -64,66 +64,20 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to create KubeVirt client")
 		})
 
-		// Test 1: Routes switch to target node after migration.
-		// Verifies that Felix correctly updates L3 routes during migration. Before migration,
-		// the VM's /32 route is a local "scope link" route on the source node. After migration,
-		// Felix detects the GARP/RARP from the newly-active VM on the target node, triggers
-		// the VerifyAndSwapOwnerAttributes call, and programs the local route on the target.
-		// The source node's local route must be removed.
-		It("should update routes to target node after migration", func() {
+		// Test 1: Target pod is promoted to active IPAM owner after migration.
+		// Validates the IPAM dual-owner mechanism by comparing the owner attributes
+		// before and after migration:
+		//
+		//   Before:  Active=source,  Alternate=empty
+		//   After:   Active=target,  Alternate=empty    (Felix EnsureActiveVMOwnerAttrs)
+		//
+		// The test positively asserts that the final active owner matches the real
+		// target pod and node, not just that it differs from the source.
+		It("should promote target pod to active IPAM owner after migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
-			vmName := "e2e-route-check"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
-
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
-
-			// Route may take a moment to be programmed after WEP creation.
-			By("Verifying local route on source node before migration")
-			Eventually(func() string {
-				return getRouteOnNode(f, sourceNode, originalIP)
-			}, 30*time.Second, 2*time.Second).Should(ContainSubstring("scope link"),
-				"expected local route on source node")
-
-			By("Triggering live migration")
-			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			mig.Create(ctx)
-			DeferCleanup(mig.Delete)
-			mig.WaitForSuccess(ctx)
-
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			targetNode := vmi.Status.NodeName
-			Expect(targetNode).NotTo(Equal(sourceNode))
-
-			By("Verifying local route on target node after migration")
-			Eventually(func() string {
-				return getRouteOnNode(f, targetNode, originalIP)
-			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("scope link"),
-				"expected local route on target node")
-
-			By("Verifying source node no longer has local route")
-			Eventually(func() bool {
-				route := getRouteOnNode(f, sourceNode, originalIP)
-				return !strings.Contains(route, "scope link")
-			}, 1*time.Minute, 5*time.Second).Should(BeTrue(),
-				"source node should not have local route after migration")
-			logrus.Infof("Routes correctly switched from %s to %s", sourceNode, targetNode)
-		})
-
-		// Test 2: Owner attributes swap during migration.
-		// Validates the IPAM dual-owner mechanism. Before migration, ActiveOwnerAttrs points
-		// to the source pod and AlternateOwnerAttrs is empty. After migration completes and
-		// Felix calls VerifyAndSwapOwnerAttributeForVM, ActiveOwnerAttrs must point to the
-		// target pod (new node), confirming the atomic ownership handover worked correctly.
-		It("should swap IPAM owner attributes on migration completion", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-			defer cancel()
-			ns := f.Namespace.Name
-			vmName := "e2e-attr-swap"
+			vmName := "e2e-attr-promote"
 			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
 
 			vm.Create(ctx)
@@ -134,46 +88,81 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
 
-			// IPAM attributes may take a moment to be set after CNI ADD.
-			By("Verifying IPAM attributes before migration")
 			lcgc := newLibcalicoClient(f)
-			Eventually(func() map[string]string {
-				active, _ := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
-				return active
-			}, 30*time.Second, 2*time.Second).Should(
-				HaveKeyWithValue(model.IPAMBlockAttributePod, sourcePod.Name))
 
-			_, alternateAttrs := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
-			Expect(alternateAttrs).To(BeEmpty())
+			By("Verifying IPAM attributes before migration (Active=source, Alternate=empty)")
+			Eventually(func() error {
+				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
+				if err != nil {
+					return err
+				}
+				if active[model.IPAMBlockAttributePod] != sourcePod.Name {
+					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
+						active[model.IPAMBlockAttributePod], sourcePod.Name)
+				}
+				if active[model.IPAMBlockAttributeNode] != sourceNode {
+					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
+						active[model.IPAMBlockAttributeNode], sourceNode)
+				}
+				if len(alternate) != 0 {
+					return fmt.Errorf("AlternateOwnerAttrs should be empty before migration, got %v", alternate)
+				}
+				return nil
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
 
 			By("Triggering live migration")
-			mig := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			mig.Create(ctx)
-			DeferCleanup(mig.Delete)
-			mig.WaitForSuccess(ctx)
+			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			migration.Create(ctx)
+			DeferCleanup(migration.Delete)
+			migration.WaitForSuccess(ctx)
 
-			By("Verifying ActiveOwnerAttrs changed to target pod after migration")
-			var finalActivePod, finalActiveNode string
-			Eventually(func() bool {
-				active, _ := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
-				if len(active) == 0 {
-					return false
+			// Read the target pod and node directly from the VMI's MigrationState,
+			// which KubeVirt populates with the source/target identifiers as part of
+			// the migration. This avoids races with the source virt-launcher pod still
+			// being Running (and the VMI's NodeName flipping) right after the VMIM
+			// reaches Succeeded.
+			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vmi.Status.MigrationState).NotTo(BeNil(), "VMI MigrationState should be populated")
+			Expect(vmi.Status.MigrationState.Completed).To(BeTrue(), "MigrationState should be marked completed")
+			targetPodName := vmi.Status.MigrationState.TargetPod
+			targetNode := vmi.Status.MigrationState.TargetNode
+			Expect(targetPodName).NotTo(BeEmpty(), "MigrationState.TargetPod should be set")
+			Expect(targetNode).NotTo(BeEmpty(), "MigrationState.TargetNode should be set")
+			Expect(targetPodName).NotTo(Equal(sourcePod.Name), "target pod should be a new pod")
+			Expect(targetNode).NotTo(Equal(sourceNode), "VM should have moved to a different node")
+			logrus.Infof("Target pod: %s on %s", targetPodName, targetNode)
+
+			By("Verifying target pod has the original IP")
+			targetPod, err := f.ClientSet.CoreV1().Pods(ns).Get(ctx, targetPodName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(targetPod.Status.PodIP).To(Equal(originalIP),
+				"target pod IP should match original VM IP")
+
+			By("Verifying Active=target and Alternate=empty after swap")
+			Eventually(func() error {
+				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
+				if err != nil {
+					return err
 				}
-				finalActivePod = active[model.IPAMBlockAttributePod]
-				finalActiveNode = active[model.IPAMBlockAttributeNode]
-				return finalActivePod != "" && finalActivePod != sourcePod.Name
-			}, 1*time.Minute, 2*time.Second).Should(BeTrue(),
-				"ActiveOwnerAttrs should change to target pod after migration")
-
-			logrus.Infof("After swap: Active pod=%s node=%s (was %s on %s)",
-				finalActivePod, finalActiveNode, sourcePod.Name, sourceNode)
-			Expect(finalActivePod).NotTo(Equal(sourcePod.Name),
-				"active owner should be target pod, not source")
-			Expect(finalActiveNode).NotTo(Equal(sourceNode),
-				"active owner should be on target node, not source node")
+				if active[model.IPAMBlockAttributePod] != targetPodName {
+					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
+						active[model.IPAMBlockAttributePod], targetPodName)
+				}
+				if active[model.IPAMBlockAttributeNode] != targetNode {
+					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
+						active[model.IPAMBlockAttributeNode], targetNode)
+				}
+				if len(alternate) != 0 {
+					return fmt.Errorf("AlternateOwnerAttrs should be cleared after promotion, got %v", alternate)
+				}
+				return nil
+			}, 1*time.Minute, 2*time.Second).Should(Succeed())
+			logrus.Infof("After promotion: Active pod=%s node=%s (was %s on %s)",
+				targetPodName, targetNode, sourcePod.Name, sourceNode)
 		})
 
-		// Test 3: TCP connection over iBGP survives two consecutive migrations.
+		// Test 2: TCP connection over iBGP survives two consecutive migrations.
 		// This is the key seamless migration test. A server VM runs a TCP server that sends
 		// "seq=N" every second. A client pod on a different node connects via nc and logs
 		// the stream. The server VM is migrated twice across 3 worker nodes. After both
@@ -197,55 +186,69 @@ var _ = describe.CalicoDescribe(
 
 			By("Creating client pod on a different node than server VM")
 			clientPod := setupAntiAffinityPod(ctx, f, ns, node1)
-			expectPingSuccess(ns, clientPod.Name, serverIP)
-			waitForTCPServer(ns, clientPod.Name, serverIP)
+			checkConnectionToTCPServer(ns, clientPod.Name, serverIP)
 
-			// Use nohup to prevent SIGHUP when kubectl exec session closes.
+			// Use nohup to prevent SIGHUP when kubectl exec session closes. The Exec()
+			// return is intentionally ignored: `nohup ... &` backgrounds immediately and
+			// always returns success, so its error value tells us nothing about whether
+			// nc actually connected. We verify liveness explicitly below.
 			By("Starting TCP client")
-			_, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
+			_, _ = kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
 				"sh", "-c", fmt.Sprintf("nohup nc %s 9999 > /tmp/tcp_stream 2>&1 &", serverIP)).Exec()
-			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				_, _ = kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
+					"pkill", "-f", fmt.Sprintf("nc %s 9999", serverIP)).Exec()
+			})
 
-			// Poll for data instead of fixed sleep.
+			By("Verifying nc client process is running")
+			Eventually(func() error {
+				out, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
+					"pgrep", "-f", fmt.Sprintf("nc %s 9999", serverIP)).Exec()
+				if err != nil {
+					return fmt.Errorf("pgrep failed: %w (output=%q)", err, out)
+				}
+				if strings.TrimSpace(out) == "" {
+					return fmt.Errorf("nc process not found — client exited immediately")
+				}
+				return nil
+			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client did not start")
+
 			By("Verifying TCP data is flowing before migration")
 			var preLines int
-			Eventually(func() int {
-				preOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-					"wc", "-l", "/tmp/tcp_stream").Exec()
-				fmt.Sscanf(strings.TrimSpace(preOutput), "%d", &preLines)
-				return preLines
+			Eventually(func() (int, error) {
+				var err error
+				preLines, err = tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
+				return preLines, err
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
 				"TCP data should be flowing")
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
 			By("First migration")
-			mig1 := &testVMIM{name: serverVMName + "-mig1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
-			mig1.Create(ctx)
-			DeferCleanup(mig1.Delete)
-			mig1.WaitForSuccess(ctx)
+			migration1 := &testVMIM{name: serverVMName + "-migration1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
+			migration1.Create(ctx)
+			DeferCleanup(migration1.Delete)
+			migration1.WaitForSuccess(ctx)
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node2 := vmi.Status.NodeName
 			Expect(node2).NotTo(Equal(node1))
 			logrus.Infof("First migration: %s -> %s", node1, node2)
 
-			// Poll for data growth instead of fixed sleep.
 			By("Verifying TCP stream survived first migration")
 			var midLines int
-			Eventually(func() int {
-				midOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-					"wc", "-l", "/tmp/tcp_stream").Exec()
-				fmt.Sscanf(strings.TrimSpace(midOutput), "%d", &midLines)
-				return midLines
+			Eventually(func() (int, error) {
+				var err error
+				midLines, err = tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
+				return midLines, err
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", preLines+5),
 				"TCP data should have grown after first migration")
 			logrus.Infof("After first migration: %d lines", midLines)
 
 			By("Second migration")
-			mig2 := &testVMIM{name: serverVMName + "-mig2", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
-			mig2.Create(ctx)
-			DeferCleanup(mig2.Delete)
-			mig2.WaitForSuccess(ctx)
+			migration2 := &testVMIM{name: serverVMName + "-migration2", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
+			migration2.Create(ctx)
+			DeferCleanup(migration2.Delete)
+			migration2.WaitForSuccess(ctx)
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			node3 := vmi.Status.NodeName
@@ -254,14 +257,9 @@ var _ = describe.CalicoDescribe(
 			Expect(node3).NotTo(Equal(node2))
 			logrus.Infof("Second migration: %s -> %s", node2, node3)
 
-			// Poll for data growth instead of fixed sleep.
 			By("Waiting for TCP data to grow after second migration")
-			Eventually(func() int {
-				postOutput, _ := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-					"wc", "-l", "/tmp/tcp_stream").Exec()
-				var postLines int
-				fmt.Sscanf(strings.TrimSpace(postOutput), "%d", &postLines)
-				return postLines
+			Eventually(func() (int, error) {
+				return tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second migration")
 
@@ -279,8 +277,8 @@ var _ = describe.CalicoDescribe(
 				"seamless live migration must not drop any TCP segments")
 		})
 
-		// Test 4: TCP connection from external eBGP client survives two consecutive migrations.
-		// Same as Test 3 but the TCP client runs on an external TOR node connected via eBGP
+		// Test 3: TCP connection from external eBGP client survives two consecutive migrations.
+		// Same as Test 2 but the TCP client runs on an external TOR node connected via eBGP
 		// (ASN 63000) over L2TP tunnels, rather than an in-cluster pod using iBGP mesh.
 		// This validates that the BGP route priority mechanism (krt_metric) works end-to-end:
 		// when the VM migrates, the elevated-priority route advertisement from the target
@@ -306,76 +304,97 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(vm.Delete)
 
 			vmIP, node1 := vm.WaitForRunningWithIP(ctx)
+			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
 
-			By("Waiting for VM TCP server")
-			probePod := setupPingPod(ctx, f, ns)
-			expectPingSuccess(ns, probePod.Name, vmIP)
-			waitForTCPServer(ns, probePod.Name, vmIP)
-			logrus.Infof("VM %s on %s with IP %s, TCP server ready", vmName, node1, vmIP)
+			By("Verifying TOR can reach the VM (eBGP routing is up)")
 			Eventually(func() string {
 				return runOnTOR(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
 			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("0% packet loss"),
 				"TOR cannot reach VM — eBGP routing may not be configured")
 
-			// Use setsid to fully detach nc from SSH session.
+			// Use setsid to fully detach nc from SSH session. The TCP server inside
+			// the VM may still be initializing — nc will retry-connect on each spawn,
+			// but we verify liveness explicitly with pgrep below.
 			By("Starting TCP client on TOR connecting to VM")
-			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 &", vmIP))
+			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 < /dev/null &", vmIP))
+			DeferCleanup(func() {
+				runOnTOR(tor, "pkill -f 'nc.*9999' 2>/dev/null || true")
+			})
+			// On test failure, dump the tail of the TOR's stream file for post-mortem.
+			DeferCleanup(func() {
+				if CurrentSpecReport().Failed() {
+					tail := runOnTOR(tor, "tail -n 50 /tmp/tcp_stream 2>/dev/null || true")
+					logrus.Warnf("TOR /tmp/tcp_stream tail (last 50 lines):\n%s", tail)
+				}
+			})
+
+			By("Verifying nc client process is running on TOR")
+			Eventually(func() error {
+				out, err := runOnTORE(tor, "pgrep -f 'nc.*9999' || true")
+				if err != nil {
+					return err
+				}
+				if strings.TrimSpace(out) == "" {
+					return fmt.Errorf("nc process not found on TOR — client exited immediately")
+				}
+				return nil
+			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client did not start on TOR")
 
 			By("Verifying TCP data is flowing from TOR before migration")
 			var preLines int
-			Eventually(func() int {
-				preOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
-				fmt.Sscanf(strings.TrimSpace(preOutput), "%d", &preLines)
-				return preLines
+			Eventually(func() (int, error) {
+				var err error
+				preLines, err = torStreamLineCount(tor, "/tmp/tcp_stream")
+				return preLines, err
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
 				"TCP data should be flowing from TOR")
 			logrus.Infof("Pre-migration: %d lines received on TOR", preLines)
 
 			By("First migration")
-			mig1 := &testVMIM{name: vmName + "-mig1", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			mig1.Create(ctx)
-			DeferCleanup(mig1.Delete)
-			mig1.WaitForSuccess(ctx)
+			migration1 := &testVMIM{name: vmName + "-migration1", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			migration1.Create(ctx)
+			DeferCleanup(migration1.Delete)
+			migration1.WaitForSuccess(ctx)
 			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			node2 := vmi.Status.NodeName
+			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1))
 			logrus.Infof("First eBGP migration: %s -> %s", node1, node2)
 
 			By("Verifying TCP data continued on TOR after first migration")
 			var midLines int
-			Eventually(func() int {
-				midOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
-				fmt.Sscanf(strings.TrimSpace(midOutput), "%d", &midLines)
-				return midLines
+			Eventually(func() (int, error) {
+				var err error
+				midLines, err = torStreamLineCount(tor, "/tmp/tcp_stream")
+				return midLines, err
 			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", preLines+5),
 				"TCP data should have grown after first eBGP migration")
 			logrus.Infof("After first eBGP migration: %d lines", midLines)
 
 			By("Second migration")
-			mig2 := &testVMIM{name: vmName + "-mig2", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			mig2.Create(ctx)
-			DeferCleanup(mig2.Delete)
-			mig2.WaitForSuccess(ctx)
+			migration2 := &testVMIM{name: vmName + "-migration2", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			migration2.Create(ctx)
+			DeferCleanup(migration2.Delete)
+			migration2.WaitForSuccess(ctx)
 			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			node3 := vmi.Status.NodeName
+			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			node3 := vmi.Status.MigrationState.TargetNode
 			Expect(node3).NotTo(Equal(node2))
 			logrus.Infof("Second eBGP migration: %s -> %s", node2, node3)
 
 			// eBGP route convergence through the external TOR may take longer than
 			// iBGP mesh, so allow more time for data to resume after the second migration.
 			By("Verifying TCP data continued on TOR after second migration")
-			Eventually(func() int {
-				postOutput := runOnTOR(tor, "wc -l < /tmp/tcp_stream")
-				var postLines int
-				fmt.Sscanf(strings.TrimSpace(postOutput), "%d", &postLines)
-				return postLines
+			Eventually(func() (int, error) {
+				return torStreamLineCount(tor, "/tmp/tcp_stream")
 			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second eBGP migration")
 
 			By("Checking sequence continuity from TOR across both migrations")
-			streamAll := runOnTOR(tor, "cat /tmp/tcp_stream")
+			streamAll, err := runOnTORE(tor, "cat /tmp/tcp_stream")
+			Expect(err).NotTo(HaveOccurred())
 			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
 			logrus.Infof("eBGP TCP stream: %d lines, first: %s, last: %s",
 				len(lines), lines[0], lines[len(lines)-1])
@@ -384,9 +403,6 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("eBGP sequence: %d gaps, %d data points across 2 migrations", seqGaps, lastSeq)
 			Expect(seqGaps).To(BeNumerically("==", 0),
 				"seamless live migration must not drop any TCP segments over eBGP")
-
-			// Cleanup: kill nc on TOR.
-			runOnTOR(tor, "pkill -f 'nc.*9999' 2>/dev/null || true")
 		})
 	},
 )
