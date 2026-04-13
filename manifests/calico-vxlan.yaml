@@ -2426,10 +2426,10 @@ spec:
                     to all nodes. For resources named "node.<nodename>", the configuration applies to
                     the named node only.
 
-                    When multiple selector-scoped FelixConfiguration resources match a given node, all
-                    matching configurations are merged in alphabetical order by resource name.
-                    For any fields set in more than one matching resource, the value from the
-                    last resource in alphabetical order takes precedence.
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, this is treated as a
+                    misconfiguration: all selector-scoped config is ignored and the node
+                    falls back to the default and per-host configuration only.
                   type: string
                 openstackRegion:
                   description: |-
