@@ -6273,16 +6273,17 @@ func (x *ServicePort) GetNodePort() int32 {
 }
 
 type ServiceUpdate struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Namespace      string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Type           string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
-	ClusterIps     []string               `protobuf:"bytes,4,rep,name=cluster_ips,json=clusterIps,proto3" json:"cluster_ips,omitempty"`
-	LoadbalancerIp string                 `protobuf:"bytes,5,opt,name=loadbalancer_ip,json=loadbalancerIp,proto3" json:"loadbalancer_ip,omitempty"`
-	ExternalIps    []string               `protobuf:"bytes,6,rep,name=external_ips,json=externalIps,proto3" json:"external_ips,omitempty"`
-	Ports          []*ServicePort         `protobuf:"bytes,7,rep,name=ports,proto3" json:"ports,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Name                   string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace              string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Type                   string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	ClusterIps             []string               `protobuf:"bytes,4,rep,name=cluster_ips,json=clusterIps,proto3" json:"cluster_ips,omitempty"`
+	LoadbalancerIp         string                 `protobuf:"bytes,5,opt,name=loadbalancer_ip,json=loadbalancerIp,proto3" json:"loadbalancer_ip,omitempty"`
+	ExternalIps            []string               `protobuf:"bytes,6,rep,name=external_ips,json=externalIps,proto3" json:"external_ips,omitempty"`
+	Ports                  []*ServicePort         `protobuf:"bytes,7,rep,name=ports,proto3" json:"ports,omitempty"`
+	LoadbalancerIngressIps []string               `protobuf:"bytes,8,rep,name=loadbalancer_ingress_ips,json=loadbalancerIngressIps,proto3" json:"loadbalancer_ingress_ips,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ServiceUpdate) Reset() {
@@ -6360,6 +6361,13 @@ func (x *ServiceUpdate) GetExternalIps() []string {
 func (x *ServiceUpdate) GetPorts() []*ServicePort {
 	if x != nil {
 		return x.Ports
+	}
+	return nil
+}
+
+func (x *ServiceUpdate) GetLoadbalancerIngressIps() []string {
+	if x != nil {
+		return x.LoadbalancerIngressIps
 	}
 	return nil
 }
@@ -6959,7 +6967,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\vServicePort\x12\x1a\n" +
 	"\bProtocol\x18\x01 \x01(\tR\bProtocol\x12\x12\n" +
 	"\x04Port\x18\x02 \x01(\x05R\x04Port\x12\x1a\n" +
-	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xec\x01\n" +
+	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xa6\x02\n" +
 	"\rServiceUpdate\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n" +
@@ -6968,7 +6976,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"clusterIps\x12'\n" +
 	"\x0floadbalancer_ip\x18\x05 \x01(\tR\x0eloadbalancerIp\x12!\n" +
 	"\fexternal_ips\x18\x06 \x03(\tR\vexternalIps\x12(\n" +
-	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\"A\n" +
+	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\x128\n" +
+	"\x18loadbalancer_ingress_ips\x18\b \x03(\tR\x16loadbalancerIngressIps\"A\n" +
 	"\rServiceRemove\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace*(\n" +

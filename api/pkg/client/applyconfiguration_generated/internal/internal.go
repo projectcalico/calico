@@ -1095,6 +1095,9 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HealthTimeoutOverride
           elementRelationship: atomic
+    - name: hostSubnetNeighResponses
+      type:
+        scalar: string
     - name: interfaceExclude
       type:
         scalar: string
