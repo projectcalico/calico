@@ -38,17 +38,15 @@ run_non_hcp_reports_and_diags() {
     echo "[INFO] global_epilogue: capturing diags"
     bz diags $VERBOSE |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
     artifact push job ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} --destination semaphore/diags.tgz || true
-    if [[ "$GS_BUCKET" != "" ]]; then
-      echo "[INFO] bucket_upload: capturing diags"
-      gsutil cp ${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME} gs://${GS_BUCKET}/${METADATA}/${DIAGS_ARCHIVE_FILENAME} || true
-    fi
+    upload_to_gcs "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${DIAGS_ARCHIVE_FILENAME}"
   fi
 
-  delete_artifacts; delete_calicoctl; delete_gcloud
+  delete_artifacts; delete_calicoctl
 
   REPORT_DIR=${REPORT_DIR:-"${BZ_LOCAL_DIR}/report/${TEST_TYPE}"}
   echo "[INFO] global_epilogue: pushing report artifacts"
   artifact push job ${REPORT_DIR} --destination semaphore/test-results || true
+  upload_to_gcs "${REPORT_DIR}/junit.xml" "junit.xml"
   cp ${REPORT_DIR}/junit.xml . || true
 
   echo "[INFO] publish new semaphore test results"
@@ -62,6 +60,30 @@ run_non_hcp_destroy() {
   bz destroy $VERBOSE |& tee ${BZ_LOGS_DIR}/destroy.log || true
 }
 
+# Upload a file to the GCS bucket.
+# VPP pipelines use their own METADATA path; all others use SEMAPHORE_JOB_ID.
+upload_to_gcs() {
+  local src="$1"
+  local dest_name="$2"
+  if [[ -z "${GS_BUCKET}" ]]; then
+    return
+  fi
+  local gcs_dir="${SEMAPHORE_JOB_ID}"
+  if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" ]]; then
+    gcs_dir="${METADATA}"
+  fi
+  echo "[INFO] bucket_upload: uploading ${dest_name} to gs://${GS_BUCKET}/${gcs_dir}/"
+  gsutil cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
+}
+
+# Create a logs tarball and upload it to GCS.
+upload_logs_to_gcs() {
+  local logs_tgz="/tmp/logs-${SEMAPHORE_JOB_ID}.tgz"
+  tar czf "${logs_tgz}" -C "${BZ_LOGS_DIR}" . || true
+  upload_to_gcs "${logs_tgz}" "logs.tgz"
+  rm -f "${logs_tgz}" || true
+}
+
 echo "[INFO] starting global_epilogue"
 
 cd "${BZ_HOME}"
@@ -71,9 +93,8 @@ else
   VERBOSE=""
 fi
 
-# If we've got GS_BUCKET defined, we should upload results and logs to Google Storage too.  This is used by the VPP pipelines.
-if [[ "$GS_BUCKET" != "" ]]; then
-  # Assemble metadata prefix for run artifacts
+# Assemble metadata prefix for VPP run artifacts.
+if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" && "$GS_BUCKET" != "" ]]; then
   METADATA="$(date -d @${SEMAPHORE_PIPELINE_STARTED_AT} -u --iso-8601=d)/${RELEASE_STREAM}/${PROVISIONER}/${MANIFEST_FILE}"
   if [[ "${ENABLE_HUGEPAGES}" == "true" ]]; then
     METADATA=${METADATA}/HUGEPAGES
@@ -118,21 +139,27 @@ if [[ "${HCP_ENABLED}" == "true" ]]; then
     echo "[INFO] global_epilogue: hcp: capturing diags"
     hcp-diags.sh |& tee ${BZ_LOGS_DIR}/diagnostic.log || true
     artifact push job ${BZ_PROFILES_PATH}/.diags --destination semaphore/diags || true
+    HCP_DIAGS_TGZ="/tmp/hcp-diags-${SEMAPHORE_JOB_ID}.tgz"
+    tar czf "${HCP_DIAGS_TGZ}" -C "${BZ_PROFILES_PATH}/.diags" . || true
+    upload_to_gcs "${HCP_DIAGS_TGZ}" "diags.tgz"
+    rm -f "${HCP_DIAGS_TGZ}" || true
   fi
 
   echo "[INFO] global_epilogue: hcp: pushing report artifacts"
   artifact push job ${BZ_PROFILES_PATH}/.report --destination semaphore/test-results || true
+  upload_to_gcs "${BZ_PROFILES_PATH}/.report/junit.xml" "junit.xml"
 
   echo "[INFO] publish new semaphore test results"
   test-results publish semaphore/test-results/junit.xml || true
 
-  delete_artifacts; delete_calicoctl; delete_gcloud
+  delete_artifacts; delete_calicoctl
 
   echo "[INFO] global_epilogue: hcp destroy"
   hcp-destroy.sh |& tee ${BZ_LOGS_DIR}/destroy.log || true
 
   echo "[INFO] global_epilogue: hcp: pushing log artifacts"
   artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
+  upload_logs_to_gcs
 else
   case "${HCP_STAGE:-}" in
     setup-hosting)
@@ -161,4 +188,7 @@ else
 
   echo "[INFO] global_epilogue: pushing log artifacts"
   artifact push job ${BZ_LOGS_DIR} --destination semaphore/logs || true
+  upload_logs_to_gcs
 fi
+
+delete_gcloud
