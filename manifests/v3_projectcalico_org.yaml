@@ -37781,6 +37781,8 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
