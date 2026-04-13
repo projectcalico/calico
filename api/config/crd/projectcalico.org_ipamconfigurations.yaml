@@ -87,6 +87,13 @@ spec:
                   maximum: 1000000
                   minimum: 0
                   type: integer
+                minIPReclaimAgeSeconds:
+                  description: |-
+                    MinIPReclaimAgeSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immeduately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  format: int32
+                  type: integer
                 strictAffinity:
                   default: false
                   description:
