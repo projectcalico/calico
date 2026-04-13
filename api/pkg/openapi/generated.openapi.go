@@ -3007,6 +3007,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 				Description: "FelixConfigurationSpec contains the values of the Felix configuration.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is an optional label selector that restricts this FelixConfiguration to only apply to nodes that match the given selector. This field is only valid on FelixConfiguration resources whose name is not \"default\" and does not start with \"node.\". For resources named \"default\", the configuration applies globally to all nodes. For resources named \"node.<nodename>\", the configuration applies to the named node only.\n\nAt most one selector-scoped FelixConfiguration should match any given node. If multiple selector-scoped resources match, this is treated as a misconfiguration: all selector-scoped config is ignored and the node falls back to the default and per-host configuration only.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"useInternalDataplaneDriver": {
 						SchemaProps: spec.SchemaProps{
 							Description: "UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.",

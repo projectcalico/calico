@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,31 @@
 package calc
 
 import (
+	"fmt"
 	"maps"
+	"reflect"
+	"strings"
+	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
+
+// selectorConfigEntry stores a selector-scoped FelixConfiguration along with
+// its parsed selector and extracted config key-value pairs.
+type selectorConfigEntry struct {
+	selectorStr string
+	sel         *selector.Selector
+	config      map[string]string
+}
 
 type ConfigBatcher struct {
 	hostname        string
@@ -32,15 +49,24 @@ type ConfigBatcher struct {
 	hostConfig      map[string]string
 	datastoreReady  bool
 	callbacks       configCallbacks
+
+	// nodeLabels holds the labels of the local node, used for evaluating
+	// selector-scoped FelixConfiguration resources.
+	nodeLabels map[string]string
+
+	// selectorConfigs stores selector-scoped FelixConfiguration resources,
+	// keyed by the resource name.
+	selectorConfigs map[string]*selectorConfigEntry
 }
 
 func NewConfigBatcher(hostname string, callbacks configCallbacks) *ConfigBatcher {
 	return &ConfigBatcher{
-		hostname:     hostname,
-		configDirty:  true,
-		globalConfig: make(map[string]string),
-		hostConfig:   make(map[string]string),
-		callbacks:    callbacks,
+		hostname:        hostname,
+		configDirty:     true,
+		globalConfig:    make(map[string]string),
+		hostConfig:      make(map[string]string),
+		callbacks:       callbacks,
+		selectorConfigs: make(map[string]*selectorConfigEntry),
 	}
 }
 
@@ -48,6 +74,7 @@ func (cb *ConfigBatcher) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	allUpdDispatcher.Register(model.GlobalConfigKey{}, cb.OnUpdate)
 	allUpdDispatcher.Register(model.HostConfigKey{}, cb.OnUpdate)
 	allUpdDispatcher.Register(model.ReadyFlagKey{}, cb.OnUpdate)
+	allUpdDispatcher.Register(model.ResourceKey{}, cb.OnUpdate)
 	allUpdDispatcher.RegisterStatusHandler(cb.OnDatamodelStatus)
 }
 
@@ -92,11 +119,122 @@ func (cb *ConfigBatcher) OnUpdate(update api.Update) (filterOut bool) {
 		} else {
 			cb.datastoreReady = true
 		}
+	case model.ResourceKey:
+		return cb.onResourceUpdate(key, update)
 	default:
-		log.Panicf("Unexpected update: %#v", update)
+		// Ignore updates for unknown key types; other components may register
+		// for model.ResourceKey and dispatch updates that aren't relevant here.
+		log.WithField("key", update.Key).Debug("Ignoring update with unhandled key type")
+		return
 	}
 	cb.maybeSendCachedConfig()
 	return
+}
+
+// onResourceUpdate handles ResourceKey-typed updates. These are used for:
+//   - selector-scoped FelixConfiguration resources (Kind == KindFelixConfiguration)
+//   - Node resources (Kind == KindNode) for tracking local node labels
+func (cb *ConfigBatcher) onResourceUpdate(key model.ResourceKey, update api.Update) (filterOut bool) {
+	switch key.Kind {
+	case apiv3.KindFelixConfiguration:
+		cb.onFelixConfigResourceUpdate(key.Name, update)
+	case internalapi.KindNode:
+		if key.Name != cb.hostname {
+			return
+		}
+		cb.onNodeUpdate(update)
+	default:
+		// Not a resource we care about.
+		return
+	}
+	cb.maybeSendCachedConfig()
+	return
+}
+
+// onFelixConfigResourceUpdate handles a selector-scoped FelixConfiguration resource update.
+func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Update) {
+	if update.Value == nil {
+		// Delete
+		if _, existed := cb.selectorConfigs[name]; existed {
+			delete(cb.selectorConfigs, name)
+			cb.configDirty = true
+			log.WithField("name", name).Info("Selector-scoped FelixConfiguration deleted")
+		}
+		return
+	}
+
+	fc, ok := update.Value.(*apiv3.FelixConfiguration)
+	if !ok {
+		log.WithField("value", update.Value).Warn("Unexpected value type for FelixConfiguration resource")
+		return
+	}
+
+	selectorStr := fc.Spec.NodeSelector
+	if selectorStr == "" {
+		// Empty selector on a selector-scoped resource — matches no nodes.
+		// We still store it in case a selector is added later via update.
+		log.WithField("name", name).Debug("Selector-scoped FelixConfiguration with empty selector, matches no nodes")
+	}
+
+	var sel *selector.Selector
+	if selectorStr != "" {
+		var err error
+		sel, err = selector.Parse(selectorStr)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"name":     name,
+				"selector": selectorStr,
+			}).Warn("Failed to parse nodeSelector on FelixConfiguration, ignoring")
+			return
+		}
+	}
+
+	config := ExtractConfigFromFelixSpec(&fc.Spec)
+
+	// Apply annotation-based config overrides, consistent with how the
+	// configUpdateProcessor handles annotations on default/per-node resources.
+	for k, v := range fc.GetAnnotations() {
+		if strings.HasPrefix(k, AnnotationConfigPrefix) {
+			config[k[len(AnnotationConfigPrefix):]] = v
+		}
+	}
+
+	cb.selectorConfigs[name] = &selectorConfigEntry{
+		selectorStr: selectorStr,
+		sel:         sel,
+		config:      config,
+	}
+	cb.configDirty = true
+	log.WithFields(log.Fields{
+		"name":     name,
+		"selector": selectorStr,
+		"config":   config,
+	}).Info("Selector-scoped FelixConfiguration updated")
+}
+
+// onNodeUpdate handles an update to the local node resource, tracking label changes.
+func (cb *ConfigBatcher) onNodeUpdate(update api.Update) {
+	if update.Value == nil {
+		if cb.nodeLabels != nil {
+			cb.nodeLabels = nil
+			cb.configDirty = true
+			log.Info("Local node deleted, clearing node labels")
+		}
+		return
+	}
+
+	node, ok := update.Value.(*internalapi.Node)
+	if !ok {
+		log.WithField("value", update.Value).Warn("Unexpected value type for Node resource")
+		return
+	}
+
+	newLabels := node.Labels
+	if !maps.Equal(cb.nodeLabels, newLabels) {
+		cb.nodeLabels = maps.Clone(newLabels)
+		cb.configDirty = true
+		log.WithField("labels", newLabels).Info("Local node labels changed")
+	}
 }
 
 func (cb *ConfigBatcher) OnDatamodelStatus(status api.SyncStatus) {
@@ -117,9 +255,123 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 	hostConfigCopy := make(map[string]string)
 	maps.Copy(globalConfigCopy, cb.globalConfig)
 	maps.Copy(hostConfigCopy, cb.hostConfig)
+
+	// Merge all matching selector-scoped configs into a single map.
+	selectorConfigMerged := cb.mergeMatchingSelectorConfigs()
+
 	if !cb.datastoreReady {
 		cb.callbacks.OnDatastoreNotReady()
 	}
-	cb.callbacks.OnConfigUpdate(globalConfigCopy, hostConfigCopy)
+	cb.callbacks.OnConfigUpdate(globalConfigCopy, selectorConfigMerged, hostConfigCopy)
 	cb.configDirty = false
+}
+
+// mergeMatchingSelectorConfigs evaluates all selector-scoped FelixConfiguration
+// resources against the local node's labels. If exactly one resource matches,
+// its config is returned. If multiple resources match, this is treated as a
+// misconfiguration: a warning is logged and an empty map is returned (falling
+// back to default + per-host config only).
+func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
+	if cb.nodeLabels == nil {
+		return make(map[string]string)
+	}
+	var matchingNames []string
+	for name, entry := range cb.selectorConfigs {
+		if entry.sel == nil {
+			continue
+		}
+		if entry.sel.Evaluate(cb.nodeLabels) {
+			matchingNames = append(matchingNames, name)
+		}
+	}
+	switch len(matchingNames) {
+	case 0:
+		return make(map[string]string)
+	case 1:
+		log.WithField("name", matchingNames[0]).Debug("Selector-scoped FelixConfiguration matches local node")
+		return maps.Clone(cb.selectorConfigs[matchingNames[0]].config)
+	default:
+		log.WithField("matching", matchingNames).Warn(
+			"Multiple selector-scoped FelixConfigurations match this node; " +
+				"this is a misconfiguration. Ignoring all selector-scoped config.")
+		return make(map[string]string)
+	}
+}
+
+// AnnotationConfigPrefix is the prefix for config override annotations on
+// FelixConfiguration resources. Must match the prefix in configurationprocessor.go.
+const AnnotationConfigPrefix = "config.projectcalico.org/"
+
+// ExtractConfigFromFelixSpec extracts the configuration key-value pairs from a
+// FelixConfigurationSpec using reflection. This mirrors the logic in the
+// configUpdateProcessor but produces a simple map rather than v1-model KVPairs.
+func ExtractConfigFromFelixSpec(spec *apiv3.FelixConfigurationSpec) map[string]string {
+	config := make(map[string]string)
+	specValue := reflect.ValueOf(spec).Elem()
+	specType := specValue.Type()
+
+	for i := 0; i < specType.NumField(); i++ {
+		fieldInfo := specType.Field(i)
+		name := fieldInfo.Tag.Get("confignamev1")
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = fieldInfo.Name
+		}
+
+		field := specValue.Field(i)
+
+		// Skip unset (nil pointer) fields and empty strings.
+		if field.Kind() == reflect.Pointer {
+			if field.IsNil() {
+				continue
+			}
+			field = field.Elem()
+		} else {
+			if field.Kind() == reflect.String && field.Len() == 0 {
+				continue
+			}
+		}
+
+		value := field.Interface()
+
+		// Convert the value to string. Use the same special-case converters
+		// as the configUpdateProcessor to ensure consistent string formatting.
+		var strValue string
+		if converter, ok := updateprocessors.FelixValueConverters[name]; ok {
+			converted := converter(value)
+			if converted == nil {
+				continue
+			}
+			strValue = converted.(string)
+		} else {
+			switch vt := value.(type) {
+			case string:
+				strValue = vt
+			case v1.Duration:
+				switch fieldInfo.Tag.Get("configv1timescale") {
+				case "milliseconds":
+					ms := vt.Duration / time.Millisecond
+					remainder := vt.Duration % time.Millisecond
+					strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
+				default:
+					strValue = fmt.Sprintf("%v", vt.Seconds())
+				}
+			case []string:
+				strValue = strings.Join(vt, ",")
+			case map[string]string:
+				var kvp strings.Builder
+				for k, v := range vt {
+					kvp.WriteString(k + "=" + v + ",")
+				}
+				strValue = kvp.String()
+			default:
+				strValue = fmt.Sprintf("%v", vt)
+			}
+		}
+
+		config[name] = strValue
+	}
+	return config
 }
