@@ -309,8 +309,8 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
 	callers := arc.computedSelectorCallers[cs]
 	if callers == nil {
-		arc.computedSelectorCallers[cs] = set.New[any]()
-		callers = arc.computedSelectorCallers[cs]
+		callers = set.New[any]()
+		arc.computedSelectorCallers[cs] = callers
 		sel, err := selector.Parse(cs)
 		if err != nil {
 			log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
