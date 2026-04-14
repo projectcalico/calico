@@ -520,7 +520,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         If a dead greenlet is found, we log an error and exit.  The
         process manager (systemd) will restart neutron-server, which is
         the safest recovery — the same approach the elector already uses
-        for its own unhandled-exception path.  See CI-1892.
+        for its own unhandled-exception path.
         """
         for name, gt in self._greenlets:
             if gt.dead:
