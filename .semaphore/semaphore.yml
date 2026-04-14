@@ -1975,8 +1975,10 @@ blocks:
           env_vars:
             - name: CLUSTER_ROUTING
               value: "FELIX"
-            - name: E2E_SKIP
-              value: "BGP"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind-felix-routing.yaml"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:

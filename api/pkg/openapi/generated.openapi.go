@@ -2238,7 +2238,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref common.ReferenceCallbac
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Type indicates whether this peer is configured via the node-to-node mesh, or via en explicit global or per-node BGPPeer object.",
+							Description: "Type indicates whether this peer is configured via the node-to-node mesh, or via an explicit global or per-node BGPPeer object.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
