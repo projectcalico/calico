@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 from oslo_log import log
 
 LOG = log.getLogger(__name__)
@@ -91,6 +93,8 @@ class ResourceSyncer(object):
         self.resource_kind = resource_kind
 
     def resync(self, context):
+        resync_start = time.monotonic()
+
         LOG.info(
             "Starting resync for %s; getting data from etcd...", self.resource_kind
         )
@@ -98,26 +102,36 @@ class ResourceSyncer(object):
         # Get all resources of this type from etcd - as an array of (name,
         # data, mod_revision) tuples.
         etcd_resources = self.get_all_from_etcd()
+        t_etcd_read = time.monotonic()
 
         # Get the corresponding Neutron resources - as a map from resource name
         # to <relevant Neutron data>.
         LOG.info(
-            "Resync for %s; got etcd data (%s items), getting data from neutron...",
+            "Resync for %s; got %d items from etcd in %.3fs,"
+            " getting data from neutron...",
             self.resource_kind,
             len(etcd_resources),
+            t_etcd_read - resync_start,
         )
         with self.txn_from_context(context, "get-all-" + self.resource_kind):
             neutron_map = self.get_all_from_neutron(context)
+        t_neutron_read = time.monotonic()
+
+        LOG.info(
+            "Resync for %s; got %d items from neutron in %.3fs,"
+            " comparing with etcd data...",
+            self.resource_kind,
+            len(neutron_map),
+            t_neutron_read - t_etcd_read,
+        )
 
         # The set of resource names that should exist and for which we've
         # already compared the existing etcd data against Neutron.
         names_compared = set()
+        n_correct = 0
+        n_updated = 0
+        n_deleted = 0
 
-        LOG.info(
-            "Resync for %s; got neutron data (%s items), look for incorrect data...",
-            self.resource_kind,
-            len(neutron_map),
-        )
         for etcd_resource in etcd_resources:
             name, data, mod_revision = etcd_resource
             if name in neutron_map:
@@ -136,6 +150,7 @@ class ResourceSyncer(object):
                 # Compare that against what we already have in etcd.
                 if self.etcd_write_data_matches_existing(write_data, data):
                     LOG.debug("etcd data good for %s %s", self.resource_kind, name)
+                    n_correct += 1
                 else:
                     # There's a difference, so do the write.
                     LOG.warning(
@@ -148,6 +163,7 @@ class ResourceSyncer(object):
                             self.resource_kind,
                             name,
                         )
+                    n_updated += 1
             else:
                 # This name is in etcd but now has nothing corresponding in
                 # Neutron, so remember it for deletion from etcd.
@@ -159,10 +175,10 @@ class ResourceSyncer(object):
                         self.resource_kind,
                         name,
                     )
+                n_deleted += 1
+        t_compare = time.monotonic()
 
-        LOG.info(
-            "Resync for %s; got etcd data, look for deletions...", self.resource_kind
-        )
+        n_created = 0
         for name, neutron_data in neutron_map.items():
             # Skip this name if we already handled it above - i.e. if we
             # already had data for it in etcd.
@@ -184,6 +200,7 @@ class ResourceSyncer(object):
                             self.resource_kind,
                             name,
                         )
+                    n_created += 1
                 except ResourceGone:
                     LOG.warning(
                         "Neutron resource gone for %s %s; presume"
@@ -195,8 +212,26 @@ class ResourceSyncer(object):
         # Delete any legacy etcd data for this kind of resource.  (For example,
         # how this resource was represented in a previous release.)
         self.delete_legacy_etcd_data()
+        t_end = time.monotonic()
 
-        LOG.info("Resync for %s; done.", self.resource_kind)
+        LOG.info(
+            "Resync for %s done in %.3fs: "
+            "etcd_read=%.3fs neutron_read=%.3fs compare=%.3fs create=%.3fs "
+            "| %d etcd items, %d neutron items "
+            "| %d correct, %d updated, %d deleted, %d created",
+            self.resource_kind,
+            t_end - resync_start,
+            t_etcd_read - resync_start,
+            t_neutron_read - t_etcd_read,
+            t_compare - t_neutron_read,
+            t_end - t_compare,
+            len(etcd_resources),
+            len(neutron_map),
+            n_correct,
+            n_updated,
+            n_deleted,
+            n_created,
+        )
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.
