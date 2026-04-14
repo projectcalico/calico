@@ -28,6 +28,7 @@ import contextlib
 from datetime import datetime, timedelta
 import os
 import re
+import sys
 import threading
 import uuid
 from functools import wraps
@@ -341,6 +342,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Last resync completion time
         self.last_resync_time = datetime.now()
 
+        # List of (name, greenlet) for the long-running worker greenlets
+        # spawned by _post_fork_init.  Used by _check_greenlets_alive() to
+        # detect silent greenlet death.
+        self._greenlets = []
+
         # Tell the monkeypatch where we are.
         global mech_driver
         assert mech_driver is None
@@ -462,13 +468,43 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # We deliberately do this last, to ensure that all of the setup
                 # above is complete before we start running.
                 self._epoch += 1
-                eventlet.spawn(self.resync_monitor_thread, self._epoch)
-                eventlet.spawn(self.periodic_resync_thread, self._epoch)
+                self._greenlets = []
+                self._greenlets.append(
+                    (
+                        "resync_monitor",
+                        eventlet.spawn(self.resync_monitor_thread, self._epoch),
+                    )
+                )
+                self._greenlets.append(
+                    (
+                        "periodic_resync",
+                        eventlet.spawn(self.periodic_resync_thread, self._epoch),
+                    )
+                )
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-                    eventlet.spawn(self.periodic_compaction_thread, self._epoch)
-                eventlet.spawn(self._status_updating_thread, self._epoch)
-                for _ in range(cfg.CONF.calico.num_port_status_threads):
-                    eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
+                    self._greenlets.append(
+                        (
+                            "periodic_compaction",
+                            eventlet.spawn(
+                                self.periodic_compaction_thread, self._epoch
+                            ),
+                        )
+                    )
+                self._greenlets.append(
+                    (
+                        "status_updating",
+                        eventlet.spawn(self._status_updating_thread, self._epoch),
+                    )
+                )
+                for i in range(cfg.CONF.calico.num_port_status_threads):
+                    self._greenlets.append(
+                        (
+                            "port_status_%d" % i,
+                            eventlet.spawn(
+                                self._loop_writing_port_statuses, self._epoch
+                            ),
+                        )
+                    )
             else:
                 LOG.info(
                     "PID %s: Not a voting participant; "
@@ -482,6 +518,29 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 "Calico mechanism driver initialisation done in process %s", current_pid
             )
 
+    def _check_greenlets_alive(self):
+        """Detect if any long-running worker greenlet has silently died.
+
+        Under eventlet, a greenlet can occasionally die without unwinding
+        its Python frames (e.g. due to a hub-level error), leaving no
+        traceback in the log and no state cleanup.  This method provides
+        mutual watchdogging: each of the driver's long-running loops
+        calls it periodically to verify that the others are still alive.
+
+        If a dead greenlet is found, we log an error and exit.  The
+        process manager (systemd) will restart neutron-server, which is
+        the safest recovery — the same approach the elector already uses
+        for its own unhandled-exception path.
+        """
+        for name, gt in self._greenlets:
+            if gt.dead:
+                LOG.error(
+                    "Worker greenlet %r has unexpectedly died; exiting so "
+                    "that the process manager can restart neutron-server.",
+                    name,
+                )
+                sys.exit(1)
+
     @logging_exceptions(LOG)
     def _status_updating_thread(self, expected_epoch):
         """_status_updating_thread
@@ -493,8 +552,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("STATUS_UPDATING")
         LOG.info("Status updating thread started.")
         while self._epoch == expected_epoch:
-            # Only handle updates if we are the master node.
-            if self.elector.master():
+            self._check_greenlets_alive()
+            # Only handle updates if we are healthily the master node.  See
+            # Elector.healthy() for why we use healthy() rather than master().
+            if self.elector.healthy():
                 if self._etcd_watcher is None:
                     LOG.info("Became the master, starting StatusWatcher")
                     self._etcd_watcher = StatusWatcher(self)
@@ -1232,8 +1293,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Resync monitor thread started")
 
             while self._epoch == launch_epoch:
-                # Only monitor the resync if we are the master node.
-                if self.elector.master():
+                self._check_greenlets_alive()
+                # Only monitor the resync if we are healthily the master node.
+                if self.elector.healthy():
                     LOG.info("I am master: monitoring periodic resync")
 
                     curr_time = datetime.now()
@@ -1276,8 +1338,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         try:
             LOG.info("Periodic resync thread started")
             while self._epoch == launch_epoch:
-                # Only do the resync if we are the master node.
-                if self.elector.master():
+                # Only do the resync if we are healthily the master node AND
+                # etcd still agrees that we are the master.  The extra etcd
+                # read (vs. plain healthy()) defends against the in-process
+                # flag disagreeing with etcd's ground truth; resync is much
+                # more expensive than a single etcd GET, so the extra check
+                # is cheap by comparison.
+                if self.elector.confirmed_master():
                     LOG.info("I am master: doing periodic resync")
                     start_time = datetime.now()
 
@@ -1343,8 +1410,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         try:
             LOG.info("Periodic compaction thread started")
             while self._epoch == launch_epoch:
-                # Only do the compaction if we are the master node.
-                if self.elector.master():
+                # Only do the compaction if we are healthily the master node.
+                if self.elector.healthy():
                     LOG.info("I am master: doing periodic compaction")
 
                     try:
