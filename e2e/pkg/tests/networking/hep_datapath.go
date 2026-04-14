@@ -467,24 +467,45 @@ var _ = describe.CalicoDescribe(
 		}
 
 		for _, scenario := range hepScenarioTable {
+			if scenario.tablesDataplaneOnly {
+				continue
+			}
 			s := scenario // capture
-
 			Context(s.name, func() {
 				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
-					if s.tablesDataplaneOnly && (dp.IsBPF() || dp.IsVPP()) {
-						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
-					}
 					runHEPScenario(s, false)
 				})
 
 				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
-					if s.tablesDataplaneOnly && (dp.IsBPF() || dp.IsVPP()) {
-						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
-					}
 					runHEPScenario(s, true)
 				})
 			})
 		}
+
+		// Xtables-only scenarios — only valid on iptables/nftables dataplanes.
+		Context("xtables-only", describe.RequiresXtables(), func() {
+			for _, scenario := range hepScenarioTable {
+				if !scenario.tablesDataplaneOnly {
+					continue
+				}
+				s := scenario // capture
+				Context(s.name, func() {
+					It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
+						if dp.IsBPF() || dp.IsVPP() {
+							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
+						}
+						runHEPScenario(s, false)
+					})
+
+					It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
+						if dp.IsBPF() || dp.IsVPP() {
+							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
+						}
+						runHEPScenario(s, true)
+					})
+				})
+			}
+		})
 	},
 )
 
