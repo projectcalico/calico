@@ -17,6 +17,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -97,14 +98,20 @@ func runStatsAll() error {
 
 	found := false
 	for _, name := range ifaces {
+		// Skip IFB devices — their stats are already reported as the
+		// egress row of the corresponding cali*/tap* interface.
+		if strings.HasPrefix(name, "bwcali") {
+			continue
+		}
 		ingress, egress, _ := ReadPodStats(name)
 		if ingress == nil && egress == nil {
 			continue
 		}
 		found = true
+		ifLabel := name
 		if ingress != nil {
 			fmt.Fprintf(w, "%s\tIngress\t%s\t%d\t%d\t%d\t%d\t%s\n",
-				name,
+				ifLabel,
 				FormatBytes(ingress.Bytes),
 				ingress.Packets,
 				ingress.Drops,
@@ -112,10 +119,11 @@ func runStatsAll() error {
 				ingress.Backlog,
 				FormatBits(ingress.Rate),
 			)
+			ifLabel = ""
 		}
 		if egress != nil {
 			fmt.Fprintf(w, "%s\tEgress\t%s\t%d\t%d\t%d\t%d\t%s\n",
-				name,
+				ifLabel,
 				FormatBytes(egress.Bytes),
 				egress.Packets,
 				egress.Drops,
