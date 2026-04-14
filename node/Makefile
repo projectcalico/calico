@@ -139,7 +139,7 @@ ST_OPTIONS?=
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
-NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
+NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/usr/lib/calico/bpf/*')
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
