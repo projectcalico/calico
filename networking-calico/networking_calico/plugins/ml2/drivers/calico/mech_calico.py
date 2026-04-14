@@ -1279,7 +1279,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # Only do the resync if we are the master node.
                 if self.elector.master():
                     LOG.info("I am master: doing periodic resync")
-                    start_time = datetime.now()
 
                     # Since this thread is not associated with any particular
                     # request, we use our own admin context for accessing the
@@ -1287,26 +1286,39 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     admin_context = ctx.get_admin_context()
 
                     try:
+                        import time as _time
+
                         # Resync subnets.
+                        t0 = _time.monotonic()
                         self.subnet_syncer.resync(admin_context)
+                        t1 = _time.monotonic()
 
                         # Resync policies.  Do this before endpoints because
                         # it's worse to have incorrect or missing policy for a
                         # known endpoint, than it is to have a briefly
                         # incorrect or missing endpoint.
                         self.policy_syncer.resync(admin_context)
+                        t2 = _time.monotonic()
 
                         # Resync endpoints.
                         self.endpoint_syncer.resync(admin_context)
+                        t3 = _time.monotonic()
 
                         # Resync ClusterInformation and FelixConfiguration.
                         self.provide_felix_config()
+                        t4 = _time.monotonic()
 
                         # mark this resync as finished.
                         self.last_resync_time = datetime.now()
                         LOG.info(
-                            "The periodic resync finished after"
-                            f" {self.last_resync_time - start_time}"
+                            "Periodic resync finished in %.3fs: "
+                            "subnets=%.3fs policies=%.3fs "
+                            "endpoints=%.3fs felix_config=%.3fs",
+                            t4 - t0,
+                            t1 - t0,
+                            t2 - t1,
+                            t3 - t2,
+                            t4 - t3,
                         )
                     except Exception:
                         LOG.exception("Error in periodic resync thread.")
