@@ -237,6 +237,7 @@ local:felix/bpf/xdp
 local:felix/cachingmap
 local:felix/calc
 local:felix/cmd/calico-bpf/commands
+local:felix/cmd/calico-qos/commands
 local:felix/collector
 local:felix/collector/flowlog
 local:felix/collector/goldmane
@@ -369,6 +370,7 @@ local:node/cmd/calico
 local:node/cmd/calico-ipam
 local:node/cmd/calico-node
 local:node/cmd/calico-node/bpf
+local:node/cmd/calico-node/qos
 local:node/cmd/mountns
 local:node/pkg/allocateip
 local:node/pkg/calicoclient

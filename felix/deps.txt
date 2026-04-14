@@ -224,6 +224,8 @@ local:felix/cmd/calico-bpf
 local:felix/cmd/calico-bpf/commands
 local:felix/cmd/calico-felix
 local:felix/cmd/calico-felix-docgen
+local:felix/cmd/calico-qos
+local:felix/cmd/calico-qos/commands
 local:felix/collector
 local:felix/collector/flowlog
 local:felix/collector/goldmane

@@ -370,6 +370,12 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(ingressLimitedPeakrate).To(BeNumerically(">=", 10000000.0))
 						Expect(ingressLimitedPeakrate).To(BeNumerically("<=", 100000000.0*1.2))
 
+						By("Verifying calico-qos stats reports ingress traffic")
+						qosOut, err := tc.Felixes[1].ExecOutput("calico-qos", "stats", w[1].InterfaceName)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(qosOut).To(ContainSubstring("10.0 Mbps"))
+						Expect(qosOut).To(MatchRegexp(`Ingress\s+\d+\.\d+ [KMGT]B`))
+
 						By("Setting 10Mbps limit and 100Mbps peakrate for egress on workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
 							EgressBandwidth: 10000000,
@@ -392,6 +398,11 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(egressLimitedRate).To(BeNumerically("<=", 10000000.0*1.2))
 						Expect(egressLimitedPeakrate).To(BeNumerically(">=", 10000000.0))
 						Expect(egressLimitedPeakrate).To(BeNumerically("<=", 100000000.0*1.2))
+
+						By("Verifying calico-qos stats reports egress traffic")
+						qosOut, err = tc.Felixes[1].ExecOutput("calico-qos", "stats", w[1].InterfaceName)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(qosOut).To(MatchRegexp(`Egress\s+\d+\.\d+ [KMGT]B`))
 
 						By("Removing all limits from workload 1")
 						w[1].WorkloadEndpoint.Spec.QoSControls = nil
