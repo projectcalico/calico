@@ -30,7 +30,6 @@ import (
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/time/rate"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -52,8 +51,6 @@ var (
 	clientCAFile string
 	logLevel     string
 	port         int
-	rateLimit    float64
-	rateBurst    int
 )
 
 var WebhookCommand = &cobra.Command{
@@ -79,8 +76,6 @@ func init() {
 	WebhookCommand.Flags().StringVar(&clientCAFile, "client-ca-file", "", "If set, enables mTLS by requiring and verifying client certificates signed by this CA.")
 	WebhookCommand.Flags().IntVar(&port, "port", 6443, "Secure port that the webhook listens on")
 	WebhookCommand.Flags().StringVar(&logLevel, "log-level", "info", "Logrus log level to output (trace, debug, info, warning, error, fatal, panic)")
-	WebhookCommand.Flags().Float64Var(&rateLimit, "rate-limit", 25, "Maximum sustained requests per second across all webhook endpoints.")
-	WebhookCommand.Flags().IntVar(&rateBurst, "rate-burst", 50, "Maximum burst of requests allowed above the sustained rate limit.")
 }
 
 func main() {
@@ -121,9 +116,8 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("Failed to create Calico clientset")
 	}
 
-	// Register webhook handlers with rate limiting.
-	limiter := rate.NewLimiter(rate.Limit(rateLimit), rateBurst)
-	registerHooks(cs, calicoCS, limiter)
+	// Register webhook handlers.
+	registerHooks(cs, calicoCS)
 
 	// Create and run the server.
 	cfg, err := ctls.NewTLSConfig()
@@ -133,11 +127,11 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	if clientCAFile != "" {
 		caCert, err := os.ReadFile(clientCAFile)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to read client CA file")
+			logrus.WithError(err).Fatalf("Failed to read client CA file %q", clientCAFile)
 		}
 		certPool := x509.NewCertPool()
 		if !certPool.AppendCertsFromPEM(caCert) {
-			logrus.Fatal("Failed to parse client CA certificate")
+			logrus.Fatalf("Failed to parse client CA certificate from %q: file must contain PEM-encoded certificates", clientCAFile)
 		}
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 		cfg.ClientCAs = certPool
@@ -159,13 +153,11 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface, limiter *rate.Limiter) {
-	handle := rateLimitedHandleFn(limiter)
-	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handle))
-	clusterinfo.RegisterHook(utils.HandleFn(handle))
+func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
+	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
+	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
 
-	// Readiness endpoint is not rate-limited — if health checks are rejected,
-	// Kubernetes restarts the pod, which amplifies a DoS.
+	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())
 }
 
@@ -177,18 +169,10 @@ func readyFn() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-// rateLimitedHandleFn returns a HandleFn that enforces a global rate limit
-// on all webhook endpoints.
-func rateLimitedHandleFn(limiter *rate.Limiter) func(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *http.Request) {
-	return func(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *http.Request) {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if !limiter.Allow() {
-				logrus.Warn("Rate limit exceeded, rejecting request")
-				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-				return
-			}
-			handleRequest(w, r, handler)
-		}
+// handleFn implements utils.HandleFn to allow registration of webhooks.
+func handleFn(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handleRequest(w, r, handler)
 	}
 }
 
