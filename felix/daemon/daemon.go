@@ -1325,14 +1325,66 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 			}()
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
 				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 {
-				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
-				fc.shutDownProcess(reasonEncapChanged)
+				log.WithFields(log.Fields{
+					"ipip":     msg.IpipEnabled,
+					"vxlan":    msg.VxlanEnabled,
+					"vxlanV6":  msg.VxlanEnabledV6,
+					"oldIpip":  encap.IPIPEnabled,
+					"oldVxlan": encap.VXLANEnabled,
+					"oldVxlanV6": encap.VXLANEnabledV6,
+				}).Warn("IPIP and/or VXLAN encapsulation change reported by calc graph.")
+				// Re-verify by listing IP pools directly from the datastore.
+				// This guards against transient pool data anomalies from
+				// watcher resyncs triggering unnecessary restarts.
+				if fc.confirmEncapChanged() {
+					log.Warn("Encapsulation change confirmed from datastore, restarting.")
+					fc.shutDownProcess(reasonEncapChanged)
+				} else {
+					log.Warn("Encapsulation change NOT confirmed from datastore, ignoring transient update.")
+				}
 			}
 		}
 		if err := fc.dataplane.SendMessage(msg); err != nil {
 			fc.shutDownProcess("Failed to write to dataplane driver")
 		}
 	}
+}
+
+// confirmEncapChanged re-lists IP pools from the datastore and recomputes
+// the encapsulation state.  Returns true if the fresh computation differs
+// from the startup state, confirming that a restart is needed.  This
+// filters out transient pool data anomalies that can arise from watcher
+// resyncs without delaying legitimate encapsulation changes.
+func (fc *DataplaneConnector) confirmEncapChanged() bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ippoolKVPList, err := fc.datastore.List(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+	if err != nil {
+		log.WithError(err).Warn("Failed to list IP pools for encapsulation verification; assuming change is real.")
+		return true
+	}
+
+	fc.configLock.Lock()
+	cfg := fc.config
+	startupEncap := fc.config.Encapsulation
+	fc.configLock.Unlock()
+
+	freshCalc := calc.NewEncapsulationCalculator(cfg, ippoolKVPList)
+	freshEncap := config.Encapsulation{
+		IPIPEnabled:    freshCalc.IPIPEnabled(),
+		VXLANEnabled:   freshCalc.VXLANEnabled(),
+		VXLANEnabledV6: freshCalc.VXLANEnabledV6(),
+	}
+
+	if freshEncap != startupEncap {
+		log.WithFields(log.Fields{
+			"startup": startupEncap,
+			"fresh":   freshEncap,
+		}).Info("Fresh encapsulation computation differs from startup.")
+		return true
+	}
+	log.WithField("encap", freshEncap).Info("Fresh encapsulation computation matches startup; transient change.")
+	return false
 }
 
 func (fc *DataplaneConnector) shutDownProcess(reason string) {

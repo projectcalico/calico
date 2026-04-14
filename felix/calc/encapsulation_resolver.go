@@ -98,6 +98,9 @@ func (r *EncapsulationResolver) triggerCalculation() {
 			"newVXLANEnabled":   newEncap.VXLANEnabled,
 			"oldVXLANEnabledV6": r.config.Encapsulation.VXLANEnabledV6,
 			"newVXLANEnabledV6": newEncap.VXLANEnabledV6,
+			"numIPIPPools":      len(r.encapCalc.ipipPools),
+			"numVXLANPools":     len(r.encapCalc.vxlanPools),
+			"numVXLANPoolsV6":   len(r.encapCalc.vxlanPoolsv6),
 		}).Info("EncapsulationResolver: Encapsulation changed.")
 	}
 
