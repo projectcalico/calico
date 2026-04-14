@@ -267,3 +267,134 @@ class TestElection(unittest.TestCase):
         self.assertEqual([], client.transaction.mock_calls)
         client.failure = None
         self._wait_and_stop(client, elector)
+
+
+class TestHealthyAndConfirmedMaster(unittest.TestCase):
+    """Tests for Elector.healthy() and Elector.confirmed_master().
+
+    These don't exercise _run / _vote / _become_master; they construct an
+    Elector, immediately kill its greenlet, and then drive the new methods
+    directly by manipulating the internal state the methods read.
+    """
+
+    def setUp(self):
+        super(TestHealthyAndConfirmedMaster, self).setUp()
+        # Prevent sys.exit() in _run from interfering if the greenlet we
+        # spawn hits an exception before we kill it.
+        self.sys_exit_p = mock.patch("sys.exit")
+        self.sys_exit_p.start()
+        etcdv3._client = mock.Mock()
+
+    def tearDown(self):
+        self.sys_exit_p.stop()
+        etcdv3._client = None
+        super(TestHealthyAndConfirmedMaster, self).tearDown()
+
+    def _make_elector(self, ttl=15):
+        elector = election.Elector("server-id", "/bloop", interval=5, ttl=ttl)
+        # Kill the spawned greenlet so we can drive state manually without
+        # racing against _run.  Don't call wait() — it would re-raise the
+        # greenlet's GreenletExit into the test, which is not what we're
+        # testing.
+        elector._greenlet.kill()
+        return elector
+
+    @staticmethod
+    def _alive_greenlet_stub():
+        """Return a stub greenlet object that looks alive to healthy()."""
+        stub = mock.Mock()
+        stub.dead = False
+        return stub
+
+    def test_healthy_false_when_not_master(self):
+        elector = self._make_elector()
+        self.assertFalse(elector.master())
+        self.assertFalse(elector.healthy())
+
+    def test_healthy_false_when_stopped(self):
+        elector = self._make_elector()
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        elector._stopped = True
+        self.assertFalse(elector.healthy())
+
+    def test_healthy_false_when_greenlet_dead(self):
+        elector = self._make_elector()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        # _make_elector has already killed the greenlet; healthy() should
+        # notice that it is dead and return False despite _master being set.
+        self.assertTrue(elector._greenlet.dead)
+        self.assertFalse(elector.healthy())
+
+    def test_healthy_false_when_lease_stale(self):
+        elector = self._make_elector(ttl=15)
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        # Pretend the last refresh was much longer ago than the ttl.
+        elector._last_refresh = election.monotonic_time() - 100
+        self.assertFalse(elector.healthy())
+
+    def test_healthy_true_when_master_and_fresh(self):
+        elector = self._make_elector(ttl=15)
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        self.assertTrue(elector.healthy())
+
+    def test_confirmed_master_false_when_unhealthy(self):
+        elector = self._make_elector()
+        self.assertFalse(elector.confirmed_master())
+
+    def test_confirmed_master_true_when_etcd_agrees(self):
+        elector = self._make_elector()
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        expected = elector.id_string
+        with mock.patch(
+            "networking_calico.etcdv3.get",
+            return_value=(expected, 123),
+        ):
+            self.assertTrue(elector.confirmed_master())
+
+    def test_confirmed_master_clears_flag_when_etcd_has_different_value(self):
+        elector = self._make_elector()
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        with mock.patch(
+            "networking_calico.etcdv3.get",
+            return_value=("someone-else:99", 123),
+        ):
+            self.assertFalse(elector.confirmed_master())
+        # The mismatch should have cleared our local _master flag so future
+        # healthy() calls return False without needing another etcd read.
+        self.assertFalse(elector._master)
+
+    def test_confirmed_master_clears_flag_when_etcd_has_no_key(self):
+        elector = self._make_elector()
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        with mock.patch(
+            "networking_calico.etcdv3.get",
+            side_effect=etcdv3.KeyNotFound(),
+        ):
+            self.assertFalse(elector.confirmed_master())
+        self.assertFalse(elector._master)
+
+    def test_confirmed_master_false_on_etcd_error_but_keeps_flag(self):
+        elector = self._make_elector()
+        elector._greenlet = self._alive_greenlet_stub()
+        elector._master = True
+        elector._last_refresh = election.monotonic_time()
+        with mock.patch(
+            "networking_calico.etcdv3.get",
+            side_effect=e3e.ConnectionFailedError(),
+        ):
+            # Transient etcd error: skip this cycle but don't forcibly
+            # demote ourselves - the next healthy() check will decide.
+            self.assertFalse(elector.confirmed_master())
+        self.assertTrue(elector._master)
