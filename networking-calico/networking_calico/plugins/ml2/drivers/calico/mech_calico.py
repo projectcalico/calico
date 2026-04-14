@@ -469,32 +469,42 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # above is complete before we start running.
                 self._epoch += 1
                 self._greenlets = []
-                self._greenlets.append((
-                    "resync_monitor",
-                    eventlet.spawn(self.resync_monitor_thread, self._epoch),
-                ))
-                self._greenlets.append((
-                    "periodic_resync",
-                    eventlet.spawn(self.periodic_resync_thread, self._epoch),
-                ))
+                self._greenlets.append(
+                    (
+                        "resync_monitor",
+                        eventlet.spawn(self.resync_monitor_thread, self._epoch),
+                    )
+                )
+                self._greenlets.append(
+                    (
+                        "periodic_resync",
+                        eventlet.spawn(self.periodic_resync_thread, self._epoch),
+                    )
+                )
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-                    self._greenlets.append((
-                        "periodic_compaction",
-                        eventlet.spawn(
-                            self.periodic_compaction_thread, self._epoch
-                        ),
-                    ))
-                self._greenlets.append((
-                    "status_updating",
-                    eventlet.spawn(self._status_updating_thread, self._epoch),
-                ))
+                    self._greenlets.append(
+                        (
+                            "periodic_compaction",
+                            eventlet.spawn(
+                                self.periodic_compaction_thread, self._epoch
+                            ),
+                        )
+                    )
+                self._greenlets.append(
+                    (
+                        "status_updating",
+                        eventlet.spawn(self._status_updating_thread, self._epoch),
+                    )
+                )
                 for i in range(cfg.CONF.calico.num_port_status_threads):
-                    self._greenlets.append((
-                        "port_status_%d" % i,
-                        eventlet.spawn(
-                            self._loop_writing_port_statuses, self._epoch
-                        ),
-                    ))
+                    self._greenlets.append(
+                        (
+                            "port_status_%d" % i,
+                            eventlet.spawn(
+                                self._loop_writing_port_statuses, self._epoch
+                            ),
+                        )
+                    )
             else:
                 LOG.info(
                     "PID %s: Not a voting participant; "
