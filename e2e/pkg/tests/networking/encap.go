@@ -39,15 +39,28 @@ func detectEncapInterface(cli ctrlclient.Client) string {
 		return ""
 	}
 
+	var result string
 	for _, pool := range pools.Items {
-		if pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet {
+		switch {
+		case pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet:
 			logrus.Infof("Detected IPIP encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.IPIPMode)
-			return "tunl0"
-		}
-		if pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet {
+			if result != "" && result != "tunl0" {
+				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses IPIP but another pool uses VXLAN; using %s", pool.Name, result)
+				continue
+			}
+			result = "tunl0"
+		case pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet:
 			logrus.Infof("Detected VXLAN encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.VXLANMode)
-			return "vxlan.calico"
+			if result != "" && result != "vxlan.calico" {
+				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses VXLAN but another pool uses IPIP; using %s", pool.Name, result)
+				continue
+			}
+			result = "vxlan.calico"
 		}
+	}
+
+	if result != "" {
+		return result
 	}
 
 	logrus.Info("No encapsulation detected from IPPools")

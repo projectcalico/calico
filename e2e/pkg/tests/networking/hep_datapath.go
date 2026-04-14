@@ -250,7 +250,9 @@ var _ = describe.CalicoDescribe(
 			}
 			if s.srcPod != s.dstPod {
 				// Forwarded pod-to-pod traffic goes via tunnel on overlay networks.
-				// Special case: ingress-2N1 on iptables/nftables uses direct host access.
+				// Special case: ingress-2N1 on iptables/nftables. NodePort DNAT happens
+				// before routing, so traffic arrives on the host interface directly
+				// rather than via the tunnel device.
 				if s.accessType == "nodePort" && s.srcPod == 2 && s.policyDirection == "ingress" &&
 					(dp.Calico == dataplaneIptables || dp.Calico == dataplaneNftables) {
 					return ""
@@ -312,9 +314,6 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
 			// Build the target based on access type.
 			var target conncheck.Target
 			expectSNAT := false
@@ -366,7 +365,9 @@ var _ = describe.CalicoDescribe(
 					}},
 				},
 			}
-			Expect(cli.Create(ctx, kubeletPolicy)).To(Succeed())
+			createCtx, createCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer createCancel()
+			Expect(cli.Create(createCtx, kubeletPolicy)).To(Succeed())
 			DeferCleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
@@ -391,7 +392,9 @@ var _ = describe.CalicoDescribe(
 			if ifaceName != "" {
 				hep.Spec.InterfaceName = ifaceName
 			}
-			Expect(cli.Create(ctx, hep)).To(Succeed())
+			hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer hepCancel()
+			Expect(cli.Create(hepCtx, hep)).To(Succeed())
 			DeferCleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
@@ -420,7 +423,9 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Allow,
 			)
-			Expect(cli.Create(ctx, allowPolicy)).To(Succeed())
+			allowCtx, allowCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer allowCancel()
+			Expect(cli.Create(allowCtx, allowPolicy)).To(Succeed())
 			DeferCleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
@@ -441,7 +446,9 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Deny,
 			)
-			Expect(cli.Create(ctx, denyPolicy)).To(Succeed())
+			denyCtx, denyCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer denyCancel()
+			Expect(cli.Create(denyCtx, denyPolicy)).To(Succeed())
 			DeferCleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
