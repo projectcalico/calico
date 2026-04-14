@@ -16,8 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -35,22 +33,6 @@ type QdiscStats struct {
 	Rate       uint64 // configured rate (bits/sec)
 }
 
-// listCalicoInterfaces returns all cali* and tap* interfaces on the host.
-func listCalicoInterfaces() ([]string, error) {
-	links, err := netlink.LinkList()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list links: %w", err)
-	}
-	var ifaces []string
-	for _, link := range links {
-		name := link.Attrs().Name
-		if strings.HasPrefix(name, "cali") || strings.HasPrefix(name, "tap") {
-			ifaces = append(ifaces, name)
-		}
-	}
-	return ifaces, nil
-}
-
 // listAllInterfaces returns all network interfaces on the host.
 func listAllInterfaces() ([]string, error) {
 	links, err := netlink.LinkList()
@@ -62,38 +44,6 @@ func listAllInterfaces() ([]string, error) {
 		ifaces = append(ifaces, link.Attrs().Name)
 	}
 	return ifaces, nil
-}
-
-// readNICStats reads cumulative bytes from a host NIC.
-func readNICStats(ifaceName string) (rxBytes, txBytes uint64, err error) {
-	link, err := netlink.LinkByName(ifaceName)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get link %s: %w", ifaceName, err)
-	}
-	stats := link.Attrs().Statistics
-	if stats == nil {
-		return 0, 0, fmt.Errorf("no statistics for %s", ifaceName)
-	}
-	return stats.RxBytes, stats.TxBytes, nil
-}
-
-// readNICSpeed reads the link speed in bits/sec. Returns 0 if unavailable.
-func readNICSpeed(ifaceName string) uint64 {
-	link, err := netlink.LinkByName(ifaceName)
-	if err != nil {
-		return 0
-	}
-	// link.Attrs().Speed is not available in all netlink versions.
-	// Fall back to reading sysfs.
-	data, err := os.ReadFile(fmt.Sprintf("/sys/class/net/%s/speed", ifaceName))
-	if err != nil {
-		log.WithError(err).WithField("iface", ifaceName).Debug("Failed to read NIC speed")
-		_ = link // suppress unused
-		return 0
-	}
-	var speedMbps uint64
-	fmt.Sscanf(strings.TrimSpace(string(data)), "%d", &speedMbps)
-	return speedMbps * 1_000_000 // convert Mbps to bps
 }
 
 // readTBFStats reads the TBF qdisc statistics from a network interface.
