@@ -188,6 +188,10 @@ class StatusWatcher(etcdutils.EtcdWatcher):
                 hostname,
             )
             return
+        if status_time.tzinfo is None:
+            # Treat naive timestamps (no timezone info) as UTC so that
+            # the subtraction below does not raise TypeError.
+            status_time = status_time.replace(tzinfo=timezone.utc)
         lag = (datetime.now(tz=timezone.utc) - status_time).total_seconds()
         if lag <= STALE_STATUS_WARN_SECS:
             return

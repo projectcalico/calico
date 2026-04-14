@@ -81,6 +81,16 @@ class TestCheckForStaleStatus(unittest.TestCase):
             )
         m_warn.assert_not_called()
 
+    def test_stale_naive_timestamp_warns(self):
+        """A timezone-less timestamp (no trailing Z) should not crash."""
+        stale = (datetime.now(tz=timezone.utc) - timedelta(hours=1)).strftime(
+            "%Y-%m-%dT%H:%M:%S"
+        )
+        with mock.patch.object(status.LOG, "warning") as m_warn:
+            self.watcher._check_for_stale_status("host1", {"time": stale})
+        m_warn.assert_called_once()
+        self.assertIn("stale Felix status update", m_warn.call_args.args[0])
+
     def test_unparseable_time_logs_separate_warning(self):
         with mock.patch.object(status.LOG, "warning") as m_warn:
             self.watcher._check_for_stale_status("host1", {"time": "not a date"})
