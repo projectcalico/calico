@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -182,7 +183,12 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 	obj, gvk, err := decodeAdmissionReview(w, r)
 	if err != nil {
 		logrus.Error(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
