@@ -475,12 +475,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         eventlet.spawn(self.resync_monitor_thread, self._epoch),
                     )
                 )
-                self._greenlets.append(
-                    (
-                        "periodic_resync",
-                        eventlet.spawn(self.periodic_resync_thread, self._epoch),
-                    )
+                resync_gt = eventlet.spawn(
+                    self.periodic_resync_thread, self._epoch
                 )
+                if cfg.CONF.calico.resync_interval_secs > 0:
+                    # Only watchdog the resync thread if it is expected to
+                    # keep running.  When resync_interval_secs == 0 the
+                    # thread does a single resync and then exits
+                    # intentionally.
+                    self._greenlets.append(("periodic_resync", resync_gt))
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     self._greenlets.append(
                         (
