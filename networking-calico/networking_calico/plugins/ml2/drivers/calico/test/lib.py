@@ -213,6 +213,12 @@ class GrandDukeOfSalzburg(object):
     def master(self):
         return True
 
+    def healthy(self):
+        return True
+
+    def confirmed_master(self):
+        return True
+
     def stop(self):
         pass
 
