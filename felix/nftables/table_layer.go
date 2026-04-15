@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package nftables
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -183,6 +184,6 @@ func (t *tableLayer) FinishMapUpdates(updates *MapUpdates) {
 	t.maps.FinishMapUpdates(updates)
 }
 
-func (t *tableLayer) LoadDataplaneState() error {
-	return t.maps.LoadDataplaneState()
+func (t *tableLayer) LoadDataplaneState(ctx context.Context, mapNames []string) error {
+	return t.maps.LoadDataplaneState(ctx, mapNames)
 }
