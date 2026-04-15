@@ -17,7 +17,7 @@ for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE E2E_TEST_CONFIG; 
 done
 
 echo "[INFO] starting e2e testing from local binary..."
-pushd "${HOME}/calico"
+pushd "${HOME}/calico" || exit
 
 make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
 GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
@@ -55,7 +55,7 @@ docker run --rm --init --net=host \
 # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
 mkdir -p "${REPORT_DIR}"
 cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
-popd
+popd || exit
 
 # Propagate the original test exit code.
 exit ${e2e_rc}
