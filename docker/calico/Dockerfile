@@ -6,11 +6,6 @@ FROM ${UBI_IMAGE} AS builder
 ARG TARGETARCH
 ARG BIN_DIR
 
-# pprof profile dumps for kube-controllers.
-RUN mkdir /profiles
-RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
-RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
-
 # Stage the calico binary alongside a calicoctl symlink. The binary detects
 # argv[0]=="calicoctl" and dispatches to the `ctl` subcommand, so calicoctl
 # can be a symlink rather than a duplicate copy of the binary.
@@ -38,8 +33,9 @@ FROM ${CALICO_BASE}
 
 ARG GIT_VERSION
 
-COPY --from=builder /profiles /profiles/
 COPY --from=source / /
+
+USER 10001:10001
 
 LABEL org.opencontainers.image.description="Calico combined binary containing all Calico components."
 LABEL org.opencontainers.image.authors="maintainers@tigera.io"
