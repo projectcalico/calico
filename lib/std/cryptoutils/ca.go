@@ -11,9 +11,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
-	mathrand "math/rand"
 	"net"
 	"time"
 )
@@ -59,7 +59,7 @@ func NewCA(name string) (CA, error) {
 		// Specify a random serial number to avoid the same issuer+serial
 		// number referring to different certs in a chain of trust if the
 		// signing certificate is ever rotated.
-		SerialNumber: big.NewInt(randomSerialNumber()),
+		SerialNumber: randomSerialNumber(),
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
@@ -133,10 +133,7 @@ func (ca *certificateAuthority) CreateServerCert(name string, hosts []string) (*
 }
 
 func (ca *certificateAuthority) SignCertificate(template *x509.Certificate, requestKey crypto.PublicKey) (*x509.Certificate, error) {
-	// Increment and persist serial
-	serial := randomSerialNumber()
-
-	template.SerialNumber = big.NewInt(serial)
+	template.SerialNumber = randomSerialNumber()
 	return signCertificate(template, requestKey, ca.cfg.certs[0], ca.cfg.key)
 }
 
@@ -250,13 +247,18 @@ func ipAddressesDNSNames(hosts []string) ([]net.IP, []string) {
 	return ips, dns
 }
 
-// randomSerialNumber returns a random int64 serial number based on
-// time.Now. It is defined separately from the generator interface so
-// that the caller doesn't have to worry about an input template or
-// error - these are unnecessary when creating a random serial.
-func randomSerialNumber() int64 {
-	r := mathrand.New(mathrand.NewSource(time.Now().UTC().UnixNano()))
-	return r.Int63()
+// randomSerialNumber returns a cryptographically random positive serial
+// number suitable for use in an X.509 certificate. RFC 5280 §4.1.2.2 limits
+// serial numbers to 20 bytes; we use 159 bits to guarantee a positive
+// integer (range [1, 2^159-1]) while exceeding the CA/Browser Forum
+// Baseline Requirements §7.1 minimum of 64 bits of entropy.
+func randomSerialNumber() *big.Int {
+	max := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 159), big.NewInt(1))
+	serial, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		panic(fmt.Errorf("failed to generate certificate serial number: %w", err))
+	}
+	return serial.Add(serial, big.NewInt(1))
 }
 
 func newKeyPairWithHash() (crypto.PublicKey, crypto.PrivateKey, []byte, error) {
