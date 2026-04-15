@@ -29,3 +29,6 @@ exclude:
 
     - label: Feature:Istio
       reason: "Calico policy not enforced with Istio ambient on BPF dataplane"
+
+    - label: RequiresXtables
+      reason: "requires iptables or nftables dataplane, but this cluster uses BPF"

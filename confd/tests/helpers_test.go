@@ -90,6 +90,11 @@ var (
 	// updateGoldenFiles, when true, overwrites golden files with actual output
 	// instead of failing on mismatch. Set via UPDATE_EXPECTED_DATA=true.
 	updateGoldenFiles = os.Getenv("UPDATE_EXPECTED_DATA") == "true"
+
+	// calicoResourceHandlers maps Calico CRD kinds to their create/cleanup
+	// functions for etcd-mode tests. Populated in init(); downstream forks
+	// can register additional kinds from init() in a separate _test.go file.
+	calicoResourceHandlers = map[string]calicoResourceApplier{}
 )
 
 func TestMain(m *testing.M) {
@@ -415,60 +420,87 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 	}
 }
 
+// calicoResourceApplier creates a Calico resource via the clientv3 and returns
+// a cleanup function. Used by applyCalicoResource for extensibility.
+type calicoResourceApplier func(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func()
+
+func init() {
+	calicoResourceHandlers["BGPConfiguration"] = applyCalicoBGPConfiguration
+	calicoResourceHandlers["IPPool"] = applyCalicoIPPool
+	calicoResourceHandlers["BGPPeer"] = applyCalicoBGPPeer
+	calicoResourceHandlers["BGPFilter"] = applyCalicoBGPFilter
+}
+
 // applyCalicoResource creates a Calico CRD resource via the Calico clientv3.
-// Used in etcd mode where there's no controller-runtime client.
+// Used in etcd mode where there's no controller-runtime client. Handlers are
+// registered in calicoResourceHandlers; downstream forks can add more.
 func applyCalicoResource(t *testing.T, cc client.Interface, kind string, yamlBytes []byte, path string) func() {
 	t.Helper()
-	ctx := context.Background()
-
-	switch kind {
-	case "BGPConfiguration":
-		var obj apiv3.BGPConfiguration
-		require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
-		_, err := cc.BGPConfigurations().Create(ctx, &obj, options.SetOptions{})
-		require.NoError(t, err, "creating BGPConfiguration %s from %s", obj.Name, path)
-		name := obj.Name
-		return func() {
-			if _, err := cc.BGPConfigurations().Delete(ctx, name, options.DeleteOptions{}); err != nil {
-				t.Logf("cleanup: failed to delete BGPConfiguration %s: %v", name, err)
-			}
-		}
-	case "IPPool":
-		var obj apiv3.IPPool
-		require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
-		_, err := cc.IPPools().Create(ctx, &obj, options.SetOptions{})
-		require.NoError(t, err, "creating IPPool %s from %s", obj.Name, path)
-		name := obj.Name
-		return func() {
-			if _, err := cc.IPPools().Delete(ctx, name, options.DeleteOptions{}); err != nil {
-				t.Logf("cleanup: failed to delete IPPool %s: %v", name, err)
-			}
-		}
-	case "BGPPeer":
-		var obj apiv3.BGPPeer
-		require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
-		_, err := cc.BGPPeers().Create(ctx, &obj, options.SetOptions{})
-		require.NoError(t, err, "creating BGPPeer %s from %s", obj.Name, path)
-		name := obj.Name
-		return func() {
-			if _, err := cc.BGPPeers().Delete(ctx, name, options.DeleteOptions{}); err != nil {
-				t.Logf("cleanup: failed to delete BGPPeer %s: %v", name, err)
-			}
-		}
-	case "BGPFilter":
-		var obj apiv3.BGPFilter
-		require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
-		_, err := cc.BGPFilter().Create(ctx, &obj, options.SetOptions{})
-		require.NoError(t, err, "creating BGPFilter %s from %s", obj.Name, path)
-		name := obj.Name
-		return func() {
-			if _, err := cc.BGPFilter().Delete(ctx, name, options.DeleteOptions{}); err != nil {
-				t.Logf("cleanup: failed to delete BGPFilter %s: %v", name, err)
-			}
-		}
-	default:
+	handler, ok := calicoResourceHandlers[kind]
+	if !ok {
 		t.Fatalf("unsupported Calico resource kind %q in %s", kind, path)
 		return nil
+	}
+	return handler(t, cc, yamlBytes, path)
+}
+
+func applyCalicoBGPConfiguration(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+	t.Helper()
+	ctx := context.Background()
+	var obj apiv3.BGPConfiguration
+	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
+	_, err := cc.BGPConfigurations().Create(ctx, &obj, options.SetOptions{})
+	require.NoError(t, err, "creating BGPConfiguration %s from %s", obj.Name, path)
+	name := obj.Name
+	return func() {
+		if _, err := cc.BGPConfigurations().Delete(ctx, name, options.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: failed to delete BGPConfiguration %s: %v", name, err)
+		}
+	}
+}
+
+func applyCalicoIPPool(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+	t.Helper()
+	ctx := context.Background()
+	var obj apiv3.IPPool
+	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
+	_, err := cc.IPPools().Create(ctx, &obj, options.SetOptions{})
+	require.NoError(t, err, "creating IPPool %s from %s", obj.Name, path)
+	name := obj.Name
+	return func() {
+		if _, err := cc.IPPools().Delete(ctx, name, options.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: failed to delete IPPool %s: %v", name, err)
+		}
+	}
+}
+
+func applyCalicoBGPPeer(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+	t.Helper()
+	ctx := context.Background()
+	var obj apiv3.BGPPeer
+	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
+	_, err := cc.BGPPeers().Create(ctx, &obj, options.SetOptions{})
+	require.NoError(t, err, "creating BGPPeer %s from %s", obj.Name, path)
+	name := obj.Name
+	return func() {
+		if _, err := cc.BGPPeers().Delete(ctx, name, options.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: failed to delete BGPPeer %s: %v", name, err)
+		}
+	}
+}
+
+func applyCalicoBGPFilter(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+	t.Helper()
+	ctx := context.Background()
+	var obj apiv3.BGPFilter
+	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
+	_, err := cc.BGPFilter().Create(ctx, &obj, options.SetOptions{})
+	require.NoError(t, err, "creating BGPFilter %s from %s", obj.Name, path)
+	name := obj.Name
+	return func() {
+		if _, err := cc.BGPFilter().Delete(ctx, name, options.DeleteOptions{}); err != nil {
+			t.Logf("cleanup: failed to delete BGPFilter %s: %v", name, err)
+		}
 	}
 }
 
