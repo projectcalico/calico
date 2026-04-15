@@ -15,15 +15,10 @@
 package calc
 
 import (
-	"fmt"
 	"maps"
-	"reflect"
-	"strings"
-	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -169,9 +164,12 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 		return
 	}
 
-	selectorStr := fc.Spec.NodeSelector
+	var selectorStr string
+	if fc.Spec.NodeSelector != nil {
+		selectorStr = *fc.Spec.NodeSelector
+	}
 	if selectorStr == "" {
-		// Empty selector on a selector-scoped resource — matches no nodes.
+		// Empty/nil selector on a selector-scoped resource — matches no nodes.
 		// We still store it in case a selector is added later via update.
 		log.WithField("name", name).Debug("Selector-scoped FelixConfiguration with empty selector, matches no nodes")
 	}
@@ -189,15 +187,7 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 		}
 	}
 
-	config := ExtractConfigFromFelixSpec(&fc.Spec)
-
-	// Apply annotation-based config overrides, consistent with how the
-	// configUpdateProcessor handles annotations on default/per-node resources.
-	for k, v := range fc.GetAnnotations() {
-		if strings.HasPrefix(k, AnnotationConfigPrefix) {
-			config[k[len(AnnotationConfigPrefix):]] = v
-		}
-	}
+	config := updateprocessors.ExtractFelixConfigFields(fc)
 
 	cb.selectorConfigs[name] = &selectorConfigEntry{
 		selectorStr: selectorStr,
@@ -296,82 +286,4 @@ func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 				"this is a misconfiguration. Ignoring all selector-scoped config.")
 		return make(map[string]string)
 	}
-}
-
-// AnnotationConfigPrefix is the prefix for config override annotations on
-// FelixConfiguration resources. Must match the prefix in configurationprocessor.go.
-const AnnotationConfigPrefix = "config.projectcalico.org/"
-
-// ExtractConfigFromFelixSpec extracts the configuration key-value pairs from a
-// FelixConfigurationSpec using reflection. This mirrors the logic in the
-// configUpdateProcessor but produces a simple map rather than v1-model KVPairs.
-func ExtractConfigFromFelixSpec(spec *apiv3.FelixConfigurationSpec) map[string]string {
-	config := make(map[string]string)
-	specValue := reflect.ValueOf(spec).Elem()
-	specType := specValue.Type()
-
-	for i := 0; i < specType.NumField(); i++ {
-		fieldInfo := specType.Field(i)
-		name := fieldInfo.Tag.Get("confignamev1")
-		if name == "-" {
-			continue
-		}
-		if name == "" {
-			name = fieldInfo.Name
-		}
-
-		field := specValue.Field(i)
-
-		// Skip unset (nil pointer) fields and empty strings.
-		if field.Kind() == reflect.Pointer {
-			if field.IsNil() {
-				continue
-			}
-			field = field.Elem()
-		} else {
-			if field.Kind() == reflect.String && field.Len() == 0 {
-				continue
-			}
-		}
-
-		value := field.Interface()
-
-		// Convert the value to string. Use the same special-case converters
-		// as the configUpdateProcessor to ensure consistent string formatting.
-		var strValue string
-		if converter, ok := updateprocessors.FelixValueConverters[name]; ok {
-			converted := converter(value)
-			if converted == nil {
-				continue
-			}
-			strValue = converted.(string)
-		} else {
-			switch vt := value.(type) {
-			case string:
-				strValue = vt
-			case v1.Duration:
-				switch fieldInfo.Tag.Get("configv1timescale") {
-				case "milliseconds":
-					ms := vt.Duration / time.Millisecond
-					remainder := vt.Duration % time.Millisecond
-					strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
-				default:
-					strValue = fmt.Sprintf("%v", vt.Seconds())
-				}
-			case []string:
-				strValue = strings.Join(vt, ",")
-			case map[string]string:
-				var kvp strings.Builder
-				for k, v := range vt {
-					kvp.WriteString(k + "=" + v + ",")
-				}
-				strValue = kvp.String()
-			default:
-				strValue = fmt.Sprintf("%v", vt)
-			}
-		}
-
-		config[name] = strValue
-	}
-	return config
 }

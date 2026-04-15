@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 )
 
 var _ = Describe("ConfigBatcher", func() {
@@ -241,7 +242,7 @@ var _ = Describe("ConfigBatcher", func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "gpu-nodes"
 				enabled := true
-				fc.Spec.NodeSelector = "role == 'gpu'"
+				fc.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("gpu-nodes", fc)
 				cb.OnDatamodelStatus(api.InSync)
@@ -257,7 +258,7 @@ var _ = Describe("ConfigBatcher", func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "storage-nodes"
 				enabled := true
-				fc.Spec.NodeSelector = "role == 'storage'"
+				fc.Spec.NodeSelector = stringPtr("role == 'storage'")
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("storage-nodes", fc)
 				cb.OnDatamodelStatus(api.InSync)
@@ -273,7 +274,7 @@ var _ = Describe("ConfigBatcher", func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "gpu-nodes"
 				enabled := true
-				fc.Spec.NodeSelector = "role == 'gpu'"
+				fc.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("gpu-nodes", fc)
 				cb.OnDatamodelStatus(api.InSync)
@@ -301,7 +302,7 @@ var _ = Describe("ConfigBatcher", func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "gpu-nodes"
 				enabled := true
-				fc.Spec.NodeSelector = "role == 'gpu'"
+				fc.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("gpu-nodes", fc)
 				cb.OnDatamodelStatus(api.InSync)
@@ -320,7 +321,7 @@ var _ = Describe("ConfigBatcher", func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "gpu-nodes"
 				enabled := true
-				fc.Spec.NodeSelector = "role == 'gpu'"
+				fc.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("gpu-nodes", fc)
 				cb.OnDatamodelStatus(api.InSync)
@@ -344,14 +345,14 @@ var _ = Describe("ConfigBatcher", func() {
 			BeforeEach(func() {
 				fcA := apiv3.NewFelixConfiguration()
 				fcA.Name = "a-config"
-				fcA.Spec.NodeSelector = "role == 'gpu'"
+				fcA.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fcA.Spec.BPFLogLevel = "info"
 				sendFelixConfigResource("a-config", fcA)
 
 				fcB := apiv3.NewFelixConfiguration()
 				fcB.Name = "b-config"
 				enabled := true
-				fcB.Spec.NodeSelector = "role == 'gpu'"
+				fcB.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fcB.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("b-config", fcB)
 
@@ -367,7 +368,7 @@ var _ = Describe("ConfigBatcher", func() {
 			BeforeEach(func() {
 				fc := apiv3.NewFelixConfiguration()
 				fc.Name = "bad-selector"
-				fc.Spec.NodeSelector = "invalid @@@ selector"
+				fc.Spec.NodeSelector = stringPtr("invalid @@@ selector")
 				enabled := true
 				fc.Spec.BPFEnabled = &enabled
 				sendFelixConfigResource("bad-selector", fc)
@@ -381,21 +382,23 @@ var _ = Describe("ConfigBatcher", func() {
 	})
 })
 
-var _ = Describe("ExtractConfigFromFelixSpec", func() {
+var _ = Describe("ExtractFelixConfigFields", func() {
 	It("should extract simple fields", func() {
 		enabled := true
-		spec := &apiv3.FelixConfigurationSpec{
-			BPFEnabled:  &enabled,
-			BPFLogLevel: "debug",
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				BPFEnabled:  &enabled,
+				BPFLogLevel: "debug",
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("BPFEnabled", "true"))
 		Expect(result).To(HaveKeyWithValue("BPFLogLevel", "debug"))
 	})
 
 	It("should skip nil pointer fields", func() {
-		spec := &apiv3.FelixConfigurationSpec{}
-		result := ExtractConfigFromFelixSpec(spec)
+		fc := &apiv3.FelixConfiguration{}
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).NotTo(HaveKey("BPFEnabled"))
 	})
 
@@ -404,28 +407,34 @@ var _ = Describe("ExtractConfigFromFelixSpec", func() {
 			{Protocol: "TCP", Port: 22},
 			{Protocol: "UDP", Port: 68},
 		}
-		spec := &apiv3.FelixConfigurationSpec{
-			FailsafeInboundHostPorts: &ports,
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				FailsafeInboundHostPorts: &ports,
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("FailsafeInboundHostPorts", "tcp:22,udp:68"))
 	})
 
 	It("should convert empty ProtoPort slices to 'none'", func() {
 		ports := []apiv3.ProtoPort{}
-		spec := &apiv3.FelixConfigurationSpec{
-			FailsafeInboundHostPorts: &ports,
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				FailsafeInboundHostPorts: &ports,
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("FailsafeInboundHostPorts", "none"))
 	})
 
 	It("should convert RouteTableRange using the standard converter", func() {
 		rtr := apiv3.RouteTableRange{Min: 1, Max: 250}
-		spec := &apiv3.FelixConfigurationSpec{
-			RouteTableRange: &rtr,
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				RouteTableRange: &rtr,
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("RouteTableRange", "1-250"))
 	})
 
@@ -434,39 +443,67 @@ var _ = Describe("ExtractConfigFromFelixSpec", func() {
 			{Min: 1, Max: 250},
 			{Min: 500, Max: 600},
 		}
-		spec := &apiv3.FelixConfigurationSpec{
-			RouteTableRanges: &ranges,
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				RouteTableRanges: &ranges,
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("RouteTableRanges", "1-250,500-600"))
 	})
 
 	It("should convert HealthTimeoutOverrides using the standard converter", func() {
-		spec := &apiv3.FelixConfigurationSpec{
-			HealthTimeoutOverrides: []apiv3.HealthTimeoutOverride{
-				{Name: "InternalDataplaneMainLoop", Timeout: metav1.Duration{Duration: 90 * time.Second}},
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				HealthTimeoutOverrides: []apiv3.HealthTimeoutOverride{
+					{Name: "InternalDataplaneMainLoop", Timeout: metav1.Duration{Duration: 90 * time.Second}},
+				},
 			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("HealthTimeoutOverrides", "InternalDataplaneMainLoop=1m30s"))
 	})
 
 	It("should convert Duration fields to seconds by default", func() {
 		dur := metav1.Duration{Duration: 30 * time.Second}
-		spec := &apiv3.FelixConfigurationSpec{
-			IptablesRefreshInterval: &dur,
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				IptablesRefreshInterval: &dur,
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).To(HaveKeyWithValue("IptablesRefreshInterval", "30"))
 	})
 
 	It("should skip the NodeSelector field (confignamev1:\"-\")", func() {
-		spec := &apiv3.FelixConfigurationSpec{
-			NodeSelector: "role == 'gpu'",
+		fc := &apiv3.FelixConfiguration{
+			Spec: apiv3.FelixConfigurationSpec{
+				NodeSelector: stringPtr("role == 'gpu'"),
+			},
 		}
-		result := ExtractConfigFromFelixSpec(spec)
+		result := updateprocessors.ExtractFelixConfigFields(fc)
 		Expect(result).NotTo(HaveKey("NodeSelector"))
 		Expect(result).NotTo(HaveKey("-"))
+	})
+
+	It("should apply annotation-based config overrides", func() {
+		enabled := true
+		fc := &apiv3.FelixConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					"config.projectcalico.org/BPFLogLevel": "info",
+					"unrelated-annotation":                 "ignored",
+				},
+			},
+			Spec: apiv3.FelixConfigurationSpec{
+				BPFEnabled:  &enabled,
+				BPFLogLevel: "debug",
+			},
+		}
+		result := updateprocessors.ExtractFelixConfigFields(fc)
+		Expect(result).To(HaveKeyWithValue("BPFEnabled", "true"))
+		// Annotation should override spec value.
+		Expect(result).To(HaveKeyWithValue("BPFLogLevel", "info"))
 	})
 })
 

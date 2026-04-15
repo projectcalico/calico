@@ -1095,10 +1095,10 @@ func loadSelectorScopedFelixConfig(
 			continue
 		}
 
-		selectorStr := fc.Spec.NodeSelector
-		if selectorStr == "" {
+		if fc.Spec.NodeSelector == nil || *fc.Spec.NodeSelector == "" {
 			continue
 		}
+		selectorStr := *fc.Spec.NodeSelector
 
 		sel, err := selector.Parse(selectorStr)
 		if err != nil {
@@ -1111,14 +1111,7 @@ func loadSelectorScopedFelixConfig(
 
 		if sel.Evaluate(nodeLabels) {
 			log.WithField("name", rk.Name).Info("Selector-scoped FelixConfiguration matches local node at startup")
-			extracted := calc.ExtractConfigFromFelixSpec(&fc.Spec)
-			// Apply annotation-based config overrides, consistent with
-			// how default/per-node resources handle annotations.
-			for k, v := range fc.GetAnnotations() {
-				if strings.HasPrefix(k, calc.AnnotationConfigPrefix) {
-					extracted[k[len(calc.AnnotationConfigPrefix):]] = v
-				}
-			}
+			extracted := updateprocessors.ExtractFelixConfigFields(fc)
 			matches = append(matches, matchEntry{
 				name:   rk.Name,
 				config: extracted,
