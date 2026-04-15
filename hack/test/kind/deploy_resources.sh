@@ -173,51 +173,10 @@ echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
-# Patch the Installation resource before waiting for tigerastatus. This avoids a
-# race where the patch triggers a new rollout after pods have already been
-# enumerated by a wait, causing "not found" errors on old ReplicaSet pods.
-if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching installation resource to Felix cluster routing mode"
-  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
-fi
-
-echo "Wait for tigera status to be ready"
-if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
-       ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
-  echo "TigeraStatus for Calico failed to become Available"
-  exit 1
-fi
-
-# Wait for the Calico API server to be available, if not using the projectcalico.org/v3 CRDs.
-# If using the projectcalico.org/v3 CRDs, there is no Calico API server to wait for.
-if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
-  echo "Wait for the Calico API server to be ready"
-  if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-    echo "TigeraStatus for API server failed to become Available"
-    exit 1
-  fi
-fi
-
-echo "Wait for Calico to be ready..."
-# Calico-system pods are covered by the tigerastatus/calico and tigerastatus/apiserver
-# waits above. kube-dns and calicoctl are not operator-managed, so wait on them directly.
-wait_pod_ready -l k8s-app=kube-dns -n kube-system
-wait_pod_ready calicoctl -n kube-system
-
-echo "Calico is running."
-echo
-
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
 ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
-
-echo "Cluster is ready."
-echo
-
-# Show all the pods running for diags purposes.
-${kubectl} get po --all-namespaces -o wide
-${kubectl} get svc
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
@@ -254,3 +213,10 @@ for attempt in $(seq 1 120); do
 
   sleep 5
 done
+
+echo "Wait for Calico to be ready..."
+wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
+wait_pod_ready -l k8s-app -n calico-system
+
+echo "Calico is running."
