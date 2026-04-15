@@ -287,7 +287,6 @@ var _ = describe.CalicoDescribe(
 			dstNode := nodeNames[podNode[s.dstPod]]
 			serverName := utils.GenerateRandomName("hep-srv")
 			serverOpts := []conncheck.ServerOption{
-				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(dstNode)),
 			}
