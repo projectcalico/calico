@@ -3,10 +3,23 @@ ARG UBI_IMAGE
 
 FROM ${UBI_IMAGE} AS builder
 
+ARG TARGETARCH
+ARG BIN_DIR
+
 # pprof profile dumps for kube-controllers.
 RUN mkdir /profiles
 RUN touch /profiles/mem.pprof && chown 999 /profiles/mem.pprof
 RUN touch /profiles/cpu.pprof && chown 999 /profiles/cpu.pprof
+
+# Stage the calico binary alongside a calicoctl symlink. The binary detects
+# argv[0]=="calicoctl" and dispatches to the `ctl` subcommand, so calicoctl
+# can be a symlink rather than a duplicate copy of the binary.
+# The symlink has to be created in a stage that has a shell (scratch does
+# not) and the target has to resolve when BuildKit computes the COPY
+# checksum, so we stage both files together here under /shim.
+RUN mkdir -p /shim/usr/bin
+COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
+RUN ln -s calico /shim/usr/bin/calicoctl
 
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
@@ -17,9 +30,7 @@ FROM scratch AS source
 ARG TARGETARCH
 ARG BIN_DIR
 
-COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calico
-# Provide calicoctl for backward compatibility with scripts that exec into the container.
-COPY ${BIN_DIR}/calico-${TARGETARCH} /usr/bin/calicoctl
+COPY --from=builder /shim/ /
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
