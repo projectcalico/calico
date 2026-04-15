@@ -43,13 +43,13 @@ var _ = Describe("Constructor test", func() {
 	kubernetesProvider := config.ProviderNone
 	routeSource := "CalicoIPAM"
 	var wireguardEncryptHostTraffic bool
-	var nftablesDataplane func(knftables.Family, string) (knftables.Interface, error)
+	var nftablesDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
 
 	BeforeEach(func() {
 		// For most tests here, mock out the creation of the nftables interface in a way
 		// that simulates "nft" being available.  We don't want these tests to depend on the
 		// actual kernel version or presence of nftables.
-		nftablesDataplane = func(knftables.Family, string) (knftables.Interface, error) {
+		nftablesDataplane = func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
 			return nil, nil
 		}
 	})
@@ -126,7 +126,7 @@ var _ = Describe("Constructor test", func() {
 
 	Context("when nft is not available", func() {
 		BeforeEach(func() {
-			nftablesDataplane = func(knftables.Family, string) (knftables.Interface, error) {
+			nftablesDataplane = func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
 				return nil, errors.New("could not find nftables binary: file not found")
 			}
 		})
