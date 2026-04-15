@@ -483,7 +483,7 @@ var _ = describe.CalicoDescribe(
 		}
 
 		// Xtables-only scenarios — only valid on iptables/nftables dataplanes.
-		Context("xtables-only", describe.RequiresXtables(), func() {
+		framework.Context("xtables-only", describe.RequiresXtables(), func() {
 			for _, scenario := range hepScenarioTable {
 				if !scenario.tablesDataplaneOnly {
 					continue
