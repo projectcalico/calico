@@ -16,6 +16,10 @@
 #
 # Sourced from body_*.sh.
 
+for _var in BZ_LOGS_DIR HOME SEMAPHORE_GIT_DIR; do
+  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
+done
+
 if [[ -n "${OPERATOR_MIGRATE}" ]]; then
   "${HOME}/${SEMAPHORE_GIT_DIR}/.semaphore/end-to-end/scripts/test_scripts/operator_migrate.sh" \
     |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/operator_migrate.log.gz")
@@ -28,5 +32,5 @@ fi
 
 if [[ -n "${UPLEVEL_RELEASE_STREAM}" ]]; then
   echo "[INFO] starting bz upgrade..."
-  bz upgrade ${VERBOSE} | tee >(gzip --stdout > "${BZ_LOGS_DIR}/upgrade.log.gz")
+  bz upgrade ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/upgrade.log.gz")
 fi

@@ -10,6 +10,10 @@
 #
 # Sourced from body_*.sh.
 
+for _var in BZ_HOME BZ_LOGS_DIR SEMAPHORE_JOB_ID SEMAPHORE_ORGANIZATION_URL TEST_TYPE; do
+  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
+done
+
 echo "[INFO] starting hcp job..."
 
 echo "[INFO] starting hcp provision..."
