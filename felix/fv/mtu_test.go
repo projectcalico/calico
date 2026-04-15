@@ -44,10 +44,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			}, "60s", "500ms").Should(Equal(fmt.Sprint(mtu)))
 		}
 		if BPFMode() {
-			// Wait for all BPF programs to be attached before checking
-			// bpfin/bpfout devices; they are only created after all BPF
-			// maps are loaded.
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			// Wait for eth0 to be programmed in BPF before checking
+			// bpfin/bpfout devices; they are only created after BPF
+			// maps are loaded.  We only wait for eth0 (not tunnel
+			// devices) because this test transitions encapsulation
+			// modes and tunnel devices may come and go.
+			for _, felix := range tc.Felixes {
+				ensureBPFProgramsAttachedOffsetWithIPVersion(2, felix,
+					true, felix.TopologyOptions.EnableIPv6,
+					"eth0")
+			}
 			felix := tc.Felixes[0]
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
