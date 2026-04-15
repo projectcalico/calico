@@ -173,9 +173,6 @@ echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
-# Patch the Installation resource before waiting for tigerastatus. This avoids a
-# race where the patch triggers a new rollout after pods have already been
-# enumerated by a wait, causing "not found" errors on old ReplicaSet pods.
 if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
   echo "Patching installation resource to Felix cluster routing mode"
   ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
