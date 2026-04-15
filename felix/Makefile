@@ -123,8 +123,9 @@ ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
 	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
-# When cross-compiling, pass linker flags so the linker can find
-# target-arch libelf and libz in the sysroot.
+# When cross-compiling, force lld as the linker — GNU ld is single-target,
+# while lld natively links the cross-arch ELF objects produced by clang.
+# (The cross sysroot itself is already supplied via CC's --sysroot flag.)
 CROSS_CGO_LDFLAGS=
 ifneq ($(CROSS_SYSROOT),)
 	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
