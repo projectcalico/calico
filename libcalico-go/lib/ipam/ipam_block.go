@@ -371,7 +371,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 	}
 	if len(attrsToDelete) != 0 {
 		log.Debugf("Deleting attributes: %v", attrsToDelete)
-		b.deleteAttributes(attrsToDelete, ordinals)
+		b.deleteAttributes(attrsToDelete)
 	}
 
 	// Release requested addresses.
@@ -386,7 +386,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 	return unallocated, countByHandle, nil
 }
 
-func (b *allocationBlock) deleteAttributes(delIndexes, ordinals []int) {
+func (b *allocationBlock) deleteAttributes(delIndexes []int) {
 	newIndexes := make([]*int, len(b.Attributes))
 	newAttrs := []model.AllocationAttribute{}
 	y := 0 // Next free slot in the new attributes list.
@@ -476,7 +476,7 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 	}
 
 	// Clean and reorder attributes.
-	b.deleteAttributes(attrIndexes, ordinals)
+	b.deleteAttributes(attrIndexes)
 
 	// Release the addresses.
 	for _, o := range ordinals {
