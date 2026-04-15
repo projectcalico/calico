@@ -45,7 +45,7 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (
 		log.Errorf("Error reading block %s: %v", blockCIDR, err)
 		return nil, err
 	}
-	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+	block := blockFromBackend(obj.Value.(*model.AllocationBlock))
 	return block.allocationAttributesForIP(addr)
 }
 
@@ -126,7 +126,7 @@ func (c ipamClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID
 			return err
 		}
 
-		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		block := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		err = block.setOwnerAttributes(ip, handleID, updates, preconditions)
 		if err != nil {
 			logCtx.WithError(err).Error("Failed to set owner attributes")

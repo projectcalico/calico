@@ -670,7 +670,7 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipamtestutils.IPP
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockKey)
 		if k.CIDR.IP.String() == blockCIDR.IP.String() && k.CIDR.Mask.String() == blockCIDR.Mask.String() {
-			block = allocationBlock{o.Value.(*model.AllocationBlock)}
+			block = blockFromBackend(o.Value.(*model.AllocationBlock))
 		}
 
 	}

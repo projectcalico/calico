@@ -966,7 +966,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						if err != nil {
 							return nil, err
 						}
-						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
+						b1 := blockFromBackend(kvpb.Value.(*model.AllocationBlock))
 						affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 						b1.autoAssign(1, nil, affinityCfg, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
