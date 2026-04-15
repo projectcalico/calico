@@ -219,9 +219,9 @@ endif
 
 # The node image uses the uber calico binary built with CGO for BPF support.
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-	$(MAKE) -C .. calico-build-cgo ARCH=$(ARCH)
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
-	cp ../bin/calico-cgo-$(ARCH) $@
+	cp ../cmd/calico/bin/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
