@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, _ ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
@@ -860,7 +860,7 @@ var _ = Describe("Insert early rules", func() {
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, _ ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
@@ -929,7 +929,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 	var f *fakeNFT
 
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, _ ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
@@ -1008,7 +1008,7 @@ var _ = Describe("Enabled table cache invalidation", func() {
 	var f *fakeNFT
 
 	BeforeEach(func() {
-		newDataplane := func(fam knftables.Family, name string) (knftables.Interface, error) {
+		newDataplane := func(fam knftables.Family, name string, _ ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
 		}
