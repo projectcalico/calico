@@ -52,7 +52,7 @@ var (
 	ErrReadFailed               = errors.New("failed to read from client")
 	ErrUnexpectedClientMsg      = errors.New("unexpected message from client")
 	ErrUnsupportedClientFeature = errors.New("unsupported client feature")
-	errInboundMessageTooLarge   = errors.New("inbound message too large")
+	errInboundMessageTooLarge = errors.New("inbound message too large")
 )
 
 var (
@@ -858,8 +858,10 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		h.shutDownWG.Done()
 		logCxt.Info("Read goroutine finished")
 	}()
-	r := gob.NewDecoder(newGobFrameLimitedReader(h.conn, uint64(maxInboundMessageBytes)))
+	lr := &limitedReader{r: h.conn, limit: maxInboundMessageBytes}
+	r := gob.NewDecoder(lr)
 	for {
+		lr.reset()
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
@@ -883,120 +885,27 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 	}
 }
 
-// gobFrameLimitedReader wraps a gob stream and enforces a maximum payload size
-// per top-level gob message. It reads the length prefix for the next message,
-// rejects oversized payloads before allocating for them, then serves the exact
-// framed bytes back to gob so the decoder retains its usual stream semantics.
-type gobFrameLimitedReader struct {
-	r      io.Reader
-	br     io.ByteReader
-	limit  uint64
-	frame  []byte
-	offset int
+// limitedReader wraps an io.Reader and tracks the total bytes read since the
+// last call to reset. If the cumulative bytes exceed the limit, Read returns
+// an error. Call reset between gob Decode calls so the limit applies
+// per-message rather than over the whole connection lifetime.
+type limitedReader struct {
+	r     io.Reader
+	limit int64
+	n     int64
 }
 
-func newGobFrameLimitedReader(r io.Reader, limit uint64) *gobFrameLimitedReader {
-	if br, ok := r.(io.ByteReader); ok {
-		return &gobFrameLimitedReader{
-			r:     r,
-			br:    br,
-			limit: limit,
-		}
+func (l *limitedReader) Read(p []byte) (int, error) {
+	n, err := l.r.Read(p)
+	l.n += int64(n)
+	if l.n > l.limit {
+		return n, fmt.Errorf("%w (read %d bytes, limit %d)", errInboundMessageTooLarge, l.n, l.limit)
 	}
-	buffered := bufio.NewReader(r)
-	return &gobFrameLimitedReader{
-		r:     buffered,
-		br:    buffered,
-		limit: limit,
-	}
+	return n, err
 }
 
-func (l *gobFrameLimitedReader) Read(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	if err := l.fillFrame(); err != nil {
-		return 0, err
-	}
-	n := copy(p, l.frame[l.offset:])
-	l.offset += n
-	if l.offset == len(l.frame) {
-		l.frame = nil
-		l.offset = 0
-	}
-	return n, nil
-}
-
-func (l *gobFrameLimitedReader) ReadByte() (byte, error) {
-	if err := l.fillFrame(); err != nil {
-		return 0, err
-	}
-	b := l.frame[l.offset]
-	l.offset++
-	if l.offset == len(l.frame) {
-		l.frame = nil
-		l.offset = 0
-	}
-	return b, nil
-}
-
-func (l *gobFrameLimitedReader) fillFrame() error {
-	if l.offset < len(l.frame) {
-		return nil
-	}
-
-	prefix, nbytes, err := readGobUint(l.br)
-	if err != nil {
-		return err
-	}
-	if nbytes > l.limit {
-		return fmt.Errorf("%w (declared %d bytes, limit %d)", errInboundMessageTooLarge, nbytes, l.limit)
-	}
-
-	l.frame = make([]byte, len(prefix)+int(nbytes))
-	l.offset = 0
-	copy(l.frame, prefix)
-	_, err = io.ReadFull(l.r, l.frame[len(prefix):])
-	if err != nil {
-		l.frame = nil
-		if errors.Is(err, io.EOF) {
-			return io.ErrUnexpectedEOF
-		}
-		return err
-	}
-	return nil
-}
-
-// readGobUint reads a gob-encoded unsigned integer from r and returns both the
-// original encoded bytes and the decoded value.
-func readGobUint(r io.ByteReader) ([]byte, uint64, error) {
-	first, err := r.ReadByte()
-	if err != nil {
-		return nil, 0, err
-	}
-	prefix := []byte{first}
-	if first <= 0x7f {
-		return prefix, uint64(first), nil
-	}
-
-	n := -int(int8(first))
-	if n <= 0 || n > 8 {
-		return nil, 0, errors.New("invalid gob message length prefix")
-	}
-
-	var value uint64
-	for i := 0; i < n; i++ {
-		b, err := r.ReadByte()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil, 0, io.ErrUnexpectedEOF
-			}
-			return nil, 0, err
-		}
-		prefix = append(prefix, b)
-		value = (value << 8) | uint64(b)
-	}
-	return prefix, value, nil
+func (l *limitedReader) reset() {
+	l.n = 0
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
