@@ -237,6 +237,9 @@ func init() {
 	registerStructValidator(validate, validateTier, api.Tier{})
 	registerStructValidator(validate, validateHTTPRule, api.HTTPMatch{})
 	registerStructValidator(validate, validateFelixConfigSpec, api.FelixConfigurationSpec{})
+	// NOTE: FelixConfiguration resource-level validation (e.g., nodeSelector
+	// restrictions) is handled by CEL XValidation rules on the CRD type, not
+	// by Go struct validators.
 	registerStructValidator(validate, validateWorkloadEndpointSpec, internalapi.WorkloadEndpointSpec{})
 	registerStructValidator(validate, validateRule, api.Rule{})
 	registerStructValidator(validate, validateEntityRule, api.EntityRule{})
