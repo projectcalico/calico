@@ -16,7 +16,7 @@ package main
 
 import (
 	"github.com/docopt/docopt-go"
-	logrus "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
 	"github.com/projectcalico/calico/pkg/buildinfo"

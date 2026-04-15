@@ -553,6 +553,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane nat outgoing flow 
 		}, "30s", "3s").ShouldNot(HaveOccurred())
 	})
 })
+
 var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra  infrastructure.DatastoreInfra
