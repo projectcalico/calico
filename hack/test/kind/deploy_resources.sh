@@ -28,7 +28,6 @@
 #   ARCH              - target architecture (default: amd64)
 #   GIT_VERSION       - version for chart lookup (default: git describe)
 #   CALICO_API_GROUP  - which API group to use
-#   CLUSTER_ROUTING   - BIRD (default) or FELIX
 #   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
 
 # Clean up background jobs on exit, and collect diagnostics on failure.
