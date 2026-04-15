@@ -12,6 +12,10 @@
 #
 # Sourced from body_*.sh. Exits with the test binary's exit code.
 
+for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE E2E_TEST_CONFIG; do
+  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
+done
+
 echo "[INFO] starting e2e testing from local binary..."
 pushd "${HOME}/calico"
 

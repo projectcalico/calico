@@ -8,6 +8,10 @@
 #
 # Sourced from body_*.sh. Assumes cwd == $BZ_HOME.
 
+for _var in BZ_HOME BZ_LOGS_DIR; do
+  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
+done
+
 echo "[INFO] starting bz install..."
 bz install ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/install.log.gz")
 
