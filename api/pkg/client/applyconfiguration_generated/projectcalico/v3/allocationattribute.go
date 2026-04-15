@@ -4,6 +4,10 @@
 
 package v3
 
+import (
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // AllocationAttributeApplyConfiguration represents a declarative configuration of the AllocationAttribute type for use
 // with apply.
 //
@@ -15,6 +19,10 @@ type AllocationAttributeApplyConfiguration struct {
 	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
 	// AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.
 	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
+	// ReleasedAt is the time this allocation was released, and is set during the allocation's
+	// "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+	// from `Allocated` to `Unallocated`).
+	ReleasedAt *v1.Time `json:"releasedAt,omitempty"`
 }
 
 // AllocationAttributeApplyConfiguration constructs a declarative configuration of the AllocationAttribute type for use with
@@ -56,5 +64,13 @@ func (b *AllocationAttributeApplyConfiguration) WithAlternateOwnerAttrs(entries 
 	for k, v := range entries {
 		b.AlternateOwnerAttrs[k] = v
 	}
+	return b
+}
+
+// WithReleasedAt sets the ReleasedAt field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ReleasedAt field is set to the value of the last call.
+func (b *AllocationAttributeApplyConfiguration) WithReleasedAt(value v1.Time) *AllocationAttributeApplyConfiguration {
+	b.ReleasedAt = &value
 	return b
 }
