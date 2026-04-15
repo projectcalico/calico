@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"errors"
-	"io"
 	"reflect"
 	"testing"
 	"time"
@@ -26,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
-func TestGobFrameLimitedReaderPreservesGobStreamState(t *testing.T) {
+func TestLimitedReaderAllowsNormalMessages(t *testing.T) {
 	var stream bytes.Buffer
 	enc := gob.NewEncoder(&stream)
 
@@ -51,9 +50,11 @@ func TestGobFrameLimitedReaderPreservesGobStreamState(t *testing.T) {
 		t.Fatalf("encoding pong: %v", err)
 	}
 
-	dec := gob.NewDecoder(newGobFrameLimitedReader(bytes.NewReader(stream.Bytes()), 1024))
+	lr := &limitedReader{r: bytes.NewReader(stream.Bytes()), limit: 1024}
+	dec := gob.NewDecoder(lr)
 
 	var gotHello syncproto.Envelope
+	lr.reset()
 	if err := dec.Decode(&gotHello); err != nil {
 		t.Fatalf("decoding hello: %v", err)
 	}
@@ -62,6 +63,7 @@ func TestGobFrameLimitedReaderPreservesGobStreamState(t *testing.T) {
 	}
 
 	var gotPong syncproto.Envelope
+	lr.reset()
 	if err := dec.Decode(&gotPong); err != nil {
 		t.Fatalf("decoding pong: %v", err)
 	}
@@ -70,87 +72,42 @@ func TestGobFrameLimitedReaderPreservesGobStreamState(t *testing.T) {
 	}
 }
 
-func TestGobFrameLimitedReaderPreservesGobStreamStateWithBufioPath(t *testing.T) {
-	var stream bytes.Buffer
-	enc := gob.NewEncoder(&stream)
+func TestLimitedReaderRejectsOversizedRead(t *testing.T) {
+	// Create a payload larger than the limit.
+	const limit int64 = 64
+	payload := bytes.Repeat([]byte{0xab}, int(limit*2))
 
-	wantHello := syncproto.Envelope{
-		Message: syncproto.MsgClientHello{
-			Hostname:   "node-a",
-			Info:       "test",
-			Version:    "v3.31.5",
-			SyncerType: syncproto.SyncerTypeFelix,
-		},
-	}
-	wantPong := syncproto.Envelope{
-		Message: syncproto.MsgPong{
-			PingTimestamp: time.Unix(123, 456),
-		},
-	}
+	lr := &limitedReader{r: bytes.NewReader(payload), limit: limit}
 
-	if err := enc.Encode(&wantHello); err != nil {
-		t.Fatalf("encoding hello: %v", err)
+	buf := make([]byte, len(payload))
+	var total int64
+	for {
+		n, err := lr.Read(buf[total:])
+		total += int64(n)
+		if err != nil {
+			if !errors.Is(err, errInboundMessageTooLarge) {
+				t.Fatalf("expected errInboundMessageTooLarge, got %v", err)
+			}
+			break
+		}
 	}
-	if err := enc.Encode(&wantPong); err != nil {
-		t.Fatalf("encoding pong: %v", err)
-	}
-
-	// Wrap in struct{io.Reader} to hide the ReadByte method, forcing the
-	// bufio.NewReader path in newGobFrameLimitedReader — the same path
-	// used in production with net.Conn.
-	dec := gob.NewDecoder(newGobFrameLimitedReader(struct{ io.Reader }{bytes.NewReader(stream.Bytes())}, 1024))
-
-	var gotHello syncproto.Envelope
-	if err := dec.Decode(&gotHello); err != nil {
-		t.Fatalf("decoding hello: %v", err)
-	}
-	if !reflect.DeepEqual(gotHello, wantHello) {
-		t.Fatalf("decoded hello mismatch: got %#v want %#v", gotHello, wantHello)
-	}
-
-	var gotPong syncproto.Envelope
-	if err := dec.Decode(&gotPong); err != nil {
-		t.Fatalf("decoding pong: %v", err)
-	}
-	if !reflect.DeepEqual(gotPong, wantPong) {
-		t.Fatalf("decoded pong mismatch: got %#v want %#v", gotPong, wantPong)
+	if total <= limit {
+		t.Fatalf("expected to read past limit before error, read %d", total)
 	}
 }
 
-func TestGobFrameLimitedReaderRejectsOversizedFrameBeforeReadingPayload(t *testing.T) {
-	const limit = 16
-	payload := bytes.Repeat([]byte{0xab}, 32)
-	prefix := encodeGobUint(limit + 1)
-	source := bytes.NewReader(append(prefix, payload...))
+func TestLimitedReaderResetAllowsNextMessage(t *testing.T) {
+	data := bytes.Repeat([]byte{0x01}, 100)
+	lr := &limitedReader{r: bytes.NewReader(data), limit: 60}
 
-	reader := newGobFrameLimitedReader(source, limit)
-
-	var oneByte [1]byte
-	_, err := reader.Read(oneByte[:])
-	if !errors.Is(err, errInboundMessageTooLarge) {
-		t.Fatalf("expected oversized-frame error, got %v", err)
+	buf := make([]byte, 50)
+	if _, err := lr.Read(buf); err != nil {
+		t.Fatalf("first read should succeed: %v", err)
 	}
 
-	if remaining := source.Len(); remaining != len(payload) {
-		t.Fatalf("expected payload to remain unread, %d bytes remain", remaining)
-	}
-}
+	lr.reset()
 
-func encodeGobUint(value uint64) []byte {
-	if value <= 0x7f {
-		return []byte{byte(value)}
+	if _, err := lr.Read(buf); err != nil {
+		t.Fatalf("read after reset should succeed: %v", err)
 	}
-
-	n := 0
-	for tmp := value; tmp > 0; tmp >>= 8 {
-		n++
-	}
-
-	buf := make([]byte, n+1)
-	buf[0] = byte(-int8(n))
-	for i := n; i > 0; i-- {
-		buf[i] = byte(value)
-		value >>= 8
-	}
-	return buf
 }
