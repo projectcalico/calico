@@ -33,11 +33,11 @@ import (
 // selectorConfigEntry stores a selector-scoped FelixConfiguration along with
 // its parsed selector and extracted config key-value pairs.
 type selectorConfigEntry struct {
-	selectorStr    string
-	sel            *selector.Selector
-	config         map[string]string
-	creationTime   time.Time
-	resourceName   string
+	selectorStr  string
+	sel          *selector.Selector
+	config       map[string]string
+	creationTime time.Time
+	resourceName string
 }
 
 type ConfigBatcher struct {
