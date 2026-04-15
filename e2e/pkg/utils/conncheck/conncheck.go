@@ -133,7 +133,7 @@ func (c *connectionTester) deploy() error {
 			continue
 		}
 		By(fmt.Sprintf("Deploying client pod %s/%s", client.namespace.Name, client.name))
-		pod, err := createClientPod(c.f, client.namespace, client.name, client.labels, client.composedCustomizer())
+		pod, err := CreateClientPod(c.f, client.namespace, client.name, client.labels, client.composedCustomizer())
 		if err != nil {
 			return err
 		}
@@ -641,8 +641,8 @@ func buildFailureMessage(results []connectionResult) string {
 	return msg.String()
 }
 
-// createClientPod creates a long lived pod that sleeps, and can be used to execute connection tests as a client.
-func createClientPod(f *framework.Framework, namespace *v1.Namespace, baseName string, labels map[string]string, customizer func(pod *v1.Pod)) (*v1.Pod, error) {
+// CreateClientPod creates a long lived pod that sleeps, and can be used to execute connection tests as a client.
+func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName string, labels map[string]string, customizer func(pod *v1.Pod)) (*v1.Pod, error) {
 	var image string
 	var args []string
 	var command []string
