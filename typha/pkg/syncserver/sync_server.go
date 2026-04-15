@@ -52,6 +52,7 @@ var (
 	ErrReadFailed               = errors.New("failed to read from client")
 	ErrUnexpectedClientMsg      = errors.New("unexpected message from client")
 	ErrUnsupportedClientFeature = errors.New("unsupported client feature")
+	errInboundMessageTooLarge   = errors.New("inbound message too large")
 )
 
 var (
@@ -97,14 +98,21 @@ const (
 	defaultMaxMessageSize                 = 100
 	defaultMaxFallBehind                  = 300 * time.Second
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
-	defaultBatchingAgeThreshold           = 100 * time.Millisecond
-	defaultPingInterval                   = 10 * time.Second
-	defaultWriteTimeout                   = 120 * time.Second
-	defaultHandshakeTimeout               = 10 * time.Second
-	defaultDropInterval                   = 1 * time.Second
-	defaultShutdownTimeout                = 300 * time.Second
-	defaultMaxConns                       = math.MaxInt32
-	PortRandom                            = -1
+
+	// maxInboundMessageBytes is the maximum number of bytes we'll read from a
+	// client for a single gob message. Client messages (MsgClientHello, MsgPong,
+	// MsgACK, MsgDecoderRestart) are small; 1 MiB is far more than any legitimate
+	// message requires but safely caps memory usage against malformed or
+	// malicious input.
+	maxInboundMessageBytes      int64 = 1 << 20
+	defaultBatchingAgeThreshold       = 100 * time.Millisecond
+	defaultPingInterval               = 10 * time.Second
+	defaultWriteTimeout               = 120 * time.Second
+	defaultHandshakeTimeout           = 10 * time.Second
+	defaultDropInterval               = 1 * time.Second
+	defaultShutdownTimeout            = 300 * time.Second
+	defaultMaxConns                   = math.MaxInt32
+	PortRandom                        = -1
 )
 
 type Server struct {
@@ -847,7 +855,7 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		h.shutDownWG.Done()
 		logCxt.Info("Read goroutine finished")
 	}()
-	r := gob.NewDecoder(h.conn)
+	r := gob.NewDecoder(newGobFrameLimitedReader(h.conn, uint64(maxInboundMessageBytes)))
 	for {
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
@@ -870,6 +878,122 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		}
 
 	}
+}
+
+// gobFrameLimitedReader wraps a gob stream and enforces a maximum payload size
+// per top-level gob message. It reads the length prefix for the next message,
+// rejects oversized payloads before allocating for them, then serves the exact
+// framed bytes back to gob so the decoder retains its usual stream semantics.
+type gobFrameLimitedReader struct {
+	r      io.Reader
+	br     io.ByteReader
+	limit  uint64
+	frame  []byte
+	offset int
+}
+
+func newGobFrameLimitedReader(r io.Reader, limit uint64) *gobFrameLimitedReader {
+	if br, ok := r.(io.ByteReader); ok {
+		return &gobFrameLimitedReader{
+			r:     r,
+			br:    br,
+			limit: limit,
+		}
+	}
+	buffered := bufio.NewReader(r)
+	return &gobFrameLimitedReader{
+		r:     buffered,
+		br:    buffered,
+		limit: limit,
+	}
+}
+
+func (l *gobFrameLimitedReader) Read(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if err := l.fillFrame(); err != nil {
+		return 0, err
+	}
+	n := copy(p, l.frame[l.offset:])
+	l.offset += n
+	if l.offset == len(l.frame) {
+		l.frame = nil
+		l.offset = 0
+	}
+	return n, nil
+}
+
+func (l *gobFrameLimitedReader) ReadByte() (byte, error) {
+	if err := l.fillFrame(); err != nil {
+		return 0, err
+	}
+	b := l.frame[l.offset]
+	l.offset++
+	if l.offset == len(l.frame) {
+		l.frame = nil
+		l.offset = 0
+	}
+	return b, nil
+}
+
+func (l *gobFrameLimitedReader) fillFrame() error {
+	if l.offset < len(l.frame) {
+		return nil
+	}
+
+	prefix, nbytes, err := readGobUint(l.br)
+	if err != nil {
+		return err
+	}
+	if nbytes > l.limit {
+		return fmt.Errorf("%w (declared %d bytes, limit %d)", errInboundMessageTooLarge, nbytes, l.limit)
+	}
+
+	l.frame = make([]byte, len(prefix)+int(nbytes))
+	l.offset = 0
+	copy(l.frame, prefix)
+	_, err = io.ReadFull(l.r, l.frame[len(prefix):])
+	if err != nil {
+		l.frame = nil
+		if errors.Is(err, io.EOF) {
+			return io.ErrUnexpectedEOF
+		}
+		return err
+	}
+	return nil
+}
+
+// readGobUint reads a gob-encoded unsigned integer from r and returns both the
+// original encoded bytes and the decoded value.
+func readGobUint(r io.ByteReader) ([]byte, uint64, error) {
+	first, err := r.ReadByte()
+	if err != nil {
+		return nil, 0, err
+	}
+	prefix := []byte{first}
+	if first <= 0x7f {
+		return prefix, uint64(first), nil
+	}
+
+	n := -int(int8(first))
+	if n <= 0 || n > 8 {
+		return nil, 0, errors.New("invalid gob message length prefix")
+	}
+
+	var value uint64
+	for i := 0; i < n; i++ {
+		b, err := r.ReadByte()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, 0, io.ErrUnexpectedEOF
+			}
+			return nil, 0, err
+		}
+		prefix = append(prefix, b)
+		value = (value << 8) | uint64(b)
+	}
+	return prefix, value, nil
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.
