@@ -52,7 +52,7 @@ var (
 	ErrReadFailed               = errors.New("failed to read from client")
 	ErrUnexpectedClientMsg      = errors.New("unexpected message from client")
 	ErrUnsupportedClientFeature = errors.New("unsupported client feature")
-	errInboundMessageTooLarge = errors.New("inbound message too large")
+	errInboundMessageTooLarge   = errors.New("inbound message too large")
 )
 
 var (
