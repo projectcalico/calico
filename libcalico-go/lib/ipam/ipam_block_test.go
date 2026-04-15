@@ -2,9 +2,11 @@ package ipam
 
 import (
 	"slices"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -367,4 +369,50 @@ var _ = Describe("Releasing IPs by Handle", func() {
 
 		block.validate()
 	})
+})
+
+var _ = Describe("Block garbage collection", func() {
+	It("produces valid block from an empty block", func() {
+		block := makeTestBlock()
+		Expect(block.garbageCollect(0)).To(Equal(false))
+		block.validate()
+	})
+
+	It("Clears unused attributes", func() {
+		block := makeTestBlock()
+		// Add some spurious attributes.
+		block.Attributes = append(block.Attributes,
+			model.AllocationAttribute{HandleID: new("spurious1")},
+			model.AllocationAttribute{HandleID: new("spurious2")},
+		)
+		// Add a regular allocation.
+		block.allocate([]int{32}, "thirty-two")
+
+		Expect(block.garbageCollect(0)).To(Equal(true))
+
+		Expect(block.allocatedOrdinals()).To(HaveLen(1))
+		Expect(block.Attributes).To(HaveLen(1))
+		block.validate()
+	})
+
+	It("produces valid block from a block with some old and some new released IPs", func() {
+		block := makeTestBlock()
+		// 31,33 are ready to deallocate.
+		block.allocateAttrib([]int{31, 33}, model.AllocationAttribute{
+			ReleasedAt: new(v1.NewTime(time.Now().Add(-time.Minute))),
+		})
+		// 42,44 are not.
+		block.allocateAttrib([]int{42, 44}, model.AllocationAttribute{
+			ReleasedAt: new(v1.NewTime(time.Now().Add(time.Minute))),
+		})
+		// 50,51 are not relased yet.
+		block.allocate([]int{52, 54}, "fifties")
+
+		Expect(block.garbageCollect(30)).To(Equal(true))
+
+		Expect(block.allocatedOrdinals()).To(HaveLen(4), "42, 44, 50, 51 are still in Allocated")
+		Expect(block.NumFreeAddresses(nilAddrFilter{})).To(Equal(256-4), "all but four addresses free")
+		block.validate()
+	})
+
 })

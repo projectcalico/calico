@@ -154,7 +154,7 @@ func (rw blockReaderWriter) findUsableBlock(
 			AffinityType: affinityType,
 			Host:         host,
 		}
-		block := allocationBlock{allocBlock}
+		block := blockFromBackend(allocBlock)
 		numFree := block.NumFreeAddresses(reservations)
 		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{
 			numFree:     numFree,
@@ -318,7 +318,7 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 			}
 
 			// Pull out the allocationBlock object.
-			b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+			b := blockFromBackend(obj.Value.(*model.AllocationBlock))
 
 			if b.Affinity != nil && *b.Affinity == affinityKeyStr {
 				// Block has affinity to this host, meaning another
@@ -417,7 +417,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 		logCtx.WithError(err).Warnf("Error getting block")
 		return err
 	}
-	b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+	b := blockFromBackend(obj.Value.(*model.AllocationBlock))
 
 	if opts.RequiredBlockSequenceNumber != nil && *opts.RequiredBlockSequenceNumber != b.SequenceNumber {
 		// Block modified since caller read it and they want us to abort in
