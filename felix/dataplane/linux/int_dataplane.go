@@ -363,7 +363,7 @@ type InternalDataplane struct {
 	vxlanManagerV6      *vxlanManager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
-	linkAddrsManagers []*linkaddrs.LinkAddrsManager
+	linkAddrsManagers []linkaddrs.Interface
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -1141,7 +1141,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.arpTables = append(dp.arpTables, arpFilterTable)
 	}
 
-	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	var linkAddrsManagerV4 linkaddrs.Interface
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled. Using default LinkAddrsManager")
+
+		linkAddrsManagerV4 = linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	} else {
+		log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+		linkAddrsManagerV4 = &linkaddrs.DummyLinkAddrsManager{}
+	}
+
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
@@ -1354,7 +1363,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
-		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		var linkAddrsManagerV6 linkaddrs.Interface
+		if !config.RouteSyncDisabled {
+			log.Debug("Route management is enabled. Using default LinkAddrsManager")
+			linkAddrsManagerV6 = linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		} else {
+			log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+			linkAddrsManagerV6 = &linkaddrs.DummyLinkAddrsManager{}
+		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
