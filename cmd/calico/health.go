@@ -27,6 +27,7 @@ func newHealthCommand() *cobra.Command {
 	var host string
 	var port int
 	var checkType string
+	var timeout time.Duration
 
 	cmd := &cobra.Command{
 		Use:   "health",
@@ -41,7 +42,7 @@ HealthAggregator pattern. Sends an HTTP GET to the component's
 			}
 
 			url := fmt.Sprintf("http://%s:%d/%s", host, port, checkType)
-			client := &http.Client{Timeout: 5 * time.Second}
+			client := &http.Client{Timeout: timeout}
 			resp, err := client.Get(url)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Health check failed: %v\n", err)
@@ -60,6 +61,7 @@ HealthAggregator pattern. Sends an HTTP GET to the component's
 	cmd.Flags().StringVar(&host, "host", "localhost", "Host to check")
 	cmd.Flags().IntVar(&port, "port", 0, "Port to check")
 	cmd.Flags().StringVar(&checkType, "type", "readiness", "Check type: readiness or liveness")
+	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Second, "Request timeout")
 	_ = cmd.MarkFlagRequired("port")
 
 	return cmd
