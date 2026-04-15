@@ -182,6 +182,7 @@ helm_values_args=(-f "${VALUES_FILE}")
 for extra in ${EXTRA_VALUES_FILES:-}; do
   helm_values_args+=(-f "${extra}")
 done
+echo "Helm values files: ${VALUES_FILE} ${EXTRA_VALUES_FILES:-}"
 ${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
 
 echo "Install calicoctl as a pod"
