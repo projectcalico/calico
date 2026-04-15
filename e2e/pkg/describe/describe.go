@@ -162,6 +162,14 @@ func RequiresRHEL() any {
 	return framework.WithLabel("RunsOnRHEL")
 }
 
+// RequiresXtables marks tests that only work on xtables-based dataplanes
+// (iptables or nftables). These tests exercise behavior that doesn't exist
+// on BPF or VPP dataplanes. Exclude on BPF clusters via the RequiresXtables
+// label in the test config.
+func RequiresXtables() any {
+	return framework.WithLabel("RequiresXtables")
+}
+
 // WithSmokeTest marks tests that are considered smoke tests.
 // A Smoke test must pass in under a minute, and is expected to pass on all platforms regardless of configuration.
 func WithSmokeTest() any {
