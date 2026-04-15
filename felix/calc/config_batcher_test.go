@@ -345,12 +345,14 @@ var _ = Describe("ConfigBatcher", func() {
 			BeforeEach(func() {
 				fcA := apiv3.NewFelixConfiguration()
 				fcA.Name = "a-config"
+				fcA.CreationTimestamp = metav1.Time{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
 				fcA.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fcA.Spec.BPFLogLevel = "info"
 				sendFelixConfigResource("a-config", fcA)
 
 				fcB := apiv3.NewFelixConfiguration()
 				fcB.Name = "b-config"
+				fcB.CreationTimestamp = metav1.Time{Time: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)}
 				enabled := true
 				fcB.Spec.NodeSelector = stringPtr("role == 'gpu'")
 				fcB.Spec.BPFEnabled = &enabled
@@ -358,9 +360,40 @@ var _ = Describe("ConfigBatcher", func() {
 
 				cb.OnDatamodelStatus(api.InSync)
 			})
-			It("should treat overlap as misconfiguration and ignore all selector config", func() {
+			It("should use the oldest config by creation time", func() {
 				Expect(recorder.Updates).To(HaveLen(1))
-				Expect(recorder.Updates[0].selector).To(BeEmpty())
+				// a-config is older, so its config wins.
+				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFLogLevel", "info"))
+				Expect(recorder.Updates[0].selector).NotTo(HaveKey("BPFEnabled"))
+			})
+		})
+
+		Context("with multiple overlapping configs where the newer was created first alphabetically", func() {
+			BeforeEach(func() {
+				// "a-config" has a later timestamp but sorts first by name.
+				// Timestamp should take precedence.
+				fcA := apiv3.NewFelixConfiguration()
+				fcA.Name = "a-config"
+				fcA.CreationTimestamp = metav1.Time{Time: time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)}
+				fcA.Spec.NodeSelector = stringPtr("role == 'gpu'")
+				fcA.Spec.BPFLogLevel = "info"
+				sendFelixConfigResource("a-config", fcA)
+
+				fcB := apiv3.NewFelixConfiguration()
+				fcB.Name = "b-config"
+				fcB.CreationTimestamp = metav1.Time{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+				enabled := true
+				fcB.Spec.NodeSelector = stringPtr("role == 'gpu'")
+				fcB.Spec.BPFEnabled = &enabled
+				sendFelixConfigResource("b-config", fcB)
+
+				cb.OnDatamodelStatus(api.InSync)
+			})
+			It("should use the oldest config regardless of name ordering", func() {
+				Expect(recorder.Updates).To(HaveLen(1))
+				// b-config is older by timestamp, so it wins despite sorting after a-config by name.
+				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFEnabled", "true"))
+				Expect(recorder.Updates[0].selector).NotTo(HaveKey("BPFLogLevel"))
 			})
 		})
 

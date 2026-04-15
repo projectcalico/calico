@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -1073,11 +1074,13 @@ func loadSelectorScopedFelixConfig(
 	}
 
 	// Collect matching selector-scoped configs. If more than one matches,
-	// treat it as a misconfiguration and return empty (fall back to
-	// default + per-host config only).
+	// the oldest by CreationTimestamp wins (tie-broken by name) to avoid
+	// disrupting existing working config when a conflicting resource is
+	// accidentally created.
 	type matchEntry struct {
-		name   string
-		config map[string]string
+		name         string
+		config       map[string]string
+		creationTime time.Time
 	}
 	var matches []matchEntry
 	for _, kvp := range felixConfigs.KVPairs {
@@ -1113,24 +1116,42 @@ func loadSelectorScopedFelixConfig(
 			log.WithField("name", rk.Name).Info("Selector-scoped FelixConfiguration matches local node at startup")
 			extracted := updateprocessors.ExtractFelixConfigFields(fc)
 			matches = append(matches, matchEntry{
-				name:   rk.Name,
-				config: extracted,
+				name:         rk.Name,
+				config:       extracted,
+				creationTime: fc.CreationTimestamp.Time,
 			})
 		}
 	}
-	switch len(matches) {
-	case 0:
-		// No selector-scoped configs match.
-	case 1:
-		maps.Copy(result, matches[0].config)
-	default:
-		names := make([]string, len(matches))
-		for i, m := range matches {
-			names[i] = m.name
+	if len(matches) > 0 {
+		// Sort by creation time, then name for determinism.
+		slices.SortFunc(matches, func(a, b matchEntry) int {
+			if a.creationTime.Before(b.creationTime) {
+				return -1
+			}
+			if b.creationTime.Before(a.creationTime) {
+				return 1
+			}
+			if a.name < b.name {
+				return -1
+			}
+			if a.name > b.name {
+				return 1
+			}
+			return 0
+		})
+		winner := matches[0]
+		if len(matches) > 1 {
+			names := make([]string, len(matches))
+			for i, m := range matches {
+				names[i] = m.name
+			}
+			log.WithFields(log.Fields{
+				"matching": names,
+				"winner":   winner.name,
+			}).Warn("Multiple selector-scoped FelixConfigurations match this node at startup; " +
+				"using the oldest by creation time. This is likely a misconfiguration.")
 		}
-		log.WithField("matching", names).Warn(
-			"Multiple selector-scoped FelixConfigurations match this node at startup; " +
-				"this is a misconfiguration. Ignoring all selector-scoped config.")
+		maps.Copy(result, winner.config)
 	}
 
 	return result, nil

@@ -174,9 +174,10 @@ type FelixConfigurationSpec struct {
 	// the named node only.
 	//
 	// At most one selector-scoped FelixConfiguration should match any given node.
-	// If multiple selector-scoped resources match, this is treated as a
-	// misconfiguration: all selector-scoped config is ignored and the node
-	// falls back to the default and per-host configuration only.
+	// If multiple selector-scoped resources match, the oldest (by creation
+	// timestamp) is used and a warning is logged. This prevents an accidentally
+	// created conflicting resource from disrupting an existing, working
+	// configuration.
 	// +optional
 	// +kubebuilder:validation:MaxLength=1024
 	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`

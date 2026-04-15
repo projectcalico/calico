@@ -16,6 +16,8 @@ package calc
 
 import (
 	"maps"
+	"slices"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -31,9 +33,11 @@ import (
 // selectorConfigEntry stores a selector-scoped FelixConfiguration along with
 // its parsed selector and extracted config key-value pairs.
 type selectorConfigEntry struct {
-	selectorStr string
-	sel         *selector.Selector
-	config      map[string]string
+	selectorStr    string
+	sel            *selector.Selector
+	config         map[string]string
+	creationTime   time.Time
+	resourceName   string
 }
 
 type ConfigBatcher struct {
@@ -190,9 +194,11 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 	config := updateprocessors.ExtractFelixConfigFields(fc)
 
 	cb.selectorConfigs[name] = &selectorConfigEntry{
-		selectorStr: selectorStr,
-		sel:         sel,
-		config:      config,
+		selectorStr:  selectorStr,
+		sel:          sel,
+		config:       config,
+		creationTime: fc.CreationTimestamp.Time,
+		resourceName: name,
 	}
 	cb.configDirty = true
 	log.WithFields(log.Fields{
@@ -257,33 +263,61 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 }
 
 // mergeMatchingSelectorConfigs evaluates all selector-scoped FelixConfiguration
-// resources against the local node's labels. If exactly one resource matches,
-// its config is returned. If multiple resources match, this is treated as a
-// misconfiguration: a warning is logged and an empty map is returned (falling
-// back to default + per-host config only).
+// resources against the local node's labels and returns the config from the
+// winning match. If multiple resources match, the oldest by CreationTimestamp
+// wins (tie-broken by resource name). This ensures that creating a new
+// conflicting resource does not disrupt an existing, working configuration.
 func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 	if cb.nodeLabels == nil {
 		return make(map[string]string)
 	}
-	var matchingNames []string
-	for name, entry := range cb.selectorConfigs {
+	var matches []*selectorConfigEntry
+	for _, entry := range cb.selectorConfigs {
 		if entry.sel == nil {
 			continue
 		}
 		if entry.sel.Evaluate(cb.nodeLabels) {
-			matchingNames = append(matchingNames, name)
+			matches = append(matches, entry)
 		}
 	}
-	switch len(matchingNames) {
-	case 0:
-		return make(map[string]string)
-	case 1:
-		log.WithField("name", matchingNames[0]).Debug("Selector-scoped FelixConfiguration matches local node")
-		return maps.Clone(cb.selectorConfigs[matchingNames[0]].config)
-	default:
-		log.WithField("matching", matchingNames).Warn(
-			"Multiple selector-scoped FelixConfigurations match this node; " +
-				"this is a misconfiguration. Ignoring all selector-scoped config.")
+	if len(matches) == 0 {
 		return make(map[string]string)
 	}
+	winner := oldestSelectorConfig(matches)
+	if len(matches) > 1 {
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = m.resourceName
+		}
+		log.WithFields(log.Fields{
+			"matching": names,
+			"winner":   winner.resourceName,
+		}).Warn("Multiple selector-scoped FelixConfigurations match this node; " +
+			"using the oldest by creation time. This is likely a misconfiguration.")
+	} else {
+		log.WithField("name", winner.resourceName).Debug(
+			"Selector-scoped FelixConfiguration matches local node")
+	}
+	return maps.Clone(winner.config)
+}
+
+// oldestSelectorConfig returns the entry with the earliest CreationTimestamp.
+// If timestamps are equal, the entry with the lexicographically smallest
+// resource name wins (for determinism).
+func oldestSelectorConfig(entries []*selectorConfigEntry) *selectorConfigEntry {
+	return slices.MinFunc(entries, func(a, b *selectorConfigEntry) int {
+		if a.creationTime.Before(b.creationTime) {
+			return -1
+		}
+		if b.creationTime.Before(a.creationTime) {
+			return 1
+		}
+		if a.resourceName < b.resourceName {
+			return -1
+		}
+		if a.resourceName > b.resourceName {
+			return 1
+		}
+		return 0
+	})
 }
