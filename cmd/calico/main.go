@@ -48,20 +48,30 @@ func newRootCommand() *cobra.Command {
 }
 
 func main() {
-	// When installed as a CNI plugin on the host, the binary may be invoked
-	// directly by the container runtime. Detect this and dispatch accordingly.
+	// When installed as a CNI plugin or as calicoctl, the binary may be
+	// invoked directly by the container runtime or as a symlink. Detect
+	// these invocations and dispatch accordingly.
 	_, filename := filepath.Split(os.Args[0])
 	switch filename {
-	case "calico-ipam", "calico-ipam.exe":
+	case "calico-ipam":
 		ipamplugin.Main(buildinfo.Version)
 		return
-	case "calicoctl", "calicoctl.exe":
-		// Dispatch to ctl subcommand when invoked as calicoctl.
-		os.Args = append([]string{"calico", "ctl"}, os.Args[1:]...)
-	}
-	if os.Getenv("CNI_COMMAND") != "" {
-		plugin.Main(buildinfo.Version)
-		return
+	case "calicoctl":
+		// Dispatch to the ctl subcommand. Insert "ctl" between argv[0] and
+		// the original args rather than replacing argv[0]; this preserves
+		// os.Args[0] for anything downstream that reads it (panic traces,
+		// log prefixes, kubectl-plugin detection).
+		os.Args = append([]string{os.Args[0], "ctl"}, os.Args[1:]...)
+	default:
+		// CNI_COMMAND is the env-based dispatch used when the container
+		// runtime invokes the CNI plugin directly. Only honor it when no
+		// subcommand was passed, so that e.g. "calicoctl get nodes" run
+		// in a shell that happens to have CNI_COMMAND set doesn't silently
+		// dispatch to the plugin.
+		if len(os.Args) == 1 && os.Getenv("CNI_COMMAND") != "" {
+			plugin.Main(buildinfo.Version)
+			return
+		}
 	}
 
 	if err := newRootCommand().Execute(); err != nil {
