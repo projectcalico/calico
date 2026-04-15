@@ -25,10 +25,12 @@
 #   KIND_IMAGES - space-separated list of Docker images to load onto the cluster
 #
 # Optional environment variables:
-#   ARCH              - target architecture (default: amd64)
-#   GIT_VERSION       - version for chart lookup (default: git describe)
-#   CALICO_API_GROUP  - which API group to use
-#   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
+#   ARCH               - target architecture (default: amd64)
+#   GIT_VERSION        - version for chart lookup (default: git describe)
+#   CALICO_API_GROUP   - which API group to use
+#   VALUES_FILE        - path to base helm values file (default: infra/values.yaml)
+#   EXTRA_VALUES_FILES - space-separated list of additional helm values files to
+#                        layer on top of VALUES_FILE (later files override earlier)
 
 # Clean up background jobs on exit, and collect diagnostics on failure.
 set -m
@@ -45,6 +47,13 @@ trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 : ${REPO_ROOT:?REPO_ROOT must be set}
 : ${KIND:?KIND must be set}
 : ${KIND_NAME:?KIND_NAME must be set}
+
+# Relative paths in VALUES_FILE / EXTRA_VALUES_FILES are resolved against the
+# current working directory, so the script must be invoked from REPO_ROOT.
+if [ "$(pwd)" != "${REPO_ROOT}" ]; then
+  echo "ERROR: deploy_resources.sh must be run from REPO_ROOT (${REPO_ROOT}), got $(pwd)"
+  exit 1
+fi
 
 INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
 ARCH=${ARCH:-amd64}
@@ -166,7 +175,14 @@ echo
 # CRDs are already created prior to reaching this script from within lib.Makefile as part
 # of kind cluster creation.
 echo "Install Calico using the helm chart"
-${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
+
+# Build helm -f args: always include the base VALUES_FILE, then any overlays
+# in EXTRA_VALUES_FILES. Helm deep-merges the files, with later ones winning.
+helm_values_args=(-f "${VALUES_FILE}")
+for extra in ${EXTRA_VALUES_FILES:-}; do
+  helm_values_args+=(-f "${extra}")
+done
+${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
 
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml

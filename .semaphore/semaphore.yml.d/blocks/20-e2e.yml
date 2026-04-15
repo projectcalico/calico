@@ -20,8 +20,6 @@
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
         env_vars:
-          - name: CLUSTER_ROUTING
-            value: "BIRD"
           - name: STORE_BUILD_CACHE
             value: "true"
     epilogue:
@@ -51,7 +49,7 @@
         commands:
           - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
         env_vars:
-          - name: VALUES_FILE
+          - name: EXTRA_VALUES_FILES
             value: "hack/test/kind/infra/values-felix-routing.yaml"
           - name: KIND_CALICO_API_GROUP
             value: "crd.projectcalico.org/v1"
