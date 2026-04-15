@@ -548,7 +548,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 			}
 
 			// Pull out the block.
-			block := allocationBlock{b.Value.(*model.AllocationBlock)}
+			block := blockFromBackend(b.Value.(*model.AllocationBlock))
 			numFreeAddresses := block.NumFreeAddresses(s.reservations)
 			if numFreeAddresses >= minFreeIps {
 				logCtx.Debugf("Block '%s' has %d free ips which is more than %d ips required.", cidr.String(), numFreeAddresses, minFreeIps)
@@ -622,7 +622,7 @@ func (s *blockAssignState) findOrClaimBlock(ctx context.Context, minFreeIps int)
 				}
 
 				// Claim successful.
-				block := allocationBlock{b.Value.(*model.AllocationBlock)}
+				block := blockFromBackend(b.Value.(*model.AllocationBlock))
 				numFree := block.NumFreeAddresses(s.reservations)
 				if numFree >= minFreeIps {
 					logCtx.Infof("Block '%s' has %d free ips which is more than %d ips required.",
@@ -1024,7 +1024,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 			log.Infof("Claimed new block: %s", blockCIDR)
 		}
 
-		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		block := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		err = block.assign(cfg.StrictAffinity, args.IP, args.HandleID, args.Attrs, affinityCfg)
 		if err != nil {
 			// Only attempt idempotent reuse when MaxAllocToHandlePerIPVersion is set (non-zero),
@@ -1329,7 +1329,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 		}
 
 		// Release the IPs.
-		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		b := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		unallocated, handles, err2 := b.release(ips)
 		if err2 != nil {
 			return nil, err2
@@ -1392,7 +1392,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	logCtx.Infof("Attempting to assign %d addresses from block", num)
 
 	// Pull out the block.
-	b := allocationBlock{block.Value.(*model.AllocationBlock)}
+	b := blockFromBackend(block.Value.(*model.AllocationBlock))
 
 	ips, err := b.autoAssign(num, handleID, affinityCfg, attrs, affCheck, reservations)
 	if err != nil {
@@ -1821,7 +1821,7 @@ func (c ipamClient) IPsByHandle(ctx context.Context, handleID string) ([]net.IP,
 		}
 
 		// Pull out the allocationBlock and get all the assignments from it.
-		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		b := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		assignments = append(assignments, b.ipsByHandle(handleID)...)
 	}
 	return assignments, nil
@@ -1864,7 +1864,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 		}
 
 		// Release the IP by handle.
-		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		block := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		num := block.releaseByHandle(opts)
 		if num == 0 {
 			// Block has no addresses with this handle, so
@@ -1932,11 +1932,11 @@ func (c ipamClient) releaseByHandle(ctx context.Context, blockCIDR net.IPNet, op
 				return err
 			}
 		}
-		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		block := blockFromBackend(obj.Value.(*model.AllocationBlock))
 		// We delete the block without waiting because the affinity doesn't correspond to any real object in the cluster,
 		// and so there is no other event to wait for after the block is empty
 		if *block.Affinity == loadBalancerAffinityHost {
-			block = allocationBlock{obj.Value.(*model.AllocationBlock)}
+			block = blockFromBackend(obj.Value.(*model.AllocationBlock))
 			if block.empty() {
 				// We can delete the block right away as the LoadBalancer controller is running
 				// on the same goroutine and no other component is assigning address to this block at the same time
