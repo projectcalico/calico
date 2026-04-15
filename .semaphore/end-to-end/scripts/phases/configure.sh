@@ -16,9 +16,7 @@
 #
 # Sourced from body_*.sh.
 
-for _var in BZ_LOCAL_DIR; do
-  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
-done
+if [[ -z "${BZ_LOCAL_DIR}" ]]; then echo "[ERROR] BZ_LOCAL_DIR is required but not set"; exit 1; fi
 
 export PATH=$PATH:${BZ_LOCAL_DIR}/bin
 
