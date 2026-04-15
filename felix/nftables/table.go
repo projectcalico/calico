@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -255,7 +255,7 @@ type NftablesTable struct {
 type TableOptions struct {
 	// NewDataplane is an optional function to override the creation of the knftables client,
 	// used for testing.
-	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
+	NewDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
 
 	// Disabled can be set to true when running in iptables mode, triggering a cleanup
 	// of any Calico nftables content.
@@ -1121,13 +1121,16 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			// Let's just print out the entire ruleset for debugging purposes.
-			cmd := t.newCmd("nft", "list", "ruleset")
+			// Dump our table's state for debugging. We scope this to our
+			// own table rather than using "nft list ruleset" to avoid
+			// parsing objects from other tables that may contain udata
+			// written by a newer nft, which can crash older nft binaries.
+			cmd := t.newCmd("nft", "list", "table", t.name)
 			output, err2 := cmd.Output()
 			if err2 != nil {
-				t.logCxt.WithError(err2).Error("Failed to load nftables ruleset")
+				t.logCxt.WithError(err2).Error("Failed to load nftables table state")
 			} else {
-				t.logCxt.WithField("ruleset", string(output)).Error("Current ruleset after error")
+				t.logCxt.WithField("tableState", string(output)).Error("Current table state after error")
 			}
 
 			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")

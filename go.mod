@@ -119,7 +119,7 @@ require (
 	modernc.org/memory v1.10.0
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/kind v0.29.0
-	sigs.k8s.io/knftables v0.0.18
+	sigs.k8s.io/knftables v0.0.21
 	sigs.k8s.io/network-policy-api v0.1.5
 	sigs.k8s.io/yaml v1.6.0
 )
