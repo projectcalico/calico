@@ -33,24 +33,48 @@ spec:
       name: v3
       schema:
         openAPIV3Schema:
+          description: BlockAffinity maintains a block affinity's state
           properties:
             apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
               type: string
             kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
               type: string
             metadata:
               type: object
             spec:
+              description:
+                BlockAffinitySpec contains the specification for a BlockAffinity
+                resource.
               properties:
                 cidr:
+                  description: The CIDR range this block affinity references.
                   format: cidr
                   type: string
                 deleted:
                   default: false
+                  description: |-
+                    Deleted indicates whether or not this block affinity is disabled and is
+                    used as part of race-condition prevention. When set to true, clients
+                    should treat this block as if it does not exist.
                   type: boolean
                 node:
+                  description: The node that this block affinity is assigned to.
                   type: string
                 state:
+                  description:
+                    The state of the block affinity with regard to any referenced
+                    IPAM blocks.
                   enum:
                     - ""
                     - confirmed
@@ -58,6 +82,7 @@ spec:
                     - pendingDeletion
                   type: string
                 type:
+                  description: The type of affinity.
                   type: string
               required:
                 - cidr

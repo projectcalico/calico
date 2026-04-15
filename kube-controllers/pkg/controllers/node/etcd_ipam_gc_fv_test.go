@@ -45,6 +45,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		c         client.Interface
 		k8sClient *fake.Clientset
 		stopCh    chan struct{}
+		ips       *testutils.TestBlockAllocator
 	)
 
 	const kNodeName = "k8snodename"
@@ -64,6 +65,10 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		p.Spec.Disabled = false
 		_, err := c.IPPools().Create(context.Background(), p, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
+
+		// Each test gets an IP from a different /26 block to avoid races with
+		// the controller's async block GC from the previous test.
+		ips = testutils.NewTestBlockAllocator("192.168.0.0", 26)
 
 		// Create the fake K8s client and start the in-process node controller.
 		// We use a single controller for all tests (matching how the Docker-based
@@ -147,6 +152,8 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should properly garbage collect IP addresses for mismatched node names", func() {
+		testIP := ips.NextIP()
+
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: kNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
@@ -161,7 +168,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		handleA := "handleA"
 		attrs := map[string]string{"node": cNodeName, "pod": "pod-a", "namespace": "default"}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: cNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: cNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -189,6 +196,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should never garbage collect IP addresses that do not belong to Kubernetes pods", func() {
+		testIP := ips.NextIP()
 		commonNodeName := "common-node-name"
 
 		// Create a kubernetes node.
@@ -207,7 +215,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -250,6 +258,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should garbage collect IP addresses if there is no Calico node, even if there happens to be a Kubernetes node", func() {
+		testIP := ips.NextIP()
 		commonNodeName := "common-node-name"
 
 		// Create a kubernetes node.
@@ -261,7 +270,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName, "pod": "pod-a", "namespace": "default"}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -279,12 +288,14 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should garbage collect IP addresses if there is no Calico node AND no Kubernetes node", func() {
+		testIP := ips.NextIP()
+
 		// Allocate an IP address on a node that doesn't exist.
 		commonNodeName := "common-node-name"
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName, "pod": "pod-a", "namespace": "default"}
 		err := c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

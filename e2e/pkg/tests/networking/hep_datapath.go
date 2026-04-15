@@ -250,7 +250,9 @@ var _ = describe.CalicoDescribe(
 			}
 			if s.srcPod != s.dstPod {
 				// Forwarded pod-to-pod traffic goes via tunnel on overlay networks.
-				// Special case: ingress-2N1 on iptables/nftables uses direct host access.
+				// Special case: ingress-2N1 on iptables/nftables. NodePort DNAT happens
+				// before routing, so traffic arrives on the host interface directly
+				// rather than via the tunnel device.
 				if s.accessType == "nodePort" && s.srcPod == 2 && s.policyDirection == "ingress" &&
 					(dp.Calico == dataplaneIptables || dp.Calico == dataplaneNftables) {
 					return ""
@@ -300,6 +302,7 @@ var _ = describe.CalicoDescribe(
 			clientName := utils.GenerateRandomName("hep-client")
 			clientOpts := []conncheck.ClientOption{
 				conncheck.WithClientCustomizer(conncheck.WithNodeName(srcNode)),
+				conncheck.WithClientCustomizer(withCurlClient),
 			}
 			if s.srcHostNetworked {
 				clientOpts = append(clientOpts, conncheck.WithClientCustomizer(func(pod *v1.Pod) {
@@ -312,21 +315,23 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
-			// Build the target based on access type.
+			// Build the target based on access type. Use HTTP with /clientip
+			// so checkConnection can parse the source IP for SNAT detection.
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			var target conncheck.Target
 			expectSNAT := false
 			switch s.accessType {
 			case "podIP":
-				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP).Port(80)
+				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP, clientIPOpt).Port(80)
 			case "clusterIP":
 				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				target = server.ClusterIPv4().Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(80)
 				if s.dstHostNetworked {
 					expectSNAT = true
 				}
 			case "nodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[0]) // HEP is on node0
+				target = server.NodePort(nodeIPs[0], clientIPOpt) // HEP is on node0
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", s.accessType))
 			}
@@ -363,9 +368,13 @@ var _ = describe.CalicoDescribe(
 					}},
 				},
 			}
-			Expect(cli.Create(context.Background(), kubeletPolicy)).To(Succeed())
+			createCtx, createCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer createCancel()
+			Expect(cli.Create(createCtx, kubeletPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), kubeletPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, kubeletPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete kubelet policy: %v", err)
 				}
 			})
@@ -386,9 +395,13 @@ var _ = describe.CalicoDescribe(
 			if ifaceName != "" {
 				hep.Spec.InterfaceName = ifaceName
 			}
-			Expect(cli.Create(context.Background(), hep)).To(Succeed())
+			hepCtx, hepCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer hepCancel()
+			Expect(cli.Create(hepCtx, hep)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), hep); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, hep); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete HEP: %v", err)
 				}
 			})
@@ -413,9 +426,13 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Allow,
 			)
-			Expect(cli.Create(context.Background(), allowPolicy)).To(Succeed())
+			allowCtx, allowCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer allowCancel()
+			Expect(cli.Create(allowCtx, allowPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), allowPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, allowPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete allow policy: %v", err)
 				}
 			})
@@ -432,9 +449,13 @@ var _ = describe.CalicoDescribe(
 				s.policyDirection,
 				v3.Deny,
 			)
-			Expect(cli.Create(context.Background(), denyPolicy)).To(Succeed())
+			denyCtx, denyCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer denyCancel()
+			Expect(cli.Create(denyCtx, denyPolicy)).To(Succeed())
 			DeferCleanup(func() {
-				if err := cli.Delete(context.Background(), denyPolicy); err != nil && !apierrors.IsNotFound(err) {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+				if err := cli.Delete(cleanupCtx, denyPolicy); err != nil && !apierrors.IsNotFound(err) {
 					framework.Logf("WARNING: failed to delete deny policy: %v", err)
 				}
 			})
@@ -449,24 +470,45 @@ var _ = describe.CalicoDescribe(
 		}
 
 		for _, scenario := range hepScenarioTable {
+			if scenario.tablesDataplaneOnly {
+				continue
+			}
 			s := scenario // capture
-
 			Context(s.name, func() {
 				It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
-					if s.tablesDataplaneOnly && (dp.IsBPF() || dp.IsVPP()) {
-						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
-					}
 					runHEPScenario(s, false)
 				})
 
 				It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
-					if s.tablesDataplaneOnly && (dp.IsBPF() || dp.IsVPP()) {
-						Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
-					}
 					runHEPScenario(s, true)
 				})
 			})
 		}
+
+		// Xtables-only scenarios — only valid on iptables/nftables dataplanes.
+		framework.Context("xtables-only", describe.RequiresXtables(), func() {
+			for _, scenario := range hepScenarioTable {
+				if !scenario.tablesDataplaneOnly {
+					continue
+				}
+				s := scenario // capture
+				Context(s.name, func() {
+					It(fmt.Sprintf("ApplyOnForward=false, %s", s.policyDirection), func() {
+						if dp.IsBPF() || dp.IsVPP() {
+							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
+						}
+						runHEPScenario(s, false)
+					})
+
+					It(fmt.Sprintf("ApplyOnForward=true, %s", s.policyDirection), func() {
+						if dp.IsBPF() || dp.IsVPP() {
+							Fail("This scenario only applies to xtables-based dataplanes (iptables/nftables)")
+						}
+						runHEPScenario(s, true)
+					})
+				})
+			}
+		})
 	},
 )
 
