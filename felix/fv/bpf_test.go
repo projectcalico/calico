@@ -1850,6 +1850,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							allowIngressFromExtClient.Spec.Selector = allowIngressFromExtClientSelector
 							allowIngressFromExtClient = createPolicy(allowIngressFromExtClient)
 
+							externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
+
+							// Wait for the ext-client allow policy to be applied in the BPF datapath.
+							cc.ResetExpectations()
+							cc.ExpectSome(externalClient, w[0][0])
+							cc.CheckConnectivity()
+
 							tcpdump1 := tc.Felixes[0].AttachTCPDump("eth0")
 							tcpdump1.SetLogEnabled(true)
 							tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
@@ -1863,8 +1870,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
 							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
 							defer tcpdump1.Stop()
-
-							externalClient.Exec("ip", "route", "add", w[0][0].IP, "via", felixIP(0))
 
 							// Send a packet with large payload without the DNF flag
 							// 16,000 bytes is the typical limit on the size of a
