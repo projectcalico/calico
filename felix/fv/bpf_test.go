@@ -1869,7 +1869,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
 							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
-							defer tcpdump1.Stop()
+							defer tcpdump0.Stop()
 
 							// Send a packet with large payload without the DNF flag
 							// 16,000 bytes is the typical limit on the size of a
