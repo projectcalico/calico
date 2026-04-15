@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
@@ -147,4 +149,98 @@ func structToKeyValueString(input any) (string, error) {
 func bpfConntrackTimeoutsToString(value any) any {
 	res, _ := structToKeyValueString(value)
 	return res
+}
+
+// ExtractFelixConfigFields extracts configuration key-value pairs from a
+// FelixConfigurationSpec using reflection, optionally merging annotation-based
+// overrides. This is the shared extraction logic used by both the
+// configUpdateProcessor (v1 decomposition) and the ConfigBatcher (selector-
+// scoped config).
+//
+// Field names are determined by the confignamev1 tag (or the struct field name
+// if unset). Fields tagged confignamev1:"-" are skipped. Nil/empty fields are
+// omitted. Value conversion uses FelixValueConverters for special types, with
+// fallback to standard stringification matching the configUpdateProcessor.
+func ExtractFelixConfigFields(fc *apiv3.FelixConfiguration) map[string]string {
+	config := extractSpecFields(&fc.Spec)
+
+	// Apply annotation-based config overrides, consistent with how the
+	// configUpdateProcessor handles annotations on default/per-node resources.
+	for k, v := range fc.GetAnnotations() {
+		if strings.HasPrefix(k, annotationConfigPrefix) {
+			config[k[len(annotationConfigPrefix):]] = v
+		}
+	}
+
+	return config
+}
+
+// extractSpecFields iterates over the FelixConfigurationSpec fields and
+// converts each set field to a string value.
+func extractSpecFields(spec *apiv3.FelixConfigurationSpec) map[string]string {
+	config := make(map[string]string)
+	specValue := reflect.ValueOf(spec).Elem()
+	specType := specValue.Type()
+
+	for i := 0; i < specType.NumField(); i++ {
+		fieldInfo := specType.Field(i)
+		name := getConfigName(fieldInfo)
+		if name == "-" {
+			continue
+		}
+
+		field := specValue.Field(i)
+
+		// Skip unset (nil pointer) fields and empty strings.
+		if field.Kind() == reflect.Pointer {
+			if field.IsNil() {
+				continue
+			}
+			field = field.Elem()
+		} else {
+			if field.Kind() == reflect.String && field.Len() == 0 {
+				continue
+			}
+		}
+
+		value := field.Interface()
+
+		// Convert the value to string using the same converters and type
+		// switches as configUpdateProcessor.processAddOrModified.
+		var strValue string
+		if converter, ok := FelixValueConverters[name]; ok {
+			converted := converter(value)
+			if converted == nil {
+				continue
+			}
+			strValue = converted.(string)
+		} else {
+			switch vt := value.(type) {
+			case string:
+				strValue = vt
+			case v1.Duration:
+				switch fieldInfo.Tag.Get("configv1timescale") {
+				case "milliseconds":
+					ms := vt.Duration / time.Millisecond
+					remainder := vt.Duration % time.Millisecond
+					strValue = fmt.Sprintf("%v", float64(ms)+float64(remainder)/1e6)
+				default:
+					strValue = fmt.Sprintf("%v", vt.Seconds())
+				}
+			case []string:
+				strValue = strings.Join(vt, ",")
+			case map[string]string:
+				var kvp strings.Builder
+				for k, v := range vt {
+					kvp.WriteString(k + "=" + v + ",")
+				}
+				strValue = kvp.String()
+			default:
+				strValue = fmt.Sprintf("%v", vt)
+			}
+		}
+
+		config[name] = strValue
+	}
+	return config
 }

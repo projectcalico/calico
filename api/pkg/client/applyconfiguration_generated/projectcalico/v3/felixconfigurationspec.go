@@ -16,7 +16,7 @@ import (
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpecApplyConfiguration struct {
 	// NodeSelector is an optional label selector that restricts this FelixConfiguration
-	// to only apply to nodes that match the given selector. This field is only valid
+	// to apply only to nodes that match the given selector. This field is only valid
 	// on FelixConfiguration resources whose name is not "default" and does not start
 	// with "node.". For resources named "default", the configuration applies globally
 	// to all nodes. For resources named "node.<nodename>", the configuration applies to

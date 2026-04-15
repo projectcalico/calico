@@ -67,7 +67,7 @@ var _ = infrastructure.DatastoreDescribe(
 			defer cancel()
 			cfg := api.NewFelixConfiguration()
 			cfg.Name = name
-			cfg.Spec.NodeSelector = selector
+			cfg.Spec.NodeSelector = &selector
 			deltaFn(&cfg.Spec)
 			_, err := client.FelixConfigurations().Create(ctx, cfg, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
