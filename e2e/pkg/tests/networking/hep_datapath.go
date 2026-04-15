@@ -302,6 +302,7 @@ var _ = describe.CalicoDescribe(
 			clientName := utils.GenerateRandomName("hep-client")
 			clientOpts := []conncheck.ClientOption{
 				conncheck.WithClientCustomizer(conncheck.WithNodeName(srcNode)),
+				conncheck.WithClientCustomizer(withCurlClient),
 			}
 			if s.srcHostNetworked {
 				clientOpts = append(clientOpts, conncheck.WithClientCustomizer(func(pod *v1.Pod) {
@@ -314,21 +315,23 @@ var _ = describe.CalicoDescribe(
 			ct.Deploy()
 			DeferCleanup(ct.Stop)
 
-			// Build the target based on access type.
+			// Build the target based on access type. Use HTTP with /clientip
+			// so checkConnection can parse the source IP for SNAT detection.
+			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			var target conncheck.Target
 			expectSNAT := false
 			switch s.accessType {
 			case "podIP":
-				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP).Port(80)
+				target = conncheck.NewTarget(server.Pod().Status.PodIP, conncheck.TypePodIP, conncheck.TCP, clientIPOpt).Port(80)
 			case "clusterIP":
 				// TODO: Also test IPv6 ClusterIP on dual-stack clusters.
-				target = server.ClusterIPv4().Port(80)
+				target = server.ClusterIPv4(clientIPOpt).Port(80)
 				if s.dstHostNetworked {
 					expectSNAT = true
 				}
 			case "nodePort":
 				expectSNAT = true
-				target = server.NodePort(nodeIPs[0]) // HEP is on node0
+				target = server.NodePort(nodeIPs[0], clientIPOpt) // HEP is on node0
 			default:
 				Fail(fmt.Sprintf("unhandled accessType: %s", s.accessType))
 			}
