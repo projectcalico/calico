@@ -127,6 +127,13 @@ func (f *fakeNFT) Check(ctx context.Context, tx *knftables.Transaction) error {
 	return f.fake.Check(ctx, tx)
 }
 
+// ListAll returns a map containing the names of all objects in the table,
+// grouped by object type.
+func (f *fakeNFT) ListAll(ctx context.Context) (map[string][]string, error) {
+	f.preList()
+	return f.fake.ListAll(ctx)
+}
+
 // List returns a list of the names of the objects of objectType ("chain", "set",
 // or "map") in the table. If there are no such objects, this will return an empty
 // list and no error.
@@ -167,6 +174,11 @@ func (f *fakeNFT) ListElements(ctx context.Context, objectType string, name stri
 		return nil, err
 	}
 	return f.fake.ListElements(ctx, objectType, name)
+}
+
+// ListCounters returns a list of the counters in the table.
+func (f *fakeNFT) ListCounters(ctx context.Context) ([]*knftables.Counter, error) {
+	return f.fake.ListCounters(ctx)
 }
 
 func (f *fakeNFT) maybeFailListElements(name string) error {

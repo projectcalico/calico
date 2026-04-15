@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -255,7 +255,7 @@ type NftablesTable struct {
 type TableOptions struct {
 	// NewDataplane is an optional function to override the creation of the knftables client,
 	// used for testing.
-	NewDataplane func(knftables.Family, string) (knftables.Interface, error)
+	NewDataplane func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
 
 	// Disabled can be set to true when running in iptables mode, triggering a cleanup
 	// of any Calico nftables content.
