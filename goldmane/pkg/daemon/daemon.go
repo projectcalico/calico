@@ -217,7 +217,7 @@ func Run(ctx context.Context, cfg Config) {
 	defer grpcServer.GracefulStop()
 
 	if cfg.ProfilePort != 0 {
-		debugserver.StartDebugPprofServer("127.0.0.1", cfg.ProfilePort)
+		debugserver.StartDebugPprofServer("localhost", cfg.ProfilePort)
 	}
 
 	if cfg.PrometheusPort != 0 {

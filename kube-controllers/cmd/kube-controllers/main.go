@@ -236,7 +236,7 @@ func main() {
 	}
 
 	if runCfg.DebugProfilePort != 0 {
-		debugserver.StartDebugPprofServer("127.0.0.1", int(runCfg.DebugProfilePort))
+		debugserver.StartDebugPprofServer("localhost", int(runCfg.DebugProfilePort))
 	}
 
 	// Run the controllers. This runs until a config change triggers a restart
