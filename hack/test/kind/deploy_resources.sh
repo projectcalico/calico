@@ -169,14 +169,14 @@ echo
 echo "Install Calico using the helm chart"
 ${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
+echo "Install calicoctl as a pod"
+${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
+echo
+
 if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
   echo "Patching installation resource to Felix cluster routing mode"
   ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
 fi
-
-echo "Install calicoctl as a pod"
-${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
-echo
 
 echo "Wait for tigera status to be ready"
 if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
@@ -196,7 +196,8 @@ if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
 fi
 
 echo "Wait for Calico to be ready..."
-wait_pod_ready -n calico-system -l k8s-app
+# Calico-system pods are covered by the tigerastatus/calico and tigerastatus/apiserver
+# waits above. kube-dns and calicoctl are not operator-managed, so wait on them directly.
 wait_pod_ready -l k8s-app=kube-dns -n kube-system
 wait_pod_ready calicoctl -n kube-system
 
