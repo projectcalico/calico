@@ -399,7 +399,6 @@ var _ = describe.CalicoDescribe(
 			// Server on svcNode.
 			serverName := utils.GenerateRandomName("ingress-srv")
 			server := conncheck.NewServer(serverName, f.Namespace,
-				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(nodeNames[2])),
 			)
@@ -537,7 +536,6 @@ var _ = describe.CalicoDescribe(
 			ct := conncheck.NewConnectionTester(f)
 			serverName := utils.GenerateRandomName("ingress-ext-srv")
 			server := conncheck.NewServer(serverName, f.Namespace,
-				conncheck.WithEchoServer(),
 				conncheck.WithNodePortService(),
 				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(nodeNames[2])),
 			)

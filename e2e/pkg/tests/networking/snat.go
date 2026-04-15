@@ -89,8 +89,8 @@ func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, ta
 }
 
 // withCurlClient swaps the conncheck client pod to Netshoot, which has curl
-// and nc. Required when using HTTP protocol targets since the default
-// TestWebserver client image only has wget.
+// and nc. Required when using HTTP protocol targets since the default Alpine
+// client image only has wget.
 func withCurlClient(pod *v1.Pod) {
 	for i := range pod.Spec.Containers {
 		pod.Spec.Containers[i].Image = images.Netshoot

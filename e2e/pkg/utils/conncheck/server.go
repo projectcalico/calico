@@ -53,7 +53,6 @@ type Server struct {
 	podCustomizers []func(*v1.Pod)
 	svcCustomizers []func(*v1.Service)
 	autoCreateSvc  bool
-	echoServer     bool
 }
 
 // composedPodCustomizer returns a single customizer function that applies all
@@ -304,16 +303,6 @@ func WithPorts(ports ...int) ServerOption {
 func WithAutoCreateService(autoCreate bool) ServerOption {
 	return func(c *Server) error {
 		c.autoCreateSvc = autoCreate
-		return nil
-	}
-}
-
-// WithEchoServer configures the server to use the EchoServer (agnhost netexec)
-// image instead of TestWebserver. The EchoServer's /clientip endpoint returns
-// the client address in "IP:port" format, useful for SNAT detection.
-func WithEchoServer() ServerOption {
-	return func(c *Server) error {
-		c.echoServer = true
 		return nil
 	}
 }

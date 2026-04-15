@@ -30,11 +30,6 @@ const (
 	// server image on Windows nodes, since Agnhost has no Windows binary.
 	Porter = "calico/porter"
 
-	// TestWebserver is a minimal HTTP server from the K8s e2e image set. Used
-	// as the default Linux server in conncheck when tests don't need any of
-	// Agnhost's extra endpoints (/clientip, /dial, UDP echo, etc.).
-	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
-
 	// Agnhost is Kubernetes' swiss-army e2e image. Used via `netexec` for
 	// multi-protocol servers (HTTP/UDP/SCTP on one pod) and via other
 	// subcommands for common test helpers. Version is pinned; bump deliberately.
@@ -61,8 +56,9 @@ const (
 	// wireguard and encap tests.
 	Netshoot = "docker.io/nicolaka/netshoot:v0.13"
 
-	// EchoServer is an alias for Agnhost, used as a convention indicator.
-	// Use with `netexec --http-port=PORT` args. Hit /clientip for source IP.
+	// EchoServer is the default Linux conncheck server; an alias for Agnhost to
+	// make the server role explicit. Run with `netexec --http-port=PORT`; hit
+	// /clientip for the source IP.
 	EchoServer = Agnhost
 
 	// PacketSizeServer is an HTTP/UDP server for tests that need controlled

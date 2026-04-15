@@ -45,11 +45,8 @@ func (s *Server) deploy(f *framework.Framework) (*v1.Pod, *v1.Service) {
 	if windows.ClusterIsWindows() {
 		image = images.Porter
 		nodeselector["kubernetes.io/os"] = "windows"
-	} else if s.echoServer {
-		image = images.EchoServer
-		nodeselector["kubernetes.io/os"] = "linux"
 	} else {
-		image = images.TestWebserver
+		image = images.EchoServer
 		nodeselector["kubernetes.io/os"] = "linux"
 	}
 	for _, port := range s.ports {
@@ -65,17 +62,15 @@ func (s *Server) deploy(f *framework.Framework) (*v1.Pod, *v1.Service) {
 					Value: "value-not-used",
 				},
 			}
-		} else if s.echoServer {
+		} else {
 			// agnhost netexec serves HTTP on the specified port and returns
 			// client IP at /clientip.
 			args = []string{"netexec", fmt.Sprintf("--http-port=%d", port)}
-		} else {
-			args = []string{fmt.Sprintf("--port=%d", port)}
 		}
 
-		probePath := "/"
-		if s.echoServer {
-			probePath = "/clientip"
+		probePath := "/clientip"
+		if windows.ClusterIsWindows() {
+			probePath = "/"
 		}
 
 		container := v1.Container{
