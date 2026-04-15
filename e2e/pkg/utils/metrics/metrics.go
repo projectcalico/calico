@@ -35,17 +35,17 @@ import (
 )
 
 // EnsurePrometheusMetricsEnabled enables PrometheusMetricsEnabled in the
-// default FelixConfiguration. The returned cleanup func restores the original
-// value (ideally via DeferCleanup). Returns no-op,nil when metrics are already
-// enabled (no-op).
-func EnsurePrometheusMetricsEnabled(cli client.Client) (cleanup func() error, err error) {
+// default FelixConfiguration. The returned cleanup func, if not-nil, restores
+// the original value (ideally via DeferCleanup).
+func EnsurePrometheusMetricsEnabled(cli client.Client) (cleanup func(), err error) {
 	framework.Logf("Ensuring Prometheus metrics are enabled in FelixConfiguration")
 
-	cleanup, err = utils.UpdateFelixConfig(cli, func(spec *v3.FelixConfigurationSpec) {
-		spec.PrometheusMetricsEnabled = ptr.To(true)
+	cleanup, err = utils.ConfigureWithCleanup(cli, client.ObjectKey{Name: "default"}, &v3.FelixConfiguration{}, func(cfg *v3.FelixConfiguration) {
+		cfg.Spec.PrometheusMetricsEnabled = ptr.To(true)
 	})
+
 	if err != nil {
-		return func() error { return nil }, fmt.Errorf("Couldn't enable Prometheus metrics: %w", err)
+		return cleanup, fmt.Errorf("Couldn't enable Prometheus metrics: %w", err)
 	}
 
 	return cleanup, nil
