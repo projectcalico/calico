@@ -199,12 +199,12 @@ release-publish-latest: release-prereqs
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -r
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 watch -r
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
