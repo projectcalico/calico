@@ -103,10 +103,6 @@ func (c *clusterNetworkPolicyClient) List(ctx context.Context, list model.ListIn
 		if err != nil && !errors.As(err, &e) {
 			return nil, err
 		}
-		// Skip malformed policies that returned a nil-Value tombstone KVPair.
-		if kvp == nil || kvp.Value == nil {
-			return nil, nil
-		}
 		return []*model.KVPair{kvp}, nil
 	}
 	return pagedList(ctx, logContext, revision, list, convertFunc, listFunc)
