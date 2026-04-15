@@ -18,12 +18,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -61,6 +64,7 @@ import (
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
@@ -222,7 +226,7 @@ configRetry:
 		numClientsCreated++
 		backendClient = v3Client.(interface{ Backend() bapi.Client }).Backend()
 		for {
-			globalConfig, hostConfig, err := loadConfigFromDatastore(
+			globalConfig, selectorConfig, hostConfig, err := loadConfigFromDatastore(
 				ctx, backendClient, datastoreConfig, configParams.FelixHostname)
 			if err == ErrNotReady {
 				log.Warn("Waiting for datastore to be initialized (or migrated)")
@@ -237,6 +241,12 @@ configRetry:
 			_, err = configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
 			if err != nil {
 				log.WithError(err).Error("Failed update global config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			_, err = configParams.UpdateFrom(selectorConfig, config.DatastorePerSelector)
+			if err != nil {
+				log.WithError(err).Error("Failed update selector-scoped config from datastore")
 				time.Sleep(1 * time.Second)
 				continue configRetry
 			}
@@ -958,17 +968,19 @@ var ErrNotReady = errors.New("datastore is not ready or has not been initialised
 
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
-) (globalConfig, hostConfig map[string]string, err error) {
-	// The configuration is split over 3 different resource types and 4 different resource
+) (globalConfig, selectorConfig, hostConfig map[string]string, err error) {
+	// The configuration is split over 3 different resource types and 4+ different resource
 	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
 	// -  FelixConfiguration (global): name "default"
+	// -  FelixConfiguration (per-selector): any other name, matched via nodeSelector
 	// -  FelixConfiguration (per-host): name "node.<hostname>"
 	// -  Node (per-host): name: <hostname>
 	// Get the global values and host specific values separately.  We re-use the updateprocessor
 	// logic to convert the single v3 resource to a set of v1 key/values.
 	hostConfig = make(map[string]string)
 	globalConfig = make(map[string]string)
+	selectorConfig = make(map[string]string)
 	var ready bool
 	err = getAndMergeConfig(
 		ctx, client, globalConfig,
@@ -993,6 +1005,14 @@ func loadConfigFromDatastore(
 	if err != nil {
 		return
 	}
+
+	// Load selector-scoped FelixConfiguration resources. List all FelixConfigurations,
+	// find the ones with a nodeSelector that matches this node's labels, and merge.
+	selectorConfig, err = loadSelectorScopedFelixConfig(ctx, client, hostname)
+	if err != nil {
+		return
+	}
+
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
 		apiv3.KindFelixConfiguration, "node."+hostname,
@@ -1013,6 +1033,128 @@ func loadConfigFromDatastore(
 	}
 
 	return
+}
+
+// loadSelectorScopedFelixConfig lists all FelixConfiguration resources, finds
+// selector-scoped ones (name not "default" and not "node.*"), evaluates their
+// nodeSelector against this node's labels, and merges all matching configs.
+func loadSelectorScopedFelixConfig(
+	ctx context.Context, client bapi.Client, hostname string,
+) (map[string]string, error) {
+	result := make(map[string]string)
+
+	// Get the local node's labels for selector evaluation.
+	nodeKVP, err := client.Get(ctx, model.ResourceKey{
+		Kind: internalapi.KindNode,
+		Name: hostname,
+	}, "")
+	if err != nil {
+		switch err.(type) {
+		case cerrors.ErrorResourceDoesNotExist:
+			log.Info("Node resource does not exist, no selector-scoped config can match")
+			return result, nil
+		default:
+			return nil, err
+		}
+	}
+
+	node, ok := nodeKVP.Value.(*internalapi.Node)
+	if !ok {
+		log.Warn("Unexpected value type for Node resource during selector config loading")
+		return result, nil
+	}
+	nodeLabels := node.Labels
+
+	// List all FelixConfiguration resources.
+	felixConfigs, err := client.List(ctx, model.ResourceListOptions{
+		Kind: apiv3.KindFelixConfiguration,
+	}, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list FelixConfiguration resources: %w", err)
+	}
+
+	// Collect matching selector-scoped configs. If more than one matches,
+	// the oldest by CreationTimestamp wins (tie-broken by name) to avoid
+	// disrupting existing working config when a conflicting resource is
+	// accidentally created.
+	type matchEntry struct {
+		name         string
+		config       map[string]string
+		creationTime time.Time
+	}
+	var matches []matchEntry
+	for _, kvp := range felixConfigs.KVPairs {
+		rk, ok := kvp.Key.(model.ResourceKey)
+		if !ok {
+			continue
+		}
+		// Skip global and per-node configs.
+		if rk.Name == "default" || strings.HasPrefix(rk.Name, "node.") {
+			continue
+		}
+
+		fc, ok := kvp.Value.(*apiv3.FelixConfiguration)
+		if !ok {
+			continue
+		}
+
+		if fc.Spec.NodeSelector == nil || *fc.Spec.NodeSelector == "" {
+			continue
+		}
+		selectorStr := *fc.Spec.NodeSelector
+
+		sel, err := selector.Parse(selectorStr)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"name":     rk.Name,
+				"selector": selectorStr,
+			}).Warn("Failed to parse nodeSelector during startup config loading, skipping")
+			continue
+		}
+
+		if sel.Evaluate(nodeLabels) {
+			log.WithField("name", rk.Name).Info("Selector-scoped FelixConfiguration matches local node at startup")
+			extracted := updateprocessors.ExtractFelixConfigFields(fc)
+			matches = append(matches, matchEntry{
+				name:         rk.Name,
+				config:       extracted,
+				creationTime: fc.CreationTimestamp.Time,
+			})
+		}
+	}
+	if len(matches) > 0 {
+		// Sort by creation time, then name for determinism.
+		slices.SortFunc(matches, func(a, b matchEntry) int {
+			if a.creationTime.Before(b.creationTime) {
+				return -1
+			}
+			if b.creationTime.Before(a.creationTime) {
+				return 1
+			}
+			if a.name < b.name {
+				return -1
+			}
+			if a.name > b.name {
+				return 1
+			}
+			return 0
+		})
+		winner := matches[0]
+		if len(matches) > 1 {
+			names := make([]string, len(matches))
+			for i, m := range matches {
+				names[i] = m.name
+			}
+			log.WithFields(log.Fields{
+				"matching": names,
+				"winner":   winner.name,
+			}).Warn("Multiple selector-scoped FelixConfigurations match this node at startup; " +
+				"using the oldest by creation time. This is likely a misconfiguration.")
+		}
+		maps.Copy(result, winner.config)
+	}
+
+	return result, nil
 }
 
 // getAndMergeConfig gets the v3 resource configuration extracts the separate config values
