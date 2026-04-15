@@ -60,7 +60,7 @@ import (
 //   3. BaselineTier deny-all egress                                    → denied
 //   4. AdminTier pass + GNP deny in default tier                       → denied; delete GNP → allowed
 //   5. AdminTier allow overrides GNP deny in default tier              → allowed
-//   6. GNP deny in kube-admin tier (order 0.5) vs KCNP allow (pri 100)→ denied; delete GNP → allowed
+//   6. GNP deny in kube-admin tier (order 0.5) vs KCNP allow (pri 100) → denied; delete GNP → allowed
 //   7. AdminTier pass + K8s NetworkPolicy implicit deny in default tier→ denied
 //
 // Flow log test:
@@ -310,8 +310,14 @@ var _ = infrastructure.DatastoreDescribe(
 			})
 
 			It("should enforce policy correctly across admin, baseline, and default tiers", func() {
+				By("checking initial connectivity")
+				cc = &connectivity.Checker{}
+				cc.ExpectSome(w[0], w[1])
+				cc.ExpectSome(w[0], w[2])
+				cc.CheckConnectivity()
+
 				// ---- Phase 1: AdminTier deny-all ingress ----
-				By("1. Creating an AdminTier KCNP that denies all ingress")
+				By("creating an AdminTier KCNP that denies all ingress")
 				createDenyAllIngressKCNP("kcnp-deny-ingress", clusternetpol.AdminTier, 100)
 				Eventually(policyProgrammed("kcnp-deny-ingress"), "15s", "200ms").Should(BeTrue())
 
@@ -321,7 +327,7 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.CheckConnectivity()
 
 				// ---- Phase 2: AdminTier priority ordering ----
-				By("2. Adding a higher-priority AdminTier KCNP allow to override the deny")
+				By("adding a higher-priority AdminTier KCNP allow to override the deny")
 				createAllowTCPIngressKCNP("kcnp-allow-tcp", clusternetpol.AdminTier, 50)
 				Eventually(policyProgrammed("kcnp-allow-tcp"), "15s", "200ms").Should(BeTrue())
 
@@ -330,7 +336,7 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.ExpectSome(w[0], w[2])
 				cc.CheckConnectivity()
 
-				By("Deleting the allow KCNP so only the deny remains")
+				By("deleting the allow KCNP so only the deny remains")
 				deleteCNP("kcnp-allow-tcp")
 				Eventually(policyProgrammed("kcnp-allow-tcp"), "15s", "200ms").Should(BeFalse())
 
@@ -343,13 +349,13 @@ var _ = infrastructure.DatastoreDescribe(
 				Eventually(policyProgrammed("kcnp-deny-ingress"), "15s", "200ms").Should(BeFalse())
 
 				// ---- Phase 3: BaselineTier deny-all egress ----
-				By("3. Verifying connectivity is restored without policies")
+				By("verifying connectivity is restored without policies")
 				cc = &connectivity.Checker{}
 				cc.ExpectSome(w[0], w[1])
 				cc.ExpectSome(w[0], w[2])
 				cc.CheckConnectivity()
 
-				By("Creating a BaselineTier KCNP that denies all egress")
+				By("creating a BaselineTier KCNP that denies all egress")
 				createDenyAllEgressKCNP("kcnp-baseline-deny-egress", clusternetpol.BaselineTier, 100)
 				Eventually(policyProgrammed("kcnp-baseline-deny-egress"), "15s", "200ms").Should(BeTrue())
 
@@ -361,8 +367,13 @@ var _ = infrastructure.DatastoreDescribe(
 				deleteCNP("kcnp-baseline-deny-egress")
 				Eventually(policyProgrammed("kcnp-baseline-deny-egress"), "15s", "200ms").Should(BeFalse())
 
+				cc = &connectivity.Checker{}
+				cc.ExpectSome(w[0], w[1])
+				cc.ExpectSome(w[0], w[2])
+				cc.CheckConnectivity()
+
 				// ---- Phase 4: KCNP pass in admin + GNP deny in default tier ----
-				By("4. Creating KCNP pass in admin tier with GNP deny in default tier")
+				By("creating KCNP pass in admin tier with GNP deny in default tier")
 				createPassIngressKCNP("kcnp-pass-ingress", clusternetpol.AdminTier, 100)
 
 				gnp := api.NewGlobalNetworkPolicy()
@@ -384,7 +395,7 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.ExpectNone(w[0], w[2])
 				cc.CheckConnectivity()
 
-				By("Deleting the GNP so traffic falls through to the default-allow profile")
+				By("deleting the GNP so traffic falls through to the default-allow profile")
 				_, err = calicoClient.GlobalNetworkPolicies().Delete(
 					utils.Ctx, "default.gnp-deny-ingress", options.DeleteOptions{},
 				)
@@ -400,7 +411,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Eventually(policyProgrammed("kcnp-pass-ingress"), "15s", "200ms").Should(BeFalse())
 
 				// ---- Phase 5: KCNP allow in admin overrides GNP deny in default ----
-				By("5. Creating KCNP allow in admin tier to override GNP deny in default tier")
+				By("creating KCNP allow in admin tier to override GNP deny in default tier")
 				gnp = api.NewGlobalNetworkPolicy()
 				gnp.Name = "default.gnp-deny-ingress"
 				gnp.Spec.Order = &order
