@@ -28,7 +28,6 @@
 #   ARCH              - target architecture (default: amd64)
 #   GIT_VERSION       - version for chart lookup (default: git describe)
 #   CALICO_API_GROUP  - which API group to use
-#   CLUSTER_ROUTING   - BIRD (default) or FELIX
 #   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
 
 # Clean up background jobs on exit, and collect diagnostics on failure.
@@ -169,51 +168,14 @@ echo
 echo "Install Calico using the helm chart"
 ${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
-if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching installation resource to Felix cluster routing mode"
-  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
-fi
-
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
-echo
-
-echo "Wait for tigera status to be ready"
-if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
-       ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
-  echo "TigeraStatus for Calico failed to become Available"
-  exit 1
-fi
-
-# Wait for the Calico API server to be available, if not using the projectcalico.org/v3 CRDs.
-# If using the projectcalico.org/v3 CRDs, there is no Calico API server to wait for.
-if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
-  echo "Wait for the Calico API server to be ready"
-  if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-    echo "TigeraStatus for API server failed to become Available"
-    exit 1
-  fi
-fi
-
-echo "Wait for Calico to be ready..."
-wait_pod_ready -n calico-system -l k8s-app
-wait_pod_ready -l k8s-app=kube-dns -n kube-system
-wait_pod_ready calicoctl -n kube-system
-
-echo "Calico is running."
 echo
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
 ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
-
-echo "Cluster is ready."
-echo
-
-# Show all the pods running for diags purposes.
-${kubectl} get po --all-namespaces -o wide
-${kubectl} get svc
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
@@ -250,3 +212,10 @@ for attempt in $(seq 1 120); do
 
   sleep 5
 done
+
+echo "Wait for Calico to be ready..."
+wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
+wait_pod_ready -l k8s-app -n calico-system
+
+echo "Calico is running."

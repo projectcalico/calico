@@ -11,6 +11,9 @@ installation:
   flexVolumePath: "None"
 
   calicoNetwork:
+    # Use Felix for routing.
+    clusterRoutingMode: "Felix"
+
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
 
