@@ -56,9 +56,9 @@ endif
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -140,7 +140,7 @@ ST_OPTIONS?=
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
-NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
+NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/usr/lib/calico/bpf/*')
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
@@ -196,7 +196,7 @@ filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/te
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
-filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d' -not -path '*/libbpf/*') $(shell find ../felix/bpf-apache -type f -not -name '*.ll' -not -name '*.o' -not -name '*.d')
+filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell find ../felix/bpf-apache -type f)
 	rm -rf filesystem/usr/lib/calico/bpf/ && mkdir -p filesystem/usr/lib/calico/bpf/
 	# Clean stale build artifacts that may reference headers from a previous
 	# build environment (e.g., Docker container with different clang version).
@@ -206,11 +206,17 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f -not -name 
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# CGO is needed on amd64/arm64 for the mountns binary.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# We need CGO when compiling in Felix for BPF support.
+# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
 CGO_ENABLED=1
+# Normalize userspace types to ensure consistency across architectures.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+    ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
+endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
