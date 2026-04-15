@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	// The DataplaneServer Flask app defaults to port 5000.
+	// The PacketSizeServer defaults to port 5000.
 	packetServerPort = 5000
 
 	// Default MTU for Calico clusters.
@@ -91,16 +91,12 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 	return getLengths, postLengths, udpLengths
 }
 
-// withDataplaneServer is a conncheck server pod customizer that replaces the
-// default image with the DataplaneServer Flask app. This server provides
-// GET /length/<N>, POST /post, and UDP echo endpoints for packet size testing.
-//
-// TODO: Consider replacing with agnhost. Agnhost's /echo endpoint can echo
-// back POST data, and nc can be used for UDP. The main gap is GET /length/N
-// (configurable response size) which would need a different approach.
-func withDataplaneServer(pod *v1.Pod) {
+// withPacketSizeServer is a conncheck server pod customizer that replaces the
+// default image with the PacketSizeServer. See images.PacketSizeServer for the
+// endpoints the server exposes.
+func withPacketSizeServer(pod *v1.Pod) {
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = images.DataplaneServer
+		pod.Spec.Containers[i].Image = images.PacketSizeServer
 		pod.Spec.Containers[i].Args = nil
 		if pod.Spec.Containers[i].ReadinessProbe != nil && pod.Spec.Containers[i].ReadinessProbe.HTTPGet != nil {
 			pod.Spec.Containers[i].ReadinessProbe.HTTPGet.Path = "/length/1"
@@ -145,7 +141,7 @@ var _ = describe.CalicoDescribe(
 						conncheck.WithPorts(packetServerPort),
 						conncheck.WithNodePortService(),
 						conncheck.WithServerPodCustomizer(conncheck.WithNodeName(serverNode)),
-						conncheck.WithServerPodCustomizer(withDataplaneServer),
+						conncheck.WithServerPodCustomizer(withPacketSizeServer),
 						conncheck.WithServerSvcCustomizer(func(svc *v1.Service) {
 							// Add a UDP port alongside the TCP port for UDP echo testing.
 							svc.Spec.Ports = append(svc.Spec.Ports, v1.ServicePort{
