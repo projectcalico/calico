@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# Install yq
-wget -q https://github.com/mikefarah/yq/releases/download/v4.11.0/yq_linux_amd64 -O yq && chmod +x yq
 echo [INFO] Checking pipeline file syntax
 FAILED="false"
 for file in .semaphore/end-to-end/pipelines/*
 do
     echo [INFO] Checking "$file"
-    if bash -c "cat $file | ./yq eval > /dev/null"; then
+    if bash -c "cat $file | yq eval > /dev/null"; then
         echo "OK"
     else
         echo "$file FAILED validation"

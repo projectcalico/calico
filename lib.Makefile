@@ -13,10 +13,32 @@ ifeq ($(wildcard $(_DEFAULTS_YAML)),)
 $(error defaults.yaml not found at $(_DEFAULTS_YAML). Run from the repository root or a component directory.)
 endif
 
+# Bootstrap yq: prefer system yq, fall back to local bin/yq, auto-download if
+# neither exists.  This runs once during Make's variable-evaluation phase so that
+# _read_default calls (which use := and are evaluated eagerly) always have a
+# working yq binary.
+_YQ_VERSION := v4.52.5
+_YQ_LOCAL := $(_DEFAULTS_DIR)bin/yq
+_YQ := $(shell command -v yq 2>/dev/null \
+    || { test -x $(_YQ_LOCAL) && echo $(_YQ_LOCAL); } \
+    || { >&2 echo "yq not found on PATH; downloading $(_YQ_VERSION) to $(_YQ_LOCAL)..." \
+         && mkdir -p $(_DEFAULTS_DIR)bin \
+         && _arch=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+         && _os=$$(uname -s | tr A-Z a-z) \
+         && curl -sSfL --retry 3 -o $(_YQ_LOCAL).tmp \
+              "https://github.com/mikefarah/yq/releases/download/$(_YQ_VERSION)/yq_$${_os}_$${_arch}" \
+         && chmod +x $(_YQ_LOCAL).tmp \
+         && mv $(_YQ_LOCAL).tmp $(_YQ_LOCAL) \
+         && echo $(_YQ_LOCAL); })
+
+ifeq ($(_YQ),)
+$(error yq not found and auto-download failed. Install yq: https://github.com/mikefarah/yq)
+endif
+
 # _read_default reads a scalar value from defaults.yaml.
 # _read_default_list reads a YAML array and returns a space-separated Make list.
-_read_default = $(shell yq '$(1)' $(_DEFAULTS_YAML))
-_read_default_list = $(shell yq '$(1) | join(" ")' $(_DEFAULTS_YAML))
+_read_default = $(shell $(_YQ) '$(1)' $(_DEFAULTS_YAML))
+_read_default_list = $(shell $(_YQ) '$(1) | join(" ")' $(_DEFAULTS_YAML))
 
 # Variables kept here are either referenced 3+ times across Makefiles or need
 # environment-override support.  Everything else is read inline via _read_default.
@@ -520,7 +542,7 @@ define update_go_build_pin
 	@echo "latest go_build_ver=$(new_ver)"
 
 	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
-		yq -i '.toolchain.go_build_ver = $(new_ver)' $(1); \
+		$(_YQ) -i '.toolchain.go_build_ver = $(new_ver)' $(1); \
 		echo "go_build_ver is updated to $(new_ver)"; \
 	else \
 		echo "no need to update go_build_ver"; \
@@ -536,7 +558,7 @@ define update_calico_base_pin
 	@echo "latest calico_base=$(new_ver)"
 
 	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
-		yq -i '.versions.calico_base = $(new_ver)' $(1); \
+		$(_YQ) -i '.versions.calico_base = $(new_ver)' $(1); \
 		echo "calico_base is updated to $(new_ver)"; \
 	else \
 		echo "no need to update calico_base"; \
@@ -1405,13 +1427,6 @@ endif
 check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
-
-bin/yq:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
-	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
-	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
 
 # This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames

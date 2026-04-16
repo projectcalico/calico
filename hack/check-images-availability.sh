@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use provided CRANE or fallback to ../bin/crane (relative to hack/)
 CRANE="${CRANE:-../bin/crane}"
-YQ="${YQ:-${SCRIPT_DIR}/../bin/yq}"
+: "${YQ:?YQ must be set to the path of the yq binary}"
 
 if [ ! -x "$CRANE" ]; then
   echo "Error: crane not found or not executable at: $CRANE" >&2

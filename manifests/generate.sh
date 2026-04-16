@@ -9,15 +9,10 @@ export LC_ALL=C
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
 
-# yq binary to use. Default to the one installed by the Makefile.
-YQ=${YQ:-../bin/yq}
+: "${YQ:?YQ must be set to the path of the yq binary}"
 
 if [[ ! -f $HELM ]]; then
   echo "[ERROR] Helm binary ${HELM} not found."
-  exit 1
-fi
-if [[ ! -f $YQ ]]; then
-  echo "[ERROR] yq binary ${YQ} not found."
   exit 1
 fi
 
