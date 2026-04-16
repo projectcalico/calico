@@ -10,8 +10,9 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 # See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
 ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.1-0a0b20ed98
 
-# Envoy proxy artifacts are only supported for amd64 and arm64.
-ARCHES ?= amd64 arm64
+# Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
+# from the release manager doesn't override the allowlist.
+ARCHES = amd64 arm64
 
 ##############################################################################
 # Include lib.Makefile before anything else
