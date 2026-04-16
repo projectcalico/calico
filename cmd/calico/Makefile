@@ -34,6 +34,10 @@ clean:
 	rm -rf bin .image.created-*
 	-docker image rm -f $$(docker images $(CALICO_IMAGE) -a -q) 2>/dev/null
 
+.PHONY: ut
+ut:
+	$(DOCKER_GO_BUILD) go test -cover -count=1 .
+
 .PHONY: build build-cgo
 build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)

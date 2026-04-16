@@ -47,31 +47,61 @@ func newRootCommand() *cobra.Command {
 	return cmd
 }
 
-func main() {
-	// When installed as a CNI plugin or as calicoctl, the binary may be
-	// invoked directly by the container runtime or as a symlink. Detect
-	// these invocations and dispatch accordingly.
-	_, filename := filepath.Split(os.Args[0])
+// dispatchMode selects which handler main runs.
+type dispatchMode int
+
+const (
+	// modeCobra runs the Cobra command tree (including the calicoctl subcommand).
+	modeCobra dispatchMode = iota
+	// modeCNI runs the CNI plugin entry point.
+	modeCNI
+	// modeCNIIPAM runs the IPAM plugin entry point.
+	modeCNIIPAM
+)
+
+// dispatch decides which handler to run based on argv and the CNI_COMMAND
+// env var, and returns the (possibly rewritten) argv to use. It is pure so
+// that the dispatch rules can be covered by unit tests without invoking the
+// actual handlers.
+//
+// Rules:
+//   - argv[0] basename of "calico-ipam" → CNI IPAM plugin.
+//   - argv[0] basename of "calicoctl" → Cobra, with "ctl" inserted between
+//     argv[0] and the rest of the args. argv[0] itself is preserved so that
+//     panic traces, log prefixes, and kubectl-plugin detection still see the
+//     original invocation name.
+//   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
+//     only when no subcommand args were passed. This guards against a stray
+//     CNI_COMMAND in a shell environment silently hijacking "calicoctl get
+//     nodes" or "calico component foo".
+//   - Otherwise, Cobra.
+func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
+	_, filename := filepath.Split(args[0])
 	switch filename {
 	case "calico-ipam":
+		return modeCNIIPAM, args
+	case "calicoctl":
+		rewritten := append([]string{args[0], "ctl"}, args[1:]...)
+		return modeCobra, rewritten
+	default:
+		if len(args) == 1 && cniCommand != "" {
+			return modeCNI, args
+		}
+		return modeCobra, args
+	}
+}
+
+func main() {
+	mode, newArgs := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
+	os.Args = newArgs
+
+	switch mode {
+	case modeCNIIPAM:
 		ipamplugin.Main(buildinfo.Version)
 		return
-	case "calicoctl":
-		// Dispatch to the ctl subcommand. Insert "ctl" between argv[0] and
-		// the original args rather than replacing argv[0]; this preserves
-		// os.Args[0] for anything downstream that reads it (panic traces,
-		// log prefixes, kubectl-plugin detection).
-		os.Args = append([]string{os.Args[0], "ctl"}, os.Args[1:]...)
-	default:
-		// CNI_COMMAND is the env-based dispatch used when the container
-		// runtime invokes the CNI plugin directly. Only honor it when no
-		// subcommand was passed, so that e.g. "calicoctl get nodes" run
-		// in a shell that happens to have CNI_COMMAND set doesn't silently
-		// dispatch to the plugin.
-		if len(os.Args) == 1 && os.Getenv("CNI_COMMAND") != "" {
-			plugin.Main(buildinfo.Version)
-			return
-		}
+	case modeCNI:
+		plugin.Main(buildinfo.Version)
+		return
 	}
 
 	if err := newRootCommand().Execute(); err != nil {
