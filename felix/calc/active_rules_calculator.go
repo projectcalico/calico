@@ -297,16 +297,15 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 // OnComputedSelectorMatch and OnComputedSelectorMatchStopped callbacks when that selector
 // matches/stops matching local endpoints, allowing the expensive selector index to be shared.
 //
-// Registration is tracked per caller.  The caller identity must therefore be stable, and the
-// same caller value (including the same inferred type T) must be passed to
-// RemoveExtraComputedSelector to remove that caller's registration.  Repeated adds from the same
-// caller are deduplicated.
+// Registration is tracked per caller.  The caller identity must therefore be stable, and the same
+// caller value must be passed to RemoveExtraComputedSelector to remove that caller's registration.
+// Repeated adds from the same caller are deduplicated.
 //
 // The underlying selector is added to the label index when the first caller registers it, and it
 // is only removed after the last caller removes its registration.  Callbacks for matches/stops
 // matching continue to be delivered to all registered PolicyMatchListeners while the selector is
 // present.
-func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
+func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string, caller any) {
 	callers := arc.computedSelectorCallers[cs]
 	if callers == nil {
 		callers = set.New[any]()
@@ -317,15 +316,15 @@ func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs strin
 		}
 		arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
 	}
-	callers.Add(any(caller))
+	callers.Add(caller)
 }
 
-func RemoveExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
+func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string, caller any) {
 	callers := arc.computedSelectorCallers[cs]
 	if callers == nil {
 		return
 	}
-	callers.Discard(any(caller))
+	callers.Discard(caller)
 	if callers.Len() == 0 {
 		arc.labelIndex.DeleteSelector(computedSelector(cs))
 		delete(arc.computedSelectorCallers, cs)
