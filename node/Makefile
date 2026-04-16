@@ -116,7 +116,6 @@ WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe \
-    $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt \
     $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1
@@ -236,9 +235,6 @@ $(WINDOWS_BINARY): $(SRC_FILES)
 	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
-	cp $(WINDOWS_BINARY) $@
-
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe: $(WINDOWS_BINARY)
 	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):

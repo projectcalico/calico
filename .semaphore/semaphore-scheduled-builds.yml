@@ -536,7 +536,7 @@ blocks:
           - export LOGS_DIR=~/fv.log
           - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
           - cd cni-plugin
-          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
+          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/win-fv.exe
       epilogue:
         always:
           commands:
