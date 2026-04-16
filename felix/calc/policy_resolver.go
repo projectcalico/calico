@@ -185,9 +185,6 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 	pr.dirtyEndpoints.Add(endpointKey)
 }
 
-func (pr *PolicyResolver) OnComputedSelectorMatch(_ string, _ any, _ model.EndpointKey)        {}
-func (pr *PolicyResolver) OnComputedSelectorMatchStopped(_ string, _ any, _ model.EndpointKey) {}
-
 func (pr *PolicyResolver) Flush() {
 	if !pr.InSync {
 		log.Debugf("Not in sync, skipping flush")
