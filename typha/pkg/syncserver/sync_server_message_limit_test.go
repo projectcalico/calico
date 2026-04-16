@@ -89,10 +89,15 @@ func TestLimitedReaderRejectsOversizedRead(t *testing.T) {
 				t.Fatalf("expected errInboundMessageTooLarge, got %v", err)
 			}
 			break
+		} else if n <= 0 {
+			t.Fatalf("read returned 0 bytes without error, possible infinite loop")
+		}
+		if total > limit {
+			t.Fatalf("read past limit without error: total %d, limit %d", total, limit)
 		}
 	}
-	if total > limit {
-		t.Fatalf("expected reads to be clamped at limit, but read %d bytes (limit %d)", total, limit)
+	if total != limit {
+		t.Fatalf("expected total bytes read to equal limit, got %d (limit %d)", total, limit)
 	}
 }
 
@@ -101,13 +106,21 @@ func TestLimitedReaderResetAllowsNextMessage(t *testing.T) {
 	lr := &limitedReader{r: bytes.NewReader(data), limit: 60}
 
 	buf := make([]byte, 50)
-	if _, err := lr.Read(buf); err != nil {
+	n, err := lr.Read(buf)
+	if err != nil {
 		t.Fatalf("first read should succeed: %v", err)
+	}
+	if n != 50 {
+		t.Fatalf("first read: expected 50 bytes, got %d", n)
 	}
 
 	lr.reset()
 
-	if _, err := lr.Read(buf); err != nil {
+	n, err = lr.Read(buf)
+	if err != nil {
 		t.Fatalf("read after reset should succeed: %v", err)
+	}
+	if n != 50 {
+		t.Fatalf("read after reset: expected 50 bytes, got %d", n)
 	}
 }
