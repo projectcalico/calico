@@ -512,9 +512,9 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 		return
 	}
 
-	loadBalancerIPs, ipv4pools, ipv6pools, err := c.parseAnnotations(svc.Annotations)
+	loadBalancerIPs, ipv4pools, ipv6pools, err := c.requestedLoadBalancerIPs(svc)
 	if err != nil {
-		log.WithError(err).Errorf("Failed to parse annotations for service %s/%s", svc.Namespace, svc.Name)
+		log.WithError(err).Errorf("Failed to parse requested IPs for service %s/%s", svc.Namespace, svc.Name)
 		return
 	}
 
@@ -667,7 +667,7 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		return nil, err
 	}
 
-	loadBalancerIPs, ipv4Pools, ipv6Pools, err := c.parseAnnotations(svc.Annotations)
+	loadBalancerIPs, ipv4Pools, ipv6Pools, err := c.requestedLoadBalancerIPs(svc)
 	if err != nil {
 		return nil, err
 	}
@@ -861,9 +861,9 @@ func (c *loadBalancerController) resolvePools(poolIDs []string, isv4 bool) ([]cn
 	return poolCIDRs, nil
 }
 
-// IsCalicoManagedLoadBalancer returns if Calico should try to assign IP address for the LoadBalancer
+// IsCalicoManagedLoadBalancer returns if Calico should try to assign IP address for the LoadBalancer.
 // We assign IPs only if the loadBalancer controller assignIP is set to AllService
-// or in RequestedOnlyServices if the service has calico annotation
+// or in RequestedOnlyServices if the service has a calico annotation, spec.loadBalancerIP, or spec.externalIPs.
 func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool {
 	if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 		return false
@@ -883,10 +883,12 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 
 		if svc.Annotations[annotationIPv4Pools] != "" ||
 			svc.Annotations[annotationIPv6Pools] != "" ||
-			svc.Annotations[annotationLoadBalancerIP] != "" {
+			svc.Annotations[annotationLoadBalancerIP] != "" ||
+			svc.Spec.LoadBalancerIP != "" ||
+			len(svc.Spec.ExternalIPs) > 0 {
 
 			if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
-				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer annotation set with spec.LoadBalancerClass != calico is not supported")
+				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer IP request set with spec.LoadBalancerClass != calico is not supported")
 				return false
 			}
 			return true
@@ -956,6 +958,64 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 			}
 		}
 	}
+	return loadBalancerIPs, ipv4Pools, ipv6Pools, nil
+}
+
+// requestedLoadBalancerIPs returns the IPs, IPv4 pools, and IPv6 pools requested for a service.
+// It checks the Calico annotation first, then falls back to spec.loadBalancerIP (deprecated)
+// and spec.externalIPs if no annotation-based IPs are specified.
+func (c *loadBalancerController) requestedLoadBalancerIPs(svc *v1.Service) ([]cnet.IP, []cnet.IPNet, []cnet.IPNet, error) {
+	loadBalancerIPs, ipv4Pools, ipv6Pools, err := c.parseAnnotations(svc.Annotations)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if _, ok := svc.Annotations[annotationLoadBalancerIP]; ok {
+		return loadBalancerIPs, ipv4Pools, ipv6Pools, nil
+	}
+
+	var specIPs []cnet.IP
+
+	if svc.Spec.LoadBalancerIP != "" {
+		ip := cnet.ParseIP(svc.Spec.LoadBalancerIP)
+		if ip == nil {
+			return nil, nil, nil, fmt.Errorf("could not parse spec.loadBalancerIP %q as a valid IP address", svc.Spec.LoadBalancerIP)
+		}
+		specIPs = append(specIPs, *ip)
+	}
+
+	for _, extIP := range svc.Spec.ExternalIPs {
+		ip := cnet.ParseIP(extIP)
+		if ip == nil {
+			return nil, nil, nil, fmt.Errorf("could not parse spec.externalIPs entry %q as a valid IP address", extIP)
+		}
+		duplicate := false
+		for _, existing := range specIPs {
+			if existing.String() == ip.String() {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			specIPs = append(specIPs, *ip)
+		}
+	}
+
+	if len(specIPs) > 0 {
+		ipv4, ipv6 := 0, 0
+		for _, ip := range specIPs {
+			if ip.To4() != nil {
+				ipv4++
+			} else {
+				ipv6++
+			}
+		}
+		if ipv4 > 1 || ipv6 > 1 {
+			return nil, nil, nil, fmt.Errorf("at most one IPv4 and one IPv6 address can be specified via spec fields; found %d IPv4 and %d IPv6", ipv4, ipv6)
+		}
+		return specIPs, ipv4Pools, ipv6Pools, nil
+	}
+
 	return loadBalancerIPs, ipv4Pools, ipv6Pools, nil
 }
 
