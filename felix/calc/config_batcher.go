@@ -138,10 +138,7 @@ func (cb *ConfigBatcher) onResourceUpdate(key model.ResourceKey, update api.Upda
 	case apiv3.KindFelixConfiguration:
 		cb.onFelixConfigResourceUpdate(key.Name, update)
 	case internalapi.KindNode:
-		if key.Name != cb.hostname {
-			return
-		}
-		cb.onNodeUpdate(update)
+		cb.onNodeUpdate(key.Name, update)
 	default:
 		// Not a resource we care about.
 		return
@@ -171,11 +168,6 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 	var selectorStr string
 	if fc.Spec.NodeSelector != nil {
 		selectorStr = *fc.Spec.NodeSelector
-	}
-	if selectorStr == "" {
-		// Empty/nil selector on a selector-scoped resource — matches no nodes.
-		// We still store it in case a selector is added later via update.
-		log.WithField("name", name).Debug("Selector-scoped FelixConfiguration with empty selector, matches no nodes")
 	}
 
 	var sel *selector.Selector
@@ -209,7 +201,10 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 }
 
 // onNodeUpdate handles an update to the local node resource, tracking label changes.
-func (cb *ConfigBatcher) onNodeUpdate(update api.Update) {
+func (cb *ConfigBatcher) onNodeUpdate(name string, update api.Update) {
+	if name != cb.hostname {
+		return
+	}
 	if update.Value == nil {
 		if cb.nodeLabels != nil {
 			cb.nodeLabels = nil
@@ -269,7 +264,7 @@ func (cb *ConfigBatcher) maybeSendCachedConfig() {
 // conflicting resource does not disrupt an existing, working configuration.
 func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 	if cb.nodeLabels == nil {
-		return make(map[string]string)
+		return map[string]string{}
 	}
 	var matches []*selectorConfigEntry
 	for _, entry := range cb.selectorConfigs {
@@ -281,7 +276,7 @@ func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 		}
 	}
 	if len(matches) == 0 {
-		return make(map[string]string)
+		return map[string]string{}
 	}
 	winner := oldestSelectorConfig(matches)
 	if len(matches) > 1 {
@@ -292,11 +287,9 @@ func (cb *ConfigBatcher) mergeMatchingSelectorConfigs() map[string]string {
 		log.WithFields(log.Fields{
 			"matching": names,
 			"winner":   winner.resourceName,
-		}).Warn("Multiple selector-scoped FelixConfigurations match this node; " +
-			"using the oldest by creation time. This is likely a misconfiguration.")
+		}).Warn("Multiple selector-scoped FelixConfigurations match this node; using the oldest by creation time. This is likely a misconfiguration.")
 	} else {
-		log.WithField("name", winner.resourceName).Debug(
-			"Selector-scoped FelixConfiguration matches local node")
+		log.WithField("name", winner.resourceName).Debug("Selector-scoped FelixConfiguration matches local node")
 	}
 	return maps.Clone(winner.config)
 }
