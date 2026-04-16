@@ -1229,6 +1229,7 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 
 func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfiguration, svcAdvertisement *bool, updatePeersV1 *bool, updateReasons *[]string) {
 	// Cache the BGP configuration as a whole.
+	old := c.bgpConfigs[resName]
 	c.bgpConfigs[resName] = v3res
 
 	// Map to legacy v2 model paths.
@@ -1253,6 +1254,16 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		} else {
 			// Default to enabled if not specified or if v3res is nil
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
+		}
+
+		// Check if normal route priority is changing.
+		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, old) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv4 route priority changed")
+		}
+		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, old) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv6 route priority changed")
 		}
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
 		// The name of a configuration resource has a strict format.  It is either "default"
