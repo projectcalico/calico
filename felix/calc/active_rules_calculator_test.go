@@ -37,6 +37,7 @@ type policyMatchEvent struct {
 
 type computedSelectorMatchEvent struct {
 	Selector    string
+	Caller      any
 	EndpointKey model.EndpointKey
 }
 
@@ -48,12 +49,12 @@ func (t *testPolicyMatchListener) OnPolicyMatchStopped(policyKey model.PolicyKey
 	t.policyMatchStops = append(t.policyMatchStops, policyMatchEvent{policyKey, endpointKey})
 }
 
-func (t *testPolicyMatchListener) OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey) {
-	t.computedSelectorMatches = append(t.computedSelectorMatches, computedSelectorMatchEvent{cs, endpointKey})
+func (t *testPolicyMatchListener) OnComputedSelectorMatch(cs string, caller any, endpointKey model.EndpointKey) {
+	t.computedSelectorMatches = append(t.computedSelectorMatches, computedSelectorMatchEvent{cs, caller, endpointKey})
 }
 
-func (t *testPolicyMatchListener) OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey) {
-	t.computedSelectorMatchStops = append(t.computedSelectorMatchStops, computedSelectorMatchEvent{cs, endpointKey})
+func (t *testPolicyMatchListener) OnComputedSelectorMatchStopped(cs string, caller any, endpointKey model.EndpointKey) {
+	t.computedSelectorMatchStops = append(t.computedSelectorMatchStops, computedSelectorMatchEvent{cs, caller, endpointKey})
 }
 
 // noopRuleScanner satisfies the ruleScanner interface required by ActiveRulesCalculator.
