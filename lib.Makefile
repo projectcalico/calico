@@ -1668,8 +1668,16 @@ $(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
+## First validates that stamp files aren't stale (image pruned but stamp remains),
+## then runs the actual build in a sub-make so prerequisites are re-evaluated.
 .PHONY: kind-build-images
-kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+kind-build-images:
+	@$(REPO_ROOT)/hack/test/kind/validate_stamps.sh $(ARCH) $(KIND_TEST_BUILD_TAG) \
+		$(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	$(MAKE) -j$$(nproc) kind-build-images-run
+
+.PHONY: kind-build-images-run
+kind-build-images-run: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
 	@for img in $(KIND_CALICO_IMAGES); do \
 	  base=$${img%%:*}; \
 	  docker tag $$base:latest-$(ARCH) $$img; \
