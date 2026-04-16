@@ -443,3 +443,36 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, golde
 	d.expectOutput(goldenDir)
 	cleanup()
 }
+
+func TestNormalRoutePriorityChange(t *testing.T) {
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			d := startConfdDaemon(t, be, withNodeName("kube-master"), withoutBlockAffinities())
+			ctx := context.Background()
+
+			// Step 1: create nodes and a peering on a local subnet.
+			// Expect a "direct" peering with source address set.
+			cleanup := applyResources(t, be, "mock_data/calicoctl/bgpfilter/node_mesh/input.yaml")
+			t.Cleanup(cleanup)
+			d.expectOutput("bgpfilter/node_mesh/priority1")
+
+			// Step 2: update BGPConfiguration to change normal IPv4 route priority.
+			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			fiveThousand := 5000
+			cfg.Spec.IPv4NormalRoutePriority = &fiveThousand
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("bgpfilter/node_mesh/priority2")
+
+			// Step 3: update BGPConfiguration to change normal IPv6 route priority.
+			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			eighty := 80
+			cfg.Spec.IPv6NormalRoutePriority = &eighty
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("bgpfilter/node_mesh/priority3")
+		})
+	}
+}

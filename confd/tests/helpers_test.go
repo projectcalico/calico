@@ -1064,7 +1064,7 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 
 			if normalizeBlankLines(string(got)) != normalizeBlankLines(string(want)) {
 				allMatch = false
-				lastMismatch = fmt.Sprintf("%s does not match %s", f, expectedPath)
+				lastMismatch = fmt.Sprintf("%s does not match %s:\n%v", f, expectedPath, normalizeBlankLines(string(got)))
 				break
 			}
 		}
