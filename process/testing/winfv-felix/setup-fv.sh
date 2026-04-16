@@ -115,8 +115,11 @@ function get_logs(){
 }
 
 # Main execution
+# Always collect pod logs on exit so failures during image rollout or test
+# infrastructure setup don't leave us without diagnostic data.
+trap get_logs EXIT
+
 upload_fv_scripts
 upload_calico_images
 start_test_infra
 run_windows_fv
-get_logs
