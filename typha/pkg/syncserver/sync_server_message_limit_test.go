@@ -91,8 +91,8 @@ func TestLimitedReaderRejectsOversizedRead(t *testing.T) {
 			break
 		}
 	}
-	if total <= limit {
-		t.Fatalf("expected to read past limit before error, read %d", total)
+	if total > limit {
+		t.Fatalf("expected reads to be clamped at limit, but read %d bytes (limit %d)", total, limit)
 	}
 }
 
