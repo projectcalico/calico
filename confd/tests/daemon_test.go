@@ -69,7 +69,7 @@ func TestNodeMeshBGPPassword(t *testing.T) {
 			continue // KDD-only: needs K8s API for Secrets
 		}
 		t.Run(be.name, func(t *testing.T) {
-			d := startConfdDaemon(t, be, withoutBlockAffinities())
+			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh_password/input.yaml")
@@ -305,7 +305,7 @@ func TestLocalBGPPeer(t *testing.T) {
 			continue // KDD-only: needs K8s API for endpoint-status
 		}
 		t.Run(be.name, func(t *testing.T) {
-			d := startConfdDaemon(t, be, withoutBlockAffinities(), withEndpointStatus(map[string]string{
+			d := startConfdDaemon(t, be, withEndpointStatus(map[string]string{
 				"pod1": `{"ifaceName":"cali97e1defe654","ipv4Nets":["192.168.162.134/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a284/128"],"bgpPeerName":"test-global-peer-with-filter"}`,
 				"pod2": `{"ifaceName":"cali97e1defe656","ipv4Nets":["192.168.162.136/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a286/128"],"bgpPeerName":"test-node-peer-with-filter"}`,
 			}))
@@ -376,7 +376,7 @@ func TestNodeDeletion(t *testing.T) {
 func TestNormalRoutePriorityChange(t *testing.T) {
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
-			d := startConfdDaemon(t, be, withNodeName("kube-master"), withoutBlockAffinities())
+			d := startConfdDaemon(t, be, withoutBlockAffinities())
 			ctx := context.Background()
 
 			// Step 1: create nodes and a peering on a local subnet.
