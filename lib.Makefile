@@ -1618,58 +1618,66 @@ KIND_IMAGE_MARKERS = \
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
-	touch $@
+	echo "calico/node:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
 	$(MAKE) -C $(REPO_ROOT)/typha image
-	touch $@
+	echo "calico/typha:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
 	$(MAKE) -C $(REPO_ROOT)/apiserver image
-	touch $@
+	echo "calico/apiserver:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
 	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
-	touch $@
+	echo "calico/cni:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	touch $@
+	echo "calico/pod2daemon-flexvol:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
 	$(MAKE) -C $(REPO_ROOT)/calicoctl image
-	touch $@
+	echo "calico/ctl:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
 	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
-	touch $@
+	echo "calico/kube-controllers:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
 	$(MAKE) -C $(REPO_ROOT)/goldmane image
-	touch $@
+	echo "calico/goldmane:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
 	$(MAKE) -C $(REPO_ROOT)/webhooks image
-	touch $@
+	echo "calico/webhooks:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
-	touch $@
+	echo "calico/whisker:latest-$(ARCH)" > $@
 
 $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
 	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
-	touch $@
+	echo "calico/whisker-backend:latest-$(ARCH)" > $@
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
 # actual built images, so it can run in parallel with component builds.
 $(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
 	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
-	touch $@
+	echo "tigera/operator:$(KIND_TEST_BUILD_TAG)" > $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
+## First validates that stamp files aren't stale (image pruned but stamp remains),
+## then runs the actual build in a sub-make so prerequisites are re-evaluated.
 .PHONY: kind-build-images
-kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+kind-build-images:
+	@$(REPO_ROOT)/hack/test/kind/validate_stamps.sh \
+		$(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
+	$(MAKE) -j$$(nproc) kind-build-images-run
+
+.PHONY: kind-build-images-run
+kind-build-images-run: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
 	@for img in $(KIND_CALICO_IMAGES); do \
 	  base=$${img%%:*}; \
 	  docker tag $$base:latest-$(ARCH) $$img; \
