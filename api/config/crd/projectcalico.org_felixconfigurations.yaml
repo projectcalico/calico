@@ -293,6 +293,8 @@ spec:
                     [Default: unset - read from net.ipv4.ipfrag_time]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                bpfIPFragmentReassemblyEnabled:
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
