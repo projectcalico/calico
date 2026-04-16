@@ -519,14 +519,14 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 	}
 
 	if loadBalancerIPs != nil {
-		// Check that service has assigned IPs to the ones specified in annotations
+		// Check that service has assigned IPs matching the requested IPs
 		lbIPs := make(map[string]bool)
 		for _, ip := range loadBalancerIPs {
 			lbIPs[ip.String()] = true
 		}
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			if _, ok := lbIPs[ip]; !ok {
-				log.Infof("Removing IP assignment (%s) for Service %s/%s; no longer in annotations.", ip, svc.Namespace, svc.Name)
+				log.Infof("Removing IP assignment (%s) for Service %s/%s; no longer in requested IPs.", ip, svc.Namespace, svc.Name)
 				err = c.releaseIP(svcKey, ip)
 				if err != nil {
 					log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
