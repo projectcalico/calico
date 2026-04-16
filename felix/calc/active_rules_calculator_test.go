@@ -37,6 +37,7 @@ type policyMatchEvent struct {
 
 type computedSelectorMatchEvent struct {
 	Selector    string
+	Caller      any
 	EndpointKey model.EndpointKey
 }
 
@@ -48,12 +49,12 @@ func (t *testPolicyMatchListener) OnPolicyMatchStopped(policyKey model.PolicyKey
 	t.policyMatchStops = append(t.policyMatchStops, policyMatchEvent{policyKey, endpointKey})
 }
 
-func (t *testPolicyMatchListener) OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey) {
-	t.computedSelectorMatches = append(t.computedSelectorMatches, computedSelectorMatchEvent{cs, endpointKey})
+func (t *testPolicyMatchListener) OnComputedSelectorMatch(cs string, caller any, endpointKey model.EndpointKey) {
+	t.computedSelectorMatches = append(t.computedSelectorMatches, computedSelectorMatchEvent{cs, caller, endpointKey})
 }
 
-func (t *testPolicyMatchListener) OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey) {
-	t.computedSelectorMatchStops = append(t.computedSelectorMatchStops, computedSelectorMatchEvent{cs, endpointKey})
+func (t *testPolicyMatchListener) OnComputedSelectorMatchStopped(cs string, caller any, endpointKey model.EndpointKey) {
+	t.computedSelectorMatchStops = append(t.computedSelectorMatchStops, computedSelectorMatchEvent{cs, caller, endpointKey})
 }
 
 // noopRuleScanner satisfies the ruleScanner interface required by ActiveRulesCalculator.
@@ -95,7 +96,7 @@ func deleteEndpoint(arc *ActiveRulesCalculator, key model.WorkloadEndpointKey) {
 func TestARC_ComputedSelector_MatchOnEndpointAdd(t *testing.T) {
 	arc, listener := createARC()
 
-	AddExtraComputedSelector(arc, "has(foo)", t)
+	arc.AddExtraComputedSelector("has(foo)", t)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -120,7 +121,7 @@ func TestARC_ComputedSelector_MatchOnEndpointAdd(t *testing.T) {
 func TestARC_ComputedSelector_MatchStoppedOnEndpointRemove(t *testing.T) {
 	arc, listener := createARC()
 
-	AddExtraComputedSelector(arc, "has(foo)", t)
+	arc.AddExtraComputedSelector("has(foo)", t)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -147,7 +148,7 @@ func TestARC_ComputedSelector_MatchStoppedOnEndpointRemove(t *testing.T) {
 func TestARC_ComputedSelector_NoMatchForNonMatchingEndpoint(t *testing.T) {
 	arc, listener := createARC()
 
-	AddExtraComputedSelector(arc, "has(foo)", t)
+	arc.AddExtraComputedSelector("has(foo)", t)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -169,7 +170,7 @@ func TestARC_ComputedSelector_NoMatchForNonMatchingEndpoint(t *testing.T) {
 func TestARC_RemoveComputedSelector(t *testing.T) {
 	arc, listener := createARC()
 
-	AddExtraComputedSelector(arc, "has(foo)", t)
+	arc.AddExtraComputedSelector("has(foo)", t)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -184,7 +185,7 @@ func TestARC_RemoveComputedSelector(t *testing.T) {
 	}
 
 	// Remove the computed selector — should fire match-stopped.
-	RemoveExtraComputedSelector(arc, "has(foo)", t)
+	arc.RemoveExtraComputedSelector("has(foo)", t)
 
 	if len(listener.computedSelectorMatchStops) != 1 {
 		t.Fatalf("expected 1 match stop after removing selector, got %d", len(listener.computedSelectorMatchStops))
@@ -221,8 +222,8 @@ func TestARC_MultiCaller_BothGetCallbacks(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listenerB)
 
 	// Two different components register the same selector.
-	AddExtraComputedSelector(arc, "has(foo)", listenerA)
-	AddExtraComputedSelector(arc, "has(foo)", listenerB)
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -250,8 +251,8 @@ func TestARC_MultiCaller_RemoveOneStillActive(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listenerA)
 	arc.RegisterPolicyMatchListener(listenerB)
 
-	AddExtraComputedSelector(arc, "has(foo)", listenerA)
-	AddExtraComputedSelector(arc, "has(foo)", listenerB)
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -264,7 +265,7 @@ func TestARC_MultiCaller_RemoveOneStillActive(t *testing.T) {
 	listenerB.computedSelectorMatches = nil
 
 	// Remove caller A — B still holds a reference.
-	RemoveExtraComputedSelector(arc, "has(foo)", listenerA)
+	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
 
 	// No match-stopped should fire on either listener because the selector is still active.
 	for name, l := range map[string]*testPolicyMatchListener{"A": listenerA, "B": listenerB} {
@@ -308,8 +309,8 @@ func TestARC_MultiCaller_RemoveBothDeactivates(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listenerA)
 	arc.RegisterPolicyMatchListener(listenerB)
 
-	AddExtraComputedSelector(arc, "has(foo)", listenerA)
-	AddExtraComputedSelector(arc, "has(foo)", listenerB)
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -320,8 +321,8 @@ func TestARC_MultiCaller_RemoveBothDeactivates(t *testing.T) {
 	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
 
 	// Remove both callers.
-	RemoveExtraComputedSelector(arc, "has(foo)", listenerA)
-	RemoveExtraComputedSelector(arc, "has(foo)", listenerB)
+	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
+	arc.RemoveExtraComputedSelector("has(foo)", listenerB)
 
 	// Removing the last caller should fire match-stopped on both listeners.
 	for name, l := range map[string]*testPolicyMatchListener{"A": listenerA, "B": listenerB} {
@@ -357,8 +358,8 @@ func TestARC_MultiCaller_DuplicateAddFromSameCaller(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listener)
 
 	// Same caller adds the same selector twice.
-	AddExtraComputedSelector(arc, "has(foo)", listener)
-	AddExtraComputedSelector(arc, "has(foo)", listener)
+	arc.AddExtraComputedSelector("has(foo)", listener)
+	arc.AddExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -373,7 +374,7 @@ func TestARC_MultiCaller_DuplicateAddFromSameCaller(t *testing.T) {
 	}
 
 	// A single Remove should be enough since the set deduplicates the caller.
-	RemoveExtraComputedSelector(arc, "has(foo)", listener)
+	arc.RemoveExtraComputedSelector("has(foo)", listener)
 
 	if len(listener.computedSelectorMatchStops) != 1 {
 		t.Fatalf("expected 1 match stop after single remove, got %d", len(listener.computedSelectorMatchStops))
@@ -386,7 +387,7 @@ func TestARC_MultiCaller_RemoveWithoutAdd(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listener)
 
 	// Removing a selector that was never added should be a no-op.
-	RemoveExtraComputedSelector(arc, "has(foo)", listener)
+	arc.RemoveExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -411,7 +412,7 @@ func TestARC_MultiCaller_ReAddAfterFullRemoval(t *testing.T) {
 	arc.RegisterPolicyMatchListener(listenerA)
 	arc.RegisterPolicyMatchListener(listenerB)
 
-	AddExtraComputedSelector(arc, "has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -422,7 +423,7 @@ func TestARC_MultiCaller_ReAddAfterFullRemoval(t *testing.T) {
 	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
 
 	// Remove fully.
-	RemoveExtraComputedSelector(arc, "has(foo)", listenerA)
+	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
 	if len(listenerA.computedSelectorMatchStops) != 1 {
 		t.Fatalf("expected 1 match stop on listener A, got %d", len(listenerA.computedSelectorMatchStops))
 	}
@@ -434,7 +435,7 @@ func TestARC_MultiCaller_ReAddAfterFullRemoval(t *testing.T) {
 
 	// Re-add the same selector from a different caller — should re-match the
 	// existing endpoint, and both listeners should see it.
-	AddExtraComputedSelector(arc, "has(foo)", listenerB)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
 
 	for name, l := range map[string]*testPolicyMatchListener{"A": listenerA, "B": listenerB} {
 		if len(l.computedSelectorMatches) != 1 {
@@ -449,7 +450,7 @@ func TestARC_MultiCaller_ReAddAfterFullRemoval(t *testing.T) {
 func TestARC_ComputedSelector_DoesNotTriggerPolicyCallbacks(t *testing.T) {
 	arc, listener := createARC()
 
-	AddExtraComputedSelector(arc, "has(foo)", t)
+	arc.AddExtraComputedSelector("has(foo)", t)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",

@@ -219,7 +219,10 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.EndpointKey)        {}
 func (lmc *LiveMigrationCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
 
-func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
+func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, caller any, epKey model.EndpointKey) {
+	if caller != lmc {
+		return
+	}
 	if _, ok := lmc.selectorKeys[cs]; !ok {
 		return
 	}
@@ -242,7 +245,10 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 	}
 }
 
-func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
+func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, caller any, epKey model.EndpointKey) {
+	if caller != lmc {
+		return
+	}
 	if _, ok := lmc.selectorKeys[cs]; !ok {
 		return
 	}
@@ -429,7 +435,7 @@ func (lmc *LiveMigrationCalculator) refSelector(
 	}
 	keys.Add(lmKey)
 	if keys.Len() == 1 {
-		AddExtraComputedSelector(lmc.activeRulesCalc, selector, lmc)
+		lmc.activeRulesCalc.AddExtraComputedSelector(selector, lmc)
 	}
 }
 
@@ -441,7 +447,7 @@ func (lmc *LiveMigrationCalculator) unrefSelector(
 	if keys != nil {
 		keys.Discard(lmKey)
 		if keys.Len() == 0 {
-			RemoveExtraComputedSelector(lmc.activeRulesCalc, selector, lmc)
+			lmc.activeRulesCalc.RemoveExtraComputedSelector(selector, lmc)
 			delete(lmc.selectorKeys, selector)
 		}
 	}

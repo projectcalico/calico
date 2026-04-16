@@ -45,8 +45,8 @@ type FelixSender interface {
 type PolicyMatchListener interface {
 	OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey)
 	OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey)
-	OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey)
-	OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey)
+	OnComputedSelectorMatch(cs string, caller any, endpointKey model.EndpointKey)
+	OnComputedSelectorMatchStopped(cs string, caller any, endpointKey model.EndpointKey)
 }
 
 // ActiveRulesCalculator calculates the set of policies and profiles (i.e. the rules) that
@@ -91,9 +91,6 @@ type ActiveRulesCalculator struct {
 	// log out those profiles at the end of the resync.
 	missingProfiles set.Set[string]
 
-	// Tracks components that have called AddExtraComputedSelector.
-	computedSelectorCallers map[string]set.Set[any]
-
 	// Callback objects.
 	RuleScanner           ruleScanner
 	PolicyMatchListeners  []PolicyMatchListener
@@ -102,7 +99,10 @@ type ActiveRulesCalculator struct {
 	OnAlive               func()
 }
 
-type computedSelector string
+type computedSelectorKey struct {
+	selector string
+	caller   any
+}
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
 	arc := &ActiveRulesCalculator{
@@ -120,8 +120,6 @@ func NewActiveRulesCalculator() *ActiveRulesCalculator {
 
 		// Cache of profile IDs by local endpoint.
 		endpointKeyToProfileIDs: NewEndpointKeyToProfileIDMap(),
-
-		computedSelectorCallers: make(map[string]set.Set[any]),
 	}
 	arc.labelIndex = labelindex.NewInheritIndex(arc.onMatchStarted, arc.onMatchStopped)
 	return arc
@@ -297,39 +295,30 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 // OnComputedSelectorMatch and OnComputedSelectorMatchStopped callbacks when that selector
 // matches/stops matching local endpoints, allowing the expensive selector index to be shared.
 //
-// Registration is tracked per caller.  The caller identity must therefore be stable, and the
-// same caller value (including the same inferred type T) must be passed to
-// RemoveExtraComputedSelector to remove that caller's registration.  Repeated adds from the same
-// caller are deduplicated.
+// Registration is tracked per caller.  The caller identity must therefore be stable, and the same
+// caller value must be passed to RemoveExtraComputedSelector to remove that caller's registration.
+// Repeated adds from the same caller are deduplicated.
 //
 // The underlying selector is added to the label index when the first caller registers it, and it
 // is only removed after the last caller removes its registration.  Callbacks for matches/stops
 // matching continue to be delivered to all registered PolicyMatchListeners while the selector is
 // present.
-func AddExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
-	callers := arc.computedSelectorCallers[cs]
-	if callers == nil {
-		callers = set.New[any]()
-		arc.computedSelectorCallers[cs] = callers
-		sel, err := selector.Parse(cs)
-		if err != nil {
-			log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
-		}
-		arc.labelIndex.UpdateSelector(computedSelector(cs), sel)
+func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string, caller any) {
+	sel, err := selector.Parse(cs)
+	if err != nil {
+		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
 	}
-	callers.Add(any(caller))
+	arc.labelIndex.UpdateSelector(computedSelectorKey{
+		selector: cs,
+		caller:   caller,
+	}, sel)
 }
 
-func RemoveExtraComputedSelector[T comparable](arc *ActiveRulesCalculator, cs string, caller T) {
-	callers := arc.computedSelectorCallers[cs]
-	if callers == nil {
-		return
-	}
-	callers.Discard(any(caller))
-	if callers.Len() == 0 {
-		arc.labelIndex.DeleteSelector(computedSelector(cs))
-		delete(arc.computedSelectorCallers, cs)
-	}
+func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string, caller any) {
+	arc.labelIndex.DeleteSelector(computedSelectorKey{
+		selector: cs,
+		caller:   caller,
+	})
 }
 
 func policyForceProgrammed(policy *model.Policy) bool {
@@ -394,10 +383,10 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 }
 
 func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
-	if cs, ok := selID.(computedSelector); ok {
+	if key, ok := selID.(computedSelectorKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			if labelId, ok := labelId.(model.EndpointKey); ok {
-				l.OnComputedSelectorMatch(string(cs), labelId)
+				l.OnComputedSelectorMatch(key.selector, key.caller, labelId)
 			}
 		}
 		return
@@ -426,10 +415,10 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
 }
 
 func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId any) {
-	if cs, ok := selID.(computedSelector); ok {
+	if key, ok := selID.(computedSelectorKey); ok {
 		for _, l := range arc.PolicyMatchListeners {
 			if labelId, ok := labelId.(model.EndpointKey); ok {
-				l.OnComputedSelectorMatchStopped(string(cs), labelId)
+				l.OnComputedSelectorMatchStopped(key.selector, key.caller, labelId)
 			}
 		}
 		return
