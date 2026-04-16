@@ -1674,7 +1674,7 @@ $(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
 kind-build-images:
 	@$(REPO_ROOT)/hack/test/kind/validate_stamps.sh \
 		$(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
-	$(MAKE) -j$$(nproc) kind-build-images-run
+	$(MAKE) kind-build-images-run
 
 .PHONY: kind-build-images-run
 kind-build-images-run: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
