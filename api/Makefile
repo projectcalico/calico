@@ -157,7 +157,7 @@ ut: kind-cluster-create
 		-e KUBECONFIG=/kubeconfig.yaml \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		$(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r --junit-report=api_ut.xml --output-dir=report/ -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 ## Run CRD validation tests using envtest (no kind cluster required)
 .PHONY: ut-validation

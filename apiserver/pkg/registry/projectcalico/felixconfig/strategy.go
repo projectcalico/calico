@@ -5,6 +5,7 @@ package felixconfig
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/fields"
@@ -37,7 +38,7 @@ func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
-	return field.ErrorList{}
+	return validateFelixConfiguration(obj)
 }
 
 func (apiServerStrategy) AllowCreateOnUpdate() bool {
@@ -60,6 +61,24 @@ func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 }
 
 func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	return validateFelixConfiguration(obj)
+}
+
+func validateFelixConfiguration(obj runtime.Object) field.ErrorList {
+	fc, ok := obj.(*calico.FelixConfiguration)
+	if !ok {
+		return field.ErrorList{}
+	}
+	if fc.Spec.NodeSelector != nil && *fc.Spec.NodeSelector != "" {
+		if fc.Name == "default" || strings.HasPrefix(fc.Name, "node.") {
+			return field.ErrorList{
+				field.Forbidden(
+					field.NewPath("spec", "nodeSelector"),
+					"nodeSelector must not be set on the 'default' or per-node ('node.*') FelixConfiguration",
+				),
+			}
+		}
+	}
 	return field.ErrorList{}
 }
 
