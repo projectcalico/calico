@@ -132,7 +132,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 		bgpPeers:                make(map[string]*apiv3.BGPPeer),
 		sourceReady:             make(map[string]bool),
 		nodeListenPorts:         make(map[string]uint16),
-		globalBGPConfig:         cfg,
+		bgpConfigs:              map[string]*apiv3.BGPConfiguration{globalConfigName: cfg},
 		nodeIPs:                 make(map[string]struct{}),
 		programmedRouteRefCount: make(map[string]int),
 
@@ -382,7 +382,7 @@ type client struct {
 	configCacheMutex sync.RWMutex
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
-	globalBGPConfig *apiv3.BGPConfiguration
+	bgpConfigs map[string]*apiv3.BGPConfiguration
 
 	// Service load balancer aggregation setting
 	serviceLoadBalancerAggregation apiv3.ServiceLoadBalancerAggregation
@@ -1165,8 +1165,8 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		c.updatePeersV1()
 
 		// Also update BGP config passwords before removing old watched secrets
-		if c.globalBGPConfig != nil {
-			c.getNodeMeshPasswordKVPair(c.globalBGPConfig, model.GlobalBGPConfigKey{})
+		if c.bgpConfigs[globalConfigName] != nil {
+			c.getNodeMeshPasswordKVPair(c.bgpConfigs[globalConfigName], model.GlobalBGPConfigKey{})
 		}
 
 		// Clean up any secrets that are no longer of interest.
@@ -1228,6 +1228,11 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 }
 
 func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfiguration, svcAdvertisement *bool, updatePeersV1 *bool, updateReasons *[]string) {
+	// Cache the BGP configuration as a whole.
+	old := c.bgpConfigs[resName]
+	c.bgpConfigs[resName] = v3res
+
+	// Map to legacy v2 model paths.
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
@@ -1251,8 +1256,15 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
 		}
 
-		// Cache the updated BGP configuration
-		c.globalBGPConfig = v3res
+		// Check if normal route priority is changing.
+		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, old) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv4 route priority changed")
+		}
+		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, old) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv6 route priority changed")
+		}
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
 		// The name of a configuration resource has a strict format.  It is either "default"
 		// for the global default values, or "node.<nodename>" for the node specific vales.

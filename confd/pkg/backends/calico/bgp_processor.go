@@ -205,14 +205,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
-	config.NormalRoutePriority = 1024
-	if c.globalBGPConfig != nil {
-		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
-		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
-		}
-	}
+	config.NormalRoutePriority = getNormalRoutePriority(ipVersion, c.bgpConfigs[globalConfigName])
 
 	config.SetMetricForBGPRoutes = []string{
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
@@ -227,6 +220,18 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	return nil
+}
+
+func getNormalRoutePriority(ipVersion int, bgpConfig *v3.BGPConfiguration) (priority int) {
+	priority = 1024
+	if bgpConfig != nil {
+		if ipVersion == 4 && bgpConfig.Spec.IPv4NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && bgpConfig.Spec.IPv6NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv6NormalRoutePriority
+		}
+	}
+	return
 }
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
@@ -876,8 +881,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+	if c.bgpConfigs[globalConfigName] != nil && c.bgpConfigs[globalConfigName].Spec.ProgramClusterRoutes != nil &&
+		*c.bgpConfigs[globalConfigName].Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
 		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {

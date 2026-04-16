@@ -411,6 +411,7 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 				t.Logf("cleanup: failed to delete %s %s: %v", cleanupObj.GetObjectKind().GroupVersionKind().Kind, cleanupObj.GetName(), err)
 			}
 		})
+		t.Logf("applied kind=%s", kind)
 	}
 
 	return func() {
@@ -561,6 +562,7 @@ func applyCalicoNode(t *testing.T, be *datastoreBackend, yamlBytes []byte) func(
 	require.NoError(t, err, "updating Calico Node %s", calicoNode.Name)
 
 	nodeName := calicoNode.Name
+	t.Logf("applied Calico node %s", nodeName)
 	return func() {
 		node, getErr := be.calicoClient.Nodes().Get(ctx, nodeName, options.GetOptions{})
 		if getErr != nil {

@@ -38,12 +38,13 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 		cache:        cache,
 		peeringCache: peeringCache,
 		configCache:  make(map[int]*bgpConfigCache),
+		bgpConfigs:   map[string]*v3.BGPConfiguration{},
 	}
 	return c
 }
 
 func TestBuildImportFilter_DefaultAccept(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Test with no filter - should return default accept
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
@@ -51,7 +52,7 @@ func TestBuildImportFilter_DefaultAccept(t *testing.T) {
 }
 
 func TestBuildImportFilter_EmptyFilters(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Test with empty filters array - should return default accept
 	result := c.buildImportFilter([]string{}, "64512", "64512", 4, 1024)
@@ -59,7 +60,7 @@ func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 }
 
 func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Test that IPv4 and IPv6 return appropriate default
 	resultV4 := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
@@ -71,7 +72,7 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 }
 
 func TestBuildExportFilter_SameAS(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
@@ -81,7 +82,7 @@ func TestBuildExportFilter_SameAS(t *testing.T) {
 }
 
 func TestBuildExportFilter_DifferentAS_StillLocalPref(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Different AS = eBGP — still includes LOCAL_PREF conversion
 	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
@@ -90,7 +91,7 @@ func TestBuildExportFilter_DifferentAS_StillLocalPref(t *testing.T) {
 }
 
 func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Different AS with no filter should use default export filter
 	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
@@ -98,7 +99,7 @@ func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
 }
 
 func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Test that both IPv4 and IPv6 work
 	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
@@ -110,7 +111,7 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 }
 
 func TestBuildExportFilter_EmptyFilters(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Test with empty filters array
 	result := c.buildExportFilter([]string{}, "65000", "64512", 4, 1024)
@@ -749,7 +750,7 @@ func TestPopulateNodeConfig_NormalRoutePriority_FromBGPConfig(t *testing.T) {
 	c := newTestClient(cache, nil)
 
 	prio := 500
-	c.globalBGPConfig = &v3.BGPConfiguration{
+	c.bgpConfigs[globalConfigName] = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			IPv4NormalRoutePriority: &prio,
 		},
@@ -777,7 +778,7 @@ func TestPopulateNodeConfig_NormalRoutePriority_IPv6(t *testing.T) {
 
 	prio4 := 500
 	prio6 := 800
-	c.globalBGPConfig = &v3.BGPConfiguration{
+	c.bgpConfigs[globalConfigName] = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			IPv4NormalRoutePriority: &prio4,
 			IPv6NormalRoutePriority: &prio6,
@@ -2594,7 +2595,7 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 }
 
 func TestBuildImportFilter_iBGP(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Same AS = iBGP — should set preference for a higher priority route
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
@@ -2604,7 +2605,7 @@ func TestBuildImportFilter_iBGP(t *testing.T) {
 }
 
 func TestBuildImportFilter_eBGP(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Different AS = eBGP — should set preference for a higher priority route
 	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
@@ -2614,7 +2615,7 @@ func TestBuildImportFilter_eBGP(t *testing.T) {
 }
 
 func TestBuildImportFilter_CustomPriority(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// Custom priority should appear in both the default and the preference check
 	result := c.buildImportFilter(nil, "64512", "64512", 4, 2000)
@@ -2622,7 +2623,7 @@ func TestBuildImportFilter_CustomPriority(t *testing.T) {
 }
 
 func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
-	c := &client{}
+	c := newTestClient(nil, nil)
 
 	// iBGP with custom priority — LOCAL_PREF conversion should still appear
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
