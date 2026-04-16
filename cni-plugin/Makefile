@@ -69,7 +69,8 @@ build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
 WINDOWS_BIN=bin/windows
-build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe $(WINDOWS_BIN)/calico-ipam.exe
+# calico-ipam.exe is not built: install.exe copies calico.exe to both names on the host.
+build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe
 endif
 
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
@@ -103,9 +104,6 @@ $(WINDOWS_BIN)/install.exe: $(SRC_FILES)
 $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	mkdir -p $(WINDOWS_BIN)
 	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
-
-$(WINDOWS_BIN)/calico-ipam.exe: $(WINDOWS_BIN)/calico.exe
-	cp "$<" "$@"
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
