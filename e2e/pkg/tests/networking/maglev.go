@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -35,9 +36,11 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	k8snet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/format"
@@ -66,12 +69,39 @@ var _ = describe.CalicoDescribe(
 	func() {
 		var (
 			f           = utils.NewDefaultFramework("calico-maglev")
+			cli         ctrlclient.Client
 			maglevTests *MaglevTests
 			nodeNames   []string
 			extNode     *externalnode.Client
 		)
 
 		BeforeEach(func() {
+			var err error
+			cli, err = client.NewAPIClient(f.ClientConfig())
+
+			if utils.IsCalicoOSS() {
+				supported, err := utils.ReleaseStreamIsAtLeast("v3.32")
+				Expect(err).NotTo(HaveOccurred(), "Couldn't not check release stream")
+				if err == nil && !supported {
+					Skip(fmt.Sprintf("Maglev is not supported on OSS release stream %s (requires >=v3.32)", os.Getenv("RELEASE_STREAM")))
+				}
+			}
+
+			isEE := false
+			Eventually(func() error {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				isEE, err = utils.IsCalicoEE(ctx, cli)
+				return err
+			}).Should(Succeed(), "Never succeeded in checking product variant")
+
+			if isEE {
+				supported, err := utils.ReleaseStreamIsAtLeast("v3.23")
+				if err == nil && !supported {
+					Skip(fmt.Sprintf("Maglev is not supported on EE release stream %s (requires >=v3.23)", os.Getenv("RELEASE_STREAM")))
+				}
+			}
+
 			// Initialize external node for testing
 			extNode = externalnode.NewClient()
 			if extNode == nil {
