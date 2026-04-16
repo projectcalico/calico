@@ -2264,6 +2264,25 @@ a given topic. This final section collects the handful of checks that
 don't belong to any single topic — they come up repeatedly in BPF
 dataplane review because several subsystems happen to share them.
 
+### Keep this document in sync with the code
+
+A BPF dataplane PR that changes how the dataplane works — a new
+sub-program, a new CT flag, a new mark bit, a new map or map field,
+a change to the packet path or forwarding decision, or a new config
+knob affecting any of those — must update the relevant section of
+this document in the same PR.
+
+Exemptions: (a) a bug fix that restores behaviour this document
+already describes, (b) a mechanical refactor with no observable
+change, (c) comment or log-message edits, (d) dependency bumps. If
+in doubt, update the doc.
+
+This rule is mirrored in `felix/CLAUDE.md` (for Claude's `/review`
+skill) and in `.github/copilot-instructions.md` /
+`.github/instructions/ebpf-dataplane.instructions.md` (for GitHub
+Copilot's automated review). Those files are short pointers; this
+document is the source of truth.
+
 ### Changes that touch shared maps
 
 - A change to the on-wire layout of a pinned BPF map needs a
