@@ -1,0 +1,13 @@
+- name: cmd/calico
+  run:
+    when: "${CHANGE_IN(cmd/calico)}"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd cmd/calico
+    jobs:
+      - name: "cmd/calico: UT"
+        commands:
+          - ../../.semaphore/run-and-monitor ut.log make ut
