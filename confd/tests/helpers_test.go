@@ -159,6 +159,12 @@ func setupKDD() *datastoreBackend {
 		os.Exit(1)
 	}
 
+	// Raise QPS and Burst from the defaults (5 / 10) so that test
+	// setup and teardown (which do many small API calls) are not
+	// throttled by the client-side rate limiter.
+	restCfg.QPS = 100
+	restCfg.Burst = 200
+
 	kubeconfigPath := writeKubeconfig(restCfg)
 	must(os.Setenv("DATASTORE_TYPE", "kubernetes"), "setting DATASTORE_TYPE")
 	must(os.Setenv("KUBECONFIG", kubeconfigPath), "setting KUBECONFIG")
@@ -166,7 +172,9 @@ func setupKDD() *datastoreBackend {
 	datastoreCfg := apiconfig.CalicoAPIConfigSpec{
 		DatastoreType: apiconfig.Kubernetes,
 		KubeConfig: apiconfig.KubeConfig{
-			Kubeconfig: kubeconfigPath,
+			Kubeconfig:     kubeconfigPath,
+			K8sClientQPS:   100,
+			K8sClientBurst: 200,
 		},
 	}
 
@@ -666,7 +674,14 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 			})
 			require.NoError(t, err, "creating block affinity %s on %s", a.cidr, a.host)
 		}
-		return func() {}
+		return func() {
+			for _, a := range standardBlockAffinities {
+				_, _ = bc.Delete(ctx, model.BlockAffinityKey{
+					CIDR: mustParseCIDR(a.cidr),
+					Host: a.host,
+				}, "")
+			}
+		}
 	}
 
 	// KDD mode: use the BlockAffinities API.
@@ -689,7 +704,18 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 			require.NoError(t, err, "updating BlockAffinity %s", a.Name)
 		}
 	}
-	return func() {}
+	return func() {
+		for _, a := range affinities {
+			existing, err := be.calicoClient.BlockAffinities().Get(ctx, a.Name, options.GetOptions{})
+			if err != nil {
+				continue // already gone
+			}
+			_, err = be.calicoClient.BlockAffinities().Delete(ctx, existing.Name, options.DeleteOptions{ResourceVersion: existing.ResourceVersion})
+			if err != nil {
+				t.Logf("Warning: failed to delete BlockAffinity %s: %v", a.Name, err)
+			}
+		}
+	}
 }
 
 func mustParseCIDR(s string) cnet.IPNet {
@@ -977,7 +1003,7 @@ func startConfdDaemon(t *testing.T, be *datastoreBackend, opts ...confdDaemonOpt
 	}
 
 	if !cfg.skipAffinities {
-		createBlockAffinities(t, be)
+		t.Cleanup(createBlockAffinities(t, be))
 	}
 
 	confdCalicoClient, err := client.New(apiconfig.CalicoAPIConfig{Spec: be.datastoreConfig})
@@ -1064,7 +1090,7 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 
 			if normalizeBlankLines(string(got)) != normalizeBlankLines(string(want)) {
 				allMatch = false
-				lastMismatch = fmt.Sprintf("%s does not match %s", f, expectedPath)
+				lastMismatch = fmt.Sprintf("%s does not match %s:\n%v", f, expectedPath, normalizeBlankLines(string(got)))
 				break
 			}
 		}
