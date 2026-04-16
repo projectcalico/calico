@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -186,15 +186,24 @@ func Install(version string) error {
 		// host CNI bin directory. The binary handles both roles — it detects the
 		// invoked name and dispatches accordingly. Check /usr/bin/calico first
 		// (combined image), then fall back to /opt/cni/bin/calico (standalone image).
-		calicoBinary := winutils.GetHostPath("/usr/bin/calico")
-		if !fileExists(calicoBinary) {
-			calicoBinary = winutils.GetHostPath("/opt/cni/bin/calico")
+		// On Windows, the binary is named calico.exe and lives in /opt/cni/bin.
+		calicoBinName := "calico"
+		if runtime.GOOS == "windows" {
+			calicoBinName = "calico.exe"
 		}
-		for _, name := range []string{"calico", "calico-ipam"} {
+		calicoBinary := winutils.GetHostPath("/usr/bin/" + calicoBinName)
+		if !fileExists(calicoBinary) {
+			calicoBinary = winutils.GetHostPath("/opt/cni/bin/" + calicoBinName)
+		}
+		installNames := []string{"calico", "calico-ipam"}
+		if runtime.GOOS == "windows" {
+			installNames = []string{"calico.exe", "calico-ipam.exe"}
+		}
+		for _, name := range installNames {
 			target := fmt.Sprintf("%s/%s", d, name)
 			if fileExists(target) && !c.UpdateCNIBinaries {
 				logrus.Infof("Skipping installation of %s", target)
-				if name == "calico" {
+				if name == installNames[0] {
 					calicoBinaryOK = true
 				}
 				continue
