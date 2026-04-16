@@ -36,16 +36,11 @@ calls it out as a **review note**. Review notes are deliberately
 generic: they point out what a reviewer should look for rather than
 enumerating every caller.
 
-The reference for the _principles_ behind the design is the
-"eBPF Dataplane Networking" internal document. This file is the
-in-tree, code-grounded counterpart to that reference.
-
 ## Scope
 
 **In scope:**
 
-- Linux TC, XDP and cgroup BPF programs under `felix/bpf-gpl/` and
-  `felix/bpf-apache/`.
+- Linux TC, XDP and cgroup BPF programs under `felix/bpf-gpl/`.
 - The userspace Go code under `felix/bpf/` that loads, attaches and
   syncs those programs and their maps.
 - Dataplane behaviour observable on the wire: packet path, NAT,
@@ -59,6 +54,9 @@ in-tree, code-grounded counterpart to that reference.
 **Out of scope:**
 
 - Windows HNS/HCN dataplane (`felix/dataplane/windows/`).
+- `felix/bpf-apache/` — legacy code (sockops/sockmap short-circuit,
+  XDP filter, redir) used only by the `*tables` dataplane, not part
+  of the eBPF dataplane.
 - Pure policy model (tiers, rules, selectors) — this is produced by
   `felix/calc/` and consumed by the BPF policy program generator
   (`felix/bpf/polprog/`); this doc treats policy as an input.
@@ -77,11 +75,19 @@ in-tree, code-grounded counterpart to that reference.
   treats a small number of special interfaces (the main route
   interface, tunnel devices, the `bpfnat` veth pair) as HEP-like even
   when no HostEndpoint CRD exists.
-- "Kernel ingress"/"kernel egress" refers to the direction the kernel
-  sees on the TC hook. For a WEP these are the _reverse_ of the pod's
-  policy-direction ("ingress policy" is programmed on the host-side
-  `cali*` egress hook, because packets from a pod enter the host on
-  that hook).
+- BPF programs live in the **host namespace** and this doc reasons
+  about all packet directions from the host namespace's point of
+  view. "Host-ingress" means a packet entering the host namespace
+  (from an external interface, a tunnel, or a pod veth); "host-egress"
+  means a packet leaving the host namespace. For a WEP these are the
+  _reverse_ of the pod's policy direction: Calico's "ingress policy"
+  for a pod is implemented on the host-egress side of the `cali*`
+  veth, because a packet leaving the host toward the pod is an
+  ingress packet from the pod's perspective.
+- Where it matters which specific TC hook a program is attached to,
+  the hook's kernel-side direction ("TC ingress hook" / "TC egress
+  hook") is named explicitly. Otherwise "host-ingress" /
+  "host-egress" is used.
 - File paths are repo-relative. Only file paths, function names,
   struct names, map names and constants are cited — line numbers are
   deliberately omitted because they rot.
@@ -103,7 +109,8 @@ in-tree, code-grounded counterpart to that reference.
 13. [3rd-party DNAT on host traffic](#13-3rd-party-dnat-on-host-traffic)
 14. [Debug log filters](#14-debug-log-filters)
 15. [QoS](#15-qos)
-16. [Cross-cutting review notes](#16-cross-cutting-review-notes)
+16. [Fast-path performance discipline](#16-fast-path-performance-discipline)
+17. [Cross-cutting review notes](#17-cross-cutting-review-notes)
 
 ---
 
@@ -114,9 +121,10 @@ in-tree, code-grounded counterpart to that reference.
 Felix attaches TC BPF programs to every interface it cares about on the
 host:
 
-- Every workload veth on the host side (`cali*`), both kernel-ingress
-  (kernel TC ingress = policy egress) and kernel-egress (policy
-  ingress).
+- Every workload veth on the host side (`cali*`), both host-ingress
+  (TC ingress hook — a packet coming from the pod, policy-egress from
+  the pod's point of view) and host-egress (TC egress hook — a packet
+  going to the pod, policy-ingress).
 - Host endpoints — the interfaces matching the
   `BPFDataIfacePattern` regex. At minimum the node's main cluster
   interface is included; any interface the cluster admin has put under
@@ -133,18 +141,21 @@ traffic before it reaches TC. Connect-time load-balancer programs
 
 ### Where BPF sits relative to netfilter
 
-On kernel ingress (packet arriving on an interface) the TC hook runs
-**before** netfilter. On kernel egress (packet leaving an interface)
-the TC hook runs **after** netfilter. BPF therefore sees the packet
-before `*tables` on the way in and after `*tables` on the way out, so
-it can overrule netfilter on ingress and see netfilter's output on
-egress.
+On host-ingress (a packet arriving on an interface) the TC ingress
+hook runs **before** netfilter. On host-egress (a packet leaving an
+interface) the TC egress hook runs **after** netfilter. BPF
+therefore sees the packet before `*tables` on the way in and after
+`*tables` on the way out, so it can overrule netfilter on ingress
+and see netfilter's output on egress.
 
 The practical consequence is that BPF can bypass the host network
 stack completely when it has enough information to forward directly.
-Any packet it forwards via `bpf_redirect` or `bpf_redirect_peer`
-skips the host's routing, conntrack and iptables/nftables chains
-entirely.
+A packet forwarded via `bpf_redirect`, `bpf_redirect_neigh`, or
+`bpf_redirect_peer` skips the host's routing, conntrack and
+iptables/nftables chains entirely. `bpf_redirect_peer` goes a step
+further: on a veth destination it hands the packet straight to the
+pod side without running the program attached to the host-side peer,
+which is the usual way into a local workload on the fast path.
 
 ### When BPF defers to the host stack
 
@@ -152,8 +163,14 @@ BPF does not try to handle every case. It hands packets to the host
 stack (or lets them continue through it) when it cannot:
 
 - **FIB lookup miss.** If `bpf_fib_lookup` fails, BPF lets the kernel
-  route the packet so the kernel can populate its FIB and neigh caches.
-  Subsequent packets of the same flow can then be forwarded directly.
+  route the packet so the kernel can populate its FIB and neigh
+  caches; subsequent packets of the same flow can then be forwarded
+  directly. This case used to be frequent because `bpf_fib_lookup`
+  returned `NO_NEIGH` whenever the neigh cache was cold, forcing a
+  host-stack detour even when the route was known. Since Calico's
+  minimum kernel is 5.10 the `bpf_redirect_neigh` helper is always
+  available and BPF resolves the neighbour itself on the fast path,
+  so the host-stack detour is now the exception.
 - **SNAT / MASQUERADE (`nat-outgoing`).** Full port-preserving SNAT
   requires port allocation state that BPF cannot safely produce; the
   `*tables` SNAT chain handles it. BPF signals this path by marking the
@@ -165,9 +182,12 @@ stack (or lets them continue through it) when it cannot:
 - **Third-party DNAT rules.** Some deployments rely on DNAT rules that
   another agent installed in the `*tables` raw/nat chain. BPF
   cooperates via the `SKIP_FIB` mark; see §13.
-- **Host-originated service traffic.** Not strictly "deferring" — the
-  `bpfnat` veth routes these packets back through BPF after `*tables`
-  has had a chance to MASQUERADE them; see §7.
+- **Host-originated traffic _to services_.** Not strictly "deferring"
+  — the `bpfnat` veth routes these packets back through BPF after
+  `*tables` has had a chance to MASQUERADE them; see §7. This only
+  applies to service traffic; host-originated traffic whose endpoint
+  is in the host namespace (host-networked peer, host-local socket)
+  obviously cannot skip the host stack and does not use this path.
 
 When BPF _can_ answer the question — FIB hit, known local pod, existing
 BPF conntrack entry, matched NAT frontend with an acceptable backend —
@@ -264,10 +284,17 @@ distinct program type and a jump map is typed for a single program
 type). See the comment at the top of
 `felix/bpf-gpl/jump.h`.
 
-Both maps are sized generously — the per-endpoint map is sized for
-many thousands of policy programs (240k slots) because each endpoint
-gets two (one per direction) and the fast and debug variants each take
-their own slot.
+Both maps are sized generously. The per-endpoint map is large (240k
+slots) because each endpoint gets two policy programs (one per TC
+direction). Policy programs themselves are _not_ duplicated for the
+fast and debug paths — one compiled policy program serves both, and
+the caller's continuation (encoded in `skb->cb[0]`/`cb[1]`, below)
+is what decides which path the packet continues on. A handful of the
+generic sub-programs in the other map (main, allowed, drop, ICMP,
+etc.) do have separate fast and debug variants occupying distinct
+slots; see `allocateLayout` in `felix/bpf/hook/map.go` for the
+placement — it uses an offset for debug variants but leaves
+`SubProgTCPolicy` at a single index.
 
 ### Caching of generic programs
 
@@ -287,23 +314,34 @@ program (older verifiers can fail on it), the load is retried with
 that sub-program disabled — which is the only sub-program that may
 legitimately be missing at runtime.
 
-### skb->cb[0] and skb->cb[1]: allow/deny addresses
+### skb->cb[0] and skb->cb[1]: continuation addresses
 
-The policy program is per-endpoint but its callers are generic. The
-convention is that before tail-calling into the policy program the
-caller writes:
+The per-endpoint policy program is called from generic
+(per-endpoint-independent) programs. The convention is that before
+tail-calling into policy, the caller writes:
 
-- `skb->cb[0]` = the jump-map index to tail-call into on **allow**,
-- `skb->cb[1]` = the jump-map index to tail-call into on **deny**.
+- `skb->cb[0]` = the jump-map index to tail-call on **allow**,
+- `skb->cb[1]` = the jump-map index to tail-call on **deny**.
 
-The policy program reads these and tail-calls into the appropriate
-generic successor. This is what makes one compiled policy program
-reusable from any caller. The convention is encoded in
-`__CALI_JUMP_TO_POLICY` in `jump.h` — it always sets cb[0] to
-`PROG_INDEX_ALLOWED` and cb[1] to `PROG_INDEX_DROP` on entry, but
-callers that want a different continuation (for example the Maglev
-program, which wants to re-enter the main program on allow) set their
-own values before jumping.
+Policy reads those and tail-calls into the appropriate successor.
+Two things fall out of this convention:
+
+- **Policy is callable from any generic program.** The generic
+  callers — main, Maglev, new-flow — each know which jump-map
+  indices they want to continue at, write them into `cb[]`, then
+  tail-call the single per-endpoint policy program. No per-caller
+  specialisation of policy is needed.
+- **The debug path reuses the same policy program as the fast path.**
+  The fast-path caller writes fast-path continuation indices; the
+  debug-path caller writes debug-path continuation indices. Policy
+  itself doesn't need a debug variant — the continuation passed in
+  `cb[]` is what carries the path selection.
+
+The convention is encoded in `__CALI_JUMP_TO_POLICY` in `jump.h`: it
+defaults to `cb[0] = PROG_INDEX_ALLOWED`, `cb[1] = PROG_INDEX_DROP`,
+but callers that want a different continuation (for example the
+Maglev program, which wants to re-enter the main program on allow)
+write their own values before jumping.
 
 ### Fast path and debug path
 
@@ -321,9 +359,18 @@ jump map, at different indices. `allocateLayout` in
 placing debug programs, so fast-path and debug-path sub-programs never
 collide.
 
-Without a log filter, the preamble jumps to the fast-path main. With
-a log filter, the filter decides per-packet whether to jump to the
-fast-path or debug-path entry point. Log filtering is covered in §14.
+Path selection depends on `BPFLogLevel`:
+
+- `BPFLogLevel` is _not_ `debug`: only the fast path is loaded. The
+  preamble jumps directly to the fast-path main.
+- `BPFLogLevel == debug` and no user-specified filter: both paths
+  are loaded and a **match-all** log filter is installed. Every
+  packet takes the debug path. Using a match-all filter (rather
+  than special-casing "no filter") keeps the preamble logic
+  uniform.
+- `BPFLogLevel == debug` with a user-specified filter: both paths
+  are loaded; the filter decides per-packet whether each packet
+  takes the fast or debug path. Log filtering is covered in §14.
 
 ### Attach-gap prevention
 
@@ -379,10 +426,20 @@ created.
 
 ### The common case: pod to service
 
+> **Note.** Everything in this subsection describes the TC path.
+> When CTLB (§6) is enabled, a pod's service traffic never takes
+> this path: CTLB rewrites the destination at `connect(2)` time and
+> the TC program on `cali*` only ever sees pod→pod packets with the
+> backend's address. The TC path below applies when CTLB is
+> disabled for the traffic in question (raw sockets always, UDP if
+> `BPFConnectTimeLoadBalancing = TCP`, any traffic if CTLB is off
+> entirely).
+
 When a pod sends a packet to a service IP, the packet leaves the pod
 and enters the host on the pod's host-side veth (`cali*`). The TC
-program on that veth — a WEP egress program in kernel terms, WEP
-_ingress_ policy in Calico terms — runs first.
+program on that veth — attached to the TC ingress hook on the
+host-side (host-ingress from the host's point of view, policy
+_egress_ from the pod's) — runs first.
 
 The flow is:
 
@@ -405,45 +462,57 @@ need to re-resolve the service. Return packets hit the reverse entry
 and have the service frontend IP/port restored on the way back to the
 pod.
 
-### Same host
+### Same host — the fast-path shortcut
 
-When the selected backend is on the same host, nothing special happens
-on the wire — after DNAT, the packet has the backend pod's IP as its
-destination, and the backend pod's host-side veth is a local interface
-that the host can deliver to directly. `fib_approve` (§2) decides
-whether to forward directly via `bpf_redirect` or hand the packet to
-the host stack to route.
+When the selected backend is on the same host, the dataplane can
+take a significantly shorter path than `*tables` does. After DNAT
+and policy, the BPF program looks up the backend's veth via the
+ifstate map and, on established-flow packets, hands the packet
+directly to the backend's pod side with `bpf_redirect_peer`. The
+packet never touches the host FIB, never enters the host netfilter
+chains, and does not trigger the host-side program of the backend's
+veth — the pod receives it straight from its own side of the veth.
+
+`fib_approve` (§2) is the gate: it checks that the backend's
+interface is ready (attach-gap protection) and whether the flow is
+confirmed in conntrack; unconfirmed traffic is fallthrough'd to the
+host stack so the `*tables` drop rules apply.
+
+Review note: a change that forces the same-host path through the
+host stack is a measurable regression. The shortcut is not optional
+under BPF mode; it's the point of running BPF for this case.
 
 ### Pod-service-self (no CTLB)
 
-When the backend chosen for a service is the pod that originated the
-traffic, this would naively resolve to a self-to-self packet. With the
-CTLB (§6) this is not a problem because the CTLB rewrites the
-destination at connect time and nothing ever leaves the pod. Without
-CTLB, the host would have to loop the packet back, which fails:
-`accept_local` is `0` by default on the pod's veth, and no socket
-exists for the `(self, self)` 5-tuple anyway.
+When the backend chosen for a service is the pod that originated
+the traffic, this would naively resolve to a self-to-self packet.
 
-Calico handles this the same way kube-proxy does: it relies on
-`*tables` MASQ to change the source, so the packet looks like it came
-from the host and the pod accepts it.
+With CTLB on, the destination rewrite happens inside `connect(2)`
+and the socket pair is set up pod-to-pod-same-address. No packet
+is ever emitted on the network — a substantial deviation from
+`*tables`, where every pod-service-self packet makes a MASQ
+round-trip through the host. This is one of the reasons CTLB is
+an important performance feature (§6).
+
+Without CTLB, the host would have to loop the packet back, which
+fails: `accept_local` is `0` by default on the pod's veth, and no
+socket exists for the `(self, self)` 5-tuple anyway. Calico handles
+this the same way kube-proxy does — it relies on `*tables` MASQ to
+change the source so the packet looks like it came from the host
+and the pod accepts it.
 
 The signal is carried on the conntrack entry:
 
-- On WEP kernel egress, if the source IP equals the post-NAT
-  destination IP, the program sets
+- On the host-ingress program of the pod's veth, if the source IP
+  equals the post-NAT destination IP, the program sets
   `CALI_CT_FLAG_SVC_SELF` on the new NAT-reverse entry (see
   `conntrack_types.h` and the NAT-create path in `tc.c`).
 - On the way out after policy allow, if that flag is set on the flow,
   `CALI_SKB_MARK_MASQ` is set on the packet and FIB is disabled. The
   packet falls through to `*tables`, which MASQ-SNATs it.
-- On the return leg (kernel ingress toward the pod, `CALI_F_TO_WEP`),
-  the program detects the `CALI_SKB_MARK_MASQ` mark and restores the
-  saved original source so the CT reverse-match works.
-
-This is one of the reasons the CTLB is an important _optimisation_
-(§6): when it is on, the self-loop is resolved in a single syscall
-and none of the MASQ dance is needed.
+- On the return leg (host-egress toward the pod, `CALI_F_TO_WEP`),
+  the program detects the `CALI_SKB_MARK_MASQ` mark and restores
+  the saved original source so the CT reverse-match works.
 
 ### Review notes for this section
 
@@ -480,6 +549,23 @@ runs:
    packet is marked "seen/approved" so Calico's egress HEP does not
    re-run policy on it.
 
+> **VXLAN ambiguity — worth flagging for readers.** The VXLAN used
+> here for NodePort forwarding is a separate use of the VXLAN
+> device from the pod-to-pod VXLAN overlay. Calico programs both on
+> the same `vxlan.calico` device (flow-mode, see §8), but:
+>
+> - **NodePort-forwarding VXLAN** (this step) is always present in
+>   BPF mode, regardless of whether the overlay uses VXLAN, IPIP,
+>   WireGuard, or no encap. It carries external traffic that has
+>   hit a NodePort on a node whose selected backend is on a
+>   different node.
+> - **Pod-to-pod overlay VXLAN** is what pod→pod traffic uses when
+>   the cluster's overlay is configured as VXLAN.
+>
+> A reader familiar with the overlay may assume one implies the
+> other; it doesn't. The BPF program picks per-packet which
+> semantics apply and sets the VXLAN tunnel key accordingly.
+
 ### Return path (non-DSR)
 
 On the backend node, the VXLAN decapsulation happens and NAT is
@@ -494,24 +580,35 @@ return packet back in VXLAN, destined for the node that originally
 received the connection, and lets the host stack route it out. That
 node decapsulates and routes the packet to the client.
 
-The asymmetry is deliberate: the return path follows the forward path
-because the ingress node is the only place that can un-DNAT the source
-on return (it holds the conntrack reverse entry keyed on the original
-client tuple).
+The return path follows the forward path as a deliberate choice:
+in non-DSR mode the ingress node holds the conntrack reverse entry
+keyed on the original client tuple, and returning packets there
+lets a single un-NAT restore the service-IP source seen by the
+client. DSR mode is the alternative — the backend node SNATs the
+return packet itself, so no round-trip to the ingress node is
+needed (see below).
 
 ### DSR
 
 With DSR enabled, return traffic does _not_ go back through the
-ingress node. The backend node simply SNATs the return packet (swapping
-the backend IP for the ingress-node IP so the packet looks like it
-came from the service) and lets the network deliver the packet
-directly to the client.
+ingress node. The backend node simply SNATs the return packet
+(swapping the backend IP for the ingress-node IP so the packet
+looks like it came from the service) and lets the network deliver
+the packet directly to the client.
 
-DSR requires a supporting underlay: the client must be willing to
-accept a reply from a node that is not the one it originally talked
-to. The cluster admin opts in via `DSRSupport` configuration or, more
-granularly, via `DSROptoutCIDRs` for destinations that cannot support
-it. DSR is also a prerequisite for Maglev (§5).
+DSR requires asymmetric-path tolerance in the underlay — and not
+just at the client. Every hop between the backend node and the
+client must accept an inbound packet from a node other than the one
+the forward packet was routed to. Cloud underlays and carefully-
+configured switched fabrics are typically fine; setups with strict
+uRPF on the first hop are not. The client's distance from the
+cluster often hides the asymmetry from the client itself, but the
+local network between the cluster and the first common hop must be
+accepting of it.
+
+The cluster admin opts in via `BPFExternalServiceMode = dsr` (vs.
+the default `tunnel`) with `BPFDSROptoutCIDRs` for per-destination
+opt-out. DSR is also a prerequisite for Maglev (§5).
 
 ### Intra-cluster access to NodePorts
 
@@ -528,13 +625,28 @@ external NodePort request.
 
 ### Conflicting nodeport connections
 
-When many clients hit a node port from the same source-IP (for
-example: a cloud load balancer), the ephemeral ports seen by the
-backend can collide across flows. Calico allocates source ports out of
-a reserved range (`PSNATStart`/`PSNATEnd` on the attach point) and
-retries with a random source port on collision. Changes to this
-logic need to preserve port stability within a flow (return packets
-must still match the CT entry).
+An external load balancer in front of the cluster holds connections
+to several nodes at the same time. From the LB's point of view each
+`(LB-IP, src_port) → (node-IP, dst_port)` 4-tuple is unique, so it
+can reuse the _same_ source port against different node IPs
+legitimately.
+
+At a backend node the problem appears: all those connections
+arrive over the VXLAN tunnel, and after decap they look like they
+come from the same ingress-node tunnel IP. Source IPs that were
+distinct at the external side collapse onto one IP here, and the
+source ports that were distinct-enough-per-node are now competing
+on the same backend-CT 5-tuple. Without intervention, connections
+that looked unambiguous from outside collide inside the cluster.
+
+Calico resolves this with port-SNAT on the ingress node: on
+collision the TC program picks a random source port from a
+reserved range (`PSNATStart`/`PSNATEnd` on the attach point) and
+retries. The resulting tuple is stable for the lifetime of the
+flow because the CT entry records it.
+
+Changes to this logic need to preserve port stability within a
+flow — return packets must still match the CT entry.
 
 ### Review notes for this section
 
@@ -543,9 +655,6 @@ must still match the CT entry).
   addressing a NodePort via a node IP. The wildcard entry lives in
   the same NAT frontend map as regular entries; changes to the key
   layout need to respect both.
-- A new encapsulation path (e.g. a new overlay protocol) must
-  preserve the "ingress node owns the CT reverse entry" invariant
-  for the non-DSR case, otherwise return traffic cannot be un-NATed.
 - A change to DSR gating must still compile-time-assert
   `CALI_F_DSR` only with `CALI_F_FROM_WEP` or `CALI_F_HEP`
   (see the `COMPILE_TIME_ASSERT` in `felix/bpf-gpl/bpf.h`). DSR
@@ -555,6 +664,14 @@ must still match the CT entry).
 ---
 
 ## 5. Maglev load balancer
+
+> **Relationship to §4.** Maglev layers on top of the NodePort
+> VXLAN-forwarding path described in §4. The forwarding mechanics —
+> VXLAN-wrap to the backend node, DSR return, conntrack bookkeeping
+> — are reused unchanged. What Maglev adds is consistent-hash
+> backend selection in place of the usual per-node random/round-robin,
+> plus a re-run of policy on mid-flow packets that may have failed
+> over from another lb-node.
 
 ### What it is for
 
@@ -803,12 +920,12 @@ The feature has three modes (`hostNetworkedNATMode` in
   veth is created.
 - **Enabled** — CTLB is off; every host-originated service access
   goes through the bpfnat veth. Selected via
-  `BPFHostNetworkedNAT = Enabled`.
+  `BPFHostNetworkedNATWithoutCTLB = Enabled`.
 - **UDPOnly** — hybrid: CTLB handles TCP, bpfnat handles UDP. Selected
-  indirectly by `BPFConnectTimeLB = TCP`, which leaves UDP to the
-  slower but safer per-packet path so connected-UDP applications
-  don't get stuck on a dead backend (§6). This mode is a compromise
-  between the CTLB performance win and UDP correctness.
+  indirectly by `BPFConnectTimeLoadBalancing = TCP`, which leaves UDP
+  to the slower but safer per-packet path so connected-UDP
+  applications don't get stuck on a dead backend (§6). This mode is
+  a compromise between the CTLB performance win and UDP correctness.
 
 ### The "tunnel trouble"
 
@@ -1320,7 +1437,7 @@ it through:
   `CALI_SKB_MARK_CT_ESTABLISHED`
   (`MarkLinuxConntrackEstablished` = `0x08000000` in
   `felix/bpf/tc/defs/defs.go`).
-- On the next TC hook the packet hits (for example, the kernel-egress
+- On the next TC hook the packet hits (for example, the host-egress
   program on the destination workload's veth), BPF sees the
   `CT_ESTABLISHED` mark and lets the packet through without
   re-running policy — the fact that Linux conntrack matched is
@@ -1646,7 +1763,99 @@ hook (for L7 tagging) uses a second global, `ISTIO_DSCP`.
 
 ---
 
-## 16. Cross-cutting review notes
+## 16. Fast-path performance discipline
+
+### The rule
+
+The eBPF dataplane's performance comes from keeping the per-packet
+work on the **fast path** small. The fast path is everything a
+packet on an established flow hits: the preamble, the main
+program's conntrack lookup, a mark check or two, and (on allow)
+forwarding. Work added here is paid at packet rate — on a hot link,
+every extra instruction and every extra map lookup is paid millions
+of times a second.
+
+**A change that adds per-packet work to the fast path is not
+acceptable without explicit justification.** The bar is higher than
+for any other area of the dataplane because the fast path carries
+all of the production throughput.
+
+### Cost tiers
+
+- **Cheap — fine on the fast path.** Mark comparisons, inline header
+  validation, reads of fields already in `ctx->state` or per-CPU
+  state, arithmetic on values the program already holds. These cost
+  a handful of instructions and no map operation.
+- **Borderline — case by case.** A single BPF map lookup. A single
+  FIB or route-table lookup. Adding one to a path that already does
+  several is often fine; adding one to a path that had none is
+  often not. "Hot" paths (established-flow packets) should be
+  looked at harder than "lukewarm" ones (first packet of a flow,
+  where CT creation already dominates the cost).
+- **Expensive — not on the fast path.** Multiple map lookups, a
+  tail-call into another sub-program, re-running the policy
+  program, hash computations (Maglev), defragmentation. These
+  belong on slow paths or on flow-creation, not on every packet.
+
+### Fast path vs slow path
+
+Where the new work lands matters more than what it is:
+
+- **Fast path** — every packet of an established flow. Preamble →
+  main → CT lookup → (on hit) allowed/epilogue. New work here is
+  presumed bad; the PR needs to make an explicit case for it.
+- **Flow-creation path** — first-packet work: policy evaluation,
+  NAT lookup, conntrack create. Already expensive; adding one
+  lookup here is rarely the thing that regresses the dataplane.
+- **Slow / error path** — ICMP error generation, fragment
+  reassembly, host-CT conflict resolution, TCP reset, log filter
+  compilation. These run rarely and failure is tolerable; expensive
+  work here is fine.
+
+The single most common way a PR regresses this dataplane is by
+moving work from "flow-creation" to "main" — adding a check or a
+lookup that looks cheap but runs on every packet instead of only
+when a flow is being established. A reviewer should check whether
+a new check could be gated on
+`state->ct_result.rc == CALI_CT_NEW` (or an equivalent "first
+packet" condition); if it could and isn't, that's a red flag.
+
+### Patterns to prefer
+
+- **Store the decision on the conntrack entry.** If a check
+  produces a per-flow result, record it as a CT flag
+  (`CALI_CT_FLAG_*` in `conntrack_types.h`) at flow creation and
+  read it on the fast path. DSCP (§15), Maglev (§5) and SVC_SELF
+  (§3) all follow this pattern.
+- **Use the skb mark between consecutive programs.** Marks are
+  already in cache; reading and writing them is negligible.
+- **Gate optional work on compile-time flags.** When a feature is
+  off for this attach type, a `CALI_F_*` / `HAS_*` guard in
+  `bpf.h` eliminates the code at verification time. A runtime
+  global flag costs a load per packet — cheap but not free.
+- **Own a sub-program for slow work.** When a feature does need
+  real computation (Maglev hashing, fragment reassembly, ICMP
+  error generation), put it in its own tail-called sub-program
+  that the main program reaches only when the condition is met.
+
+### Review notes
+
+- A new map lookup on the main program's hot path needs an explicit
+  justification in the PR description: "runs every packet; here's
+  why it's cheap enough", or "gated on first-packet", or a
+  benchmark.
+- A new tail-call from main is a warning sign. The existing
+  sub-programs (Maglev, IP-frag, ICMP, new-flow, policy) were all
+  carved out because the verifier or performance told us to.
+- A new CT flag plus a main-path branch is almost always
+  preferable to a new main-path map lookup.
+- "It's only one lookup" is not evidence. A benchmark, or a
+  feature gate that keeps the cost off the default path, is.
+
+
+---
+
+## 17. Cross-cutting review notes
 
 The per-section review notes cover what a reviewer should check inside
 a given topic. This final section collects the handful of checks that
@@ -1655,13 +1864,19 @@ dataplane review because several subsystems happen to share them.
 
 ### Changes that touch shared maps
 
-- A change to the key or value layout of a pinned BPF map needs a
-  version bump on that map's `MapParameters.Version` in
-  `felix/bpf/.../map.go`. Two Felixes running different versions
-  cannot share the same pinned map, and the kernel refuses to pin
-  two layouts under one name. Bumping the version triggers the
-  rename-and-migrate path in `felix/bpf/maps/` and lets old Felix
-  versions ignore the new pin.
+- A change to the on-wire layout of a pinned BPF map needs a
+  version bump on `MapParameters.Version` in
+  `felix/bpf/.../map.go` **only when new programs are not
+  compatible with the old map**. Repurposing reserved or padding
+  bytes so that new programs still read and write the old map
+  correctly does not require a bump — the old map is still a
+  valid layout for the new programs, and old programs simply
+  don't know about the new field. Changes that move fields,
+  widen the key, shrink the value, or depend on a field that old
+  programs write as zero *do* require a bump. The kernel refuses
+  to pin two different layouts under one name, so a missed bump
+  blocks upgrades; an unnecessary bump discards warm map state
+  (cold conntrack, empty NAT, etc.) across the transition.
 - A new map that BPF programs update from multiple CPUs
   concurrently needs a clear consistency story: spinlock (like
   `cali_qos`), per-CPU (like `cali_v4_frgtmp`), or LRU with
