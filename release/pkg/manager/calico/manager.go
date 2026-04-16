@@ -1866,6 +1866,9 @@ func updateDefaultsYAML(filePath string, keyPath []string, value string) error {
 	}
 
 	// doc.Content[0] is the root mapping node.
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("%s: expected a YAML mapping at root", filePath)
+	}
 	node := doc.Content[0]
 	for i, key := range keyPath {
 		found := false

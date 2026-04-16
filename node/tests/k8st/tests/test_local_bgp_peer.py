@@ -20,7 +20,7 @@ import enum
 
 from tests.k8st.test_base import TestBase, Pod
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-    run, calicoctl, kubectl, node_info, retry_until_success, calico_node_pod_name
+    run, calicoctl, kubectl, node_info, retry_until_success, calico_node_pod_name, ROUTER_IMAGE
 
 _log = logging.getLogger(__name__)
 
@@ -336,7 +336,7 @@ spec:
       privileged: true
   nodeName: %s
   terminationGracePeriodSeconds: 0
-""" % (name, ns, color, os.environ["ROUTER_IMAGE"], host))
+""" % (name, ns, color, ROUTER_IMAGE, host))
         self.add_cleanup(pod.delete)
         return pod
 

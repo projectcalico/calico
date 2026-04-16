@@ -17,16 +17,15 @@ endif
 # neither exists.  This runs once during Make's variable-evaluation phase so that
 # _read_default calls (which use := and are evaluated eagerly) always have a
 # working yq binary.
-_YQ_VERSION := v4.52.5
 _YQ_LOCAL := $(_DEFAULTS_DIR)bin/yq
 _YQ := $(shell command -v yq 2>/dev/null \
     || { test -x $(_YQ_LOCAL) && echo $(_YQ_LOCAL); } \
-    || { >&2 echo "yq not found on PATH; downloading $(_YQ_VERSION) to $(_YQ_LOCAL)..." \
+    || { >&2 echo "yq not found on PATH; downloading latest to $(_YQ_LOCAL)..." \
          && mkdir -p $(_DEFAULTS_DIR)bin \
          && _arch=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
          && _os=$$(uname -s | tr A-Z a-z) \
          && curl -sSfL --retry 3 -o $(_YQ_LOCAL).tmp \
-              "https://github.com/mikefarah/yq/releases/download/$(_YQ_VERSION)/yq_$${_os}_$${_arch}" \
+              "https://github.com/mikefarah/yq/releases/latest/download/yq_$${_os}_$${_arch}" \
          && chmod +x $(_YQ_LOCAL).tmp \
          && mv $(_YQ_LOCAL).tmp $(_YQ_LOCAL) \
          && echo $(_YQ_LOCAL); })
@@ -542,7 +541,7 @@ define update_go_build_pin
 	@echo "latest go_build_ver=$(new_ver)"
 
 	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
-		$(_YQ) -i '.toolchain.go_build_ver = $(new_ver)' $(1); \
+		$(_YQ) -i '.toolchain.go_build_ver = "$(new_ver)"' $(1); \
 		echo "go_build_ver is updated to $(new_ver)"; \
 	else \
 		echo "no need to update go_build_ver"; \
@@ -558,7 +557,7 @@ define update_calico_base_pin
 	@echo "latest calico_base=$(new_ver)"
 
 	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
-		$(_YQ) -i '.versions.calico_base = $(new_ver)' $(1); \
+		$(_YQ) -i '.versions.calico_base = "$(new_ver)"' $(1); \
 		echo "calico_base is updated to $(new_ver)"; \
 	else \
 		echo "no need to update calico_base"; \
