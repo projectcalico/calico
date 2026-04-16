@@ -31,9 +31,11 @@ FIPS ?= false
 ifeq ($(FIPS),true)
 BINDIR = bin/$(ARCH)-fips
 CONTAINER_MARKER = .image.created-$(ARCH)-fips
+IMAGE_TAG = latest-fips
 else
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
+IMAGE_TAG = latest
 endif
 
 .PHONY: clean
@@ -80,8 +82,8 @@ $(REGISTRAR_BIN):
 image: $(CONTAINER_MARKER)
 
 $(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
-	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):latest-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
+	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 
 image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
