@@ -2253,6 +2253,13 @@ packet" condition); if it could and isn't, that's a red flag.
   preferable to a new main-path map lookup.
 - "It's only one lookup" is not evidence. A benchmark, or a
   feature gate that keeps the cost off the default path, is.
+- A change that **suppresses or narrows an existing fast-path
+  shortcut** for a class of flows is the same kind of change as
+  adding a per-packet map lookup — work that already existed is
+  now paid by more flows. Required: a benchmark, OR a scoping
+  mechanism that restores the shortcut in steady state
+  (gen-counter, time-bounded flag), OR an explicit case that the
+  affected flow class is small enough not to matter.
 
 
 ---

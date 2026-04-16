@@ -20,12 +20,18 @@ pointer.
 
 ## Must-check principles
 
-- **Fast-path cost (§21).** New per-packet work on the main program
-  needs explicit justification. Mark comparisons and
-  `ctx->state` reads are cheap; a new map lookup on the hot path
-  is not. See §21 for the cost tiers and patterns to prefer
-  (CT flags, skb marks, compile-time gates, slow-path
-  sub-programs).
+- **Per-packet cost (§21).** For every BPF dataplane change,
+  answer explicitly: *does this cause more packets to do more
+  work?* The obvious case is new code on the fast path. The
+  non-obvious case is a change that **shrinks the set of packets
+  eligible for an existing fast-path shortcut** — work that
+  already existed is now paid by more flows. Both need the same
+  justification: a benchmark, a scoping mechanism that restores
+  the shortcut in steady state, or an argument that the affected
+  flow class is small. If the answer to the question is "yes" and
+  the PR description doesn't address it, that's a finding. See
+  §21 for cost tiers and patterns to prefer (CT flags, skb marks,
+  compile-time gates, slow-path sub-programs).
 - **Map versioning (§22).** Bump `MapParameters.Version` only when
   the change makes new BPF programs incompatible with the old
   pinned map. Repurposing padding / reserved bytes does not need

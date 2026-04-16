@@ -259,6 +259,8 @@ Typically, back-to-back sub-tests simulate a packet traversing from one interfac
 
 **When reviewing a BPF dataplane change with `/review` or the `review` skill,** read the relevant DESIGN.md section(s) before forming an opinion and use the Review notes there as the checklist. Path-specific Copilot rules mirror the same checks and live in `.github/instructions/ebpf-dataplane.instructions.md`.
 
+Before signing off on any BPF dataplane PR, answer §21's question in plain prose: *does this change the per-packet cost for any class of flows?* This includes changes that don't add new fast-path code but route more flows through existing slow-path work — e.g., a CT flag whose effect is to suppress a fast-path return code, or a condition that gates the policy program on a wider set of packets. If the per-packet cost changes for any class of flows and the PR doesn't address it, the review must flag it.
+
 **Update rule.** A BPF dataplane PR that changes how the dataplane works — new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision — must update `felix/bpf/DESIGN.md` in the same PR. Exemptions: (a) a bug fix that restores behaviour `DESIGN.md` already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
 
 ## Iptables/Nftables Dataplane
