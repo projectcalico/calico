@@ -826,7 +826,7 @@ var _ = Describe("RouteGenerator", func() {
 })
 
 var _ = Describe("Update BGP Config Cache", func() {
-	c := &client{cache: make(map[string]string)}
+	c := newTestClient(make(map[string]string), nil)
 
 	It("should update cache value when IgnoredInterfaces is set in BGPConfiguration", func() {
 		By("No value cached")

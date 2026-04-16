@@ -206,11 +206,11 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
 	config.NormalRoutePriority = 1024
-	if c.globalBGPConfig != nil {
-		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
-		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
+	if c.bgpConfigs[globalConfigName] != nil {
+		if ipVersion == 4 && c.bgpConfigs[globalConfigName].Spec.IPv4NormalRoutePriority != nil {
+			config.NormalRoutePriority = *c.bgpConfigs[globalConfigName].Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && c.bgpConfigs[globalConfigName].Spec.IPv6NormalRoutePriority != nil {
+			config.NormalRoutePriority = *c.bgpConfigs[globalConfigName].Spec.IPv6NormalRoutePriority
 		}
 	}
 
@@ -876,8 +876,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+	if c.bgpConfigs[globalConfigName] != nil && c.bgpConfigs[globalConfigName].Spec.ProgramClusterRoutes != nil &&
+		*c.bgpConfigs[globalConfigName].Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
 		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {

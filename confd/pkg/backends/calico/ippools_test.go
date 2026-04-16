@@ -315,7 +315,7 @@ func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 	programClusterRoutes := "Disabled"
-	c.globalBGPConfig = &v3.BGPConfiguration{
+	c.bgpConfigs[globalConfigName] = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			ProgramClusterRoutes: &programClusterRoutes,
 		},
@@ -391,7 +391,7 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 	programClusterRoutes := "Disabled"
-	c.globalBGPConfig = &v3.BGPConfiguration{
+	c.bgpConfigs[globalConfigName] = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			ProgramClusterRoutes: &programClusterRoutes,
 		},
@@ -468,7 +468,7 @@ func strPtr(s string) *string { return &s }
 
 func TestGetProgramClusterRoutesKVPair(t *testing.T) {
 	// Initially, set ProgramClusterRoutes to Enabled.
-	c := &client{cache: make(map[string]string)}
+	c := newTestClient(make(map[string]string), nil)
 	res := &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			ProgramClusterRoutes: strPtr("Enabled"),
@@ -506,9 +506,9 @@ func TestGetProgramClusterRoutesKVPair(t *testing.T) {
 }
 
 func TestGetProgramClusterRoutesKVPair_NilResourceDeletesCacheEntry(t *testing.T) {
-	c := &client{cache: map[string]string{
+	c := newTestClient(map[string]string{
 		programClusterRoutesCacheKey: "Disabled",
-	}}
+	}, nil)
 	c.getProgramClusterRoutesKVPair(nil, model.GlobalBGPConfigKey{})
 	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
 }
@@ -518,7 +518,7 @@ func TestGetProgramClusterRoutesKVPair_NilResourceDeletesCacheEntry(t *testing.T
 // getProgramClusterRoutesKVPair. This test pins that behavior — if per-node
 // support is ever added, this test should be updated along with the call site.
 func TestGetProgramClusterRoutesKVPair_PerNodeKeyDoesNotWriteGlobal(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
+	c := newTestClient(make(map[string]string), nil)
 	res := &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
 			ProgramClusterRoutes: strPtr("Enabled"),
@@ -529,7 +529,7 @@ func TestGetProgramClusterRoutesKVPair_PerNodeKeyDoesNotWriteGlobal(t *testing.T
 }
 
 func TestUpdateBGPConfigCache_ProgramClusterRoutes_UpdateThenDelete(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
+	c := newTestClient(make(map[string]string), nil)
 	var (
 		svcAdvertisement bool
 		updatePeersV1    bool
@@ -569,7 +569,7 @@ func TestUpdateBGPConfigCache_ProgramClusterRoutes_UpdateThenDelete(t *testing.T
 }
 
 func TestUpdateBGPConfigCache_ProgramClusterRoutes_PerNodeResourceNameSkipsGlobalKey(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
+	c := newTestClient(make(map[string]string), nil)
 	var (
 		svcAdvertisement bool
 		updatePeersV1    bool
