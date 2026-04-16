@@ -36,7 +36,7 @@ clean:
 
 .PHONY: ut
 ut:
-	$(DOCKER_GO_BUILD) go test -cover -count=1 .
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go test -cover -count=1 ."
 
 .PHONY: build build-cgo
 build: $(BINDIR)/calico-$(ARCH)

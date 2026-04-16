@@ -215,7 +215,14 @@ ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
     ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
-CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+# When cross-compiling, force lld as the linker — GNU ld is single-target,
+# while lld natively links the cross-arch ELF objects produced by clang.
+# (The cross sysroot itself is already supplied via CC's --sysroot flag.)
+CROSS_CGO_LDFLAGS=
+ifneq ($(CROSS_SYSROOT),)
+    CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
+endif
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 else
 CGO_ENABLED=0
@@ -263,9 +270,8 @@ dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
-# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
-image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
@@ -275,7 +281,7 @@ $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOU
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
@@ -387,7 +393,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
-	    -v $(REPO_ROOT)/bin/calico-$(ARCH):/usr/local/bin/calico \
+	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
