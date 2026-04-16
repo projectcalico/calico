@@ -1251,6 +1251,18 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
 		}
 
+		// Check if normal route priority is changing.
+		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, c.globalBGPConfig) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv4 route priority changed")
+			c.keyUpdated("/calico/bgpconfig")
+		}
+		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, c.globalBGPConfig) {
+			*updatePeersV1 = true
+			*updateReasons = append(*updateReasons, "normal IPv6 route priority changed")
+			c.keyUpdated("/calico/bgpconfig")
+		}
+
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
 	} else if strings.HasPrefix(resName, perNodeConfigNamePrefix) {
