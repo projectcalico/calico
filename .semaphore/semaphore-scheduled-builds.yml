@@ -476,6 +476,19 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: cmd/calico
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd cmd/calico
+      jobs:
+        - name: "cmd/calico: UT"
+          commands:
+            - ../../.semaphore/run-and-monitor ut.log make ut
   - name: CNI Plugin
     run:
       when: "true"

@@ -45,14 +45,15 @@ FIPS ?= false
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 else
 NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
+
+# The node image uses the uber calico binary built with CGO for BPF support.
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 # Set the platform correctly for building docker images.
 ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
@@ -222,28 +223,23 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
+# The node image uses the uber calico binary built with CGO for BPF support.
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
-else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
-endif
-endif
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp ../cmd/calico/bin/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
@@ -391,6 +387,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
+	    -v $(REPO_ROOT)/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
