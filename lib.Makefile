@@ -1435,7 +1435,7 @@ CRANE_OS = Windows
 else
 CRANE_OS = $(shell uname -s)
 endif
-CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(call _read_default,.versions.crane)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
+CRANE_URL = https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
 
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane

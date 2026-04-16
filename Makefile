@@ -282,15 +282,14 @@ release-prep: release/bin/release bin/gh
 
 # Install ghr for publishing to github.
 bin/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(call _read_default,.versions.ghr)
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@latest
 
-# Install GitHub CLI
+# Install GitHub CLI (latest release). The version is needed because asset
+# filenames embed it (gh_X.Y.Z_linux_amd64.tar.gz).
 bin/gh:
 	@mkdir -p bin
-	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(call _read_default,.versions.github_cli)/gh_$(call _read_default,.versions.github_cli)_linux_amd64.tar.gz
-	@tar -zxvf bin/gh.tgz -C bin/ gh_$(call _read_default,.versions.github_cli)_linux_amd64/bin/gh --strip-components=2
-	@chmod +x $@
-	@rm bin/gh.tgz
+	$(eval GH_VER := $(shell curl -sSf https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")'))
+	@curl -sSfL --retry 5 https://github.com/cli/cli/releases/latest/download/gh_$(GH_VER)_linux_amd64.tar.gz | tar xz -C bin --strip-components=2 --wildcards '*/bin/gh'
 
 # Build a release.
 release: release/bin/release
@@ -364,7 +363,7 @@ update-pins: update-go-build-pin update-calico-base-pin
 # Post-release validation
 ###############################################################################
 bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(call _read_default,.versions.gotestsum)
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@latest
 
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
