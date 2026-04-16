@@ -253,6 +253,14 @@ Typically, back-to-back sub-tests simulate a packet traversing from one interfac
 
 `dataplane/linux/bpf_*.go` — manages the BPF dataplane from user space (program lifecycle, map syncing, endpoint management).
 
+### eBPF Dataplane Design & Review Guide
+
+`felix/bpf/DESIGN.md` is the authoritative design and review guide for the eBPF dataplane. It covers the packet path, TC program layout (preamble + jump maps + fast/debug paths), XDP→TC handoff, intra-cluster & external service NAT, Maglev, session affinity, the BPF kube-proxy replacement, CTLB, the bpfnat workaround, VXLAN flow-mode, RPF, conntrack cleanup, IP fragmentation, BPF-synthesised ICMP errors, `*tables`→BPF migration, third-party DNAT interop, log filters, flow logs, QoS, the fast-path cost discipline, and cross-cutting review rules. Each section ends with a **Review notes** block listing the invariants a PR in that area must respect.
+
+**When reviewing a BPF dataplane change with `/review` or the `review` skill,** read the relevant DESIGN.md section(s) before forming an opinion and use the Review notes there as the checklist. Path-specific Copilot rules mirror the same checks and live in `.github/instructions/ebpf-dataplane.instructions.md`.
+
+**Update rule.** A BPF dataplane PR that changes how the dataplane works — new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision — must update `felix/bpf/DESIGN.md` in the same PR. Exemptions: (a) a bug fix that restores behaviour `DESIGN.md` already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
+
 ## Iptables/Nftables Dataplane
 
 The netfilter-based policy engine uses a layered architecture:
