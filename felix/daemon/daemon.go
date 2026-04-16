@@ -18,14 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"reflect"
 	"runtime"
 	"runtime/debug"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -1073,16 +1071,8 @@ func loadSelectorScopedFelixConfig(
 		return nil, fmt.Errorf("failed to list FelixConfiguration resources: %w", err)
 	}
 
-	// Collect matching selector-scoped configs. If more than one matches,
-	// the oldest by CreationTimestamp wins (tie-broken by name) to avoid
-	// disrupting existing working config when a conflicting resource is
-	// accidentally created.
-	type matchEntry struct {
-		name         string
-		config       map[string]string
-		creationTime time.Time
-	}
-	var matches []matchEntry
+	// Build selector config entries from the listed resources.
+	var entries []*calc.SelectorConfigEntry
 	for _, kvp := range felixConfigs.KVPairs {
 		rk, ok := kvp.Key.(model.ResourceKey)
 		if !ok {
@@ -1112,49 +1102,15 @@ func loadSelectorScopedFelixConfig(
 			continue
 		}
 
-		if sel.Evaluate(nodeLabels) {
-			log.WithField("name", rk.Name).Info("Selector-scoped FelixConfiguration matches local node at startup")
-			extracted := updateprocessors.ExtractFelixConfigFields(fc)
-			matches = append(matches, matchEntry{
-				name:         rk.Name,
-				config:       extracted,
-				creationTime: fc.CreationTimestamp.Time,
-			})
-		}
-	}
-	if len(matches) > 0 {
-		// Sort by creation time, then name for determinism.
-		slices.SortFunc(matches, func(a, b matchEntry) int {
-			if a.creationTime.Before(b.creationTime) {
-				return -1
-			}
-			if b.creationTime.Before(a.creationTime) {
-				return 1
-			}
-			if a.name < b.name {
-				return -1
-			}
-			if a.name > b.name {
-				return 1
-			}
-			return 0
+		entries = append(entries, &calc.SelectorConfigEntry{
+			ResourceName: rk.Name,
+			Sel:          sel,
+			Config:       updateprocessors.ExtractFelixConfigFields(fc),
+			CreationTime: fc.CreationTimestamp.Time,
 		})
-		winner := matches[0]
-		if len(matches) > 1 {
-			names := make([]string, len(matches))
-			for i, m := range matches {
-				names[i] = m.name
-			}
-			log.WithFields(log.Fields{
-				"matching": names,
-				"winner":   winner.name,
-			}).Warn("Multiple selector-scoped FelixConfigurations match this node at startup; " +
-				"using the oldest by creation time. This is likely a misconfiguration.")
-		}
-		maps.Copy(result, winner.config)
 	}
 
-	return result, nil
+	return calc.MergeSelectorConfigs(entries, nodeLabels), nil
 }
 
 // getAndMergeConfig gets the v3 resource configuration extracts the separate config values
