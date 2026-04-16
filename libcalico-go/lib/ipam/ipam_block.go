@@ -438,6 +438,10 @@ func sanitizeHandle(handleID string) string {
 	return strings.Split(handleID, "\r")[0]
 }
 
+// Release all allocations with the handle in opts.
+//
+// If opts.SequenceNumber is set, and any affected allocations' sequence numbers
+// do not match, those allocations are not released.
 func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 	handleID := opts.Handle
 	attrIndexes := b.attributeIndexesByHandle(handleID)
@@ -450,23 +454,33 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 
 	// There are addresses to release.
 	ordinals := []int{}
+	keepAttrs := make([]bool, len(b.Attributes))
 	var o int
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
-		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
-			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.GetSequenceNumberForOrdinal(o) {
-				f := log.Fields{"opts": opts, "ip": b.OrdinalToIP(o).String()}
-				log.WithFields(f).Warnf("Skipping release of IP with mismatched sequence number")
+		if b.Allocations[o] == nil {
+			continue
+		}
+
+		attrIndex := *b.Allocations[o]
+		if intInSlice(attrIndex, attrIndexes) {
+			if opts.SequenceNumber == nil || *opts.SequenceNumber == b.GetSequenceNumberForOrdinal(o) {
+				// Release this ordinal.
+				ordinals = append(ordinals, o)
 				continue
 			}
-
-			// Release this ordinal.
-			ordinals = append(ordinals, o)
 		}
+		keepAttrs[attrIndex] = true
 	}
 
-	// Clean and reorder attributes.
-	b.deleteAttributes(attrIndexes)
+	// Clean and reorder now-unused attributes.
+	deleteIndexes := make([]int, 0, len(attrIndexes))
+	for _, attrIndex := range attrIndexes {
+		if !keepAttrs[attrIndex] {
+			deleteIndexes = append(deleteIndexes, attrIndex)
+		}
+	}
+	b.deleteAttributes(deleteIndexes)
 
 	// Release the addresses.
 	for _, o := range ordinals {
