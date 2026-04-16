@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -182,12 +182,53 @@ func Install(version string) error {
 			continue
 		}
 
+		// Install the calico binary as both "calico" and "calico-ipam" in the
+		// host CNI bin directory. The binary handles both roles — it detects the
+		// invoked name and dispatches accordingly. Check /usr/bin/calico first
+		// (combined image), then fall back to /opt/cni/bin/calico (standalone image).
+		// On Windows, the binary is named calico.exe and lives in /opt/cni/bin.
+		calicoBinName := "calico"
+		if runtime.GOOS == "windows" {
+			calicoBinName = "calico.exe"
+		}
+		calicoBinary := winutils.GetHostPath("/usr/bin/" + calicoBinName)
+		if !fileExists(calicoBinary) {
+			calicoBinary = winutils.GetHostPath("/opt/cni/bin/" + calicoBinName)
+		}
+		installNames := []string{"calico", "calico-ipam"}
+		if runtime.GOOS == "windows" {
+			installNames = []string{"calico.exe", "calico-ipam.exe"}
+		}
+		for _, name := range installNames {
+			target := fmt.Sprintf("%s/%s", d, name)
+			if fileExists(target) && !c.UpdateCNIBinaries {
+				logrus.Infof("Skipping installation of %s", target)
+				if name == installNames[0] {
+					calicoBinaryOK = true
+				}
+				continue
+			}
+			if err := copyFileAndPermissions(calicoBinary, target); err != nil {
+				logrus.WithError(err).Errorf("Failed to install %s", target)
+				os.Exit(1)
+			}
+			binaryOK, err := destinationUptoDate(calicoBinary, target)
+			if err != nil || !binaryOK {
+				logrus.WithError(err).Errorf("Failed to verify installed binary %s", target)
+				os.Exit(1)
+			}
+			if name == "calico" {
+				calicoBinaryOK = true
+			}
+			logrus.Infof("Installed %s", target)
+		}
+
+		// Install any additional CNI plugins from /opt/cni/bin (e.g., bandwidth).
 		// The binaries dir in the container needs to be prepended by the CONTAINER_SANDBOX_MOUNT_POINT env var on Windows Host Process Containers
 		// see https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/#containerd-v1-7-and-greater
 		containerBinDir := winutils.GetHostPath("/opt/cni/bin")
-		// Iterate through each binary we might want to install.
 		files, err := os.ReadDir(containerBinDir)
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			logrus.Fatal(err)
 		}
 		for _, binary := range files {
@@ -195,6 +236,11 @@ func Install(version string) error {
 			source := fmt.Sprintf("%s/%s", containerBinDir, binary.Name())
 			// Skip the 'install' binary as it is not needed on the host
 			if binary.Name() == "install" || binary.Name() == "install.exe" {
+				continue
+			}
+			// Skip calico binaries — already installed from /usr/bin/calico above.
+			if binary.Name() == "calico" || binary.Name() == "calico.exe" ||
+				binary.Name() == "calico-ipam" || binary.Name() == "calico-ipam.exe" {
 				continue
 			}
 			if slices.Contains(c.SkipCNIBinaries, binary.Name()) {
@@ -208,14 +254,10 @@ func Install(version string) error {
 				logrus.WithError(err).Errorf("Failed to install %s", target)
 				os.Exit(1)
 			}
-			// Verify if the binary was installed successfully, exit (to retry) otherwise
 			binaryOK, err := destinationUptoDate(source, target)
 			if err != nil || !binaryOK {
 				logrus.WithError(err).Errorf("Failed to verify installed binary %s", target)
 				os.Exit(1)
-			}
-			if binary.Name() == "calico" || binary.Name() == "calico.exe" {
-				calicoBinaryOK = true
 			}
 			logrus.Infof("Installed %s", target)
 		}
