@@ -18,45 +18,22 @@
 # images no longer exist locally. Docker images can disappear (pruned, manual
 # rmi) while their stamp files remain, causing Make to skip needed rebuilds.
 #
+# Each stamp file contains the Docker image name it tracks (written by the
+# Makefile rule that creates it). This script reads that name and checks
+# whether the image still exists in Docker.
+#
 # Must run as a separate Make invocation BEFORE kind-build-images-run evaluates
 # its prerequisites — otherwise Make will see the stale stamps as satisfied.
 #
-# Usage: validate_stamps.sh ARCH BUILD_TAG STAMP_FILE...
+# Usage: validate_stamps.sh STAMP_FILE...
 
 set -euo pipefail
-
-arch="${1:?Usage: validate_stamps.sh ARCH BUILD_TAG STAMP_FILE...}"
-build_tag="${2:?}"
-shift 2
-
-# Derive the Docker image that a stamp file tracks. Most follow a regular
-# naming pattern; the case statement handles the exceptions.
-image_for_stamp() {
-	local stamp="$1"
-	case "$stamp" in
-		*/.stamp.operator)
-			echo "tigera/operator:${build_tag}" ;;
-		*/.stamp.*)
-			local name="${stamp##*/.stamp.}"
-			echo "calico/${name}:latest-${arch}" ;;
-		*/cni-plugin/.image.created-*)
-			echo "calico/cni:latest-${arch}" ;;
-		*/pod2daemon/.image.created-*)
-			echo "calico/pod2daemon-flexvol:latest-${arch}" ;;
-		*/.image.created-*)
-			local dir="${stamp%/.image.created-*}"
-			local name="${dir##*/}"
-			echo "calico/${name}:latest-${arch}" ;;
-		*)
-			;;
-	esac
-}
 
 removed=0
 for stamp in "$@"; do
 	[ -f "$stamp" ] || continue
 
-	image=$(image_for_stamp "$stamp")
+	image=$(<"$stamp")
 	[ -z "$image" ] && continue
 
 	if ! docker image inspect "$image" &>/dev/null; then
