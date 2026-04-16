@@ -1706,7 +1706,7 @@ kind-reload:
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
-		-f $(KIND_INFRA_DIR)/values.yaml \
+		--reuse-values \
 		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
