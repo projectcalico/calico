@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -310,6 +310,11 @@ func (r *CalicoManager) Build() error {
 				return fmt.Errorf("error building target %s: %s", target, err)
 			}
 		}
+	}
+
+	// Build multi-arch e2e test binaries and copy them into the output directory.
+	if err = r.buildE2EBinaries(); err != nil {
+		return err
 	}
 
 	// Build an OCP tgz bundle from manifests, used in the docs.
@@ -1120,6 +1125,42 @@ func (r *CalicoManager) buildReleaseTar() error {
 	}
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{releaseTarFilePath, r.uploadDir()}, nil); err != nil {
 		return fmt.Errorf("failed to copy release tar: %w", err)
+	}
+	return nil
+}
+
+func (r *CalicoManager) buildE2EBinaries() error {
+	logrus.Info("Building multi-arch e2e test binaries")
+	e2eDir := filepath.Join(r.repoRoot, "e2e")
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
+	if len(r.architectures) > 0 {
+		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
+	}
+	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
+	if err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to build e2e binaries: %w", err)
+	}
+
+	// Copy the built binaries into the hashrelease output directory.
+	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create e2e output dir: %w", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+	if err != nil {
+		return fmt.Errorf("reading e2e bin directory: %w", err)
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
+			continue
+		}
+		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
+		dst := filepath.Join(e2eOutputDir, entry.Name())
+		if err := utils.CopyFile(src, dst); err != nil {
+			return fmt.Errorf("copying e2e binary %s: %w", entry.Name(), err)
+		}
+		logrus.Infof("Copied e2e binary: %s", entry.Name())
 	}
 	return nil
 }
