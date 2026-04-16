@@ -20,14 +20,13 @@
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
         env_vars:
-          - name: CLUSTER_ROUTING
-            value: "BIRD"
           - name: STORE_BUILD_CACHE
             value: "true"
     epilogue:
       always:
         commands:
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+
 - name: "E2E tests (cluster routing: Felix)"
   run:
     when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
@@ -50,8 +49,8 @@
         commands:
           - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
         env_vars:
-          - name: CLUSTER_ROUTING
-            value: "FELIX"
+          - name: EXTRA_VALUES_FILES
+            value: "hack/test/kind/infra/values-felix-routing.yaml"
           - name: KIND_CALICO_API_GROUP
             value: "crd.projectcalico.org/v1"
           - name: E2E_TEST_CONFIG
