@@ -496,12 +496,13 @@ rules:
       - create
       - update
       - delete
-  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
+  # The operator needs to manage NetworkPolicies, GlobalNetworkPolicies, and NetworkSets via the projectcalico.org API group.
   - apiGroups:
       - projectcalico.org
     resources:
       - networkpolicies
       - globalnetworkpolicies
+      - networksets
     verbs:
       - get
       - list
