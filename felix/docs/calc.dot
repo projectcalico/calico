@@ -145,7 +145,7 @@ OnProfileInactive(model.ProfileRulesKey)<BR ALIGN="LEFT"/>
 <BR ALIGN="LEFT"/>
 OnEndpointTierUpdate(endpointKey model.Key,<BR ALIGN="LEFT"/>
 <BR ALIGN="LEFT"/>
-OnConfigUpdate(globalConfig, hostConfig map[string]string)
+OnConfigUpdate(globalConfig, selectorConfig, hostConfig map[string]string)
     endpoint interface{},<BR ALIGN="LEFT"/>
     filteredTiers []endpoint.TierInfo)<BR ALIGN="LEFT"/>
 </font></td></tr>
