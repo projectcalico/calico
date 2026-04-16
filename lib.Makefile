@@ -1698,11 +1698,17 @@ kind-deploy:
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Rebuild any images whose source files have changed, load onto the kind
-# cluster, and restart pods.
+# cluster, upgrade the Helm release, and restart pods. The chart rebuild
+# and helm upgrade are both fast no-ops when nothing has changed.
 .PHONY: kind-reload
 kind-reload:
 	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
+		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
+		-f $(KIND_INFRA_DIR)/values.yaml \
+		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
