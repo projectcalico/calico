@@ -685,6 +685,21 @@ func initMapsOnce() {
 	})
 }
 
+// newTestRingBuf opens a reader on the shared cali_rb_evnt ring buffer used
+// by all BPF UT programs and drains any events left over from earlier tests,
+// so rb.Next() only observes events produced after this call. The caller is
+// responsible for closing the returned reader.
+//
+// Prefer this helper over calling ringbuf.New directly — the ring buffer map
+// is pinned and shared across tests, so a naked reader can pick up stray
+// records (TYPE_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
+func newTestRingBuf() *ringbuf.RingBuffer {
+	rb, err := ringbuf.New(ringBufMap, rbSize)
+	Expect(err).NotTo(HaveOccurred())
+	rb.Drain()
+	return rb
+}
+
 func cleanupMap(m maps.Map) {
 	log.WithField("map", m.GetName()).Info("Cleaning")
 	err := m.Iter(func(_, _ []byte) maps.IteratorAction {

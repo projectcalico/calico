@@ -22,8 +22,6 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/bpf/ringbuf"
 )
 
 const (
@@ -42,8 +40,7 @@ func TestRingBufBasic(t *testing.T) {
 	ipv4 := iphdr.(*layers.IPv4)
 	udp := l4.(*layers.UDP)
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb := newTestRingBuf()
 	defer rb.Close()
 
 	// Send a UDP packet and verify the event.
@@ -98,8 +95,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb := newTestRingBuf()
 
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -114,8 +110,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 	// Close the first reader and create a new one on the same map.
 	rb.Close()
 
-	rb2, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb2 := newTestRingBuf()
 	defer rb2.Close()
 
 	// Send another event — the new reader should pick it up.
@@ -145,14 +140,11 @@ func TestRingBufFillup(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb := newTestRingBuf()
 	defer rb.Close()
 
-	// Drain any leftover events from previous tests and reset the drops map
-	// so we start with a completely clean state.
-	rb.Drain()
-	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes).
+	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes) so
+	// this test's accounting isn't affected by earlier ring-buffer-full tests.
 	k := make([]byte, 4) // key = 0
 	zeroVal := make([]byte, 16)
 	err = ringBufDropsMap.Update(k, zeroVal)
@@ -232,8 +224,7 @@ func TestRingBufMultipleEvents(t *testing.T) {
 	RegisterTestingT(t)
 	hostIP = node1ip
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb := newTestRingBuf()
 	defer rb.Close()
 
 	numEvents := 10
