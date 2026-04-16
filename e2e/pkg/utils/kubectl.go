@@ -36,11 +36,13 @@ func (k *Kubectl) Wait(kind, ns, name, user, condition string, timeout time.Dura
 }
 
 // PortForward starts a kubectl port-forward in the background, allocating a random
-// local port to avoid conflicts when tests run in parallel. It returns the local port.
-func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan time.Time) (int, error) {
+// local port to avoid conflicts when tests run in parallel. It returns the local port
+// and a channel that receives an error (or nil) when the port-forward process exits.
+// Callers can select on the channel to detect unexpected port-forward termination.
+func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan time.Time) (int, <-chan error, error) {
 	localPort, err := getFreePort()
 	if err != nil {
-		return 0, fmt.Errorf("failed to allocate local port: %w", err)
+		return 0, nil, fmt.Errorf("failed to allocate local port: %w", err)
 	}
 
 	options := []string{"port-forward", pod, fmt.Sprintf("%d:%s", localPort, remotePort)}
@@ -48,13 +50,13 @@ func (k *Kubectl) PortForward(ns, pod, remotePort, user string, timeOut chan tim
 		options = append(options, fmt.Sprintf("--as=%v", user))
 	}
 
+	errCh := make(chan error, 1)
 	go func() {
+		defer close(errCh)
 		_, err := kubectl.NewKubectlCommand(ns, options...).WithTimeout(timeOut).Exec()
-		if err != nil {
-			return
-		}
+		errCh <- err
 	}()
-	return localPort, nil
+	return localPort, errCh, nil
 }
 
 func getFreePort() (int, error) {
