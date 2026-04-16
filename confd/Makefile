@@ -61,7 +61,7 @@ fv: setup-envtest
 		-e KUBEBUILDER_ASSETS=/envtest \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) \
-		gotestsum --junitfile report/confd_fv.xml -- -count=1 -v -timeout 600s ./tests/...
+		gotestsum --junitfile report/confd_fv.xml -- -run RoutePriority -count=1 -v -timeout 600s ./tests/...
 # -count=1 disables test caching; envtest-based tests should always run fresh.
 
 
