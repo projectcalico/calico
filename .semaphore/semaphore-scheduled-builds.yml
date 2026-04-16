@@ -476,6 +476,19 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: cmd/calico
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd cmd/calico
+      jobs:
+        - name: "cmd/calico: UT"
+          commands:
+            - ../../.semaphore/run-and-monitor ut.log make ut
   - name: CNI Plugin
     run:
       when: "true"
@@ -523,7 +536,7 @@ blocks:
           - export LOGS_DIR=~/fv.log
           - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
           - cd cni-plugin
-          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
+          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/win-fv.exe
       epilogue:
         always:
           commands:
