@@ -1,0 +1,20 @@
+# gcp-bpf.yaml - GCP kubeadm with BPF dataplane.
+#
+# Used by the in-repo e2e CI block (20-e2e-gcp.yml). Runs sig-calico tests
+# and networking conformance on a VXLAN cluster.
+
+extends: base.yaml
+
+exclude:
+  labels:
+    - label: RequiresBGPMesh
+      reason: "requires BGP routing, but this cluster uses VXLAN"
+
+    - label: NoEncap
+      reason: "requires non-encapsulated routing, but this cluster uses VXLAN"
+
+    - label: Feature:Istio
+      reason: "Calico policy not enforced with Istio ambient on BPF dataplane"
+
+    - label: RequiresXtables
+      reason: "requires iptables or nftables dataplane, but this cluster uses BPF"

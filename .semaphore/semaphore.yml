@@ -1447,7 +1447,8 @@ blocks:
           # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
           # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
           # - ExternalNode: requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured
-          value: "--ginkgo.label-filter=sig-calico&&!Slow&&!Disruptive&&!RequiresBGPMesh&&!NoEncap&&!Feature:Istio&&!ExternalNode"
+          # - RequiresXtables: requires iptables or nftables dataplane, but this cluster uses BPF
+          value: "--ginkgo.label-filter=sig-calico&&!Slow&&!Disruptive&&!RequiresBGPMesh&&!NoEncap&&!Feature:Istio&&!ExternalNode&&!RequiresXtables"
         - name: USE_API_SERVER
           value: "false"
       jobs:
@@ -2105,8 +2106,10 @@ blocks:
           env_vars:
             - name: CLUSTER_ROUTING
               value: "FELIX"
-            - name: E2E_SKIP
-              value: "BGP"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind-felix-routing.yaml"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
