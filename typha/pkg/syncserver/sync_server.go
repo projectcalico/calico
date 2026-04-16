@@ -896,11 +896,15 @@ type limitedReader struct {
 }
 
 func (l *limitedReader) Read(p []byte) (int, error) {
+	avail := l.limit - l.n
+	if avail <= 0 {
+		return 0, fmt.Errorf("%w (read %d bytes, limit %d)", errInboundMessageTooLarge, l.n, l.limit)
+	}
+	if int64(len(p)) > avail {
+		p = p[:avail]
+	}
 	n, err := l.r.Read(p)
 	l.n += int64(n)
-	if l.n > l.limit {
-		return n, fmt.Errorf("%w (read %d bytes, limit %d)", errInboundMessageTooLarge, l.n, l.limit)
-	}
 	return n, err
 }
 
