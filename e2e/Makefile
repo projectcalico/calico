@@ -20,18 +20,16 @@ bin/clusternetworkpolicy/e2e.test: $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
 
 # Multi-arch e2e binary targets. Each architecture gets its own binary, built
-# via cross-compilation inside the calico/go-build container.
-bin/k8s/e2e-linux-amd64.test: $(SRC_FILES)
+# via cross-compilation inside the calico/go-build container. Uses a pattern
+# rule so that any arch in VALIDARCHES (including ppc64le, s390x) works.
+# The recursive make sets ARCH so that DOCKER_RUN passes the correct GOARCH.
+bin/k8s/e2e-linux-%.test: $(SRC_FILES)
 	mkdir -p bin/k8s
-	$(MAKE) build-e2e-binary ARCH=amd64
-
-bin/k8s/e2e-linux-arm64.test: $(SRC_FILES)
-	mkdir -p bin/k8s
-	$(MAKE) build-e2e-binary ARCH=arm64
+	$(MAKE) build-e2e-binary ARCH=$* OUTPUT=$@
 
 .PHONY: build-e2e-binary
 build-e2e-binary:
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/k8s -c -o bin/k8s/e2e-linux-$(ARCH).test
+	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/k8s -c -o $(OUTPUT)
 
 .PHONY: build-all
 build-all: $(addprefix bin/k8s/e2e-linux-,$(addsuffix .test,$(VALIDARCHES)))

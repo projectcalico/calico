@@ -310,11 +310,11 @@ func (r *CalicoManager) Build() error {
 				return fmt.Errorf("error building target %s: %s", target, err)
 			}
 		}
-	}
 
-	// Build multi-arch e2e test binaries and copy them into the output directory.
-	if err = r.buildE2EBinaries(); err != nil {
-		return err
+		// Build multi-arch e2e test binaries and copy them into the output directory.
+		if err = r.buildE2EBinaries(); err != nil {
+			return err
+		}
 	}
 
 	// Build an OCP tgz bundle from manifests, used in the docs.
@@ -1159,6 +1159,9 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		dst := filepath.Join(e2eOutputDir, entry.Name())
 		if err := utils.CopyFile(src, dst); err != nil {
 			return fmt.Errorf("copying e2e binary %s: %w", entry.Name(), err)
+		}
+		if err := os.Chmod(dst, 0o755); err != nil {
+			return fmt.Errorf("setting permissions on e2e binary %s: %w", entry.Name(), err)
 		}
 		logrus.Infof("Copied e2e binary: %s", entry.Name())
 	}
