@@ -55,13 +55,6 @@ endif
 # The node image uses the uber calico binary built with CGO for BPF support.
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
-# Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
-
 ###############################################################################
 
 # Our (public) GCP bucket where we mirror any third party files
