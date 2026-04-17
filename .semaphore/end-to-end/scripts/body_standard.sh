@@ -89,51 +89,64 @@ else
     echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
     echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
 
-    if [[ -n "$RUN_LOCAL_TESTS" ]]; then
-      echo "[INFO] starting e2e testing from local binary..."
+    if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+      echo "[INFO] building e2e binary from local source..."
       pushd "${HOME}/calico"
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
-      GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
-      # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
-      # Capture the exit code so that the JUnit copy below runs even when
-      # tests fail (set -e would otherwise bail out before the cp).
-      #shellcheck disable=SC2086
-      e2e_rc=0
-      docker run --rm --init --net=host \
-        -e LOCAL_USER_ID="$(id -u)" \
-        -e GOCACHE=/go-cache \
-        -e GOPATH=/go \
-        -e KUBECONFIG=/kubeconfig \
-        -e PRODUCT=calico \
-        -e CREATE_WINDOWS_NODES \
-        -e FUNCTIONAL_AREA \
-        -e INSTALLER \
-        -e PROVISIONER \
-        -e K8S_VERSION \
-        -e DATAPLANE \
-        -e ENCAPSULATION_TYPE \
-        -e WINDOWS_OS \
-        -e USE_VENDORED_CNI \
-        -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-        -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
-        -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
-        -w /go/src/github.com/projectcalico/calico \
-        "calico/go-build:${GO_BUILD_VER}" \
-        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
-          --junit-report=junit.xml --output-dir=report \
-          ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} \
-        |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
-
-      # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
-      mkdir -p "${REPORT_DIR}"
-      cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+      E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
       popd
-
-      # Propagate the original test exit code.
-      exit $e2e_rc
     else
-      echo "[INFO] starting bz testing..."
-      bz tests $VERBOSE |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
+      echo "[INFO] downloading e2e binary from hashrelease..."
+      HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
+      echo "[INFO] hashrelease URL: ${HASHREL_URL}"
+      ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
+      mkdir -p "${HOME}/calico/e2e/bin/k8s"
+      curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o "${HOME}/calico/e2e/bin/k8s/e2e.test"
+      chmod +x "${HOME}/calico/e2e/bin/k8s/e2e.test"
+      echo "[INFO] downloaded e2e binary to ${HOME}/calico/e2e/bin/k8s/e2e.test"
+      E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
     fi
+
+    echo "[INFO] starting e2e tests..."
+    pushd "${HOME}/calico"
+    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    # Capture the exit code so that the JUnit copy below runs even when
+    # tests fail (set -e would otherwise bail out before the cp).
+    # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
+    #shellcheck disable=SC2086
+    e2e_rc=0
+    docker run --rm --init --net=host \
+      -e LOCAL_USER_ID="$(id -u)" \
+      -e GOCACHE=/go-cache \
+      -e GOPATH=/go \
+      -e KUBECONFIG=/kubeconfig \
+      -e PRODUCT=${PRODUCT:-calico} \
+      -e CREATE_WINDOWS_NODES \
+      -e FUNCTIONAL_AREA \
+      -e INSTALLER \
+      -e PROVISIONER \
+      -e K8S_VERSION \
+      -e DATAPLANE \
+      -e ENCAPSULATION_TYPE \
+      -e WINDOWS_OS \
+      -e USE_VENDORED_CNI \
+      ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+      -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
+      -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+      -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
+      -w /go/src/github.com/projectcalico/calico \
+      "calico/go-build:${GO_BUILD_VER}" \
+      go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
+        --junit-report=junit.xml --output-dir=report \
+        "${E2E_BINARY}" -- ${K8S_E2E_FLAGS} \
+      |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz") || e2e_rc=$?
+
+    # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
+    mkdir -p "${REPORT_DIR}"
+    cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+    popd
+
+    # Propagate the original test exit code.
+    exit $e2e_rc
   fi
 fi
