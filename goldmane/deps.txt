@@ -84,7 +84,6 @@ local:api/pkg/lib/numorstring
 local:crypto/pkg/tls
 local:felix/proto
 local:felix/types
-local:goldmane/cmd
 local:goldmane/cmd/flowgen
 local:goldmane/cmd/health
 local:goldmane/cmd/stream
