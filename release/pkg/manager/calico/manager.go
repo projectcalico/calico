@@ -848,7 +848,7 @@ func (r *CalicoManager) assertImageVersions() error {
 			}
 		case "cni-windows", "node-windows":
 			// Skip windows images
-		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "flannel-migration-controller", "goldmane", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel",
+		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "goldmane", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel",
 			"node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
@@ -1076,13 +1076,13 @@ func (r *CalicoManager) buildReleaseTar() error {
 		}
 		registry := r.imageRegistries[0]
 		images := map[string]string{
+			fmt.Sprintf("%s/calico:%s", registry, r.calicoVersion):                       filepath.Join(imgDir, "calico.tar"),
 			fmt.Sprintf("%s/node:%s", registry, r.calicoVersion):                         filepath.Join(imgDir, "calico-node.tar"),
 			fmt.Sprintf("%s/typha:%s", registry, r.calicoVersion):                        filepath.Join(imgDir, "calico-typha.tar"),
 			fmt.Sprintf("%s/cni:%s", registry, r.calicoVersion):                          filepath.Join(imgDir, "calico-cni.tar"),
 			fmt.Sprintf("%s/kube-controllers:%s", registry, r.calicoVersion):             filepath.Join(imgDir, "calico-kube-controllers.tar"),
 			fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, r.calicoVersion):           filepath.Join(imgDir, "calico-pod2daemon.tar"),
-			fmt.Sprintf("%s/dikastes:%s", registry, r.calicoVersion):                     filepath.Join(imgDir, "calico-dikastes.tar"),
-			fmt.Sprintf("%s/flannel-migration-controller:%s", registry, r.calicoVersion): filepath.Join(imgDir, "calico-flannel-migration-controller.tar"),
+			fmt.Sprintf("%s/dikastes:%s", registry, r.calicoVersion): filepath.Join(imgDir, "calico-dikastes.tar"),
 		}
 		for img, out := range images {
 			err = r.archiveContainerImage(out, img)
