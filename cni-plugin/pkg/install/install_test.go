@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 package install
 
 import (
@@ -102,7 +102,7 @@ func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...strin
 	}
 	args = append(args, extraArgs...)
 	image := os.Getenv("CONTAINER_NAME")
-	args = append(args, image, "/opt/cni/bin/install")
+	args = append(args, image, "component", "cni", "install")
 
 	out, err = exec.Command("docker", args...).CombinedOutput()
 	_, writeErr := GinkgoWriter.Write(out)
