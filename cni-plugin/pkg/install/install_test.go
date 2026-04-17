@@ -88,6 +88,7 @@ func runCniContainer(tempDir string, binFolderWriteable bool, extraArgs ...strin
 	}
 	args := []string{
 		"run", "--rm", "--name", name,
+		"--user", "0",
 		"--net=host",
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
