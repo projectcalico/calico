@@ -1,5 +1,5 @@
 version: v1.0
-name: Publish calico uber images
+name: Publish calico images
 agent:
   machine:
     type: f1-standard-2
@@ -24,7 +24,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish calico uber images and multi-arch manifests
+  - name: Publish calico images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"

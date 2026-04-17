@@ -52,7 +52,7 @@ NODE_CONTAINER_BIN_DIR=dist/bin
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
-# The node image uses the uber calico binary built with CGO for BPF support.
+# The node image uses the combined calico binary built with CGO for BPF support.
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 ###############################################################################
@@ -222,7 +222,7 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
-# The node image uses the uber calico binary built with CGO for BPF support.
+# The node image uses the combined calico binary built with CGO for BPF support.
 # Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
 # it to bin/$(ARCH)-fips, which is where we pick it up from below.
 CMD_CALICO_BINDIR = ../cmd/calico/bin
