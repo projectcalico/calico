@@ -169,9 +169,9 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process bind mode and listen address
-	bindMode, err := c.getNodeOrGlobalValue(NodeName, "bind_mode")
+
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if err == nil && bindMode == "NodeIP" {
+	if getBindMode(c.globalBGPConfig) == v3.BindModeNodeIP {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
