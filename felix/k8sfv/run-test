@@ -212,6 +212,7 @@ if ${USE_TYPHA}; then
        --name ${prefix}-typha \
        -e CALICO_DATASTORE_TYPE=kubernetes \
        -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
+       -e TYPHA_LOGFILEPATH=none \
        -e TYPHA_DATASTORETYPE=kubernetes \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
        -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
