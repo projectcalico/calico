@@ -20,7 +20,7 @@
 set -ex
 
 ARCH=${ARCH:-amd64}
-REPO_ROOT=$(git rev-parse --show-toplevel)
+REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 
 # Load any pre-built images that were cached by the Prerequisites build blocks.
 for item in calico-image:cmd/calico node-image:node whisker-image:whisker; do
