@@ -35,6 +35,18 @@
             value: "e2e/config/kind-felix-routing.yaml"
           - name: STORE_BUILD_CACHE
             value: "true"
+      - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
+        commands:
+          - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
+        env_vars:
+          - name: EXTRA_VALUES_FILES
+            value: "hack/test/kind/infra/values-felix-routing.yaml"
+          - name: KIND_CALICO_API_GROUP
+            value: "projectcalico.org/v3"
+          - name: E2E_TEST_CONFIG
+            value: "e2e/config/kind-felix-routing.yaml"
+          - name: STORE_BUILD_CACHE
+            value: "true"
     epilogue:
       always:
         commands:
