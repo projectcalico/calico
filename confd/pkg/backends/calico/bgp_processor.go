@@ -39,6 +39,10 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
+type processorContext struct {
+	globalBGPConfig *v3.BGPConfiguration
+}
+
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
 // ipVersion should be 4 for IPv4 or 6 for IPv6
 func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
@@ -55,6 +59,8 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 
 	logc.Debug("BGP config cache miss or expired, processing new configuration")
 
+	pc := c.getBGPProcessorContext()
+
 	config := &types.BirdBGPConfig{
 		NodeName:    NodeName,
 		Peers:       make([]types.BirdBGPPeer, 0),
@@ -63,7 +69,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	}
 
 	// Get basic node configuration
-	if err := c.populateNodeConfig(config, ipVersion); err != nil {
+	if err := c.populateNodeConfig(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to populate node configuration")
 		return nil, err
 	}
@@ -89,7 +95,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
 
 	// Process ippools.
-	if err := c.processIPPools(config, ipVersion); err != nil {
+	if err := c.processIPPools(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process ippools")
 		return nil, err
 	}
@@ -111,8 +117,14 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	return config, nil
 }
 
+func (c *client) getBGPProcessorContext() *processorContext {
+	return &processorContext{
+		globalBGPConfig: c.getBGPConfig(),
+	}
+}
+
 // populateNodeConfig fills in basic node configuration
-func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
@@ -169,9 +181,9 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process bind mode and listen address
-	bindMode, err := c.getNodeOrGlobalValue(NodeName, "bind_mode")
+
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if err == nil && bindMode == "NodeIP" {
+	if getBindMode(pc.globalBGPConfig) == v3.BindModeNodeIP {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
@@ -205,14 +217,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
-	config.NormalRoutePriority = 1024
-	if c.globalBGPConfig != nil {
-		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
-		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
-		}
-	}
+	config.NormalRoutePriority = getNormalRoutePriority(ipVersion, pc.globalBGPConfig)
 
 	config.SetMetricForBGPRoutes = []string{
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
@@ -227,6 +232,18 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	return nil
+}
+
+func getNormalRoutePriority(ipVersion int, bgpConfig *v3.BGPConfiguration) (priority int) {
+	priority = 1024
+	if bgpConfig != nil {
+		if ipVersion == 4 && bgpConfig.Spec.IPv4NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && bgpConfig.Spec.IPv6NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv6NormalRoutePriority
+		}
+	}
+	return
 }
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
@@ -851,7 +868,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	return nil
 }
 
-func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	poolKey := fmt.Sprintf("/calico/v1/ipam/v%d/pool", ipVersion)
 	logCtx := log.WithFields(map[string]any{
 		"ipVersion": ipVersion,
@@ -876,8 +893,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
+		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
 		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {

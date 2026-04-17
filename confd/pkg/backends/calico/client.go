@@ -1231,7 +1231,6 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
-		c.getBindModeKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
@@ -1249,6 +1248,19 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		} else {
 			// Default to enabled if not specified or if v3res is nil
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
+		}
+
+		// Check for changes in BGPConfiguration fields that impact GetBirdBGPConfig.  Note,
+		// the following changes do not affect the _set_ of BGP peers, so do not require
+		// setting updatePeersV1 and updateReasons.
+		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
+		}
+		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
+		}
+		if getBindMode(v3res) != getBindMode(c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
 		}
 
 		// Cache the updated BGP configuration
@@ -1374,16 +1386,12 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 	*updatePeersV1 = true
 }
 
-func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
-	bindMode := getBGPConfigKey("bind_mode", key)
+func getBindMode(v3res *apiv3.BGPConfiguration) (bindMode apiv3.BindMode) {
+	bindMode = apiv3.BindModeNone
 	if v3res != nil && v3res.Spec.BindMode != nil {
-		*updateReasons = append(*updateReasons, "bindMode updated.")
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(bindMode, string(*v3res.Spec.BindMode)))
-	} else {
-		*updateReasons = append(*updateReasons, "bindMode deleted.")
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(bindMode))
+		bindMode = *v3res.Spec.BindMode
 	}
-	*updatePeersV1 = true
+	return
 }
 
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
@@ -1875,6 +1883,13 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	log.Debugf("Returning %d results", len(values))
 
 	return values, nil
+}
+
+func (c *client) getBGPConfig() *apiv3.BGPConfiguration {
+	c.waitForSync.Wait()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.globalBGPConfig
 }
 
 // WatchPrefix is called from confd.  It blocks waiting for updates to the data which have any
