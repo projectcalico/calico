@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -388,8 +389,7 @@ func TestNormalRoutePriorityChange(t *testing.T) {
 			// Step 2: update BGPConfiguration to change normal IPv4 route priority.
 			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
 			require.NoError(t, err)
-			fiveThousand := 5000
-			cfg.Spec.IPv4NormalRoutePriority = &fiveThousand
+			cfg.Spec.IPv4NormalRoutePriority = ptr.To(5000)
 			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
 			require.NoError(t, err)
 			d.expectOutput("bgpfilter/node_mesh/priority2")
@@ -397,8 +397,7 @@ func TestNormalRoutePriorityChange(t *testing.T) {
 			// Step 3: update BGPConfiguration to change normal IPv6 route priority.
 			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
 			require.NoError(t, err)
-			eighty := 80
-			cfg.Spec.IPv6NormalRoutePriority = &eighty
+			cfg.Spec.IPv6NormalRoutePriority = ptr.To(80)
 			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
 			require.NoError(t, err)
 			d.expectOutput("bgpfilter/node_mesh/priority3")
