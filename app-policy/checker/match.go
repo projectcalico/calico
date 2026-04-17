@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -301,12 +301,12 @@ func matchHTTPMethods(methods []string, reqMethod *string) bool {
 // otherwise.
 //
 // The request-target is normalised per RFC 3986 / RFC 7230 before comparison:
-// query and fragment are stripped, unreserved and path-separator percent-escapes
-// are decoded, repeated slashes are collapsed, and "." / ".." segments are
-// resolved. This matches what upstream HTTP servers do before dispatching a
-// request, so an authorisation decision here is made on the same path the
-// upstream will actually serve. Prefix matches are anchored to path-segment
-// boundaries so that prefix "/pub" does not authorise "/public-leak".
+// query and fragment are stripped, percent-escapes are decoded, repeated
+// slashes are collapsed, and "." / ".." segments are resolved. This matches
+// what upstream HTTP servers do before dispatching a request, so an
+// authorisation decision here is made on the same path the upstream will
+// actually serve. Prefix matches are anchored to path-segment boundaries so
+// that prefix "/pub" does not authorise "/public-leak".
 func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
