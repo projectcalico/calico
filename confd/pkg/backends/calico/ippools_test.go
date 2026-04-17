@@ -25,6 +25,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -314,10 +315,9 @@ func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
@@ -390,10 +390,9 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
@@ -458,129 +457,4 @@ func filterExpectedStatements(statements []string, filterAction string) (filtere
 		}
 	}
 	return
-}
-
-// programClusterRoutesCacheKey is the confd cache key that mirrors
-// BGPConfiguration.Spec.ProgramClusterRoutes into BIRD config.
-const programClusterRoutesCacheKey = "/calico/bgp/v1/global/program_cluster_routes"
-
-func strPtr(s string) *string { return &s }
-
-func TestGetProgramClusterRoutesKVPair(t *testing.T) {
-	// Initially, set ProgramClusterRoutes to Enabled.
-	c := &client{cache: make(map[string]string)}
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Switch ProgramClusterRoutes to Disabled.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Disabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Disabled", c.cache[programClusterRoutesCacheKey])
-
-	// Switch ProgramClusterRoutes to Enabled.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Unsetting ProgramClusterRoutes.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: nil,
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestGetProgramClusterRoutesKVPair_NilResourceDeletesCacheEntry(t *testing.T) {
-	c := &client{cache: map[string]string{
-		programClusterRoutesCacheKey: "Disabled",
-	}}
-	c.getProgramClusterRoutesKVPair(nil, model.GlobalBGPConfigKey{})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-// ProgramClusterRoutes is intentionally wired as global-only in
-// updateBGPConfigCache (client.go): the per-node branch does not call
-// getProgramClusterRoutesKVPair. This test pins that behavior — if per-node
-// support is ever added, this test should be updated along with the call site.
-func TestGetProgramClusterRoutesKVPair_PerNodeKeyDoesNotWriteGlobal(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.NodeBGPConfigKey{Nodename: "nodeX"})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestUpdateBGPConfigCache_ProgramClusterRoutes_UpdateThenDelete(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	var (
-		svcAdvertisement bool
-		updatePeersV1    bool
-		updateReasons    []string
-	)
-
-	// First: set ProgramClusterRoutes=Disabled and confirm cache is populated
-	// via the full updateBGPConfigCache entrypoint (exercises wiring at
-	// client.go's global branch).
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Disabled"),
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.Equal(t, "Disabled", c.cache[programClusterRoutesCacheKey])
-
-	// Second: set ProgramClusterRoutes=Enabled and confirm cache is populated
-	// via the full updateBGPConfigCache entrypoint (exercises wiring at
-	// client.go's global branch).
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Finally: clear the field and confirm the cache entry is removed.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: nil,
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestUpdateBGPConfigCache_ProgramClusterRoutes_PerNodeResourceNameSkipsGlobalKey(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	var (
-		svcAdvertisement bool
-		updatePeersV1    bool
-		updateReasons    []string
-	)
-
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.updateBGPConfigCache("node.nodeX", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
 }
