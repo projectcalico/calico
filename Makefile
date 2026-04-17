@@ -228,8 +228,11 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+E2E_OUTPUT_DIR ?= report
+E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
+CLUSTER_ROUTING ?= BIRD
 
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
@@ -248,24 +251,27 @@ kind-migration-test:
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	$(MAKE) kind-up
-	$(MAKE) e2e-run-test
-	$(MAKE) e2e-run-cnp-test
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	$(MAKE) kind-up
-	$(MAKE) e2e-run-cnp-test
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
-## Run the general e2e tests against a pre-existing kind cluster.
-e2e-run-test:
-	mkdir -p report
-	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
+## Run the general e2e tests against the cluster at $KUBECONFIG.
+## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
+e2e-run:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
+	mkdir -p $(E2E_OUTPUT_DIR)
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
-## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
-e2e-run-cnp-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
+e2e-run-cnp:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
