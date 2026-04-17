@@ -935,27 +935,6 @@ blocks:
           commands:
             - ./.semaphore/analyze-test-failures --ut || true
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: "Felix: multi-arch build"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      prologue:
-        commands:
-          - cd felix
-      jobs:
-        - name: "Felix: build multi-arch binaries"
-          matrix:
-            - env_var: ARCH
-              values:
-                - arm64
-                - ppc64le
-                - s390x
-          commands:
-            # Only building the code, not the image here because the felix image is now only used for FV tests, which
-            # only run on AMD64 at the moment.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Felix: Build Windows binaries"
     run:
       when: "true"
