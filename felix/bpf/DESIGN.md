@@ -2169,131 +2169,71 @@ global, `ISTIO_DSCP`; see §21 for the integration.
 
 ## 21. Istio ambient mode integration
 
-### What Calico provides
-
-Calico supports Istio's **ambient** service-mesh mode (no
-sidecars: a ztunnel at each node plus per-namespace waypoint
-proxies). The BPF dataplane's contribution is narrow: it helps
-ztunnel distinguish **in-mesh** traffic from raw traffic at
-connection setup, so ztunnel can route it to a waypoint for L7
-processing.
-
-Calico does not host ztunnel, does not redirect mesh traffic in
-BPF, and does not implement HBONE tunnelling. All of that is
-Istio's responsibility. The integration surface is a small set of
-signalling hooks.
-
-### Identifying mesh workloads (userspace)
-
-A workload endpoint is considered a mesh member if either:
-
-- The WEP's namespace is labelled
-  `istio.io/dataplane-mode = ambient`, or
-- The WEP itself carries that label.
-
-...**unless** the WEP explicitly sets
-`istio.io/dataplane-mode = none`, which opts out even when the
-namespace opts in.
-
-The computation lives in
-`felix/calc/istio_calculator.go` (`IstioCalculator`). It watches
-for namespace and WEP labels via a computed selector and stamps
-matching WEPs with `IsIstioAmbient = true` on the
-`WorkloadEndpoint` proto. The feature is gated by the
-`IstioAmbientMode` FelixConfig field (default `Disabled`).
-
-### All-mesh-WEPs IP set
-
-Calico maintains a reserved IP set with member-IPs of every mesh
-WEP in the cluster — local _and_ remote. It is shared between Go
-and C:
-
-- Go side: `IPSetIDAllIstioWEPs` (string ID `"all-istio-weps"`)
-  in `felix/rules/rule_defs.go`.
-- C side: `ALL_ISTIO_WEPS_ID = RESERVED_IP_SET_BASE + 3` in
-  `felix/bpf-gpl/policy.h`. The numeric ID must agree with the
-  Go constant's assignment.
-
-The set lives in the general-purpose BPF IP-set map (the LPM-trie
-`cali_ip_sets` in `policy.h`) that policy programs already read.
-No separate map.
+The BPF dataplane's only contribution to Istio ambient mode is
+**marking the TCP SYN of a new flow between two mesh workloads
+with a configurable DSCP** so ztunnel can recognise in-mesh
+traffic at connection setup. Nothing else — no traffic redirection,
+no ztunnel hosting, no HBONE — is in the BPF dataplane.
 
 ### BPF-side DSCP marking
 
-The whole BPF-side of the feature is a small block in `tc.c`
-running on **host-egress-to-WEP** (`CALI_F_TO_WEP`), for TCP SYN
-packets only:
+On host-egress-to-WEP (`CALI_F_TO_WEP`), for TCP SYN packets only,
+the main program in `tc.c` does:
 
-1. Gate on `ISTIO_DSCP >= 0`, `IPPROTO_TCP`, and
-   `ct_result_is_syn(...)`. The per-interface global
-   `ISTIO_DSCP` is only positive when the attached WEP is a mesh
-   member (see below); for every other interface the check
-   short-circuits at cost of one global read.
-2. Look up the source IP in the `ALL_ISTIO_WEPS_ID` IP set to
-   confirm the sender is also a mesh member.
-3. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
-   bits in the IPv4 TOS / IPv6 traffic-class byte (mechanics
-   shared with §20 QoS DSCP).
+1. Gate on `ISTIO_DSCP >= 0`. This per-interface global is `-1`
+   by default and becomes the configured DSCP value only for
+   WEPs that are mesh members, so the check vanishes for
+   non-mesh interfaces.
+2. Gate on `ct_result_is_syn(...)`. Established-flow packets
+   skip the whole block; the fast path pays zero per-packet cost.
+3. Look up the source IP in the `ALL_ISTIO_WEPS_ID` IP set
+   (`RESERVED_IP_SET_BASE + 3` in `felix/bpf-gpl/policy.h`,
+   shared with the Go constant `IPSetIDAllIstioWEPs` in
+   `felix/rules/rule_defs.go`). This confirms the sender is also
+   a mesh member.
+4. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
+   bits in the IPv4 TOS / IPv6 traffic-class byte — same
+   mechanics as §20 QoS DSCP.
 
-The mark is applied on SYN only. ztunnel reads it from the first
-packet, establishes a waypoint session, and subsequent packets of
-the flow do not need the mark. Established-flow packets skip the
-whole block because
-`ct_result_is_syn` is false — the fast-path cost is zero.
+The `ALL_ISTIO_WEPS_ID` IP set is populated by Felix with every
+mesh WEP in the cluster (local and remote); it lives in the
+regular shared BPF IP-set map, not a dedicated one.
 
-### Per-interface gate
+### Per-endpoint on/off
 
-`IstioDSCP` on each attach point is `-1` by default and becomes
-the configured value only for WEPs with `IsIstioAmbient = true`.
-The `bpfEndpointManager` tracks mesh membership per-interface as
-`hasIstioDSCP` and pushes the value into the attach-point globals
-when the interface program is (re)attached — see
-`felix/dataplane/linux/bpf_ep_mgr.go` around `hasIstioDSCP` and
-the `ap.IstioDSCP = ...` assignment.
+The feature is gated at two levels:
 
-This is the pattern recommended by §22 Fast-path performance
-discipline: gate optional work on a per-endpoint flag so the
-verifier can short-circuit the code on attach points that don't
-need it.
+- **Cluster-wide:** `IstioAmbientMode` in FelixConfig (default
+  `Disabled`).
+- **Per-endpoint:** per-interface, the attach-point global
+  `ISTIO_DSCP` is set to `-1` for WEPs that are _not_ mesh
+  members and to the configured DSCP value for WEPs that are.
+  Felix decides per-WEP based on the
+  `istio.io/dataplane-mode` label on the WEP's namespace or the
+  WEP itself (with `=none` as an opt-out); the result is tracked
+  as `hasIstioDSCP` in
+  `felix/dataplane/linux/bpf_ep_mgr.go` and pushed into the
+  attach-point globals when the program is (re)attached.
 
-### Configuration surface
+So the DSCP marking fires only when **both** the attached WEP is
+a mesh member (gate via `ISTIO_DSCP >= 0`) **and** the source is
+a mesh member (IP-set lookup). Neither side by itself triggers
+the rewrite.
 
-- `IstioAmbientMode` (FelixConfig, default `Disabled`) — master
-  switch for the integration.
-- `IstioDSCPMark` (FelixConfig, default `23`) — the DSCP value
-  used for the SYN mark. `23` is the convention shared between
-  Calico and Istio ztunnel; changing it requires ztunnel to agree.
-
-### `*tables` parallel
-
-In `*tables` mode, the same signal is produced by a mangle
-POSTROUTING rule generated by `StaticManglePostroutingChain` in
-`felix/rules/static.go`, gated on
-`IstioAmbientModeEnabled`. The BPF path replaces that rule — the
-two paths are mutually exclusive.
+The DSCP value is configurable via `IstioDSCPMark` (default `23`,
+a convention shared with Istio ztunnel).
 
 ### Review notes
 
-- A change to the mesh-membership criteria in
-  `felix/calc/istio_calculator.go` must preserve the "namespace
-  opt-in, WEP opt-out" semantics; Istio's dataplane-mode label
-  docs specify these and users rely on the precedence.
-- A change that moves Istio DSCP marking off the SYN-only path
-  onto every packet would break the fast-path discipline (§22).
+- The SYN-only path is load-bearing. A change that moves Istio
+  DSCP marking onto every packet breaks §22 fast-path discipline.
   If a future feature genuinely needs per-packet Istio DSCP,
-  reuse the existing `CALI_CT_FLAG_SET_DSCP` /
-  `CALI_ST_SET_DSCP` mechanism from §20 — do not introduce a
-  second per-packet DSCP rewrite.
-- The reserved IP-set ID (`ALL_ISTIO_WEPS_ID`,
-  `RESERVED_IP_SET_BASE + 3`) is shared between Go and C. A
-  change to either the value or the namespace requires matching
-  updates on both sides. The `RESERVED_IP_SET_BASE + N` space is
-  a reserved-ID namespace shared with other calculated IP sets;
-  new reserved IDs go here.
-- The BPF unit test covering this feature is
-  `felix/bpf/ut/istio_test.go`. Any change to the BPF-side path
-  should keep that test passing and, when semantics change,
-  update it in the same PR.
+  reuse `CALI_CT_FLAG_SET_DSCP` / `CALI_ST_SET_DSCP` from §20
+  rather than introducing a second per-packet rewrite.
+- `ALL_ISTIO_WEPS_ID = RESERVED_IP_SET_BASE + 3` is shared
+  between Go and C. A change to either side requires matching
+  changes on the other.
+- BPF unit test: `felix/bpf/ut/istio_test.go`.
 
 
 ---
