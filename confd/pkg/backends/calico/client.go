@@ -1885,6 +1885,13 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	return values, nil
 }
 
+func (c *client) getBGPConfig() *apiv3.BGPConfiguration {
+	c.waitForSync.Wait()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.globalBGPConfig
+}
+
 // WatchPrefix is called from confd.  It blocks waiting for updates to the data which have any
 // of the requested set of prefixes.
 //
