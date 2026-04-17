@@ -221,11 +221,44 @@ func TestMatchHTTPPaths_Normalization(t *testing.T) {
 		{"percent-encoded backslash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%5C..%5Cadmin", false},
 		{"backslash within legitimate segment still inside prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo\\bar", true},
 
-		// --- Pinned single-decode semantics ---
-		// Double percent-encoded sequences must not be decoded twice, otherwise
-		// we'd over-authorise relative to a compliant upstream. /public/%25..
-		// decodes once to /public/%.. which is a literal segment.
-		{"double percent-encoded traversal stays literal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%252e%252e/admin", true},
+		// --- Matrix parameters on traversal segments (JSR-339 / Servlet
+		// 3.0+). Tomcat, Jetty, Jersey, Spring MVC and Resin strip ";..."
+		// per path segment before dispatch, so an attacker can hide a
+		// traversal dot-segment inside a matrix parameter suffix: a request
+		// like /public/..;x/admin is authorised here as literal segment
+		// "..;x" (matches prefix /public), but the upstream strips ";x",
+		// resolves the remaining "..", and serves /admin. Strip matrix
+		// parameters per segment before dot-segment resolution so we see
+		// the same path shape the upstream will. ---
+		{"matrix param on dotdot escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..;x/admin", false},
+		{"matrix param jsessionid on dotdot", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..;jsessionid=abc/admin", false},
+		{"matrix param percent-encoded semicolon on dotdot", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..%3Bx/admin", false},
+		{"matrix param on leaf segment still under prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo;jsessionid=abc", true},
+		{"matrix param on middle segment still under prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo;x=1/bar", true},
+
+		// --- Still-encoded separators after single decode. A compliant
+		// upstream decodes once, but Spring Security
+		// (setAllowUrlEncodedSlash), some nginx merge_slashes=off
+		// configurations, and some WAF placements decode twice. A request
+		// whose single-decode form still contains a path-sensitive
+		// percent-escape (%2e / %2f / %5c) carries a second layer of
+		// traversal payload that a double-decoding upstream would resolve
+		// into a different path than the one we authorise here. Reject so
+		// the authorisation view stays aligned with the most permissive
+		// upstream. ---
+		{"double-encoded dotdot rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%252e%252e/admin", false},
+		{"double-encoded slash rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%252fadmin", false},
+		{"double-encoded backslash rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%255c..%255cadmin", false},
+		{"deep double-encoded dot rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%25%32%65%25%32%65/admin", false},
+
+		// --- Null byte. Some Java stacks and any C-string-aware upstream
+		// treat a null byte as end-of-string: "/admin%00/../public" on
+		// such a stack truncates to "/admin" at dispatch, which would let
+		// a request bypass a rule targeting the truncated prefix. Reject
+		// null bytes so the authorisation view stays aligned. ---
+		{"percent-null in traversal rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%00/admin", false},
+		{"percent-null mid-segment rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo%00bar", false},
+		{"raw null byte rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo\x00", false},
 	}
 
 	for _, tc := range testCases {
@@ -265,9 +298,21 @@ func TestNormalizeHTTPPath(t *testing.T) {
 		{"backslash converted to slash", "/public/..\\admin", "/admin", true},
 		{"only backslash separators", "\\public\\..\\admin", "/admin", true},
 		{"percent-encoded backslash decoded and normalised", "/public%5C..%5Cadmin", "/admin", true},
-		{"double percent encoding stays single decoded", "/public/%252e%252e/admin", "/public/%2e%2e/admin", true},
+		{"matrix param on leaf stripped", "/public/foo;x=1", "/public/foo", true},
+		{"matrix param jsessionid stripped", "/public/foo;jsessionid=abc", "/public/foo", true},
+		{"matrix param on dotdot resolves traversal", "/public/..;x/admin", "/admin", true},
+		{"matrix param on every segment stripped", "/a;p=1/b;q=2/c;r=3", "/a/b/c", true},
+		{"percent-encoded semicolon stripped", "/public/..%3Bx/admin", "/admin", true},
+		{"double percent-encoded dot rejected", "/public/%252e%252e/admin", "", false},
+		{"double percent-encoded slash rejected", "/public%252fadmin", "", false},
+		{"double percent-encoded backslash rejected", "/public%255c..%255cadmin", "", false},
+		{"deep double-encoded dot rejected", "/public/%25%32%65%25%32%65/admin", "", false},
+		{"mixed-case double-encoded dot rejected", "/public/%252E%252E/admin", "", false},
+		{"percent-null rejected", "/public%00/admin", "", false},
+		{"raw null byte rejected", "/public/foo\x00bar", "", false},
 		{"invalid percent escape rejected", "/%XY/admin", "", false},
 		{"non-absolute rejected", "relative/path", "", false},
+		{"absolute URI form rejected", "http://example.com/admin", "", false},
 		{"empty rejected", "", "", false},
 	}
 	for _, tc := range cases {
