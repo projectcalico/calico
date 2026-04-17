@@ -126,6 +126,72 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+- name: "Build: uber image"
+  # Always build and cache the uber image so that downstream CI blocks can
+  # load it from GCS instead of rebuilding per component.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "uber-calico"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache uber image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C cmd/calico image
+          - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+          - zstd -3 --rm /tmp/calico-image.tar
+          - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+- name: "Build: node image"
+  run:
+    when: "${CHANGE_IN(node)}"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache node image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C node image
+          - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+          - zstd -3 --rm /tmp/node-image.tar
+          - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+- name: "Build: whisker image"
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "whisker"
+    jobs:
+      - name: "Build and cache whisker image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C whisker image
+          - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+          - zstd -3 --rm /tmp/whisker-image.tar
+          - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.
@@ -139,6 +205,9 @@
     - Check protobufs
     - Manifests and API docs
     - Store working copy
+    - "Build: uber image"
+    - "Build: node image"
+    - "Build: whisker image"
   task:
     jobs:
       - name: Pre-flight checks
