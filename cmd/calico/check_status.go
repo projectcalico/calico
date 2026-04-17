@@ -33,7 +33,7 @@ func newKubeControllersHealthCommand() *cobra.Command {
 	var checkLive bool
 
 	cmd := &cobra.Command{
-		Use:   "kube-controllers-health",
+		Use:   "health",
 		Short: "Check kube-controllers health via status file",
 		Run: func(cmd *cobra.Command, args []string) {
 			if !checkReady && !checkLive {

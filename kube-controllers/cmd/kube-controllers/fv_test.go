@@ -103,7 +103,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		It("should pass health check", func() {
 			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -111,7 +111,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 
 			By("Waiting for the controller to be ready")
 			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return strings.TrimSpace(string(stdoutStderr))
@@ -121,7 +121,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		It("should fail health check if apiserver is not running", func() {
 			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -132,7 +132,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 
 			By("Waiting for the readiness to change")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -142,7 +142,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 		It("should fail health check if etcd not running", func() {
 			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -153,7 +153,7 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 
 			By("Waiting for the readiness to change")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -322,7 +322,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		It("should pass health check", func() {
 			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -330,7 +330,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 			By("Waiting for the controller to be ready")
 			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return strings.TrimSpace(string(stdoutStderr))
@@ -340,7 +340,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 		It("should fail health check if apiserver is not running", func() {
 			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
@@ -351,7 +351,7 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 			By("Waiting for the readiness to change")
 			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
+				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
