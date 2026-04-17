@@ -114,8 +114,9 @@ enumerating every caller.
 18. [Debug log filters](#18-debug-log-filters)
 19. [Flow logs & event ring buffer](#19-flow-logs--event-ring-buffer)
 20. [QoS](#20-qos)
-21. [Fast-path performance discipline](#21-fast-path-performance-discipline)
-22. [Cross-cutting review notes](#22-cross-cutting-review-notes)
+21. [Istio ambient mode integration](#21-istio-ambient-mode-integration)
+22. [Fast-path performance discipline](#22-fast-path-performance-discipline)
+23. [Cross-cutting review notes](#23-cross-cutting-review-notes)
 
 ---
 
@@ -917,7 +918,7 @@ resolution; flow-lifetime fast-path packets are not affected.
   turns sessionAffinity into a cache rather than a guarantee.
 - A change to the affinity map's key/value layout needs a map
   version bump **only** if the change makes new programs
-  incompatible with the old map (§22). Reusing reserved bytes for
+  incompatible with the old map (§23). Reusing reserved bytes for
   a new field doesn't need a bump.
 - An affinity entry that points at a backend that no longer exists
   must be treated as a miss, not as a drop. A change that tightens
@@ -996,7 +997,7 @@ the BPF program ever runs.
   silently diverges from kube-proxy, which is a difficult bug
   class to diagnose.
 - A change to the frontend/backend map key or value layout is the
-  common case for bumping NAT map versions; see §22 for the rule.
+  common case for bumping NAT map versions; see §23 for the rule.
 - A new type of LB filter (future SourceRanges-like features) goes
   here rather than into the TC program — we don't want per-packet
   lookup cost for policy that is stable per-service.
@@ -1683,7 +1684,7 @@ where an error is actually needed.
 - **Post-defrag too big.** After reassembling fragments (§14),
   the result may exceed the next-hop MTU; same ICMP path.
 
-### Relation to fast-path discipline (§21)
+### Relation to fast-path discipline (§22)
 
 ICMP error generation is explicitly a **slow path**. The main
 program decides to generate one only on conditions that should be
@@ -2053,7 +2054,7 @@ reorderings. Calico's minimum kernel (5.10) supports it.
 
 The emission sites are on the flow-creation path, not on every
 packet of an established flow, so the per-packet fast-path cost
-(§21) is unaffected when flow logs are on. The `FLOWLOGS_ENABLED`
+(§22) is unaffected when flow logs are on. The `FLOWLOGS_ENABLED`
 branch that guards emission is also a single mark-style load,
 which is acceptable on the fast path.
 
@@ -2071,7 +2072,7 @@ which is acceptable on the fast path.
   does not pay for it.
 - Do **not** emit events on every packet of an established
   flow. That turns a cheap feature into a fast-path regression
-  (§21). The established-flow path already does not, and it
+  (§22). The established-flow path already does not, and it
   should stay that way.
 
 
@@ -2137,7 +2138,8 @@ annotation on a HEP or WEP. The value is carried in BPF globals as
     `flow_lbl[0]` (traffic class = DSCP + ECN).
 
 The ECN bits are preserved in both address families. Istio's DSCP
-hook (for L7 tagging) uses a second global, `ISTIO_DSCP`.
+hook (for L7 mesh identification at connection setup) uses a second
+global, `ISTIO_DSCP`; see §21 for the integration.
 
 ### Review notes for this section
 
@@ -2165,7 +2167,138 @@ hook (for L7 tagging) uses a second global, `ISTIO_DSCP`.
 
 ---
 
-## 21. Fast-path performance discipline
+## 21. Istio ambient mode integration
+
+### What Calico provides
+
+Calico supports Istio's **ambient** service-mesh mode (no
+sidecars: a ztunnel at each node plus per-namespace waypoint
+proxies). The BPF dataplane's contribution is narrow: it helps
+ztunnel distinguish **in-mesh** traffic from raw traffic at
+connection setup, so ztunnel can route it to a waypoint for L7
+processing.
+
+Calico does not host ztunnel, does not redirect mesh traffic in
+BPF, and does not implement HBONE tunnelling. All of that is
+Istio's responsibility. The integration surface is a small set of
+signalling hooks.
+
+### Identifying mesh workloads (userspace)
+
+A workload endpoint is considered a mesh member if either:
+
+- The WEP's namespace is labelled
+  `istio.io/dataplane-mode = ambient`, or
+- The WEP itself carries that label.
+
+...**unless** the WEP explicitly sets
+`istio.io/dataplane-mode = none`, which opts out even when the
+namespace opts in.
+
+The computation lives in
+`felix/calc/istio_calculator.go` (`IstioCalculator`). It watches
+for namespace and WEP labels via a computed selector and stamps
+matching WEPs with `IsIstioAmbient = true` on the
+`WorkloadEndpoint` proto. The feature is gated by the
+`IstioAmbientMode` FelixConfig field (default `Disabled`).
+
+### All-mesh-WEPs IP set
+
+Calico maintains a reserved IP set with member-IPs of every mesh
+WEP in the cluster — local _and_ remote. It is shared between Go
+and C:
+
+- Go side: `IPSetIDAllIstioWEPs` (string ID `"all-istio-weps"`)
+  in `felix/rules/rule_defs.go`.
+- C side: `ALL_ISTIO_WEPS_ID = RESERVED_IP_SET_BASE + 3` in
+  `felix/bpf-gpl/policy.h`. The numeric ID must agree with the
+  Go constant's assignment.
+
+The set lives in the general-purpose BPF IP-set map (the LPM-trie
+`cali_ip_sets` in `policy.h`) that policy programs already read.
+No separate map.
+
+### BPF-side DSCP marking
+
+The whole BPF-side of the feature is a small block in `tc.c`
+running on **host-egress-to-WEP** (`CALI_F_TO_WEP`), for TCP SYN
+packets only:
+
+1. Gate on `ISTIO_DSCP >= 0`, `IPPROTO_TCP`, and
+   `ct_result_is_syn(...)`. The per-interface global
+   `ISTIO_DSCP` is only positive when the attached WEP is a mesh
+   member (see below); for every other interface the check
+   short-circuits at cost of one global read.
+2. Look up the source IP in the `ALL_ISTIO_WEPS_ID` IP set to
+   confirm the sender is also a mesh member.
+3. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
+   bits in the IPv4 TOS / IPv6 traffic-class byte (mechanics
+   shared with §20 QoS DSCP).
+
+The mark is applied on SYN only. ztunnel reads it from the first
+packet, establishes a waypoint session, and subsequent packets of
+the flow do not need the mark. Established-flow packets skip the
+whole block because
+`ct_result_is_syn` is false — the fast-path cost is zero.
+
+### Per-interface gate
+
+`IstioDSCP` on each attach point is `-1` by default and becomes
+the configured value only for WEPs with `IsIstioAmbient = true`.
+The `bpfEndpointManager` tracks mesh membership per-interface as
+`hasIstioDSCP` and pushes the value into the attach-point globals
+when the interface program is (re)attached — see
+`felix/dataplane/linux/bpf_ep_mgr.go` around `hasIstioDSCP` and
+the `ap.IstioDSCP = ...` assignment.
+
+This is the pattern recommended by §22 Fast-path performance
+discipline: gate optional work on a per-endpoint flag so the
+verifier can short-circuit the code on attach points that don't
+need it.
+
+### Configuration surface
+
+- `IstioAmbientMode` (FelixConfig, default `Disabled`) — master
+  switch for the integration.
+- `IstioDSCPMark` (FelixConfig, default `23`) — the DSCP value
+  used for the SYN mark. `23` is the convention shared between
+  Calico and Istio ztunnel; changing it requires ztunnel to agree.
+
+### `*tables` parallel
+
+In `*tables` mode, the same signal is produced by a mangle
+POSTROUTING rule generated by `StaticManglePostroutingChain` in
+`felix/rules/static.go`, gated on
+`IstioAmbientModeEnabled`. The BPF path replaces that rule — the
+two paths are mutually exclusive.
+
+### Review notes
+
+- A change to the mesh-membership criteria in
+  `felix/calc/istio_calculator.go` must preserve the "namespace
+  opt-in, WEP opt-out" semantics; Istio's dataplane-mode label
+  docs specify these and users rely on the precedence.
+- A change that moves Istio DSCP marking off the SYN-only path
+  onto every packet would break the fast-path discipline (§22).
+  If a future feature genuinely needs per-packet Istio DSCP,
+  reuse the existing `CALI_CT_FLAG_SET_DSCP` /
+  `CALI_ST_SET_DSCP` mechanism from §20 — do not introduce a
+  second per-packet DSCP rewrite.
+- The reserved IP-set ID (`ALL_ISTIO_WEPS_ID`,
+  `RESERVED_IP_SET_BASE + 3`) is shared between Go and C. A
+  change to either the value or the namespace requires matching
+  updates on both sides. The `RESERVED_IP_SET_BASE + N` space is
+  a reserved-ID namespace shared with other calculated IP sets;
+  new reserved IDs go here.
+- The BPF unit test covering this feature is
+  `felix/bpf/ut/istio_test.go`. Any change to the BPF-side path
+  should keep that test passing and, when semantics change,
+  update it in the same PR.
+
+
+---
+
+## 22. Fast-path performance discipline
 
 ### The rule
 
@@ -2264,7 +2397,7 @@ packet" condition); if it could and isn't, that's a red flag.
 
 ---
 
-## 22. Cross-cutting review notes
+## 23. Cross-cutting review notes
 
 The per-section review notes cover what a reviewer should check inside
 a given topic. This final section collects the handful of checks that

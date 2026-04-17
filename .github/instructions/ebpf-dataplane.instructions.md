@@ -20,7 +20,7 @@ pointer.
 
 ## Must-check principles
 
-- **Per-packet cost (§21).** For every BPF dataplane change,
+- **Per-packet cost (§22).** For every BPF dataplane change,
   answer explicitly: *does this cause more packets to do more
   work?* The obvious case is new code on the fast path. The
   non-obvious case is a change that **shrinks the set of packets
@@ -30,9 +30,9 @@ pointer.
   the shortcut in steady state, or an argument that the affected
   flow class is small. If the answer to the question is "yes" and
   the PR description doesn't address it, that's a finding. See
-  §21 for cost tiers and patterns to prefer (CT flags, skb marks,
+  §22 for cost tiers and patterns to prefer (CT flags, skb marks,
   compile-time gates, slow-path sub-programs).
-- **Map versioning (§22).** Bump `MapParameters.Version` only when
+- **Map versioning (§23).** Bump `MapParameters.Version` only when
   the change makes new BPF programs incompatible with the old
   pinned map. Repurposing padding / reserved bytes does not need
   a bump. Moving fields, widening keys, shrinking values, or
@@ -58,7 +58,7 @@ pointer.
 - **Cross-section invariants.** RPF (§12), mid-flow fallthrough
   (§16), SkipFIB for third-party DNAT (§17), bpfnat RPF sysctls
   (§10), VXLAN flow-mode device (§11), and fast-path discipline
-  (§21) all have explicit rules in their Review notes sections.
+  (§22) all have explicit rules in their Review notes sections.
   If the change touches any of those areas, read the relevant
   Review notes.
 
