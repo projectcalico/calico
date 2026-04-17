@@ -20,7 +20,7 @@ sourced individually when reproducing part of a CI run locally.
 | `phases/install.sh` | `bz install` (install Calico on the provisioned cluster) |
 | `phases/configure.sh` | Post-install env setup: PATH, external-node creds, IPAM pool, failsafe ports |
 | `phases/migrate.sh` | Optional operator migration, AKS migration, `bz upgrade` |
-| `phases/run_tests_local.sh` | Build and run the in-repo e2e binary via `make e2e-run` (wrapped in calico/go-build) |
+| `phases/run_tests.sh` | Acquire and run the e2e binary (local build, hashrelease download, or `bz tests` fallback) |
 | `phases/hcp.sh` | Hosted control plane flow (separate provision + test tooling) |
 
 ## Reproducing a CI run locally
@@ -33,7 +33,7 @@ cd "${BZ_HOME}"
 source phases/provision.sh
 source phases/install.sh
 source phases/configure.sh
-source phases/run_tests_local.sh
+source phases/run_tests.sh
 ```
 
 Phases are **sourced**, not executed, so env vars exported by earlier phases
@@ -49,12 +49,18 @@ required env vars.
 3. Add the phase to the appropriate body script's dispatch logic.
 4. Add a row to the phase table above.
 
-## The in-repo test runner
+## The test runner
 
-`phases/run_tests_local.sh` invokes `make e2e-run` at the repository root.
-That Makefile target is the single canonical entry point for running the
-in-repo e2e binary -- the same target kind-based CI (`20-e2e.yml`) uses via
-`make e2e-test`, and the same target developers can use against any cluster:
+`phases/run_tests.sh` selects the test execution strategy automatically:
+
+| Condition | Strategy |
+|---|---|
+| `RUN_LOCAL_TESTS` is set | Build the e2e binary from local source (per-PR CI) |
+| `TEST_TYPE == k8s-e2e` | Download the pre-built binary from the hashrelease (scheduled CI) |
+| Otherwise | Fall back to `bz tests` (benchmarks, certification, etc.) |
+
+The first two paths run the binary via `make e2e-run` inside
+`calico/go-build`. Developers can use the same target directly:
 
 ```bash
 KUBECONFIG=/path/to/kubeconfig \
@@ -67,10 +73,6 @@ See `e2e/config/*.yaml` for available test-selection configs and
 
 ## Legacy notes
 
-- The `docker run calico/go-build ...` wrapper around `make e2e-run` in
-  `run_tests_local.sh` is legacy. Once the in-repo binary reaches parity
-  with the enterprise test suite, the wrapper should be removed and the
-  script should call `make e2e-run` directly.
 - `body_flannel-migration.sh` still uses `./bz.sh tests:run` for its pre-
   and post-migration test runs -- that's a different legacy runner than
   `bz tests` and has tests the in-repo binary doesn't yet cover. Migrate

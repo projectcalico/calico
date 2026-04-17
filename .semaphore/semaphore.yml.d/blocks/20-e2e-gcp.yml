@@ -26,6 +26,8 @@
         value: "true"
       - name: PRIVATE_REGISTRY
         value: "quay.io/"
+      - name: RUN_LOCAL_TESTS
+        value: "true"
       - name: E2E_TEST_CONFIG
         # Test selection is driven by the config file; see gcp-bpf.yaml for the
         # include/exclude rationale.

@@ -35,6 +35,10 @@ if [ -n "${IPAM_TEST_POOL_SUBNET}" ]; then
   echo "IPAM_TEST_POOL_SUBNET=$IPAM_TEST_POOL_SUBNET"
 fi
 
+# Some pipelines (e.g., VPP) need port 443 added to the failsafe outbound rules
+# so nodes can reach the kube-apiserver. This replaces the default failsafe list
+# with one that includes 443. TODO: consider making 443 a default failsafe port
+# so this patch isn't needed.
 if [ "${FAILSAFE_443}" == "true" ]; then
   KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl patch felixconfiguration default --type=merge \
     -p '{"spec":{"failsafeOutboundHostPorts": [{"protocol": "udp", "port":53},{"protocol": "udp", "port":67},{"protocol": "tcp", "port":179},{"protocol": "tcp", "port":2379},{"protocol": "tcp", "port":2380},{"protocol": "tcp", "port":5473},{"protocol": "tcp", "port":443},{"protocol": "tcp", "port":6666},{"protocol": "tcp", "port":6667}]}}'
