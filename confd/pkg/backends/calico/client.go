@@ -1191,29 +1191,16 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 			}
 		}
 
-		// Update external IP CIDRs. In v1 format, they are a single comma-separated
-		// string. If the string isn't empty, split on the comma and pass a list of strings
-		// to the route generator.  An empty string indicates a withdrawal of that set of
-		// service IPs.
-		var externalIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
-			externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
-		}
-		c.onExternalIPsUpdate(externalIPs)
+		// Update external IP CIDRs.
+		c.onExternalIPsUpdate(getServiceExternalIPs(c.globalBGPConfig))
 
-		// Same for cluster CIDRs.
-		var clusterIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
-			clusterIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
+		// Same for cluster CIDRs - except those can be overridden by an env var, so only
+		// process cluster IPs in BGPConfiguration if that env var is not set.
+		if len(os.Getenv(envAdvertiseClusterIPs)) == 0 {
+			c.onClusterIPsUpdate(getServiceClusterIPs(c.globalBGPConfig))
 		}
-		c.onClusterIPsUpdate(clusterIPs)
-
 		// Same for loadbalancer CIDRs.
-		var loadBalancerIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"]) > 0 {
-			loadBalancerIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"], ",")
-		}
-		c.onLoadBalancerIPsUpdate(loadBalancerIPs)
+		c.onLoadBalancerIPsUpdate(getServiceLoadBalancerIPs(c.globalBGPConfig))
 
 		if c.rg != nil {
 			// Trigger the route generator to recheck and advertise or withdraw
@@ -1232,9 +1219,6 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
-		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
-		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
-		c.getServiceLoadBalancerIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getNodeToNodeMeshKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
@@ -1250,18 +1234,15 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
 		}
 
-		// Check for changes in BGPConfiguration fields that impact GetBirdBGPConfig.  Note,
-		// the following changes do not affect the _set_ of BGP peers, so do not require
-		// setting updatePeersV1 and updateReasons.
-		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, c.globalBGPConfig) {
-			c.keyUpdated("/calico/bgpconfig")
-		}
-		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, c.globalBGPConfig) {
-			c.keyUpdated("/calico/bgpconfig")
-		}
-		if getBindMode(v3res) != getBindMode(c.globalBGPConfig) {
-			c.keyUpdated("/calico/bgpconfig")
-		}
+		// BGPConfiguration changes should not be very frequent, but they often impact
+		// GetBirdBGPConfig when they do occur, so flag that templates should be processed
+		// again.  Note, BGPConfiguration changes do not generally affect the _set_ of BGP
+		// peers, so do not always require setting updatePeersV1 and updateReasons.
+		c.keyUpdated("/calico/bgpconfig")
+
+		// Some of the previous per-field logic above used to set svcAdvertisement
+		// unconditionally.  It's equivalent to set it unconditionally here.
+		*svcAdvertisement = true
 
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
@@ -1406,13 +1387,8 @@ func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updat
 	*updatePeersV1 = true
 }
 
-func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcExternalIPKey := getBGPConfigKey("svc_external_ips", key)
-
-	if v3res != nil && v3res.Spec.ServiceExternalIPs != nil && len(v3res.Spec.ServiceExternalIPs) != 0 {
-		// We wrap each Service external IP in a ServiceExternalIPBlock struct to
-		// achieve the desired API structure, unpack that.
-		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceExternalIPs))
+func getServiceExternalIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
 		for _, ipBlock := range v3res.Spec.ServiceExternalIPs {
 			if ipBlock.CIDR == "" {
 				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
@@ -1420,18 +1396,12 @@ func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key 
 			}
 			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcExternalIPKey, strings.Join(ipCidrs, ",")))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcExternalIPKey))
 	}
-	*svcAdvertisement = true
+	return
 }
 
-func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcLoadBalancerIPKey := getBGPConfigKey("svc_loadbalancer_ips", key)
-
-	if v3res != nil && v3res.Spec.ServiceLoadBalancerIPs != nil && len(v3res.Spec.ServiceLoadBalancerIPs) != 0 {
-		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceLoadBalancerIPs))
+func getServiceLoadBalancerIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
 		for _, ipBlock := range v3res.Spec.ServiceLoadBalancerIPs {
 			if ipBlock.CIDR == "" {
 				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
@@ -1439,39 +1409,21 @@ func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, 
 			}
 			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcLoadBalancerIPKey, strings.Join(ipCidrs, ",")))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcLoadBalancerIPKey))
 	}
-	*svcAdvertisement = true
+	return
 }
 
-func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcInternalIPKey := getBGPConfigKey("svc_cluster_ips", key)
-
-	if len(os.Getenv(envAdvertiseClusterIPs)) != 0 {
-		// ClusterIPs are configurable through an environment variable. If specified,
-		// that variable takes precedence over datastore config, so we should ignore the update.
-		// Setting Spec.ServiceClusterIPs to nil, so we keep using the cache value set during startup.
-		log.Infof("Ignoring serviceClusterIPs update due to environment variable %s", envAdvertiseClusterIPs)
-	} else {
-		if v3res != nil && v3res.Spec.ServiceClusterIPs != nil && len(v3res.Spec.ServiceClusterIPs) != 0 {
-			// We wrap each Service Cluster IP in a ServiceClusterIPBlock to
-			// achieve the desired API structure. This unpacks that.
-			ipCidrs := make([]string, 0, len(v3res.Spec.ServiceClusterIPs))
-			for _, ipBlock := range v3res.Spec.ServiceClusterIPs {
-				if ipBlock.CIDR == "" {
-					// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
-					continue
-				}
-				ipCidrs = append(ipCidrs, ipBlock.CIDR)
+func getServiceClusterIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
+		for _, ipBlock := range v3res.Spec.ServiceClusterIPs {
+			if ipBlock.CIDR == "" {
+				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
+				continue
 			}
-			c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcInternalIPKey, strings.Join(ipCidrs, ",")))
-		} else {
-			c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcInternalIPKey))
+			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		*svcAdvertisement = true
 	}
+	return
 }
 
 func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key any) {

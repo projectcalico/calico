@@ -62,10 +62,11 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	pc := c.getBGPProcessorContext()
 
 	config := &types.BirdBGPConfig{
-		NodeName:    NodeName,
-		Peers:       make([]types.BirdBGPPeer, 0),
-		Filters:     make(map[string]string),
-		Communities: make([]types.CommunityRule, 0),
+		NodeName:        NodeName,
+		Peers:           make([]types.BirdBGPPeer, 0),
+		Filters:         make(map[string]string),
+		Communities:     make([]types.CommunityRule, 0),
+		LoadBalancerIPs: getServiceLoadBalancerIPs(pc.globalBGPConfig),
 	}
 
 	// Get basic node configuration
