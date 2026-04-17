@@ -40,7 +40,7 @@ if ($env:CNI_IPAM_TYPE -EQ "host-local") {
 # to a config change (return code 129).
 while ($true) {
     Write-Host "[felix-service.ps1] Starting calico felix process"
-    .\calico-node.exe -felix
+    .\calico-node.exe node felix
     Write-Host "[felix-service.ps1] calico felix process stopped, RC=$LASTEXITCODE"
     if ($LASTEXITCODE -eq 129) {
         Write-Host "[felix-service.ps1] Restarting calico felix process for config reload"

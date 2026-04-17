@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,6 +104,79 @@ func Run() {
 		}
 
 		// If the wrapped command exited successfully then we should do the same.
+		os.Exit(0)
+	}
+}
+
+// WrapSelf provides cmdwrapper-style restart-on-129 semantics for a component
+// that runs as a subcommand of the current executable (e.g. "calico component
+// kube-controllers"). On first invocation, the caller passes innerEnvVar,
+// which is set as an environment variable when re-executing os.Args. The
+// re-executed child sees innerEnvVar=="1" and runs fn directly; the parent
+// loops on exec.ExitError{ExitCode:129} to restart the child.
+func WrapSelf(innerEnvVar string, fn func()) {
+	if os.Getenv(innerEnvVar) == "1" {
+		fn()
+		return
+	}
+
+	logutils.ConfigureEarlyLogging()
+	logutils.ConfigureLogging(&config.Config{
+		LogSeverityScreen:       "info",
+		DebugDisableLogDropping: true,
+	})
+
+	env := append(os.Environ(), innerEnvVar+"=1")
+	prog := os.Args[0]
+	args := os.Args[1:]
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c)
+
+	for {
+		logrus.Infof("Starting %s %v", prog, args)
+		cmd := exec.Command(prog, args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = env
+		if err := cmd.Start(); err != nil {
+			logrus.WithError(err).Fatalf("Failed to start %s", prog)
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		stop := make(chan any)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case s := <-c:
+					if s == syscall.SIGCHLD {
+						continue
+					}
+					if err := cmd.Process.Signal(s); err != nil {
+						logrus.WithError(err).Error("Failed to send signal to wrapped command process")
+					}
+				case <-stop:
+					return
+				}
+			}
+		}()
+		cmdWaitErr := cmd.Wait()
+		close(stop)
+		wg.Wait()
+		if cmdWaitErr != nil {
+			if ee, ok := cmdWaitErr.(*exec.ExitError); ok {
+				if ee.ExitCode() == RestartReturnCode {
+					logrus.Infof("Received exit status %d, restarting %s", ee.ExitCode(), prog)
+					continue
+				}
+				logrus.Infof("Received exit status %d", ee.ExitCode())
+				os.Exit(ee.ExitCode())
+			}
+			logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 }
