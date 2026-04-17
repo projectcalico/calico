@@ -3111,7 +3111,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				if ap.HookName() == hook.Ingress && ipFamily == proto.IPVersion_IPV4 {
 					info := hook.GetOptionalSubProgInfo(hook.SubProgIPFrag)
 					if info != nil {
-						bpfEpMgr.failedOptionalProgs[info.FeatureName] = info
+						bpfEpMgr.recordSkippedOptional([]hook.OptionalSubProgInfo{*info})
 					}
 				}
 

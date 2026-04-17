@@ -402,12 +402,13 @@ type bpfEndpointManager struct {
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
-	healthAggregator      *health.HealthAggregator
-	permanentBPFErr       error // set when BPF programs fail to load permanently; prevents retries
-	disabledOptionalProgs set.Typed[hook.SubProg]
-	failedOptionalProgs   map[string]*hook.OptionalSubProgInfo // keyed by FeatureName
-	updateRateLimitedLog  *logutilslc.RateLimitedLogger
-	istioDSCP             uint8
+	healthAggregator        *health.HealthAggregator
+	permanentBPFErr         error // set when BPF programs fail to load permanently; prevents retries
+	disabledOptionalProgs   set.Typed[hook.SubProg]
+	failedOptionalProgsLock sync.Mutex
+	failedOptionalProgs     map[string]*hook.OptionalSubProgInfo // keyed by FeatureName; guarded by failedOptionalProgsLock
+	updateRateLimitedLog    *logutilslc.RateLimitedLogger
+	istioDSCP               uint8
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
@@ -1838,11 +1839,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
-	} else if len(m.failedOptionalProgs) > 0 {
-		var names []string
-		for _, info := range m.failedOptionalProgs {
-			names = append(names, info.FeatureName)
-		}
+	} else if names := m.failedOptionalProgFeatureNames(); len(names) > 0 {
 		m.reportHealth(false,
 			fmt.Sprintf("Optional BPF program(s) failed to load: %s. "+
 				"Disable the feature(s) in FelixConfiguration or upgrade the kernel. "+
@@ -3888,10 +3885,28 @@ func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap)
 }
 
 func (m *bpfEndpointManager) recordSkippedOptional(skipped []hook.OptionalSubProgInfo) {
+	if len(skipped) == 0 {
+		return
+	}
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
 	for i := range skipped {
 		info := &skipped[i]
 		m.failedOptionalProgs[info.FeatureName] = info
 	}
+}
+
+// failedOptionalProgFeatureNames returns a snapshot of the failed optional
+// program feature names, safe to use outside the lock.
+func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
+	names := make([]string, 0, len(m.failedOptionalProgs))
+	for _, info := range m.failedOptionalProgs {
+		names = append(names, info.FeatureName)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
