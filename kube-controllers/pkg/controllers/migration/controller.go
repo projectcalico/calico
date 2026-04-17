@@ -449,18 +449,17 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	logCtx.Info("Migration in progress")
 	dm.Status.Message = "Migrating resources"
 
-	// The APIService was already saved and deleted during handlePending
-	// (before conflict detection). Ensure it's gone in case we're resuming.
+	// Step 1: Save and delete the APIService to route v3 requests to CRDs.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
 
-	// Step 1: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
+	// Step 2: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
 	if err := m.lockDatastore(logCtx); err != nil {
 		return err
 	}
 
-	// Step 2: Migrate all resources in order.
+	// Step 3: Migrate all resources in order.
 	allMigrators := m.migrators
 	sort.Slice(allMigrators, func(i, j int) bool {
 		return allMigrators[i].Order() < allMigrators[j].Order()
@@ -557,7 +556,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
-	// Step 3: Unlock the datastore.
+	// Step 4: Unlock the datastore.
 	if err := m.unlockV3CRDDatastore(logCtx); err != nil {
 		return err
 	}
