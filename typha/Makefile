@@ -144,10 +144,12 @@ ut combined.coverprofile: $(SRC_FILES)
 # CI/CD
 ###############################################################################
 .PHONY: cd ci version
-version: image
-	docker run --rm $(TYPHA_IMAGE):latest-$(ARCH) calico-typha version
+# Uses the combined calico/calico image (loaded from the uber-image prerequisite
+# in CI, or built locally via `make -C cmd/calico image`).
+version:
+	docker run --rm calico/calico:latest-$(ARCH) version
 
-ci: mod-download image-all version static-checks ut
+ci: mod-download version static-checks ut
 ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test
 endif
@@ -157,8 +159,13 @@ cd: image-all cd-common
 
 fv: k8sfv-test
 
-k8sfv-test: image
-	$(MAKE) -C ../felix JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(TYPHA_IMAGE):latest-$(ARCH) TYPHA_VERSION=latest k8sfv-test
+# k8sfv-test runs the combined calico/calico image with `component typha` as the
+# command. The image is loaded from GCS in CI or built locally.
+k8sfv-test:
+	$(MAKE) -C ../felix JUST_A_MINUTE=true USE_TYPHA=true \
+		FV_TYPHAIMAGE=calico/calico:latest-$(ARCH) \
+		FV_TYPHACMD="component typha" \
+		TYPHA_VERSION=latest k8sfv-test
 
 st:
 	@echo "No STs available."

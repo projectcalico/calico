@@ -279,14 +279,17 @@ pkg/install/install.test: pkg/install/*.go
 
 .PHONY: test-install-cni
 ## Test the install
-test-install-cni: run-k8s-apiserver image pkg/install/install.test
-	cd pkg/install && CONTAINER_NAME=$(CNI_PLUGIN_IMAGE):latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
+# Uses the combined calico/calico image (loaded from the uber-image prerequisite
+# job in CI, or built locally via `make -C cmd/calico image`). The test invokes
+# `calico component cni install` instead of the legacy `/opt/cni/bin/install`.
+test-install-cni: run-k8s-apiserver pkg/install/install.test
+	cd pkg/install && CONTAINER_NAME=calico/calico:latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
 # CI/CD
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build static-checks ut image-all test-install-cni
+ci: clean mod-download build static-checks ut test-install-cni
 
 ## Deploys images to registry
 cd: image-all cd-common

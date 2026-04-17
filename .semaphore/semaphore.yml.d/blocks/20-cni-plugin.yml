@@ -9,6 +9,7 @@
         value: "uber-calico"
     prologue:
       commands:
+        - .semaphore/load-cached-images
         - cd cni-plugin
     jobs:
       - name: "CNI Plugin: CI"
