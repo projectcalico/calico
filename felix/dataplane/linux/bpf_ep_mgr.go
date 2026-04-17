@@ -3905,6 +3905,7 @@ func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
 	for _, info := range m.failedOptionalProgs {
 		names = append(names, info.FeatureName)
 	}
+	sort.Strings(names)
 	return names
 }
 
