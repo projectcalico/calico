@@ -230,7 +230,16 @@ func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {
 // empty returns true if the block has released all of its assignable addresses,
 // and returns false if any assignable addresses are in use.
 func (b allocationBlock) empty() bool {
-	return b.containsOnlyReservedIPs()
+	for _, attrIdx := range b.Allocations {
+		if attrIdx == nil {
+			continue
+		}
+		attrs := b.Attributes[*attrIdx]
+		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
+			return false
+		}
+	}
+	return true
 }
 
 // inUseIPs returns a list of IPs currently allocated in this block in string format.
@@ -244,21 +253,6 @@ func (b allocationBlock) inUseIPs() []string {
 		ips = append(ips, b.OrdinalToIP(o).String())
 	}
 	return ips
-}
-
-// containsOnlyReservedIPs returns true if the block is empty excepted for
-// expected "reserved" IP addresses.
-func (b *allocationBlock) containsOnlyReservedIPs() bool {
-	for _, attrIdx := range b.Allocations {
-		if attrIdx == nil {
-			continue
-		}
-		attrs := b.Attributes[*attrIdx]
-		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
-			return false
-		}
-	}
-	return true
 }
 
 func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
@@ -497,22 +491,6 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 		}
 	}
 	return ips
-}
-
-func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
-	// Convert to an ordinal.
-	ordinal, err := b.IPToOrdinal(ip)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if allocated.
-	attrIndex := b.Allocations[ordinal]
-	if attrIndex == nil {
-		log.Debugf("IP %s is not currently assigned in block", ip)
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
-	}
-	return b.Attributes[*attrIndex].ActiveOwnerAttrs, nil
 }
 
 // allocationAttributesForIP returns the full AllocationAttribute for the given IP,
