@@ -124,7 +124,7 @@ func Test_processIPPoolsV4(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -177,7 +177,7 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if config.KernelFilterForIPPools != nil {
@@ -246,7 +246,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -324,7 +324,7 @@ func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -400,7 +400,7 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
