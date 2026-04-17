@@ -16,6 +16,7 @@ package calico
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"slices"
 	"sort"
@@ -41,6 +42,22 @@ type bgpConfigCache struct {
 
 type processorContext struct {
 	globalBGPConfig *v3.BGPConfiguration
+}
+
+func (pc *processorContext) getBindMode() (bindMode v3.BindMode) {
+	bindMode = v3.BindModeNone
+	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.BindMode != nil {
+		bindMode = *pc.globalBGPConfig.Spec.BindMode
+	}
+	return
+}
+
+func (pc *processorContext) getNodeMeshRestartTime() (restartTimeStr string) {
+	v3res := pc.globalBGPConfig
+	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
+		restartTimeStr = fmt.Sprintf("%v", int(math.Round(v3res.Spec.NodeMeshMaxRestartTime.Seconds())))
+	}
+	return
 }
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
@@ -184,7 +201,7 @@ func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPC
 	// Process bind mode and listen address
 
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if getBindMode(pc.globalBGPConfig) == v3.BindModeNodeIP {
+	if pc.getBindMode() == v3.BindModeNodeIP {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
@@ -374,7 +391,7 @@ func (c *client) processMeshPeers(pc *processorContext, config *types.BirdBGPCon
 			Type:            "mesh",
 			SourceAddr:      currentNodeIP,
 			Password:        c.getNodeMeshPassword(pc.globalBGPConfig),
-			GracefulRestart: getNodeMeshRestartTime(pc.globalBGPConfig),
+			GracefulRestart: pc.getNodeMeshRestartTime(),
 		}
 
 		// Make mesh unidirectional to avoid race conditions

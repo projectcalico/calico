@@ -1364,14 +1364,6 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 	*updatePeersV1 = true
 }
 
-func getBindMode(v3res *apiv3.BGPConfiguration) (bindMode apiv3.BindMode) {
-	bindMode = apiv3.BindModeNone
-	if v3res != nil && v3res.Spec.BindMode != nil {
-		bindMode = *v3res.Spec.BindMode
-	}
-	return
-}
-
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	asNumberKey := getBGPConfigKey("as_num", key)
 	if v3res != nil && v3res.Spec.ASNumber != nil {
@@ -1454,13 +1446,6 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	} else {
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(logLevelKey))
 	}
-}
-
-func getNodeMeshRestartTime(v3res *apiv3.BGPConfiguration) (restartTimeStr string) {
-	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
-		restartTimeStr = fmt.Sprintf("%v", int(math.Round(v3res.Spec.NodeMeshMaxRestartTime.Seconds())))
-	}
-	return
 }
 
 func (c *client) getNodeMeshPassword(v3res *apiv3.BGPConfiguration) (password string) {
