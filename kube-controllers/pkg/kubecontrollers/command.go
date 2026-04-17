@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,18 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
+	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
 
+// innerEnvVar marks the inner (controller-running) process when the command
+// re-execs itself to provide cmdwrapper-style restart-on-config-change
+// semantics. See cmdwrapper.WrapSelf.
+const innerEnvVar = "CALICO_KUBE_CONTROLLERS_INNER"
+
 // NewCommand returns a cobra command that runs the Calico Kubernetes controllers.
+// The command wraps itself so that when the controller exits with
+// cmdwrapper.RestartReturnCode (on a live config change), the outer process
+// re-execs the inner process transparently.
 func NewCommand() *cobra.Command {
 	var cfg Config
 
@@ -30,7 +39,9 @@ func NewCommand() *cobra.Command {
 		Use:   "kube-controllers",
 		Short: "Run the Calico Kubernetes controllers",
 		Run: func(cmd *cobra.Command, args []string) {
-			Run(context.Background(), cfg)
+			cmdwrapper.WrapSelf(innerEnvVar, func() {
+				Run(context.Background(), cfg)
+			})
 		},
 	}
 

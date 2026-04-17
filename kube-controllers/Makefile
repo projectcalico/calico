@@ -5,9 +5,8 @@ PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
 # Name of the images.
 # e.g., <registry>/<name>:<tag>
 KUBE_CONTROLLERS_IMAGE  ?=kube-controllers
-FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
 
-BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
+BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE)
 
 ###############################################################################
 # Download and include ../lib.Makefile
@@ -19,7 +18,6 @@ include ../lib.Makefile
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
 KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
-FLANNEL_MIGRATION_CONTAINER_CREATED=.image.created-flannel-migration-$(ARCH)
 
 FIPS ?= false
 
@@ -42,7 +40,6 @@ clean:
 	rm -f report/*.xml
 	rm -f tests/fv/fv.test
 	rm -rf bin image.created-$(ARCH) build report/*.xml release-notes-*
-	-docker image rm -f $$(docker images $(FLANNEL_MIGRATION_IMAGE) -a -q)
 	-docker image rm -f $$(docker images $(KUBE_CONTROLLERS_IMAGE) -a -q)
 
 ###############################################################################
@@ -70,10 +67,6 @@ endif
 $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./cmd/check-status, $@)
 
-$(BINDIR)/kubectl-$(ARCH):
-	curl -sSf -L --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
-	chmod +x $@
-
 ###############################################################################
 # Building the image
 ###############################################################################
@@ -86,28 +79,17 @@ sub-image-fips-%:
 
 image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
-IMAGE_DEPS = Dockerfile docker-image/flannel-migration/Dockerfile
+IMAGE_DEPS = Dockerfile
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
-$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
+$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile .
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-# Flannel-migration-only image. Used by the flannel migration FV tests, which
-# need kubectl inside the container (the combined calico/calico image doesn't
-# ship kubectl). Kept separate so kube-controllers FV tests — which use the
-# combined image — don't force a rebuild of the standalone kube-controllers image.
-$(FLANNEL_MIGRATION_CONTAINER_CREATED): docker-image/flannel-migration/Dockerfile $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
-	cp ../LICENSE.md $(BINDIR)/LICENSE
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
-	touch $@
-
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
@@ -149,15 +131,12 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
 # uber-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
-# Flannel-migration FV tests need kubectl inside the container, which the
-# combined image does not ship, so they continue to use a dedicated image.
 test: ut
-ut fv: $(TEST_BINARIES) $(FLANNEL_MIGRATION_CONTAINER_CREATED) setup-envtest
+ut fv: $(TEST_BINARIES) setup-envtest
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		   CONTAINER_NAME=calico/calico:latest-$(ARCH) \
-		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
