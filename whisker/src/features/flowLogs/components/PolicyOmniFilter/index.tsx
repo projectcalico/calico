@@ -6,7 +6,8 @@ import {
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
-import { Flex, Text } from '@chakra-ui/react';
+import { Flex, Text as ChakraText } from '@chakra-ui/react';
+import { Text } from '@/libs/tigera/ui-components/components/common/text';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
 import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
@@ -39,7 +40,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
     const isNoPolicy = checkIsNoPolicy(selectedFilters);
     const [noPolicyChecked, setNoPolicyChecked] = React.useState(isNoPolicy);
     const [queryState, setQueryState] = React.useState<PolicyQuery[]>(
-        isNoPolicy ? [] : transformToQueries(selectedFilters),
+        isNoPolicy ? [{}] : transformToQueries(selectedFilters),
     );
     const filterCount = selectedFilters.length;
     const isActive = filterCount > 0;
@@ -81,7 +82,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                         isActive={isActive}
                         customContent={
                             <Flex>
-                                <Text>Policy</Text>
+                                <ChakraText>Policy</ChakraText>
                                 {isActive && (
                                     <Badge ml={2}>{filterCount}</Badge>
                                 )}
@@ -89,7 +90,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                         }
                     />
                     <OmniFilterContent
-                        width={noPolicyChecked ? '300px' : '800px'}
+                        width={noPolicyChecked ? '300px' : '850px'}
                     >
                         <OmniFilterBody
                             p={4}
@@ -97,6 +98,20 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             flexDirection='column'
                             gap={4}
                         >
+                            <div>
+                                <Text size='base' className='font-bold'>
+                                    Policy filter
+                                </Text>
+
+                                <Text
+                                    size='sm'
+                                    className='text-tigera-token-fg-support'
+                                >
+                                    Results will match any of the filters below.
+                                    Each filter matches all of its fields.
+                                </Text>
+                            </div>
+                            <hr />
                             {!noPolicyChecked && (
                                 <>
                                     <QueryList
@@ -123,6 +138,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             rightButtonProps={{
                                 onClick: () => {
                                     onClose();
+                                    setQueryState([{}]);
                                     handleChange();
                                 },
                             }}
