@@ -338,8 +338,9 @@ blocks:
               value: "true"
           commands:
             - make -C cmd/calico image
-            - docker save calico/calico:latest-amd64 | zstd -3 > /tmp/calico-image.tar.zstd
-            - gcloud storage cp /tmp/calico-image.tar.zstd "${GCS_WORKFLOW_DIR}/calico-image.tar.zstd"
+            - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+            - zstd -3 --rm /tmp/calico-image.tar
+            - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
   - name: "Build: node image"
     run:
       when: "true"
@@ -359,8 +360,9 @@ blocks:
               value: "true"
           commands:
             - make -C node image
-            - docker save calico/node:latest-amd64 | zstd -3 > /tmp/node-image.tar.zstd
-            - gcloud storage cp /tmp/node-image.tar.zstd "${GCS_WORKFLOW_DIR}/node-image.tar.zstd"
+            - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+            - zstd -3 --rm /tmp/node-image.tar
+            - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
     run:
       when: >-
@@ -378,8 +380,9 @@ blocks:
               value: "true"
           commands:
             - make -C whisker image
-            - docker save calico/whisker:latest-amd64 | zstd -3 > /tmp/whisker-image.tar.zstd
-            - gcloud storage cp /tmp/whisker-image.tar.zstd "${GCS_WORKFLOW_DIR}/whisker-image.tar.zstd"
+            - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+            - zstd -3 --rm /tmp/whisker-image.tar
+            - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -685,7 +688,7 @@ blocks:
         - name: "E2E script & pipeline validations: validate yaml"
           commands:
             - ./.semaphore/end-to-end/scripts/test_scripts/e2e-validation.sh
-  - name: "E2E tests (cluster routing: BIRD)"
+  - name: "E2E tests (KinD)"
     run:
       when: "true"
     dependencies:
@@ -710,29 +713,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-      epilogue:
-        always:
-          commands:
-            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: "E2E tests (cluster routing: Felix)"
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      env_vars:
-        - name: BUILD_CACHE_GROUP
-          value: "e2e-tests"
-      agent:
-        machine:
-          type: f1-standard-4
-          os_image: ubuntu2204
-      prologue:
-        commands:
-          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
-          - docker system prune -af
-          - .semaphore/load-cached-images
-      jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -968,12 +948,20 @@ blocks:
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
-  - name: "Felix: iptables tests on Ubuntu 22.04"
+  - name: "Felix: FV"
     run:
       when: "true"
     dependencies:
       - "Felix: Build"
     task:
+      epilogue:
+        always:
+          commands:
+            - source felix/.semaphore/fv-epilogue
+      secrets:
+        - name: google-service-account-for-gce
+        - name: gemini-api-key
+        - name: fv-tests-guru-github-token
       jobs:
         - name: "Felix: iptables tests on Ubuntu 22.04"
           execution_time_limit:
@@ -987,21 +975,6 @@ blocks:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
-  - name: "Felix: nftables tests on Ubuntu 22.04"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      jobs:
         - name: "Felix: nftables tests on Ubuntu 22.04"
           execution_time_limit:
             minutes: 60
@@ -1014,22 +987,7 @@ blocks:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
-  - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      jobs:
-        - name: "Felix: BPF tests on Ubuntu 24.04"
+        - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
           execution_time_limit:
             minutes: 60
           env_vars:
@@ -1041,21 +999,6 @@ blocks:
             - source felix/.semaphore/fv-prologue
             - export NUM_FV_BATCHES=60
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
-  - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      jobs:
         - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
           execution_time_limit:
             minutes: 60
@@ -1072,22 +1015,7 @@ blocks:
             - export FV_FOCUS='_BPF_.*ct=true'
             - export NUM_FV_BATCHES=10
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
-  - name: "Felix: BPF program-loading check on 25.10 (nftables)"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      jobs:
-        - name: "Felix: BPF program-loading check on 25.10"
+        - name: "Felix: BPF program-loading check on 25.10 (nftables)"
           execution_time_limit:
             minutes: 30
           env_vars:
@@ -1102,22 +1030,7 @@ blocks:
             # Only run the UT that checks that the precompiled BPF binaries are loadable.
             - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
-  - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      jobs:
-        - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
+        - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
           execution_time_limit:
             minutes: 60
           env_vars:
@@ -1133,14 +1046,6 @@ blocks:
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      epilogue:
-        always:
-          commands:
-            - source felix/.semaphore/fv-epilogue
-      secrets:
-        - name: google-service-account-for-gce
-        - name: gemini-api-key
-        - name: fv-tests-guru-github-token
   - name: Goldmane
     run:
       when: "true"
@@ -1323,7 +1228,7 @@ blocks:
           commands:
             - 'python3 ../hack/strip-skipped-tests.py ./report/*.xml 2>/dev/null || true'
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: "Node: Build"
+  - name: "Node: Static checks and UT"
     run:
       when: "true"
     dependencies:
@@ -1339,14 +1244,27 @@ blocks:
       prologue:
         commands:
           - cd node
+      # Image builds (image, image-windows) are handled by the Prerequisites
+      # "Build: node image" block and the "Node: multi-arch build" block
+      # respectively, so we only run the unique checks here.
       jobs:
-        - name: "Node: CI"
+        - name: "Node: Static checks"
           priority:
             # This job is on the critical path so we increase its priority.
             - value: 51
               when: "pull_request =~ '.+'"
           commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
+            - ../.semaphore/run-and-monitor static-checks.log make static-checks
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+        - name: "Node: UT"
+          priority:
+            # This job is on the critical path so we increase its priority.
+            - value: 51
+              when: "pull_request =~ '.+'"
+          commands:
+            - ../.semaphore/run-and-monitor ut.log make ut
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
@@ -1358,7 +1276,7 @@ blocks:
     run:
       when: "true"
     dependencies:
-      - "Node: Build"
+      - Prerequisites
     task:
       prologue:
         commands:
