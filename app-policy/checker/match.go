@@ -380,6 +380,14 @@ func normalizeHTTPPath(p string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
+	// Fold backslash to forward slash. "\" is not a valid HTTP path character
+	// per RFC 3986, but Windows / IIS backends accept it as a path separator,
+	// so an attacker could otherwise smuggle traversal past path.Clean using
+	// "\..\". Folding here aligns the authorisation view with the most
+	// permissive upstream interpretation.
+	if strings.ContainsRune(decoded, '\\') {
+		decoded = strings.ReplaceAll(decoded, "\\", "/")
+	}
 	if !strings.HasPrefix(decoded, "/") {
 		return "", false
 	}
