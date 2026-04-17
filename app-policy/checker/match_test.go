@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -209,6 +210,21 @@ func TestMatchHTTPPaths_Normalization(t *testing.T) {
 		// --- Query/fragment retained after normalisation ---
 		{"query stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin?x=1", false},
 		{"fragment stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin#frag", false},
+
+		// --- Backslash separator: Windows / IIS backends may treat "\" as a path
+		// separator. "\" is not a valid HTTP path character per RFC 3986, so we
+		// normalise it to "/" before resolving dot-segments to stay aligned with
+		// the most permissive (Windows) upstream interpretation. ---
+		{"backslash traversal escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public\\..\\admin", false},
+		{"backslash mixed with slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..\\admin", false},
+		{"percent-encoded backslash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%5C..%5Cadmin", false},
+		{"backslash within legitimate segment still inside prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo\\bar", true},
+
+		// --- Pinned single-decode semantics ---
+		// Double percent-encoded sequences must not be decoded twice, otherwise
+		// we'd over-authorise relative to a compliant upstream. /public/%25..
+		// decodes once to /public/%.. which is a literal segment.
+		{"double percent-encoded traversal stays literal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%252e%252e/admin", true},
 	}
 
 	for _, tc := range testCases {
@@ -217,6 +233,115 @@ func TestMatchHTTPPaths_Normalization(t *testing.T) {
 			Expect(matchHTTPPaths(tc.paths, &tc.reqPath)).To(Equal(tc.result))
 		})
 	}
+}
+
+// TestNormalizeHTTPPath exercises normalizeHTTPPath directly so its contract
+// is pinned independently of the matchHTTPPaths rule-iteration logic. Each
+// case lists the raw path Envoy may deliver and the canonical path that must
+// be used for authorisation decisions.
+func TestNormalizeHTTPPath(t *testing.T) {
+	cases := []struct {
+		title string
+		in    string
+		want  string
+		ok    bool
+	}{
+		{"root", "/", "/", true},
+		{"plain", "/public", "/public", true},
+		{"trailing slash stripped", "/public/", "/public", true},
+		{"single dot segment", "/public/.", "/public", true},
+		{"dotdot resolved", "/public/../admin", "/admin", true},
+		{"nested dotdot resolved", "/public/a/../../admin", "/admin", true},
+		{"dotdot above root clamped", "/..", "/", true},
+		{"repeated slash collapsed", "/public//foo", "/public/foo", true},
+		{"leading repeated slash collapsed", "//public", "/public", true},
+		{"percent-encoded slash decoded", "/public%2F..%2Fadmin", "/admin", true},
+		{"percent-encoded dot decoded", "/public/%2e%2e/admin", "/admin", true},
+		{"percent-encoded unreserved decoded", "/public/%66ile", "/public/file", true},
+		{"query stripped before decode", "/public/../admin?q=1", "/admin", true},
+		{"fragment stripped before decode", "/public/../admin#x", "/admin", true},
+		{"encoded query marker stays literal", "/public%3Ffoo", "/public?foo", true},
+		{"backslash converted to slash", "/public/..\\admin", "/admin", true},
+		{"only backslash separators", "\\public\\..\\admin", "/admin", true},
+		{"percent-encoded backslash decoded and normalised", "/public%5C..%5Cadmin", "/admin", true},
+		{"double percent encoding stays single decoded", "/public/%252e%252e/admin", "/public/%2e%2e/admin", true},
+		{"invalid percent escape rejected", "/%XY/admin", "", false},
+		{"non-absolute rejected", "relative/path", "", false},
+		{"empty rejected", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			got, ok := normalizeHTTPPath(tc.in)
+			Expect(ok).To(Equal(tc.ok), "ok mismatch for input %q", tc.in)
+			if tc.ok {
+				Expect(got).To(Equal(tc.want), "normalised form mismatch for input %q", tc.in)
+			}
+		})
+	}
+}
+
+// FuzzMatchHTTPPaths is a canary that explores arbitrary request paths and
+// asserts structural invariants on the normalised form whenever normalisation
+// succeeds:
+//
+//   - Starts with "/".
+//   - Contains no "\" separator (backslashes are folded during normalisation).
+//   - Contains no "//" (repeated slashes collapsed).
+//   - Contains no "." or ".." path segments (dot-segments resolved).
+//
+// Idempotence is intentionally not asserted: the normaliser is a deliberate
+// single-decode to match a compliant upstream HTTP server. An input with two
+// layers of percent-encoding (e.g. "%252e%252e") normalises to one with a
+// literal "%2e%2e" segment; a second normalisation would decode further and
+// diverge. See the "double percent-encoded traversal stays literal" case in
+// TestMatchHTTPPaths_Normalization for the pinned behaviour.
+func FuzzMatchHTTPPaths(f *testing.F) {
+	seeds := []string{
+		"/public",
+		"/public/",
+		"/public/index.html",
+		"/public/../admin",
+		"/public%2F..%2Fadmin",
+		"/public//../admin",
+		"/public-leak",
+		"/public/%2e%2e/admin",
+		"/public/..\\admin",
+		"/public%5C..%5Cadmin",
+		"/public/%252e%252e/admin",
+		"/%2e%2e/admin",
+		"/public/foo%00bar",
+		"/public/.",
+		"/public/./././foo",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		// Reject inputs that the matcher is documented to panic on — those are
+		// filtered before the matcher would ever see them in production.
+		if raw == "" || raw[0] != '/' {
+			return
+		}
+		got, ok := normalizeHTTPPath(raw)
+		if !ok {
+			return
+		}
+		if !strings.HasPrefix(got, "/") {
+			t.Fatalf("normalised path %q (from %q) does not start with /", got, raw)
+		}
+		if strings.Contains(got, "\\") {
+			t.Fatalf("normalised path %q (from %q) still contains backslash", got, raw)
+		}
+		if strings.Contains(got, "//") {
+			t.Fatalf("normalised path %q (from %q) still contains repeated slash", got, raw)
+		}
+		for _, seg := range strings.Split(got, "/") {
+			if seg == "." || seg == ".." {
+				t.Fatalf("normalised path %q (from %q) still contains dot-segment", got, raw)
+			}
+		}
+	})
 }
 
 // An omitted HTTP Match clause always matches.
