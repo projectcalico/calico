@@ -37,7 +37,7 @@ OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
-NON_HELM_MANIFEST_IMAGES="apiserver windows ctl csi node-driver-registrar dikastes flannel-migration-controller"
+NON_HELM_MANIFEST_IMAGES="node-windows flannel-migration-controller"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
@@ -64,7 +64,7 @@ ${HELM} -n tigera-operator template \
 	--set tigeraOperator.image=$OPERATOR_IMAGE \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
 	--set calicoctl.tag=$CALICO_VERSION \
-	--set calicoctl.image=$REGISTRY/ctl \
+	--set calicoctl.image=$REGISTRY/calico \
 	../charts/tigera-operator >> tigera-operator.yaml
 
 ##########################################################################
@@ -78,14 +78,9 @@ for FILE in $(ls ../charts/calico/crds); do
 		--include-crds \
 		--show-only $FILE \
 		--set version=$CALICO_VERSION \
+		--set calico.registry=$REGISTRY \
 		--set node.registry=$REGISTRY \
-		--set calicoctl.registry=$REGISTRY \
-		--set typha.registry=$REGISTRY \
-		--set cni.registry=$REGISTRY \
-		--set kubeControllers.registry=$REGISTRY \
 		--set flannelMigration.registry=$REGISTRY \
-		--set dikastes.registry=$REGISTRY \
-		--set csi-driver.registry=$REGISTRY \
 		-f ../charts/values/calico.yaml >> crds.yaml
 done
 
@@ -158,7 +153,7 @@ ${HELM} template \
 	--set tigeraOperator.image=$OPERATOR_IMAGE \
 	--set tigeraOperator.version=$OPERATOR_VERSION \
 	--set tigeraOperator.registry=$OPERATOR_REGISTRY \
-	--set calicoctl.image=$REGISTRY/ctl \
+	--set calicoctl.image=$REGISTRY/calico \
 	--set calicoctl.tag=$CALICO_VERSION
 # The first two lines are a newline and a yaml separator - remove them.
 find ocp/tigera-operator -name "*.yaml" -print0 | xargs -0 sed -i -e 1,2d

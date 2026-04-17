@@ -8,7 +8,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "guardian"
+        value: "calico-image"
     prologue:
       commands:
         - cd guardian
@@ -19,15 +19,6 @@
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
-      - name: "Guardian: build multi-arch"
-        matrix:
-          - env_var: ARCH
-            values:
-              - arm64
-              - ppc64le
-              - s390x
-        commands:
-          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
     epilogue:
       always:
         commands:
