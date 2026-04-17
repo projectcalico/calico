@@ -40,8 +40,8 @@ const NoPolicyCheckbox = ({ value, onChange }: NoPolicyCheckboxProps) => (
                 </FieldLabel>
                 <FieldDescription>
                     {value
-                        ? 'Uncheck to add a new query.'
-                        : 'This filter will clear all existing queries.'}
+                        ? 'Uncheck to add a new filter.'
+                        : 'This filter will clear any existing filters.'}
                 </FieldDescription>
             </FieldContent>
         </Field>
