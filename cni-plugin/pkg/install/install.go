@@ -217,7 +217,7 @@ func Install(version string) error {
 				logrus.WithError(err).Errorf("Failed to verify installed binary %s", target)
 				os.Exit(1)
 			}
-			if name == "calico" {
+			if name == installNames[0] {
 				calicoBinaryOK = true
 			}
 			logrus.Infof("Installed %s", target)
