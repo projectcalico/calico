@@ -526,6 +526,29 @@ func torContainerLineCount(tor *externalnode.Client, container string) (int, err
 	return n, nil
 }
 
+// pauseForDebug checks for the existence of a "pause-for-debug" namespace and
+// waits in a loop if it exists, allowing developers to pause test execution for
+// debugging. To pause: kubectl create ns pause-for-debug
+// To resume: kubectl delete ns pause-for-debug
+func pauseForDebug(f *framework.Framework) {
+	const ns = "pause-for-debug"
+	maxWait := 1 * time.Hour
+	start := time.Now()
+	for {
+		_, err := f.ClientSet.CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
+		if err != nil {
+			logrus.Infof("pauseForDebug: namespace %q does not exist, continuing.", ns)
+			return
+		}
+		if time.Since(start) >= maxWait {
+			logrus.Infof("pauseForDebug: timeout after 1 hour, continuing.")
+			return
+		}
+		logrus.Infof("pauseForDebug: namespace %q exists, paused for debugging. Elapsed: %v", ns, time.Since(start))
+		time.Sleep(30 * time.Second)
+	}
+}
+
 // generateTORBirdPeersConf returns a BIRD 1.x peers config for the TOR node.
 // This is written to /etc/bird/peers.conf inside the calico/bird container,
 // which already provides the base config (router id, protocol kernel/device).
@@ -626,22 +649,29 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		Mask: net.CIDRMask(24, 32),
 	}
 
-	var nodeIPs []string
-	var nodeNames []string
+	// Find the master (control-plane) node and its BGP IP. Only the master
+	// will peer with the TOR — it re-advertises all iBGP-learned routes with
+	// "next hop keep", so the TOR gets the correct per-node next-hop and can
+	// route directly to the node hosting each workload.
+	var masterName, masterBGPIP string
 	for _, node := range nodeList.Items {
+		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; !ok {
+			continue
+		}
 		addr := node.Annotations["projectcalico.org/IPv4Address"]
 		if addr == "" {
 			continue
 		}
-		// Strip CIDR suffix (e.g. "172.16.8.2/24" -> "172.16.8.2")
 		ip := strings.Split(addr, "/")[0]
 		if bgpSubnet.Contains(net.ParseIP(ip)) {
-			nodeIPs = append(nodeIPs, ip)
-			nodeNames = append(nodeNames, node.Name)
+			masterName = node.Name
+			masterBGPIP = ip
+			break
 		}
 	}
-	Expect(nodeIPs).NotTo(BeEmpty(), "no node BGP IPs found in 172.16.8.0/24 subnet")
-	logrus.Infof("Node BGP IPs: %v", nodeIPs)
+	Expect(masterBGPIP).NotTo(BeEmpty(),
+		"no control-plane node found with BGP IP in 172.16.8.0/24 subnet")
+	logrus.Infof("Master node: %s, BGP IP: %s", masterName, masterBGPIP)
 
 	// Find the TOR's L2TP IP by matching against the BGP subnet.
 	torIPs := tor.IPs()
@@ -657,23 +687,25 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		"no TOR IP found in 172.16.8.0/24 subnet (TOR IPs: %v)", torIPs)
 	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
 
-	// Generate peers config and start BIRD on the TOR.
-	peersConf := generateTORBirdPeersConf(nodeIPs)
+	// Generate peers config with only the master as peer and start BIRD on the TOR.
+	peersConf := generateTORBirdPeersConf([]string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
 	startBirdOnTOR(tor, torL2tpIP, peersConf)
 	DeferCleanup(func() { stopBirdOnTOR(tor) })
 
-	// Create a BGPPeer so all cluster nodes peer with the TOR.
-	// This must happen BEFORE disabling the mesh — if we disable the mesh first,
-	// nodes lose API server connectivity (since it routes through BGP) and we
-	// cannot create the BGPPeer resource.
-	By("Creating BGPPeer for TOR")
+	// Create a BGPPeer so the master node peers with the TOR via eBGP.
+	// NextHopMode "Keep" preserves the original next-hop from iBGP routes,
+	// so the TOR gets per-node next-hops and routes directly to the node
+	// hosting each workload — no ECMP, no extra hop through the master.
+	By("Creating BGPPeer for TOR (master only, next-hop-keep)")
+	nextHopKeep := v3.NextHopMode("Keep")
 	bgpPeer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: "tor-ebgp-peer"},
 		Spec: v3.BGPPeerSpec{
-			NodeSelector: "all()",
-			PeerIP:       torL2tpIP,
-			ASNumber:     numorstring.ASNumber(65001),
+			Node:        masterName,
+			PeerIP:      torL2tpIP,
+			ASNumber:    numorstring.ASNumber(65001),
+			NextHopMode: &nextHopKeep,
 		},
 	}
 	_, err = lcgc.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
@@ -688,30 +720,70 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 
 	// Keep the BGP mesh enabled — nodes need iBGP for inter-node routing
 	// (required for KubeVirt live migration). The eBGP peer to the TOR is
-	// additive: nodes advertise routes to the TOR via eBGP while continuing
-	// to exchange routes with each other via the iBGP mesh.
+	// additive: the master advertises routes to the TOR via eBGP while all
+	// nodes continue to exchange routes with each other via the iBGP mesh.
 
-	// Wait for eBGP sessions to establish by checking BIRD protocol status on TOR.
-	By("Waiting for eBGP sessions to establish")
-	expectedPeers := len(nodeIPs)
+	// Wait for the eBGP session to establish on the TOR.
+	By("Waiting for eBGP session to establish")
 	Eventually(func() error {
 		out := runOnTOR(tor, "sudo docker exec tor-bird birdcl show protocols")
 		logrus.Infof("birdcl show protocols:\n%s", out)
-		established := strings.Count(out, "Established")
-		if established < expectedPeers {
-			return fmt.Errorf("only %d/%d BGP sessions established:\n%s",
-				established, expectedPeers, out)
+		if !strings.Contains(out, "Established") {
+			return fmt.Errorf("BGP session not established:\n%s", out)
 		}
 		return nil
 	}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-		"not all eBGP sessions established on TOR")
-	logrus.Infof("eBGP peering established — %d sessions up on TOR", expectedPeers)
+		"eBGP session not established on TOR")
+	logrus.Info("eBGP peering established on TOR")
 
 	// Log the routes the TOR learned via eBGP for debugging.
 	routes := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
 	logrus.Infof("TOR BIRD routes after eBGP establishment:\n%s", routes)
 	kernRoutes := runOnTOR(tor, "ip route show proto bird")
 	logrus.Infof("TOR kernel routes (proto bird):\n%s", kernRoutes)
+}
+
+// startRouteMonitor polls TOR kernel routes for a VM IP and logs changes.
+// It monitors both the /32 host route (advertised during migration for the
+// specific VM) and the /26 block route (the steady-state subnet route),
+// clearly showing how routes transition during live migration.
+// Call the returned stop function to terminate the monitor goroutine.
+func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
+	ip := strings.Split(vmIP, "/")[0]
+
+	// Determine the /26 block that contains this IP. Calico allocates /26 blocks
+	// by default, so mask the IP to find the block prefix.
+	parsed := net.ParseIP(ip).To4()
+	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
+	block26 := fmt.Sprintf("%s/26", blockIP)
+
+	logrus.Infof("Route monitor: tracking /32=%s and /26=%s", ip, block26)
+
+	stopCh := make(chan struct{})
+	go func() {
+		var lastRoutes string
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
+			// Query both the /32 host route and /26 block route separately
+			// so we can see which one exists and how they change.
+			out, _ := runOnTORE(tor, fmt.Sprintf(
+				"echo '--- /32 route ---'; ip route show proto bird %s/32 2>&1; "+
+					"echo '--- /26 route ---'; ip route show proto bird %s 2>&1; "+
+					"echo '--- route lookup ---'; ip route get %s 2>&1",
+				ip, block26, ip))
+			out = strings.TrimSpace(out)
+			if out != lastRoutes {
+				logrus.Infof("TOR route change:\n%s", out)
+				lastRoutes = out
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	return func() { close(stopCh) }
 }
 
 func ptrInt64(v int64) *int64 { return &v }

@@ -324,6 +324,12 @@ var _ = describe.CalicoDescribe(
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
 				"TOR cannot reach VM — eBGP routing may not be configured")
 
+			pauseForDebug(f)
+
+			By("Starting route monitor on TOR")
+			stopMonitor := startRouteMonitor(tor, vmIP)
+			defer stopMonitor()
+
 			By("Waiting for TCP server on VM to be reachable from TOR")
 			const ncClientContainer = "tor-nc-client"
 			Eventually(func() error {
