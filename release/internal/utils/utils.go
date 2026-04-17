@@ -81,25 +81,15 @@ var once sync.Once
 
 var (
 	ImageReleaseDirs = []string{
-		"apiserver",
-		"app-policy",
-		"calicoctl",
 		"cmd/calico",
 		"cni-plugin",
-		"goldmane",
-		"guardian",
 		"istio",
-		"key-cert-provisioner",
 		"kube-controllers",
 		"node",
-		"pod2daemon",
 		"third_party/envoy-gateway",
 		"third_party/envoy-proxy",
 		"third_party/envoy-ratelimit",
-		"typha",
-		"webhooks",
 		"whisker",
-		"whisker-backend",
 	}
 	releaseImages = []string{}
 )
