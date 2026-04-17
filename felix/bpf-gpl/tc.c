@@ -700,6 +700,16 @@ syn_force_policy:
 	if (!dest_rt) {
 		CALI_DEBUG("No route for post DNAT dest " IP_FMT "", debug_ip(ctx->state->post_nat_ip_dst));
 		if (CALI_F_FROM_HEP) {
+			/* Check failsafe before policy for packets with no route.
+			 * Handles DHCP responses (dest 255.255.255.255 or newly
+			 * assigned IP not yet in the route table).
+			 * https://github.com/projectcalico/calico/issues/12253
+			 */
+			if (is_failsafe_in(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->ip_src)) {
+				CALI_DEBUG("Inbound failsafe port: %d. Skip policy (no route).", ctx->state->post_nat_dport);
+				counter_inc(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
+				goto skip_policy;
+			}
 			/* Disable FIB, let the packet go through the host after it is
 			 * policed. It is ingress into the system and we do not know what
 			 * exactly is the packet's destination. It may be a local VM or
@@ -781,6 +791,18 @@ syn_force_policy:
 			}
 			ctx->state->flags |= CALI_ST_CT_NP_REMOTE;
 		}
+	}
+
+	/* Check outbound failsafe for packets with no recognized local source IP.
+	 * Handles DHCP requests where source is 0.0.0.0, which is not in the
+	 * route table as a local host IP so the normal failsafe check is skipped.
+	 * https://github.com/projectcalico/calico/issues/12253
+	 */
+	if (CALI_F_TO_HEP && !forwarding && ip_void(ctx->state->ip_src) &&
+	    is_failsafe_out(ctx->state->ip_proto, ctx->state->post_nat_dport, ctx->state->post_nat_ip_dst)) {
+		CALI_DEBUG("Outbound failsafe port: %d. Skip policy (void src).", ctx->state->post_nat_dport);
+		counter_inc(ctx, CALI_REASON_ACCEPTED_BY_FAILSAFE);
+		goto skip_policy;
 	}
 
 do_policy:
