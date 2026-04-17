@@ -88,6 +88,48 @@ func parsePersistence(val string) (*ipam.VMAddressPersistence, error) {
 	}
 }
 
+// ConfigureIPAM updates IPAM configuration from pre-parsed flag values.
+func ConfigureIPAM(ctx context.Context, config, strictAffinityStr, maxBlocksStr, persistenceStr string) error {
+	client, err := clientmgr.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	ipamClient := client.IPAM()
+
+	var strictAffinity *bool
+	if strictAffinityStr != "" {
+		enabled, err := strconv.ParseBool(strictAffinityStr)
+		if err != nil {
+			return fmt.Errorf("invalid value. Use true or false to set strictaffinity")
+		}
+		strictAffinity = &enabled
+	}
+
+	var maxBlocks *int
+	if maxBlocksStr != "" {
+		maxBlocksVal, err := strconv.Atoi(maxBlocksStr)
+		if err != nil {
+			return fmt.Errorf("invalid value for maxblockhost. Use a valid number")
+		}
+		maxBlocks = &maxBlocksVal
+	}
+
+	var persistence *ipam.VMAddressPersistence
+	if persistenceStr != "" {
+		persistence, err = parsePersistence(persistenceStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if strictAffinity == nil && maxBlocks == nil && persistence == nil {
+		return fmt.Errorf("at least one configuration option must be specified")
+	}
+
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
+}
+
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:

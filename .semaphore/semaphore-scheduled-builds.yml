@@ -143,16 +143,8 @@ promotions:
       when: "result = 'stopped'"
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
-  - name: Push apiserver images
-    pipeline_file: push-images/apiserver.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push ALP images
-    pipeline_file: push-images/alp.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push calicoctl images
-    pipeline_file: push-images/calicoctl.yml
+  - name: Push calico uber images
+    pipeline_file: push-images/calico.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
@@ -163,48 +155,12 @@ promotions:
     pipeline_file: push-images/mock-node.yml
     auto_promote:
       when: "branch =~ 'master|release-'"
-  - name: Push cni-plugin images
-    pipeline_file: push-images/cni-plugin.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push key-cert-provisioner images
-    pipeline_file: push-images/key-cert-provisioner.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push kube-controllers images
-    pipeline_file: push-images/kube-controllers.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push pod2daemon images
-    pipeline_file: push-images/pod2daemon.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push typha images
-    pipeline_file: push-images/typha.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push Goldmane images
-    pipeline_file: push-images/goldmane.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
-  - name: Push Whisker Backend images
-    pipeline_file: push-images/whisker-backend.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push Guardian images
-    pipeline_file: push-images/guardian.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
-  - name: Push Webhooks images
-    pipeline_file: push-images/webhooks.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
@@ -363,6 +319,67 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  - name: "Build: uber image"
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "uber-calico"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache uber image"
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+          commands:
+            - make -C cmd/calico image
+            - docker save calico/calico:latest-amd64 | zstd -3 > /tmp/calico-image.tar.zstd
+            - gcloud storage cp /tmp/calico-image.tar.zstd "${GCS_WORKFLOW_DIR}/calico-image.tar.zstd"
+  - name: "Build: node image"
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      jobs:
+        - name: "Build and cache node image"
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+          commands:
+            - make -C node image
+            - docker save calico/node:latest-amd64 | zstd -3 > /tmp/node-image.tar.zstd
+            - gcloud storage cp /tmp/node-image.tar.zstd "${GCS_WORKFLOW_DIR}/node-image.tar.zstd"
+  - name: "Build: whisker image"
+    run:
+      when: >-
+        true or
+        change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "whisker"
+      jobs:
+        - name: "Build and cache whisker image"
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+          commands:
+            - make -C whisker image
+            - docker save calico/whisker:latest-amd64 | zstd -3 > /tmp/whisker-image.tar.zstd
+            - gcloud storage cp /tmp/whisker-image.tar.zstd "${GCS_WORKFLOW_DIR}/whisker-image.tar.zstd"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -376,6 +393,9 @@ blocks:
       - Check protobufs
       - Manifests and API docs
       - Store working copy
+      - "Build: uber image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       jobs:
         - name: Pre-flight checks
@@ -412,7 +432,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "apiserver"
+          value: "uber-calico"
       prologue:
         commands:
           - cd apiserver
@@ -423,15 +443,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-        - name: "API Server: Build"
-          matrix:
-            - env_var: ARCH
-              values:
-                - arm64
-                - ppc64le
-                - s390x
-          commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
       epilogue:
         always:
           commands:
@@ -461,7 +472,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calicoctl"
+          value: "uber-calico"
       prologue:
         commands:
           - cd calicoctl
@@ -476,6 +487,28 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: cmd/calico
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd cmd/calico
+      jobs:
+        - name: "cmd/calico: UT"
+          commands:
+            - ../../.semaphore/run-and-monitor ut.log make ut
+        - name: "cmd/calico: build multi-arch"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: CNI Plugin
     run:
       when: "true"
@@ -484,7 +517,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "cni-plugin"
+          value: "uber-calico"
       prologue:
         commands:
           - cd cni-plugin
@@ -495,9 +528,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-        - name: "CNI Plugin: build windows images"
-          commands:
-            - ../.semaphore/run-and-monitor ci.log make image-windows
       epilogue:
         always:
           commands:
@@ -523,7 +553,7 @@ blocks:
           - export LOGS_DIR=~/fv.log
           - export RG_PREFIX=${USER}-win-cni-${SEMAPHORE_GIT_SHA:0:4}-pr${SEMAPHORE_GIT_PR_NUMBER}
           - cd cni-plugin
-          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/calico-ipam.exe bin/windows/win-fv.exe
+          - ../.semaphore/run-and-monitor build.log make bin/windows/calico.exe bin/windows/win-fv.exe
       epilogue:
         always:
           commands:
@@ -532,7 +562,7 @@ blocks:
             - cd ~/calico/process/testing/aso && make dist-clean
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "cni-plugin"
+          value: "uber-calico"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: AZURE_LOCATION
@@ -564,7 +594,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "confd"
+          value: "uber-calico"
       prologue:
         commands:
           - cd confd
@@ -671,6 +701,7 @@ blocks:
         commands:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
+          - .semaphore/load-cached-images
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -699,6 +730,7 @@ blocks:
         commands:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
+          - .semaphore/load-cached-images
       jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
@@ -1118,7 +1150,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "goldmane"
+          value: "uber-calico"
       prologue:
         commands:
           # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
@@ -1133,15 +1165,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-        - name: "Goldmane: build multi-arch"
-          matrix:
-            - env_var: ARCH
-              values:
-                - arm64
-                - ppc64le
-                - s390x
-          commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
       epilogue:
         always:
           commands:
@@ -1156,7 +1179,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "guardian"
+          value: "uber-calico"
       prologue:
         commands:
           - cd guardian
@@ -1167,15 +1190,6 @@ blocks:
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
-        - name: "Guardian: build multi-arch"
-          matrix:
-            - env_var: ARCH
-              values:
-                - arm64
-                - ppc64le
-                - s390x
-          commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
       epilogue:
         always:
           commands:
@@ -1227,7 +1241,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "kube-controllers"
+          value: "uber-calico"
       prologue:
         commands:
           - cd kube-controllers
@@ -1280,7 +1294,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "libcalico-go"
+          value: "uber-calico"
       prologue:
         commands:
           - cd libcalico-go
@@ -1445,7 +1459,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "typha"
+          value: "uber-calico"
       prologue:
         commands:
           - cd typha
@@ -1476,7 +1490,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "webhooks"
+          value: "uber-calico"
       prologue:
         commands:
           - cd webhooks
@@ -1506,15 +1520,6 @@ blocks:
         - name: "Whisker backend: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-        - name: "Whisker backend: build multi-arch"
-          matrix:
-            - env_var: ARCH
-              values:
-                - arm64
-                - ppc64le
-                - s390x
-          commands:
-            - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
       epilogue:
         always:
           commands:
@@ -1559,7 +1564,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "key-cert-provisioner"
+          value: "uber-calico"
       prologue:
         commands:
           - cd key-cert-provisioner
