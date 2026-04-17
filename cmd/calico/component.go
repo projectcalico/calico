@@ -49,12 +49,8 @@ func newComponentCommand() *cobra.Command {
 		csi.NewCommand(),
 		flexvol.NewCommand(),
 		webhook.NewCommand(),
+		kubecontrollers.NewCommand(),
 	)
-
-	// Kube-controllers with its health subcommand.
-	kcCmd := kubecontrollers.NewCommand()
-	kcCmd.AddCommand(newKubeControllersHealthCommand())
-	cmd.AddCommand(kcCmd)
 
 	// Components with their own CLI framework that need shims.
 	cmd.AddCommand(

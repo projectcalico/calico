@@ -40,5 +40,5 @@ func RunKubeControllers(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfi
 		"-e", "FV_TEST=true", // Indicate that this is an FV test run, enabling some test hooks.
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers", "--health-port=9099")
 }

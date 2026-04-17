@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +33,13 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+// checkReadiness runs `calico health --type=readiness` inside the given container
+// and returns the exit status — nil when the controller reports ready.
+func checkReadiness(containerName string) error {
+	return exec.Command("docker", "exec", containerName,
+		"/usr/bin/calico", "health", "--port=9099", "--type=readiness").Run()
+}
 
 var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 	var (
@@ -101,63 +107,40 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 
 	Context("Healthcheck FV tests", func() {
 		It("should pass health check", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
 			By("Waiting for the controller to be ready")
-			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return strings.TrimSpace(string(stdoutStderr))
-			}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 		})
 
 		It("should fail health check if apiserver is not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping the apiserver")
 			apiserver.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 
 		It("should fail health check if etcd not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping etcd")
 			etcd.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error verifying datastore"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 	})
 })
@@ -320,42 +303,25 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 	Context("Healthcheck FV tests", func() {
 		It("should pass health check", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
 			By("Waiting for the controller to be ready")
-			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return strings.TrimSpace(string(stdoutStderr))
-			}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 		})
 
 		It("should fail health check if apiserver is not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping the apiserver")
 			apiserver.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/calico", "component", "kube-controllers", "health", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 60*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 60*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 	})
 })
