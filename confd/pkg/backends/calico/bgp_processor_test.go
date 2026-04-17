@@ -25,6 +25,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -39,6 +40,8 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 		peeringCache: peeringCache,
 		configCache:  make(map[int]*bgpConfigCache),
 	}
+	c.globalBGPConfig = v3.NewBGPConfiguration()
+	c.globalBGPConfig.ObjectMeta.Name = "default"
 	return c
 }
 
@@ -468,10 +471,10 @@ func TestPopulateNodeConfig_BindModeNodeIP_IPv4(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.BindMode = ptr.To(v3.BindModeNodeIP)
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -493,10 +496,10 @@ func TestPopulateNodeConfig_BindModeNodeIP_IPv6(t *testing.T) {
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/host/test-node/ip_addr_v6": "fd00::1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.BindMode = ptr.To(v3.BindModeNodeIP)
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -648,10 +651,10 @@ func TestPopulateNodeConfig_NodeSpecificBindMode(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/host/test-node/bind_mode":  "NodeIP", // Node-specific
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.BindMode = ptr.To(v3.BindModeNodeIP)
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -672,7 +675,6 @@ func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		// No bind_mode set
 	}
 
 	c := newTestClient(cache, nil)
