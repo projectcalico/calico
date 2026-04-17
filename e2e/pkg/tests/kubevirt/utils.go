@@ -16,6 +16,7 @@ package kubevirt
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -26,6 +27,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -42,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func init() {
@@ -349,6 +353,14 @@ func (m *testVMIM) WaitForSuccess(ctx context.Context) {
 			return err
 		}
 		if vmim.Status.Phase == kubevirtv1.MigrationFailed {
+			logrus.Warnf("Migration %s FAILED. Conditions: %+v", m.name, vmim.Status.Conditions)
+			// Check VMI for migration state details.
+			vmi, vmiErr := m.kvClient.VirtualMachineInstances(m.namespace).Get(ctx, m.vmiName, metav1.GetOptions{})
+			if vmiErr == nil && vmi.Status.MigrationState != nil {
+				ms := vmi.Status.MigrationState
+				logrus.Warnf("VMI MigrationState: Completed=%v Failed=%v FailureReason=%s StartTimestamp=%v EndTimestamp=%v",
+					ms.Completed, ms.Failed, ms.FailureReason, ms.StartTimestamp, ms.EndTimestamp)
+			}
 			return StopTrying("migration failed")
 		}
 		if vmim.Status.Phase != kubevirtv1.MigrationSucceeded {
@@ -499,6 +511,207 @@ func torStreamLineCount(tor *externalnode.Client, file string) (int, error) {
 		return 0, fmt.Errorf("failed to parse wc -l output %q: %w", out, scanErr)
 	}
 	return n, nil
+}
+
+// torContainerLineCount counts lines in a Docker container's stdout logs on the TOR.
+func torContainerLineCount(tor *externalnode.Client, container string) (int, error) {
+	out, err := runOnTORE(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null | wc -l", container))
+	if err != nil {
+		return 0, err
+	}
+	var n int
+	if _, scanErr := fmt.Sscanf(strings.TrimSpace(out), "%d", &n); scanErr != nil {
+		return 0, fmt.Errorf("failed to parse docker logs line count %q: %w", out, scanErr)
+	}
+	return n, nil
+}
+
+// generateTORBirdPeersConf returns a BIRD 1.x peers config for the TOR node.
+// This is written to /etc/bird/peers.conf inside the calico/bird container,
+// which already provides the base config (router id, protocol kernel/device).
+// The TOR acts as an eBGP hub (AS 65001) peering with all cluster nodes (AS 64512).
+// Uses ip@local as a placeholder replaced with the actual TOR IP at runtime.
+func generateTORBirdPeersConf(nodeIPs []string) string {
+	var sb strings.Builder
+	sb.WriteString(`template bgp bgp_template {
+  debug { states };
+  description "BGP peer";
+  local as 65001;
+  multihop;
+  gateway recursive;
+  import all;
+  export all;
+  source address ip@local;
+  add paths on;
+  graceful restart;
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+
+`)
+	for i, nodeIP := range nodeIPs {
+		sb.WriteString(fmt.Sprintf(`protocol bgp node_%d from bgp_template {
+  neighbor %s as 64512;
+  passive on;
+}
+
+`, i, nodeIP))
+	}
+	return sb.String()
+}
+
+// startBirdOnTOR starts a calico/bird container on the TOR node with host networking,
+// injects the peer config, and reloads BIRD. Follows the same pattern as
+// node/tests/k8st/utils/utils.py:start_external_node_with_bgp.
+func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
+	By("Starting BIRD container on TOR")
+
+	// Remove any prior container.
+	runOnTOR(tor, "sudo docker rm -f tor-bird 2>/dev/null || true")
+
+	// Start the container with host networking. The calico/bird image ships with
+	// a base bird.conf that defines router id, protocol kernel, and protocol device.
+	runOnTOR(tor, "sudo docker run -d --privileged --name tor-bird --network host "+
+		"calico/bird:v0.3.3-211-g9111ec3c")
+
+	// Wait for the container to be running.
+	Eventually(func() string {
+		return runOnTOR(tor, "sudo docker ps --filter name=tor-bird --filter status=running -q")
+	}, 30*time.Second, 2*time.Second).ShouldNot(BeEmpty(), "tor-bird container is not running")
+	logrus.Info("BIRD container started on TOR")
+
+	// Add "merge paths on" to the kernel protocol block for ECMP support.
+	runOnTOR(tor, `sudo docker exec tor-bird sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf`)
+
+	// Write the peers config, replacing ip@local with the actual TOR IP.
+	peersConf = strings.ReplaceAll(peersConf, "ip@local", torIP)
+
+	// Base64-encode locally in Go to avoid SSH quoting issues with
+	// multi-line config content containing special characters.
+	encoded := base64.StdEncoding.EncodeToString([]byte(peersConf))
+	runOnTOR(tor, fmt.Sprintf("echo %s | base64 -d | sudo docker exec -i tor-bird tee /etc/bird/peers.conf > /dev/null", encoded))
+
+	// Reload BIRD to pick up the new peers config.
+	By("Reloading BIRD config on TOR")
+	out := runOnTOR(tor, "sudo docker exec tor-bird birdcl configure")
+	logrus.Infof("birdcl configure: %s", out)
+}
+
+// stopBirdOnTOR removes the BIRD container from the TOR node.
+func stopBirdOnTOR(tor *externalnode.Client) {
+	By("Stopping BIRD on TOR")
+	runOnTOR(tor, "sudo docker rm -f tor-bird 2>/dev/null || true")
+}
+
+// setupEBGPPeering configures eBGP peering between a TOR node and all cluster nodes.
+// It starts a BIRD daemon on the TOR, disables the BGP full mesh, and creates a global
+// BGPPeer resource pointing all nodes at the TOR. All resources are cleaned up via
+// DeferCleanup when the test completes.
+func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
+	By("Setting up eBGP peering between TOR and cluster nodes")
+
+	// Use the libcalico-go client for Calico resources (BGPPeer, BGPConfiguration).
+	// The controller-runtime client fails resource discovery when the Calico API
+	// server aggregated endpoint (projectcalico.org/v3) is registered but not running.
+	lcgc := newLibcalicoClient(f)
+	ctx := context.Background()
+
+	// Collect node BGP IPs from the projectcalico.org/IPv4Address annotation.
+	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
+
+	bgpSubnet := &net.IPNet{
+		IP:   net.ParseIP("172.16.8.0"),
+		Mask: net.CIDRMask(24, 32),
+	}
+
+	var nodeIPs []string
+	var nodeNames []string
+	for _, node := range nodeList.Items {
+		addr := node.Annotations["projectcalico.org/IPv4Address"]
+		if addr == "" {
+			continue
+		}
+		// Strip CIDR suffix (e.g. "172.16.8.2/24" -> "172.16.8.2")
+		ip := strings.Split(addr, "/")[0]
+		if bgpSubnet.Contains(net.ParseIP(ip)) {
+			nodeIPs = append(nodeIPs, ip)
+			nodeNames = append(nodeNames, node.Name)
+		}
+	}
+	Expect(nodeIPs).NotTo(BeEmpty(), "no node BGP IPs found in 172.16.8.0/24 subnet")
+	logrus.Infof("Node BGP IPs: %v", nodeIPs)
+
+	// Find the TOR's L2TP IP by matching against the BGP subnet.
+	torIPs := tor.IPs()
+	Expect(torIPs).NotTo(BeEmpty(), "could not discover TOR IPs")
+	var torL2tpIP string
+	for _, ip := range torIPs {
+		if bgpSubnet.Contains(net.ParseIP(ip)) {
+			torL2tpIP = ip
+			break
+		}
+	}
+	Expect(torL2tpIP).NotTo(BeEmpty(),
+		"no TOR IP found in 172.16.8.0/24 subnet (TOR IPs: %v)", torIPs)
+	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
+
+	// Generate peers config and start BIRD on the TOR.
+	peersConf := generateTORBirdPeersConf(nodeIPs)
+	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
+	startBirdOnTOR(tor, torL2tpIP, peersConf)
+	DeferCleanup(func() { stopBirdOnTOR(tor) })
+
+	// Create a BGPPeer so all cluster nodes peer with the TOR.
+	// This must happen BEFORE disabling the mesh — if we disable the mesh first,
+	// nodes lose API server connectivity (since it routes through BGP) and we
+	// cannot create the BGPPeer resource.
+	By("Creating BGPPeer for TOR")
+	bgpPeer := &v3.BGPPeer{
+		ObjectMeta: metav1.ObjectMeta{Name: "tor-ebgp-peer"},
+		Spec: v3.BGPPeerSpec{
+			NodeSelector: "all()",
+			PeerIP:       torL2tpIP,
+			ASNumber:     numorstring.ASNumber(65001),
+		},
+	}
+	_, err = lcgc.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to create BGPPeer")
+	DeferCleanup(func() {
+		By("Deleting BGPPeer for TOR")
+		_, err := lcgc.BGPPeers().Delete(context.Background(), "tor-ebgp-peer", options.DeleteOptions{})
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to delete BGPPeer tor-ebgp-peer")
+		}
+	})
+
+	// Keep the BGP mesh enabled — nodes need iBGP for inter-node routing
+	// (required for KubeVirt live migration). The eBGP peer to the TOR is
+	// additive: nodes advertise routes to the TOR via eBGP while continuing
+	// to exchange routes with each other via the iBGP mesh.
+
+	// Wait for eBGP sessions to establish by checking BIRD protocol status on TOR.
+	By("Waiting for eBGP sessions to establish")
+	expectedPeers := len(nodeIPs)
+	Eventually(func() error {
+		out := runOnTOR(tor, "sudo docker exec tor-bird birdcl show protocols")
+		logrus.Infof("birdcl show protocols:\n%s", out)
+		established := strings.Count(out, "Established")
+		if established < expectedPeers {
+			return fmt.Errorf("only %d/%d BGP sessions established:\n%s",
+				established, expectedPeers, out)
+		}
+		return nil
+	}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+		"not all eBGP sessions established on TOR")
+	logrus.Infof("eBGP peering established — %d sessions up on TOR", expectedPeers)
+
+	// Log the routes the TOR learned via eBGP for debugging.
+	routes := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
+	logrus.Infof("TOR BIRD routes after eBGP establishment:\n%s", routes)
+	kernRoutes := runOnTOR(tor, "ip route show proto bird")
+	logrus.Infof("TOR kernel routes (proto bird):\n%s", kernRoutes)
 }
 
 func ptrInt64(v int64) *int64 { return &v }

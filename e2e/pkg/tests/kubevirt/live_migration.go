@@ -293,6 +293,9 @@ var _ = describe.CalicoDescribe(
 				Skip("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
 			}
 
+			By("Setting up eBGP peering between TOR and cluster nodes")
+			setupEBGPPeering(f, tor)
+
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
@@ -307,44 +310,66 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
 
 			By("Verifying TOR can reach the VM (eBGP routing is up)")
-			Eventually(func() string {
-				return runOnTOR(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
-			}, 1*time.Minute, 5*time.Second).Should(ContainSubstring("0% packet loss"),
-				"TOR cannot reach VM — eBGP routing may not be configured")
-
-			// Use setsid to fully detach nc from SSH session. The TCP server inside
-			// the VM may still be initializing — nc will retry-connect on each spawn,
-			// but we verify liveness explicitly with pgrep below.
-			By("Starting TCP client on TOR connecting to VM")
-			runOnTOR(tor, fmt.Sprintf("rm -f /tmp/tcp_stream; setsid nc %s 9999 > /tmp/tcp_stream 2>&1 < /dev/null &", vmIP))
-			DeferCleanup(func() {
-				runOnTOR(tor, "pkill -f 'nc.*9999' 2>/dev/null || true")
-			})
-			// On test failure, dump the tail of the TOR's stream file for post-mortem.
-			DeferCleanup(func() {
-				if CurrentSpecReport().Failed() {
-					tail := runOnTOR(tor, "tail -n 50 /tmp/tcp_stream 2>/dev/null || true")
-					logrus.Warnf("TOR /tmp/tcp_stream tail (last 50 lines):\n%s", tail)
-				}
-			})
-
-			By("Verifying nc client process is running on TOR")
 			Eventually(func() error {
-				out, err := runOnTORE(tor, "pgrep -f 'nc.*9999' || true")
+				out, err := runOnTORE(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
 				if err != nil {
-					return err
-				}
-				if strings.TrimSpace(out) == "" {
-					return fmt.Errorf("nc process not found on TOR — client exited immediately")
+					// Log route debugging on failure.
+					routes := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
+					logrus.Infof("TOR BIRD routes:\n%s", routes)
+					kernRoutes := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1 || true", vmIP))
+					logrus.Infof("TOR kernel route to %s: %s", vmIP, kernRoutes)
+					return fmt.Errorf("ping %s failed: %v (output=%s)", vmIP, err, out)
 				}
 				return nil
-			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client did not start on TOR")
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+				"TOR cannot reach VM — eBGP routing may not be configured")
+
+			By("Waiting for TCP server on VM to be reachable from TOR")
+			const ncClientContainer = "tor-nc-client"
+			Eventually(func() error {
+				// Run a short-lived Docker container with nc to verify data flows.
+				// sleep keeps stdin open so nc doesn't close; timeout limits the probe.
+				out := runOnTOR(tor, fmt.Sprintf(
+					"sudo docker run --rm --network host alpine sh -c 'sleep 999 | timeout 5 nc %s 9999' 2>&1 || true", vmIP))
+				if !strings.Contains(out, "seq=") {
+					return fmt.Errorf("TCP server not sending data from TOR (output=%q)", out)
+				}
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+				"TCP server not reachable from TOR")
+			logrus.Infof("TCP server on %s:9999 is reachable and sending data from TOR", vmIP)
+
+			By("Starting TCP client container on TOR connecting to VM")
+			runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null || true", ncClientContainer))
+			runOnTOR(tor, fmt.Sprintf(
+				"sudo docker run -d --name %s --network host alpine sh -c 'sleep 999999 | nc %s 9999'",
+				ncClientContainer, vmIP))
+			DeferCleanup(func() {
+				By("Removing TCP client container from TOR")
+				runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null || true", ncClientContainer))
+			})
+			// On test failure, dump the tail of the container's output for post-mortem.
+			DeferCleanup(func() {
+				if CurrentSpecReport().Failed() {
+					tail := runOnTOR(tor, fmt.Sprintf("sudo docker logs --tail 50 %s 2>/dev/null || true", ncClientContainer))
+					logrus.Warnf("TOR %s logs (last 50 lines):\n%s", ncClientContainer, tail)
+				}
+			})
+
+			By("Verifying nc client container is running on TOR")
+			Eventually(func() error {
+				out := runOnTOR(tor, fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %s 2>&1 || true", ncClientContainer))
+				if strings.TrimSpace(out) != "true" {
+					return fmt.Errorf("container %s not running (state=%q)", ncClientContainer, out)
+				}
+				return nil
+			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client container did not start on TOR")
 
 			By("Verifying TCP data is flowing from TOR before migration")
 			var preLines int
 			Eventually(func() (int, error) {
 				var err error
-				preLines, err = torStreamLineCount(tor, "/tmp/tcp_stream")
+				preLines, err = torContainerLineCount(tor, ncClientContainer)
 				return preLines, err
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
 				"TCP data should be flowing from TOR")
@@ -366,7 +391,7 @@ var _ = describe.CalicoDescribe(
 			var midLines int
 			Eventually(func() (int, error) {
 				var err error
-				midLines, err = torStreamLineCount(tor, "/tmp/tcp_stream")
+				midLines, err = torContainerLineCount(tor, ncClientContainer)
 				return midLines, err
 			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", preLines+5),
 				"TCP data should have grown after first eBGP migration")
@@ -388,12 +413,12 @@ var _ = describe.CalicoDescribe(
 			// iBGP mesh, so allow more time for data to resume after the second migration.
 			By("Verifying TCP data continued on TOR after second migration")
 			Eventually(func() (int, error) {
-				return torStreamLineCount(tor, "/tmp/tcp_stream")
+				return torContainerLineCount(tor, ncClientContainer)
 			}, 1*time.Minute, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second eBGP migration")
 
 			By("Checking sequence continuity from TOR across both migrations")
-			streamAll, err := runOnTORE(tor, "cat /tmp/tcp_stream")
+			streamAll, err := runOnTORE(tor, fmt.Sprintf("sudo docker logs %s", ncClientContainer))
 			Expect(err).NotTo(HaveOccurred())
 			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
 			logrus.Infof("eBGP TCP stream: %d lines, first: %s, last: %s",
