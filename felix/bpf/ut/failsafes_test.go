@@ -201,6 +201,37 @@ var failsafeTests = []failsafeTest{
 		Allowed:       false,
 		FromLocalHost: true,
 	},
+	{
+		Description: "DHCP request (src 0.0.0.0) on outbound failsafe port is allowed",
+		Rules:       &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(0, 0, 0, 0),
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: true,
+		Allowed:  true,
+	},
+	{
+		// DstIP 10.0.0.50 has no entry in the route map, simulating a DHCP response.
+		Description: "Inbound failsafe port with no route for dest is allowed",
+		Rules:       &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    srcIP,
+			DstIP:    net.IPv4(10, 0, 0, 50),
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound: false,
+		Allowed:  true,
+	},
 }
 
 func TestFailsafes(t *testing.T) {
