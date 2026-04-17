@@ -1,0 +1,25 @@
+- name: cmd/calico
+  run:
+    when: "${CHANGE_IN(cmd/calico)}"
+  dependencies:
+    - Prerequisites
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "uber-calico"
+    prologue:
+      commands:
+        - cd cmd/calico
+    jobs:
+      - name: "cmd/calico: UT"
+        commands:
+          - ../../.semaphore/run-and-monitor ut.log make ut
+      - name: "cmd/calico: build multi-arch"
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
