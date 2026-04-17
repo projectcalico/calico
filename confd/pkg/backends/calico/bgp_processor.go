@@ -983,30 +983,22 @@ func (c *client) processIPPool(
 	}
 
 	// IPIP encapsulation or No-Encap.
-	if ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet ||
-		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never {
-		if programClusterRoutes {
-			var extraStatement string
-			if forProgrammingKernel && ipVersion == 4 {
-				// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
-				// our fork of BIRD.
-				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
-			}
-			return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
+	if programClusterRoutes {
+		var extraStatement string
+		if forProgrammingKernel && ipVersion == 4 {
+			// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
+			// our fork of BIRD.
+			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 		}
-
-		// Felix is responsible for programming cluster routes, not BIRD.
-		if forProgrammingKernel {
-			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
-		}
-		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+		return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
 	}
 
-	log.WithFields(log.Fields{
-		"ippool":    ippool.CIDR,
-		"ipVersion": ipVersion,
-	}).Error("Invalid ippool")
-	return ""
+	// Felix is responsible for programming cluster routes, not BIRD.
+	if forProgrammingKernel {
+		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
+	}
+
+	return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
