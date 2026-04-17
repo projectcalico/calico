@@ -132,6 +132,8 @@ local:app-policy/checker
 local:app-policy/cmd/dikastes
 local:app-policy/cmd/healthz
 local:app-policy/health
+local:app-policy/pkg/dikastes
+local:app-policy/pkg/healthz
 local:app-policy/policystore
 local:app-policy/proto
 local:app-policy/syncher

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,5 +40,5 @@ func RunLoadBalancerController(datastoreType apiconfig.DatastoreType, etcdIP, kc
 		"-e", "LOG_LEVEL=debug",
 		"-e", "RECONCILER_PERIOD=10s",
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		os.Getenv("CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
 }
