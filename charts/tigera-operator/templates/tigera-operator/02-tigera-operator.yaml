@@ -120,7 +120,7 @@ spec:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - calicoctl
+            - /usr/bin/calicoctl
           args:
             - --allow-version-mismatch
             - create

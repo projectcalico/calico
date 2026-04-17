@@ -14,7 +14,8 @@ ARG BIN_DIR
 # checksum, so we stage both files together here under /shim.
 RUN mkdir -p /shim/usr/bin
 COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
-RUN ln -s calico /shim/usr/bin/calicoctl
+RUN ln -s calico /shim/usr/bin/calicoctl && \
+    ln -s calico /shim/usr/bin/calico-ipam
 
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
