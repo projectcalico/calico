@@ -372,6 +372,7 @@ type bpfEndpointManager struct {
 	hostNetworkedNATMode hostNetworkedNATMode
 
 	bpfPolicyDebugEnabled  bool
+	bpfOverlayIPOnDevice   bool
 	bpfRedirectToPeer      string
 	bpfAttachType          apiv3.BPFAttachOption
 	policyTrampolineStride atomic.Int32
@@ -564,6 +565,7 @@ func NewBPFEndpointManager(
 		rpfEnforceOption:       config.BPFEnforceRPF,
 		bpfDisableGROForIfaces: config.BPFDisableGROForIfaces,
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
+		bpfOverlayIPOnDevice:   config.BPFOverlayIPOnDevice,
 		bpfRedirectToPeer:      config.BPFRedirectToPeer,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
@@ -961,6 +963,21 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 
 func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
+		// By default, only set the host tunnel IP for WireGuard tunnels.
+		// WireGuard needs HOST_TUNNEL_IP in BPF globals for SNAT conflict
+		// resolution when host-networked traffic to remote tunneled workloads
+		// conflicts with existing conntrack entries. For IPIP/VXLAN in BPF
+		// mode, BPF handles encap directly and setting HOST_TUNNEL_IP would
+		// incorrectly SNAT host-networked traffic source from the node IP to
+		// the tunnel IP.
+		//
+		// When BPFOverlayIPOnDevice is enabled, we also set HOST_TUNNEL_IP
+		// for IPIP/VXLAN tunnels to restore the legacy behavior where the
+		// overlay device IP is used as the encapsulation source.
+		isWireguard := update.TunnelType != nil && update.TunnelType.Wireguard
+		if !isWireguard && !m.bpfOverlayIPOnDevice {
+			return
+		}
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
 			logrus.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
