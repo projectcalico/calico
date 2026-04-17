@@ -17,6 +17,8 @@ package checker
 import (
 	"fmt"
 	"net"
+	"net/url"
+	"path"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -301,6 +303,14 @@ func matchHTTPMethods(methods []string, reqMethod *string) bool {
 
 // matchHTTPPaths checks if the HTTP paths match. It returns true if the paths match, false
 // otherwise.
+//
+// The request-target is normalised per RFC 3986 / RFC 7230 before comparison:
+// query and fragment are stripped, unreserved and path-separator percent-escapes
+// are decoded, repeated slashes are collapsed, and "." / ".." segments are
+// resolved. This matches what upstream HTTP servers do before dispatching a
+// request, so an authorisation decision here is made on the same path the
+// upstream will actually serve. Prefix matches are anchored to path-segment
+// boundaries so that prefix "/pub" does not authorise "/public-leak".
 func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -316,33 +326,86 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 		log.Debug("nil HTTP Path. Default is /")
 		return true
 	}
-	// Accept only valid paths
+	// Accept only valid paths.
 	if !strings.HasPrefix(*reqPath, "/") {
 		s := fmt.Sprintf("Invalid HTTP Path \"%s\"", *reqPath)
 		log.Error(s)
 		// Let the caller recover from the panic.
 		panic(&InvalidDataFromDataPlane{s})
 	}
-	// Strip out the query '?' and fragment '#' identifier
-	for _, s := range []string{"?", "#"} {
-		*reqPath = strings.Split(*reqPath, s)[0]
+	normalizedReq, ok := normalizeHTTPPath(*reqPath)
+	if !ok {
+		log.WithField("reqPath", *reqPath).Debug("HTTP Path could not be normalized; not matched.")
+		return false
 	}
 	for _, pathMatch := range paths {
-		switch pathMatch.GetPathMatch().(type) {
+		switch m := pathMatch.GetPathMatch().(type) {
 		case *proto.HTTPMatch_PathMatch_Exact:
-			if *reqPath == pathMatch.GetExact() {
+			rulePath, ok := normalizeHTTPPath(m.Exact)
+			if !ok {
+				log.WithField("rulePath", m.Exact).Warn("HTTP Path exact rule could not be normalized; skipping.")
+				continue
+			}
+			if normalizedReq == rulePath {
 				log.Debug("HTTP Path exact matched.")
 				return true
 			}
 		case *proto.HTTPMatch_PathMatch_Prefix:
-			if strings.HasPrefix(*reqPath, pathMatch.GetPrefix()) {
-				log.Debugf("HTTP Path prefix %s matched.", pathMatch.GetPrefix())
+			rulePrefix, ok := normalizeHTTPPath(m.Prefix)
+			if !ok {
+				log.WithField("rulePath", m.Prefix).Warn("HTTP Path prefix rule could not be normalized; skipping.")
+				continue
+			}
+			if segmentPrefixMatch(normalizedReq, rulePrefix) {
+				log.Debugf("HTTP Path prefix %s matched.", m.Prefix)
 				return true
 			}
 		}
 	}
 	log.Debug("HTTP Path not matched.")
 	return false
+}
+
+// normalizeHTTPPath applies RFC 3986 / RFC 7230 style normalisation to an HTTP
+// request-target so prefix and exact comparisons are resilient to
+// percent-encoded path separators, repeated slashes and "." / ".." segments.
+// It returns false when the input cannot be interpreted as an absolute path —
+// callers treat that as a non-match rather than falling back to raw byte
+// comparison.
+func normalizeHTTPPath(p string) (string, bool) {
+	// Strip query and fragment — not part of the path.
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	// Percent-decode once. Upstream servers decode once before dispatch, so a
+	// single decode here gives the same view they act on. Double-decoding
+	// would over-authorise (e.g. %252e%252e would become "..").
+	decoded, err := url.PathUnescape(p)
+	if err != nil {
+		return "", false
+	}
+	if !strings.HasPrefix(decoded, "/") {
+		return "", false
+	}
+	// path.Clean collapses repeated slashes and resolves "." / ".." segments,
+	// and always returns a path rooted at "/" for inputs starting with "/".
+	// Trailing slashes are stripped, which is fine for matching: "/foo" and
+	// "/foo/" address the same resource for an authorisation decision.
+	return path.Clean(decoded), true
+}
+
+// segmentPrefixMatch reports whether req equals prefix or extends it at a path
+// segment boundary. Both arguments are expected to have been passed through
+// normalizeHTTPPath already, so prefix does not end with a trailing slash
+// (except for the root "/").
+func segmentPrefixMatch(req, prefix string) bool {
+	if prefix == "/" {
+		return strings.HasPrefix(req, "/")
+	}
+	if req == prefix {
+		return true
+	}
+	return strings.HasPrefix(req, prefix+"/")
 }
 
 // matchSrcIPSets checks if the source IP is within the IP sets and not in the not IP sets. It
