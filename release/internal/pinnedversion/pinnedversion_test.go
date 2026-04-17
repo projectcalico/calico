@@ -57,13 +57,13 @@ func TestImageComponents(t *testing.T) {
 	}
 	t.Run("without operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"typha":                        {Version: "v3.31.0", Image: "typha"},
-			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
-			"node":                         {Version: "v3.31.0", Image: "node"},
-			"cni":                          {Version: "v3.31.0", Image: "cni"},
-			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
-			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
-			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
+			"typha":                     {Version: "v3.31.0", Image: "typha"},
+			"calicoctl":                 {Version: "v3.31.0", Image: "ctl"},
+			"node":                      {Version: "v3.31.0", Image: "node"},
+			"cni":                       {Version: "v3.31.0", Image: "cni"},
+			"apiserver":                 {Version: "v3.31.0", Image: "apiserver"},
+			"kube-controllers":          {Version: "v3.31.0", Image: "kube-controllers"},
+			"goldmane":                  {Version: "v3.31.0", Image: "goldmane"},
 			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
 			"dikastes":                  {Version: "v3.31.0", Image: "dikastes"},
 			"envoy-gateway":             {Version: "v3.31.0", Image: "envoy-gateway"},
@@ -92,13 +92,13 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"typha":                        {Version: "v3.31.0", Image: "typha"},
-			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
-			"node":                         {Version: "v3.31.0", Image: "node"},
-			"cni":                          {Version: "v3.31.0", Image: "cni"},
-			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
-			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
-			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
+			"typha":                     {Version: "v3.31.0", Image: "typha"},
+			"calicoctl":                 {Version: "v3.31.0", Image: "ctl"},
+			"node":                      {Version: "v3.31.0", Image: "node"},
+			"cni":                       {Version: "v3.31.0", Image: "cni"},
+			"apiserver":                 {Version: "v3.31.0", Image: "apiserver"},
+			"kube-controllers":          {Version: "v3.31.0", Image: "kube-controllers"},
+			"goldmane":                  {Version: "v3.31.0", Image: "goldmane"},
 			"flannel":                   {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
 			"dikastes":                  {Version: "v3.31.0", Image: "dikastes"},
 			"envoy-gateway":             {Version: "v3.31.0", Image: "envoy-gateway"},
