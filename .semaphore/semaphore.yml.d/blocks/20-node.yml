@@ -1,4 +1,4 @@
-- name: "Node: Build"
+- name: "Node: Static checks and UT"
   run:
     when: "${CHANGE_IN(node)}"
   dependencies:
@@ -14,14 +14,27 @@
     prologue:
       commands:
         - cd node
+    # Image builds (image, image-windows) are handled by the Prerequisites
+    # "Build: node image" block and the "Node: multi-arch build" block
+    # respectively, so we only run the unique checks here.
     jobs:
-      - name: "Node: CI"
+      - name: "Node: Static checks"
         priority:
           # This job is on the critical path so we increase its priority.
           - value: 51
             when: "pull_request =~ '.+'"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
+          - ../.semaphore/run-and-monitor static-checks.log make static-checks
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+      - name: "Node: UT"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
+        commands:
+          - ../.semaphore/run-and-monitor ut.log make ut
         env_vars:
           - name: STORE_BUILD_CACHE
             value: "true"
@@ -33,7 +46,7 @@
   run:
     when: "${CHANGE_IN(node)}"
   dependencies:
-    - "Node: Build"
+    - Prerequisites
   task:
     prologue:
       commands:
@@ -57,7 +70,7 @@
 - name: "Node: kind-cluster tests"
   run:
     # KinD tests also build and run all the other images.
-    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Prerequisites"
   task:
