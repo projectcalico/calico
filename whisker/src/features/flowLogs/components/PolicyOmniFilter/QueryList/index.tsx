@@ -76,7 +76,12 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                 className='border! border-tigera-token-border-default! rounded-md!'
                             >
                                 <AccordionTrigger>
-                                    <QueryLabel query={query} />
+                                    <QueryLabel
+                                        query={query}
+                                        showEmptyMessage={
+                                            expandedValue !== itemValue
+                                        }
+                                    />
                                     <Tooltip label='Delete query'>
                                         <Box
                                             as='span'
@@ -93,19 +98,24 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                         </Box>
                                     </Tooltip>
                                 </AccordionTrigger>
-                                <AccordionContent className='flex flex-col gap-2 px-4'>
+                                <AccordionContent className='flex flex-col gap-2 px-4 pt-0! mt-0!'>
+                                    <span className='text-left flex-1 text-tigera-token-fg-subtle text-sm'>
+                                        Select one or more fields to match.
+                                    </span>
                                     <QuerySelect
                                         label='Kind'
                                         filterKey={FilterKey.policyKind}
                                         value={query.kind}
                                         onChange={updateField(index, 'kind')}
                                         showSearch={false}
+                                        placeholder='Select a kind...'
                                     />
                                     <QuerySelect
                                         label='Tier'
                                         filterKey={FilterKey.policyTier}
                                         value={query.tier}
                                         onChange={updateField(index, 'tier')}
+                                        placeholder='Select a tier...'
                                     />
                                     <QuerySelect
                                         label='Namespace'
@@ -115,19 +125,21 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                             index,
                                             'namespace',
                                         )}
+                                        placeholder='Select a namespace...'
                                     />
                                     <QuerySelect
                                         label='Name'
                                         filterKey={FilterKey.policyName}
                                         value={query.name}
                                         onChange={updateField(index, 'name')}
+                                        placeholder='Select a name...'
                                     />
                                 </AccordionContent>
                             </AccordionItem>
 
                             {index !== queries.length - 1 && (
-                                <Text className='w-full text-center text-tigera-token-fg-support text-sm py-2'>
-                                    or
+                                <Text className='w-full text-center text-sm py-2 font-bold'>
+                                    OR
                                 </Text>
                             )}
                         </>
@@ -147,7 +159,7 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                     onClick={addQuery}
                     disabled={queries.length >= 5}
                 >
-                    + Add Query
+                    + Add Filter
                 </Button>
             </Tooltip>
         </div>
