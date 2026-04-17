@@ -40,7 +40,15 @@ import (
 	"github.com/projectcalico/calico/node/pkg/nodeservices"
 	"github.com/projectcalico/calico/node/pkg/status"
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/pkg/cmdwrapper"
+	typhaconfig "github.com/projectcalico/calico/typha/pkg/config"
+	typhalogutils "github.com/projectcalico/calico/typha/pkg/logutils"
 )
+
+// felixInnerEnvVar marks the inner (felix-running) process when the
+// command re-execs itself to provide cmdwrapper-style restart-on-129
+// semantics. See cmdwrapper.WrapSelf.
+const felixInnerEnvVar = "CALICO_FELIX_INNER"
 
 // NewCommand returns a cobra command tree for node lifecycle operations.
 func NewCommand() *cobra.Command {
@@ -84,8 +92,20 @@ func newFelixCommand() *cobra.Command {
 		Use:   "felix",
 		Short: "Run the Felix policy agent",
 		Run: func(cmd *cobra.Command, args []string) {
-			logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
-			felix.Run("/etc/calico/felix.cfg", buildinfo.Version, buildinfo.BuildDate, buildinfo.GitRevision)
+			// Outer (wrapper) process logging. Felix reconfigures logging
+			// in its own Run. Previously this restart-on-129 behaviour was
+			// provided by felix/docker-image/calico-felix-wrapper, but in
+			// the combined image felix is run directly by runit with no
+			// shell wrapper.
+			typhalogutils.ConfigureEarlyLogging()
+			typhalogutils.ConfigureLogging(&typhaconfig.Config{
+				LogSeverityScreen:       "info",
+				DebugDisableLogDropping: true,
+			})
+			cmdwrapper.WrapSelf(felixInnerEnvVar, func() {
+				logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
+				felix.Run("/etc/calico/felix.cfg", buildinfo.Version, buildinfo.BuildDate, buildinfo.GitRevision)
+			})
 		},
 	}
 }

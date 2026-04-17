@@ -21,6 +21,8 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
+	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/logutils"
 )
 
 // innerEnvVar marks the inner (controller-running) process when the command
@@ -39,6 +41,13 @@ func NewCommand() *cobra.Command {
 		Use:   "kube-controllers",
 		Short: "Run the Calico Kubernetes controllers",
 		Run: func(cmd *cobra.Command, args []string) {
+			// Configure logging for the outer (restart-wrapper) process.
+			// The inner process reconfigures logging for itself in Run.
+			logutils.ConfigureEarlyLogging()
+			logutils.ConfigureLogging(&config.Config{
+				LogSeverityScreen:       "info",
+				DebugDisableLogDropping: true,
+			})
 			cmdwrapper.WrapSelf(innerEnvVar, func() {
 				Run(context.Background(), cfg)
 			})

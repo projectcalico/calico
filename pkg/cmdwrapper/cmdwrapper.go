@@ -15,168 +15,163 @@
 package cmdwrapper
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/typha/pkg/config"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
 )
 
 const (
+	// RestartReturnCode is the exit code wrapped processes (currently felix
+	// and kube-controllers) use to signal that they are restarting due to a
+	// configuration change. Run and WrapSelf re-exec the child on this code.
 	RestartReturnCode int = 129
+
+	// signalBufferSize is the size of the signal-forwarding channel.
+	// signal.Notify drops signals when the channel is full, so this needs to
+	// be large enough to absorb short bursts.
+	signalBufferSize = 16
+
+	// restartBackoff is the minimum delay between restarts, to prevent a
+	// misconfigured child from busy-looping through RestartReturnCode.
+	restartBackoff = 100 * time.Millisecond
 )
 
-// This is a wrapper program to restart the passed in program anytime it exits
-// with a status code of 129, which should be used by typha or kube-controllers
-// to signal they are restarting due to a configuration change.
+// Run is the external-wrapper entry point: it reads the wrapped program and
+// its arguments from os.Args[1:] and restarts the child on
+// RestartReturnCode. The caller is responsible for configuring logrus before
+// calling Run.
 func Run() {
-	// Set up logging.
-	logutils.ConfigureEarlyLogging()
-	logutils.ConfigureLogging(&config.Config{
-		LogSeverityScreen:       "info",
-		DebugDisableLogDropping: true,
-	})
 	if len(os.Args) < 2 {
 		logrus.Fatalf("Invalid invocation of command wrapper, expected: %s <wrapped command>", os.Args[0])
 	}
-	prog := os.Args[1]
-	args := os.Args[2:]
-
-	c := make(chan os.Signal, 1)
-	// Capture all signals and send them to our channel which are then passed on to the
-	// wrapped command
-	signal.Notify(c)
-
-	for {
-		logrus.Infof("Starting %s", prog)
-		cmd := exec.Command(prog, args...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		err := cmd.Start()
-		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to start %s", prog)
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		stop := make(chan any)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case s := <-c:
-					// We don't need to know about SIGCHLD signals since cmd.Wait will give us
-					// all we need to know about the command we spawn
-					if s == syscall.SIGCHLD {
-						continue
-					}
-					err = cmd.Process.Signal(s)
-					if err != nil {
-						logrus.WithError(err).Error("Failed so send signal to wrapped command process")
-					}
-				case <-stop:
-					return
-				}
-			}
-		}()
-		cmdWaitErr := cmd.Wait()
-		close(stop)
-		wg.Wait()
-		if cmdWaitErr != nil {
-			if ee, ok := cmdWaitErr.(*exec.ExitError); ok {
-				// If the exitcode is the expected restart code then start our loop over
-				// again to re-run the command we're wrapping.
-				if ee.ExitCode() == RestartReturnCode {
-					logrus.Infof("Received exit status %d, restarting %s", ee.ExitCode(), prog)
-					continue
-				}
-				logrus.Infof("Received exit status %d", ee.ExitCode())
-				// Exit with the same exit status of the wrapped command so the code is returned
-				// to whatever is running us.
-				os.Exit(ee.ExitCode())
-			}
-			logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
-		}
-
-		// If the wrapped command exited successfully then we should do the same.
-		os.Exit(0)
-	}
+	runLoop(os.Args[1], os.Args[2:], nil)
 }
 
-// WrapSelf provides cmdwrapper-style restart-on-129 semantics for a component
-// that runs as a subcommand of the current executable (e.g. "calico component
-// kube-controllers"). On first invocation, the caller passes innerEnvVar,
-// which is set as an environment variable when re-executing os.Args. The
-// re-executed child sees innerEnvVar=="1" and runs fn directly; the parent
-// loops on exec.ExitError{ExitCode:129} to restart the child.
+// WrapSelf provides the same restart-on-RestartReturnCode semantics as Run,
+// but for a component that runs as a subcommand of the current executable
+// (e.g. "calico component felix"). The outer invocation re-execs the
+// current program with the same argv, setting innerEnvVar=1 in the child's
+// environment; the inner invocation sees innerEnvVar=="1" and runs fn
+// directly.
+//
+// innerEnvVar must be non-empty and should be unique to this binary and
+// component (for example "CALICO_FELIX_INNER"). Any pre-existing value of
+// innerEnvVar in the outer's environment is stripped before re-execing, so
+// a stale or user-supplied value cannot confuse the child.
+//
+// If fn returns normally, the inner exits 0 and the outer follows suit. If
+// fn calls os.Exit(N) or panics, the inner exits with that code and the
+// outer propagates it. The caller is responsible for configuring logrus
+// before calling WrapSelf.
 func WrapSelf(innerEnvVar string, fn func()) {
+	if innerEnvVar == "" {
+		panic("cmdwrapper.WrapSelf: innerEnvVar must not be empty")
+	}
 	if os.Getenv(innerEnvVar) == "1" {
 		fn()
 		return
 	}
+	env := append(stripEnvVar(os.Environ(), innerEnvVar), innerEnvVar+"=1")
+	runLoop(os.Args[0], os.Args[1:], env)
+}
 
-	logutils.ConfigureEarlyLogging()
-	logutils.ConfigureLogging(&config.Config{
-		LogSeverityScreen:       "info",
-		DebugDisableLogDropping: true,
-	})
+// stripEnvVar returns environ with any "<key>=..." entries removed. It does
+// not modify the input slice.
+func stripEnvVar(environ []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(environ))
+	for _, e := range environ {
+		if strings.HasPrefix(e, prefix) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
 
-	env := append(os.Environ(), innerEnvVar+"=1")
-	prog := os.Args[0]
-	args := os.Args[1:]
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c)
+// runLoop starts prog with args and env and restarts it on
+// RestartReturnCode, forwarding signals to the child. env may be nil to
+// inherit the current process's environment unchanged. runLoop never
+// returns; it calls os.Exit with the child's last exit code.
+func runLoop(prog string, args []string, env []string) {
+	sigCh := make(chan os.Signal, signalBufferSize)
+	signal.Notify(sigCh)
+	defer signal.Stop(sigCh)
 
 	for {
 		logrus.Infof("Starting %s %v", prog, args)
 		cmd := exec.Command(prog, args...)
+		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		cmd.Env = env
+		if env != nil {
+			cmd.Env = env
+		}
+		setPdeathsig(cmd)
+
 		if err := cmd.Start(); err != nil {
 			logrus.WithError(err).Fatalf("Failed to start %s", prog)
 		}
 
+		stop := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
-		stop := make(chan any)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case s := <-c:
-					if s == syscall.SIGCHLD {
-						continue
-					}
-					if err := cmd.Process.Signal(s); err != nil {
-						logrus.WithError(err).Error("Failed to send signal to wrapped command process")
-					}
-				case <-stop:
-					return
-				}
-			}
-		}()
+		go forwardSignals(cmd.Process, sigCh, stop, &wg)
+
 		cmdWaitErr := cmd.Wait()
 		close(stop)
 		wg.Wait()
-		if cmdWaitErr != nil {
-			if ee, ok := cmdWaitErr.(*exec.ExitError); ok {
-				if ee.ExitCode() == RestartReturnCode {
-					logrus.Infof("Received exit status %d, restarting %s", ee.ExitCode(), prog)
-					continue
-				}
-				logrus.Infof("Received exit status %d", ee.ExitCode())
-				os.Exit(ee.ExitCode())
-			}
-			logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
-			os.Exit(1)
+
+		exitCode := classifyExit(cmdWaitErr, prog)
+		if exitCode == RestartReturnCode {
+			logrus.Infof("Received exit status %d, restarting %s", exitCode, prog)
+			time.Sleep(restartBackoff)
+			continue
 		}
-		os.Exit(0)
+		logrus.Infof("Received exit status %d for %s", exitCode, prog)
+		os.Exit(exitCode)
 	}
+}
+
+func forwardSignals(p *os.Process, sigCh <-chan os.Signal, stop <-chan struct{}, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case s := <-sigCh:
+			// SIGCHLD arrives because our child exited; cmd.Wait handles
+			// reaping, so we don't need to forward it.
+			if s == syscall.SIGCHLD {
+				continue
+			}
+			if err := p.Signal(s); err != nil {
+				// The child may have already exited (common during
+				// teardown), so this is not fatal.
+				logrus.WithError(err).WithField("signal", s).Debug("Failed to forward signal to wrapped process")
+			}
+		case <-stop:
+			return
+		}
+	}
+}
+
+// classifyExit maps cmd.Wait()'s error to a numeric exit code to propagate.
+// Non-ExitError failures (e.g. I/O errors reaping the child) are logged and
+// reported as exit code 1.
+func classifyExit(cmdWaitErr error, prog string) int {
+	if cmdWaitErr == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(cmdWaitErr, &ee) {
+		return ee.ExitCode()
+	}
+	logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
+	return 1
 }
