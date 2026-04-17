@@ -142,6 +142,81 @@ func TestMatchHTTPPaths(t *testing.T) {
 	}
 }
 
+// TestMatchHTTPPaths_Normalization pins down the expected behaviour of
+// matchHTTPPaths when the incoming request-target contains characters that
+// change meaning after RFC 3986 / RFC 7230 normalisation.
+//
+// Upstream HTTP servers (Nginx, Apache, Envoy with normalize_path, Go's
+// net/http, most language frameworks) collapse ".", "..", and repeated "/"
+// segments, and most decode unreserved percent-escapes, before dispatching
+// the request to a handler. If matchHTTPPaths decides Allow/Deny against the
+// raw request-target, the upstream server can serve a resource different
+// from the one Dikastes authorised — which is a path-traversal style
+// authorisation bypass (CWE-22 / CWE-23).
+//
+// Prefix matches must also be anchored to a path-segment boundary, otherwise
+// prefix "/pub" authorises "/public-leak-endpoint". RFC 7230 §5.3 and
+// common L7 matcher semantics (Envoy, Istio AuthorizationPolicy) treat path
+// prefixes as segment-aligned.
+//
+// Cases below currently FAIL — they describe what a fix must achieve.
+func TestMatchHTTPPaths_Normalization(t *testing.T) {
+	exact := func(p string) *proto.HTTPMatch_PathMatch {
+		return &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: p}}
+	}
+	prefix := func(p string) *proto.HTTPMatch_PathMatch {
+		return &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: p}}
+	}
+
+	testCases := []struct {
+		title   string
+		paths   []*proto.HTTPMatch_PathMatch
+		reqPath string
+		result  bool
+	}{
+		// --- Regression guards: legitimate requests must stay matched ---
+		{"prefix baseline", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public", true},
+		{"prefix with trailing slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/", true},
+		{"prefix with subpath", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/index.html", true},
+		{"exact baseline", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public", true},
+		{"exact unchanged by trailing dot-segment normalisation", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/.", true},
+
+		// --- Dotdot traversal: must NOT match prefix /public ---
+		{"dotdot escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin", false},
+		{"dotdot nested escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/a/../../admin", false},
+		{"dotdot escapes exact", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/../public", true}, // normalises to /public
+		{"dotdot changes exact", []*proto.HTTPMatch_PathMatch{exact("/public/foo")}, "/public/bar/../foo", true},
+
+		// --- Percent-encoded slashes and dots ---
+		{"percent-encoded slash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%2F..%2Fadmin", false},
+		{"percent-encoded dots traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%2e%2e/admin", false},
+		{"percent-encoded uppercase dots", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%2E%2E/admin", false},
+		{"percent-encoded unreserved should not be re-escaped", []*proto.HTTPMatch_PathMatch{exact("/public/file")}, "/public/%66ile", true}, // %66 = 'f'
+
+		// --- Repeated slash collapse ---
+		{"double slash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//../admin", false},
+		{"leading double slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "//public", true},
+		{"interior double slash preserved match", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//foo", true},
+
+		// --- Prefix not anchored to segment boundary ---
+		{"short-prefix sibling leak", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/public-leak-endpoint", false},
+		{"short-prefix sibling path", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/public", false},
+		{"short-prefix matches own segment", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/pub", true},
+		{"short-prefix matches deeper segment", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/pub/x", true},
+
+		// --- Query/fragment retained after normalisation ---
+		{"query stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin?x=1", false},
+		{"fragment stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin#frag", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(matchHTTPPaths(tc.paths, &tc.reqPath)).To(Equal(tc.result))
+		})
+	}
+}
+
 // An omitted HTTP Match clause always matches.
 func TestMatchHTTPNil(t *testing.T) {
 	RegisterTestingT(t)
