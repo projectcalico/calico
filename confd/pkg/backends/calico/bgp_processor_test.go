@@ -41,7 +41,7 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 		configCache:  make(map[int]*bgpConfigCache),
 	}
 	c.globalBGPConfig = v3.NewBGPConfiguration()
-	c.globalBGPConfig.ObjectMeta.Name = "default"
+	c.globalBGPConfig.Name = "default"
 	return c
 }
 
