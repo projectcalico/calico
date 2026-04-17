@@ -429,7 +429,7 @@ func (lmc *LiveMigrationCalculator) refSelector(
 	}
 	keys.Add(lmKey)
 	if keys.Len() == 1 {
-		AddExtraComputedSelector(lmc.activeRulesCalc, selector, lmc)
+		lmc.activeRulesCalc.AddExtraComputedSelector(selector, lmc)
 	}
 }
 
@@ -441,7 +441,7 @@ func (lmc *LiveMigrationCalculator) unrefSelector(
 	if keys != nil {
 		keys.Discard(lmKey)
 		if keys.Len() == 0 {
-			RemoveExtraComputedSelector(lmc.activeRulesCalc, selector, lmc)
+			lmc.activeRulesCalc.RemoveExtraComputedSelector(selector, lmc)
 			delete(lmc.selectorKeys, selector)
 		}
 	}
