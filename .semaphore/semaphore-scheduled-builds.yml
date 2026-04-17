@@ -320,6 +320,8 @@ blocks:
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
   - name: "Build: uber image"
+    # Always build and cache the uber image so that downstream CI blocks can
+    # load it from GCS instead of rebuilding per component.
     run:
       when: "true"
     dependencies: []
@@ -338,8 +340,9 @@ blocks:
               value: "true"
           commands:
             - make -C cmd/calico image
-            - docker save calico/calico:latest-amd64 | zstd -3 > /tmp/calico-image.tar.zstd
-            - gcloud storage cp /tmp/calico-image.tar.zstd "${GCS_WORKFLOW_DIR}/calico-image.tar.zstd"
+            - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
+            - zstd -3 --rm /tmp/calico-image.tar
+            - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
   - name: "Build: node image"
     run:
       when: "true"
@@ -359,8 +362,9 @@ blocks:
               value: "true"
           commands:
             - make -C node image
-            - docker save calico/node:latest-amd64 | zstd -3 > /tmp/node-image.tar.zstd
-            - gcloud storage cp /tmp/node-image.tar.zstd "${GCS_WORKFLOW_DIR}/node-image.tar.zstd"
+            - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+            - zstd -3 --rm /tmp/node-image.tar
+            - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
     run:
       when: >-
@@ -378,8 +382,9 @@ blocks:
               value: "true"
           commands:
             - make -C whisker image
-            - docker save calico/whisker:latest-amd64 | zstd -3 > /tmp/whisker-image.tar.zstd
-            - gcloud storage cp /tmp/whisker-image.tar.zstd "${GCS_WORKFLOW_DIR}/whisker-image.tar.zstd"
+            - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+            - zstd -3 --rm /tmp/whisker-image.tar
+            - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
