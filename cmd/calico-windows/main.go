@@ -29,9 +29,9 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-// main is the Windows uber binary. On Linux, cmd/calico is used instead.
+// main is the Windows combined calico binary. On Linux, cmd/calico is used instead.
 // This binary imports only Windows-safe packages, avoiding the Linux-only
-// dependencies in the full uber binary (typha, pod2daemon, dikastes, etc.).
+// dependencies in the full calico binary (typha, pod2daemon, dikastes, etc.).
 //
 // When symlinked or copied as "calico-ipam.exe", dispatches to the IPAM
 // plugin. When CNI_COMMAND is set, dispatches to the CNI plugin. Otherwise,

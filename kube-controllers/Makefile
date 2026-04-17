@@ -35,7 +35,7 @@ clean:
 # Building the binary
 ###############################################################################
 # The kube-controllers and check-status binaries are only built standalone for
-# the flannel-migration image. The main kube-controllers ships in the uber
+# the flannel-migration image. The main kube-controllers ships in the combined
 # calico/calico image.
 build: $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH)
 
@@ -95,7 +95,7 @@ TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
-# uber-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
+# calico-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
 # Flannel-migration FV tests need kubectl inside the container, which the
 # combined image does not ship, so they continue to use a dedicated image.
 test: ut

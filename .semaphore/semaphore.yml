@@ -163,7 +163,7 @@ promotions:
       when: "result = 'stopped'"
   # Have separate promotions for publishing images so we can re-run
   # them individually if they fail, and so we can run them in parallel.
-  - name: Push calico uber images
+  - name: Push calico images
     pipeline_file: push-images/calico.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
@@ -367,8 +367,8 @@ blocks:
                 zstd -3 --rm /tmp/go-build.tar
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
-  - name: "Build: uber image"
-    # Always build and cache the uber image so that downstream CI blocks can
+  - name: "Build: calico image"
+    # Always build and cache the calico image so that downstream CI blocks can
     # load it from GCS instead of rebuilding per component.
     run:
       when: "true"
@@ -376,13 +376,13 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       agent:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
       jobs:
-        - name: "Build and cache uber image"
+        - name: "Build and cache calico image"
           env_vars:
             - name: STORE_BUILD_CACHE
               value: "true"
@@ -685,7 +685,7 @@ blocks:
       - Manifests and API docs
       - Store working copy
       - "Pull: go-build image"
-      - "Build: uber image"
+      - "Build: calico image"
       - "Build: node image"
       - "Build: whisker image"
     task:
@@ -786,7 +786,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd apiserver
@@ -903,6 +903,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico-image"
       prologue:
         commands:
           - cd app-policy
@@ -990,7 +993,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd calicoctl
@@ -1398,7 +1401,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd cmd/calico
@@ -1486,7 +1489,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -1598,7 +1601,7 @@ blocks:
             - cd ~/calico/process/testing/aso && make dist-clean
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: AZURE_LOCATION
@@ -1699,7 +1702,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd confd
@@ -3078,7 +3081,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
@@ -3139,7 +3142,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd guardian
@@ -3324,7 +3327,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -3410,7 +3413,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd libcalico-go
@@ -4492,6 +4495,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico-image"
       prologue:
         commands:
           - cd pod2daemon
@@ -4508,6 +4514,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico-image"
       prologue:
         commands:
           - cd hack
@@ -4598,7 +4607,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -4686,7 +4695,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd webhooks
@@ -4760,6 +4769,9 @@ blocks:
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico-image"
       prologue:
         commands:
           - cd whisker-backend
@@ -4829,7 +4841,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "uber-calico"
+          value: "calico-image"
       prologue:
         commands:
           - cd key-cert-provisioner

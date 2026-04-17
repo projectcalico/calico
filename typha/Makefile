@@ -38,7 +38,7 @@ ut combined.coverprofile: $(SRC_FILES)
 # CI/CD
 ###############################################################################
 .PHONY: ci version
-# Uses the combined calico/calico image (loaded from the uber-image prerequisite
+# Uses the combined calico/calico image (loaded from the calico-image prerequisite
 # in CI, or built locally via `make -C cmd/calico image`).
 version:
 	docker run --rm calico/calico:latest-$(ARCH) version
