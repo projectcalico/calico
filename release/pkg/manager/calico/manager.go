@@ -824,57 +824,23 @@ func (r *CalicoManager) assertImageVersions() error {
 	buildInfoVersionRegex := regexp.MustCompile(`(?m)^Version:\s+(.*)$`)
 	for _, img := range utils.ReleaseImages() {
 		switch img {
-		case "apiserver":
+		case "calico":
 			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
-				// apiserver always returns an error because there is no kubeconfig, log but do not fail here
+				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "version"}, nil)
 				if err != nil {
-					logrus.WithError(err).WithField("image", img).Error("error while getting version from apiserver image, continuing")
-				}
-				if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
+					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
+				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "cni":
-			for _, reg := range r.imageRegistries {
-				for _, cmd := range []string{"calico", "calico-ipam"} {
-					out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), cmd, "-v"}, nil)
-					if err != nil {
-						return fmt.Errorf("failed to run get version from %s image: %s", cmd, err)
-					} else if !strings.Contains(out, r.calicoVersion) {
-						return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-					}
 				}
 			}
 		case "cni-windows", "node-windows":
 			// Skip windows images
-		case "csi", "dikastes", "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "flannel-migration-controller", "goldmane", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel",
-			"node-driver-registrar", "pod2daemon-flexvol", "whisker", "whisker-backend":
+		case "envoy-gateway", "envoy-proxy", "envoy-ratelimit", "flannel-migration-controller", "istio-install-cni", "istio-pilot", "istio-proxyv2", "istio-ztunnel", "whisker":
 			for _, reg := range r.imageRegistries {
 				out, err := r.runner.Run("docker", []string{"inspect", `--format='{{ index .Config.Labels "org.opencontainers.image.version" }}'`, fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion)}, nil)
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "ctl":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "version"}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "key-cert-provisioner", "test-signer":
-			// key-cert-provisioner images do not have version information.
-		case "guardian", "kube-controllers":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "--version"}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
@@ -884,24 +850,6 @@ func (r *CalicoManager) assertImageVersions() error {
 				if err != nil {
 					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
 				} else if len(buildInfoVersionRegex.FindStringSubmatch(out)) == 0 {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "typha":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "calico-typha", "--version"}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
-					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
-				}
-			}
-		case "webhooks":
-			for _, reg := range r.imageRegistries {
-				out, err := r.runner.Run("docker", []string{"run", "--rm", fmt.Sprintf("%s/%s:%s", reg, img, r.calicoVersion), "version"}, nil)
-				if err != nil {
-					return fmt.Errorf("failed to run get version from %s image: %s", img, err)
-				} else if !strings.Contains(out, r.calicoVersion) {
 					return fmt.Errorf("version does not match for image %s/%s:%s", reg, img, r.calicoVersion)
 				}
 			}
@@ -1076,12 +1024,8 @@ func (r *CalicoManager) buildReleaseTar() error {
 		}
 		registry := r.imageRegistries[0]
 		images := map[string]string{
+			fmt.Sprintf("%s/calico:%s", registry, r.calicoVersion):                       filepath.Join(imgDir, "calico.tar"),
 			fmt.Sprintf("%s/node:%s", registry, r.calicoVersion):                         filepath.Join(imgDir, "calico-node.tar"),
-			fmt.Sprintf("%s/typha:%s", registry, r.calicoVersion):                        filepath.Join(imgDir, "calico-typha.tar"),
-			fmt.Sprintf("%s/cni:%s", registry, r.calicoVersion):                          filepath.Join(imgDir, "calico-cni.tar"),
-			fmt.Sprintf("%s/kube-controllers:%s", registry, r.calicoVersion):             filepath.Join(imgDir, "calico-kube-controllers.tar"),
-			fmt.Sprintf("%s/pod2daemon-flexvol:%s", registry, r.calicoVersion):           filepath.Join(imgDir, "calico-pod2daemon.tar"),
-			fmt.Sprintf("%s/dikastes:%s", registry, r.calicoVersion):                     filepath.Join(imgDir, "calico-dikastes.tar"),
 			fmt.Sprintf("%s/flannel-migration-controller:%s", registry, r.calicoVersion): filepath.Join(imgDir, "calico-flannel-migration-controller.tar"),
 		}
 		for img, out := range images {

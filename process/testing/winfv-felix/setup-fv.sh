@@ -104,19 +104,47 @@ function get_logs(){
   rm -r ./pod-logs || true
   mkdir -p ./pod-logs
 
-  # Get logs from windows pod
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c uninstall-calico > ./pod-logs/win-uninstall-calico.log || echo "Failed to get logs for win-uninstall-calico"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c install-cni > ./pod-logs/win-install-cni.log || echo "Failed to get logs for win-install-cni"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c node > ./pod-logs/win-node.log || echo "Failed to get logs for win-node"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c felix > ./pod-logs/win-felix.log || echo "Failed to get logs for win-felix"
+  # Dump cluster state and container logs to stdout as well as files so that
+  # when the job's pod-logs/ directory isn't uploaded as an artifact, the
+  # diagnostic output is still captured in the main job log.
+  local sections=(
+    "kubectl get pods -A -o wide"
+    "kubectl get nodes -o wide"
+    "kubectl describe ds -n calico-system calico-node-windows"
+    "kubectl describe pods -n calico-system -l k8s-app=calico-node-windows"
+    "kubectl get events -n calico-system --sort-by=.lastTimestamp"
+  )
+  for cmd in "${sections[@]}"; do
+    echo "================ ${cmd} ================"
+    ${KUBECTL} --kubeconfig="${KUBECONFIG}" ${cmd#kubectl } || echo "Failed: ${cmd}"
+  done
 
-  # Get logs from linux pod
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node -c calico-node > ./pod-logs/linux-calico-node.log || echo "Failed to get logs for linux-calico-node"
+  # Container logs: capture to files (for artifact upload) and stdout (for job log).
+  local win_containers=(uninstall-calico install-cni node felix)
+  for c in "${win_containers[@]}"; do
+    local out="./pod-logs/win-${c}.log"
+    ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node-windows -c "${c}" > "${out}" 2>&1 || echo "Failed to get logs for win-${c}"
+    echo "================ calico-node-windows container=${c} ================"
+    cat "${out}" || true
+  done
+
+  ${KUBECTL} --kubeconfig="${KUBECONFIG}" logs -n calico-system -l k8s-app=calico-node -c calico-node > ./pod-logs/linux-calico-node.log 2>&1 || echo "Failed to get logs for linux-calico-node"
+  echo "================ calico-node (linux) ================"
+  cat ./pod-logs/linux-calico-node.log || true
+
+  # Pull Windows-side service logs from the VM. When calico-node.exe crashes
+  # before Kubernetes can capture container logs (e.g., bad argv parsing), the
+  # only trace lives in CalicoWindows/logs on the host.
+  echo "================ Windows node CalicoWindows logs ================"
+  ${WINDOWS_CONNECT_COMMAND} 'Get-ChildItem c:\CalicoWindows\logs -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "---- $($_.FullName) ----"; Get-Content $_.FullName -Tail 500 -ErrorAction SilentlyContinue }' || echo "Failed to fetch Windows service logs"
 }
 
 # Main execution
+# Always collect pod logs on exit so failures during image rollout or test
+# infrastructure setup don't leave us without diagnostic data.
+trap get_logs EXIT
+
 upload_fv_scripts
 upload_calico_images
 start_test_infra
 run_windows_fv
-get_logs
