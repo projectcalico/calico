@@ -87,3 +87,20 @@ exclusively one of:
 If in doubt, update the doc. A PR that modifies the BPF dataplane
 without a `DESIGN.md` update and without falling into one of the
 four exemptions is incomplete.
+
+**Amending the PR.** The Copilot automated code-review step is
+read-only with respect to the PR branch — it cannot push the
+`DESIGN.md` amendment itself. When the review flags a missing
+update per the rule above, its comment should include a
+ready-to-paste `@copilot` prompt that specifies which section
+needs updating and what new invariant or mechanic to cover, for
+example:
+
+> `@copilot update felix/bpf/DESIGN.md §13 to cover the new CT flag CALI_CT_FLAG_FOO — the fields it uses, where it is set, how it interacts with the fast path.`
+
+The reviewer (or the PR author) drops that into a new PR comment
+to invoke the Copilot coding agent, which pushes a commit with
+the amendment to the PR branch. Pre-formatting the invocation in
+the review comment is the path of least resistance; without it
+the reviewer has to draft the prompt themselves and the doc
+drift typically ends up in a follow-up PR.
