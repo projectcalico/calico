@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "typha"
+        value: "uber-calico"
     prologue:
       commands:
         - cd typha
