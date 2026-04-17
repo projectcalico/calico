@@ -94,6 +94,26 @@ global_job_config:
           mkdir -p artifacts
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      # Best-effort: load calico/go-build from the GCS cache populated by the
+      # "Pull: go-build image" prerequisite job. Falls back to a Docker Hub pull
+      # on cache miss. Skipped on non-x86_64 / cross-compile agents since the
+      # cache is amd64-only.
+      - |-
+        if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
+          GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          image="calico/go-build:${GO_BUILD_VER}"
+          if ! docker image inspect "$image" >/dev/null 2>&1; then
+            cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+            if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+              echo "Loading ${image} from GCS cache"
+              zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
+              docker load -i /tmp/go-build.tar
+              rm -f /tmp/go-build.tar
+            else
+              echo "No GCS cache for ${image}, docker will pull from Docker Hub if needed"
+            fi
+          fi
+        fi
   epilogue:
     commands:
       - cd $HOME
@@ -319,6 +339,34 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  - name: "Pull: go-build image"
+    # Populate the GCS cache of calico/go-build so that every downstream job can
+    # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
+    # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
+    # the tarball survives across workflows — the common case is a no-op
+    # `gcloud storage ls` on a cache hit.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: SKIP_CACHE_RESTORE
+          value: "true"
+      jobs:
+        - name: "Cache calico/go-build to GCS"
+          commands:
+            - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+            - |-
+              if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+                echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
+                exit 0
+              fi
+              echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
+              docker pull "calico/go-build:${GO_BUILD_VER}"
+              docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
+              zstd -3 --rm /tmp/go-build.tar
+              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
   - name: "Build: uber image"
     # Always build and cache the uber image so that downstream CI blocks can
     # load it from GCS instead of rebuilding per component.
@@ -636,6 +684,7 @@ blocks:
       - Check protobufs
       - Manifests and API docs
       - Store working copy
+      - "Pull: go-build image"
       - "Build: uber image"
       - "Build: node image"
       - "Build: whisker image"
@@ -2227,6 +2276,18 @@ blocks:
               value: "hack/test/kind/infra/values-felix-routing.yaml"
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind-felix-routing.yaml"
+            - name: STORE_BUILD_CACHE
+              value: "true"
+        - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
+          commands:
+            - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
+          env_vars:
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-felix-routing.yaml"
+            - name: KIND_CALICO_API_GROUP
+              value: "projectcalico.org/v3"
             - name: E2E_TEST_CONFIG
               value: "e2e/config/kind-felix-routing.yaml"
             - name: STORE_BUILD_CACHE
