@@ -6,8 +6,6 @@ keys = [
     "/bgpconfig",
     "/v1/ipam/v4/pool",
     "/bgp/v1/host//NODENAME",
-    "/bgp/v1/global/svc_loadbalancer_ips",
-    "/bgp/v1/global/program_cluster_routes",
     "/staticroutes",
     "/rejectcidrs",
 ]
