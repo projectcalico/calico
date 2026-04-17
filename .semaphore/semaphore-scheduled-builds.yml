@@ -360,13 +360,13 @@ blocks:
             - |-
               if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
                 echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
-                exit 0
+              else
+                echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
+                docker pull "calico/go-build:${GO_BUILD_VER}"
+                docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
+                zstd -3 --rm /tmp/go-build.tar
+                gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
-              echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
-              docker pull "calico/go-build:${GO_BUILD_VER}"
-              docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
-              zstd -3 --rm /tmp/go-build.tar
-              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
   - name: "Build: uber image"
     run:
       when: "true"
