@@ -638,13 +638,18 @@ runs:
 >   BPF mode, regardless of whether the overlay uses VXLAN, IPIP,
 >   WireGuard, or no encap. It carries external traffic that has
 >   hit a NodePort on a node whose selected backend is on a
->   different node.
+>   different node. It uses a fixed VNI of **`0xca11c0`**
+>   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`) — reserving that
+>   value so receivers can tell NodePort-forwarding packets from
+>   overlay packets on the same device.
 > - **Pod-to-pod overlay VXLAN** is what pod→pod traffic uses when
->   the cluster's overlay is configured as VXLAN.
+>   the cluster's overlay is configured as VXLAN. Its VNI is the
+>   operator-configured overlay VNI, not `0xca11c0`.
 >
 > A reader familiar with the overlay may assume one implies the
 > other; it doesn't. The BPF program picks per-packet which
-> semantics apply and sets the VXLAN tunnel key accordingly.
+> semantics apply and sets the VXLAN tunnel key (destination
+> node IP + VNI) accordingly.
 
 ### Return path (non-DSR)
 
