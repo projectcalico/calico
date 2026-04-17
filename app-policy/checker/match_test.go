@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,7 +162,8 @@ func TestMatchHTTPPaths(t *testing.T) {
 // common L7 matcher semantics (Envoy, Istio AuthorizationPolicy) treat path
 // prefixes as segment-aligned.
 //
-// Cases below currently FAIL — they describe what a fix must achieve.
+// Cases below provide regression coverage for normalisation and
+// segment-aligned prefix matching.
 func TestMatchHTTPPaths_Normalization(t *testing.T) {
 	exact := func(p string) *proto.HTTPMatch_PathMatch {
 		return &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: p}}
@@ -182,7 +183,7 @@ func TestMatchHTTPPaths_Normalization(t *testing.T) {
 		{"prefix with trailing slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/", true},
 		{"prefix with subpath", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/index.html", true},
 		{"exact baseline", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public", true},
-		{"exact unchanged by trailing dot-segment normalisation", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/.", true},
+		{"trailing dot-segment collapses to exact", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/.", true},
 
 		// --- Dotdot traversal: must NOT match prefix /public ---
 		{"dotdot escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin", false},
@@ -199,7 +200,7 @@ func TestMatchHTTPPaths_Normalization(t *testing.T) {
 		// --- Repeated slash collapse ---
 		{"double slash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//../admin", false},
 		{"leading double slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "//public", true},
-		{"interior double slash preserved match", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//foo", true},
+		{"interior double slash collapsed still matches prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//foo", true},
 
 		// --- Prefix not anchored to segment boundary ---
 		{"short-prefix sibling leak", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/public-leak-endpoint", false},
