@@ -611,6 +611,8 @@ blocks:
           value: "true"
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
+        - name: RUN_LOCAL_TESTS
+          value: "true"
         - name: E2E_TEST_CONFIG
           # Test selection is driven by the config file; see gcp-bpf.yaml for the
           # include/exclude rationale.
@@ -668,8 +670,6 @@ blocks:
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "BIRD"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
@@ -698,8 +698,8 @@ blocks:
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "FELIX"
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-felix-routing.yaml"
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
@@ -867,28 +867,13 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
             # Only building the code, not the image here because the felix image is now only used for FV tests, which
             # only run on AMD64 at the moment.
             - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
-  - name: "Felix: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd felix
-      jobs:
-        - name: "Felix: build arm64 binaries"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
   - name: "Felix: Build Windows binaries"
     run:
       when: "true"
@@ -1361,6 +1346,7 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
@@ -1371,22 +1357,6 @@ blocks:
         - name: "Node: build Windows image"
           commands:
             - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-  - name: "Node: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Node: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-4
-      prologue:
-        commands:
-          - cd node
-      jobs:
-        - name: "Node: build arm64 image"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
   - name: "Node: kind-cluster tests"
     run:
       # KinD tests also build and run all the other images.
