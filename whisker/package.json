@@ -39,7 +39,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "framer-motion": "^10.12.16",
-        "lodash": "^4.17.23",
+        "lodash": "^4.18.1",
         "lucide-react": "^0.545.0",
         "motion": "^12.4.10",
         "postcss": "^8.5.6",
