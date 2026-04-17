@@ -62,10 +62,11 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	pc := c.getBGPProcessorContext()
 
 	config := &types.BirdBGPConfig{
-		NodeName:    NodeName,
-		Peers:       make([]types.BirdBGPPeer, 0),
-		Filters:     make(map[string]string),
-		Communities: make([]types.CommunityRule, 0),
+		NodeName:        NodeName,
+		Peers:           make([]types.BirdBGPPeer, 0),
+		Filters:         make(map[string]string),
+		Communities:     make([]types.CommunityRule, 0),
+		LoadBalancerIPs: getServiceLoadBalancerIPs(pc.globalBGPConfig),
 	}
 
 	// Get basic node configuration
@@ -76,7 +77,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debugf("Populated node configuration: node=%s, ip=%s, ipv6=%s, as=%s", config.NodeName, config.NodeIP, config.NodeIPv6, config.ASNumber)
 
 	// Process all peer types
-	if err := c.processPeers(config, ipVersion); err != nil {
+	if err := c.processPeers(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process BGP peers")
 		return nil, err
 	}
@@ -198,23 +199,17 @@ func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPC
 	}
 
 	// Process ignored interfaces and build complete interface string
-	ignoredInterfaces, err := c.getNodeOrGlobalValue(NodeName, "ignored_interfaces")
-
-	// Build the complete interface pattern string
-	if err == nil && ignoredInterfaces != "" {
-		// Parse comma-separated list and build pattern
-		ifaceList := strings.Split(ignoredInterfaces, ",")
-		var patterns []string
-		for _, iface := range ifaceList {
-			patterns = append(patterns, fmt.Sprintf(`-"%s"`, iface))
-		}
-		// Add standard exclusions and wildcard
-		patterns = append(patterns, `-"cali*"`, `-"kube-ipvs*"`, `"*"`)
-		config.DirectInterfaces = strings.Join(patterns, ", ")
-	} else {
-		// Default pattern with explanatory comment
-		config.DirectInterfaces = `-"cali*", -"kube-ipvs*", "*"`
+	var ignoredInterfaces []string
+	if pc.globalBGPConfig != nil {
+		ignoredInterfaces = pc.globalBGPConfig.Spec.IgnoredInterfaces
 	}
+	var patterns []string
+	for _, iface := range ignoredInterfaces {
+		patterns = append(patterns, fmt.Sprintf(`-"%s"`, iface))
+	}
+	// Add standard exclusions and wildcard include.
+	patterns = append(patterns, `-"cali*"`, `-"kube-ipvs*"`, `"*"`)
+	config.DirectInterfaces = strings.Join(patterns, ", ")
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
 	config.NormalRoutePriority = getNormalRoutePriority(ipVersion, pc.globalBGPConfig)
@@ -247,12 +242,12 @@ func getNormalRoutePriority(ipVersion int, bgpConfig *v3.BGPConfiguration) (prio
 }
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
-func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) processPeers(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node's route reflector cluster ID
 	nodeClusterID, _ := c.GetValue(fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", NodeName))
 
 	// Process node-to-node mesh peers
-	if err := c.processMeshPeers(config, nodeClusterID, ipVersion); err != nil {
+	if err := c.processMeshPeers(pc, config, nodeClusterID, ipVersion); err != nil {
 		return fmt.Errorf("failed to process mesh peers: %w", err)
 	}
 
@@ -270,7 +265,7 @@ func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error 
 }
 
 // processMeshPeers processes node-to-node mesh BGP peers
-func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+func (c *client) processMeshPeers(pc *processorContext, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
 	logc := log.WithField("ipVersion", ipVersion)
 
 	// If this node is a route reflector, skip mesh processing
@@ -299,10 +294,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		logc.Debug("Node-to-node mesh disabled")
 		return nil
 	}
-
-	// Get global mesh settings
-	meshPassword, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_password")
-	meshRestartTime, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_restart_time")
 
 	// Determine which IP address field to use
 	ipAddrSuffix := "ip_addr_v4"
@@ -382,8 +373,8 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			ASNumber:        peerAS,
 			Type:            "mesh",
 			SourceAddr:      currentNodeIP,
-			Password:        meshPassword,
-			GracefulRestart: meshRestartTime,
+			Password:        c.getNodeMeshPassword(pc.globalBGPConfig),
+			GracefulRestart: getNodeMeshRestartTime(pc.globalBGPConfig),
 		}
 
 		// Make mesh unidirectional to avoid race conditions
