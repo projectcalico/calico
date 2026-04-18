@@ -16,8 +16,17 @@
 
 package cmdwrapper
 
-import "os/exec"
+import (
+	"os"
+	"os/exec"
+)
 
 // setPdeathsig is a no-op on non-Linux platforms: the parent-death signal
 // mechanism is Linux-specific.
 func setPdeathsig(_ *exec.Cmd) {}
+
+// shouldIgnoreSignal returns false on non-Linux: SIGCHLD is the only signal
+// we filter and it doesn't exist here.
+func shouldIgnoreSignal(_ os.Signal) bool {
+	return false
+}

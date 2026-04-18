@@ -43,8 +43,8 @@ func MassageError(err error) string {
 // non-nil RunE so that any error it returns has MassageError applied before
 // bubbling up to cobra's SilenceErrors+SilenceUsage path. Callers of Execute()
 // print the returned error directly, so without this wrapping the calicoctl
-// YAML/JSON error UX would regress when run under the uber-binary's ctl
-// subcommand.
+// YAML/JSON error UX would regress when run under the combined calico binary's
+// ctl subcommand.
 func wrapRunEWithMassageError(cmd *cobra.Command) {
 	for _, sub := range cmd.Commands() {
 		wrapRunEWithMassageError(sub)

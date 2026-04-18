@@ -62,7 +62,8 @@ SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
-FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico:latest-$(BUILDARCH)
+FV_TYPHACMD?=component typha
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
@@ -316,10 +317,13 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-typha
+REMOTE_DEPS=build-calico-image
 
-build-typha:
-	make -C ../typha image DEV_REGISTRIES=felix-test
+# Typha runs from the combined calico image as `component typha` (see
+# FV_TYPHAIMAGE / FV_TYPHACMD). For local FV runs we build the image here; in
+# CI it is preloaded from the calico-image GCS cache.
+build-calico-image:
+	$(MAKE) -C ../cmd/calico image
 
 .PHONY: fv fv-prereqs fv-no-build
 
@@ -348,6 +352,7 @@ build-fv-env: build fv-prereqs
 	@echo "FV_FELIXIMAGE=$(FV_FELIXIMAGE)" > .env
 	@echo "FV_ETCDIMAGE=$(ETCD_IMAGE)-$(ARCH)" >> .env
 	@echo "FV_TYPHAIMAGE=$(FV_TYPHAIMAGE)" >> .env
+	@echo "FV_TYPHACMD=$(FV_TYPHACMD)" >> .env
 	@echo "FV_K8SIMAGE=$(FV_K8SIMAGE)" >> .env
 	@echo "CERTS_PATH=$(CERTS_PATH)" >> .env
 	@echo "PRIVATE_KEY=`pwd`/private.key" >> .env
@@ -376,6 +381,7 @@ fv-no-prereqs:
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	  FV_TYPHACMD="$(FV_TYPHACMD)" \
 	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \

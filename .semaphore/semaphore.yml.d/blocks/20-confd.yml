@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "uber-calico"
+        value: "calico-image"
     prologue:
       commands:
         - cd confd

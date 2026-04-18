@@ -1187,13 +1187,12 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
-# build-images echos the images that would be built.
-# If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
+# build-images echoes the images that would be built. If WINDOWS_IMAGE is set
+# it is included in the output. $(sort) dedupes in case BUILD_IMAGES and
+# WINDOWS_IMAGE overlap (e.g. a component that only ships a Windows image
+# still needs BUILD_IMAGES set so the retag/push machinery iterates over it).
 build-images: var-require-all-BUILD_IMAGES
-	$(if $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES)\
-	)
+	@echo $(sort $(BUILD_IMAGES) $(WINDOWS_IMAGE))
 
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated

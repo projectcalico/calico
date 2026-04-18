@@ -8,7 +8,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "uber-calico"
+        value: "calico-image"
     prologue:
       commands:
         # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures

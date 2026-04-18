@@ -14,7 +14,8 @@ ARG BIN_DIR
 # checksum, so we stage both files together here under /shim.
 RUN mkdir -p /shim/usr/bin
 COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
-RUN ln -s calico /shim/usr/bin/calicoctl
+RUN ln -s calico /shim/usr/bin/calicoctl && \
+    ln -s calico /shim/usr/bin/calico-ipam
 
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
@@ -28,6 +29,11 @@ ARG BIN_DIR
 COPY --from=builder /shim/ /
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
+
+# Ship typha's default config so typha's subcommand doesn't try to mkdir
+# /var/log/calico at startup (it runs as non-root and has no write access
+# to /var). Matches the behavior of the standalone typha image.
+COPY docker/calico/typha.cfg /etc/calico/typha.cfg
 
 FROM ${CALICO_BASE}
 

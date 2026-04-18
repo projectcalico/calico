@@ -176,7 +176,6 @@ local:crypto/pkg/tls
 local:felix/ip
 local:kube-controllers/cmd/check-status
 local:kube-controllers/cmd/kube-controllers
-local:kube-controllers/cmd/wrapper
 local:kube-controllers/pkg/cache
 local:kube-controllers/pkg/config
 local:kube-controllers/pkg/controllers/controller

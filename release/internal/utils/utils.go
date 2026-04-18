@@ -80,26 +80,20 @@ func AllReleaseCharts() []string {
 var once sync.Once
 
 var (
+	// ImageReleaseDirs enumerates the component directories whose Makefiles
+	// publish standalone images. Components bundled into the combined
+	// calico image (kube-controllers, apiserver, dikastes, webhooks, typha,
+	// goldmane, guardian, whisker-backend, key-cert-provisioner, CSI,
+	// flexvol, Linux CNI) live under cmd/calico and are not listed here.
 	ImageReleaseDirs = []string{
-		"apiserver",
-		"app-policy",
-		"calicoctl",
 		"cmd/calico",
 		"cni-plugin",
-		"goldmane",
-		"guardian",
 		"istio",
-		"key-cert-provisioner",
-		"kube-controllers",
 		"node",
-		"pod2daemon",
 		"third_party/envoy-gateway",
 		"third_party/envoy-proxy",
 		"third_party/envoy-ratelimit",
-		"typha",
-		"webhooks",
 		"whisker",
-		"whisker-backend",
 	}
 	releaseImages = []string{}
 )
