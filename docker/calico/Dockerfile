@@ -30,6 +30,11 @@ COPY --from=builder /shim/ /
 COPY pod2daemon/bin/node-driver-registrar-${TARGETARCH} /usr/bin/csi-node-driver-registrar
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
+# Ship typha's default config so typha's subcommand doesn't try to mkdir
+# /var/log/calico at startup (it runs as non-root and has no write access
+# to /var). Matches the behavior of the standalone typha image.
+COPY docker/calico/typha.cfg /etc/calico/typha.cfg
+
 FROM ${CALICO_BASE}
 
 ARG GIT_VERSION
