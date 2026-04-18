@@ -17,6 +17,7 @@
 package cmdwrapper
 
 import (
+	"os"
 	"os/exec"
 	"syscall"
 )
@@ -31,4 +32,11 @@ func setPdeathsig(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Pdeathsig = syscall.SIGKILL
+}
+
+// shouldIgnoreSignal returns true for signals that should not be forwarded
+// to the wrapped child. SIGCHLD is emitted when the child exits; cmd.Wait
+// reaps it, so forwarding would be meaningless (and racy).
+func shouldIgnoreSignal(s os.Signal) bool {
+	return s == syscall.SIGCHLD
 }

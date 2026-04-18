@@ -21,7 +21,6 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -145,9 +144,9 @@ func forwardSignals(p *os.Process, sigCh <-chan os.Signal, stop <-chan struct{},
 	for {
 		select {
 		case s := <-sigCh:
-			// SIGCHLD arrives because our child exited; cmd.Wait handles
-			// reaping, so we don't need to forward it.
-			if s == syscall.SIGCHLD {
+			// SIGCHLD (Linux) arrives because our child exited; cmd.Wait
+			// handles reaping, so we don't need to forward it.
+			if shouldIgnoreSignal(s) {
 				continue
 			}
 			if err := p.Signal(s); err != nil {
