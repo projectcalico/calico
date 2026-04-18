@@ -122,6 +122,23 @@ require (
 )
 
 require (
+	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
+	github.com/MakeNowJust/heredoc v1.0.0 // indirect
+	github.com/chai2010/gettext-go v1.0.2 // indirect
+	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
+	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
+	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
+	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
+	github.com/moby/term v0.5.2 // indirect
+	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
+	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
+	github.com/xlab/treeprint v1.2.0 // indirect
+	k8s.io/cli-runtime v0.35.3 // indirect
+	sigs.k8s.io/kustomize/api v0.20.1 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
+)
+
+require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go v0.123.0 // indirect
@@ -360,7 +377,7 @@ require (
 	k8s.io/dynamic-resource-allocation v0.35.3 // indirect
 	k8s.io/kms v0.35.3 // indirect
 	k8s.io/kube-scheduler v0.35.3 // indirect
-	k8s.io/kubectl v0.35.3 // indirect
+	k8s.io/kubectl v0.35.3
 	k8s.io/kubelet v0.35.3 // indirect
 	k8s.io/mount-utils v0.35.3 // indirect
 	k8s.io/pod-security-admission v0.35.3
