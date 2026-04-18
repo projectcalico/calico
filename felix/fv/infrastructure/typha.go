@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -68,9 +69,13 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		options.ExtraVolumes[CertDir] = CertDir
 	}
 
-	args = append(args,
-		utils.Config.TyphaImage,
-	)
+	args = append(args, utils.Config.TyphaImage)
+	// The combined calico image is entered with a `component typha` subcommand
+	// rather than running the typha binary directly, so plumb through any
+	// command tokens after the image.
+	if cmd := strings.TrimSpace(utils.Config.TyphaCmd); cmd != "" {
+		args = append(args, strings.Fields(cmd)...)
+	}
 
 	c := containers.Run("typha",
 		containers.RunOpts{AutoRemove: true},
