@@ -163,7 +163,11 @@ $(LIBBPF_FILE_CREATED):
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	# Build the static libbpf.a with -fPIC so the objects can be linked into
+	# either a PDE or a PIE executable. The combined calico binary pulls in
+	# Go packages that cause the linker to emit -Wl,-z,nocopyreloc, which
+	# rejects libbpf's non-PIC references to glibc symbols like stderr.
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -442,6 +446,7 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.test
 	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
+	FV_TYPHACMD="$(FV_TYPHACMD)" \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	FV_BINARY=$(FV_BINARY) \
