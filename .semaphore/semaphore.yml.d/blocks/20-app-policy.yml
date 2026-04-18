@@ -4,6 +4,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico-image"
     prologue:
       commands:
         - cd app-policy
