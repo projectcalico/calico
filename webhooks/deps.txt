@@ -111,3 +111,4 @@ local:webhooks/cmd
 local:webhooks/pkg/clusterinfo
 local:webhooks/pkg/rbac
 local:webhooks/pkg/utils
+local:webhooks/pkg/webhook
