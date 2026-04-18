@@ -10,23 +10,9 @@
   components:
     api:
       version: v3.31.0
-    apiserver:
-      version: v3.31.0
     calico:
       version: v3.31.0
-    calicoctl:
-      version: v3.31.0
-      image: ctl
-    cni:
-      version: v3.31.0
     cni-windows:
-      version: v3.31.0
-    csi:
-      version: v3.31.0
-    csi-node-driver-registrar:
-      version: v3.31.0
-      image: node-driver-registrar
-    dikastes:
       version: v3.31.0
     envoy-gateway:
       version: v3.31.0
@@ -38,15 +24,6 @@
       version: v0.12.0
       image: coreos/flannel
       registry: quay.io
-    flannel-migration-controller:
-      version: v3.31.0
-    flexvol:
-      version: v3.31.0
-      image: pod2daemon-flexvol
-    goldmane:
-      version: v3.31.0
-    guardian:
-      version: v3.31.0
     istio-install-cni:
       version: v3.31.0
     istio-pilot:
@@ -55,23 +32,11 @@
       version: v3.31.0
     istio-ztunnel:
       version: v3.31.0
-    key-cert-provisioner:
-      version: v3.31.0
-    kube-controllers:
-      version: v3.31.0
     networking-calico:
       version: release-v3.31
     node:
       version: v3.31.0
     node-windows:
       version: v3.31.0
-    test-signer:
-      version: v3.31.0
-    typha:
-      version: v3.31.0
-    webhooks:
-      version: v3.31.0
     whisker:
-      version: v3.31.0
-    whisker-backend:
       version: v3.31.0

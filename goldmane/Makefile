@@ -1,10 +1,6 @@
 include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/goldmane
-IMAGE_BUILD_MARKER = goldmane_container-$(ARCH).created
-
-# Configure variables used by ci/cd common targets from lib.Makefile.
-BUILD_IMAGES=goldmane
 
 ###############################################################################
 # include ../lib.Makefile
@@ -13,36 +9,8 @@ BUILD_IMAGES=goldmane
 ###############################################################################
 include ../lib.Makefile
 
-# Full set of binaries to build.
-BINARIES=bin/goldmane-$(ARCH) bin/health-$(ARCH)
-
-.PHONY: image build
-image: $(IMAGE_BUILD_MARKER)
-build: $(BINARIES)
 clean:
 	rm -rf bin
-	rm -f $(IMAGE_BUILD_MARKER)
-
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
-sub-image-%:
-	$(MAKE) image ARCH=$*
-
-# Build goldmane image.
-goldmane calico/goldmane: $(IMAGE_BUILD_MARKER)
-IMAGE_DEPS = docker/Dockerfile
-$(IMAGE_BUILD_MARKER): $(IMAGE_DEPS) $(BINARIES) bin/LICENSE
-	$(DOCKER_BUILD) --build-arg TARGETARCH=$(ARCH) -t goldmane:latest-$(ARCH) -f docker/Dockerfile .
-	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-bin/goldmane-$(ARCH): $(shell find . -name '*.go')
-	$(call build_binary, $(PACKAGE_NAME)/cmd/, $@)
-
-bin/health-$(ARCH): $(shell find . -name '*.go')
-	$(call build_binary, $(PACKAGE_NAME)/cmd/health, $@)
-
-bin/LICENSE: ../LICENSE.md
-	cp ../LICENSE.md $@
 
 # Build the testserver image.
 .PHONY: testserver
@@ -81,21 +49,3 @@ ut:
 
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
-
-###############################################################################
-# Release
-###############################################################################
-## Deploys images to registry
-cd: image-all cd-common
-
-release-build: .release-$(VERSION).created
-.release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	touch $@
-
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
