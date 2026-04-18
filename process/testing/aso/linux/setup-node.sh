@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eu -o pipefail
 
 echo "=== Setting up Kubernetes prerequisites ==="
 
@@ -26,7 +26,7 @@ net.bridge.bridge-nf-call-ip6tables = 1
 net.ipv4.ip_forward                 = 1
 SYSCTL
 
-sudo sysctl --system
+sudo sysctl --system || true # ignore errors from unrelated sysctl params in the base image
 
 # Verify containerd is installed
 echo "Verifying containerd..."
@@ -66,18 +66,18 @@ KUBE_VERSION=${1:-"v1.33.7"}
 KUBE_MAJOR_MINOR=$(echo "${KUBE_VERSION}" | cut -d'.' -f1,2)
 echo "Installing kubeadm, kubelet, and kubectl ${KUBE_VERSION}..."
 echo "Using repository version: ${KUBE_MAJOR_MINOR}"
-sudo apt-get update
+sudo apt-get -o DPkg::Lock::Timeout=60 update
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y apt-transport-https ca-certificates curl gpg
 
 # Create keyrings directory
 sudo mkdir -p /etc/apt/keyrings
 
 # Add Kubernetes apt repository
-curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_MAJOR_MINOR}/deb/Release.key" | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBE_MAJOR_MINOR}/deb/Release.key" | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
 echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBE_MAJOR_MINOR}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 # Install Kubernetes components
-sudo apt-get update
+sudo apt-get -o DPkg::Lock::Timeout=60 update
 sudo apt-get -o DPkg::Lock::Timeout=60 install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 
