@@ -1,3 +1,71 @@
+#################################################################################################
+# Build defaults — toolchain versions, dependency pins, and shared build settings are read
+# from defaults.yaml.  Edit defaults.yaml to change pinned versions, not this file.
+#################################################################################################
+
+# Helper to locate and read from the centralized defaults file.
+# _DEFAULTS_DIR resolves correctly whether included from the root
+# Makefile or from a component subdirectory (e.g., felix/Makefile).
+_DEFAULTS_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+_DEFAULTS_YAML := $(_DEFAULTS_DIR)defaults.yaml
+
+ifeq ($(wildcard $(_DEFAULTS_YAML)),)
+$(error defaults.yaml not found at $(_DEFAULTS_YAML). Run from the repository root or a component directory.)
+endif
+
+# Bootstrap yq: prefer system yq, fall back to local bin/yq, auto-download if
+# neither exists.  This runs once during Make's variable-evaluation phase so that
+# _read_default calls (which use := and are evaluated eagerly) always have a
+# working yq binary.
+_YQ_LOCAL := $(_DEFAULTS_DIR)bin/yq
+_YQ := $(shell command -v yq 2>/dev/null \
+    || { test -x $(_YQ_LOCAL) && echo $(_YQ_LOCAL); } \
+    || { >&2 echo "yq not found on PATH; downloading latest to $(_YQ_LOCAL)..." \
+         && mkdir -p $(_DEFAULTS_DIR)bin \
+         && _arch=$$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') \
+         && _os=$$(uname -s | tr A-Z a-z) \
+         && curl -sSfL --retry 3 -o $(_YQ_LOCAL).tmp \
+              "https://github.com/mikefarah/yq/releases/latest/download/yq_$${_os}_$${_arch}" \
+         && chmod +x $(_YQ_LOCAL).tmp \
+         && mv $(_YQ_LOCAL).tmp $(_YQ_LOCAL) \
+         && echo $(_YQ_LOCAL); })
+
+ifeq ($(_YQ),)
+$(error yq not found and auto-download failed. Install yq: https://github.com/mikefarah/yq)
+endif
+
+# _read_default reads a scalar value from defaults.yaml.
+# _read_default_list reads a YAML array and returns a space-separated Make list.
+_read_default = $(shell $(_YQ) '$(1)' $(_DEFAULTS_YAML))
+_read_default_list = $(shell $(_YQ) '$(1) | join(" ")' $(_DEFAULTS_YAML))
+
+# Variables kept here are either referenced 3+ times across Makefiles or need
+# environment-override support.  Everything else is read inline via _read_default.
+BIRD_VERSION    := $(call _read_default,.versions.bird)
+BPFTOOL_IMAGE   := $(call _read_default,.toolchain.bpftool_image)
+CNI_VERSION     := $(call _read_default,.versions.cni_branch)
+ETCD_VERSION    := $(call _read_default,.versions.etcd)
+FLANNEL_VERSION := $(call _read_default,.versions.flannel_branch)
+HELM_VERSION    := $(call _read_default,.versions.helm)
+K8S_VERSION     := $(call _read_default,.versions.kubernetes)
+KIND_VERSION    := $(call _read_default,.versions.kind)
+LIBBPF_VERSION  := $(call _read_default,.toolchain.libbpf_ver)
+WINDOWS_DIST    := $(call _read_default,.windows.dist_dir)
+
+# Overridable by environment / CI.
+DEV_REGISTRIES        ?= $(call _read_default,.registries.dev)
+DEV_TAG_SUFFIX        ?= $(call _read_default,.git.dev_tag_suffix)
+GIT_REPO              ?= $(call _read_default,.git.repo)
+MIN_K8S_VERSION       ?= $(call _read_default,.versions.min_kubernetes)
+OPERATOR_BRANCH       ?= $(call _read_default,.git.operator_branch)
+OPERATOR_GIT_REPO     ?= $(call _read_default,.git.operator_repo)
+OPERATOR_ORGANIZATION ?= $(call _read_default,.git.operator_organization)
+ORGANIZATION          ?= $(call _read_default,.git.organization)
+RELEASE_BRANCH_PREFIX ?= $(call _read_default,.git.release_branch_prefix)
+WINDOWS_VERSIONS      ?= $(call _read_default_list,.windows.versions)
+
+GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
+
 # Disable built-in rules
 .SUFFIXES:
 
@@ -15,7 +83,7 @@ test: ut fv st
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES ?= amd64 arm64 ppc64le s390x
+ARCHES ?= $(call _read_default_list,.architectures.default)
 
 # list of arches *not* to build when doing *-all
 EXCLUDEARCH?=
@@ -55,7 +123,7 @@ endif
 # detect the local outbound ip address
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
-LATEST_IMAGE_TAG?=latest
+LATEST_IMAGE_TAG ?= latest
 
 # these macros create a list of valid architectures for pushing manifests
 comma := ,
@@ -75,7 +143,7 @@ endif
 .PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.1.4 --install all || true
+	docker run --privileged --rm $(call _read_default,.toolchain.binfmt_image) --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -83,7 +151,7 @@ ifeq ($(RELEASE),true)
 PUSH_IMAGES+=$(RELEASE_IMAGES)
 endif
 
-DOCKERHUB_REGISTRY ?=registry.hub.docker.com
+DOCKERHUB_REGISTRY ?= $(call _read_default,.registries.dockerhub)
 # filter-registry filters out registries we don't want to include when tagging / pushing docker images. For instance,
 # we don't include the registry name when pushing to docker hub because that registry is the default.
 filter-registry ?= $(if $(filter-out $(1),$(DOCKERHUB_REGISTRY)),$(1)/)
@@ -126,20 +194,11 @@ endif
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
-CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
+GO_BUILD_IMAGE ?= $(call _read_default,.toolchain.go_build_image)
+CALICO_BUILD    = $(GO_BUILD_IMAGE):$(call _read_default,.toolchain.go_build_ver)
 
-RUST_BUILD_IMAGE ?= calico/rust-build
-CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
-
-# We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-GOEXPERIMENT?=boringcrypto
-TAGS?=boringcrypto,osusergo,netgo
-CGO_ENABLED?=1
-else
-CGO_ENABLED?=0
-endif
+RUST_BUILD_IMAGE ?= $(call _read_default,.toolchain.rust_build_image)
+CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(call _read_default,.toolchain.rust_build_ver)
 
 # Cross-compilation support using clang.  When building on amd64 for a different
 # target architecture, we use clang as a cross-compiler (it natively supports all
@@ -218,15 +277,15 @@ define build_windows_binary
 endef
 
 # Images used in build / test across multiple directories.
-ETCD_IMAGE ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(ARCH)
+ETCD_IMAGE ?= $(call _read_default,.base_images.etcd):$(ETCD_VERSION)-$(ARCH)
 ifeq ($(BUILDARCH),amd64)
 	# *-amd64 tagged images for etcd are not available until v3.5.0
-	ETCD_IMAGE = quay.io/coreos/etcd:$(ETCD_VERSION)
+	ETCD_IMAGE = $(call _read_default,.base_images.etcd):$(ETCD_VERSION)
 endif
 
-UBI_IMAGE ?= registry.access.redhat.com/ubi9/ubi-minimal:latest
+UBI_IMAGE ?= $(call _read_default,.base_images.ubi)
 
-ifeq ($(GIT_USE_SSH),true)
+ifeq ($(call _read_default,.git.use_ssh),true)
 	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
 endif
 
@@ -346,7 +405,7 @@ endif
 ifdef USE_UBI_AS_CALICO_BASE
 CALICO_BASE ?= $(UBI_IMAGE)
 else
-CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
+CALICO_BASE ?= $(call _read_default,.base_images.calico_base):$(call _read_default,.versions.calico_base)
 endif
 
 ifndef NO_DOCKER_PULL
@@ -471,40 +530,38 @@ define get_go_build_version
 	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
 endef
 
-# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
+# update_go_build_pin updates go_build_ver in defaults.yaml.
 # for annotated git tags, we need to remove the trailing `^{}`.
 # for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
 define update_go_build_pin
 	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
+	$(eval old_ver := $(call _read_default,.toolchain.go_build_ver))
 
-	@echo "current GO_BUILD_VER=$(old_ver)"
-	@echo "latest GO_BUILD_VER=$(new_ver)"
+	@echo "current go_build_ver=$(old_ver)"
+	@echo "latest go_build_ver=$(new_ver)"
 
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^GO_BUILD_VER[[:space:]]*=.*/GO_BUILD_VER=$(new_ver)/" $(1); \
-			echo "GO_BUILD_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update GO_BUILD_VER"; \
-		fi'
+	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
+		$(_YQ) -i '.toolchain.go_build_ver = "$(new_ver)"' $(1); \
+		echo "go_build_ver is updated to $(new_ver)"; \
+	else \
+		echo "no need to update go_build_ver"; \
+	fi
 endef
 
-# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
+# update_calico_base_pin updates versions.calico_base in defaults.yaml.
 define update_calico_base_pin
 	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi9-[0-9]+$$" | sort -r | head -n 1))
-	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
+	$(eval old_ver := $(call _read_default,.versions.calico_base))
 
-	@echo "current CALICO_BASE_VER=$(old_ver)"
-	@echo "latest CALICO_BASE_VER=$(new_ver)"
+	@echo "current calico_base=$(old_ver)"
+	@echo "latest calico_base=$(new_ver)"
 
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
-			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update CALICO_BASE_VER"; \
-		fi'
+	@if [ "$(new_ver)" \> "$(old_ver)" ]; then \
+		$(_YQ) -i '.versions.calico_base = "$(new_ver)"' $(1); \
+		echo "calico_base is updated to $(new_ver)"; \
+	else \
+		echo "no need to update calico_base"; \
+	fi
 endef
 
 GIT_REMOTE?=origin
@@ -642,7 +699,7 @@ GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
-GIT_GO_BUILD_UPDATE_COMMIT_FILE?=metadata.mk
+GIT_GO_BUILD_UPDATE_COMMIT_FILE ?= defaults.yaml
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
 
@@ -753,7 +810,7 @@ trigger-auto-pin-update-process-wrapped: create-pin-update-head trigger-pin-upda
 static-checks: $(LOCAL_CHECKS)
 	$(MAKE) golangci-lint
 
-LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
+LINT_ARGS ?= $(call _read_default,.toolchain.golangci_lint_args)
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
@@ -1057,7 +1114,7 @@ push-image-to-registry-%:
 ifeq ($(findstring quay.io,$(REGISTRY)),quay.io)
 	$(if $(RELEASE), \
 		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) remove $(EXPIRY_IMAGES_LIST), \
-		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $(EXPIRY_IMAGES_LIST) \
+		-$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(call _read_default,.registries.quay_expire_days) $(EXPIRY_IMAGES_LIST) \
 	)
 endif
 
@@ -1075,8 +1132,8 @@ define retry_docker_cmd
 endef
 
 # Configuration options for retrying docker commands
-MANIFEST_RETRIES ?= 5
-MANIFEST_RETRY_DELAY ?= 5
+MANIFEST_RETRIES ?= $(call _read_default,.ci.manifest_retries)
+MANIFEST_RETRY_DELAY ?= $(call _read_default,.ci.manifest_retry_delay_seconds)
 
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
@@ -1370,13 +1427,6 @@ check-dirty:
 	@if [ "$$(git --no-pager diff --stat)" != "" ]; then \
 	echo "The following files are dirty"; git --no-pager diff; exit 1; fi
 
-bin/yq:
-	mkdir -p bin
-	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/yq4.tar.gz https://github.com/mikefarah/yq/releases/download/v4.34.2/yq_linux_$(BUILDARCH).tar.gz
-	tar -zxvf $(TMP)/yq4.tar.gz -C $(TMP)
-	mv $(TMP)/yq_linux_$(BUILDARCH) bin/yq
-
 # This setup is used to download and install the `crane` binary into $(REPOROOT)/bin/crane.
 # Normalize architecture for go-containerregistry filenames
 CRANE_ARCH = $(subst amd64,x86_64,$(BUILDARCH))
@@ -1385,7 +1435,7 @@ CRANE_OS = Windows
 else
 CRANE_OS = $(shell uname -s)
 endif
-CRANE_URL = https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
+CRANE_URL = https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_$(CRANE_OS)_$(CRANE_ARCH).tar.gz
 
 .PHONY: bin/crane
 bin/crane: $(REPO_ROOT)/bin/crane
@@ -1495,7 +1545,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 		--config $(KIND_CONFIG) \
 		--kubeconfig $(KIND_KUBECONFIG) \
 		--name $(KIND_NAME) \
-		--image kindest/node:$(KINDEST_NODE_VERSION)
+		--image kindest/node:$(call _read_default,.versions.kindest_node)
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
@@ -1733,8 +1783,6 @@ $(ENVTEST_ASSETS_MARKER):
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
 	touch $@
 
-# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
-MIN_K8S_VERSION ?= v1.31.0
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
 ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
@@ -1932,7 +1980,7 @@ release-windows-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-IMAG
 			$(DOCKER_MANIFEST) annotate --os windows --arch amd64 --os-version $${version} $${manifest_image} $${image}; \
 		done; \
 		$(DOCKER_MANIFEST) push --purge $${manifest_image}; \
-		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(QUAY_EXPIRE_DAYS) $${manifest_image} $${all_images} || true; \
+		$(RELEASE_PY3) $(QUAY_SET_EXPIRY_SCRIPT) add --expiry-days=$(call _read_default,.registries.quay_expire_days) $${manifest_image} $${all_images} || true; \
 	done;
 
 release-windows: var-require-one-of-CONFIRM-DRYRUN var-require-all-DEV_REGISTRIES-WINDOWS_IMAGE var-require-one-of-VERSION-BRANCH_NAME bin/crane

@@ -2,7 +2,7 @@
   run:
     when: "${FORCE_RUN} or change_in(['/.semaphore/end-to-end/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
-    minutes: 5
+    minutes: 15
   dependencies:
     - Prerequisites
   task:

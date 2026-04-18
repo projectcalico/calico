@@ -1549,7 +1549,7 @@ func (r *CalicoManager) releaseBranchPrereqs(branch string) error {
 // SetupReleaseBranch runs the steps necessary when cutting a new release branch
 //
 // For a newly created release branch, it will:
-//   - Update the versions in the helm charts, metadata.mk.
+//   - Update the versions in the helm charts and defaults.yaml.
 //   - Run code generation to update generated files based on the new versions.
 //   - Commit the changes.
 func (r *CalicoManager) SetupReleaseBranch(branch string) error {
@@ -1570,12 +1570,11 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		return err
 	}
 
-	// Modify values in metadata.mk
-	logrus.WithField("operator_branch", r.operatorBranch).Debug("Updating variables in metadata.mk")
-	makeMetadataFilePath := filepath.Join(r.repoRoot, "metadata.mk")
-	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/^OPERATOR_BRANCH.*/OPERATOR_BRANCH ?= %s/g`, r.operatorBranch), makeMetadataFilePath}, nil); err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to update operator branch in %s: %w", makeMetadataFilePath, err)
+	// Modify values in defaults.yaml
+	logrus.WithField("operator_branch", r.operatorBranch).Debug("Updating variables in defaults.yaml")
+	defaultsFilePath := filepath.Join(r.repoRoot, "defaults.yaml")
+	if err := updateDefaultsYAML(defaultsFilePath, []string{"git", "operator_branch"}, r.operatorBranch); err != nil {
+		return fmt.Errorf("failed to update operator branch in %s: %w", defaultsFilePath, err)
 	}
 
 	// Update release stream used for CAPZ - Windows FV tests.
@@ -1607,7 +1606,7 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		filepath.Join(r.repoRoot, ".semaphore"),
 		filepath.Join(r.repoRoot, "charts"),
 		filepath.Join(r.repoRoot, "manifests"),
-		filepath.Join(r.repoRoot, "metadata.mk"),
+		filepath.Join(r.repoRoot, "defaults.yaml"),
 		filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh"),
 		filepath.Join(r.repoRoot, "test-tools", "mocknode"),
 	); err != nil {
@@ -1851,4 +1850,49 @@ func ownerFromRemoteURL(raw string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unable to determine owner from remote URL %q", raw)
+}
+
+// updateDefaultsYAML reads a YAML file, sets the value at the given key path,
+// and writes it back preserving comments and formatting.
+func updateDefaultsYAML(filePath string, keyPath []string, value string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", filePath, err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parsing %s: %w", filePath, err)
+	}
+
+	// doc.Content[0] is the root mapping node.
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("%s: expected a YAML mapping at root", filePath)
+	}
+	node := doc.Content[0]
+	for i, key := range keyPath {
+		found := false
+		for j := 0; j < len(node.Content)-1; j += 2 {
+			if node.Content[j].Value == key {
+				if i == len(keyPath)-1 {
+					// Leaf: set the value.
+					node.Content[j+1].Value = value
+				} else {
+					// Intermediate: descend into the mapping.
+					node = node.Content[j+1]
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("key %q not found in %s", strings.Join(keyPath[:i+1], "."), filePath)
+		}
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return fmt.Errorf("marshaling %s: %w", filePath, err)
+	}
+	return os.WriteFile(filePath, out, 0644)
 }

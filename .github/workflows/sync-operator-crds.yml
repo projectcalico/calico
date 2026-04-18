@@ -51,7 +51,7 @@ jobs:
           ref: ${{ matrix.branch }}
 
       - name: Install tools
-        run: make bin/helm bin/yq
+        run: make bin/helm
 
       - name: Sync operator CRDs
         run: make get-operator-crds

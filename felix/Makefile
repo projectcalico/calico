@@ -1,5 +1,3 @@
-include ../metadata.mk
-
 # This Makefile builds Felix and releases it in various forms:
 #
 #				   Go install
@@ -275,7 +273,6 @@ $(FELIX_IMAGE)-$(ARCH): $(FELIX_CONTAINER_CREATED)
 IMAGE_DEPS = docker-image/Dockerfile docker-image/calico-felix-wrapper docker-image/felix.cfg
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 $(FELIX_CONTAINER_CREATED): $(IMAGE_DEPS) \
-                            ../metadata.mk \
                             $(shell test "$(FELIX_IMAGE_ID)" || echo force-rebuild) \
                             | register
 	$(DOCKER_BUILD) \

@@ -2,6 +2,11 @@
 
 export LC_ALL=C
 
+# Filter out Helm symlink warnings (walk.go).  The charts/calico directory
+# intentionally uses symlinks to reference CRDs and admission configs from
+# their source-of-truth locations; the warnings are noise.
+exec 2> >(grep -v 'walk\.go.*symbolic link' >&2)
+
 # This script updates the manifests in this directory using helm.
 # Values files for the manifests in this directory can be found in
 # ../calico/charts/values.
@@ -9,15 +14,10 @@ export LC_ALL=C
 # Helm binary to use. Default to the one installed by the Makefile.
 HELM=${HELM:-../bin/helm}
 
-# yq binary to use. Default to the one installed by the Makefile.
-YQ=${YQ:-../bin/yq}
+: "${YQ:?YQ must be set to the path of the yq binary}"
 
 if [[ ! -f $HELM ]]; then
   echo "[ERROR] Helm binary ${HELM} not found."
-  exit 1
-fi
-if [[ ! -f $YQ ]]; then
-  echo "[ERROR] yq binary ${YQ} not found."
   exit 1
 fi
 
@@ -76,7 +76,7 @@ echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
-		--show-only $FILE \
+		--show-only crds/$FILE \
 		--set version=$CALICO_VERSION \
 		--set node.registry=$REGISTRY \
 		--set calicoctl.registry=$REGISTRY \

@@ -1,6 +1,5 @@
 PACKAGE_NAME = github.com/projectcalico/calico
 
-include metadata.mk
 include lib.Makefile
 
 DOCKER_RUN := mkdir -p ./.go-pkg-cache bin $(GOMOD_CACHE) && \
@@ -64,8 +63,8 @@ update-x-libraries:
 check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
-check-images-availability: bin/crane bin/yq
-	cd ./hack && ./check-images-availability.sh
+check-images-availability: bin/crane
+	cd ./hack && YQ=$(_YQ) ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
@@ -103,8 +102,8 @@ generate:
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 
-gen-manifests: bin/helm bin/yq
-	cd ./manifests && ./generate.sh
+gen-manifests: bin/helm
+	cd ./manifests && YQ=$(_YQ) ./generate.sh
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
 get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERATOR_BRANCH
@@ -283,15 +282,14 @@ release-prep: release/bin/release bin/gh
 
 # Install ghr for publishing to github.
 bin/ghr:
-	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@$(GHR_VERSION)
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install github.com/tcnksm/ghr@latest
 
-# Install GitHub CLI
+# Install GitHub CLI (latest release). The version is needed because asset
+# filenames embed it (gh_X.Y.Z_linux_amd64.tar.gz).
 bin/gh:
 	@mkdir -p bin
-	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	@chmod +x $@
-	@rm bin/gh.tgz
+	$(eval GH_VER := $(shell curl -sSf https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")'))
+	@curl -sSfL --retry 5 https://github.com/cli/cli/releases/latest/download/gh_$(GH_VER)_linux_amd64.tar.gz | tar xz -C bin --strip-components=2 --wildcards '*/bin/gh'
 
 # Build a release.
 release: release/bin/release
@@ -314,13 +312,13 @@ release-test:
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
-build-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+build-openstack:
+	$(eval VERSION=$(shell $(_YQ) '.version' charts/calico/values.yaml))
 	$(info Building openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release VERSION=$(VERSION)
 
-publish-openstack: bin/yq
-	$(eval VERSION=$(shell bin/yq '.version' charts/calico/values.yaml))
+publish-openstack:
+	$(eval VERSION=$(shell $(_YQ) '.version' charts/calico/values.yaml))
 	$(info Publishing openstack packages for version $(VERSION))
 	$(MAKE) -C release/packaging release-publish VERSION=$(VERSION)
 
@@ -334,7 +332,7 @@ helm-index:
 			     $(MAKE) semaphore-run-workflow
 
 # Creates the tar file used for installing Calico on OpenShift.
-bin/ocp.tgz: manifests/ocp/ bin/yq
+bin/ocp.tgz: manifests/ocp/
 	tar czvf $@ --exclude='.gitattributes' -C manifests/ ocp
 
 ## Generates release notes for the given version.
@@ -365,7 +363,7 @@ update-pins: update-go-build-pin update-calico-base-pin
 # Post-release validation
 ###############################################################################
 bin/gotestsum:
-	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@latest
 
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

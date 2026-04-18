@@ -2,9 +2,7 @@ BINDIR?=bin
 ARCH?=amd64
 KIND_VERSION?=v0.24.0
 KUBE_VERSION?=v1.33.7
-HELM_VERSION?=v3.16.3
-GOMPLATE_VERSION?=v3.11.7
-CRANE_VERSION?=v0.21.2
+HELM_VERSION?=v3.20.2
 
 KIND_CLUSTER_NAME?=kind
 
@@ -108,23 +106,20 @@ $(BINDIR)/asoctl:
 
 $(BINDIR)/gomplate:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/download/$(GOMPLATE_VERSION)/gomplate_linux-$(ARCH) -o $@
+	curl -sSf -L --retry 5 https://github.com/hairyhenderson/gomplate/releases/latest/download/gomplate_linux-$(ARCH) -o $@
 	chmod +x $@
 	touch $@
 
 $(BINDIR)/helm:
 	mkdir -p $(@D)
-	curl -sSf -L --retry 5 https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz -o $(BINDIR)/helm.tar.gz
-	tar -xzf $(BINDIR)/helm.tar.gz -C $(BINDIR) --strip-components=1 linux-$(ARCH)/helm
-	rm $(BINDIR)/helm.tar.gz
+	curl -sSf -L --retry 5 https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz | tar xz -C $(@D) --strip-components=1 linux-$(ARCH)/helm
 	chmod +x $@
 	touch $@
 
 CRANE_ARCH = $(subst amd64,x86_64,$(ARCH))
 $(BINDIR)/crane:
 	mkdir -p $(@D)
-	curl -sSfL --retry 5 -o /tmp/crane.tar.gz https://github.com/google/go-containerregistry/releases/download/$(CRANE_VERSION)/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz
-	tar xz -C $(@D) -f /tmp/crane.tar.gz crane && rm -f /tmp/crane.tar.gz
+	curl -sSfL --retry 5 https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_$(CRANE_ARCH).tar.gz | tar xz -C $(@D) crane
 	touch $@
 
 .PHONY: clean

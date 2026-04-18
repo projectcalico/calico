@@ -93,7 +93,7 @@ else
       echo "[INFO] starting e2e testing from local binary..."
       pushd "${HOME}/calico"
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
-      GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+      GO_BUILD_IMAGE=$(yq '.toolchain.go_build_image + ":" + .toolchain.go_build_ver' ./defaults.yaml)
       # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
       # Capture the exit code so that the JUnit copy below runs even when
       # tests fail (set -e would otherwise bail out before the cp).
@@ -118,7 +118,7 @@ else
         -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
         -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
         -w /go/src/github.com/projectcalico/calico \
-        "calico/go-build:${GO_BUILD_VER}" \
+        "${GO_BUILD_IMAGE}" \
         go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
           --junit-report=junit.xml --output-dir=report \
           ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} \
