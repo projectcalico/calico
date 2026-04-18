@@ -1,6 +1,6 @@
 - name: "E2E tests (cluster routing: BIRD)"
   run:
-    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
+    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico)}"
   dependencies:
     - Prerequisites
   task:
@@ -15,6 +15,7 @@
       commands:
         # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
         - docker system prune -af
+        - .semaphore/load-cached-images
     jobs:
       - name: "E2E tests: Conformance (cluster routing: BIRD)"
         commands:
@@ -29,7 +30,7 @@
 
 - name: "E2E tests (cluster routing: Felix)"
   run:
-    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend)}"
+    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico)}"
   dependencies:
     - Prerequisites
   task:
@@ -44,6 +45,7 @@
       commands:
         # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
         - docker system prune -af
+        - .semaphore/load-cached-images
     jobs:
       - name: "E2E tests: Conformance (cluster routing: Felix)"
         commands:
