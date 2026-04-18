@@ -67,16 +67,16 @@ spec:
       echo "Installing containerd..."
 
       # Update package list
-      apt-get update
+      apt-get -o DPkg::Lock::Timeout=60 update
 
       # Install prerequisites
-      apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+      apt-get -o DPkg::Lock::Timeout=60 install -y apt-transport-https ca-certificates curl gnupg lsb-release
 
       # Install containerd from the Docker repo
-      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --no-tty --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-      apt-get update
-      apt-get install -y containerd.io
+      apt-get -o DPkg::Lock::Timeout=60 update
+      apt-get -o DPkg::Lock::Timeout=60 install -y containerd.io
 
       # Configure containerd for Kubernetes
       mkdir -p /etc/containerd

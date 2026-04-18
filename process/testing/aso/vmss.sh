@@ -671,6 +671,12 @@ function delete_rg() {
   # Verify required environment variables
   : "${AZURE_RESOURCE_GROUP:?Environment variable empty or not defined.}"
 
+  # Verify az CLI is authenticated
+  if ! az account show &>/dev/null; then
+    log_error "Not logged into Azure CLI. Run 'az login' first."
+    return 1
+  fi
+
   # Check if resource group exists
   log_info "Checking if resource group '${AZURE_RESOURCE_GROUP}' exists..."
   if ! az group show --name "${AZURE_RESOURCE_GROUP}" &>/dev/null; then
