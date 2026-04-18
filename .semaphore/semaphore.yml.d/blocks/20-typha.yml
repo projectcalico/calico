@@ -6,9 +6,10 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "typha"
+        value: "uber-calico"
     prologue:
       commands:
+        - .semaphore/load-cached-images
         - cd typha
     jobs:
       - name: "Typha: UT and FV tests"
@@ -21,7 +22,9 @@
       - name: "Typha: FV tests on UBI-minimal"
         commands:
           - 'export TEST_SUITE_PREFIX="UBI-minimal"'
-          - ../.semaphore/run-and-monitor make-fv-ubi.log make clean image fv
+          # Rebuild the combined image with UBI-minimal as CALICO_BASE,
+          # then run Typha FV against it.
+          - ../.semaphore/run-and-monitor make-fv-ubi.log bash -c 'make -C ../cmd/calico clean image && make fv'
         env_vars:
           - name: USE_UBI_AS_CALICO_BASE
             value: '1'
