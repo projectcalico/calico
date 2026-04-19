@@ -48,7 +48,8 @@ type EnvConfig struct {
 	FelixImage   string `default:"calico/felix-test:latest"`
 	EtcdImage    string `default:"quay.io/coreos/etcd"`
 	K8sImage     string `default:"calico/go-build:latest"`
-	TyphaImage   string `default:"calico/typha:latest"`
+	TyphaImage   string `default:"calico/calico:latest"`
+	TyphaCmd     string `default:"component typha"`
 	BusyboxImage string `default:"busybox:latest"`
 }
 

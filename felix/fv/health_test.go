@@ -39,6 +39,7 @@ import (
 	"math/rand"
 	gonet "net"
 	"net/http"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -168,19 +169,23 @@ var _ = infrastructure.DatastoreDescribe("_HEALTH_ _BPF-SAFE_ health tests", []a
 	var typhaReady, typhaLiveness func() int
 
 	startTypha := func(getDockerArgs func() []string) {
+		args := append(getDockerArgs(),
+			"--privileged",
+			"-e", "TYPHA_HEALTHENABLED=true",
+			"-e", "TYPHA_HEALTHHOST=0.0.0.0",
+			"-e", "TYPHA_LOGSEVERITYSCREEN=info",
+			"-e", "TYPHA_DATASTORETYPE=kubernetes",
+			"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
+			"-e", "TYPHA_USAGEREPORTINGENABLED=false",
+			"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
+			utils.Config.TyphaImage,
+		)
+		if cmd := strings.TrimSpace(utils.Config.TyphaCmd); cmd != "" {
+			args = append(args, strings.Fields(cmd)...)
+		}
 		typhaContainer = containers.Run("typha",
 			containers.RunOpts{AutoRemove: true},
-			append(getDockerArgs(),
-				"--privileged",
-				"-e", "TYPHA_HEALTHENABLED=true",
-				"-e", "TYPHA_HEALTHHOST=0.0.0.0",
-				"-e", "TYPHA_LOGSEVERITYSCREEN=info",
-				"-e", "TYPHA_DATASTORETYPE=kubernetes",
-				"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
-				"-e", "TYPHA_USAGEREPORTINGENABLED=false",
-				"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
-				utils.Config.TyphaImage,
-				"calico-typha")...)
+			args...)
 		Expect(typhaContainer).NotTo(BeNil())
 		infra.AddCleanup(typhaContainer.Stop)
 		typhaReady = healthStatusFn(typhaContainer.IP, "9098", "readiness")

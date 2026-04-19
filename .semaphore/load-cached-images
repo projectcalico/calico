@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Load pre-built docker images AND their build artifacts from GCS.
+# See hack/cache-image-artifacts.sh for the corresponding store step: it
+# snapshots every file the build wrote, so extracting those here restores
+# the full Make prereq chain (binaries, LICENSEs, generated files, etc.)
+# without hardcoding any paths.
+
+set -euo pipefail
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+"${REPO_ROOT}/hack/cache-image-artifacts.sh" load calico
+"${REPO_ROOT}/hack/cache-image-artifacts.sh" load node
+"${REPO_ROOT}/hack/cache-image-artifacts.sh" load whisker
