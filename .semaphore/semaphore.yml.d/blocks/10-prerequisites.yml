@@ -126,6 +126,97 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+- name: "Pull: go-build image"
+  # Populate the GCS cache of calico/go-build so that every downstream job can
+  # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
+  # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
+  # the tarball survives across workflows — the common case is a no-op
+  # `gcloud storage ls` on a cache hit.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: SKIP_CACHE_RESTORE
+        value: "true"
+    jobs:
+      - name: "Cache calico/go-build to GCS"
+        commands:
+          - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+          - |-
+            if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+              echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
+            else
+              echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
+              docker pull "calico/go-build:${GO_BUILD_VER}"
+              docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
+              zstd -3 --rm /tmp/go-build.tar
+              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+            fi
+- name: "Build: calico image"
+  # Always build and cache the calico image so that downstream CI blocks can
+  # load it from GCS instead of rebuilding per component.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico-image"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache calico image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C cmd/calico image
+          - docker save calico/calico:latest-amd64 | zstd -3 -o /tmp/calico-image.tar.zst
+          - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+- name: "Build: node image"
+  run:
+    when: "${CHANGE_IN(node)}"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "node"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache node image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C node image
+          - docker save calico/node:latest-amd64 | zstd -3 -o /tmp/node-image.tar.zst
+          - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+- name: "Build: whisker image"
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "whisker"
+    jobs:
+      - name: "Build and cache whisker image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C whisker image
+          - docker save calico/whisker:latest-amd64 | zstd -3 -o /tmp/whisker-image.tar.zst
+          - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.
@@ -139,6 +230,10 @@
     - Check protobufs
     - Manifests and API docs
     - Store working copy
+    - "Pull: go-build image"
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
   task:
     jobs:
       - name: Pre-flight checks
