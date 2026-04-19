@@ -235,18 +235,6 @@ blocks:
         - name: Check images availability
           commands:
             - make check-images-availability
-  - name: Check SemaphoreCI files
-    run:
-      when: >-
-        true or
-        change_in(['/.semaphore', '/hack', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'track'})
-    dependencies: []
-    task:
-      jobs:
-        - name: Check semaphore files
-          commands:
-            - make gen-semaphore-yaml
-            - make check-dirty
   - name: Check YAML files
     run:
       when: >-
@@ -368,7 +356,6 @@ blocks:
       # Always skip, this is a dummy job used to group prerequisite checks.
       when: "true"
     dependencies:
-      - Check SemaphoreCI files
       - Check YAML files
       - Check Go
       - Check Python
