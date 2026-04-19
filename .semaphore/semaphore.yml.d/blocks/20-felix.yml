@@ -7,8 +7,11 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "felix"
+      - name: IMAGE_PREBUILT
+        value: "true"
     prologue:
       commands:
+        - .semaphore/load-cached-images
         - cd felix
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
