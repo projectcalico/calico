@@ -1,0 +1,104 @@
+include ../../metadata.mk
+
+PACKAGE_NAME = github.com/projectcalico/calico/cmd/calico
+
+CALICO_IMAGE ?= calico
+BUILD_IMAGES ?= $(CALICO_IMAGE)
+
+include ../../lib.Makefile
+
+# Source files for the combined binary, derived from cmd/deps.txt.
+SRC_FILES := $(call local-deps-go-files,cmd)
+
+# Paths within the build container for BPF source (needed for CGO builds).
+LIBBPF_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src/
+BPFGPL_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/
+LIBBPF_A = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
+
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# When cross-compiling, force lld as the linker — GNU ld is single-target,
+# while lld natively links the cross-arch ELF objects produced by clang.
+# (The cross sysroot itself is already supplied via CC's --sysroot flag.)
+CROSS_CGO_LDFLAGS=
+ifneq ($(CROSS_SYSROOT),)
+	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
+endif
+CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
+CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+endif
+
+FIPS ?= false
+ifeq ($(FIPS),true)
+BINDIR = bin/$(ARCH)-fips
+CONTAINER_MARKER = .image.created-$(ARCH)-fips
+IMAGE_TAG = latest-fips
+else
+BINDIR = bin
+CONTAINER_MARKER = .image.created-$(ARCH)
+IMAGE_TAG = latest
+endif
+
+.PHONY: clean
+clean:
+	rm -rf bin .image.created-*
+	-docker image rm -f $$(docker images $(CALICO_IMAGE) -a -q) 2>/dev/null
+
+.PHONY: ut
+ut:
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go test -cover -count=1 ."
+
+.PHONY: build build-cgo
+build: $(BINDIR)/calico-$(ARCH)
+build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
+
+$(BINDIR)/calico-$(ARCH): $(SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, ./, $@)
+else
+	$(call build_binary, ./, $@)
+endif
+
+$(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+ifeq ($(FIPS),true)
+	$(call build_cgo_boring_binary, ./, $@)
+else ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+	$(call build_cgo_binary, ./, $@)
+else
+	$(call build_binary, ./, $@)
+endif
+
+$(LIBBPF_A):
+	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
+
+$(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
+	mkdir -p $(BINDIR)
+	cp $(REPO_ROOT)/LICENSE.md $@
+
+REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
+$(REGISTRAR_BIN):
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
+
+.PHONY: image image-all
+image: $(CONTAINER_MARKER)
+
+# Downstream CI jobs that docker-load a pre-built image from the GCS cache set
+# IMAGE_PREBUILT=true so the marker rule skips Make's whole prereq chain
+# (binary, LICENSE, registrar, BPF) — none of those files exist post-load and
+# rebuilding them is exactly what the cache is meant to avoid.
+ifeq ($(IMAGE_PREBUILT),true)
+$(CONTAINER_MARKER):
+	@docker image inspect $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+else
+$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
+	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
+	touch $@
+endif
+
+image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+sub-image-%:
+	$(MAKE) image ARCH=$*
+sub-image-fips-%:
+	$(MAKE) image FIPS=true ARCH=$*

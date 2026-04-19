@@ -7,8 +7,11 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "felix"
+      - name: IMAGE_PREBUILT
+        value: "true"
     prologue:
       commands:
+        - .semaphore/load-cached-images
         - cd felix
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -63,27 +66,6 @@
         commands:
           - ./.semaphore/analyze-test-failures --ut || true
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-- name: "Felix: multi-arch build"
-  run:
-    when: "${CHANGE_IN(felix)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    prologue:
-      commands:
-        - cd felix
-    jobs:
-      - name: "Felix: build multi-arch binaries"
-        matrix:
-          - env_var: ARCH
-            values:
-              - arm64
-              - ppc64le
-              - s390x
-        commands:
-          # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
 - name: "Felix: Build Windows binaries"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -139,12 +121,20 @@
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
           - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
-- name: "Felix: iptables tests on Ubuntu 22.04"
+- name: "Felix: FV"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
+    epilogue:
+      always:
+        commands:
+          - source felix/.semaphore/fv-epilogue
+    secrets:
+      - name: google-service-account-for-gce
+      - name: gemini-api-key
+      - name: fv-tests-guru-github-token
     jobs:
       - name: "Felix: iptables tests on Ubuntu 22.04"
         execution_time_limit:
@@ -158,21 +148,6 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: nftables tests on Ubuntu 22.04"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
       - name: "Felix: nftables tests on Ubuntu 22.04"
         execution_time_limit:
           minutes: 60
@@ -185,22 +160,7 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF tests on Ubuntu 24.04"
+      - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
         execution_time_limit:
           minutes: 60
         env_vars:
@@ -212,21 +172,6 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=60
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
       - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
         execution_time_limit:
           minutes: 60
@@ -243,22 +188,7 @@
           - export FV_FOCUS='_BPF_.*ct=true'
           - export NUM_FV_BATCHES=10
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF program-loading check on 25.10 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF program-loading check on 25.10"
+      - name: "Felix: BPF program-loading check on 25.10 (nftables)"
         execution_time_limit:
           minutes: 30
         env_vars:
@@ -273,22 +203,7 @@
           # Only run the UT that checks that the precompiled BPF binaries are loadable.
           - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
+      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
         execution_time_limit:
           minutes: 60
         env_vars:
@@ -304,11 +219,3 @@
           - export FV_FOCUS='_BPF_.*tcp.*ct=true'
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
