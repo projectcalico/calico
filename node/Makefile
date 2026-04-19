@@ -45,14 +45,15 @@ FIPS ?= false
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 else
 NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
+
+# The node image uses the combined calico binary built with CGO for BPF support.
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 ###############################################################################
 
@@ -115,7 +116,6 @@ WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe \
-    $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt \
     $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1
@@ -222,28 +222,27 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
-$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
+# The node image uses the combined calico binary built with CGO for BPF support.
+# Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
+# it to bin/$(ARCH)-fips, which is where we pick it up from below.
+CMD_CALICO_BINDIR = ../cmd/calico/bin
 ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
-else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
+CMD_CALICO_BINDIR = ../cmd/calico/bin/$(ARCH)-fips
 endif
-endif
+
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH) FIPS=$(FIPS)
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp $(CMD_CALICO_BINDIR)/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
-
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
@@ -268,6 +267,22 @@ dist/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md $@
 
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
+
+# Downstream CI jobs that docker-load a pre-built image from the GCS cache set
+# IMAGE_PREBUILT=true so the marker rule skips Make's whole prereq chain —
+# none of the prereqs exist post-load and rebuilding them is exactly what the
+# cache is meant to avoid.
+ifeq ($(IMAGE_PREBUILT),true)
+$(NODE_CONTAINER_CREATED):
+	@docker image inspect $(NODE_IMAGE):latest-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(NODE_IMAGE):latest-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+
+$(NODE_CONTAINER_FIPS_CREATED):
+	@docker image inspect $(NODE_IMAGE):latest-fips-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(NODE_IMAGE):latest-fips-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+else
 $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
@@ -287,6 +302,7 @@ $(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDE
 		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
+endif
 
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created
@@ -390,6 +406,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
+	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
