@@ -7,6 +7,8 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "calico-image"
+      - name: IMAGE_PREBUILT
+        value: "true"
     prologue:
       commands:
         - .semaphore/load-cached-images
@@ -28,6 +30,10 @@
         env_vars:
           - name: USE_UBI_AS_CALICO_BASE
             value: '1'
+          # This job intentionally rebuilds the calico image with UBI as the
+          # base, so it must NOT short-circuit on the preloaded image.
+          - name: IMAGE_PREBUILT
+            value: ""
     epilogue:
       always:
         commands:

@@ -267,6 +267,22 @@ dist/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md $@
 
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
+
+# Downstream CI jobs that docker-load a pre-built image from the GCS cache set
+# IMAGE_PREBUILT=true so the marker rule skips Make's whole prereq chain —
+# none of the prereqs exist post-load and rebuilding them is exactly what the
+# cache is meant to avoid.
+ifeq ($(IMAGE_PREBUILT),true)
+$(NODE_CONTAINER_CREATED):
+	@docker image inspect $(NODE_IMAGE):latest-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(NODE_IMAGE):latest-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+
+$(NODE_CONTAINER_FIPS_CREATED):
+	@docker image inspect $(NODE_IMAGE):latest-fips-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(NODE_IMAGE):latest-fips-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+else
 $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
@@ -286,6 +302,7 @@ $(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDE
 		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
+endif
 
 # download BIRD source to include in image.
 $(BIRD_SOURCE): .bird-source.created

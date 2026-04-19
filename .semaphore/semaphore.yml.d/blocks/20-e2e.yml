@@ -7,6 +7,8 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "e2e-tests"
+      - name: IMAGE_PREBUILT
+        value: "true"
     agent:
       machine:
         type: f1-standard-4

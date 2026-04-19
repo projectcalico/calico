@@ -7,6 +7,8 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "calico-image"
+      - name: IMAGE_PREBUILT
+        value: "true"
     prologue:
       commands:
         - .semaphore/load-cached-images

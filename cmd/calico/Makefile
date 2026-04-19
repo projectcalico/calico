@@ -81,10 +81,21 @@ $(REGISTRAR_BIN):
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
+# Downstream CI jobs that docker-load a pre-built image from the GCS cache set
+# IMAGE_PREBUILT=true so the marker rule skips Make's whole prereq chain
+# (binary, LICENSE, registrar, BPF) — none of those files exist post-load and
+# rebuilding them is exactly what the cache is meant to avoid.
+ifeq ($(IMAGE_PREBUILT),true)
+$(CONTAINER_MARKER):
+	@docker image inspect $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+else
 $(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
 	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
+endif
 
 image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
 sub-image-%:
