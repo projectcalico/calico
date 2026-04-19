@@ -554,16 +554,49 @@ func pauseForDebug(f *framework.Framework) {
 // which already provides the base config (router id, protocol kernel/device).
 // The TOR acts as an eBGP hub (AS 65001) peering with all cluster nodes (AS 64512).
 // Uses ip@local as a placeholder replaced with the actual TOR IP at runtime.
+//
+// The import filter reads the BGP community (65000:100) added by Calico's
+// BGPFilter on export and sets a higher BIRD preference for the tagged route.
+// During live migration, the target pod's route gets community 65000:100
+// (elevated priority 512), while the source pod's route has no community
+// (normal priority 1024). The preference difference prevents BIRD from
+// merging the two /32 routes into ECMP (merge paths on), so only the
+// target route is installed in the kernel.
 func generateTORBirdPeersConf(nodeIPs []string) string {
 	var sb strings.Builder
-	sb.WriteString(`template bgp bgp_template {
+	// The import filter follows the same pattern as Calico's confd-generated
+	// BIRD config: community match → bgp_local_pref, then bgp_local_pref
+	// check → preference = 200. This mirrors the import filter in
+	// confd/tests/compiled_templates/bgpfilter/communities_and_operations/bird.cfg.
+	//
+	// The kernel programming filter follows calico_kernel_programming from
+	// bird_ipam.cfg: converts bgp_local_pref → krt_metric for kernel route
+	// installation (krt_metric is never passed from BGP protocol to kernel
+	// protocol, so we must convert explicitly).
+	sb.WriteString(`function import_community_lp() {
+  if ((65000, 100) ~ bgp_community) then { bgp_local_pref = 2147483135; accept; }
+  accept;
+}
+
+filter import_community_priority {
+  # Only accept routes within the pod CIDR. Reject kernel/direct routes
+  # (0.0.0.0/0, 10.x, 169.254.x, 172.16.x) that would break TOR routing.
+  if (net !~ 192.168.0.0/16) then reject;
+
+  import_community_lp();
+  if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then
+    preference = 200;
+  accept;
+}
+
+template bgp bgp_template {
   debug { states };
   description "BGP peer";
   local as 65001;
   multihop;
   gateway recursive;
-  import all;
-  export all;
+  import filter import_community_priority;
+  export none;
   source address ip@local;
   add paths on;
   graceful restart;
@@ -605,6 +638,9 @@ func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
 	logrus.Info("BIRD container started on TOR")
 
 	// Add "merge paths on" to the kernel protocol block for ECMP support.
+	// With different BIRD preferences (200 for community-tagged, 100 for default),
+	// merge paths only merges routes of equal preference, so the higher-preference
+	// route wins during migration.
 	runOnTOR(tor, `sudo docker exec tor-bird sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf`)
 
 	// Write the peers config, replacing ip@local with the actual TOR IP.
@@ -693,11 +729,52 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	startBirdOnTOR(tor, torL2tpIP, peersConf)
 	DeferCleanup(func() { stopBirdOnTOR(tor) })
 
+	// Create a BGPFilter that tags elevated-priority routes with a BGP community
+	// on export to eBGP peers. During KubeVirt live migration, Felix sets
+	// krt_metric=512 (ipv4ElevatedRoutePriority) on the target pod's route.
+	// The filter matches this priority and adds community 65000:100, which the
+	// TOR's import filter reads to set a higher BIRD preference. Routes without
+	// elevated priority (normal krt_metric=1024) pass through untagged.
+	//
+	// IMPORTANT: Do NOT add a catch-all Accept rule here. In BIRD 1.x, accept/reject
+	// inside a function terminates the entire filter evaluation. A catch-all Accept
+	// would bypass calico_export_to_bgp_peers(), exporting ALL routes from the master's
+	// BIRD table (including kernel/direct routes) to the TOR, breaking SSH connectivity.
+	By("Creating BGPFilter for KubeVirt live migration community tagging")
+	community := v3.BGPCommunityValue("65000:100")
+	elevatedPriority := 512
+	bgpFilter := &v3.BGPFilter{
+		ObjectMeta: metav1.ObjectMeta{Name: "kubevirt-lm"},
+		Spec: v3.BGPFilterSpec{
+			ExportV4: []v3.BGPFilterRuleV4{
+				{
+					Action:   v3.Accept,
+					PeerType: v3.BGPFilterPeerTypeEBGP,
+					Priority: &elevatedPriority,
+					Operations: []v3.BGPFilterOperation{
+						{AddCommunity: &v3.BGPFilterAddCommunity{Value: &community}},
+					},
+				},
+			},
+		},
+	}
+	// Delete any leftover from a previous failed run before creating.
+	_, _ = lcgc.BGPFilter().Delete(ctx, "kubevirt-lm", options.DeleteOptions{})
+	_, err = lcgc.BGPFilter().Create(ctx, bgpFilter, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to create BGPFilter")
+	DeferCleanup(func() {
+		By("Deleting BGPFilter kubevirt-lm")
+		_, err := lcgc.BGPFilter().Delete(context.Background(), "kubevirt-lm", options.DeleteOptions{})
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to delete BGPFilter kubevirt-lm")
+		}
+	})
+
 	// Create a BGPPeer so the master node peers with the TOR via eBGP.
 	// NextHopMode "Keep" preserves the original next-hop from iBGP routes,
 	// so the TOR gets per-node next-hops and routes directly to the node
 	// hosting each workload — no ECMP, no extra hop through the master.
-	By("Creating BGPPeer for TOR (master only, next-hop-keep)")
+	By("Creating BGPPeer for TOR (master only, next-hop-keep, with filter)")
 	nextHopKeep := v3.NextHopMode("Keep")
 	bgpPeer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: "tor-ebgp-peer"},
@@ -706,8 +783,10 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 			PeerIP:      torL2tpIP,
 			ASNumber:    numorstring.ASNumber(65001),
 			NextHopMode: &nextHopKeep,
+			Filters:     []string{"kubevirt-lm"},
 		},
 	}
+	_, _ = lcgc.BGPPeers().Delete(ctx, "tor-ebgp-peer", options.DeleteOptions{})
 	_, err = lcgc.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to create BGPPeer")
 	DeferCleanup(func() {
@@ -722,6 +801,51 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	// (required for KubeVirt live migration). The eBGP peer to the TOR is
 	// additive: the master advertises routes to the TOR via eBGP while all
 	// nodes continue to exchange routes with each other via the iBGP mesh.
+
+	// Debug: check master's BIRD config and routes after BGPPeer creation.
+	// This helps diagnose SSH breakage by showing what confd generated.
+	By("Debugging: checking master BIRD config after BGPPeer creation")
+	time.Sleep(3 * time.Second) // Give confd time to regenerate config
+	masterPods, podErr := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + masterName,
+	})
+	if podErr == nil && len(masterPods.Items) > 0 {
+		masterPodName := masterPods.Items[0].Name
+		logrus.Infof("DEBUG: calico-node pod on master: %s", masterPodName)
+
+		// Show the generated BIRD config (specifically the export filter for the TOR peer).
+		birdCfg, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"sh", "-c", "cat /etc/calico/confd/config/bird.cfg | grep -A 30 'tor-ebgp-peer\\|kubevirt-lm\\|exportFilter'").Exec()
+		logrus.Infof("DEBUG: Master BIRD config (BGPFilter sections):\n%s", birdCfg)
+
+		// Show the IPAM config (calico_export_to_bgp_peers function).
+		birdIpam, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"sh", "-c", "cat /etc/calico/confd/config/bird_ipam.cfg").Exec()
+		logrus.Infof("DEBUG: Master bird_ipam.cfg:\n%s", birdIpam)
+
+		// Show bird_aggr.cfg (calico_aggr function).
+		birdAggr, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"sh", "-c", "cat /etc/calico/confd/config/bird_aggr.cfg").Exec()
+		logrus.Infof("DEBUG: Master bird_aggr.cfg:\n%s", birdAggr)
+
+		// Also check routes WITHOUT the filter to compare.
+		birdAllRoutes, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"birdcl", "show", "route").Exec()
+		logrus.Infof("DEBUG: Master BIRD all routes:\n%s", birdAllRoutes)
+
+		// Show BIRD protocol status.
+		birdProto, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"birdcl", "show", "protocols").Exec()
+		logrus.Infof("DEBUG: Master BIRD protocols:\n%s", birdProto)
+
+		// Show BIRD routing table.
+		birdRoutes, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
+			"birdcl", "show", "route", "export", "Node_172_16_8_5").Exec()
+		logrus.Infof("DEBUG: Master BIRD routes exported to TOR peer:\n%s", birdRoutes)
+	} else {
+		logrus.Warnf("DEBUG: Could not find calico-node pod on master %s: %v (pods=%d)", masterName, podErr, len(masterPods.Items))
+	}
 
 	// Wait for the eBGP session to establish on the TOR.
 	By("Waiting for eBGP session to establish")
