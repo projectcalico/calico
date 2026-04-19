@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "webhooks"
+        value: "calico-image"
     prologue:
       commands:
         - cd webhooks
