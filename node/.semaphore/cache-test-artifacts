@@ -22,7 +22,15 @@ set -x
 
 cd ../..
 
-# Future work: pre-build images for node in an earlier job.
+# Copy pre-built images from the workflow cache if available.
+# These were built by the "Build: *" blocks in the Prerequisites stage.
+for img in calico-image.tar.zstd node-image.tar.zstd whisker-image.tar.zstd; do
+  if gcloud storage cp "${GCS_WORKFLOW_DIR}/${img}" "/tmp/${img}" 2>/dev/null; then
+    echo "Found pre-built ${img}, including in artifacts."
+    gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"
+  fi
+done
+
 tar -czf /tmp/working-copy.tgz \
   --exclude=artifacts \
   ${CALICO_DIR_NAME}
