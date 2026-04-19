@@ -84,7 +84,14 @@ load() {
 
     if gcloud storage cp "${GCS_WORKFLOW_DIR}/${name}-artifacts.tar.zst" "$artifacts_tar" 2>/dev/null; then
         echo "Extracting cached ${name} build artifacts into repo..."
-        tar --use-compress-program="zstd -d" -xpf "$artifacts_tar" -C "$REPO_ROOT"
+        # Extract with -m so every artifact gets an mtime of "now" instead of
+        # its archived mtime. The working-copy cache and the global git
+        # checkout both reset source file mtimes in downstream jobs; if we
+        # preserved the archive mtimes, Make would see those sources as
+        # newer than the cached binaries and markers and rebuild. Stamping
+        # all artifacts as the freshest files in the tree matches the prior
+        # touch-marker behaviour but covers every cached file.
+        tar --use-compress-program="zstd -d" -xmf "$artifacts_tar" -C "$REPO_ROOT"
         rm -f "$artifacts_tar"
     else
         echo "No cached ${name} artifacts tar found (image only)."
