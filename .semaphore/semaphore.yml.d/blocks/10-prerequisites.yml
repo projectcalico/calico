@@ -174,10 +174,9 @@
           - name: STORE_BUILD_CACHE
             value: "true"
         commands:
+          - hack/cache-image-artifacts.sh pre-build
           - make -C cmd/calico image
-          - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
-          - zstd -3 --rm /tmp/calico-image.tar
-          - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+          - hack/cache-image-artifacts.sh store calico calico/calico:latest-amd64
 - name: "Build: node image"
   run:
     when: "${CHANGE_IN(node)}"
@@ -196,10 +195,9 @@
           - name: STORE_BUILD_CACHE
             value: "true"
         commands:
+          - hack/cache-image-artifacts.sh pre-build
           - make -C node image
-          - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
-          - zstd -3 --rm /tmp/node-image.tar
-          - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+          - hack/cache-image-artifacts.sh store node calico/node:latest-amd64
 - name: "Build: whisker image"
   run:
     when: >-
@@ -216,10 +214,9 @@
           - name: STORE_BUILD_CACHE
             value: "true"
         commands:
+          - hack/cache-image-artifacts.sh pre-build
           - make -C whisker image
-          - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
-          - zstd -3 --rm /tmp/whisker-image.tar
-          - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+          - hack/cache-image-artifacts.sh store whisker calico/whisker:latest-amd64
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.

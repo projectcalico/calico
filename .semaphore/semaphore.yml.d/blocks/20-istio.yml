@@ -10,11 +10,31 @@
     jobs:
       - name: "Istio: CI"
         commands:
+          # Include the istio ztunnel build in the amd64 CI job.
           - ../.semaphore/run-and-monitor ci.log make ci
-      - name: "Istio: multi-arch build"
+      - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
-          - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+          # Skip istio ztunnel in this arm64 cross-build job.
+          # ztunnel is built separately in the native arm64 runner block below.
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
+
+- name: Istio Ztunnel - native arm64 runner
+  run:
+    when: "${CHANGE_IN(istio)}"
+  dependencies:
+    - Istio
+  task:
+    agent:
+      machine:
+        type: s1-aws-arm64-2
+    prologue:
+      commands:
+        - cd istio
+    jobs:
+      - name: "Linux arm64"
+        commands:
+          - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
