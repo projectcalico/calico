@@ -1664,7 +1664,9 @@ $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,
 # calico_versions.yml (a static file with version strings), not the
 # actual built images, so it can run in parallel with component builds.
 $(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
-	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+	cd $(KIND_INFRA_DIR) && \
+	  REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
+	  BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
