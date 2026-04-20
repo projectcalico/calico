@@ -55,12 +55,16 @@ func TestMain(m *testing.M) {
 	calicoClient, err = testEnv.NewCalicoEtcdClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "calico client setup: %v\n", err)
-		testEnv.Stop()
+		if stopErr := testEnv.Stop(); stopErr != nil {
+			fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", stopErr)
+		}
 		os.Exit(1)
 	}
 
 	code := m.Run()
-	calicoClient.Close()
+	if err := calicoClient.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "calico client close: %v\n", err)
+	}
 	if err := testEnv.Stop(); err != nil {
 		fmt.Fprintf(os.Stderr, "envtest teardown: %v\n", err)
 	}
