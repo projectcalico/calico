@@ -1414,7 +1414,7 @@ func udpResponseRaw(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv4R, udpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv4R, udpR, gopacket.Payload(udpR.Payload))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
@@ -1443,7 +1443,7 @@ func udpResponseRawV6(in []byte) []byte {
 
 	_ = udpR.SetNetworkLayerForChecksum(ipv6R)
 
-	lrs = append(lrs, udpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+	lrs = append(lrs, udpR, gopacket.Payload(udpR.Payload))
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true}, lrs...)
@@ -1474,7 +1474,7 @@ func tcpResponseRaw(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv4R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv4R, tcpR, gopacket.Payload(tcpR.Payload))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
@@ -1502,7 +1502,7 @@ func tcpResponseRawV6(in []byte) []byte {
 
 	out := gopacket.NewSerializeBuffer()
 	err := gopacket.SerializeLayers(out, gopacket.SerializeOptions{ComputeChecksums: true},
-		ethR, ipv6R, tcpR, gopacket.Payload(pkt.ApplicationLayer().Payload()))
+		ethR, ipv6R, tcpR, gopacket.Payload(tcpR.Payload))
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
