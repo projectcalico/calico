@@ -28,13 +28,19 @@ SYSCTL
 
 sudo sysctl --system || true # ignore errors from unrelated sysctl params in the base image
 
-# Verify containerd is installed
-echo "Verifying containerd..."
-if ! command -v containerd &> /dev/null; then
-  echo "ERROR: containerd is not installed!"
-  echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
-  exit 1
-fi
+# Wait for containerd to be installed (the VM extension may still be running)
+echo "Waiting for containerd to be installed..."
+for i in $(seq 1 30); do
+  if command -v containerd &> /dev/null; then
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "ERROR: containerd is not installed after 5 minutes!"
+    echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
+    exit 1
+  fi
+  sleep 10
+done
 
 echo "Containerd found: $(containerd --version)"
 
