@@ -5,13 +5,13 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
-import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
-import { Flex, Text as ChakraText } from '@chakra-ui/react';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
+import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
+import { Text as ChakraText, Flex } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
-import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
 import NoPolicyCheckbox from './NoPolicyCheckbox';
+import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
 import { transformToFilterOptions, transformToQueries } from './utils';
 
 export type PolicyFilter = Partial<Record<PolicyFilterKey, string>>;
@@ -98,22 +98,27 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             flexDirection='column'
                             gap={4}
                         >
-                            <div>
-                                <Text size='base' className='font-bold'>
-                                    Policy filter
-                                </Text>
-
-                                <Text
-                                    size='sm'
-                                    className='text-tigera-token-fg-support'
-                                >
-                                    Results will match any of the filters below.
-                                    Each filter matches all of its fields.
-                                </Text>
-                            </div>
-                            <hr />
                             {!noPolicyChecked && (
                                 <>
+                                    <div>
+                                        <Text size='base' className='font-bold'>
+                                            Policy filter
+                                        </Text>
+                                        <span className=' text-tigera-token-fg-support text-sm'>
+                                            Filter by policy attributes (kind,
+                                            tier, namespace, name) using{' '}
+                                            <span className='font-bold'>
+                                                AND
+                                            </span>
+                                            . Multiple filters are combined
+                                            using{' '}
+                                            <span className='font-bold'>
+                                                OR
+                                            </span>
+                                            .
+                                        </span>
+                                    </div>
+
                                     <QueryList
                                         queries={queryState}
                                         onChange={setQueryState}
