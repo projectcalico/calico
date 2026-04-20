@@ -227,15 +227,14 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13, 26, 39}, "lucky")
 
-		unallocated, _, err := block.release([]ReleaseOptions{
+		unallocated, countByHandle, err := block.release([]ReleaseOptions{
 			{Address: "100.64.0.13"},
 			{Address: "100.64.0.26"},
 			{Address: "100.64.0.39"},
 		})
 		Expect(err).To(Succeed())
 		Expect(unallocated).To(HaveLen(0))
-		// TODO: handle count is incorrect
-		//Expect(countByHandle).To(Equal(map[string]int{"lucky": 3}))
+		Expect(countByHandle).To(Equal(map[string]int{"lucky": 3}))
 		Expect(block.allocatedOrdinals()).To(HaveLen(0),
 			"all three IPs no longer Allocated")
 
