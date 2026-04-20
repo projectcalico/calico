@@ -29,12 +29,24 @@ for PKG in "$@"; do
 		echo "Running tests for package: ${PKG}";
 		REPORT_NAME=$(echo "${PKG}" | tr '/./' '_' | sed 's/^_//')
 
-		# Only pass Ginkgo flags to Ginkgo-based test binaries. Vanilla go test
-		# binaries don't recognize --ginkgo.* flags and will fail immediately.
-		if ${PKG}/ut.test --help 2>&1 | grep -q ginkgo; then
+		# Detect whether this package is a Ginkgo suite by grepping the source
+		# for a RunSpecs call. We can't probe the binary's --help output because
+		# packages that import Ginkgo indirectly (e.g., via controller-runtime
+		# envtest) expose --ginkgo.* flags even though no specs are registered.
+		# Ginkgo suites keep the native --ginkgo.junit-report; vanilla go test
+		# binaries are wrapped with gotestsum (via go tool test2json) to produce
+		# JUnit XML, mirroring the felix/Makefile pattern.
+		if grep -rq "RunSpecs(" ${PKG}/*_test.go 2>/dev/null; then
 			${PKG}/ut.test --ginkgo.junit-report=report/${REPORT_NAME}.xml ${GINKGO_ARGS} || ((RC++))
 		else
-			${PKG}/ut.test -test.v || ((RC++))
+			set -o pipefail
+			${PKG}/ut.test -test.v |& \
+				"${GOTESTSUM:-gotestsum}" \
+					--junitfile report/${REPORT_NAME}.xml \
+					--format testname \
+					--raw-command -- \
+					go tool test2json -t -p ${PKG} || ((RC++))
+			set +o pipefail
 		fi
 	else
 		echo "WARNING: No tests to run in ${PKG}, skipping"
