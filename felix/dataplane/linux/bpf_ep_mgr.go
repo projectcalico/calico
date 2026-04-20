@@ -2601,7 +2601,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// netkit BPF attachment instead of TC/TCX. Only workload interfaces are ours to
 	// manage this way — other netkit devices (host/data interfaces) are not ours.
 	if ifaceType == IfaceTypeNetkit && m.isWorkloadIface(ifaceName) && tc.IsNetkitSupported() {
-		ap.AttachType = apiv3.BPFAttachOption(tc.AttachOptionNetkit)
+		ap.Netkit = true
 		// Netkit programs have a different expected_attach_type and cannot
 		// share prog_array maps with TC/TCX programs. Use separate maps.
 		// Note: the AP is copied for both directions in applyPolicyToWeps,
@@ -4063,6 +4063,9 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		// Derive the program attach type from the attach point. For netkit
 		// devices this will be "Netkit", otherwise it comes from the global config.
 		progAttachType := string(aptc.AttachType)
+		if aptc.IsNetkit() {
+			progAttachType = tc.AttachOptionNetkit
+		}
 
 		at := hook.AttachType{
 			Hook:       aptc.HookName(),

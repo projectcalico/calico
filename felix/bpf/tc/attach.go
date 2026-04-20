@@ -83,16 +83,22 @@ type AttachPoint struct {
 	IPFragTimeout                 uint32
 	ProgramsMap                   maps.Map
 	MapPinOverrides               map[string]string // prog_array pin path overrides for netkit
+	// Netkit is an internal signal set by Felix when it auto-detects a netkit
+	// workload interface. It is intentionally separate from AttachType (which
+	// holds the user-facing TC/TCX enum) to avoid conflating an internal
+	// override with a validated API type.
+	Netkit bool
 }
 
-// AttachOptionNetkit is used internally to signal netkit attachment.
-// It is not part of the public API (not user-configurable); Felix auto-selects
-// it when it detects a netkit device.
+// AttachOptionNetkit is the program-attach-type string used by the hook loader
+// to select netkit-specific BPF object variants. It is not part of the public
+// API — Felix sets Netkit=true on the AttachPoint when it detects a netkit
+// device and derives this string from that flag.
 const AttachOptionNetkit = "Netkit"
 
 // IsNetkit reports whether this attach point targets a netkit device.
 func (ap *AttachPoint) IsNetkit() bool {
-	return string(ap.AttachType) == AttachOptionNetkit
+	return ap.Netkit
 }
 
 var ErrDeviceNotFound = errors.New("device not found")
