@@ -40,6 +40,9 @@ global_job_config:
         fi
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
+      # Configure docker to use gcloud credentials for gcr.io so `docker buildx
+      # build --cache-from/to=type=registry,ref=gcr.io/...` can authenticate.
+      - gcloud auth configure-docker gcr.io --quiet || true
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)
@@ -367,6 +370,27 @@ blocks:
                 zstd -3 --rm /tmp/go-build.tar
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
+  - name: "Build: calico image"
+    # Prime the BuildKit registry cache for the combined calico image so
+    # downstream blocks (felix, typha, cni-plugin, kube-controllers, cmd/calico
+    # multi-arch) pull warm layers from gcr.io instead of compiling cold. On
+    # branch builds STORE_BUILD_CACHE=true writes the cache back with mode=max
+    # so subsequent runs start hot.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico-image"
+      jobs:
+        - name: "Build and cache calico image"
+          env_vars:
+            - name: STORE_BUILD_CACHE
+              value: "true"
+          commands:
+            - gcloud auth configure-docker gcr.io --quiet
+            - make -C cmd/calico image
   - name: "Build: node image"
     run:
       when: >-
@@ -1386,7 +1410,10 @@ blocks:
         - name: "cmd/calico: UT"
           commands:
             - ../../.semaphore/run-and-monitor ut.log make ut
-        - name: "cmd/calico: build multi-arch"
+        - name: "cmd/calico: image multi-arch"
+          # Build the calico image for non-amd64 arches to verify cross-compile.
+          # amd64 is already covered by the Prerequisites "Build: calico image"
+          # job. Each variant pulls warm layers from the buildx registry cache.
           matrix:
             - env_var: ARCH
               values:
@@ -1394,7 +1421,10 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+        - name: "cmd/calico: image FIPS"
+          commands:
+            - ../../.semaphore/run-and-monitor image-fips.log make image FIPS=true
   - name: CNI Plugin
     run:
       when: >-

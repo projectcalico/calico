@@ -24,6 +24,9 @@ global_job_config:
         fi
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
+      # Configure docker to use gcloud credentials for gcr.io so `docker buildx
+      # build --cache-from/to=type=registry,ref=gcr.io/...` can authenticate.
+      - gcloud auth configure-docker gcr.io --quiet || true
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)

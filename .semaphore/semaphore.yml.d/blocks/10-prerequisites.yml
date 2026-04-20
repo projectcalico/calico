@@ -154,6 +154,27 @@
               zstd -3 --rm /tmp/go-build.tar
               gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
             fi
+- name: "Build: calico image"
+  # Prime the BuildKit registry cache for the combined calico image so
+  # downstream blocks (felix, typha, cni-plugin, kube-controllers, cmd/calico
+  # multi-arch) pull warm layers from gcr.io instead of compiling cold. On
+  # branch builds STORE_BUILD_CACHE=true writes the cache back with mode=max
+  # so subsequent runs start hot.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico-image"
+    jobs:
+      - name: "Build and cache calico image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - gcloud auth configure-docker gcr.io --quiet
+          - make -C cmd/calico image
 - name: "Build: node image"
   run:
     when: "${CHANGE_IN(node)}"
