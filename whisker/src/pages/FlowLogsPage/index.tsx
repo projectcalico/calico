@@ -8,10 +8,10 @@ import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
-import { FilterHintValues } from '@/types/render';
 import { parseStartTime } from '@/utils';
 import {
     OmniFilterParam,
+    SelectedOmniFilterValues,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import {
@@ -139,7 +139,7 @@ const FlowLogsPage: React.FC = () => {
                             fetchFilter(
                                 filterParam,
                                 transformToFlowsFilterQuery(
-                                    filterHintValues as FilterHintValues,
+                                    filterHintValues as SelectedOmniFilterValues,
                                     filterParam,
                                     searchOption,
                                 ),
