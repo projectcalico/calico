@@ -1,6 +1,6 @@
 module github.com/projectcalico/api
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/jinzhu/copier v0.4.0
@@ -11,7 +11,7 @@ require (
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
