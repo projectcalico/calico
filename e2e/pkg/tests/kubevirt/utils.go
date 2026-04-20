@@ -814,10 +814,10 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		masterPodName := masterPods.Items[0].Name
 		logrus.Infof("DEBUG: calico-node pod on master: %s", masterPodName)
 
-		// Show the generated BIRD config (specifically the export filter for the TOR peer).
+		// Show the FULL TOR peer protocol config from bird.cfg to verify export filter.
 		birdCfg, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
-			"sh", "-c", "cat /etc/calico/confd/config/bird.cfg | grep -A 30 'tor-ebgp-peer\\|kubevirt-lm\\|exportFilter'").Exec()
-		logrus.Infof("DEBUG: Master BIRD config (BGPFilter sections):\n%s", birdCfg)
+			"sh", "-c", "cat /etc/calico/confd/config/bird.cfg | sed -n '/kubevirt-lm/,/^$/p; /Node_172_16_8_5/,/^}/p'").Exec()
+		logrus.Infof("DEBUG: Master BIRD config (BGPFilter + TOR peer):\n%s", birdCfg)
 
 		// Show the IPAM config (calico_export_to_bgp_peers function).
 		birdIpam, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
@@ -892,13 +892,15 @@ func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
 				return
 			default:
 			}
-			// Query both the /32 host route and /26 block route separately
-			// so we can see which one exists and how they change.
+			// Query kernel routes and BIRD routing table for the /32.
+			// The BIRD "show route all" output shows preference, community,
+			// and bgp_local_pref — critical for diagnosing ECMP issues.
 			out, _ := runOnTORE(tor, fmt.Sprintf(
-				"echo '--- /32 route ---'; ip route show proto bird %s/32 2>&1; "+
-					"echo '--- /26 route ---'; ip route show proto bird %s 2>&1; "+
+				"echo '--- /32 kernel ---'; ip route show proto bird %s/32 2>&1; "+
+					"echo '--- /26 kernel ---'; ip route show proto bird %s 2>&1; "+
+					"echo '--- BIRD /32 ---'; sudo docker exec tor-bird birdcl show route %s/32 all 2>&1; "+
 					"echo '--- route lookup ---'; ip route get %s 2>&1",
-				ip, block26, ip))
+				ip, block26, ip, ip))
 			out = strings.TrimSpace(out)
 			if out != lastRoutes {
 				logrus.Infof("TOR route change:\n%s", out)
@@ -908,6 +910,79 @@ func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
 		}
 	}()
 	return func() { close(stopCh) }
+}
+
+// checkMasterBIRDRoute queries the master's BIRD routing table for a /32 VM
+// route and logs the full details (bgp_local_pref, community, preference).
+// This is used to diagnose whether the elevated bgp_local_pref from the worker
+// node is preserved through the iBGP route reflector on the master.
+func checkMasterBIRDRoute(f *framework.Framework, vmIP, label string) {
+	ctx := context.Background()
+	masterName := ""
+	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		logrus.WithError(err).Warn("checkMasterBIRDRoute: failed to list nodes")
+		return
+	}
+	for i := range nodes.Items {
+		if _, ok := nodes.Items[i].Labels["node-role.kubernetes.io/control-plane"]; ok {
+			masterName = nodes.Items[i].Name
+			break
+		}
+	}
+	if masterName == "" {
+		logrus.Warn("checkMasterBIRDRoute: no master node found")
+		return
+	}
+	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + masterName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warn("checkMasterBIRDRoute: no calico-node pod on master")
+		return
+	}
+	ip := strings.Split(vmIP, "/")[0]
+	out, _ := kubectl.NewKubectlCommand("calico-system", "exec", pods.Items[0].Name, "-c", "calico-node", "--",
+		"birdcl", "show", "route", ip+"/32", "all").Exec()
+	logrus.Infof("MASTER-BIRD [%s] route %s/32:\n%s", label, ip, out)
+}
+
+// checkWorkerBIRDRoute queries a worker node's kernel route and BIRD table
+// for a /32 VM route. This reveals whether Felix programmed the elevated
+// krt_metric and whether BIRD has the correct bgp_local_pref.
+func checkWorkerBIRDRoute(f *framework.Framework, nodeName, vmIP, label string) {
+	ctx := context.Background()
+	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warnf("checkWorkerBIRDRoute: no calico-node pod on %s", nodeName)
+		return
+	}
+	ip := strings.Split(vmIP, "/")[0]
+	podName := pods.Items[0].Name
+
+	// Check kernel route (krt_metric is shown as "metric" in ip route).
+	kernRoute, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf("ip route show %s/32", ip)).Exec()
+	logrus.Infof("WORKER-BIRD [%s] %s kernel route %s/32: %s", label, nodeName, ip, strings.TrimSpace(kernRoute))
+
+	// Check BIRD routing table.
+	birdRoute, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"birdcl", "show", "route", ip+"/32", "all").Exec()
+	logrus.Infof("WORKER-BIRD [%s] %s BIRD route %s/32:\n%s", label, nodeName, ip, birdRoute)
+
+	// Check the worker node's bird.cfg export filter and BIRD export for the mesh peer.
+	exportFilter, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", "grep -A 15 'export filter' /etc/calico/confd/config/bird.cfg | head -30").Exec()
+	logrus.Infof("WORKER-BIRD [%s] %s export filter:\n%s", label, nodeName, exportFilter)
+
+	// Check what BIRD is actually exporting for this /32 to the mesh peers.
+	birdExport, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf("birdcl show route %s/32 export Mesh_172_16_8_1 all 2>&1", ip)).Exec()
+	logrus.Infof("WORKER-BIRD [%s] %s export to master for %s/32:\n%s", label, nodeName, ip, birdExport)
 }
 
 func ptrInt64(v int64) *int64 { return &v }
