@@ -28,27 +28,23 @@ SYSCTL
 
 sudo sysctl --system || true # ignore errors from unrelated sysctl params in the base image
 
-# Wait for containerd to be installed (the VM extension may still be running)
-echo "Waiting for containerd to be installed..."
-for i in $(seq 1 30); do
-  if command -v containerd &> /dev/null; then
-    break
+# Wait for containerd to be fully configured (the VM extension may still be running)
+echo "Waiting for containerd to be installed and configured..."
+for i in $(seq 1 31); do
+  if command -v containerd &> /dev/null && [ -f /etc/containerd/config.toml ]; then
+    if ! command -v systemctl &> /dev/null || systemctl is-active --quiet containerd; then
+      break
+    fi
   fi
-  if [ "$i" -eq 30 ]; then
-    echo "ERROR: containerd is not installed after 5 minutes!"
-    echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd."
+  if [ "$i" -eq 31 ]; then
+    echo "ERROR: containerd is not installed after 5 minutes"
+    echo "Please ensure the VM extension in vmss-linux.yaml has installed containerd, created /etc/containerd/config.toml, and started the containerd service."
     exit 1
   fi
   sleep 10
 done
 
 echo "Containerd found: $(containerd --version)"
-
-# Verify containerd configuration
-if [ ! -f /etc/containerd/config.toml ]; then
-  echo "ERROR: containerd config file /etc/containerd/config.toml not found!"
-  exit 1
-fi
 
 # Verify systemd cgroup is enabled
 if ! grep -q "SystemdCgroup = true" /etc/containerd/config.toml; then
