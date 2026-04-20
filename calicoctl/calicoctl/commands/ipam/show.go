@@ -24,7 +24,8 @@ import (
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
@@ -120,26 +121,20 @@ func showBorrowedDetails(ctx context.Context, ippoolClient clientv3.IPPoolInterf
 	if err != nil {
 		return err
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"IP", "BORROWING-NODE", "BLOCK", "BLOCK OWNER", "TYPE", "ALLOCATED-TO"})
-	genRow := func(address, borrowingNode, block, blockOwner, t, allocatedTo string) []string {
-		return []string{
-			address,
-			borrowingNode,
-			block,
-			blockOwner,
-			t,
-			allocatedTo,
-		}
-	}
-
-	var rows [][]string
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"IP", "BORROWING-NODE", "BLOCK", "BLOCK OWNER", "TYPE", "ALLOCATED-TO"})
 	for _, detail := range details {
-		rows = append(rows, genRow(detail.addr, detail.borrowingNode, detail.block, detail.blockOwner,
-			detail.allocationType, detail.allocatedTo))
+		t.AppendRow(table.Row{
+			detail.addr,
+			detail.borrowingNode,
+			detail.block,
+			detail.blockOwner,
+			detail.allocationType,
+			detail.allocatedTo,
+		})
 	}
-	table.AppendBulk(rows)
-	table.Render()
+	t.Render()
 
 	if unclassifiedIPs != 0 {
 		fmt.Printf("\nNote: found %d IP allocations without an explicit node association. Unable to determine if they are borrowed.\n",
@@ -217,10 +212,16 @@ func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 	if err != nil {
 		return err
 	}
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS FREE"})
-	genRow := func(kind, cidr string, inUse, capacity float64) []string {
-		return []string{
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS FREE"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Name: "IPS TOTAL", Align: text.AlignRight},
+		{Name: "IPS IN USE", Align: text.AlignRight},
+		{Name: "IPS FREE", Align: text.AlignRight},
+	})
+	genRow := func(kind, cidr string, inUse, capacity float64) table.Row {
+		return table.Row{
 			kind,
 			cidr,
 			fmt.Sprintf("%.5g", capacity),
@@ -232,7 +233,7 @@ func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 		}
 	}
 	for _, poolUse := range usage {
-		var blockRows [][]string
+		var blockRows []table.Row
 		var poolInUse float64
 		for _, blockUse := range poolUse.Blocks {
 			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), float64(blockUse.Capacity-blockUse.Available), float64(blockUse.Capacity)))
@@ -243,13 +244,13 @@ func showBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 		if ones > 0 {
 			// Only show the IP Pool row for a real IP Pool and not for the orphaned
 			// block case.
-			table.Append(genRow("IP Pool", poolUse.CIDR.String(), poolInUse, poolCapacity))
+			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(), poolInUse, poolCapacity))
 		}
 		if showBlocks {
-			table.AppendBulk(blockRows)
+			t.AppendRows(blockRows)
 		}
 	}
-	table.Render()
+	t.Render()
 
 	return nil
 }
@@ -260,25 +261,17 @@ func showConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 		return fmt.Errorf("error: %v", err)
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"PROPERTY", "VALUE"})
-	genRow := func(name string, value any) []string {
-		return []string{
-			name,
-			fmt.Sprintf("%#v", value),
-		}
-	}
-
-	var rows [][]string
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"PROPERTY", "VALUE"})
 	e := reflect.ValueOf(ipamConfig).Elem()
 	for i := 0; i < e.NumField(); i++ {
-		varName := e.Type().Field(i).Name
-		varValue := e.Field(i).Interface()
-
-		rows = append(rows, genRow(varName, varValue))
+		t.AppendRow(table.Row{
+			e.Type().Field(i).Name,
+			fmt.Sprintf("%#v", e.Field(i).Interface()),
+		})
 	}
-	table.AppendBulk(rows)
-	table.Render()
+	t.Render()
 	return nil
 }
 
