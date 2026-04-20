@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // ErrPermanentLoadFailure indicates a BPF program load failure that will not
@@ -120,9 +121,10 @@ type SubProgInfo struct {
 // GetApplicableSubProgs returns the list of sub-programs that should be loaded
 // for the given AttachType. It filters out empty entries and conditionally
 // excludes programs based on the AttachType's characteristics.
-// The skipIPDefrag parameter allows skipping IP defrag even if the AttachType
-// normally supports it (used when loading fails and retrying without IP defrag).
-func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
+// The skipOptional set allows skipping optional programs even if the AttachType
+// normally supports them (used when loading fails and retrying without them,
+// or when they are disabled by configuration).
+func GetApplicableSubProgs(at AttachType, skipOptional set.Set[SubProg]) []SubProgInfo {
 	var result []SubProgInfo
 
 	subs := GetSubProgNames(at.Hook)
@@ -136,8 +138,10 @@ func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
-			continue
+		if isOpt, notApplicable := isOptionalAndNotApplicable(SubProg(idx), at); isOpt {
+			if notApplicable || (skipOptional != nil && skipOptional.Contains(SubProg(idx))) {
+				continue
+			}
 		}
 
 		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
@@ -156,6 +160,13 @@ func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
 
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
+
+// LoadResult is the result of loading a BPF object. It contains the layout
+// and any optional programs that were skipped because they failed to load.
+type LoadResult struct {
+	Layout          Layout
+	SkippedOptional []OptionalSubProgInfo
+}
 
 func MergeLayouts(layouts ...Layout) Layout {
 	ret := make(Layout)
@@ -178,9 +189,10 @@ type ProgramsMap struct {
 }
 
 type program struct {
-	lock         sync.Mutex
-	layout       Layout
-	permanentErr error // non-nil if loading failed permanently; prevents retries
+	lock            sync.Mutex
+	layout          Layout
+	permanentErr    error                 // non-nil if loading failed permanently; prevents retries
+	skippedOptional []OptionalSubProgInfo // optional programs that were skipped on load
 }
 
 var IngressProgramsMapParameters = bpfmaps.MapParameters{
@@ -238,7 +250,7 @@ func NewXDPProgramsMap() bpfmaps.Map {
 	}
 }
 
-func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
+func (pm *ProgramsMap) LoadObj(at AttachType, progType string, disabledOptional set.Set[SubProg]) (*LoadResult, error) {
 	file := ObjectFile(at)
 	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
@@ -258,22 +270,28 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 		return nil, pi.permanentErr
 	}
 
-	var err error
 	if pi.layout == nil {
-		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
+		result, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType, disabledOptional)
 		if err == nil {
-			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
-			pi.layout = la
+			log.WithField("layout", result.Layout).Debugf("Loaded generic object file %s", file)
+			pi.layout = result.Layout
+			pi.skippedOptional = result.SkippedOptional
 		} else if IsPermanentLoadFailure(err) {
 			err = fmt.Errorf("%w: %w", ErrPermanentLoadFailure, err)
 			pi.permanentErr = err
+			return nil, err
+		} else {
+			return nil, err
 		}
 	} else {
 		log.WithField("layout", pi.layout).Debugf("Using cached layout for %s", file)
 	}
 
 	// Return a clone of the layout to avoid accidental modifications.
-	return maps.Clone(pi.layout), err
+	return &LoadResult{
+		Layout:          maps.Clone(pi.layout),
+		SkippedOptional: pi.skippedOptional,
+	}, nil
 }
 
 func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
@@ -287,7 +305,23 @@ func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
 	return pi
 }
 
-func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layout, error) {
+// applicableOptionalProgs returns the list of optional sub-programs that are
+// applicable to the given AttachType AND enabled (not in disabledOptional).
+func applicableOptionalProgs(at AttachType, disabledOptional set.Set[SubProg]) []SubProg {
+	var result []SubProg
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
+		if disabledOptional != nil && disabledOptional.Contains(sp) {
+			return
+		}
+		if !info.IsApplicable(at) {
+			return
+		}
+		result = append(result, sp)
+	})
+	return result
+}
+
+func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string, disabledOptional set.Set[SubProg]) (*LoadResult, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
@@ -297,46 +331,83 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, err
 	}
 
-	if !at.hasIPDefrag() {
-		// Disable autoload for the IP defrag program
-		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
+	// Build the full set of optional programs to skip: those disabled by
+	// config plus those not structurally applicable.
+	skipOptional := set.New[SubProg]()
+	if disabledOptional != nil {
+		disabledOptional.Iter(func(sp SubProg) error {
+			skipOptional.Add(sp)
+			return nil
+		})
 	}
-	skipIPDefrag := false
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
+		if skipOptional.Contains(sp) {
+			obj.SetProgramAutoload(info.ProgName, false)
+			return
+		}
+		if !info.IsApplicable(at) {
+			obj.SetProgramAutoload(info.ProgName, false)
+			skipOptional.Add(sp)
+		}
+	})
+
+	var skippedOptional []OptionalSubProgInfo
 	if err := obj.Load(); err != nil {
-		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
-		if at.hasIPDefrag() {
-			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
-			// Close the failed object and reopen
+		// Try disabling optional programs one at a time and retrying, so
+		// we preserve as many optional features as possible.
+		enabledOptional := applicableOptionalProgs(at, skipOptional)
+		if len(enabledOptional) == 0 {
+			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		log.WithError(err).Warn("Failed to load BPF object, retrying without optional programs")
+		for _, sp := range enabledOptional {
+			skipOptional.Add(sp)
 			obj.Close()
 			obj, err = libbpf.OpenObject(file)
 			if err != nil {
 				return nil, fmt.Errorf("file %s: %w", file, err)
 			}
-
-			// Re-configure maps
 			if err := pm.configureMapsAndPrograms(obj, file, progAttachType); err != nil {
 				return nil, err
 			}
-
-			// Disable autoload for the IP defrag program
-			obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
-			skipIPDefrag = true
-
-			// Try loading again
-			if err := obj.Load(); err != nil {
-				return nil, fmt.Errorf("error loading program %s: %w", file, err)
+			// Disable all programs we've decided to skip so far.
+			forEachOptionalSubProg(func(osp SubProg, oinfo OptionalSubProgInfo) {
+				if skipOptional.Contains(osp) || !oinfo.IsApplicable(at) {
+					obj.SetProgramAutoload(oinfo.ProgName, false)
+				}
+			})
+			if err = obj.Load(); err == nil {
+				break
 			}
-			log.WithField("attach type", at).
-				Warn("Object loaded without IP defrag - processing of fragmented packets will not be supported")
-		} else {
+			log.WithError(err).WithField("skipped", sp).Warn("Still failed after disabling optional program")
+		}
+		if err != nil {
 			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		for _, sp := range enabledOptional {
+			if !skipOptional.Contains(sp) {
+				continue
+			}
+			if info := GetOptionalSubProgInfo(sp); info != nil {
+				log.WithField("feature", info.FeatureName).
+					Warn("BPF object loaded without optional program. " + info.DisableMsg)
+				skippedOptional = append(skippedOptional, *info)
+			}
 		}
 	}
 
-	layout, err := pm.allocateLayout(at, obj, skipIPDefrag)
+	layout, err := pm.allocateLayout(at, obj, skipOptional)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
+	if err != nil {
+		return nil, err
+	}
 
-	return layout, err
+	return &LoadResult{
+		Layout:          layout,
+		SkippedOptional: skippedOptional,
+	}, nil
 }
 
 func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttachType string) error {
@@ -378,7 +449,7 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefrag bool) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipOptional set.Set[SubProg]) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -389,7 +460,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 		offset = int(SubProgTCMainDebug)
 	}
 
-	applicableProgs := GetApplicableSubProgs(at, skipIPDefrag)
+	applicableProgs := GetApplicableSubProgs(at, skipOptional)
 
 	for _, progInfo := range applicableProgs {
 		pmIdx := pm.allocIdx()

@@ -607,20 +607,16 @@ blocks:
           value: calico
         - name: FUNCTIONAL_AREA
           value: "e2e-gcp.yml"
-        - name: RUN_LOCAL_TESTS
-          value: "true"
         - name: USE_PRIVATE_REGISTRY
           value: "true"
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
-        - name: K8S_E2E_FLAGS
-          # Skipped test labels:
-          # - Slow: long-running tests not suitable for CI
-          # - Disruptive: tests that break cluster state for other tests
-          # - RequiresBGPMesh: requires BGP routing, but this cluster uses VXLAN
-          # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
-          # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
-          value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[RequiresBGPMesh\]|\[NoEncap\]|\[Feature:Istio\])
+        - name: RUN_LOCAL_TESTS
+          value: "true"
+        - name: E2E_TEST_CONFIG
+          # Test selection is driven by the config file; see gcp-bpf.yaml for the
+          # include/exclude rationale.
+          value: "e2e/config/gcp-bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
       jobs:
@@ -665,13 +661,15 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "BIRD"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
@@ -691,15 +689,21 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+          - docker system prune -af
       jobs:
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "FELIX"
-            - name: E2E_SKIP
-              value: "BGP"
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-felix-routing.yaml"
+            - name: KIND_CALICO_API_GROUP
+              value: "crd.projectcalico.org/v1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind-felix-routing.yaml"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
@@ -863,28 +867,13 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
             # Only building the code, not the image here because the felix image is now only used for FV tests, which
             # only run on AMD64 at the moment.
             - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
-  - name: "Felix: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd felix
-      jobs:
-        - name: "Felix: build arm64 binaries"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
   - name: "Felix: Build Windows binaries"
     run:
       when: "true"
@@ -1185,37 +1174,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-  - name: Istio Ztunnel
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux amd64"
-          commands:
-            - ../../.semaphore/run-and-monitor build.log make build
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: "true"
-    dependencies:
-      - Prerequisites
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-          - cd third_party/istio-ztunnel
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../../.semaphore/run-and-monitor build-arm64.log make build
   - name: Istio
     run:
       when: "true"
@@ -1224,20 +1182,37 @@ blocks:
     task:
       prologue:
         commands:
-          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
           - cd istio
       jobs:
         - name: "Istio: CI"
           commands:
-            # build all images except ztunnel, which is built in the previous step
-            - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+            # Include the istio ztunnel build in the amd64 CI job.
+            - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
           matrix:
             - env_var: ARCH
               values:
                 - arm64
           commands:
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+            # Skip istio ztunnel in this arm64 cross-build job.
+            # ztunnel is built separately in the native arm64 runner block below.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
+  - name: Istio Ztunnel - native arm64 runner
+    run:
+      when: "true"
+    dependencies:
+      - Istio
+    task:
+      agent:
+        machine:
+          type: s1-aws-arm64-2
+      prologue:
+        commands:
+          - cd istio
+      jobs:
+        - name: "Linux arm64"
+          commands:
+            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
   - name: kube-controllers
     run:
       when: "true"
@@ -1371,6 +1346,7 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
@@ -1381,22 +1357,6 @@ blocks:
         - name: "Node: build Windows image"
           commands:
             - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-  - name: "Node: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Node: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-4
-      prologue:
-        commands:
-          - cd node
-      jobs:
-        - name: "Node: build arm64 image"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
   - name: "Node: kind-cluster tests"
     run:
       # KinD tests also build and run all the other images.

@@ -68,6 +68,7 @@ type Source uint8
 const (
 	Default Source = iota
 	DatastoreGlobal
+	DatastorePerSelector
 	DatastorePerHost
 	ConfigFile
 	EnvironmentVariable
@@ -82,7 +83,7 @@ const (
 	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
 )
 
-var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
+var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastorePerSelector, DatastoreGlobal}
 
 func (source Source) String() string {
 	switch source {
@@ -90,6 +91,8 @@ func (source Source) String() string {
 		return "<default>"
 	case DatastoreGlobal:
 		return "datastore (global)"
+	case DatastorePerSelector:
+		return "datastore (per-node-selector)"
 	case DatastorePerHost:
 		return "datastore (per-host)"
 	case ConfigFile:
@@ -194,6 +197,7 @@ type Config struct {
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
 	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
+	BPFIPFragTimeout                   time.Duration     `config:"seconds;0"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -219,6 +223,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool              `config:"bool;false"`
+	BPFIPFragmentReassemblyEnabled     bool              `config:"bool;true"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`

@@ -894,6 +894,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfHostNetworkedNATWithoutCTLB
       type:
         scalar: string
+    - name: bpfIPFragTimeout
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: bpfIPFragmentReassemblyEnabled
+      type:
+        scalar: boolean
     - name: bpfJITHardening
       type:
         scalar: string
@@ -1236,6 +1242,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: nftablesRefreshInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: nodeSelector
+      type:
+        scalar: string
     - name: openstackRegion
       type:
         scalar: string

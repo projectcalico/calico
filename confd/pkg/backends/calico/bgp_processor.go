@@ -20,7 +20,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -40,14 +39,8 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
-// configCache is indexed by IP version (4 or 6)
-var configCache map[int]*bgpConfigCache
-
-// configCacheMutex protects concurrent access to configCache
-var configCacheMutex sync.RWMutex
-
-func init() {
-	configCache = make(map[int]*bgpConfigCache)
+type processorContext struct {
+	globalBGPConfig *v3.BGPConfiguration
 }
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
@@ -56,15 +49,17 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc := log.WithField("ipVersion", ipVersion)
 	currentRevision := c.GetCurrentRevision()
 
-	configCacheMutex.RLock()
-	if cached, ok := configCache[ipVersion]; ok && cached.revision == currentRevision {
-		configCacheMutex.RUnlock()
+	c.configCacheMutex.RLock()
+	if cached, ok := c.configCache[ipVersion]; ok && cached.revision == currentRevision {
+		c.configCacheMutex.RUnlock()
 		logc.Debug("BGP config cache hit, returning cached configuration")
 		return cached.config, nil
 	}
-	configCacheMutex.RUnlock()
+	c.configCacheMutex.RUnlock()
 
 	logc.Debug("BGP config cache miss or expired, processing new configuration")
+
+	pc := c.getBGPProcessorContext()
 
 	config := &types.BirdBGPConfig{
 		NodeName:    NodeName,
@@ -74,7 +69,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	}
 
 	// Get basic node configuration
-	if err := c.populateNodeConfig(config, ipVersion); err != nil {
+	if err := c.populateNodeConfig(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to populate node configuration")
 		return nil, err
 	}
@@ -100,7 +95,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
 
 	// Process ippools.
-	if err := c.processIPPools(config, ipVersion); err != nil {
+	if err := c.processIPPools(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process ippools")
 		return nil, err
 	}
@@ -110,20 +105,26 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
 
-	// Update cache with write lock
-	configCacheMutex.Lock()
-	configCache[ipVersion] = &bgpConfigCache{
+	// Update cache with write lock.
+	c.configCacheMutex.Lock()
+	c.configCache[ipVersion] = &bgpConfigCache{
 		config:   config,
 		revision: currentRevision,
 	}
-	configCacheMutex.Unlock()
+	c.configCacheMutex.Unlock()
 	logc.Debug("Updated BGP config cache")
 
 	return config, nil
 }
 
+func (c *client) getBGPProcessorContext() *processorContext {
+	return &processorContext{
+		globalBGPConfig: c.getBGPConfig(),
+	}
+}
+
 // populateNodeConfig fills in basic node configuration
-func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
@@ -180,9 +181,9 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process bind mode and listen address
-	bindMode, err := c.getNodeOrGlobalValue(NodeName, "bind_mode")
+
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if err == nil && bindMode == "NodeIP" {
+	if getBindMode(pc.globalBGPConfig) == v3.BindModeNodeIP {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
@@ -216,14 +217,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
-	config.NormalRoutePriority = 1024
-	if c.globalBGPConfig != nil {
-		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
-		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
-		}
-	}
+	config.NormalRoutePriority = getNormalRoutePriority(ipVersion, pc.globalBGPConfig)
 
 	config.SetMetricForBGPRoutes = []string{
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
@@ -238,6 +232,18 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	return nil
+}
+
+func getNormalRoutePriority(ipVersion int, bgpConfig *v3.BGPConfiguration) (priority int) {
+	priority = 1024
+	if bgpConfig != nil {
+		if ipVersion == 4 && bgpConfig.Spec.IPv4NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && bgpConfig.Spec.IPv6NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv6NormalRoutePriority
+		}
+	}
+	return
 }
 
 // processPeers processes all BGP peers (mesh, global, and node-specific)
@@ -862,7 +868,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	return nil
 }
 
-func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	poolKey := fmt.Sprintf("/calico/v1/ipam/v%d/pool", ipVersion)
 	logCtx := log.WithFields(map[string]any{
 		"ipVersion": ipVersion,
@@ -887,8 +893,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
+		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
 		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {
@@ -934,7 +940,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
 //   - ippool: IPPool resource.
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP routes.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
@@ -991,7 +997,7 @@ func (c *client) processIPPool(
 		if programClusterRoutes {
 			var extraStatement string
 			if forProgrammingKernel && ipVersion == 4 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
 				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
@@ -1029,8 +1035,8 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
 	case v3.Never:
-		// No-encap case.
-		return `krt_tunnel="";`
+		// No encapsulation needed; no need to set krt_tunnel.
+		return ``
 	default:
 		return ``
 	}

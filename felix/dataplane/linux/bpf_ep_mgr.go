@@ -402,13 +402,17 @@ type bpfEndpointManager struct {
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
-	healthAggregator     *health.HealthAggregator
-	permanentBPFErr      error // set when BPF programs fail to load permanently; prevents retries
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
-	istioDSCP            uint8
+	healthAggregator        *health.HealthAggregator
+	permanentBPFErr         error // set when BPF programs fail to load permanently; prevents retries
+	disabledOptionalProgs   set.Typed[hook.SubProg]
+	failedOptionalProgsLock sync.Mutex
+	failedOptionalProgs     map[string]*hook.OptionalSubProgInfo // keyed by FeatureName; guarded by failedOptionalProgsLock
+	updateRateLimitedLog    *logutilslc.RateLimitedLogger
+	istioDSCP               uint8
 
 	QoSMap        maps.MapWithUpdateWithFlags
 	maglevLUTSize int
+	ipFragTimeout uint32
 
 	workloadSourceSpoofing bool
 }
@@ -442,6 +446,45 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
+}
+
+// getIPFragTimeout returns the IP fragment timeout in seconds.
+// If configuredTimeout is 0, it reads the value from the Linux kernel sysctl
+// net.ipv4.ipfrag_time. Otherwise, it converts the configured duration to seconds.
+func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
+	var timeoutSecs int64
+
+	if configuredTimeout == 0 {
+		// Try to read from /proc/sys/net/ipv4/ipfrag_time
+		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutStr := strings.TrimSpace(string(data))
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutSecs = int64(timeout)
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+	} else {
+		timeoutSecs = int64(configuredTimeout.Seconds())
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
+	}
+
+	if timeoutSecs < 1 {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too low, clamping to 1 second")
+		timeoutSecs = 1
+	} else if timeoutSecs > int64(^uint32(0)) {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too high, clamping to max uint32")
+		timeoutSecs = int64(^uint32(0))
+	}
+
+	return uint32(timeoutSecs)
 }
 
 func NewBPFEndpointManager(
@@ -536,7 +579,14 @@ func NewBPFEndpointManager(
 
 		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
 		maglevLUTSize:          config.BPFMaglevLUTSize,
+		ipFragTimeout:          getIPFragTimeout(config.BPFIPFragTimeout),
 		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
+		failedOptionalProgs:    map[string]*hook.OptionalSubProgInfo{},
+	}
+
+	m.disabledOptionalProgs = set.New[hook.SubProg]()
+	if !config.BPFIPFragmentReassemblyEnabled {
+		m.disabledOptionalProgs.Add(hook.SubProgIPFrag)
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -1789,6 +1839,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
+	} else if names := m.failedOptionalProgFeatureNames(); len(names) > 0 {
+		m.reportHealth(false,
+			fmt.Sprintf("Optional BPF program(s) failed to load: %s. "+
+				"Disable the feature(s) in FelixConfiguration or upgrade the kernel. "+
+				"See Felix logs for details.", strings.Join(names, ", ")))
 	} else if m.dirtyIfaceNames.Len() == 0 {
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
@@ -3123,6 +3178,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
+	ap.IPFragTimeout = m.ipFragTimeout
 	ap.RedirectPeer = true
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
@@ -3808,22 +3864,49 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 }
 
 func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap) (hook.Layout, error) {
-	layout, err := pm.LoadObj(at, string(m.bpfAttachType))
+	result, err := pm.LoadObj(at, string(m.bpfAttachType), m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
+	m.recordSkippedOptional(result.SkippedOptional)
 
 	if at.LogLevel != "debug" {
-		return layout, nil
+		return result.Layout, nil
 	}
 
 	at.LogLevel = "off"
-	layoutNoDebug, err := pm.LoadObj(at, string(m.bpfAttachType))
+	resultNoDebug, err := pm.LoadObj(at, string(m.bpfAttachType), m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
+	m.recordSkippedOptional(resultNoDebug.SkippedOptional)
 
-	return hook.MergeLayouts(layoutNoDebug, layout), nil
+	return hook.MergeLayouts(resultNoDebug.Layout, result.Layout), nil
+}
+
+func (m *bpfEndpointManager) recordSkippedOptional(skipped []hook.OptionalSubProgInfo) {
+	if len(skipped) == 0 {
+		return
+	}
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
+	for i := range skipped {
+		info := &skipped[i]
+		m.failedOptionalProgs[info.FeatureName] = info
+	}
+}
+
+// failedOptionalProgFeatureNames returns a snapshot of the failed optional
+// program feature names, safe to use outside the lock.
+func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
+	names := make([]string, 0, len(m.failedOptionalProgs))
+	for _, info := range m.failedOptionalProgs {
+		names = append(names, info.FeatureName)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
@@ -3876,13 +3959,19 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		at.Family = int(ipFamily)
 		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if apxdp.HookLayoutV6, err = pm.LoadObj(at, ""); err != nil {
-				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			result, loadErr := pm.LoadObj(at, "", m.disabledOptionalProgs)
+			if loadErr != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", loadErr)
 			}
+			apxdp.HookLayoutV6 = result.Layout
+			m.recordSkippedOptional(result.SkippedOptional)
 		} else {
-			if apxdp.HookLayoutV4, err = pm.LoadObj(at, ""); err != nil {
-				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			result, loadErr := pm.LoadObj(at, "", m.disabledOptionalProgs)
+			if loadErr != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", loadErr)
 			}
+			apxdp.HookLayoutV4 = result.Layout
+			m.recordSkippedOptional(result.SkippedOptional)
 		}
 	} else {
 		return fmt.Errorf("unknown attach type")

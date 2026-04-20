@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,8 +31,8 @@ import (
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/confd/pkg/config"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -98,42 +98,25 @@ type RouteIndex struct {
 	programmedRejectRoutes map[string]bool
 }
 
-func NewCalicoClient(confdConfig *config.Config) (*client, error) {
-	// Load the client clientCfg.  This loads from the environment if a filename
-	// has not been specified.
-	clientCfg, err := apiconfig.LoadClientConfig(confdConfig.CalicoConfig)
-	if err != nil {
-		log.Errorf("Failed to load Calico client configuration: %v", err)
-		return nil, err
-	}
-
+func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, datastoreConfig apiconfig.CalicoAPIConfigSpec, typhaConfig *syncclientutils.TyphaConfig) (*client, error) {
 	// Query the current BGP configuration to determine if the node to node mesh is enabled or
 	// not.  If it is we need to monitor all node configuration.  If it is not enabled then we
 	// only need to monitor our own node.  If this setting changes, we terminate confd (so that
 	// when restarted it will start watching the correct resources).
-	cc, err := clientv3.New(*clientCfg)
-	if err != nil {
-		log.Errorf("Failed to create main Calico client: %v", err)
-		return nil, err
-	}
 	cfg, err := cc.BGPConfigurations().Get(
 		context.Background(),
 		globalConfigName,
 		options.GetOptions{},
 	)
 	if _, ok := err.(lerr.ErrorResourceDoesNotExist); err != nil && !ok {
-		// Failed to get the BGP configuration (and not because it doesn't exist).
-		// Exit.
-		log.Errorf("Failed to query current BGP settings: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("querying current BGP settings: %w", err)
 	}
 	nodeMeshEnabled := true
 	if cfg != nil && cfg.Spec.NodeToNodeMeshEnabled != nil {
 		nodeMeshEnabled = *cfg.Spec.NodeToNodeMeshEnabled
 	}
 
-	// We know the v2 client implements the backendClientAccessor interface.  Use it to
-	// get the backend client.
+	// Extract the backend client from the v3 client.
 	bc := cc.(backendClientAccessor).Backend()
 
 	// Create the client.  Initialize the cache revision to 1 so that the watcher
@@ -165,7 +148,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// This channel, for the syncer calling OnUpdates and OnStatusUpdated, has 0
 		// capacity so that the caller blocks in the same way as it did before when its
 		// calls were processed synchronously.
-		syncerC: make(chan any),
+		syncerC:     make(chan any),
+		stopCh:      make(chan struct{}),
+		configCache: make(map[int]*bgpConfigCache),
 
 		// This channel holds a trigger for existing BGP peerings to be recomputed.  We only
 		// ever need 1 pending trigger, hence capacity 1.  recheckPeerConfig() does a
@@ -174,11 +159,16 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		recheckC: make(chan struct{}, 1),
 	}
 	maps.Copy(c.cache, globalDefaults)
+	c.k8sClient = k8sClient
 
 	// Create secret watcher.  Must do this before the syncer, because updates from
 	// the syncer can trigger calling c.secretWatcher.MarkStale().
-	if c.secretWatcher, err = NewSecretWatcher(c); err != nil {
-		log.WithError(err).Warning("Failed to create secret watcher, not running under Kubernetes?")
+	if k8sClient != nil {
+		if c.secretWatcher, err = NewSecretWatcher(c, k8sClient); err != nil {
+			log.WithError(err).Warning("Failed to create secret watcher")
+		}
+	} else {
+		log.Warning("No K8s client available, secret watcher disabled")
 	}
 
 	if runtime.GOOS == "windows" {
@@ -247,9 +237,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
 	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", template.NodeName)
-	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(clientCfg.Spec.K8sUsePodCIDR)
+	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor(datastoreConfig.K8sUsePodCIDR)
 	if syncclientutils.MustStartSyncerClientIfTyphaConfigured(
-		&confdConfig.Typha, syncproto.SyncerTypeBGP,
+		typhaConfig, syncproto.SyncerTypeBGP,
 		buildinfo.Version, template.NodeName, fmt.Sprintf("confd %s", buildinfo.Version),
 		c,
 	) {
@@ -257,16 +247,16 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	} else {
 		// Use the syncer locally.
 		log.Debug("Using local syncer")
-		c.syncer = bgpsyncer.New(c.client, c, template.NodeName, clientCfg.Spec)
+		c.syncer = bgpsyncer.New(c.client, c, template.NodeName, datastoreConfig)
 		c.syncer.Start()
 	}
 
-	if len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 || len(lbCIDRs) != 0 {
+	if c.k8sClient != nil && (len(clusterCIDRs) != 0 || len(externalCIDRs) != 0 || len(lbCIDRs) != 0) {
 		// Create and start route generator, if configured to do so. This can either be through
 		// environment variable, or the data store via BGPConfiguration.
-		// We only turn it on if configured to do so, to avoid needing to watch services / endpoints.
+		// Requires a K8s client for watching Services/EndpointSlices.
 		log.Info("Starting route generator for service advertisement")
-		if c.rg, err = NewRouteGenerator(c); err != nil {
+		if c.rg, err = NewRouteGenerator(c, c.k8sClient); err != nil {
 			log.WithError(err).Error("Failed to start route generator, routes will not be advertised")
 			c.OnSyncChange(SourceRouteGenerator, true)
 			c.rg = nil
@@ -281,6 +271,8 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	go func() {
 		for {
 			select {
+			case <-c.stopCh:
+				return
 			case e := <-c.syncerC:
 				switch event := e.(type) {
 				case []api.Update:
@@ -371,6 +363,9 @@ type client struct {
 	loadBalancerIPs    []string
 	loadBalancerIPNets []*net.IPNet // same as externalIPs but parsed
 
+	// Kubernetes client, shared by secret watcher and route generator.
+	k8sClient kubernetes.Interface
+
 	// Subcomponent for accessing and watching secrets (that hold BGP passwords).
 	secretWatcher *secretWatcher
 
@@ -380,6 +375,11 @@ type client struct {
 	// Channels used to decouple update and status processing.
 	syncerC  chan any
 	recheckC chan struct{}
+	stopCh   chan struct{}
+
+	// BGP config cache, keyed by IP version (4 or 6).
+	configCache      map[int]*bgpConfigCache
+	configCacheMutex sync.RWMutex
 
 	// Cached value of the default BGP configuration for node to node mesh BGP password lookup.
 	globalBGPConfig *apiv3.BGPConfiguration
@@ -412,7 +412,10 @@ func (c *client) SetPrefixes(keys []string) error {
 // When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
 // GetValues calls.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
-	c.syncerC <- status
+	select {
+	case c.syncerC <- status:
+	case <-c.stopCh:
+	}
 }
 
 func (c *client) onStatusUpdated(status api.SyncStatus) {
@@ -986,7 +989,10 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 //   - wakes up the watchers so that they can check if any of the prefixes they are
 //     watching have been updated.
 func (c *client) OnUpdates(updates []api.Update) {
-	c.syncerC <- updates
+	select {
+	case c.syncerC <- updates:
+	case <-c.stopCh:
+	}
 }
 
 func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
@@ -1172,11 +1178,12 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 	// If we need to update Service advertisement based on the updates, then do so.
 	if needServiceAdvertisementUpdates {
 		log.Info("Updates included service advertisement changes.")
-		if c.rg == nil {
+		if c.rg == nil && c.k8sClient != nil {
 			// If this is the first time we've needed to start the route generator, then do so here.
+			// Requires a K8s client for watching Services/EndpointSlices.
 			log.Info("Starting route generator due to service advertisement update")
 			var err error
-			if c.rg, err = NewRouteGenerator(c); err != nil {
+			if c.rg, err = NewRouteGenerator(c, c.k8sClient); err != nil {
 				log.WithError(err).Error("Failed to start route generator, unable to advertise node-specific service routes")
 				c.rg = nil
 			} else {
@@ -1224,7 +1231,6 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
-		c.getBindModeKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
@@ -1234,6 +1240,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getProgramClusterRoutesKVPair(v3res, model.GlobalBGPConfigKey{})
 
 		// Update service load balancer aggregation setting
 		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != nil {
@@ -1241,6 +1248,19 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		} else {
 			// Default to enabled if not specified or if v3res is nil
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
+		}
+
+		// Check for changes in BGPConfiguration fields that impact GetBirdBGPConfig.  Note,
+		// the following changes do not affect the _set_ of BGP peers, so do not require
+		// setting updatePeersV1 and updateReasons.
+		if getNormalRoutePriority(4, v3res) != getNormalRoutePriority(4, c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
+		}
+		if getNormalRoutePriority(6, v3res) != getNormalRoutePriority(6, c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
+		}
+		if getBindMode(v3res) != getBindMode(c.globalBGPConfig) {
+			c.keyUpdated("/calico/bgpconfig")
 		}
 
 		// Cache the updated BGP configuration
@@ -1366,16 +1386,12 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 	*updatePeersV1 = true
 }
 
-func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
-	bindMode := getBGPConfigKey("bind_mode", key)
+func getBindMode(v3res *apiv3.BGPConfiguration) (bindMode apiv3.BindMode) {
+	bindMode = apiv3.BindModeNone
 	if v3res != nil && v3res.Spec.BindMode != nil {
-		*updateReasons = append(*updateReasons, "bindMode updated.")
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(bindMode, string(*v3res.Spec.BindMode)))
-	} else {
-		*updateReasons = append(*updateReasons, "bindMode deleted.")
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(bindMode))
+		bindMode = *v3res.Spec.BindMode
 	}
-	*updatePeersV1 = true
+	return
 }
 
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
@@ -1528,6 +1544,15 @@ func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key a
 		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
 	} else {
 		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredIfacesKey))
+	}
+}
+
+func (c *client) getProgramClusterRoutesKVPair(v3res *apiv3.BGPConfiguration, key any) {
+	programClusterRoutesKey := getBGPConfigKey("program_cluster_routes", key)
+	if v3res != nil && v3res.Spec.ProgramClusterRoutes != nil {
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(programClusterRoutesKey, *v3res.Spec.ProgramClusterRoutes))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(programClusterRoutesKey))
 	}
 }
 
@@ -1860,6 +1885,13 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	return values, nil
 }
 
+func (c *client) getBGPConfig() *apiv3.BGPConfiguration {
+	c.waitForSync.Wait()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.globalBGPConfig
+}
+
 // WatchPrefix is called from confd.  It blocks waiting for updates to the data which have any
 // of the requested set of prefixes.
 //
@@ -1880,6 +1912,13 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 	}
 
 	for {
+		// Check if the client is shutting down.
+		select {
+		case <-c.stopCh:
+			return "", fmt.Errorf("client stopped")
+		default:
+		}
+
 		// Loop through each key, if the revision associated with the key is higher than the lastRevision
 		// then exit with the current cacheRevision and render with the current data.
 		log.Debugf("Checking for updated key revisions, watching from rev %d", lastRevision)
@@ -1908,6 +1947,25 @@ func (c *client) GetCurrentRevision() uint64 {
 	defer c.cacheLock.Unlock()
 	log.Debugf("Current cache revision is %v", c.cacheRevision)
 	return c.cacheRevision
+}
+
+// Stop shuts down the client's background goroutines (syncer, watchers, update processor).
+// stopCh is closed first so that OnUpdates/OnStatusUpdated callbacks (called by the
+// syncer during shutdown to send delete events) return immediately instead of blocking
+// on the zero-capacity syncerC channel.
+func (c *client) Stop() {
+	close(c.stopCh)
+
+	// Wake any goroutines blocked in WatchPrefix so they can observe the
+	// closed stopCh and return.
+	c.watcherCond.Broadcast()
+
+	if c.syncer != nil {
+		c.syncer.Stop()
+	}
+	if c.localBGPPeerWatcher != nil {
+		c.localBGPPeerWatcher.Stop()
+	}
 }
 
 // matchesPrefix returns true if the key matches any of the supplied prefixes.

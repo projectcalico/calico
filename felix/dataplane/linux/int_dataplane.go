@@ -246,12 +246,14 @@ type Config struct {
 	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
+	BPFIPFragmentReassemblyEnabled     bool
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
 	BPFAttachType                      apiv3.BPFAttachOption
+	BPFIPFragTimeout                   time.Duration
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration

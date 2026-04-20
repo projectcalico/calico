@@ -347,6 +347,7 @@ func StartDataplaneDriver(
 			IPv6Enabled:                    configParams.Ipv6Support,
 			BPFIpv6Enabled:                 configParams.Ipv6Support && configParams.BPFEnabled,
 			BPFHostConntrackBypass:         configParams.BPFHostConntrackBypass,
+			BPFIPFragmentReassemblyEnabled: configParams.BPFIPFragmentReassemblyEnabled,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
 			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
@@ -416,6 +417,7 @@ func StartDataplaneDriver(
 			BPFRedirectToPeer:                  configParams.BPFRedirectToPeer,
 			BPFAttachType:                      configParams.GetBPFAttachType(),
 			BPFProfiling:                       configParams.BPFProfiling,
+			BPFIPFragTimeout:                   configParams.BPFIPFragTimeout,
 			ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 
 			KubeClientSet: k8sClientSet,

@@ -10,10 +10,11 @@ installation:
   kubeletVolumePluginPath: "None"
   flexVolumePath: "None"
 
-  # Configure CIDRs to match kubeadm cluster.
   calicoNetwork:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
+
+    # Configure CIDRs to match kubeadm cluster.
     ipPools:
     - cidr: 192.168.0.0/16
     - cidr: fd00:10:244::/64
@@ -136,6 +137,13 @@ whisker:
               limits:
                 cpu: 200m
                 memory: 128Mi
+
+# Exercise the defaultFelixConfiguration helm template in CI. The value here
+# matches Felix's default, so it's a no-op - we just want to verify the
+# template renders with the correct API group.
+defaultFelixConfiguration:
+  enabled: true
+  logSeverityScreen: Info
 
 # CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
 manageCRDs: false
