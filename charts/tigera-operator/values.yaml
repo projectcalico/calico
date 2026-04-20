@@ -150,7 +150,7 @@ tigeraOperator:
   version: master
   registry: quay.io
 calicoctl:
-  image: quay.io/calico/ctl
+  image: quay.io/calico/calico
   tag: master
 
 # Optionally configure the host and port used to access the Kubernetes API server.

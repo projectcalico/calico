@@ -217,6 +217,36 @@ lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
 - Handles CNI plugin installation
 - Source: `node/pkg/lifecycle/startup/startup.go`
 
+### Combined `calico` binary
+
+Most component daemons are registered as subcommands of a single `calico` binary rather than shipping as independent binaries — felix, confd, kube-controllers, goldmane, guardian, whisker-backend, key-cert-provisioner, typha, dikastes, csi, flexvol, and webhooks all dispatch through `calico component <name>`. Inside the node container, runit services exec the subcommand directly (see `node/filesystem/etc/service/available/<name>/run`).
+
+**Adding a new component:**
+
+1. Expose a `NewCommand() *cobra.Command` from the component's package.
+2. Register it in `cmd/calico/component.go` under `newComponentCommand`.
+3. If the component runs in the node container, add a runit service at `node/filesystem/etc/service/available/<name>/run` whose body is `exec calico component <name>`.
+4. The component's `Run` handler should call `logutils.ConfigureFormatter("<name>")` so log lines carry a consistent component prefix.
+
+**Restart-on-config-change (exit 129):** A component that intentionally exits with `cmdwrapper.RestartReturnCode` (129) to request a live restart on config change (currently felix and kube-controllers) must wrap its cobra `Run` with `cmdwrapper.WrapSelf(innerEnvVar, fn)` from `pkg/cmdwrapper`. Without this, `exec calico component <name>` from runit just exits — there is no outer process to restart the child.
+
+- Pick a unique `innerEnvVar` per component (e.g. `CALICO_FELIX_INNER`, `CALICO_KUBE_CONTROLLERS_INNER`). `WrapSelf` strips any pre-existing value before re-execing.
+- The caller configures logrus before calling `WrapSelf`; `fn` is the inner daemon body.
+- Don't change the log line format in `cmdwrapper` — integration tests grep stdout for `"Received exit status N, restarting"`.
+
+### Health reporting
+
+Components expose liveness/readiness through the shared aggregator in `libcalico-go/lib/health`.
+
+1. Construct once per component: `ha := health.NewHealthAggregator()`.
+2. For each independent health source, register a named reporter declaring what it will report: `ha.RegisterReporter("Startup", &health.HealthReport{Live: true, Ready: true}, timeout)`. A non-zero timeout means reports must refresh before expiry or the aggregator treats that reporter as unhealthy — use this for long-running loops where silent stalls matter.
+3. Call `ha.Report(name, &health.HealthReport{...})` at startup and as state changes inside running goroutines.
+4. Serve the endpoints with `ha.ServeHTTP(enabled, host, port)` — this exposes `/readiness` and `/liveness` on the given port.
+
+For Kubernetes probes, use the generic `calico health --port=<port> --type=readiness|liveness` exec command (`cmd/calico/health.go`) rather than adding a per-component healthcheck binary or a bare `httpGet` probe. It does the HTTP GET and exits 0 on 2xx/3xx — that's the standard for pods running the combined image.
+
+Examples worth copying from: `kube-controllers/pkg/kubecontrollers/run.go` (Startup / CalicoDatastore / KubeAPIServer reporters, no timeout) and `felix/daemon/daemon.go` (lifecycle reporter plus per-subsystem reporters with timeouts).
+
 ### Go Module Structure
 
 - Root `go.mod` (`github.com/projectcalico/calico`) is the primary module for most components

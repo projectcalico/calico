@@ -1,0 +1,27 @@
+# Exclude anything that doesn't belong in the build context for
+# `docker buildx build` at the repo root. Without these exclusions, the
+# context tarball balloons to multiple GB (Go module cache alone is ~5GB)
+# and every build pays the transfer cost on top of the actual compile.
+
+.git
+.go-pkg-cache
+.claude
+.remember
+
+# Generated binaries — the image build compiles fresh inside the Dockerfile.
+# Keep pod2daemon/bin so node-driver-registrar is available for the COPY.
+bin
+**/bin
+!pod2daemon/bin
+
+# Test artifacts.
+**/*.test
+**/coverage.out
+**/coverage.txt
+**/report
+**/artifacts
+
+# Editor / OS cruft.
+.idea
+.vscode
+**/.DS_Store

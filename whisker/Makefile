@@ -24,11 +24,20 @@ DOCKER_RUN_RM:=docker run --rm \
 	-v $${PWD}:/code \
 	-w /code
 
+# Downstream CI jobs that docker-load a pre-built image from the GCS cache set
+# IMAGE_PREBUILT=true so the marker rule skips the yarn build and image build.
+ifeq ($(IMAGE_PREBUILT),true)
+$(IMAGE_BUILD_MARKER):
+	@docker image inspect whisker:latest-$(ARCH) >/dev/null 2>&1 || \
+		{ echo "ERROR: IMAGE_PREBUILT=true but whisker:latest-$(ARCH) is not loaded" >&2; exit 1; }
+	@touch $@
+else
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 $(IMAGE_BUILD_MARKER): build bin/LICENSE | register
 	$(DOCKER_BUILD) --build-arg BIN_DIR=bin -t whisker:latest-$(ARCH) -f docker-image/Dockerfile .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
+endif
 
 bin/LICENSE: ../LICENSE.md
 	@mkdir -p bin

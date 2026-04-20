@@ -1,0 +1,31 @@
+- name: cmd/calico
+  run:
+    when: "${CHANGE_IN(cmd/calico)}"
+  dependencies:
+    - Prerequisites
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico-image"
+    prologue:
+      commands:
+        - cd cmd/calico
+    jobs:
+      - name: "cmd/calico: UT"
+        commands:
+          - ../../.semaphore/run-and-monitor ut.log make ut
+      - name: "cmd/calico: image multi-arch"
+        # Build the calico image for non-amd64 arches to verify cross-compile.
+        # amd64 is already covered by the Prerequisites "Build: calico image"
+        # job. Each variant pulls warm layers from the buildx registry cache.
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+      - name: "cmd/calico: image FIPS"
+        commands:
+          - ../../.semaphore/run-and-monitor image-fips.log make image FIPS=true
