@@ -740,6 +740,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds=true
+            - -zap-devel=false
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
