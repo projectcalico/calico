@@ -230,7 +230,6 @@ E2E_PROCS ?= 4
 E2E_TEST_CONFIG ?= e2e/config/kind.yaml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
-CLUSTER_ROUTING ?= BIRD
 
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
@@ -249,14 +248,14 @@ kind-migration-test:
 ## Create a kind cluster and run all e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) kind-up
 	$(MAKE) e2e-run-test
 	$(MAKE) e2e-run-cnp-test
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) kind-up
 	$(MAKE) e2e-run-cnp-test
 
 ## Run the general e2e tests against a pre-existing kind cluster.

@@ -220,6 +220,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool              `config:"bool;false"`
+	BPFIPFragmentReassemblyEnabled     bool              `config:"bool;true"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
