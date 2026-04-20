@@ -343,14 +343,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		// exists.
 		log.Debugf("Looking up attribute with index %d", *attrIdx)
 		if handleID != "" {
-			log.Debugf("HandleID is %s", handleID)
-			handleCount := 0
-			if count, ok := countByHandle[handleID]; !ok {
-				handleCount = count
-			}
-			log.Debugf("Handle ref count is %d, incrementing", handleCount)
-			handleCount += 1
-			countByHandle[handleID] = handleCount
+			countByHandle[handleID] = countByHandle[handleID] + 1
 			log.Debugf("countByHandle %v", countByHandle)
 		}
 	}
