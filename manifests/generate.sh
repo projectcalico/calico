@@ -5,7 +5,7 @@ export LC_ALL=C
 # Filter out Helm symlink warnings (walk.go).  The charts/calico directory
 # intentionally uses symlinks to reference CRDs and admission configs from
 # their source-of-truth locations; the warnings are noise.
-exec 2> >(grep -v 'walk\.go.*symbolic link' >&2)
+exec 2> >(grep --line-buffered -v 'walk\.go.*symbolic link' >&2)
 
 # This script updates the manifests in this directory using helm.
 # Values files for the manifests in this directory can be found in
@@ -81,7 +81,7 @@ echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
 for FILE in $(ls ../charts/calico/crds); do
 	${HELM} template ../charts/calico \
 		--include-crds \
-		--show-only crds/$FILE \
+		--show-only "crds/$FILE" \
 		--set version=$CALICO_VERSION \
 		--set node.registry=$REGISTRY \
 		--set calicoctl.registry=$REGISTRY \
