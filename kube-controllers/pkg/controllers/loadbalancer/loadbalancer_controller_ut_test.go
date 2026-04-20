@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -537,5 +538,95 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		err = c.ensureDatastoreUpgraded()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
+	})
+
+	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		// syncService is guarded on the syncer being InSync; mark it so the body runs.
+		c.syncStatus = bapi.InSync
+
+		// Add an invalid IP address to the allocation tracker
+		c.allocationTracker.assignAddressToService(*svcKey, "invalid-ip-address")
+
+		// Create a service with pool annotations to trigger the problematic code path
+		svc.Annotations = map[string]string{
+			annotationIPv4Pools: "[\"10.0.0.0/24\"]",
+		}
+
+		// Add a valid IP pool to the controller
+		ipv4Pool := apiv3.IPPool{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-pool",
+			},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:        "10.0.0.0/24",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+			},
+		}
+		c.ipPools["test-pool"] = ipv4Pool
+
+		// Create the service in the fake client
+		_, err = c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		// This should not panic even with invalid IP in allocation tracker
+		// The syncService method should handle invalid IPs gracefully
+		Expect(func() {
+			c.syncService(*svcKey)
+		}).ToNot(Panic())
+	})
+
+	// Service event observed before the syncer has replayed historical
+	// IPAM blocks into allocationTracker must not trigger an IP allocation. Otherwise
+	// a freshly allocated IP and a later-arriving historical IP both land in the
+	// tracker and the service's status ends up with more IPs than its IPFamilyPolicy allows.
+	It("should defer syncService until InSync and pick up work once the syncer catches up", func() {
+		svcKey, err := serviceKeyFromService(&svc)
+		Expect(err).ToNot(HaveOccurred())
+
+		ipv4Pool := apiv3.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:        "10.0.0.0/24",
+				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+			},
+		}
+		c.ipPools["test-pool"] = ipv4Pool
+
+		created, err := c.clientSet.CoreV1().Services(svc.Namespace).Create(context.Background(), &svc, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(created.Status.LoadBalancer.Ingress).To(BeEmpty())
+		// serviceLister reads from the informer's indexer; seed it directly so tests
+		// don't race the informer's watch.
+		Expect(c.serviceInformer.GetIndexer().Add(created)).To(Succeed())
+
+		// Phase 1: pre-InSync. The guard must short-circuit so no allocation or status
+		// write happens on a service event observed before the syncer has replayed IPAM.
+		Expect(c.syncStatus).ToNot(Equal(bapi.InSync))
+
+		c.syncService(*svcKey)
+
+		Expect(c.allocationTracker.ipsByService[*svcKey]).To(BeEmpty())
+		fetched, err := c.clientSet.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(fetched.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		// Phase 2: syncer reaches InSync. handleBlockUpdate has by now populated the
+		// tracker with the service's historical IP, so syncService should observe the
+		// existing allocation, skip assignment, and write the IP to the service status.
+		c.allocationTracker.assignAddressToService(*svcKey, "10.0.0.4")
+		c.syncStatus = bapi.InSync
+
+		c.syncService(*svcKey)
+
+		Expect(c.allocationTracker.ipsByService[*svcKey]).To(HaveLen(1))
+		Expect(c.allocationTracker.ipsByService[*svcKey]).To(HaveKey("10.0.0.4"))
+		fetched, err = c.clientSet.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(fetched.Status.LoadBalancer.Ingress).To(HaveLen(1))
+		Expect(fetched.Status.LoadBalancer.Ingress[0].IP).To(Equal("10.0.0.4"))
 	})
 })
