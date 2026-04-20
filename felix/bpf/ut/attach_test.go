@@ -160,6 +160,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		// Verify expected programs were loaded based on AttachTypes
 		atIng := programsIng.Programs()
@@ -217,6 +219,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+			err = bpfEpMgr.ApplyBPFPrograms()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify expected programs were loaded based on AttachTypes
@@ -279,6 +283,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		})
 
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		ifstateMap = ifstateMapDump(commonMaps.IfStateMap)
@@ -346,6 +352,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		xdppm := jumpMapDump(commonMaps.XDPJumpMap)
 		Expect(xdppm).To(HaveLen(0))
@@ -362,6 +370,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify expected programs are loaded based on AttachTypes
@@ -388,6 +398,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify expected programs were loaded based on AttachTypes
@@ -462,6 +474,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		jumpMapLen := 3
 
@@ -481,6 +495,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateDown, host1.Attrs().Index))
 
 		err := bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
@@ -531,6 +547,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		})
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		// Policy indexes did not change ...
 		ifstateMap2 := ifstateMapDump(commonMaps.IfStateMap)
@@ -555,6 +573,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		err := bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		pmIng := jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
 		pmEgr := jumpMapDump(commonMaps.JumpMaps[hook.Egress])
@@ -573,7 +593,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		if err != nil {
 			deleteLink(workload3)
 		}
-
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
@@ -666,6 +687,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		// We got no new updates, we still have the same programs attached
 		attached2, err := bpf.ListCalicoAttached()
@@ -678,6 +701,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		// After restart and replaying state, verify expected programs were loaded
@@ -719,7 +744,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		if err != nil {
 			deleteLink(workload3)
 		}
-
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		wl2State := ifstateMap[ifstate.NewKey(uint32(workload2.Attrs().Index))]
@@ -762,6 +788,8 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep2", "4.3.2.1"))
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		pmIng = jumpMapDump(commonMaps.JumpMaps[hook.Ingress])
@@ -833,6 +861,8 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
+	Expect(err).NotTo(HaveOccurred())
 
 	ingressProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
@@ -900,6 +930,8 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 			},
 		})
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 	}
 	ingProg, err := tc.ListAttachedPrograms("workloadep1", hook.Ingress.String(), true)
@@ -1010,6 +1042,8 @@ func TestRepeatedAttach(t *testing.T) {
 		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep1"},
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
 	Expect(err).NotTo(HaveOccurred())
 
 	ingProg, err = tc.ListAttachedPrograms(ap.Iface, hook.Ingress.String(), true)
@@ -1161,6 +1195,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
+	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
@@ -1172,6 +1208,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	// the interface is still there. The pinned programs must remain.
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, workload0.Attrs().Index))
 	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
 	Expect(err).NotTo(HaveOccurred())
@@ -1191,6 +1229,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
+	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_egress")
@@ -1203,6 +1243,8 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateNotPresent, 0))
 	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
 	Expect(err).NotTo(HaveOccurred())
 	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
 	Expect(err).To(HaveOccurred())
@@ -1255,6 +1297,8 @@ func TestAttachTcx(t *testing.T) {
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
+	Expect(err).NotTo(HaveOccurred())
 	// Ensure there is no qdisc.
 	hasQdisc, err := tc.HasQdisc("workloadep0")
 	Expect(err).NotTo(HaveOccurred())
@@ -1295,6 +1339,8 @@ func TestAttachTcx(t *testing.T) {
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
 	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
+	Expect(err).NotTo(HaveOccurred())
 	progs, err = tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(len(progs)).To(Equal(1))
@@ -1323,6 +1369,8 @@ func TestAttachTcx(t *testing.T) {
 		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
 	})
 	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+	err = bpfEpMgr.ApplyBPFPrograms()
 	Expect(err).NotTo(HaveOccurred())
 	hasQdisc, err = tc.HasQdisc("workloadep0")
 	Expect(err).NotTo(HaveOccurred())
@@ -1380,6 +1428,8 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
+		Expect(err).NotTo(HaveOccurred())
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 
@@ -1409,6 +1459,8 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
+		Expect(err).NotTo(HaveOccurred())
+		err = bpfEpMgr.ApplyBPFPrograms()
 		Expect(err).NotTo(HaveOccurred())
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)

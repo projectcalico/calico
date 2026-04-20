@@ -379,6 +379,10 @@ type InternalDataplane struct {
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
+
+	// bpfEndpointManager is stored separately so that ApplyBPFPrograms() can be
+	// called explicitly after IP sets are written but before iptables is updated.
+	bpfEndpointManager *bpfEndpointManager
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -1018,6 +1022,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		dp.RegisterManager(bpfEndpointManager)
+		dp.bpfEndpointManager = bpfEndpointManager
 
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
@@ -1759,6 +1764,7 @@ type ManagerWithRouteRules interface {
 	Manager
 	GetRouteRules() []routeRules
 }
+
 
 type routeRules interface {
 	SetRule(rule *routerule.Rule)
@@ -2828,6 +2834,20 @@ func (d *InternalDataplane) apply() {
 
 	// Wait for the IP sets update to finish.  We can't update iptables until it has.
 	ipSetsWG.Wait()
+
+	// Now that IP sets are in place, attach BPF programs to interfaces.  This must
+	// happen after IP set updates so that policy rules referencing IP sets don't
+	// produce spurious denies for newly-added workloads whose IPs are freshly added
+	// to IP sets.
+	if d.bpfEndpointManager != nil {
+		err := d.bpfEndpointManager.ApplyBPFPrograms()
+		if err != nil {
+			log.WithError(err).Debug(
+				"couldn't apply BPF programs, will try again later")
+			d.dataplaneNeedsSync = true
+		}
+		d.reportHealth()
+	}
 
 	// Update tables, this should sever any references to now-unused IP sets.
 	var reschedDelayMutex sync.Mutex
