@@ -25,6 +25,8 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
@@ -594,10 +596,10 @@ func TestPopulateNodeConfig_IgnoredInterfaces_Custom(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/ignored_interfaces": "eth0,docker*",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.IgnoredInterfaces = []string{"eth0", "docker*"}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -611,34 +613,6 @@ func TestPopulateNodeConfig_IgnoredInterfaces_Custom(t *testing.T) {
 	assert.Contains(t, config.DirectInterfaces, `-"cali*"`)
 	assert.Contains(t, config.DirectInterfaces, `-"kube-ipvs*"`)
 	assert.Contains(t, config.DirectInterfaces, `"*"`)
-}
-
-func TestPopulateNodeConfig_NodeSpecificIgnoredInterfaces(t *testing.T) {
-	originalNodeName := NodeName
-	NodeName = "test-node"
-	defer func() { NodeName = originalNodeName }()
-
-	_ = os.Unsetenv("CALICO_ROUTER_ID")
-
-	cache := map[string]string{
-		"/calico/bgp/v1/host/test-node/ip_addr_v4":         "10.0.0.1",
-		"/calico/bgp/v1/global/as_num":                     "64512",
-		"/calico/bgp/v1/global/ignored_interfaces":         "global-if", // Global
-		"/calico/bgp/v1/host/test-node/ignored_interfaces": "node-if",   // Node-specific (should win)
-	}
-
-	c := newTestClient(cache, nil)
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
-	require.NoError(t, err)
-
-	// Node-specific interface should be present
-	assert.Contains(t, config.DirectInterfaces, `-"node-if"`)
-	// Global interface should NOT be present
-	assert.NotContains(t, config.DirectInterfaces, `-"global-if"`)
 }
 
 func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
@@ -1158,7 +1132,7 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// Should have 2 mesh peers (node-2 and node-3, excluding ourselves)
@@ -1200,7 +1174,7 @@ func TestProcessMeshPeers_IPv6(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 6)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 6)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 1)
@@ -1232,7 +1206,7 @@ func TestProcessMeshPeers_MeshDisabled(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// No peers should be added when mesh is disabled
@@ -1263,7 +1237,7 @@ func TestProcessMeshPeers_RouteReflector(t *testing.T) {
 	}
 
 	// Node is a route reflector - should skip mesh
-	err := c.processMeshPeers(config, "rr-cluster-1", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "rr-cluster-1", 4)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 0)
@@ -1294,7 +1268,7 @@ func TestProcessMeshPeers_SkipRouteReflectorPeers(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// Should only have node-3, node-2 is a route reflector
@@ -1328,7 +1302,7 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 2)
@@ -1356,27 +1330,47 @@ func TestProcessMeshPeers_WithPasswordAndRestartTime(t *testing.T) {
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":              string(meshConfigJSON),
-		"/calico/bgp/v1/global/node_mesh_password":     "secret123",
-		"/calico/bgp/v1/global/node_mesh_restart_time": "120",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":        "10.0.0.1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.NodeMeshMaxRestartTime = ptr.To(metav1.Duration{Duration: 120 * time.Second})
+	c.globalBGPConfig.Spec.NodeMeshPassword = &v3.BGPPassword{
+		SecretKeyRef: &v1.SecretKeySelector{
+			LocalObjectReference: v1.LocalObjectReference{
+				Name: "",
+			},
+			Key: "",
+		},
+	}
+	c.secretWatcher = &fakeSecret{secret: "secret123"}
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	require.Len(t, config.Peers, 1)
 	assert.Equal(t, "secret123", config.Peers[0].Password)
 	assert.Equal(t, "120", config.Peers[0].GracefulRestart)
 }
+
+type fakeSecret struct {
+	secret string
+}
+
+func (s *fakeSecret) GetSecret(name, key string) (string, error) {
+	return s.secret, nil
+}
+
+func (s *fakeSecret) MarkStale() {}
+
+func (s *fakeSecret) SweepStale() {}
 
 func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 	originalNodeName := NodeName
@@ -1647,7 +1641,7 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 	}
 
 	// Process all peer types
-	err := c.processPeers(config, 4)
+	err := c.processPeers(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Should have: 1 mesh peer (node-2), 1 global peer, 1 node peer
