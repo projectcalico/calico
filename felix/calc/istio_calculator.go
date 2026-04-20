@@ -72,7 +72,7 @@ func NewIstioCalculator(
 }
 
 func (ic *IstioCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok && cs == istioSelector {
+	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		// Always pass a newly created or cloned `computedData` instance to the handler.
 		// This ensures the dataplane never receives a mutable object shared elsewhere.
 		ic.onEndpointComputedData(wepKey, EPCompDataKindIstio, &ComputedIstioEndpoint{})
@@ -80,7 +80,7 @@ func (ic *IstioCalculator) OnComputedSelectorMatch(cs string, epKey model.Endpoi
 }
 
 func (ic *IstioCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok && cs == istioSelector {
+	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		ic.onEndpointComputedData(wepKey, EPCompDataKindIstio, nil)
 	}
 }

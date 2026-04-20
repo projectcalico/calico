@@ -220,9 +220,6 @@ func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.End
 func (lmc *LiveMigrationCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
-	if _, ok := lmc.selectorKeys[cs]; !ok {
-		return
-	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
@@ -243,9 +240,6 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 }
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
-	if _, ok := lmc.selectorKeys[cs]; !ok {
-		return
-	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
