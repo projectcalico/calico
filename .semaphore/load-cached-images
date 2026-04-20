@@ -4,11 +4,6 @@
 # calico/go-build if it's missing (blocks that run "docker system prune" wipe
 # it between the global prologue and the test commands, which would otherwise
 # cold-pull from Docker Hub).
-#
-# Downstream consumers must run with IMAGE_PREBUILT=true so that their
-# Makefiles short-circuit the image rebuild chain and trust what we loaded
-# here. See cmd/calico/Makefile, node/Makefile, and whisker/Makefile for the
-# gate.
 
 set -euo pipefail
 
@@ -28,7 +23,6 @@ load_image() {
     rm -f "/tmp/${gcs_path}"
 }
 
-load_image "calico/calico"  "calico-image.tar.zst"
 load_image "calico/node"    "node-image.tar.zst"
 load_image "calico/whisker" "whisker-image.tar.zst"
 
