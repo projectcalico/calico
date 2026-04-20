@@ -202,9 +202,9 @@ func TestARC_RemoveComputedSelector(t *testing.T) {
 	}
 }
 
-// --- Multi-caller AddExtraComputedSelector tests ---
+// --- Multi-listener AddExtraComputedSelector tests ---
 
-func TestARC_MultiCaller_BothGetCallbacks(t *testing.T) {
+func TestARC_MultiListener_BothGetCallbacks(t *testing.T) {
 	arc, _ := createARC()
 	listenerA := &testComputedSelectorListener{}
 	listenerB := &testComputedSelectorListener{}
@@ -232,7 +232,7 @@ func TestARC_MultiCaller_BothGetCallbacks(t *testing.T) {
 	}
 }
 
-func TestARC_MultiCaller_RemoveOneStillActive(t *testing.T) {
+func TestARC_MultiListener_RemoveOneStillActive(t *testing.T) {
 	RegisterTestingT(t)
 	arc, _ := createARC()
 	listenerA := &testComputedSelectorListener{}
@@ -251,7 +251,7 @@ func TestARC_MultiCaller_RemoveOneStillActive(t *testing.T) {
 	listenerA.computedSelectorMatches = nil
 	listenerB.computedSelectorMatches = nil
 
-	// Remove caller A — B still holds a reference.
+	// Remove listener A — B still holds a reference.
 	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
 
 	// Expect match-stopped to listener A only
@@ -277,7 +277,7 @@ func TestARC_MultiCaller_RemoveOneStillActive(t *testing.T) {
 	Expect(listenerB.computedSelectorMatchStops).To(HaveLen(1))
 }
 
-func TestARC_MultiCaller_RemoveBothDeactivates(t *testing.T) {
+func TestARC_MultiListener_RemoveBothDeactivates(t *testing.T) {
 	arc, _ := createARC()
 	listenerA := &testComputedSelectorListener{}
 	listenerB := &testComputedSelectorListener{}
@@ -293,14 +293,14 @@ func TestARC_MultiCaller_RemoveBothDeactivates(t *testing.T) {
 	}
 	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
 
-	// Remove both callers.
+	// Remove both listeners.
 	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
 	arc.RemoveExtraComputedSelector("has(foo)", listenerB)
 
 	// Both listeners should have match-stopped.
 	for name, l := range map[string]*testComputedSelectorListener{"A": listenerA, "B": listenerB} {
 		if len(l.computedSelectorMatchStops) != 1 {
-			t.Fatalf("listener %s: expected 1 match stop after removing both callers, got %d", name, len(l.computedSelectorMatchStops))
+			t.Fatalf("listener %s: expected 1 match stop after removing both listeners, got %d", name, len(l.computedSelectorMatchStops))
 		}
 	}
 
@@ -320,16 +320,16 @@ func TestARC_MultiCaller_RemoveBothDeactivates(t *testing.T) {
 
 	for name, l := range map[string]*testComputedSelectorListener{"A": listenerA, "B": listenerB} {
 		if len(l.computedSelectorMatches) != 0 {
-			t.Errorf("listener %s: expected no matches after both callers removed, got %d", name, len(l.computedSelectorMatches))
+			t.Errorf("listener %s: expected no matches after both listeners removed, got %d", name, len(l.computedSelectorMatches))
 		}
 	}
 }
 
-func TestARC_MultiCaller_DuplicateAddFromSameCaller(t *testing.T) {
+func TestARC_MultiListener_DuplicateAddFromSameListener(t *testing.T) {
 	arc, _ := createARC()
 	listener := &testComputedSelectorListener{}
 
-	// Same caller adds the same selector twice.
+	// Same listener adds the same selector twice.
 	arc.AddExtraComputedSelector("has(foo)", listener)
 	arc.AddExtraComputedSelector("has(foo)", listener)
 
@@ -345,7 +345,7 @@ func TestARC_MultiCaller_DuplicateAddFromSameCaller(t *testing.T) {
 		t.Fatalf("expected 1 match, got %d", len(listener.computedSelectorMatches))
 	}
 
-	// A single Remove should be enough since the set deduplicates the caller.
+	// A single Remove should be enough since the set deduplicates the listener.
 	arc.RemoveExtraComputedSelector("has(foo)", listener)
 
 	if len(listener.computedSelectorMatchStops) != 1 {
@@ -353,7 +353,7 @@ func TestARC_MultiCaller_DuplicateAddFromSameCaller(t *testing.T) {
 	}
 }
 
-func TestARC_MultiCaller_RemoveWithoutAdd(t *testing.T) {
+func TestARC_MultiListener_RemoveWithoutAdd(t *testing.T) {
 	arc, _ := createARC()
 	listener := &testComputedSelectorListener{}
 

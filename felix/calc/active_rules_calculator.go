@@ -104,7 +104,7 @@ type ActiveRulesCalculator struct {
 
 type computedSelectorKey struct {
 	selector string
-	caller   ComputedSelectorListener
+	listener ComputedSelectorListener
 }
 
 func NewActiveRulesCalculator() *ActiveRulesCalculator {
@@ -298,23 +298,24 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 // OnComputedSelectorMatch and OnComputedSelectorMatchStopped callbacks when that selector
 // matches/stops matching local endpoints, allowing the expensive selector index to be shared.
 //
-// Registration is tracked per caller.  The caller identity must therefore be stable, and the same
-// caller value must be passed to RemoveExtraComputedSelector to remove that caller's registration.
-func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string, caller ComputedSelectorListener) {
+// Registration is tracked per listener.  The listener identity must therefore be stable, and the
+// same listener value must be passed to RemoveExtraComputedSelector to remove that listener's
+// registration.
+func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string, listener ComputedSelectorListener) {
 	sel, err := selector.Parse(cs)
 	if err != nil {
 		log.WithError(err).Panicf("Failed to parse computed selector %#v", cs)
 	}
 	arc.labelIndex.UpdateSelector(computedSelectorKey{
 		selector: cs,
-		caller:   caller,
+		listener: listener,
 	}, sel)
 }
 
-func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string, caller ComputedSelectorListener) {
+func (arc *ActiveRulesCalculator) RemoveExtraComputedSelector(cs string, listener ComputedSelectorListener) {
 	arc.labelIndex.DeleteSelector(computedSelectorKey{
 		selector: cs,
-		caller:   caller,
+		listener: listener,
 	})
 }
 
@@ -381,9 +382,9 @@ func (arc *ActiveRulesCalculator) updateEndpointProfileIDs(key model.Key, profil
 
 func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
 	if key, ok := selID.(computedSelectorKey); ok {
-		// ComputedSelector callers are only interested in endpoints.
+		// ComputedSelector listeners are only interested in endpoints.
 		if labelId, ok := labelId.(model.EndpointKey); ok {
-			key.caller.OnComputedSelectorMatch(key.selector, labelId)
+			key.listener.OnComputedSelectorMatch(key.selector, labelId)
 		}
 		return
 	}
@@ -412,9 +413,9 @@ func (arc *ActiveRulesCalculator) onMatchStarted(selID, labelId any) {
 
 func (arc *ActiveRulesCalculator) onMatchStopped(selID, labelId any) {
 	if key, ok := selID.(computedSelectorKey); ok {
-		// ComputedSelector callers are only interested in endpoints.
+		// ComputedSelector listeners are only interested in endpoints.
 		if labelId, ok := labelId.(model.EndpointKey); ok {
-			key.caller.OnComputedSelectorMatchStopped(key.selector, labelId)
+			key.listener.OnComputedSelectorMatchStopped(key.selector, labelId)
 		}
 		return
 	}
