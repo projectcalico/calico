@@ -738,9 +738,21 @@ func (c *client) buildExportFilter(
 ) string {
 	var filterLines []string
 
-	// Default krt_metric to our normal route priority, if not already set.
+	// If krt_metric isn't set (BGP-learned route), derive it from
+	// bgp_local_pref if available, otherwise default to the normal route
+	// priority. This never touches krt_metric when Felix already set it
+	// (kernel-learned route).
+	//
+	// This matters for re-export: when a route reflector or eBGP hub
+	// re-exports an iBGP-learned route, krt_metric is undefined (it's a
+	// kernel-only attribute, not carried over BGP) but bgp_local_pref
+	// carries the original priority from the originating node. Without
+	// recovering krt_metric from bgp_local_pref, the subsequent
+	// "bgp_local_pref = INT_MAX - krt_metric" line would overwrite it
+	// with the default priority (1024), breaking BGPFilter Priority
+	// matching and preventing community tags from being added.
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		fmt.Sprintf("if (!defined(krt_metric)) then { if (defined(bgp_local_pref)) then { krt_metric = %d - bgp_local_pref; } else { krt_metric = %d; } }", template.BirdIntMaxValue, normalRoutePriority),
 	)
 
 	// Convert from krt_metric to BGP LOCAL_PREF.  Higher LOCAL_PREF = higher priority, but
