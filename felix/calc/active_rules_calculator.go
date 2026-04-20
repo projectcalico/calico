@@ -301,6 +301,8 @@ func (arc *ActiveRulesCalculator) OnUpdate(update api.Update) (_ bool) {
 // Registration is tracked per listener.  The listener identity must therefore be stable, and the
 // same listener value must be passed to RemoveExtraComputedSelector to remove that listener's
 // registration.
+//
+// Listener values must be comparable, because they will used internally as part of a map key.
 func (arc *ActiveRulesCalculator) AddExtraComputedSelector(cs string, listener ComputedSelectorListener) {
 	sel, err := selector.Parse(cs)
 	if err != nil {
