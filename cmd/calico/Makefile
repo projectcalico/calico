@@ -40,12 +40,15 @@ endif
 
 # BuildKit registry cache for the calico image. One cache tag per
 # arch/FIPS variant so concurrent variant builds don't stomp on each
-# other's cache. Branch builds set STORE_BUILD_CACHE=true to push cache
-# back with mode=max; PR and local dev builds read-only from the cache.
+# other's cache. The prereq "Build: calico image" job sets
+# BUILDX_PUSH_CACHE=true to push cache back with mode=max; every other
+# build reads from the cache only. Kept separate from STORE_BUILD_CACHE
+# (the go-pkg-cache GCS tarball flag) because they need different
+# credentials on CI.
 BUILDCACHE_REGISTRY ?= gcr.io/unique-caldron-775/buildcache/calico/calico
 BUILDX_BUILDER ?= calico-buildx
 BUILDX_CACHE_FROM = --cache-from=type=registry,ref=$(BUILDCACHE_REGISTRY):$(CACHE_TAG)
-ifeq ($(STORE_BUILD_CACHE),true)
+ifeq ($(BUILDX_PUSH_CACHE),true)
 BUILDX_CACHE_TO = --cache-to=type=registry,ref=$(BUILDCACHE_REGISTRY):$(CACHE_TAG),mode=max
 else
 BUILDX_CACHE_TO =

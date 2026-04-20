@@ -373,20 +373,28 @@ blocks:
   - name: "Build: calico image"
     # Prime the BuildKit registry cache for the combined calico image so
     # downstream blocks (felix, typha, cni-plugin, kube-controllers, cmd/calico
-    # multi-arch) pull warm layers from gcr.io instead of compiling cold. On
-    # branch builds STORE_BUILD_CACHE=true writes the cache back with mode=max
-    # so subsequent runs start hot.
+    # multi-arch) pull warm layers from gcr.io instead of compiling cold.
+    # BUILDX_PUSH_CACHE=true writes the cache back with mode=max so subsequent
+    # runs start hot.
+    #
+    # google-service-account-for-gcr is mounted at the same path as the global
+    # google-service-account-for-gce secret, so it overrides the active SA for
+    # this job — that one has Artifact Registry Writer (needed to push the
+    # BuildKit cache) plus Storage Object Viewer (enough to restore the working
+    # copy and go-build image from GCS).
     run:
       when: "true"
     dependencies: []
     task:
+      secrets:
+        - name: google-service-account-for-gcr
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico-image"
       jobs:
         - name: "Build and cache calico image"
           env_vars:
-            - name: STORE_BUILD_CACHE
+            - name: BUILDX_PUSH_CACHE
               value: "true"
           commands:
             - gcloud auth configure-docker gcr.io --quiet
