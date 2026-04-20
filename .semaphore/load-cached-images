@@ -1,0 +1,44 @@
+#!/bin/bash
+
+# Load pre-built docker images from the GCS workflow cache and also rehydrate
+# calico/go-build if it's missing (blocks that run "docker system prune" wipe
+# it between the global prologue and the test commands, which would otherwise
+# cold-pull from Docker Hub).
+
+set -euo pipefail
+
+ARCH=${ARCH:-amd64}
+
+load_image() {
+    local name=$1
+    local gcs_path=$2
+
+    if ! gcloud storage cp "${GCS_WORKFLOW_DIR}/${gcs_path}" "/tmp/${gcs_path}" 2>/dev/null; then
+        echo "No cached ${name} image found."
+        return
+    fi
+
+    echo "Loading cached ${name} image..."
+    zstd -dc "/tmp/${gcs_path}" | docker load
+    rm -f "/tmp/${gcs_path}"
+}
+
+load_image "calico/node"    "node-image.tar.zst"
+load_image "calico/whisker" "whisker-image.tar.zst"
+
+# Reload calico/go-build if it's missing. The global prologue loads it once
+# per job, but blocks that run "docker system prune" (e.g. e2e) wipe it before
+# the test commands run, which would then cold-pull from Docker Hub.
+REPO_ROOT=$(git rev-parse --show-toplevel)
+GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' "${REPO_ROOT}/metadata.mk" | cut -d'=' -f2 | tr -d '[:space:]')
+image="calico/go-build:${GO_BUILD_VER}"
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+    cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+    if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+        echo "Reloading ${image} from GCS cache"
+        zstd -dc /tmp/go-build.tar.zst | docker load
+        rm -f /tmp/go-build.tar.zst
+    else
+        echo "No GCS cache for ${image}, docker will pull from Docker Hub if needed"
+    fi
+fi
