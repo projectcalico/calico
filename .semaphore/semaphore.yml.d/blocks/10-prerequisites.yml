@@ -177,6 +177,10 @@
             value: "true"
         commands:
           - make -C cmd/calico image
+          # Also build the cgo and race variants so their GOCACHE fingerprints
+          # land in the shared build cache. Felix FV consumes calico-cgo (for
+          # BPF) or calico-race (when FV_RACE_DETECTOR_ENABLED=true).
+          - make -C cmd/calico build-cgo build-race
           - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
           - zstd -3 --rm /tmp/calico-image.tar
           - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"

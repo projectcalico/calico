@@ -47,9 +47,10 @@ clean:
 ut:
 	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go test -cover -count=1 ."
 
-.PHONY: build build-cgo
+.PHONY: build build-cgo build-race
 build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
+build-race: $(BINDIR)/calico-race-$(ARCH)
 
 $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 ifeq ($(FIPS),true)
@@ -66,6 +67,19 @@ else ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 else
 	$(call build_binary, ./, $@)
 endif
+
+# Race-enabled combined binary for Felix FV runs. The race detector requires
+# CGO so we always build with CGO_ENABLED=1 and pull in libbpf the same way
+# the cgo variant does.
+$(BINDIR)/calico-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+	mkdir -p $(BINDIR)
+	$(DOCKER_RUN) \
+		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
+		-e CGO_CFLAGS=$(CGO_CFLAGS) \
+		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
 
 $(LIBBPF_A):
 	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
