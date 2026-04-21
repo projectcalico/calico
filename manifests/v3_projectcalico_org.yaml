@@ -37760,6 +37760,12 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
