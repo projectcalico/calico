@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -516,13 +516,15 @@ func mustInitDatastore(client client.Interface) {
 
 func AssignIP(workload, addr, hostname string, client client.Interface) {
 	// Assign the workload's IP in IPAM, this will trigger calculation of routes.
-	err := client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-		IP:       cnet.MustParseIP(addr),
-		HandleID: &workload,
-		Attrs: map[string]string{
-			ipam.AttributeNode: hostname,
-		},
-		Hostname: hostname,
-	})
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	// Retry briefly to ride out transient API server errors under CI load.
+	EventuallyWithOffset(1, func() error {
+		return client.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+			IP:       cnet.MustParseIP(addr),
+			HandleID: &workload,
+			Attrs: map[string]string{
+				ipam.AttributeNode: hostname,
+			},
+			Hostname: hostname,
+		})
+	}, "10s", "500ms").ShouldNot(HaveOccurred())
 }
