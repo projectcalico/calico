@@ -24,12 +24,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	// eventSize must match sizeof(struct tuple) in ringbuf_events.c:
-	// event_header(8) + ip_src(4) + ip_dst(4) + port_src(2) + port_dst(2) + proto(1) + _pad(1027)
-	eventSize uint32 = 8 + 4 + 4 + 2 + 2 + 1 + 1027
-	rbSize    int    = 1024 * 1024
-)
+// eventSize must match sizeof(struct tuple) in ringbuf_events.c:
+// event_header(8) + ip_src(4) + ip_dst(4) + port_src(2) + port_dst(2) + proto(1) + _pad(1027)
+const eventSize uint32 = 8 + 4 + 4 + 2 + 2 + 1 + 1027
 
 func TestRingBufBasic(t *testing.T) {
 	RegisterTestingT(t)
@@ -40,8 +37,7 @@ func TestRingBufBasic(t *testing.T) {
 	ipv4 := iphdr.(*layers.IPv4)
 	udp := l4.(*layers.UDP)
 
-	rb := newTestRingBuf()
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	// Send a UDP packet and verify the event.
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
@@ -95,7 +91,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb := newTestRingBuf()
+	rb := newTestRingBuf(t)
 
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -110,8 +106,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 	// Close the first reader and create a new one on the same map.
 	rb.Close()
 
-	rb2 := newTestRingBuf()
-	defer rb2.Close()
+	rb2 := newTestRingBuf(t)
 
 	// Send another event — the new reader should pick it up.
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
@@ -140,8 +135,7 @@ func TestRingBufFillup(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb := newTestRingBuf()
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes) so
 	// this test's accounting isn't affected by earlier ring-buffer-full tests.
@@ -224,8 +218,7 @@ func TestRingBufMultipleEvents(t *testing.T) {
 	RegisterTestingT(t)
 	hostIP = node1ip
 
-	rb := newTestRingBuf()
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	numEvents := 10
 	for range numEvents {
