@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -4073,8 +4073,7 @@ func (m *bpfEndpointManager) writePolicyDebugInfo(insns []asm.Insns, ifaceName s
 
 	filename := bpf.PolicyDebugJSONFileName(ifaceName, strings.ToLower(polDir), ipFamily)
 	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	err := encoder.Encode(policyDebugInfo)
+	err := json.MarshalWrite(buffer, policyDebugInfo)
 	if err != nil {
 		return err
 	}

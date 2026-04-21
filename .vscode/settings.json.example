@@ -1,0 +1,8 @@
+{
+  "go.toolsEnvVars": {
+    "GOEXPERIMENT": "jsonv2"
+  },
+  "go.testEnvVars": {
+    "GOEXPERIMENT": "jsonv2"
+  }
+}

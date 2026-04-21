@@ -16,7 +16,8 @@ package commands
 
 import (
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"net"
@@ -236,23 +237,27 @@ type ctEntryJSON struct {
 	ActiveAgo string   `json:"active_ago"`
 	TCPState  string   `json:"tcp_state,omitempty"`
 	// For nat-forward entries: the key of the reverse entry this points to.
+	// Numeric fields use omitzero (v2 semantics) to preserve the v1 omitempty
+	// behavior of omitting zero values for these NAT-only fields.
 	RevProto string `json:"rev_proto,omitempty"`
 	RevAddrA string `json:"rev_addr_a,omitempty"`
-	RevPortA uint16 `json:"rev_port_a,omitempty"`
+	RevPortA uint16 `json:"rev_port_a,omitzero"`
 	RevAddrB string `json:"rev_addr_b,omitempty"`
-	RevPortB uint16 `json:"rev_port_b,omitempty"`
+	RevPortB uint16 `json:"rev_port_b,omitzero"`
 }
 
 // ctConnectionJSON is a logical connection in pretty JSON mode.
 // For NAT connections, forward and reverse entries are grouped.
 type ctConnectionJSON struct {
-	Type        string   `json:"type"`
-	Proto       string   `json:"proto"`
-	Src         string   `json:"src"`
-	Dst         string   `json:"dst"`
-	OrigDst     string   `json:"orig_dst,omitempty"`
-	TunnelIP    string   `json:"tunnel_ip,omitempty"`
-	OrigSrcPort uint16   `json:"orig_src_port,omitempty"`
+	Type     string `json:"type"`
+	Proto    string `json:"proto"`
+	Src      string `json:"src"`
+	Dst      string `json:"dst"`
+	OrigDst  string `json:"orig_dst,omitempty"`
+	TunnelIP string `json:"tunnel_ip,omitempty"`
+	// omitzero preserves v1 omitempty behavior for this numeric field that is
+	// only populated when FlagHostPSNAT is set.
+	OrigSrcPort uint16   `json:"orig_src_port,omitzero"`
 	Flags       []string `json:"flags"`
 	ActiveAgo   string   `json:"active_ago"`
 	TCPState    string   `json:"tcp_state,omitempty"`
@@ -336,9 +341,7 @@ func (cmd *conntrackDumpCmd) dumpRawJSON(
 		return fmt.Errorf("failed to iterate over conntrack entries: %w", err)
 	}
 
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(entries)
+	return json.MarshalWrite(cmd.OutOrStdout(), entries, jsontext.WithIndent("  "))
 }
 
 func (cmd *conntrackDumpCmd) dumpPrettyJSON(
@@ -419,9 +422,7 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		connections = append(connections, conn)
 	}
 
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(connections)
+	return json.MarshalWrite(cmd.OutOrStdout(), connections, jsontext.WithIndent("  "))
 }
 
 // orientedAddrs returns src and dst as "ip:port" strings, respecting
@@ -884,9 +885,7 @@ func (cmd *conntrackStatsCmd) Run(c *cobra.Command, _ []string) {
 			TCPReset:       cmd.reset,
 			TCPSynSent:     cmd.synSent,
 		}
-		enc := json.NewEncoder(cmd.OutOrStdout())
-		enc.SetIndent("", "  ")
-		if encErr := enc.Encode(stats); encErr != nil {
+		if encErr := json.MarshalWrite(cmd.OutOrStdout(), stats, jsontext.WithIndent("  ")); encErr != nil {
 			log.WithError(encErr).Error("Failed to encode JSON")
 		}
 	} else {

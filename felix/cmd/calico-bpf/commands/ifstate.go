@@ -15,7 +15,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -104,9 +105,7 @@ func dumpIfState(cmd *cobra.Command) error {
 	}
 
 	if *jsonOutput {
-		enc := json.NewEncoder(cmd.OutOrStdout())
-		enc.SetIndent("", "  ")
-		return enc.Encode(jsonEntries)
+		return json.MarshalWrite(cmd.OutOrStdout(), jsonEntries, jsontext.WithIndent("  "))
 	}
 
 	return err

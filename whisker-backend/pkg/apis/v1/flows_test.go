@@ -22,10 +22,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
-	"github.com/projectcalico/calico/lib/std/ptr"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 )
 
@@ -104,7 +104,7 @@ func TestFlowsFilterHints(t *testing.T) {
 				"type":     {"SourceName"},
 			}),
 			expected: &v1.FlowFilterHintsRequest{
-				Type:       ptr.ToPtr(v1.FilterType(proto.FilterType_FilterTypeSourceName)),
+				Type:       ptr.To(v1.FilterType(proto.FilterType_FilterTypeSourceName)),
 				Pagination: v1.Pagination{PageSize: 1, Page: 1}},
 		},
 	}

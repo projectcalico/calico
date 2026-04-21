@@ -15,7 +15,7 @@
 package windataplane
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"regexp"

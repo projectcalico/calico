@@ -19,6 +19,7 @@ Project Calico is a large monorepo providing container networking and security f
 - **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
 - **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
+- **ALWAYS** set `GOEXPERIMENT=jsonv2` when running `go build`/`go test` outside of Make — the project uses `encoding/json/v2`
 
 ## Essential Build Commands
 

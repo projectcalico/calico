@@ -16,7 +16,7 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -214,7 +214,11 @@ func calculateAnnotationPatch(revision string, uid *types.UID, annotations map[s
 		metadata["uid"] = uid
 	}
 
-	return json.Marshal(patch)
+	// Deterministic keeps the serialized patch byte-stable across calls
+	// with identical content. The Kubernetes API would accept either
+	// ordering, but stable bytes make debug logs (e.g. the `patch` field
+	// logged by the caller) diffable and easier to reason about.
+	return json.Marshal(patch, json.Deterministic(true))
 }
 
 func (c *WorkloadEndpointClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {

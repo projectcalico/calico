@@ -1,7 +1,7 @@
 package azure
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"

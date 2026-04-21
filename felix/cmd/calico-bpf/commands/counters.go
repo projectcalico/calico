@@ -15,7 +15,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 
@@ -220,9 +221,7 @@ func dumpInterfaceJSON(cmd *cobra.Command, iface *net.Interface, values [][]uint
 		result.Counters = append(result.Counters, entry)
 	}
 
-	enc := json.NewEncoder(cmd.OutOrStdout())
-	enc.SetIndent("", "  ")
-	return enc.Encode(result)
+	return json.MarshalWrite(cmd.OutOrStdout(), result, jsontext.WithIndent("  "))
 }
 
 func flushInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
