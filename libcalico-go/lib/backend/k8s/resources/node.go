@@ -16,7 +16,7 @@ package resources
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"
@@ -500,7 +500,7 @@ func mergeCalicoAndK8sLabels(calicoNode *internalapi.Node, k8sNode *kapiv1.Node)
 	if calicoNode.Annotations == nil {
 		calicoNode.Annotations = map[string]string{}
 	}
-	bytes, err := json.Marshal(k8sNode.Labels)
+	bytes, err := json.Marshal(k8sNode.Labels, json.Deterministic(true))
 	if err != nil {
 		log.WithError(err).Errorf("Error marshalling node labels")
 		return err

@@ -15,7 +15,7 @@
 package rbac_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"

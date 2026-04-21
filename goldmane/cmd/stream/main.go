@@ -16,7 +16,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"flag"
 	"fmt"
 
@@ -75,7 +76,7 @@ func main() {
 		}
 
 		// Print the flow.
-		j, err := json.MarshalIndent(flow, "", "  ")
+		j, err := json.Marshal(flow, jsontext.WithIndent("  "))
 		if err != nil {
 			panic(err)
 		}
