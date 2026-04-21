@@ -76,11 +76,11 @@ var _ = Describe("NoEncap Manager", func() {
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {
-		noencapMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
 			Ipv4Addr: "172.0.0.2",
 		})
-		noencapMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+		noencapMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node2",
 			Ipv4Addr: "172.0.2.2",
 		})
@@ -158,11 +158,11 @@ var _ = Describe("NoEncap Manager", func() {
 	})
 
 	It("successfully adds a IPv6 route to the noEncap interface", func() {
-		noencapMgrV6.OnUpdate(&proto.HostMetadataV4V6Update{
+		noencapMgrV6.OnUpdate(&proto.HostMetadataV6Update{
 			Hostname: "node1",
 			Ipv6Addr: "fc00:10:96::2",
 		})
-		noencapMgrV6.OnUpdate(&proto.HostMetadataV4V6Update{
+		noencapMgrV6.OnUpdate(&proto.HostMetadataV6Update{
 			Hostname: "node2",
 			Ipv6Addr: "fc00:10:10::1",
 		})
