@@ -212,7 +212,6 @@ if ${USE_TYPHA}; then
        --name ${prefix}-typha \
        -e CALICO_DATASTORE_TYPE=kubernetes \
        -e TYPHA_LOGSEVERITYSCREEN=${TYPHA_LOG_LEVEL} \
-       -e TYPHA_LOGFILEPATH=none \
        -e TYPHA_DATASTORETYPE=kubernetes \
        -e K8S_API_ENDPOINT=${k8s_api_endpoint} \
        -e K8S_INSECURE_SKIP_TLS_VERIFY=true \
@@ -220,7 +219,7 @@ if ${USE_TYPHA}; then
        -w /testcode/k8sfv/output \
        --restart=on-failure:2 \
        $FV_TYPHAIMAGE \
-       ${FV_TYPHACMD}
+       component typha
     typha_ip=$(get_container_ip ${prefix}-typha)
     typha_hostname=$(get_container_hostname ${prefix}-typha)
     typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"

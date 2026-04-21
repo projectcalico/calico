@@ -63,7 +63,6 @@ SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
 FV_TYPHAIMAGE?=calico:latest-$(BUILDARCH)
-FV_TYPHACMD?=component typha
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
@@ -320,8 +319,8 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 REMOTE_DEPS=build-calico-image
 
 # Typha runs from the combined calico image as `component typha` (see
-# FV_TYPHAIMAGE / FV_TYPHACMD). For local FV runs we build the image here; in
-# CI it is preloaded from the calico-image GCS cache.
+# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
+# preloaded from the calico-image GCS cache.
 build-calico-image:
 	$(MAKE) -C ../cmd/calico image
 
@@ -352,7 +351,6 @@ build-fv-env: build fv-prereqs
 	@echo "FV_FELIXIMAGE=$(FV_FELIXIMAGE)" > .env
 	@echo "FV_ETCDIMAGE=$(ETCD_IMAGE)-$(ARCH)" >> .env
 	@echo "FV_TYPHAIMAGE=$(FV_TYPHAIMAGE)" >> .env
-	@echo "FV_TYPHACMD=$(FV_TYPHACMD)" >> .env
 	@echo "FV_K8SIMAGE=$(FV_K8SIMAGE)" >> .env
 	@echo "CERTS_PATH=$(CERTS_PATH)" >> .env
 	@echo "PRIVATE_KEY=`pwd`/private.key" >> .env
@@ -381,7 +379,6 @@ fv-no-prereqs:
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	  FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
-	  FV_TYPHACMD="$(FV_TYPHACMD)" \
 	  FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	  FV_NUM_BATCHES=$(FV_NUM_BATCHES) \
 	  FV_BATCHES_TO_RUN="$(FV_BATCHES_TO_RUN)" \
@@ -452,7 +449,6 @@ K8SFV_GO_FILES:=$(shell find ./$(K8SFV_DIR) -name prometheus -prune -o -type f -
 k8sfv-test: $(REMOTE_DEPS) $(FELIX_CONTAINER_CREATED) $(FV_BINARY) bin/k8sfv.test
 	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
-	FV_TYPHACMD="$(FV_TYPHACMD)" \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	FV_K8SIMAGE=$(FV_K8SIMAGE) \
 	FV_BINARY=$(FV_BINARY) \

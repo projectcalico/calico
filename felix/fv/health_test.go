@@ -39,7 +39,6 @@ import (
 	"math/rand"
 	gonet "net"
 	"net/http"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -180,9 +179,7 @@ var _ = infrastructure.DatastoreDescribe("_HEALTH_ _BPF-SAFE_ health tests", []a
 			"-e", "TYPHA_DEBUGMEMORYPROFILEPATH=\"heap-<timestamp>\"",
 			utils.Config.TyphaImage,
 		)
-		if cmd := strings.TrimSpace(utils.Config.TyphaCmd); cmd != "" {
-			args = append(args, strings.Fields(cmd)...)
-		}
+		args = append(args, utils.TyphaCmd...)
 		typhaContainer = containers.Run("typha",
 			containers.RunOpts{AutoRemove: true},
 			args...)

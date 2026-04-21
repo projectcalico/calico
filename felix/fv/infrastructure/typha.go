@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 
@@ -70,12 +69,7 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 	}
 
 	args = append(args, utils.Config.TyphaImage)
-	// The combined calico image is entered with a `component typha` subcommand
-	// rather than running the typha binary directly, so plumb through any
-	// command tokens after the image.
-	if cmd := strings.TrimSpace(utils.Config.TyphaCmd); cmd != "" {
-		args = append(args, strings.Fields(cmd)...)
-	}
+	args = append(args, utils.TyphaCmd...)
 
 	c := containers.Run("typha",
 		containers.RunOpts{AutoRemove: true},

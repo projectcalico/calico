@@ -49,9 +49,12 @@ type EnvConfig struct {
 	EtcdImage    string `default:"quay.io/coreos/etcd"`
 	K8sImage     string `default:"calico/go-build:latest"`
 	TyphaImage   string `default:"calico/calico:latest"`
-	TyphaCmd     string `default:"component typha"`
 	BusyboxImage string `default:"busybox:latest"`
 }
+
+// TyphaCmd is the subcommand used to launch typha inside the combined
+// calico image.
+var TyphaCmd = []string{"component", "typha"}
 
 var Config EnvConfig
 
