@@ -587,11 +587,13 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		svcKey, err := serviceKeyFromService(&svc)
 		Expect(err).ToNot(HaveOccurred())
 
+		automatic := apiv3.Automatic
 		ipv4Pool := apiv3.IPPool{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-pool"},
 			Spec: apiv3.IPPoolSpec{
-				CIDR:        "10.0.0.0/24",
-				AllowedUses: []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+				CIDR:           "10.0.0.0/24",
+				AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseLoadBalancer},
+				AssignmentMode: &automatic,
 			},
 		}
 		c.ipPools["test-pool"] = ipv4Pool
