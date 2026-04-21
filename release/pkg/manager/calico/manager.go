@@ -578,18 +578,22 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		return fmt.Errorf("download previous helm index from %s: %w", indexURL, err)
 	}
 
-	// Create tmp directory for building index and copy chart there.
+	// Create tmp directory for building index and hard-link charts there.
 	tmpChartsDir := filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()))
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
+	defer func() {
+		if err := os.RemoveAll(tmpChartsDir); err != nil {
+			logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
+		}
+	}()
 
-	// Copy charts to temp dir.
 	for _, chart := range utils.AllReleaseCharts() {
 		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
 		destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
-		if err := utils.CopyFile(srcChart, destChart); err != nil {
-			return fmt.Errorf("error copying %s chart to temp dir for building helm index: %w", chart, err)
+		if err := os.Link(srcChart, destChart); err != nil {
+			return fmt.Errorf("linking %s chart to temp dir for building helm index: %w", chart, err)
 		}
 	}
 
