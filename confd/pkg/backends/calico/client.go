@@ -33,6 +33,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/confd/pkg/backends"
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -115,6 +116,10 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 	// Extract the backend client from the v3 client.
 	bc := cc.(backendClientAccessor).Backend()
 
+	// The node label manager tracks node labels for components to use when calculating
+	// node selectors, etc.
+	nodeLabelMgr := newNodeLabelManager()
+
 	// Create the client.  Initialize the cache revision to 1 so that the watcher
 	// code can handle the first iteration by always rendering.
 	c := &client{
@@ -124,7 +129,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 		cacheRevision:           1,
 		revisionsByPrefix:       make(map[string]uint64),
 		nodeMeshEnabled:         nodeMeshEnabled,
-		nodeLabelManager:        newNodeLabelManager(),
+		nodeLabelManager:        nodeLabelMgr,
 		bgpPeers:                make(map[string]*apiv3.BGPPeer),
 		sourceReady:             make(map[string]bool),
 		nodeListenPorts:         make(map[string]uint16),
@@ -305,7 +310,7 @@ type client struct {
 	// The BGP syncer.
 	syncer           api.Syncer
 	nodeV1Processor  watchersyncer.SyncerUpdateProcessor
-	nodeLabelManager nodeLabelManager
+	nodeLabelManager *nodeLabelManager
 	bgpPeers         map[string]*apiv3.BGPPeer
 	globalListenPort uint16
 	nodeListenPorts  map[string]uint16
@@ -483,27 +488,6 @@ func (c *client) inSync() bool {
 	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
 }
 
-type bgpPeer struct {
-	PeerIP          cnet.IP              `json:"ip"`
-	ASNum           numorstring.ASNumber `json:"as_num,string"`
-	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
-	RRClusterID     string               `json:"rr_cluster_id"`
-	Password        *string              `json:"password"`
-	SourceAddr      string               `json:"source_addr"`
-	Port            uint16               `json:"port"`
-	KeepNextHop     bool                 `json:"keep_next_hop"`
-	RestartTime     string               `json:"restart_time"`
-	KeepaliveTime   string               `json:"keepalive_time"`
-	CalicoNode      bool                 `json:"calico_node"`
-	NumAllowLocalAS int32                `json:"num_allow_local_as"`
-	TTLSecurity     uint8                `json:"ttl_security"`
-	ReachableBy     string               `json:"reachable_by"`
-	Filters         []string             `json:"filters"`
-	PassiveMode     bool                 `json:"passive_mode"`
-	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
-	NextHopMode     string               `json:"next_hop_mode"`
-}
-
 type bgpPrefix struct {
 	CIDR        string   `json:"cidr"`
 	Communities []string `json:"communities"`
@@ -529,7 +513,7 @@ func (c *client) updatePeersV1() {
 	peersV1 := make(map[string]string)
 
 	// Common subroutine for emitting both global and node-specific peerings.
-	emit := func(key model.Key, peer *bgpPeer) {
+	emit := func(key model.Key, peer *backends.BGPPeer) {
 		log.WithFields(log.Fields{"key": key, "peer": peer}).Debug("Maybe emit peering")
 
 		// Compute etcd v1 path for this peering key.
@@ -589,7 +573,7 @@ func (c *client) updatePeersV1() {
 			}
 			log.Debugf("Local nodes %#v", localNodeNames)
 
-			var peers []*bgpPeer
+			var peers []*backends.BGPPeer
 			if (v3res.Spec.LocalWorkloadSelector != "") && (c.localBGPPeerWatcher != nil) {
 				// Get active local BGP Peers.
 				log.Infof("Process on local workload bgp peer %s", v3res.Name)
@@ -663,7 +647,7 @@ func (c *client) updatePeersV1() {
 				}
 
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
-				peers = append(peers, &bgpPeer{
+				peers = append(peers, &backends.BGPPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
 					LocalASNum:      localASN,
@@ -754,7 +738,7 @@ func (c *client) updatePeersV1() {
 			continue
 		}
 
-		var peers []*bgpPeer
+		var peers []*backends.BGPPeer
 		for _, peerNodeName := range peerNodeNames {
 			peers = append(peers, c.nodeAsBGPPeers(peerNodeName, includeV4, includeV6, v3res)...)
 		}
@@ -879,7 +863,7 @@ func (c *client) globalAS() string {
 	return c.cache[asKey]
 }
 
-func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
+func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v3Peer *apiv3.BGPPeer) (peers []*backends.BGPPeer) {
 	versions := map[string]string{
 		"IPv4": localBGPPeerData.ipv4,
 		"IPv6": localBGPPeerData.ipv6,
@@ -888,7 +872,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 	workloadName := localBGPPeerData.name
 
 	for version, ipStr := range versions {
-		peer := &bgpPeer{}
+		peer := &backends.BGPPeer{}
 		if ipStr == "" {
 			continue
 		}
@@ -911,7 +895,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 	return
 }
 
-func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
+func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*backends.BGPPeer) {
 	ipv4Str, ipv6Str, asNum, rrClusterID := c.nodeToBGPFields(nodeName)
 	versions := map[string]string{}
 	if v4 {
@@ -921,7 +905,7 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 		versions["IPv6"] = ipv6Str
 	}
 	for version, ipStr := range versions {
-		peer := &bgpPeer{}
+		peer := &backends.BGPPeer{}
 		if ipStr == "" {
 			log.Debugf("No %v for node %v", version, nodeName)
 			continue
@@ -937,11 +921,11 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			peer.TTLSecurity = *v3Peer.Spec.TTLSecurity
 		}
 
+		peer.Filters = v3Peer.Spec.Filters
+
 		if v3Peer.Spec.ReachableBy != "" {
 			peer.ReachableBy = v3Peer.Spec.ReachableBy
 		}
-
-		peer.Filters = v3Peer.Spec.Filters
 
 		// If peer node has listenPort set in BGPConfiguration, use that.
 		if port, ok := c.nodeListenPorts[nodeName]; ok {
@@ -1979,7 +1963,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	c.onNewUpdates()
 }
 
-func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
+func (c *client) setPeerConfigFieldsFromV3Resource(peers []*backends.BGPPeer, v3res *apiv3.BGPPeer) {
 	// Get the password, if one is configured
 	password := c.getPassword(v3res)
 
