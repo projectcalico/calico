@@ -22,16 +22,11 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/bpf/ringbuf"
 )
 
-const (
-	// eventSize must match sizeof(struct tuple) in ringbuf_events.c:
-	// event_header(8) + ip_src(4) + ip_dst(4) + port_src(2) + port_dst(2) + proto(1) + _pad(1027)
-	eventSize uint32 = 8 + 4 + 4 + 2 + 2 + 1 + 1027
-	rbSize    int    = 1024 * 1024
-)
+// eventSize must match sizeof(struct tuple) in ringbuf_events.c:
+// event_header(8) + ip_src(4) + ip_dst(4) + port_src(2) + port_dst(2) + proto(1) + _pad(1027)
+const eventSize uint32 = 8 + 4 + 4 + 2 + 2 + 1 + 1027
 
 func TestRingBufBasic(t *testing.T) {
 	RegisterTestingT(t)
@@ -42,9 +37,7 @@ func TestRingBufBasic(t *testing.T) {
 	ipv4 := iphdr.(*layers.IPv4)
 	udp := l4.(*layers.UDP)
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	// Send a UDP packet and verify the event.
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
@@ -53,8 +46,7 @@ func TestRingBufBasic(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw := ringBufNextWithTimeout(t, rb)
 
 	eventHdr := eventHdrFromBytes(eventRaw.Data()[0:8])
 	Expect(eventHdr.typ).To(Equal(uint32(0xdead)))
@@ -78,8 +70,7 @@ func TestRingBufBasic(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err = rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw = ringBufNextWithTimeout(t, rb)
 	eventHdr = eventHdrFromBytes(eventRaw.Data()[0:8])
 	// The BPF program sets type to 0xdead for all protocols (no special ICMP path anymore).
 	Expect(eventHdr.typ).To(Equal(uint32(0xdead)))
@@ -98,8 +89,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
+	rb := newTestRingBuf(t)
 
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -107,16 +97,13 @@ func TestRingBufReaderRecovery(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw := ringBufNextWithTimeout(t, rb)
 	Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 
 	// Close the first reader and create a new one on the same map.
 	rb.Close()
 
-	rb2, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb2.Close()
+	rb2 := newTestRingBuf(t)
 
 	// Send another event — the new reader should pick it up.
 	runBpfUnitTest(t, "ringbuf_events.c", func(bpfrun bpfProgRunFn) {
@@ -125,8 +112,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err = rb2.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw = ringBufNextWithTimeout(t, rb2)
 	Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 }
 
@@ -145,14 +131,10 @@ func TestRingBufFillup(t *testing.T) {
 	_, _, _, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
-	// Drain any leftover events from previous tests and reset the drops map
-	// so we start with a completely clean state.
-	rb.Drain()
-	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes).
+	// Reset the single-entry drops map (struct rb_drops_val = 16 bytes) so
+	// this test's accounting isn't affected by earlier ring-buffer-full tests.
 	k := make([]byte, 4) // key = 0
 	zeroVal := make([]byte, 16)
 	err = ringBufDropsMap.Update(k, zeroVal)
@@ -209,14 +191,12 @@ func TestRingBufFillup(t *testing.T) {
 	)
 
 	// First: the data event.
-	dataEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	dataEvent := ringBufNextWithTimeout(t, rb)
 	dataHdr := eventHdrFromBytes(dataEvent.Data()[0:8])
 	Expect(dataHdr.typ).To(Equal(uint32(0xdead)))
 
 	// Second: the TYPE_LOST_EVENTS event with exactly 1 drop.
-	lostEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	lostEvent := ringBufNextWithTimeout(t, rb)
 	lostData := lostEvent.Data()
 	lostHdr := eventHdrFromBytes(lostData[0:8])
 	Expect(lostHdr.typ).To(Equal(uint32(0)), "Expected EVENT_LOST_EVENTS (type 0)")
@@ -232,9 +212,7 @@ func TestRingBufMultipleEvents(t *testing.T) {
 	RegisterTestingT(t)
 	hostIP = node1ip
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	numEvents := 10
 	for range numEvents {
@@ -249,8 +227,7 @@ func TestRingBufMultipleEvents(t *testing.T) {
 	}
 
 	for range numEvents {
-		eventRaw, err := rb.Next()
-		Expect(err).NotTo(HaveOccurred())
+		eventRaw := ringBufNextWithTimeout(t, rb)
 		Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 
 		hdr := eventHdrFromBytes(eventRaw.Data()[0:8])
