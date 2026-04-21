@@ -6,7 +6,7 @@ import {
 } from '@/components/common/shadcn/accordion';
 import { SelectOption } from '@/libs/tigera/ui-components/components/common/Select';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
-import { CloseIcon } from '@chakra-ui/icons';
+import { CloseIcon, InfoOutlineIcon } from '@chakra-ui/icons';
 import { Box, Button, Tooltip } from '@chakra-ui/react';
 import React from 'react';
 import QuerySelect from '../QuerySelect';
@@ -99,9 +99,20 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                     </Tooltip>
                                 </AccordionTrigger>
                                 <AccordionContent className='flex flex-col gap-2 px-4 pt-0! mt-0!'>
-                                    <span className='text-left flex-1 text-tigera-token-fg-subtle text-sm'>
-                                        Select one or more fields to match.
-                                    </span>
+                                    <div className='flex items-center gap-2'>
+                                        <span className=' text-tigera-token-fg-subtle text-sm'>
+                                            Select one or more attributes to
+                                            match.
+                                        </span>
+
+                                        <Tooltip label='Fields within a filter are matched using AND.'>
+                                            <InfoOutlineIcon
+                                                color='experimental-token-fg-subtle'
+                                                boxSize={3}
+                                            />
+                                        </Tooltip>
+                                    </div>
+
                                     <QuerySelect
                                         label='Kind'
                                         filterKey={FilterKey.policyKind}
