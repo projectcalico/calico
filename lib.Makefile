@@ -134,10 +134,11 @@ CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-GOEXPERIMENT?=boringcrypto
+GOEXPERIMENT?=boringcrypto,jsonv2
 TAGS?=boringcrypto,osusergo,netgo
 CGO_ENABLED?=1
 else
+GOEXPERIMENT?=jsonv2
 CGO_ENABLED?=0
 endif
 
@@ -177,7 +178,7 @@ define build_cgo_boring_binary
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) GOEXPERIMENT=boringcrypto go build -o $(2) -tags fipsstrict -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1) \
+		sh -c '$(GIT_CONFIG_SSH) GOEXPERIMENT=$(GOEXPERIMENT) go build -o $(2) -tags fipsstrict -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1) \
 			&& go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endef
 
@@ -374,6 +375,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e GOOS=$(BUILDOS) \
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
+		-e "GOEXPERIMENT=$(GOEXPERIMENT)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
 		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)

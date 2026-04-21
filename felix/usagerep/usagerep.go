@@ -16,7 +16,7 @@ package usagerep
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -162,7 +162,7 @@ func (u *UsageReporter) reportUsage(clusterGUID, clusterType, calicoVersion stri
 		return
 	}
 	jsonResp := map[string]any{}
-	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
+	if err := json.UnmarshalRead(resp.Body, &jsonResp); err != nil {
 		log.WithError(err).Warn(
 			"Failed to decode report server response")
 		return
