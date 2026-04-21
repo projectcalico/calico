@@ -62,7 +62,7 @@ SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
-FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
@@ -163,7 +163,11 @@ $(LIBBPF_FILE_CREATED):
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	# Build the static libbpf.a with -fPIC so the objects can be linked into
+	# either a PDE or a PIE executable. The combined calico binary pulls in
+	# Go packages that cause the linker to emit -Wl,-z,nocopyreloc, which
+	# rejects libbpf's non-PIC references to glibc symbols like stderr.
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -312,10 +316,13 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-typha
+REMOTE_DEPS=build-calico-image
 
-build-typha:
-	make -C ../typha image DEV_REGISTRIES=felix-test
+# Typha runs from the combined calico image as `component typha` (see
+# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
+# preloaded from the calico-image GCS cache.
+build-calico-image:
+	$(MAKE) -C ../cmd/calico image
 
 .PHONY: fv fv-prereqs fv-no-build
 
