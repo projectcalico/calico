@@ -148,6 +148,10 @@ defaultFelixConfiguration:
 # CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
 manageCRDs: false
 
+# Enable zap development logging for the tigera/operator in CI so test failures surface debug-level
+# operator logs and stacktraces on warnings.
+zapDevel: true
+
 # Configuration for the tigera operator
 tigeraOperator:
   image: tigera/operator
