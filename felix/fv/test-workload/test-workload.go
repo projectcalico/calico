@@ -16,6 +16,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"net"
@@ -230,10 +231,18 @@ func main() {
 			connReader := bufio.NewReader(conn)
 			w := bufio.NewWriter(conn)
 
+			// Use a long-lived jsontext.Decoder so we can stream multiple JSON
+			// values from the same connection. json.UnmarshalRead is NOT a
+			// drop-in for json.NewDecoder.Decode in a loop — it expects the
+			// reader to contain exactly one top-level JSON value and errors
+			// out with "unexpected EOF" or "invalid character after top-level
+			// value" on back-to-back messages.
+			dec := jsontext.NewDecoder(connReader)
+
 			for {
 				var request connectivity.Request
 
-				err := json.UnmarshalRead(connReader, &request)
+				err := json.UnmarshalDecode(dec, &request)
 				if err != nil {
 					log.WithError(err).Error("failed to read request")
 					return
