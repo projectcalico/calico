@@ -1187,13 +1187,12 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
-# build-images echos the images that would be built.
-# If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
+# build-images echoes the images that would be built. If WINDOWS_IMAGE is set
+# it is included in the output. $(sort) dedupes in case BUILD_IMAGES and
+# WINDOWS_IMAGE overlap (e.g. a component that only ships a Windows image
+# still needs BUILD_IMAGES set so the retag/push machinery iterates over it).
 build-images: var-require-all-BUILD_IMAGES
-	$(if $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES)\
-	)
+	@echo $(sort $(BUILD_IMAGES) $(WINDOWS_IMAGE))
 
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated
@@ -1577,20 +1576,13 @@ KIND_TEST_BUILD_TAG = test-build
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
+# Most components are provided by the combined calico/calico image, which
+# uses "calico <subcommand>" as the container command. Only node and
+# whisker (TypeScript/nginx, not a Go binary) remain as separate images.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
-	calico/typha:$(KIND_TEST_BUILD_TAG) \
-	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
-	calico/ctl:$(KIND_TEST_BUILD_TAG) \
-	calico/cni:$(KIND_TEST_BUILD_TAG) \
-	calico/csi:$(KIND_TEST_BUILD_TAG) \
-	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
-	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
-	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
-	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
-	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+	calico/calico:$(KIND_TEST_BUILD_TAG)
 
 # Operator is built separately (build-operator.sh tags it directly as
 # :test-build), so it's not in KIND_CALICO_IMAGES.
@@ -1605,60 +1597,19 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 # runs when sources are newer.
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
-	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
-	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
-	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
-	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
-	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
-	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
-	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
-	touch $@
-
-$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
-	$(MAKE) -C $(REPO_ROOT)/typha image
-	touch $@
-
-$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
-	$(MAKE) -C $(REPO_ROOT)/apiserver image
-	touch $@
-
-$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
-	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
-	touch $@
-
-$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	touch $@
-
-$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
-	$(MAKE) -C $(REPO_ROOT)/calicoctl image
-	touch $@
-
-$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
-	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
-	touch $@
-
-$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
-	$(MAKE) -C $(REPO_ROOT)/goldmane image
-	touch $@
-
-$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
-	$(MAKE) -C $(REPO_ROOT)/webhooks image
 	touch $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
 	touch $@
 
-$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
-	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
-	touch $@
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
+	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
