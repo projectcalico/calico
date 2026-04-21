@@ -15,7 +15,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 
@@ -133,9 +134,7 @@ func dumpARP() error {
 	}
 
 	if *jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(jsonEntries)
+		return json.MarshalWrite(os.Stdout, jsonEntries, jsontext.WithIndent("  "))
 	}
 
 	return nil

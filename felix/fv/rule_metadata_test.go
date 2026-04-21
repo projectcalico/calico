@@ -15,8 +15,6 @@
 package fv_test
 
 import (
-	cryptorand "crypto/rand"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -125,10 +123,6 @@ var _ = infrastructure.DatastoreDescribe("Rule Metadata tests", []apiconfig.Data
 		var p *api.Profile
 
 		BeforeEach(func() {
-			// build some random bytes to try to break annotation processing
-			rv := make([]byte, 200)
-			_, err := cryptorand.Read(rv)
-			Expect(err).ToNot(HaveOccurred())
 			// the profile should allow the workloads to communicate
 			p = api.NewProfile()
 			p.Name = "default"
@@ -140,10 +134,15 @@ var _ = infrastructure.DatastoreDescribe("Rule Metadata tests", []apiconfig.Data
 				Action: api.Allow,
 				Metadata: &api.RuleMetadata{Annotations: map[string]string{
 					"hometown": "Småland",
-					"random":   string(rv),
+					// Exercise the shell-unsafe-character sanitizer in Felix's
+					// iptables comment rendering. Includes quoting metachars,
+					// control chars, and high-plane unicode. Must be valid
+					// UTF-8: the k8s apiserver (and encoding/json/v2) rejects
+					// invalid UTF-8 in annotations.
+					"random": "$`\"'\\|;&<>()[]{}!#*?~\t\v\r\n\x00\x7f ☃ 🦑 Ωπ",
 				}},
 			}}
-			_, err = client.Profiles().Create(utils.Ctx, p, utils.NoOptions)
+			_, err := client.Profiles().Create(utils.Ctx, p, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 		})
 

@@ -16,9 +16,9 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
-	"io"
 	"net"
 	"os/exec"
 	"strconv"
@@ -228,13 +228,21 @@ func main() {
 				}()
 			}
 
-			decoder := json.NewDecoder(conn)
+			connReader := bufio.NewReader(conn)
 			w := bufio.NewWriter(conn)
+
+			// Use a long-lived jsontext.Decoder so we can stream multiple JSON
+			// values from the same connection. json.UnmarshalRead is NOT a
+			// drop-in for json.NewDecoder.Decode in a loop — it expects the
+			// reader to contain exactly one top-level JSON value and errors
+			// out with "unexpected EOF" or "invalid character after top-level
+			// value" on back-to-back messages.
+			dec := jsontext.NewDecoder(connReader)
 
 			for {
 				var request connectivity.Request
 
-				err := decoder.Decode(&request)
+				err := json.UnmarshalDecode(dec, &request)
 				if err != nil {
 					log.WithError(err).Error("failed to read request")
 					return
@@ -244,24 +252,8 @@ func main() {
 					rcv := request.SendSize
 					buff := make([]byte, 4096)
 
-					r := decoder.Buffered()
-
 					for rcv > 0 {
-						n, err := r.Read(buff)
-						rcv -= n
-						if err == io.EOF {
-							break
-						}
-					}
-
-					for rcv > 0 {
-						var err error
-						n := 0
-						if rcv < 4096 {
-							n, err = conn.Read(buff[:rcv])
-						} else {
-							n, err = conn.Read(buff)
-						}
+						n, err := connReader.Read(buff)
 						rcv -= n
 						if err != nil {
 							log.Errorf("Reading from connection failed. %d bytes too short\n", rcv)

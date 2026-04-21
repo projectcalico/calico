@@ -252,6 +252,7 @@ ut-datastore:
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	$(EXTRA_DOCKER_ARGS) \
+	-e GOEXPERIMENT=$(GOEXPERIMENT) \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e RUN_AS_ROOT=true \
 	-e ARCH=$(ARCH) \
