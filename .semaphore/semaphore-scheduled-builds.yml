@@ -369,14 +369,16 @@ blocks:
               fi
   - name: "Build: calico image"
     # Always build and cache the calico image so that downstream CI blocks can
-    # load it from GCS instead of rebuilding per component.
+    # load it from GCS instead of rebuilding per component. This block is the
+    # sole producer for the "calico" build-cache group — every Go component
+    # block on master restores the module + build cache populated here.
     run:
       when: "true"
     dependencies: []
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       agent:
         machine:
           type: f1-standard-4
@@ -391,43 +393,44 @@ blocks:
             - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
             - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+            # TEMPORARY for PR #12225: warm master's "calico" build cache from this
+            # PR so downstream PR-consumer blocks get a realistic warm-cache
+            # measurement. REVERT BEFORE MERGE — once this lands on master, the
+            # normal branch-build epilogue repopulates the cache.
+            - |-
+              pushd $HOME
+              tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+              gcloud storage cp /tmp/build-cache.tar.zstd "${GCS_CACHE_DIR}/master/build-cache-calico.tar.zstd"
+              popd
   - name: "Build: node image"
+    # Builds the node image on top of the combined calico binary. The underlying
+    # Go state lives in the "calico" build cache populated by "Build: calico
+    # image", so this block does not participate in build-cache storage.
     run:
       when: "true"
     dependencies: []
     task:
-      env_vars:
-        - name: BUILD_CACHE_GROUP
-          value: "node"
       agent:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
       jobs:
         - name: "Build and cache node image"
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
           commands:
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
             - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
+    # Whisker is a TypeScript/React frontend — no Go build cache to populate.
     run:
       when: >-
         true or
         change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies: []
     task:
-      env_vars:
-        - name: BUILD_CACHE_GROUP
-          value: "whisker"
       jobs:
         - name: "Build and cache whisker image"
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
           commands:
             - make -C whisker image
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
@@ -487,7 +490,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd apiserver
@@ -495,9 +498,6 @@ blocks:
         - name: "API Server: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -510,7 +510,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd app-policy
@@ -530,7 +530,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd calicoctl
@@ -538,9 +538,6 @@ blocks:
         - name: "calicoctl: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -553,7 +550,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd cmd/calico
@@ -579,7 +576,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -588,9 +585,6 @@ blocks:
         - name: "CNI Plugin: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -625,7 +619,7 @@ blocks:
             - cd ~/calico/process/testing/aso && make dist-clean
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: AZURE_LOCATION
@@ -657,7 +651,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd confd
@@ -667,9 +661,6 @@ blocks:
             minutes: 60
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -752,7 +743,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "e2e-tests"
+          value: "calico"
       agent:
         machine:
           type: f1-standard-4
@@ -766,9 +757,6 @@ blocks:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -779,8 +767,6 @@ blocks:
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
               value: "e2e/config/kind-felix-routing.yaml"
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -791,8 +777,6 @@ blocks:
               value: "projectcalico.org/v3"
             - name: E2E_TEST_CONFIG
               value: "e2e/config/kind-felix-routing.yaml"
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -883,7 +867,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "felix"
+          value: "calico"
       prologue:
         commands:
           - cd felix
@@ -899,9 +883,6 @@ blocks:
           # This job is on the critical path so we increase its priority.
             - value: 51
               when: "pull_request =~ '.+'"
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
           execution_time_limit:
             minutes: 20
           commands:
@@ -948,7 +929,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "felix"
+          value: "calico"
       jobs:
         - name: "Felix: Build Windows binaries"
           commands:
@@ -982,7 +963,7 @@ blocks:
             - cd ~/calico/process/testing/aso && make dist-clean
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "felix"
+          value: "calico"
         - name: FV_TYPE
           value: "calico-felix"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -1103,7 +1084,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
@@ -1115,9 +1096,6 @@ blocks:
         - name: "Goldmane: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1132,7 +1110,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd guardian
@@ -1140,9 +1118,6 @@ blocks:
         - name: "Guardian: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1195,7 +1170,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -1204,9 +1179,6 @@ blocks:
         - name: "kube-controllers: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
         - name: "kube-controllers: CI (projectcalico.org/v3)"
           commands:
@@ -1214,8 +1186,6 @@ blocks:
           env_vars:
             - name: CALICO_API_GROUP
               value: "projectcalico.org/v3"
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1249,7 +1219,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd libcalico-go
@@ -1258,15 +1228,10 @@ blocks:
         - name: "libcalico-go: CI (crd.projectcalico.org/v1)"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "libcalico-go: CI (projectcalico.org/v3)"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
           env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
             - name: CALICO_API_GROUP
               value: projectcalico.org/v3
             - name: GINKGO_SKIP
@@ -1284,7 +1249,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "node"
+          value: "calico"
       agent:
         machine:
           type: f1-standard-4
@@ -1303,9 +1268,6 @@ blocks:
               when: "pull_request =~ '.+'"
           commands:
             - ../.semaphore/run-and-monitor static-checks.log make static-checks
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "Node: UT"
           priority:
             # This job is on the critical path so we increase its priority.
@@ -1313,9 +1275,6 @@ blocks:
               when: "pull_request =~ '.+'"
           commands:
             - ../.semaphore/run-and-monitor ut.log make ut
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1354,9 +1313,9 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "node"
+          value: "calico"
         - name: CI_GROUP_LABEL
-          value: "node"
+          value: "calico"
         - name: CI_JOB_LABEL
           value: "kind-cluster-tests"
       prologue:
@@ -1398,7 +1357,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd pod2daemon
@@ -1417,7 +1376,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd hack
@@ -1434,7 +1393,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -1444,9 +1403,6 @@ blocks:
           commands:
             - export TEST_SUITE_PREFIX="calico/base"
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "Typha: FV tests on UBI-minimal"
           commands:
             - 'export TEST_SUITE_PREFIX="UBI-minimal"'
@@ -1468,7 +1424,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd webhooks
@@ -1476,9 +1432,6 @@ blocks:
         - name: "webhooks: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1493,7 +1446,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd whisker-backend
@@ -1515,9 +1468,6 @@ blocks:
     dependencies:
       - Prerequisites
     task:
-      env_vars:
-        - name: BUILD_CACHE_GROUP
-          value: "whisker"
       prologue:
         commands:
           - cd whisker
@@ -1525,9 +1475,6 @@ blocks:
         - name: "Whisker: CI"
           commands:
             - ../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
         - name: "Whisker: build multi-arch images"
           matrix:
             - env_var: ARCH
@@ -1545,7 +1492,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "calico-image"
+          value: "calico"
       prologue:
         commands:
           - cd key-cert-provisioner
@@ -1553,9 +1500,6 @@ blocks:
         - name: "key-cert-provisioner: CI"
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
       epilogue:
         always:
           commands:
@@ -1611,7 +1555,7 @@ blocks:
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
-          value: "mock-node"
+          value: "calico"
       prologue:
         commands:
           - cd test-tools/mocknode
@@ -1619,9 +1563,6 @@ blocks:
         - name: "Mock node: CI"
           commands:
             - ../../.semaphore/run-and-monitor make-ci.log make ci
-          env_vars:
-            - name: STORE_BUILD_CACHE
-              value: "true"
   - name: Release tooling
     run:
       when: "true"

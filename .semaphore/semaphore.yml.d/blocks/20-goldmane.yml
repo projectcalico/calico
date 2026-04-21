@@ -8,7 +8,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "calico-image"
+        value: "calico"
     prologue:
       commands:
         # The Makefile sometimes tries to rebuild the protobuf files on non-amd architectures
@@ -20,9 +20,6 @@
       - name: "Goldmane: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
     epilogue:
       always:
         commands:

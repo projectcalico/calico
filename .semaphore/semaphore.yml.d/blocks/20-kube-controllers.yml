@@ -7,7 +7,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "calico-image"
+        value: "calico"
     prologue:
       commands:
         - .semaphore/load-cached-images
@@ -16,9 +16,6 @@
       - name: "kube-controllers: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
 
       # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
       - name: "kube-controllers: CI (projectcalico.org/v3)"
@@ -27,8 +24,6 @@
         env_vars:
           - name: CALICO_API_GROUP
             value: "projectcalico.org/v3"
-          - name: STORE_BUILD_CACHE
-            value: "true"
     epilogue:
       always:
         commands:

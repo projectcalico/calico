@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "calico-image"
+        value: "calico"
     prologue:
       commands:
         - cd pod2daemon

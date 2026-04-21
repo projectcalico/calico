@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "calico-image"
+        value: "calico"
     prologue:
       commands:
         - cd key-cert-provisioner
@@ -14,9 +14,6 @@
       - name: "key-cert-provisioner: CI"
         commands:
           - ../.semaphore/run-and-monitor ci.log make ci
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
     epilogue:
       always:
         commands:

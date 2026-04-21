@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
     agent:
       machine:
         type: f1-standard-4
@@ -25,9 +25,6 @@
             when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
       - name: "Node: UT"
         priority:
           # This job is on the critical path so we increase its priority.
@@ -35,9 +32,6 @@
             when: "pull_request =~ '.+'"
         commands:
           - ../.semaphore/run-and-monitor ut.log make ut
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
     epilogue:
       always:
         commands:
@@ -76,9 +70,9 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
       - name: CI_GROUP_LABEL
-        value: "node"
+        value: "calico"
       - name: CI_JOB_LABEL
         value: "kind-cluster-tests"
     prologue:

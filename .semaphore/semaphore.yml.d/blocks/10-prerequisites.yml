@@ -156,14 +156,16 @@
             fi
 - name: "Build: calico image"
   # Always build and cache the calico image so that downstream CI blocks can
-  # load it from GCS instead of rebuilding per component.
+  # load it from GCS instead of rebuilding per component. This block is the
+  # sole producer for the "calico" build-cache group — every Go component
+  # block on master restores the module + build cache populated here.
   run:
     when: "true"
   dependencies: []
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "calico-image"
+        value: "calico"
     agent:
       machine:
         type: f1-standard-4
@@ -178,43 +180,44 @@
           - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
           - zstd -3 --rm /tmp/calico-image.tar
           - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+          # TEMPORARY for PR #12225: warm master's "calico" build cache from this
+          # PR so downstream PR-consumer blocks get a realistic warm-cache
+          # measurement. REVERT BEFORE MERGE — once this lands on master, the
+          # normal branch-build epilogue repopulates the cache.
+          - |-
+            pushd $HOME
+            tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+            gcloud storage cp /tmp/build-cache.tar.zstd "${GCS_CACHE_DIR}/master/build-cache-calico.tar.zstd"
+            popd
 - name: "Build: node image"
+  # Builds the node image on top of the combined calico binary. The underlying
+  # Go state lives in the "calico" build cache populated by "Build: calico
+  # image", so this block does not participate in build-cache storage.
   run:
     when: "${CHANGE_IN(node)}"
   dependencies: []
   task:
-    env_vars:
-      - name: BUILD_CACHE_GROUP
-        value: "node"
     agent:
       machine:
         type: f1-standard-4
         os_image: ubuntu2204
     jobs:
       - name: "Build and cache node image"
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
         commands:
           - make -C node image
           - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
           - zstd -3 --rm /tmp/node-image.tar
           - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
 - name: "Build: whisker image"
+  # Whisker is a TypeScript/React frontend — no Go build cache to populate.
   run:
     when: >-
       ${FORCE_RUN} or
       change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
   dependencies: []
   task:
-    env_vars:
-      - name: BUILD_CACHE_GROUP
-        value: "whisker"
     jobs:
       - name: "Build and cache whisker image"
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
         commands:
           - make -C whisker image
           - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar

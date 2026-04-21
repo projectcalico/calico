@@ -9,7 +9,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "e2e-tests"
+        value: "calico"
     agent:
       machine:
         type: f1-standard-4
@@ -23,9 +23,6 @@
       - name: "E2E tests: Conformance (cluster routing: BIRD)"
         commands:
           - .semaphore/run-and-monitor e2e-test.log make e2e-test
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
       - name: "E2E tests: Conformance (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -36,8 +33,6 @@
             value: "crd.projectcalico.org/v1"
           - name: E2E_TEST_CONFIG
             value: "e2e/config/kind-felix-routing.yaml"
-          - name: STORE_BUILD_CACHE
-            value: "true"
       - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
         commands:
           - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -48,8 +43,6 @@
             value: "projectcalico.org/v3"
           - name: E2E_TEST_CONFIG
             value: "e2e/config/kind-felix-routing.yaml"
-          - name: STORE_BUILD_CACHE
-            value: "true"
     epilogue:
       always:
         commands:
