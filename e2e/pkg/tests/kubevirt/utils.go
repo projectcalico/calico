@@ -367,7 +367,7 @@ func (m *testVMIM) WaitForSuccess(ctx context.Context) {
 			return fmt.Errorf("phase is %s", vmim.Status.Phase)
 		}
 		return nil
-	}, 5*time.Minute, 5*time.Second).Should(Succeed())
+	}, 5*time.Minute, 1*time.Second).Should(Succeed())
 }
 
 // expectPingSuccess verifies ICMP connectivity from a pod to the target IP.
@@ -983,6 +983,159 @@ func checkWorkerBIRDRoute(f *framework.Framework, nodeName, vmIP, label string) 
 	birdExport, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
 		"sh", "-c", fmt.Sprintf("birdcl show route %s/32 export Mesh_172_16_8_1 all 2>&1", ip)).Exec()
 	logrus.Infof("WORKER-BIRD [%s] %s export to master for %s/32:\n%s", label, nodeName, ip, birdExport)
+}
+
+// startTCPDumpOnTOR starts tcpdump on the TOR's L2TP interface capturing all
+// traffic to/from the VM IP. Returns a stop function that kills tcpdump and
+// returns the captured output (last 200 lines). Safe to call the stop function
+// multiple times — subsequent calls return "(already collected)".
+func startTCPDumpOnTOR(tor *externalnode.Client, vmIP string) func() string {
+	ip := strings.Split(vmIP, "/")[0]
+	runOnTOR(tor, "sudo rm -f /tmp/tor-tcpdump.log")
+	runOnTOR(tor, fmt.Sprintf(
+		"sudo sh -c 'nohup tcpdump -i l2tpeth8-5 host %s -nn -v -l > /tmp/tor-tcpdump.log 2>&1 &'", ip))
+	logrus.Infof("DIAG: tcpdump started on TOR for host %s on l2tpeth8-5", ip)
+
+	var stopped bool
+	return func() string {
+		if stopped {
+			return "(already collected)"
+		}
+		stopped = true
+		runOnTOR(tor, "sudo pkill -f 'tcpdump.*l2tpeth8-5' 2>/dev/null || true")
+		time.Sleep(1 * time.Second)
+		out := runOnTOR(tor, "sudo tail -200 /tmp/tor-tcpdump.log 2>/dev/null || echo '(no capture)'")
+		return out
+	}
+}
+
+// dumpNodeConntrack dumps conntrack entries for the VM IP on a specific node,
+// and checks the nf_conntrack_tcp_loose sysctl.
+func dumpNodeConntrack(f *framework.Framework, nodeName, vmIP string) {
+	ctx := context.Background()
+	ip := strings.Split(vmIP, "/")[0]
+	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warnf("dumpNodeConntrack: no calico-node pod on %s", nodeName)
+		return
+	}
+	podName := pods.Items[0].Name
+	out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf("cat /proc/net/nf_conntrack 2>/dev/null | grep %s || echo '(no entries for %s)'", ip, ip)).Exec()
+	logrus.Infof("DIAG-CONNTRACK [%s] entries for %s:\n%s", nodeName, ip, strings.TrimSpace(out))
+
+	looseOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", "cat /proc/sys/net/netfilter/nf_conntrack_tcp_loose 2>/dev/null || echo 'unknown'").Exec()
+	logrus.Infof("DIAG-CONNTRACK [%s] nf_conntrack_tcp_loose=%s", nodeName, strings.TrimSpace(looseOut))
+}
+
+// dumpNodeFirewallRules dumps nftables/iptables rules related to connection
+// tracking on a node, to identify rules that might drop mid-stream TCP packets.
+func dumpNodeFirewallRules(f *framework.Framework, nodeName string) {
+	ctx := context.Background()
+	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warnf("dumpNodeFirewallRules: no calico-node pod on %s", nodeName)
+		return
+	}
+	podName := pods.Items[0].Name
+
+	nftOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", "nft list ruleset 2>/dev/null | grep -B3 -A1 -iE '(ct state|invalid)' | head -100 || echo '(nft not available)'").Exec()
+	logrus.Infof("DIAG-NFTABLES [%s] ct state rules:\n%s", nodeName, strings.TrimSpace(nftOut))
+
+	iptOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", "iptables-save 2>/dev/null | grep -iE '(state|conntrack|INVALID)' | head -50 || echo '(iptables-save not available)'").Exec()
+	logrus.Infof("DIAG-IPTABLES [%s] state/conntrack rules:\n%s", nodeName, strings.TrimSpace(iptOut))
+}
+
+// dumpTORSocketState shows the TCP socket state on the TOR for connections to
+// the VM IP, indicating whether nc's connection is still ESTABLISHED or has been reset.
+func dumpTORSocketState(tor *externalnode.Client, vmIP string) {
+	ip := strings.Split(vmIP, "/")[0]
+	out := runOnTOR(tor, fmt.Sprintf("ss -tnp 2>/dev/null | grep %s || echo '(no sockets for %s)'", ip, ip))
+	logrus.Infof("DIAG-SOCKET TOR sockets for %s:\n%s", ip, out)
+}
+
+// startNodeVethCapture starts tcpdump on the VM's veth interface inside the
+// calico-node pod on the given node. Also records interface stats (RX/TX counters)
+// as a fallback if tcpdump isn't available. Returns a stop function that collects
+// the results. Safe to call stop multiple times.
+func startNodeVethCapture(f *framework.Framework, nodeName, vmIP string) func() string {
+	ctx := context.Background()
+	ip := strings.Split(vmIP, "/")[0]
+	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warnf("startNodeVethCapture: no calico-node pod on %s", nodeName)
+		return func() string { return "(no calico-node pod)" }
+	}
+	podName := pods.Items[0].Name
+
+	// Get the veth name from the kernel route for the VM IP.
+	routeOut, err := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf("ip route show %s/32", ip)).Exec()
+	if err != nil {
+		logrus.Warnf("startNodeVethCapture: failed to get route for %s: %v", ip, err)
+		return func() string { return "(no route)" }
+	}
+	// Parse "192.168.12.10 dev cali3b065c6b12d scope link metric 512"
+	var vethName string
+	for _, field := range strings.Fields(strings.TrimSpace(routeOut)) {
+		if strings.HasPrefix(field, "cali") {
+			vethName = field
+			break
+		}
+	}
+	if vethName == "" {
+		logrus.Warnf("startNodeVethCapture: no cali* veth in route: %s", routeOut)
+		return func() string { return fmt.Sprintf("(no veth in route: %s)", routeOut) }
+	}
+	logrus.Infof("DIAG-VETH: VM %s on %s uses veth %s", ip, nodeName, vethName)
+
+	// Record interface stats before.
+	statsBefore, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf("ip -s link show %s", vethName)).Exec()
+	logrus.Infof("DIAG-VETH [%s] %s stats BEFORE:\n%s", nodeName, vethName, strings.TrimSpace(statsBefore))
+
+	// Try to start tcpdump (best effort — may not be available).
+	// Avoid nohup (not present in minimal calico-node image); backgrounding
+	// with sh -c '... &' is sufficient since kubectl exec returns immediately.
+	tcpdumpOut, tcpdumpErr := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf(
+			"rm -f /tmp/veth-tcpdump.log; tcpdump -i %s -nn -v -l -c 200 > /tmp/veth-tcpdump.log 2>&1 & echo $!",
+			vethName)).Exec()
+	if tcpdumpErr != nil {
+		logrus.Warnf("DIAG-VETH: tcpdump start failed on %s (may not be installed): %v", nodeName, tcpdumpErr)
+	} else {
+		logrus.Infof("DIAG-VETH: tcpdump started on %s:%s (pid=%s)", nodeName, vethName, strings.TrimSpace(tcpdumpOut))
+	}
+
+	var stopped bool
+	return func() string {
+		if stopped {
+			return "(already collected)"
+		}
+		stopped = true
+
+		// Record interface stats after.
+		statsAfter, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+			"sh", "-c", fmt.Sprintf("ip -s link show %s", vethName)).Exec()
+		logrus.Infof("DIAG-VETH [%s] %s stats AFTER:\n%s", nodeName, vethName, strings.TrimSpace(statsAfter))
+
+		// Stop tcpdump and collect output.
+		out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+			"sh", "-c", "pkill tcpdump 2>/dev/null; sleep 1; tail -200 /tmp/veth-tcpdump.log 2>/dev/null || echo '(no tcpdump output)'").Exec()
+		return out
+	}
 }
 
 func ptrInt64(v int64) *int64 { return &v }

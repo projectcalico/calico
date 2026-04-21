@@ -296,6 +296,23 @@ var _ = describe.CalicoDescribe(
 			By("Setting up eBGP peering between TOR and cluster nodes")
 			setupEBGPPeering(f, tor)
 
+			// Disable natOutgoing on the default IPPool to prevent Calico's
+			// cali-nat-outgoing masquerade rule from SNATing VM→TOR traffic
+			// after migration (the new node has no conntrack entry for the
+			// existing flow, so it would be treated as NEW and masqueraded).
+			By("Disabling natOutgoing on default IPPool to prevent masquerade breaking TCP after migration")
+			_, err := kubectl.NewKubectlCommand("", "patch", "ippool", "default-ipv4-ippool",
+				"--type=merge", "-p", `{"spec":{"natOutgoing":false}}`).Exec()
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				By("Re-enabling natOutgoing on default IPPool")
+				_, restoreErr := kubectl.NewKubectlCommand("", "patch", "ippool", "default-ipv4-ippool",
+					"--type=merge", "-p", `{"spec":{"natOutgoing":true}}`).Exec()
+				if restoreErr != nil {
+					logrus.WithError(restoreErr).Warn("Failed to restore natOutgoing on default IPPool")
+				}
+			})
+
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
@@ -393,6 +410,10 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing from TOR")
 			logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
 
+			By("Starting tcpdump on TOR for migration diagnostics")
+			stopTORDump := startTCPDumpOnTOR(tor, vmIP)
+			DeferCleanup(func() { stopTORDump() })
+
 			// ---- First migration ----
 			By("First migration")
 			logrus.Infof("TIMELINE: starting first migration")
@@ -405,12 +426,23 @@ var _ = describe.CalicoDescribe(
 			Expect(vmi.Status.MigrationState).NotTo(BeNil())
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1))
-			logrus.Infof("TIMELINE: first migration complete %s -> %s", node1, node2)
+			ms1 := vmi.Status.MigrationState
+			logrus.Infof("TIMELINE: first migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
+				node1, node2, ms1.StartTimestamp, ms1.EndTimestamp)
 
 			// Check worker's kernel route and BIRD table — should show krt_metric=512 (elevated).
 			checkWorkerBIRDRoute(f, node2, vmIP, "after-first-migration")
 			// Check master's BIRD table — should show elevated bgp_local_pref for /32.
 			checkMasterBIRDRoute(f, vmIP, "after-first-migration")
+
+			By("Dumping network diagnostics on migration target node")
+			dumpNodeConntrack(f, node2, vmIP)
+			dumpNodeFirewallRules(f, node2)
+			dumpTORSocketState(tor, vmIP)
+
+			By("Starting tcpdump on node-2 veth to check if VM is generating packets")
+			stopVethDump := startNodeVethCapture(f, node2, vmIP)
+			DeferCleanup(func() { stopVethDump() })
 
 			// Wait 40s after first migration completes. This exceeds the default
 			// LiveMigrationRouteConvergenceTime (30s), ensuring that when the
@@ -423,6 +455,14 @@ var _ = describe.CalicoDescribe(
 			checkMasterBIRDRoute(f, vmIP, "after-40s-wait")
 			midLines, _ := torContainerLineCount(tor, ncClientContainer)
 			logrus.Infof("TIMELINE: after first migration wait lines=%d (pre=%d, delta=%d)", midLines, preLines, midLines-preLines)
+
+			By("Collecting network diagnostics after first migration wait")
+			dumpNodeConntrack(f, node2, vmIP)
+			dumpTORSocketState(tor, vmIP)
+			torDump := stopTORDump()
+			logrus.Infof("DIAG: TOR tcpdump (last 200 lines):\n%s", torDump)
+			vethDump := stopVethDump()
+			logrus.Infof("DIAG: Node-2 veth tcpdump (last 200 lines):\n%s", vethDump)
 
 			// Cordon node1 (the original node) so the second migration cannot
 			// go back there — we want the VM to land on a third node so that a
@@ -460,7 +500,9 @@ var _ = describe.CalicoDescribe(
 			Expect(vmi.Status.MigrationState).NotTo(BeNil())
 			node3 := vmi.Status.MigrationState.TargetNode
 			Expect(node3).NotTo(Equal(node2))
-			logrus.Infof("TIMELINE: second migration complete %s -> %s", node2, node3)
+			ms2 := vmi.Status.MigrationState
+			logrus.Infof("TIMELINE: second migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
+				node2, node3, ms2.StartTimestamp, ms2.EndTimestamp)
 
 			// Check master — should show elevated /32 from the new target node.
 			checkMasterBIRDRoute(f, vmIP, "after-second-migration")
