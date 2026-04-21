@@ -3,7 +3,7 @@ package cni
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"math/rand"
 	"os"

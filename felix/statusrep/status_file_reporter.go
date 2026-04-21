@@ -16,7 +16,7 @@ package statusrep
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"io/fs"
 	"time"

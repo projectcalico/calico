@@ -133,16 +133,16 @@ type GlobalNetworkPolicySpec struct {
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
 	// this policy are marked as not to be tracked. Requires ApplyOnForward to be true.
-	DoNotTrack bool `json:"doNotTrack,omitempty"`
+	DoNotTrack bool `json:"doNotTrack,omitempty,omitzero"`
 
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
 	// Requires ApplyOnForward to be true. Cannot be used with DoNotTrack, and the
 	// policy must not contain egress rules.
-	PreDNAT bool `json:"preDNAT,omitempty"`
+	PreDNAT bool `json:"preDNAT,omitempty,omitzero"`
 
 	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
 	// Must be set to true when DoNotTrack or PreDNAT is true.
-	ApplyOnForward bool `json:"applyOnForward,omitempty"`
+	ApplyOnForward bool `json:"applyOnForward,omitempty,omitzero"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	// +kubebuilder:validation:MaxLength=1024

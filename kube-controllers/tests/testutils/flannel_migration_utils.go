@@ -19,7 +19,7 @@ package testutils
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"
@@ -72,7 +72,7 @@ func newFlannelNode(podCidr, backend, mac, ip string) FlannelNode {
 }
 
 func (n FlannelNode) getFlannelAnnotations() map[string]string {
-	jsonString, err := json.Marshal(map[string]string{"VtepMac": n.VtepMac})
+	jsonString, err := json.Marshal(map[string]string{"VtepMAC": n.VtepMac})
 	Expect(err).ShouldNot(HaveOccurred())
 	return map[string]string{
 		"flannel.alpha.coreos.com/backend-data": string(jsonString),
