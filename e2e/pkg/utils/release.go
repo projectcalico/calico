@@ -20,9 +20,8 @@ import (
 	"os"
 	"strings"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	v1 "github.com/tigera/operator/api/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
