@@ -255,9 +255,9 @@ func (b allocationBlock) inUseIPs() []string {
 	return ips
 }
 
-// release tries to release addresses matching the release options, on success, returns
-// slice of IPs that were released, map from handle ID to count of IPs released
-// for that handle.
+// release tries to release addresses matching the release options, on success,
+// returns slice of IPs that were *skipped* due to not being allocated and a
+// map from handle ID to count of IPs released for that handle.
 func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
 	unallocated := []cnet.IP{}
