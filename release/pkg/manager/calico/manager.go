@@ -1065,7 +1065,13 @@ func (r *CalicoManager) uploadDir() string {
 func (r *CalicoManager) buildReleaseTar() error {
 	baseReleaseOutputDir := filepath.Dir(r.uploadDir())
 	releaseBase := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion))
-	releaseTarFilePath := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s.tgz", r.calicoVersion))
+	releaseTarFilePath := filepath.Join(r.uploadDir(), fmt.Sprintf("release-%s.tgz", r.calicoVersion))
+	// Drop the staging tree once tar has consumed it.
+	defer func() {
+		if err := os.RemoveAll(releaseBase); err != nil {
+			logrus.WithError(err).Warnf("failed to remove release staging dir %s", releaseBase)
+		}
+	}()
 
 	if r.archiveImages {
 		imgDir := filepath.Join(releaseBase, "images")
@@ -1120,12 +1126,8 @@ func (r *CalicoManager) buildReleaseTar() error {
 		return fmt.Errorf("failed to copy manifests: %w", err)
 	}
 
-	// tar up the whole thing, and copy it to the target directory
 	if _, err := r.runner.RunInDir(r.repoRoot, "tar", []string{"-czvf", releaseTarFilePath, "-C", baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion)}, nil); err != nil {
 		return fmt.Errorf("failed to create release tar: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{releaseTarFilePath, r.uploadDir()}, nil); err != nil {
-		return fmt.Errorf("failed to copy release tar: %w", err)
 	}
 	return nil
 }
