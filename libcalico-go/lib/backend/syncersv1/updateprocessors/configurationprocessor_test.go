@@ -71,7 +71,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Kind: apiv3.KindFelixConfiguration,
 		Name: "default",
 	}
-	invalidFelixKey := model.ResourceKey{
+	selectorScopedFelixKey := model.ResourceKey{
 		Kind: apiv3.KindFelixConfiguration,
 		Name: "foobar",
 	}
@@ -182,20 +182,20 @@ var _ = Describe("Test the generic configuration update processor and the concre
 
 		By("Testing selector-scoped name passes through on Process with add/mod")
 		selectorKvps, err := cc.Process(&model.KVPair{
-			Key:   invalidFelixKey,
+			Key:   selectorScopedFelixKey,
 			Value: apiv3.NewFelixConfiguration(),
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(selectorKvps).To(HaveLen(1))
-		Expect(selectorKvps[0].Key).To(Equal(invalidFelixKey))
+		Expect(selectorKvps[0].Key).To(Equal(selectorScopedFelixKey))
 
 		By("Testing selector-scoped name passes through on Process with delete")
 		selectorKvps, err = cc.Process(&model.KVPair{
-			Key: invalidFelixKey,
+			Key: selectorScopedFelixKey,
 		})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(selectorKvps).To(HaveLen(1))
-		Expect(selectorKvps[0].Key).To(Equal(invalidFelixKey))
+		Expect(selectorKvps[0].Key).To(Equal(selectorScopedFelixKey))
 	})
 
 	It("should handle different field types being assigned", func() {

@@ -177,7 +177,11 @@ func (cb *ConfigBatcher) onFelixConfigResourceUpdate(name string, update api.Upd
 			log.WithError(err).WithFields(log.Fields{
 				"name":     name,
 				"selector": selectorStr,
-			}).Warn("Failed to parse nodeSelector on FelixConfiguration, ignoring")
+			}).Warn("Failed to parse nodeSelector on FelixConfiguration, removing selector-scoped config")
+			if _, existed := cb.selectorConfigs[name]; existed {
+				delete(cb.selectorConfigs, name)
+				cb.configDirty = true
+			}
 			return
 		}
 	}

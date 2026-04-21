@@ -32,7 +32,7 @@ import (
 // FelixValueConverters maps FelixConfigurationSpec field names to their
 // special-case value converter functions. These are needed both by the
 // configUpdateProcessor (for v1 config decomposition) and by
-// ExtractConfigFromFelixSpec (for selector-scoped config extraction).
+// ExtractFelixConfigFields (for selector-scoped config extraction).
 var FelixValueConverters = map[string]ConfigFieldValueToV1ModelValue{
 	"FailsafeInboundHostPorts":  protoPortSliceToString,
 	"FailsafeOutboundHostPorts": protoPortSliceToString,
