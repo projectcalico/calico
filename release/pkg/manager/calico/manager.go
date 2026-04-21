@@ -1143,7 +1143,8 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		return fmt.Errorf("failed to build e2e binaries: %w", err)
 	}
 
-	// Copy the built binaries into the hashrelease output directory.
+	// Hard-link the built binaries into the hashrelease output directory
+	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
 	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
@@ -1158,13 +1159,10 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		}
 		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
 		dst := filepath.Join(e2eOutputDir, entry.Name())
-		if err := utils.CopyFile(src, dst); err != nil {
-			return fmt.Errorf("copying e2e binary %s: %w", entry.Name(), err)
+		if err := os.Link(src, dst); err != nil {
+			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
 		}
-		if err := os.Chmod(dst, 0o755); err != nil {
-			return fmt.Errorf("setting permissions on e2e binary %s: %w", entry.Name(), err)
-		}
-		logrus.Infof("Copied e2e binary: %s", entry.Name())
+		logrus.Infof("Staged e2e binary: %s", entry.Name())
 	}
 	return nil
 }
