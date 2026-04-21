@@ -6,6 +6,9 @@
   dependencies:
     - Prerequisites
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico-image"
     prologue:
       commands:
         - cd whisker-backend
@@ -13,15 +16,6 @@
       - name: "Whisker backend: CI"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-      - name: "Whisker backend: build multi-arch"
-        matrix:
-          - env_var: ARCH
-            values:
-              - arm64
-              - ppc64le
-              - s390x
-        commands:
-          - ../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
     epilogue:
       always:
         commands:
