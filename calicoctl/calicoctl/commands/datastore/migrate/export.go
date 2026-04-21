@@ -16,7 +16,8 @@ package migrate
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
@@ -342,7 +343,7 @@ Description:
 		}
 
 		// Print the Cluster Info resource
-		if output, err := json.MarshalIndent(clusterinfo, "", "  "); err != nil {
+		if output, err := json.Marshal(clusterinfo, jsontext.WithIndent("  ")); err != nil {
 			return err
 		} else {
 			fmt.Printf("%s\n", string(output))
@@ -380,7 +381,7 @@ Description:
 	}
 
 	// Print out the contents of IPAM
-	output, err := json.MarshalIndent(ipam, "", "  ")
+	output, err := json.Marshal(ipam, jsontext.WithIndent("  "))
 	if err != nil {
 		return err
 	} else {

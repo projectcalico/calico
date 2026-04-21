@@ -177,6 +177,10 @@ func TestWatchFlows(t *testing.T) {
 			SourceName:      "test-pod",
 			Action:          whiskerv1.Action(proto.Action_Pass),
 			Reporter:        whiskerv1.Reporter(proto.Reporter_Src),
+			Policies: whiskerv1.PolicyTrace{
+				Enforced: []*whiskerv1.PolicyHit{},
+				Pending:  []*whiskerv1.PolicyHit{},
+			},
 		},
 	}
 	Expect(flows).Should(Equal(expected))

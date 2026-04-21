@@ -96,9 +96,9 @@ REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 CGO_ENABLED=1
 ifeq ($(FIPS),true)
 TAGS=fipsstrict
-GOEXPERIMENT=boringcrypto
+GOEXPERIMENT=boringcrypto,jsonv2
 else
-GOEXPERIMENT=""
+GOEXPERIMENT=jsonv2
 endif
 else ifeq ($(ARCH), $(filter $(ARCH),arm64))
 CGO_ENABLED=0
