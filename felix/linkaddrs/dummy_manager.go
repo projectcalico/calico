@@ -8,20 +8,20 @@ import (
 type DummyLinkAddrsManager struct {
 }
 
-func (_ *DummyLinkAddrsManager) QueueResync() {
+func (*DummyLinkAddrsManager) QueueResync() {
 }
 
-func (_ *DummyLinkAddrsManager) SetLinkLocalAddress(_ string, _ ip.CIDR) error {
+func (*DummyLinkAddrsManager) SetLinkLocalAddress(_ string, _ ip.CIDR) error {
 	return nil
 }
 
-func (_ *DummyLinkAddrsManager) RemoveLinkLocalAddress(_ string) {
+func (*DummyLinkAddrsManager) RemoveLinkLocalAddress(_ string) {
 }
 
-func (_ *DummyLinkAddrsManager) GetNlHandle() (netlinkshim.Interface, error) {
+func (*DummyLinkAddrsManager) GetNlHandle() (netlinkshim.Interface, error) {
 	return nil, nil
 }
 
-func (_ *DummyLinkAddrsManager) Apply() error {
+func (*DummyLinkAddrsManager) Apply() error {
 	return nil
 }
