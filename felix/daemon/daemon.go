@@ -997,7 +997,8 @@ func loadConfigFromDatastore(
 
 // loadSelectorScopedFelixConfig lists all FelixConfiguration resources, finds
 // selector-scoped ones (name not "default" and not "node.*"), evaluates their
-// nodeSelector against this node's labels, and merges all matching configs.
+// nodeSelector against this node's labels, and returns the config from the
+// single winning match (the oldest by creation time).
 func loadSelectorScopedFelixConfig(
 	ctx context.Context, client bapi.Client, hostname string,
 ) (map[string]string, error) {
