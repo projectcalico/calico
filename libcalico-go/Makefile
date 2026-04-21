@@ -6,12 +6,8 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-# For a branch/tag use this format:
-# NETPOL_CNP_REF = refs/heads/main
-# For a commit, just use the commit ID:
-# NETPOL_CNP_REF = <commit ID>
-NETPOL_CNP_REF = 6bb86defe1a70ee81974dbf6b59090835a32a8f0
-NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
+NETPOL_CNP_VER = v0.2.0
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_CNP_VER)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
