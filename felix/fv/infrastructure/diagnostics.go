@@ -31,6 +31,7 @@ func dumpFelixDiags(f *Felix) {
 		f.ExecBestEffort("nft", "list", "ruleset")
 	} else {
 		f.ExecBestEffort("iptables-save", "-c")
+		f.ExecBestEffort("ipset", "list")
 	}
 
 	// IPv6-specific diagnostics if IPv6 is enabled for this node.
