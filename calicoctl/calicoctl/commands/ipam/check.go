@@ -16,7 +16,8 @@ package ipam
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"
@@ -513,7 +514,7 @@ func (c *IPAMChecker) printReport() {
 		Allocations:         c.allocations,
 		LeakedHandles:       c.leakedHandles,
 	}
-	bytes, _ := json.MarshalIndent(r, "", "  ")
+	bytes, _ := json.Marshal(r, jsontext.WithIndent("  "))
 	_ = os.WriteFile(c.outFile, bytes, 0o777)
 }
 

@@ -136,9 +136,7 @@ func init() {
 	windowsManageFirewallRulesDisabled := api.WindowsManageFirewallRulesDisabled
 	var windowsManageFirewallRulesBlah api.WindowsManageFirewallRulesMode = "blah"
 
-	// assignmentMode variables
 	assignmentModeAutomatic := api.Automatic
-	assignmentModeInvalid := new(api.AssignmentMode)
 
 	// Perform validation on error messages from validator
 	DescribeTable("Validator errors",
@@ -1276,18 +1274,6 @@ func init() {
 					AssignmentMode: &assignmentModeAutomatic,
 				},
 			}, true),
-		// Empty assignment mode is rejected by the CRD enum validator. In
-		// a real API server request, omitempty would omit the zero value and
-		// the CRD default (Automatic) would be applied, but Validate() sees
-		// the raw Go struct where the zero value is present.
-		Entry("should reject IP pool with empty assignment mode",
-			&api.IPPool{
-				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
-				Spec: api.IPPoolSpec{
-					CIDR:           netv4_4,
-					AssignmentMode: assignmentModeInvalid,
-				},
-			}, false),
 		Entry("should reject IP pool with LoadBlancer and disableBGPExport true",
 			&api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},

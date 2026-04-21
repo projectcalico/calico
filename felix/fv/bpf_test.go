@@ -16,7 +16,7 @@ package fv_test
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"
@@ -6548,8 +6548,7 @@ func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, pol
 	if err != nil {
 		return false
 	}
-	dec := json.NewDecoder(strings.NewReader(string(out)))
-	err = dec.Decode(&policyDbg)
+	err = json.UnmarshalRead(strings.NewReader(string(out)), &policyDbg)
 	if err != nil {
 		return false
 	}

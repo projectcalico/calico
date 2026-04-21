@@ -1,7 +1,7 @@
 package driver
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -50,10 +50,10 @@ var testTableRetrievePodInfoFromFile = []struct {
 		}`,
 		setupTest: createRealTempJSONFile,
 		validate: func(err error) error {
-			// Expect to receive a json.SyntaxError.
-			se := &json.SyntaxError{}
+			// Expect to receive a jsontext.SyntacticError.
+			se := &jsontext.SyntacticError{}
 			if err == nil || !errors.As(err, &se) {
-				return fmt.Errorf("Expected json.SyntaxError, but got: %w", err)
+				return fmt.Errorf("Expected jsontext.SyntacticError, but got: %w", err)
 			}
 			return nil
 		},
