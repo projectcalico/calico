@@ -16,7 +16,7 @@ package ut_test
 
 import (
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"
@@ -1085,8 +1085,8 @@ func setLogPrefix(ifaceLog string) string {
 }
 
 type bpfRunResult struct {
-	Retval   int
-	Duration int
+	Retval   int `json:"retval"`
+	Duration int `json:"duration"`
 	dataOut  []byte
 }
 

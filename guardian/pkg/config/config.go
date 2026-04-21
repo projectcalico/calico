@@ -17,7 +17,7 @@ package config
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
+	"encoding/json/v2"
 	"encoding/pem"
 	"errors"
 	"fmt"
