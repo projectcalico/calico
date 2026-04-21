@@ -1108,14 +1108,15 @@ func (r *CalicoManager) buildReleaseTar() error {
 		// Felix binaries.
 		"felix/bin/calico-bpf": binDir,
 	}
+	// -al (archive + hard-link) keeps staging disk usage flat and preserves symlinks
 	for src, dst := range binaries {
-		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-r", src, dst}, nil); err != nil {
+		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", src, dst}, nil); err != nil {
 			return fmt.Errorf("failed to copy %s to %s: %w", src, dst, err)
 		}
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", "manifests", releaseBase}, nil); err != nil {
 		return fmt.Errorf("failed to copy manifests: %w", err)
 	}
 
