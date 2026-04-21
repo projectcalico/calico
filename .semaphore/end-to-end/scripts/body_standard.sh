@@ -93,7 +93,10 @@ else
       echo "[INFO] starting e2e testing from local binary..."
       pushd "${HOME}/calico"
       make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
-      GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+      _go_ver=$(grep '^GO_VERSION=' ./metadata.mk | cut -d= -f2)
+      _llvm_ver=$(grep '^LLVM_VERSION=' ./metadata.mk | cut -d= -f2)
+      _k8s_ver=$(grep '^K8S_VERSION=' ./metadata.mk | cut -d= -f2)
+      GO_BUILD_VER="${_go_ver}-llvm${_llvm_ver}-k8s${_k8s_ver#v}"
       # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
       #shellcheck disable=SC2086
       docker run --rm --init --net=host \
