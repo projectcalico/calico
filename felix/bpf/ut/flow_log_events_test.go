@@ -47,8 +47,7 @@ func TestFlowLogV6Events(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withIPv6(), withFlowLogs())
 
-	rawEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	rawEvent := ringBufNextWithTimeout(t, rb)
 	e, err := events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(e.Type()).To(Equal(events.TypePolicyVerdictV6))
@@ -83,8 +82,7 @@ func TestFlowLogEvents(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withFlowLogs())
 
-	rawEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	rawEvent := ringBufNextWithTimeout(t, rb)
 	e, err := events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(e.Type()).To(Equal(events.TypePolicyVerdict))
@@ -117,8 +115,7 @@ func TestFlowLogEvents(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withFlowLogs())
 
-	rawEvent, err = rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	rawEvent = ringBufNextWithTimeout(t, rb)
 	e, err = events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(e.Type()).To(Equal(events.TypePolicyVerdict))

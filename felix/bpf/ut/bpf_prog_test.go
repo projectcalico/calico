@@ -708,6 +708,26 @@ func newTestRingBuf(t *testing.T) *ringbuf.RingBuffer {
 	return rb
 }
 
+// ringBufNextWithTimeout reads the next event from rb, failing the test after
+// 5s rather than blocking on epoll indefinitely. Use this instead of rb.Next()
+// directly so a silent BPF-side regression surfaces as a clear timeout instead
+// of a hung test.
+func ringBufNextWithTimeout(t *testing.T, rb *ringbuf.RingBuffer) ringbuf.Event {
+	t.Helper()
+	var (
+		evt ringbuf.Event
+		err error
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		evt, err = rb.Next()
+	}()
+	Eventually(done, "5s").Should(BeClosed(), "timed out waiting for ring buffer event")
+	Expect(err).NotTo(HaveOccurred())
+	return evt
+}
+
 func cleanupMap(m maps.Map) {
 	log.WithField("map", m.GetName()).Info("Cleaning")
 	err := m.Iter(func(_, _ []byte) maps.IteratorAction {

@@ -46,8 +46,7 @@ func TestRingBufBasic(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw := ringBufNextWithTimeout(t, rb)
 
 	eventHdr := eventHdrFromBytes(eventRaw.Data()[0:8])
 	Expect(eventHdr.typ).To(Equal(uint32(0xdead)))
@@ -71,8 +70,7 @@ func TestRingBufBasic(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err = rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw = ringBufNextWithTimeout(t, rb)
 	eventHdr = eventHdrFromBytes(eventRaw.Data()[0:8])
 	// The BPF program sets type to 0xdead for all protocols (no special ICMP path anymore).
 	Expect(eventHdr.typ).To(Equal(uint32(0xdead)))
@@ -99,8 +97,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw := ringBufNextWithTimeout(t, rb)
 	Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 
 	// Close the first reader and create a new one on the same map.
@@ -115,8 +112,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	})
 
-	eventRaw, err = rb2.Next()
-	Expect(err).NotTo(HaveOccurred())
+	eventRaw = ringBufNextWithTimeout(t, rb2)
 	Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 }
 
@@ -195,14 +191,12 @@ func TestRingBufFillup(t *testing.T) {
 	)
 
 	// First: the data event.
-	dataEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	dataEvent := ringBufNextWithTimeout(t, rb)
 	dataHdr := eventHdrFromBytes(dataEvent.Data()[0:8])
 	Expect(dataHdr.typ).To(Equal(uint32(0xdead)))
 
 	// Second: the TYPE_LOST_EVENTS event with exactly 1 drop.
-	lostEvent, err := rb.Next()
-	Expect(err).NotTo(HaveOccurred())
+	lostEvent := ringBufNextWithTimeout(t, rb)
 	lostData := lostEvent.Data()
 	lostHdr := eventHdrFromBytes(lostData[0:8])
 	Expect(lostHdr.typ).To(Equal(uint32(0)), "Expected EVENT_LOST_EVENTS (type 0)")
@@ -233,8 +227,7 @@ func TestRingBufMultipleEvents(t *testing.T) {
 	}
 
 	for range numEvents {
-		eventRaw, err := rb.Next()
-		Expect(err).NotTo(HaveOccurred())
+		eventRaw := ringBufNextWithTimeout(t, rb)
 		Expect(len(eventRaw.Data())).To(BeNumerically(">", 0))
 
 		hdr := eventHdrFromBytes(eventRaw.Data()[0:8])
