@@ -24,13 +24,13 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/utils/ptr"
 
 	climocks "github.com/projectcalico/calico/goldmane/pkg/client/mocks"
 	"github.com/projectcalico/calico/goldmane/proto"
 	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
-	"github.com/projectcalico/calico/lib/std/ptr"
 	"github.com/projectcalico/calico/lib/std/time"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
@@ -177,6 +177,10 @@ func TestWatchFlows(t *testing.T) {
 			SourceName:      "test-pod",
 			Action:          whiskerv1.Action(proto.Action_Pass),
 			Reporter:        whiskerv1.Reporter(proto.Reporter_Src),
+			Policies: whiskerv1.PolicyTrace{
+				Enforced: []*whiskerv1.PolicyHit{},
+				Pending:  []*whiskerv1.PolicyHit{},
+			},
 		},
 	}
 	Expect(flows).Should(Equal(expected))
@@ -366,7 +370,7 @@ func TestListFilterHints(t *testing.T) {
 
 	hdlr := hdlrv1.NewFlows(fsCli)
 	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
-		Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
+		Type: ptr.To(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
 	})
 	Expect(rsp.Status()).Should(Equal(http.StatusOK))
 	recorder := httptest.NewRecorder()

@@ -15,7 +15,7 @@ package node
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -289,8 +289,12 @@ func (c *nodeLabelController) syncNodeLabels(node *v1.Node) {
 		}
 	}
 
-	// Set the annotation to the correct values.
-	bytes, err := json.Marshal(node.Labels)
+	// Set the annotation to the correct values. Deterministic must stay:
+	// the bytes are stored as the VALUE of a Kubernetes annotation, and
+	// encoding/json/v2's default non-deterministic map key ordering would
+	// cause every reconcile to see a "changed" annotation and rewrite it,
+	// producing needless API churn.
+	bytes, err := json.Marshal(node.Labels, json.Deterministic(true))
 	if err != nil {
 		logrus.WithError(err).Errorf("Error marshalling node labels")
 		return

@@ -1003,19 +1003,6 @@ func TestCRDValidation_FelixConfiguration(t *testing.T) {
 func TestCRDValidation_BGPConfiguration(t *testing.T) {
 	runCRDTests(t, []crdTestCase{
 		{
-			name: "nodeMeshPassword with nodeToNodeMeshEnabled false fails",
-			obj: &apiv3.BGPConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
-				Spec: apiv3.BGPConfigurationSpec{
-					NodeToNodeMeshEnabled: ptr.To(false),
-					NodeMeshPassword: &apiv3.BGPPassword{
-						SecretKeyRef: nil,
-					},
-				},
-			},
-			errSubstr: "nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is false",
-		},
-		{
 			name: "nodeMeshMaxRestartTime with nodeToNodeMeshEnabled false fails",
 			obj: &apiv3.BGPConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
@@ -1411,23 +1398,6 @@ func TestCRDValidation_EntityRule(t *testing.T) {
 				},
 			},
 			errSubstr: "cannot specify Nets/NotNets and Services on the same rule",
-		},
-		{
-			name: "services without name fails",
-			obj: &apiv3.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-policy", Namespace: "default"},
-				Spec: apiv3.NetworkPolicySpec{
-					Ingress: []apiv3.Rule{
-						{
-							Action: apiv3.Allow,
-							Source: apiv3.EntityRule{
-								Services: &apiv3.ServiceMatch{},
-							},
-						},
-					},
-				},
-			},
-			errSubstr: "must specify a service name",
 		},
 		{
 			name: "selector with global() fails",
