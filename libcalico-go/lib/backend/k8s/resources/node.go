@@ -500,6 +500,10 @@ func mergeCalicoAndK8sLabels(calicoNode *internalapi.Node, k8sNode *kapiv1.Node)
 	if calicoNode.Annotations == nil {
 		calicoNode.Annotations = map[string]string{}
 	}
+	// Deterministic must stay: the bytes are stored as the VALUE of a
+	// Kubernetes annotation, and encoding/json/v2's default non-deterministic
+	// map key ordering would cause every reconcile to see a "changed"
+	// annotation and rewrite it, producing needless API churn.
 	bytes, err := json.Marshal(k8sNode.Labels, json.Deterministic(true))
 	if err != nil {
 		log.WithError(err).Errorf("Error marshalling node labels")

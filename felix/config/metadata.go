@@ -338,6 +338,10 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 				parsedDefault = ""
 			}
 		}
+		// Deterministic must stay: this value is embedded in the checked-in
+		// felix/docs/config-params.json via calico-felix-docgen, so
+		// non-deterministic ordering would cause spurious diffs on every
+		// regeneration.
 		parsedDefaultJSON, err := json.Marshal(metadata.Default, json.Deterministic(true))
 		if err != nil {
 			logrus.WithError(err).WithField("name", metadata.Name).Error("Failed to marshal default value to JSON")
