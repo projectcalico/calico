@@ -1,4 +1,6 @@
-// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+// Copyright 2026 Tigera, Inc.
+//
+// Copyright 2018 The Kubernetes Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +17,7 @@
 package webhook
 
 import (
-	crypto_tls "crypto/tls"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
@@ -42,11 +44,6 @@ import (
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
-
-// maxRequestBodyBytes is the maximum size of an admission review request body.
-// The Kubernetes API server limits API objects to 3MB, so an AdmissionReview
-// wrapping a Calico resource will not legitimately exceed this.
-const maxRequestBodyBytes = 3 << 20 // 3MB
 
 var (
 	certFile     string
@@ -91,6 +88,7 @@ func NewCommand() *cobra.Command {
 }
 
 func configureLogging() {
+	// Set up logging.
 	l, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
@@ -105,6 +103,7 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	configureLogging()
 	logrus.Info("Starting Calico admission webhook server")
 
+	// Create a clientset to interact with the Kubernetes API.
 	rc, err := rest.InClusterConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in-cluster config")
@@ -118,8 +117,10 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 		logrus.WithError(err).Fatal("Failed to create Calico clientset")
 	}
 
+	// Register webhook handlers.
 	registerHooks(cs, calicoCS)
 
+	// Create and run the server.
 	cfg, err := ctls.NewTLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create TLS config")
@@ -133,7 +134,7 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 		if !certPool.AppendCertsFromPEM(caCert) {
 			logrus.Fatalf("Failed to parse client CA certificate from %q: file must contain PEM-encoded certificates", clientCAFile)
 		}
-		cfg.ClientAuth = crypto_tls.RequireAndVerifyClientCert
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 		cfg.ClientCAs = certPool
 		logrus.Info("mTLS enabled: requiring and verifying client certificates")
 	}
@@ -147,7 +148,8 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 
 	logrus.Infof("Listening on port %d", port)
-	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
+	err = server.ListenAndServeTLS(certFile, keyFile)
+	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to start webhook server on port %d", port)
 	}
 }
@@ -156,6 +158,7 @@ func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
 	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
 	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
 
+	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn())
 }
 
@@ -167,13 +170,16 @@ func readyFn() func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// handleFn implements utils.HandleFn to allow registration of webhooks.
 func handleFn(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		handleRequest(w, r, handler)
 	}
 }
 
+// handleRequest handles an incoming HTTP request, decodes the AdmissionReview, processes it, and writes the response.
 func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.AdmissionReviewHandler) {
+	// Decode the AdmissionReview request.
 	obj, gvk, err := decodeAdmissionReview(w, r)
 	if err != nil {
 		logrus.Error(err)
@@ -186,6 +192,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 		return
 	}
 
+	// Process the AdmissionReview request.
 	responseObj, err := processAdmissionReview(obj, gvk, handler)
 	if err != nil {
 		logrus.Error(err)
@@ -193,6 +200,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 		return
 	}
 
+	// Encode and send the AdmissionReview response.
 	respBytes, err := json.Marshal(responseObj)
 	if err != nil {
 		logrus.Error(err)
@@ -204,6 +212,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 		logrus.Error(err)
 	}
 }
+
+// maxRequestBodyBytes is the maximum size of an admission review request body.
+// The Kubernetes API server limits API objects to 3MB, so an AdmissionReview
+// wrapping a Calico resource will not legitimately exceed this.
+const maxRequestBodyBytes = 3 << 20 // 3MB
 
 func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
 	var body []byte
@@ -218,14 +231,17 @@ func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Obje
 		return nil, nil, fmt.Errorf("empty body")
 	}
 
+	// Verify the content type is accurate
 	if ct := r.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
 		return nil, nil, fmt.Errorf("invalid Content-Type '%s', expected `application/json`", ct)
 	}
 
+	// Decode the body into an AdmissionReview object, and check the
+	// GroupVersionKind to ensure it's something we support.
 	deserializer := utils.Codecs.UniversalDeserializer()
 	obj, gvk, err := deserializer.Decode(body, nil, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("request could not be decoded: %w", err)
+		return nil, nil, fmt.Errorf("request could not be decoded: %v", err)
 	}
 	return obj, gvk, nil
 }
