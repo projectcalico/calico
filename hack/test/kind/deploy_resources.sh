@@ -184,6 +184,9 @@ for extra in ${EXTRA_VALUES_FILES:-}; do
 done
 echo "Helm values files: ${VALUES_FILE} ${EXTRA_VALUES_FILES:-}"
 ${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
+
+echo "Install calicoctl as a pod"
+${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
@@ -229,6 +232,7 @@ done
 
 echo "Wait for Calico to be ready..."
 wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
 wait_pod_ready -l k8s-app -n calico-system
 
 echo "Calico is running."
