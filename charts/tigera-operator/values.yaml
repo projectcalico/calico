@@ -113,6 +113,11 @@ certs:
 # needed to run itself and Calico. If disabled, you must manage these resources out-of-band.
 manageCRDs: true
 
+# Whether to run the tigera/operator in zap development logging mode. When true, the operator
+# logs at debug level using a human-readable console encoder and emits stacktraces on warnings.
+# Intended for development and debugging; leave disabled in production.
+zapDevel: false
+
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
 
@@ -144,6 +149,7 @@ podLabels: {}
 
 # Custom DNS configuration for the tigera/operator pod.
 dnsConfig: {}
+
 # Image and registry configuration for the tigera/operator pod.
 tigeraOperator:
   image: tigera/operator

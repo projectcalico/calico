@@ -62,6 +62,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds={{ .Values.manageCRDs }}
+            - -zap-devel={{ .Values.zapDevel }}
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
