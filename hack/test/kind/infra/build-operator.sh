@@ -16,15 +16,21 @@ set -e
 REPO=${REPO:-tigera/operator}
 BRANCH=${BRANCH:-master}
 
-# Reuse the existing clone if branch matches, otherwise start fresh.
+# Reuse the existing clone if branch and remote URL match, otherwise start fresh.
+expected_url="https://github.com/${REPO}"
 if [ -d operator/.git ]; then
   existing_branch=$(git -C operator rev-parse --abbrev-ref HEAD 2>/dev/null || true)
-  if [ "$existing_branch" = "$BRANCH" ]; then
+  existing_url=$(git -C operator remote get-url origin 2>/dev/null || true)
+  if [ "$existing_branch" = "$BRANCH" ] && [ "$existing_url" = "$expected_url" ]; then
     echo "Reusing cached operator clone (branch: ${BRANCH}), pulling latest..."
     git -C operator fetch --depth=1 origin ${BRANCH}
     git -C operator reset --hard origin/${BRANCH}
   else
-    echo "Branch changed (${existing_branch} -> ${BRANCH}), re-cloning..."
+    if [ "$existing_branch" != "$BRANCH" ]; then
+      echo "Branch changed (${existing_branch} -> ${BRANCH}), re-cloning..."
+    else
+      echo "Repo changed (${existing_url} -> ${expected_url}), re-cloning..."
+    fi
     rm -rf operator/
     git clone --depth=1 https://github.com/${REPO} -b ${BRANCH} operator
   fi
