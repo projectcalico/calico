@@ -774,12 +774,12 @@ func (c *client) buildExportFilter(
 	// true for routes learned from a BGP peer (iBGP/eBGP), not for
 	// kernel-imported routes (which have source = RTS_INHERIT).
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (source = RTS_BGP && defined(bgp_local_pref)) then {"),
+		"if (source = RTS_BGP && defined(bgp_local_pref)) then {",
 		fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
-		fmt.Sprintf("} else {"),
+		"} else {",
 		fmt.Sprintf("  if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
 		fmt.Sprintf("  bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
-		fmt.Sprintf("}"),
+		"}",
 	)
 
 	// Determine filter suffix based on IP version
