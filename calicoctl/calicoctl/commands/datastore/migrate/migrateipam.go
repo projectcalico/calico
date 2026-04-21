@@ -42,25 +42,25 @@ type migrateIPAM struct {
 type BlockAffinityKVPair struct {
 	Key   string
 	Value *model.BlockAffinity
-	TTL   time.Duration // For writes, if non-zero, key has a TTL.
+	TTL   time.Duration `json:",omitzero,format:nano"` // For writes, if non-zero, key has a TTL.
 }
 
 type IPAMBlockKVPair struct {
 	Key   string
 	Value *model.AllocationBlock
-	TTL   time.Duration // For writes, if non-zero, key has a TTL.
+	TTL   time.Duration `json:",omitzero,format:nano"` // For writes, if non-zero, key has a TTL.
 }
 
 type IPAMHandleKVPair struct {
 	Key   string
 	Value *model.IPAMHandle
-	TTL   time.Duration // For writes, if non-zero, key has a TTL.
+	TTL   time.Duration `json:",omitzero,format:nano"` // For writes, if non-zero, key has a TTL.
 }
 
 type IPAMConfigKVPair struct {
 	Key   string
 	Value *model.IPAMConfig
-	TTL   time.Duration // For writes, if non-zero, key has a TTL.
+	TTL   time.Duration `json:",omitzero,format:nano"` // For writes, if non-zero, key has a TTL.
 }
 
 // ipamResults contains the results from executing an IPAM backend command
