@@ -412,6 +412,30 @@ var _ = Describe("ConfigBatcher", func() {
 				Expect(recorder.Updates[0].selector).To(BeEmpty())
 			})
 		})
+
+		Context("when a previously-valid selector is updated to an invalid one", func() {
+			BeforeEach(func() {
+				fc := apiv3.NewFelixConfiguration()
+				fc.Name = "flip-selector"
+				fc.Spec.NodeSelector = stringPtr("role == 'gpu'")
+				enabled := true
+				fc.Spec.BPFEnabled = &enabled
+				sendFelixConfigResource("flip-selector", fc)
+				cb.OnDatamodelStatus(api.InSync)
+
+				// Now update the same resource with an invalid selector.
+				fc2 := apiv3.NewFelixConfiguration()
+				fc2.Name = "flip-selector"
+				fc2.Spec.NodeSelector = stringPtr("invalid @@@ selector")
+				fc2.Spec.BPFEnabled = &enabled
+				sendFelixConfigResource("flip-selector", fc2)
+			})
+			It("should clear the previous selector config", func() {
+				Expect(recorder.Updates).To(HaveLen(2))
+				Expect(recorder.Updates[0].selector).To(HaveKeyWithValue("BPFEnabled", "true"))
+				Expect(recorder.Updates[1].selector).To(BeEmpty())
+			})
+		})
 	})
 })
 

@@ -1,8 +1,8 @@
-From 1eaa582d3746f6835c36e4fd07d5c0d271ab2eb5 Mon Sep 17 00:00:00 2001
+From b05474f6fb70169d709f5366b3a5918984cd22a0 Mon Sep 17 00:00:00 2001
 From: Seth Malaki <seth@tigera.io>
 Date: Sun, 7 Dec 2025 09:44:57 +0000
-Subject: [PATCH 1/2] feat(cni): DSCP magic mark support for transparent
- network policies
+Subject: [PATCH] feat(cni): DSCP magic mark support for transparent network
+ policies
 
 ---
  cni/pkg/cmd/root.go               |  2 ++
@@ -14,7 +14,7 @@ Subject: [PATCH 1/2] feat(cni): DSCP magic mark support for transparent
  6 files changed, 22 insertions(+)
 
 diff --git a/cni/pkg/cmd/root.go b/cni/pkg/cmd/root.go
-index 887db317a9..0b82274d06 100644
+index 47a3ef1..0b0a895 100644
 --- a/cni/pkg/cmd/root.go
 +++ b/cni/pkg/cmd/root.go
 @@ -128,6 +128,7 @@ var rootCmd = &cobra.Command{
@@ -25,7 +25,7 @@ index 887db317a9..0b82274d06 100644
  				})
  			if err != nil {
  				return fmt.Errorf("failed to create ambient nodeagent service: %v", err)
-@@ -332,6 +333,7 @@ func constructConfig() (*config.Config, error) {
+@@ -334,6 +335,7 @@ func constructConfig() (*config.Config, error) {
  
  		NativeNftables:      viper.GetBool(constants.NativeNftables),
  		ForceIptablesBinary: os.Getenv("FORCE_IPTABLES_BINARY"),
@@ -34,7 +34,7 @@ index 887db317a9..0b82274d06 100644
  
  	if len(installCfg.K8sNodeName) == 0 {
 diff --git a/cni/pkg/config/config.go b/cni/pkg/config/config.go
-index 5ae9e2b732..b39706545e 100644
+index 98e8a86..5d0d491 100644
 --- a/cni/pkg/config/config.go
 +++ b/cni/pkg/config/config.go
 @@ -67,6 +67,9 @@ type AmbientConfig struct {
@@ -47,7 +47,7 @@ index 5ae9e2b732..b39706545e 100644
  }
  
  // GetConfig converts AmbientConfig to tools common config format
-@@ -161,6 +164,9 @@ type InstallConfig struct {
+@@ -164,6 +167,9 @@ type InstallConfig struct {
  
  	// Choose which iptables binary to use (legacy or nft)
  	ForceIptablesBinary string
@@ -57,7 +57,7 @@ index 5ae9e2b732..b39706545e 100644
  }
  
  // RepairConfig struct defines the Istio CNI race repair configuration
-@@ -238,6 +244,7 @@ func (c InstallConfig) String() string {
+@@ -242,6 +248,7 @@ func (c InstallConfig) String() string {
  
  	b.WriteString("NativeNftables: " + fmt.Sprint(c.NativeNftables) + "\n")
  	b.WriteString("ForceIptablesBinary: " + fmt.Sprint(c.ForceIptablesBinary) + "\n")
@@ -66,11 +66,11 @@ index 5ae9e2b732..b39706545e 100644
  }
  
 diff --git a/cni/pkg/constants/constants.go b/cni/pkg/constants/constants.go
-index 2d43aa5819..9b72c39364 100644
+index 1f09085..947f34b 100644
 --- a/cni/pkg/constants/constants.go
 +++ b/cni/pkg/constants/constants.go
-@@ -48,6 +48,7 @@ const (
- 	AmbientReconcilePodRulesOnStartup = "ambient-reconcile-pod-rules-on-startup"
+@@ -49,6 +49,7 @@ const (
+ 	EnableAmbientDetectionRetry       = "enable-ambient-detection-retry"
  
  	NativeNftables = "native-nftables"
 +	MagicDSCPMark  = "magic-dscp-mark"
@@ -78,12 +78,12 @@ index 2d43aa5819..9b72c39364 100644
  	// Repair
  	RepairEnabled            = "repair-enabled"
 diff --git a/cni/pkg/iptables/iptables.go b/cni/pkg/iptables/iptables.go
-index 966aff5763..2b6fe0c553 100644
+index f4588a5..c9cf364 100644
 --- a/cni/pkg/iptables/iptables.go
 +++ b/cni/pkg/iptables/iptables.go
-@@ -275,6 +275,16 @@ func (cfg *IptablesConfigurator) AppendInpodRules(podOverrides config.PodLevelOv
- 		}
- 	}
+@@ -283,6 +283,16 @@ func (cfg *IptablesConfigurator) AppendInpodRules(podOverrides config.PodLevelOv
+ 		"-j", "CONNMARK",
+ 		"--set-xmark", inpodTproxyMark)
  
 +	// DSCP magic mark rule for transparent network policies
 +	if cfg.cfg.MagicDSCPMark > 0 {
@@ -96,10 +96,10 @@ index 966aff5763..2b6fe0c553 100644
 +	}
 +
  	if !podOverrides.IngressMode {
- 		// CLI: -A ISTIO_PRERT -m mark --mark 0x539/0xfff -j CONNMARK --set-xmark 0x111/0xfff
- 		//
+ 		// Handle healthcheck probes from the host node. In the host netns, before the packet enters the pod, we SNAT
+ 		// the healthcheck packet to a fixed IP if the packet is coming from a node-local process with a socket.
 diff --git a/cni/pkg/nodeagent/options.go b/cni/pkg/nodeagent/options.go
-index ee23e41f03..4623fd41af 100644
+index ee23e41..4623fd4 100644
 --- a/cni/pkg/nodeagent/options.go
 +++ b/cni/pkg/nodeagent/options.go
 @@ -56,4 +56,5 @@ type AmbientArgs struct {
@@ -109,17 +109,14 @@ index ee23e41f03..4623fd41af 100644
 +	MagicDSCPMark              int
  }
 diff --git a/cni/pkg/nodeagent/server_linux.go b/cni/pkg/nodeagent/server_linux.go
-index 118c910507..183c958586 100644
+index 2086d01..f7e0cf8 100644
 --- a/cni/pkg/nodeagent/server_linux.go
 +++ b/cni/pkg/nodeagent/server_linux.go
-@@ -44,6 +44,7 @@ func initMeshDataplane(client kube.Client, args AmbientArgs) (*meshDataplane, er
+@@ -47,6 +47,7 @@ func initMeshDataplane(client kube.Client, args AmbientArgs) (*meshDataplane, er
  		HostProbeSNATAddress:   HostProbeSNATIP,
  		HostProbeV6SNATAddress: HostProbeSNATIPV6,
  		Reconcile:              args.ReconcilePodRulesOnStartup,
 +		MagicDSCPMark:          args.MagicDSCPMark,
  	}
  
- 	log.Infof("creating host addressSet manager in the node netns")
--- 
-2.39.5 (Apple Git-154)
-
+ 	useNftables := args.NativeNftables
