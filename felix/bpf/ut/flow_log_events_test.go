@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/events"
-	"github.com/projectcalico/calico/felix/bpf/ringbuf"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 )
 
@@ -34,9 +33,7 @@ func TestFlowLogV6Events(t *testing.T) {
 	ipv6 := ip6hdr.(*layers.IPv6)
 	udp := l4.(*layers.UDP)
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
 	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
@@ -54,6 +51,7 @@ func TestFlowLogV6Events(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	e, err := events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
+	Expect(e.Type()).To(Equal(events.TypePolicyVerdictV6))
 	evnt := events.ParsePolicyVerdict(e.Data(), true)
 	Expect(evnt.SrcAddr).To(Equal(ipv6.SrcIP))
 	Expect(evnt.DstAddr).To(Equal(ipv6.DstIP))
@@ -71,9 +69,7 @@ func TestFlowLogEvents(t *testing.T) {
 	ipv4 := iphdr.(*layers.IPv4)
 	udp := l4.(*layers.UDP)
 
-	rb, err := ringbuf.New(ringBufMap, rbSize)
-	Expect(err).NotTo(HaveOccurred())
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
@@ -91,6 +87,7 @@ func TestFlowLogEvents(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	e, err := events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
+	Expect(e.Type()).To(Equal(events.TypePolicyVerdict))
 	evnt := events.ParsePolicyVerdict(e.Data(), false)
 	Expect(evnt.SrcAddr).To(Equal(ipv4.SrcIP))
 	Expect(evnt.DstAddr).To(Equal(ipv4.DstIP))
@@ -124,6 +121,7 @@ func TestFlowLogEvents(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	e, err = events.ParseEvent(rawEvent)
 	Expect(err).NotTo(HaveOccurred())
+	Expect(e.Type()).To(Equal(events.TypePolicyVerdict))
 	evnt = events.ParsePolicyVerdict(e.Data(), false)
 	Expect(evnt.SrcAddr).To(Equal(ipv4.SrcIP))
 	Expect(evnt.DstAddr).To(Equal(ipv4.DstIP))
