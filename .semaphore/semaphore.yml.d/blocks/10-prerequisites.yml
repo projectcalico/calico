@@ -42,6 +42,7 @@
             value: "true"
         commands:
           - make check-ginkgo-v2
+          - make check-encoding-json-v2
           - make check-go-mod
           - make verify-go-mods
           - make gen-deps-files
