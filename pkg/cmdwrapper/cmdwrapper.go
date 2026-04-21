@@ -29,7 +29,7 @@ import (
 const (
 	// RestartReturnCode is the exit code wrapped processes (currently felix
 	// and kube-controllers) use to signal that they are restarting due to a
-	// configuration change. Run and WrapSelf re-exec the child on this code.
+	// configuration change. WrapSelf re-execs the child on this code.
 	RestartReturnCode int = 129
 
 	// signalBufferSize is the size of the signal-forwarding channel.
@@ -42,23 +42,11 @@ const (
 	restartBackoff = 100 * time.Millisecond
 )
 
-// Run is the external-wrapper entry point: it reads the wrapped program and
-// its arguments from os.Args[1:] and restarts the child on
-// RestartReturnCode. The caller is responsible for configuring logrus before
-// calling Run.
-func Run() {
-	if len(os.Args) < 2 {
-		logrus.Fatalf("Invalid invocation of command wrapper, expected: %s <wrapped command>", os.Args[0])
-	}
-	runLoop(os.Args[1], os.Args[2:], nil)
-}
-
-// WrapSelf provides the same restart-on-RestartReturnCode semantics as Run,
-// but for a component that runs as a subcommand of the current executable
-// (e.g. "calico component felix"). The outer invocation re-execs the
-// current program with the same argv, setting innerEnvVar=1 in the child's
-// environment; the inner invocation sees innerEnvVar=="1" and runs fn
-// directly.
+// WrapSelf provides restart-on-RestartReturnCode semantics for a component
+// that runs as a subcommand of the current executable (e.g. "calico
+// component felix"). The outer invocation re-execs the current program with
+// the same argv, setting innerEnvVar=1 in the child's environment; the
+// inner invocation sees innerEnvVar=="1" and runs fn directly.
 //
 // innerEnvVar must be non-empty and should be unique to this binary and
 // component (for example "CALICO_FELIX_INNER"). Any pre-existing value of
@@ -96,8 +84,7 @@ func stripEnvVar(environ []string, key string) []string {
 }
 
 // runLoop starts prog with args and env and restarts it on
-// RestartReturnCode, forwarding signals to the child. env may be nil to
-// inherit the current process's environment unchanged. runLoop never
+// RestartReturnCode, forwarding signals to the child. runLoop never
 // returns; it calls os.Exit with the child's last exit code.
 func runLoop(prog string, args []string, env []string) {
 	sigCh := make(chan os.Signal, signalBufferSize)
@@ -110,9 +97,7 @@ func runLoop(prog string, args []string, env []string) {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if env != nil {
-			cmd.Env = env
-		}
+		cmd.Env = env
 		setPdeathsig(cmd)
 
 		if err := cmd.Start(); err != nil {
