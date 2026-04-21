@@ -364,6 +364,10 @@ blocks:
               value: "NA"
             - name: NUM_ADDON_PODS
               value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
+            # Maglev deploys 20 backend pods which can exceed the per-node pod
+            # capacity on EKS with the AWS CNI (limited by ENI IP allocation).
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
 
         - name: EKS w/ calico CNI
           execution_time_limit:
