@@ -35,12 +35,12 @@ func matchJSONPols(expected ...string) types.GomegaMatcher {
 		matchers = append(matchers, WithTransform(
 			func(v jsontext.Value) any {
 				var m any
-				json.Unmarshal(v, &m)
+				_ = json.Unmarshal(v, &m)
 				return m
 			},
 			Equal(func() any {
 				var m any
-				json.Unmarshal([]byte(e), &m)
+				_ = json.Unmarshal([]byte(e), &m)
 				return m
 			}()),
 		))
