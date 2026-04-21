@@ -33,8 +33,7 @@ func TestFlowLogV6Events(t *testing.T) {
 	ipv6 := ip6hdr.(*layers.IPv6)
 	udp := l4.(*layers.UDP)
 
-	rb := newTestRingBuf()
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
 	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
@@ -70,8 +69,7 @@ func TestFlowLogEvents(t *testing.T) {
 	ipv4 := iphdr.(*layers.IPv4)
 	udp := l4.(*layers.UDP)
 
-	rb := newTestRingBuf()
-	defer rb.Close()
+	rb := newTestRingBuf(t)
 
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
 	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
