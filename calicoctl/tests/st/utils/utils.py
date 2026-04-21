@@ -308,7 +308,7 @@ def clean_calico_data(data, extra_keys_to_remove=None):
             # Remove non-settable fields, and recursively clean each value of
             # the dictionary, removing nil values or values that are empty
             # dicts after cleaning.
-            del_keys = ['creationTimestamp', 'resourceVersion', 'uid']
+            del_keys = ['creationTimestamp', 'resourceVersion', 'uid', 'generation']
             if extra_keys is not None:
                 for extra_key in extra_keys:
                     del_keys.append(extra_key)

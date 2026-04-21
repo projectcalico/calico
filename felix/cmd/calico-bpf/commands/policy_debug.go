@@ -15,7 +15,7 @@
 package commands
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"regexp"
@@ -270,7 +270,7 @@ func dumpPolicyInfo(cmd *cobra.Command, iface string, h hook.Hook, m counters.Po
 	}
 	defer jsonFile.Close()
 
-	err = json.NewDecoder(jsonFile).Decode(&policyDbg)
+	err = json.UnmarshalRead(jsonFile, &policyDbg)
 	if err != nil {
 		return err
 	}
