@@ -3,6 +3,7 @@
     when: "${CHANGE_IN(cni-plugin)}"
   dependencies:
     - Prerequisites
+    - "Build: calico image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP

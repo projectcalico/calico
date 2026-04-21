@@ -677,6 +677,10 @@ blocks:
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
+      # Only the pre-flight checks gate on this; the per-image build blocks are
+      # wired in directly as dependencies on the consumer blocks that actually
+      # load those cached images, so unrelated component blocks don't serialize
+      # behind them.
       when: "true"
     dependencies:
       - Check SemaphoreCI files
@@ -688,9 +692,6 @@ blocks:
       - Manifests and API docs
       - Store working copy
       - "Pull: go-build image"
-      - "Build: calico image"
-      - "Build: node image"
-      - "Build: whisker image"
     task:
       jobs:
         - name: Pre-flight checks
@@ -1494,6 +1495,7 @@ blocks:
         '/pkg/**/*_test.go']})
     dependencies:
       - Prerequisites
+      - "Build: calico image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -2248,6 +2250,9 @@ blocks:
         '/whisker-backend/**/*_test.go']})
     dependencies:
       - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -3367,6 +3372,7 @@ blocks:
         '/typha/**/*_test.go']})
     dependencies:
       - Prerequisites
+      - "Build: calico image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -4656,6 +4662,7 @@ blocks:
         '/pkg/**/*_test.go']})
     dependencies:
       - Prerequisites
+      - "Build: calico image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP

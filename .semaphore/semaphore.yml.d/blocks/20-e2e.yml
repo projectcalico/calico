@@ -3,6 +3,9 @@
     when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico)}"
   dependencies:
     - Prerequisites
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
