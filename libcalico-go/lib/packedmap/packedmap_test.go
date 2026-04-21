@@ -23,7 +23,7 @@ import (
 type exampleStruct struct {
 	Field1 string         `json:"field_one,omitempty"`
 	Field2 bool           `json:"field_two,omitempty"`
-	Field3 map[string]int `json:"field_three,omitemepty"`
+	Field3 map[string]int `json:"field_three,omitempty"`
 }
 
 func TestCompressedJSON(t *testing.T) {

@@ -145,7 +145,10 @@ func (p SnappyEncoderWrapper[V, E]) Unpack(packed string) V {
 type JSONEncoder[V any] struct{}
 
 func (p JSONEncoder[V]) Pack(val V) string {
-	buf, err := json.Marshal(val)
+	// Deterministic ensures map keys are emitted in a stable order so that
+	// equal inputs produce equal bytes — required for DedupingEncoderWrapper
+	// to collapse identical values.
+	buf, err := json.Marshal(val, json.Deterministic(true))
 	if err != nil {
 		panic(fmt.Sprintf("failed to pack value as JSON: %s", err))
 	}
