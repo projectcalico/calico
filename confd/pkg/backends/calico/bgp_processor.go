@@ -767,8 +767,14 @@ func (c *client) buildExportFilter(
 	// default to the normal route priority. Convert krt_metric →
 	// bgp_local_pref so BGPFilter Priority matching and iBGP transmission
 	// work correctly.
+	// Note: we cannot use `defined(bgp_local_pref)` to distinguish these
+	// cases because BIRD 1.x initializes bgp_local_pref to 100 (the BGP
+	// default) for all routes during BGP export preparation, so it is
+	// always "defined". Instead, use `source = RTS_BGP` which is only
+	// true for routes learned from a BGP peer (iBGP/eBGP), not for
+	// kernel-imported routes (which have source = RTS_INHERIT).
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (defined(bgp_local_pref)) then {"),
+		fmt.Sprintf("if (source = RTS_BGP && defined(bgp_local_pref)) then {"),
 		fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
 		fmt.Sprintf("} else {"),
 		fmt.Sprintf("  if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
