@@ -315,18 +315,21 @@ var _ = Describe("Releasing IPs by Handle", func() {
 	})
 
 	It("skips removal if the sequence numbers do not match", func() {
-		Skip("Currently failing: leaks the IP")
-
 		block := makeTestBlock()
-		block.allocate([]int{15}, "fifteen")
+		block.allocate([]int{15}, "teens")
+		block.allocate([]int{16}, "teens")
+		block.allocate([]int{17, 18}, "teens")
 		block.SequenceNumberForAllocation["15"] = 10
+		block.SequenceNumberForAllocation["16"] = 10
+		block.SequenceNumberForAllocation["17"] = 999 // not removed
+		block.SequenceNumberForAllocation["18"] = 10
 
 		released := block.releaseByHandle(ReleaseOptions{
-			Handle:         "fifteen",
-			SequenceNumber: new(uint64(999)),
+			Handle:         "teens",
+			SequenceNumber: new(uint64(10)),
 		})
-		Expect(released).To(Equal(0))
-		Expect(block.allocatedOrdinals()).To(Equal([]int{15}), "allocation not affected")
+		Expect(released).To(Equal(3))
+		Expect(block.allocatedOrdinals()).To(Equal([]int{17}), "mismatched allocation not freed")
 
 		block.validate()
 	})
