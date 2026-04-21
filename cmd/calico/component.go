@@ -18,16 +18,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
-	goldmane "github.com/projectcalico/calico/goldmane/pkg/daemon"
-	guardian "github.com/projectcalico/calico/guardian/pkg/daemon"
+	"github.com/projectcalico/calico/goldmane/cmd/goldmane"
+	"github.com/projectcalico/calico/guardian/cmd/guardian"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
 	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
 	"github.com/projectcalico/calico/node/pkg/node"
 	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
 	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
-	typha "github.com/projectcalico/calico/typha/pkg/daemon"
+	"github.com/projectcalico/calico/typha/cmd/typha"
 	"github.com/projectcalico/calico/webhooks/pkg/webhook"
-	whiskerbackend "github.com/projectcalico/calico/whisker-backend/cmd/app"
+	"github.com/projectcalico/calico/whisker-backend/cmd/whiskerbackend"
 )
 
 func newComponentCommand() *cobra.Command {

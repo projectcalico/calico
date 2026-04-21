@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package daemon
+package guardian
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/guardian/pkg/config"
+	"github.com/projectcalico/calico/guardian/pkg/daemon"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -44,7 +45,7 @@ func NewCommand() *cobra.Command {
 			}
 
 			logrus.Infof("Starting Calico Guardian %s", cfg.String())
-			Run(shutdownContext(), cfg.Config, cfg.Targets())
+			daemon.Run(shutdownContext(), cfg.Config, cfg.Targets())
 		},
 	}
 

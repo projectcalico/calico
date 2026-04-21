@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package daemon
+package typha
 
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/pkg/buildinfo"
+	"github.com/projectcalico/calico/typha/pkg/daemon"
 )
 
 // NewCommand returns a cobra command that runs the Typha datastore fan-out proxy.
@@ -31,14 +32,14 @@ func NewCommand() *cobra.Command {
 		Use:   "typha",
 		Short: "Run the Typha datastore fan-out proxy",
 		Run: func(cmd *cobra.Command, args []string) {
-			typha := New()
-			if err := typha.Run(context.Background(), configFile); err != nil {
-				log.WithError(err).Fatal("Typha exited with error")
+			t := daemon.New()
+			if err := t.Run(context.Background(), configFile); err != nil {
+				logrus.WithError(err).Fatal("Typha exited with error")
 			}
 		},
 	}
 
-	cmd.Flags().StringVarP(&configFile, "config-file", "c", DefaultConfigFile, "Config file to load")
+	cmd.Flags().StringVarP(&configFile, "config-file", "c", daemon.DefaultConfigFile, "Config file to load")
 	cmd.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
