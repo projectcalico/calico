@@ -19,6 +19,10 @@ import (
 	"github.com/projectcalico/calico/confd/pkg/backends"
 )
 
+const (
+	maxBIRDSymLen = 64
+)
+
 func newFuncMap() map[string]any {
 	m := make(map[string]any)
 	m["base"] = path.Base
@@ -154,14 +158,12 @@ func filterAction(action v3.BGPFilterAction) (string, error) {
 	return fmt.Sprintf("%s;", strings.ToLower(string(action))), nil
 }
 
-var (
-	operatorLUT = map[v3.BGPFilterMatchOperator]string{
-		v3.MatchOperatorEqual:    "=",
-		v3.MatchOperatorNotEqual: "!=",
-		v3.MatchOperatorIn:       "~",
-		v3.MatchOperatorNotIn:    "!~",
-	}
-)
+var operatorLUT = map[v3.BGPFilterMatchOperator]string{
+	v3.MatchOperatorEqual:    "=",
+	v3.MatchOperatorNotEqual: "!=",
+	v3.MatchOperatorIn:       "~",
+	v3.MatchOperatorNotIn:    "!~",
+}
 
 func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, error) {
 	cidrIP, cidrNet, err := net.ParseCIDR(cidr)
@@ -330,7 +332,6 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 		return "", fmt.Errorf("provided direction '%s' does not map to either 'import' or 'export'", direction)
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
-	maxBIRDSymLen := 64
 	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err
