@@ -108,13 +108,13 @@ func ApplyCRDs(apiserver *containers.Container) {
 	// see a NoKindMatchError from the controller-runtime RESTMapper. Wait for all
 	// CRDs to report Established before returning.
 	waitEstablished := func() error {
-		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=30s")
+		out, err := apiserver.ExecOutput("kubectl", "wait", "--for=condition=Established", "--all", "crds", "--timeout=5s")
 		if err != nil {
 			return fmt.Errorf("%s: %s", err, out)
 		}
 		return nil
 	}
-	EventuallyWithOffset(1, waitEstablished, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+	EventuallyWithOffset(1, waitEstablished, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
 
 func RunK8sApiserver(etcdIp string) *containers.Container {
