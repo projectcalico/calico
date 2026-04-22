@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ set -o pipefail
 
 : "${ASO_DIR:="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"}"
 
+. "${ASO_DIR}/../util/utils.sh"
+
 : "${KIND_CLUSTER_NAME:=kind}"
 : "${KINDEST_NODE_VERSION:=v1.31.0}"
 : "${CERT_MANAGER_VERSION:=v1.14.1}"
@@ -30,6 +32,14 @@ CRD_PATTERN="resources.azure.com/*;containerservice.azure.com/*;compute.azure.co
 : ${CMCTL:=./bin/cmctl}
 : ${ASOCTL:=./bin/asoctl}
 : ${HELM:=./bin/helm}
+
+# On failure, capture describe + logs for every non-Ready pod in the kind cluster
+# so CI has something actionable to look at. Under Semaphore we drop straight into
+# /home/semaphore/fv.log/ (the job's artifact staging dir); otherwise fall back to
+# /tmp for hand runs.
+diag_dir="${DIAG_DIR:-/home/semaphore/fv.log/diagnostics}"
+[[ -d /home/semaphore ]] || diag_dir="/tmp/pod-diagnostics"
+trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Collecting pod diagnostics..."; echo "========================================"; KUBECTL='"${KUBECTL}"' KUBECONFIG='"${ASO_DIR}"'/kind-kubeconfig collect_pod_diagnostics "'"${diag_dir}"'"; fi; exit $exit_code' EXIT
 
 # Create management cluster
 ${KIND} create cluster --image "kindest/node:${KINDEST_NODE_VERSION}" --name "${KIND_CLUSTER_NAME}" --verbosity 5
