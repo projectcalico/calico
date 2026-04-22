@@ -64,8 +64,8 @@ import (
 //                |   +-------+     +-------+     +-------+     +-----------+   |
 //                |       ^             ^             ^               ^         |
 //                |       |             |             |               |         |
-//                |   pod IP from   LB VIP from        |       arping/rdisc6    |
-//                |   workload pool LB pool            |       curl ...         |
+//                |   pod IP from   LB VIP from       |        arping/rdisc6    |
+//                |   workload pool LB pool           |        curl ...         |
 //                +-------------------------------------------------------------+
 //
 // The extL2 container shares the L2 segment with the cluster nodes. It has no
