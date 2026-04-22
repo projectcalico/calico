@@ -1866,14 +1866,18 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpdump1.SetLogEnabled(true)
 							tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-							tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							// Exclude packets with the DF flag set so incidental
+							// probe traffic (e.g., the connectivity checker) does
+							// not pollute the fragment count; pktgen sends with
+							// --ip-dnf=n so its fragments have DF=0.
+							tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP, "and", "ip[6] & 0x40 = 0")
 							defer tcpdump1.Stop()
 
 							tcpdump0 := w[0][0].AttachTCPDump()
 							tcpdump0.SetLogEnabled(true)
 							tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP, "and", "ip[6] & 0x40 = 0")
 							defer tcpdump0.Stop()
 
 							// Wait for the new policy to be programmed and BPF
