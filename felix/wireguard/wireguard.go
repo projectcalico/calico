@@ -1775,7 +1775,8 @@ func (w *Wireguard) getNodeFromKey(key wgtypes.Key) *nodeData {
 
 // applyWireguardConfig applies the wireguard configuration.
 func (w *Wireguard) applyWireguardConfig(wireguardClient netlinkshim.Wireguard, c *wgtypes.Config) error {
-	w.logCtx.Debugf("Apply wireguard config update: %#v", c)
+	// Do not log the wgtypes.Config struct, it may contain the WireGuard PrivateKey.
+	w.logCtx.Debug("Apply wireguard config update")
 	if c == nil {
 		// No config to apply.
 		return nil
