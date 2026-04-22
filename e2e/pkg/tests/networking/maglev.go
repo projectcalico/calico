@@ -136,7 +136,7 @@ var _ = describe.CalicoDescribe(
 			// nodes. The test programs static routes with node IPs as gateways,
 			// which requires the gateway to be directly reachable on a connected
 			// interface.
-			verifyExternalNodeSubnetReachability(extNode, nodeIPv4s)
+			verifyExternalNodeSubnetReachability(extNode, nodeIPv4s, nodeIPv6s)
 
 			// Initialize the test helper
 			maglevTests = NewMaglevTests(f)
@@ -728,20 +728,38 @@ func removeRoute(extNode *externalnode.Client, destCIDR, gatewayIP string, ipv6 
 }
 
 // verifyExternalNodeSubnetReachability checks that the external node can
-// program a static route via a cluster node IP. If the kernel rejects the
-// nexthop (nodes are on different L2 subnets), the test is skipped.
-func verifyExternalNodeSubnetReachability(extNode *externalnode.Client, nodeIPv4s []string) {
+// program a static route via a cluster node IP, for each IP family that has
+// at least one node address. If the kernel rejects the nexthop (nodes are on
+// different L2 subnets), the test is skipped.
+func verifyExternalNodeSubnetReachability(extNode *externalnode.Client, nodeIPv4s, nodeIPv6s []string) {
 	By("verifying external node can route to cluster nodes")
 
-	if len(nodeIPv4s) == 0 {
+	if len(nodeIPv4s) == 0 && len(nodeIPv6s) == 0 {
+		framework.Logf("No cluster node IPs available for reachability probe; skipping check")
 		return
 	}
 
-	// Try adding a route to a RFC 5737 TEST-NET-2 address via the first
-	// cluster node. If the kernel rejects the nexthop, the external node
-	// and cluster nodes are on different subnets.
-	const testDest = "198.51.100.1/32"
-	err := addRoute(extNode, testDest, nodeIPv4s[0], false)
+	// RFC 5737 TEST-NET-2 (IPv4) and RFC 3849 documentation prefix (IPv6).
+	// These addresses are reserved for documentation and are guaranteed not
+	// to collide with any real cluster CIDR. We only need the kernel to
+	// evaluate the nexthop; no packets are sent to these addresses.
+	if len(nodeIPv4s) > 0 {
+		probeReachability(extNode, "198.51.100.1/32", nodeIPv4s[0], false)
+	} else {
+		framework.Logf("No IPv4 node IPs available; skipping IPv4 reachability probe")
+	}
+	if len(nodeIPv6s) > 0 {
+		probeReachability(extNode, "2001:db8::1/128", nodeIPv6s[0], true)
+	} else {
+		framework.Logf("No IPv6 node IPs available; skipping IPv6 reachability probe")
+	}
+}
+
+// probeReachability attempts to add a throw-away route via gatewayIP and
+// removes it on success. On *ErrInvalidNexthop, the test is skipped; on any
+// other error, the test fails fast.
+func probeReachability(extNode *externalnode.Client, testDest, gatewayIP string, ipv6 bool) {
+	err := addRoute(extNode, testDest, gatewayIP, ipv6)
 	if err != nil {
 		var invalidNexthop *ErrInvalidNexthop
 		if errors.As(err, &invalidNexthop) {
@@ -751,6 +769,6 @@ func verifyExternalNodeSubnetReachability(extNode *externalnode.Client, nodeIPv4
 		// the same underlying error and fail with less context.
 		Expect(err).NotTo(HaveOccurred(), "External node early reachability check failed for an unexpected reason")
 	}
-	removeRoute(extNode, testDest, nodeIPv4s[0], false)
-	framework.Logf("External node subnet reachability verified via node %s", nodeIPv4s[0])
+	removeRoute(extNode, testDest, gatewayIP, ipv6)
+	framework.Logf("External node subnet reachability verified via node %s", gatewayIP)
 }
