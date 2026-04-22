@@ -79,26 +79,26 @@ var _ = describe.CalicoDescribe(
 		BeforeEach(func() {
 			var err error
 			cli, err = client.NewAPIClient(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred(), "failed to create an API client at beginning of setup")
 
+			// Skip unsupported Calico OSS versions.
 			if utils.IsCalicoOSS() {
 				supported, err := utils.ReleaseStreamIsAtLeast("v3.32")
-				Expect(err).NotTo(HaveOccurred(), "Couldn't not check release stream")
-				if err == nil && !supported {
+				Expect(err).NotTo(HaveOccurred(), "Couldn't check OSS release stream")
+				if !supported {
 					Skip(fmt.Sprintf("Maglev is not supported on OSS release stream %s (requires >=v3.32)", os.Getenv("RELEASE_STREAM")))
 				}
 			}
 
-			isEE := false
-			Eventually(func() error {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				isEE, err = utils.IsCalicoEE(ctx, cli)
-				return err
-			}).Should(Succeed(), "Never succeeded in checking product variant")
-
+			// Skip unsupported Calico Enterprise versions.
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			isEE, err := utils.IsCalicoEE(ctx, cli)
+			Expect(err).NotTo(HaveOccurred(), "Failed to check if Calico is Enterprise")
 			if isEE {
 				supported, err := utils.ReleaseStreamIsAtLeast("v3.23")
-				if err == nil && !supported {
+				Expect(err).NotTo(HaveOccurred(), "Couldn't check EE release stream")
+				if !supported {
 					Skip(fmt.Sprintf("Maglev is not supported on EE release stream %s (requires >=v3.23)", os.Getenv("RELEASE_STREAM")))
 				}
 			}
@@ -117,7 +117,7 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "Failed to pre-pull rapidclient image on external node")
 
 			// Get available nodes for pod distribution
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 10) // Get up to 10 nodes
 			Expect(err).ShouldNot(HaveOccurred(), "Failed to get schedulable nodes")
