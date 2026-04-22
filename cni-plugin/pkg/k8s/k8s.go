@@ -300,7 +300,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 				newData, err := json.Marshal(stdinData)
 				if err != nil {
 					// Do not log stdinData, it may contain sensitive credentials (K8sAuthToken, K8sClientKey).
-				logger.WithError(err).Error("Error marshaling CNI stdin data")
+					logger.WithError(err).Error("Error marshaling CNI stdin data")
 					return nil, err
 				}
 				args.StdinData = newData
