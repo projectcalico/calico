@@ -578,18 +578,22 @@ func (r *CalicoManager) buildHelmIndex(chartDir, chartURL string) error {
 		return fmt.Errorf("download previous helm index from %s: %w", indexURL, err)
 	}
 
-	// Create tmp directory for building index and copy chart there.
+	// Create tmp directory for building index and hard-link charts there.
 	tmpChartsDir := filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()))
 	if err := os.MkdirAll(tmpChartsDir, utils.DirPerms); err != nil {
 		return fmt.Errorf("create temp dir for building helm index: %w", err)
 	}
+	defer func() {
+		if err := os.RemoveAll(tmpChartsDir); err != nil {
+			logrus.WithError(err).Warnf("failed to remove helm index staging dir %s", tmpChartsDir)
+		}
+	}()
 
-	// Copy charts to temp dir.
 	for _, chart := range utils.AllReleaseCharts() {
 		srcChart := filepath.Join(chartDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
 		destChart := filepath.Join(tmpChartsDir, fmt.Sprintf("%s-%s.tgz", chart, r.helmChartVersion()))
-		if err := utils.CopyFile(srcChart, destChart); err != nil {
-			return fmt.Errorf("error copying %s chart to temp dir for building helm index: %w", chart, err)
+		if err := os.Link(srcChart, destChart); err != nil {
+			return fmt.Errorf("linking %s chart to temp dir for building helm index: %w", chart, err)
 		}
 	}
 
@@ -1065,7 +1069,13 @@ func (r *CalicoManager) uploadDir() string {
 func (r *CalicoManager) buildReleaseTar() error {
 	baseReleaseOutputDir := filepath.Dir(r.uploadDir())
 	releaseBase := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion))
-	releaseTarFilePath := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s.tgz", r.calicoVersion))
+	releaseTarFilePath := filepath.Join(r.uploadDir(), fmt.Sprintf("release-%s.tgz", r.calicoVersion))
+	// Drop the staging tree once tar has consumed it.
+	defer func() {
+		if err := os.RemoveAll(releaseBase); err != nil {
+			logrus.WithError(err).Warnf("failed to remove release staging dir %s", releaseBase)
+		}
+	}()
 
 	if r.archiveImages {
 		imgDir := filepath.Join(releaseBase, "images")
@@ -1108,23 +1118,20 @@ func (r *CalicoManager) buildReleaseTar() error {
 		// Felix binaries.
 		"felix/bin/calico-bpf": binDir,
 	}
+	// -al (archive + hard-link) keeps staging disk usage flat and preserves symlinks
 	for src, dst := range binaries {
-		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-r", src, dst}, nil); err != nil {
+		if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", src, dst}, nil); err != nil {
 			return fmt.Errorf("failed to copy %s to %s: %w", src, dst, err)
 		}
 	}
 
 	// Add in manifests directory generated from the docs.
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-r", "manifests", releaseBase}, nil); err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", "manifests", releaseBase}, nil); err != nil {
 		return fmt.Errorf("failed to copy manifests: %w", err)
 	}
 
-	// tar up the whole thing, and copy it to the target directory
 	if _, err := r.runner.RunInDir(r.repoRoot, "tar", []string{"-czvf", releaseTarFilePath, "-C", baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion)}, nil); err != nil {
 		return fmt.Errorf("failed to create release tar: %w", err)
-	}
-	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{releaseTarFilePath, r.uploadDir()}, nil); err != nil {
-		return fmt.Errorf("failed to copy release tar: %w", err)
 	}
 	return nil
 }
