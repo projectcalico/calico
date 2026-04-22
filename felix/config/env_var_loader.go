@@ -25,6 +25,37 @@ import (
 // An environment entry of "FELIX_FOO=bar" is translated to "foo": "bar".
 func LoadConfigFromEnvironment(environ []string) map[string]string {
 	result := make(map[string]string)
+	// isSensitiveParam checks whether a config parameter name suggests its value
+	// may contain credentials. Matching params have their values redacted in logs.
+	// Note: params ending in "file" (e.g. "etcdkeyfile") are file paths, not secrets.
+	sensitiveSubstrings := []string{
+		"password", "passwd", "passphrase",
+		"token", "bearer",
+		"secret",
+		"credential",
+		"authorization",
+		"cookie",
+		"private",
+	}
+	sensitiveSuffixes := []string{"key", "cert", "kubeconfig", "kubeconfiginline"}
+	isSensitiveParam := func(name string) bool {
+		lower := strings.ToLower(name)
+		// Params ending in "file" or "path" are file paths, not inline secrets.
+		if strings.HasSuffix(lower, "file") || strings.HasSuffix(lower, "path") {
+			return false
+		}
+		for _, sub := range sensitiveSubstrings {
+			if strings.Contains(lower, sub) {
+				return true
+			}
+		}
+		for _, suffix := range sensitiveSuffixes {
+			if strings.HasSuffix(lower, suffix) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, kv := range environ {
 		splits := strings.SplitN(kv, "=", 2)
 		if len(splits) < 2 {
@@ -37,9 +68,14 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		if strings.Index(key, "felix_") == 0 {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			// Do not log env var values, they may contain sensitive credentials.
-			log.Infof("Found felix environment variable: %s=<set>",
-				paramName)
+			// Redact values for env vars that may contain sensitive credentials.
+			if isSensitiveParam(paramName) {
+				log.Infof("Found felix environment variable: %s=<redacted>",
+					paramName)
+			} else {
+				log.Infof("Found felix environment variable: %s=%q",
+					paramName, value)
+			}
 			result[paramName] = value
 		}
 	}
