@@ -50,8 +50,6 @@ install-package --skip-update jq
 
 echo "[INFO] exporting default env vars..."
 
-export RELEASE_STREAM=${RELEASE_STREAM:-v3.32}
-
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
 export PROVISIONER=${PROVISIONER:-"gcp-kubeadm"}
 export INSTALLER=${INSTALLER:-"manual"}
