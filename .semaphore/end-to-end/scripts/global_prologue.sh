@@ -49,6 +49,7 @@ echo "[INFO] Installing jq..."
 install-package --skip-update jq
 
 echo "[INFO] exporting default env vars..."
+
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
 export PROVISIONER=${PROVISIONER:-"gcp-kubeadm"}
 export INSTALLER=${INSTALLER:-"manual"}
