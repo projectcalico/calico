@@ -204,4 +204,4 @@ stop-kubernetes-control-plane:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: mod-download build-all static-checks test
+ci: mod-download build static-checks test
