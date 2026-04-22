@@ -141,6 +141,28 @@ else
 CGO_ENABLED?=0
 endif
 
+# Cross-compilation support using clang.  When building on amd64 for a different
+# target architecture, we use clang as a cross-compiler (it natively supports all
+# targets) with a per-arch sysroot containing the target libraries.  This avoids
+# slow QEMU emulation for CGO builds.
+#
+# Map Go ARCH names to clang target triples.
+# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
+CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
+CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+
+# Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+ifneq ($(CLANG_CROSS_TRIPLE_$(ARCH)),)
+CROSS_TRIPLE := $(CLANG_CROSS_TRIPLE_$(ARCH))
+CROSS_SYSROOT := /usr/$(CROSS_TRIPLE)/sys-root
+CROSS_CC := clang --target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT)
+CROSS_LDFLAGS := -fuse-ld=lld
+endif
+endif
+endif
+
 # Build a binary with boring crypto support.
 # This function expects you to pass in two arguments:
 #   1st arg: path/to/input/package(s)
@@ -151,6 +173,7 @@ endif
 define build_cgo_boring_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
@@ -162,6 +185,7 @@ endef
 define build_cgo_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
@@ -190,7 +214,7 @@ define build_windows_binary
 		-e GOARCH=amd64 \
 		-e GOOS=windows \
 		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -361,6 +385,7 @@ DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
+		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
@@ -1049,7 +1074,7 @@ define retry_docker_cmd
 	done
 endef
 
-# Configuration options for retrying docker commands 
+# Configuration options for retrying docker commands
 MANIFEST_RETRIES ?= 5
 MANIFEST_RETRY_DELAY ?= 5
 
@@ -1638,8 +1663,26 @@ $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
 # actual built images, so it can run in parallel with component builds.
-$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
-	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+# Track the operator source selection in a generated inputs file so
+# changes to repo/branch invalidate the operator stamp.
+.PHONY: FORCE
+FORCE:
+
+$(REPO_ROOT)/.stamp.operator.inputs: FORCE
+	@printf '%s\n' \
+	  'OPERATOR_ORGANIZATION=$(OPERATOR_ORGANIZATION)' \
+	  'OPERATOR_GIT_REPO=$(OPERATOR_GIT_REPO)' \
+	  'OPERATOR_BRANCH=$(OPERATOR_BRANCH)' > $@.tmp
+	@if test -f $@ && cmp -s $@.tmp $@; then \
+	  rm -f $@.tmp; \
+	else \
+	  mv -f $@.tmp $@; \
+	fi
+
+$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml $(REPO_ROOT)/.stamp.operator.inputs
+	cd $(KIND_INFRA_DIR) && \
+	  REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
+	  BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
@@ -1668,16 +1711,21 @@ kind-deploy:
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
 	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Rebuild any images whose source files have changed, load onto the kind
-# cluster, and restart pods.
+# cluster, upgrade the Helm release, and restart pods. The chart rebuild
+# and helm upgrade are both fast no-ops when nothing has changed.
 .PHONY: kind-reload
 kind-reload:
 	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
+		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
+		--reuse-values \
+		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 

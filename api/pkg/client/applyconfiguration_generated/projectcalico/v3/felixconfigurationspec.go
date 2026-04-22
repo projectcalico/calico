@@ -15,6 +15,19 @@ import (
 //
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpecApplyConfiguration struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to apply only to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// At most one selector-scoped FelixConfiguration should match any given node.
+	// If multiple selector-scoped resources match, the oldest (by creation
+	// timestamp) is used and a warning is logged. This prevents an accidentally
+	// created conflicting resource from disrupting an existing, working
+	// configuration.
+	NodeSelector *string `json:"nodeSelector,omitempty"`
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
@@ -520,6 +533,12 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
+	// BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+	// reassembles out-of-order IP fragments from external networks. This program requires
+	// a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+	// Felix reports not-ready until the user sets this to false. When false, fragmented
+	// packets from external sources are dropped. [Default: true]
+	BPFIPFragmentReassemblyEnabled *bool `json:"bpfIPFragmentReassemblyEnabled,omitempty"`
 	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
 	// or Loose. [Default: Loose]
@@ -722,6 +741,14 @@ type FelixConfigurationSpecApplyConfiguration struct {
 // apply.
 func FelixConfigurationSpec() *FelixConfigurationSpecApplyConfiguration {
 	return &FelixConfigurationSpecApplyConfiguration{}
+}
+
+// WithNodeSelector sets the NodeSelector field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NodeSelector field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNodeSelector(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NodeSelector = &value
+	return b
 }
 
 // WithUseInternalDataplaneDriver sets the UseInternalDataplaneDriver field in the declarative configuration to the given value
@@ -1798,6 +1825,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithBPFMapSizeIfState(value i
 // If called multiple times, the BPFHostConntrackBypass field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFHostConntrackBypass(value bool) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFHostConntrackBypass = &value
+	return b
+}
+
+// WithBPFIPFragmentReassemblyEnabled sets the BPFIPFragmentReassemblyEnabled field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFIPFragmentReassemblyEnabled field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFIPFragmentReassemblyEnabled(value bool) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFIPFragmentReassemblyEnabled = &value
 	return b
 }
 

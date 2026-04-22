@@ -429,6 +429,21 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) {
+	if c.syncStatus != bapi.InSync {
+		// Defer service sync until the syncer has replayed all existing IPAM blocks
+		// into allocationTracker. Otherwise a service event observed during the cold-start
+		// window would see an empty tracker and allocate a fresh IP alongside the historical
+		// one that arrives later, leaving the service with more IPs than its IPFamilyPolicy
+		// permits. Events received pre-InSync are picked up by syncIPAM, which is kicked
+		// once the syncer reaches InSync.
+		log.WithFields(log.Fields{
+			"status":    c.syncStatus,
+			"namespace": svcKey.namespace,
+			"name":      svcKey.name,
+		}).Debug("Syncer not yet InSync; deferring service sync")
+		return
+	}
+
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status

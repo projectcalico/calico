@@ -15,11 +15,11 @@ import {
     OmniFilterKeys,
     OmniFilterProperties,
     SelectedOmniFilterOptions,
-    SelectedOmniFilters,
+    SelectedOmniFilterValues,
 } from '@/utils/omniFilter';
 import React from 'react';
 import ActionOmniFilter from '../ActionOmniFilter';
-import PolicyOmniFilter, { PolicyFilter } from '../PolicyOmniFilter';
+import PolicyOmniFilter from '../PolicyOmniFilter';
 import StartTimeOmniFilter from '../StartTimeOmniFilter';
 
 const listOmniFilterIds = Object.values(ListOmniFilterKeys);
@@ -34,7 +34,7 @@ type OmniFiltersProps = {
     onMultiChange: (change: Partial<Record<FilterKey, string[]>>) => void;
     onReset: () => void;
     omniFilterData: ListOmniFiltersData;
-    selectedValues: SelectedOmniFilters;
+    selectedValues: SelectedOmniFilterValues;
     selectedListOmniFilters: SelectedOmniFilterOptions;
     onRequestFilterData: (query: OmniFilterDataQuery) => void;
     onRequestNextPage: (filterId: DataListOmniFilterParam) => void;
@@ -56,24 +56,6 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
 
     const debounce = useDebouncedCallback();
     const [isLoading, setIsLoading] = React.useState(false);
-
-    const policyFilters = React.useMemo(
-        () =>
-            [
-                selectedValues.policy,
-                selectedValues.policyNamespace,
-                selectedValues.policyTier,
-                selectedValues.policyKind,
-            ]
-                .filter(Boolean)
-                .flat() as string[],
-        [
-            selectedValues.policy?.length,
-            selectedValues.policyNamespace?.length,
-            selectedValues.policyTier?.length,
-            selectedValues.policyKind?.length,
-        ],
-    );
 
     const handleChange = (omniFilterChangeEvent: OmniFilterChangeEvent) => {
         onChange(
@@ -99,7 +81,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     key='policy-omni-filter'
                     onChange={handlePolicyFilterChange}
                     filterId={CustomOmniFilterKeys.policy}
-                    selectedFilters={policyFilters as PolicyFilter[]}
+                    selectedFilters={selectedValues.policy ?? []}
                     onClear={() => handleClear(FilterKey.policy)}
                 />
 

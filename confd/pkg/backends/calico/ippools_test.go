@@ -25,6 +25,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -124,7 +125,7 @@ func Test_processIPPoolsV4(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -177,7 +178,7 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if config.KernelFilterForIPPools != nil {
@@ -246,7 +247,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -268,7 +269,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 	}
 }
 
-func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
 		`  if (net ~ 10.10.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
@@ -314,17 +315,16 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -345,7 +345,7 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	}
 }
 
-func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
 		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
@@ -390,17 +390,16 @@ func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")

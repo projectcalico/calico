@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -69,7 +70,7 @@ func TestNodeMeshBGPPassword(t *testing.T) {
 			continue // KDD-only: needs K8s API for Secrets
 		}
 		t.Run(be.name, func(t *testing.T) {
-			d := startConfdDaemon(t, be, withoutBlockAffinities())
+			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh_password/input.yaml")
@@ -305,7 +306,7 @@ func TestLocalBGPPeer(t *testing.T) {
 			continue // KDD-only: needs K8s API for endpoint-status
 		}
 		t.Run(be.name, func(t *testing.T) {
-			d := startConfdDaemon(t, be, withoutBlockAffinities(), withEndpointStatus(map[string]string{
+			d := startConfdDaemon(t, be, withEndpointStatus(map[string]string{
 				"pod1": `{"ifaceName":"cali97e1defe654","ipv4Nets":["192.168.162.134/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a284/128"],"bgpPeerName":"test-global-peer-with-filter"}`,
 				"pod2": `{"ifaceName":"cali97e1defe656","ipv4Nets":["192.168.162.136/32"],"ipv6Nets":["fd00:10:244:0:586d:4461:e980:a286/128"],"bgpPeerName":"test-node-peer-with-filter"}`,
 			}))
@@ -369,6 +370,37 @@ func TestNodeDeletion(t *testing.T) {
 				require.NoError(t, err)
 			}
 			d.expectPeeringCount(2)
+		})
+	}
+}
+
+func TestNormalRoutePriorityChange(t *testing.T) {
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			d := startConfdDaemon(t, be, withoutBlockAffinities())
+			ctx := context.Background()
+
+			// Step 1: create nodes and a peering on a local subnet.
+			// Expect a "direct" peering with source address set.
+			cleanup := applyResources(t, be, "mock_data/calicoctl/bgpfilter/node_mesh/input.yaml")
+			t.Cleanup(cleanup)
+			d.expectOutput("bgpfilter/node_mesh/priority1")
+
+			// Step 2: update BGPConfiguration to change normal IPv4 route priority.
+			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			cfg.Spec.IPv4NormalRoutePriority = ptr.To(5000)
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("bgpfilter/node_mesh/priority2")
+
+			// Step 3: update BGPConfiguration to change normal IPv6 route priority.
+			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			cfg.Spec.IPv6NormalRoutePriority = ptr.To(80)
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("bgpfilter/node_mesh/priority3")
 		})
 	}
 }
@@ -442,4 +474,34 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, golde
 	cleanup := applyResources(t, be, inputPath)
 	d.expectOutput(goldenDir)
 	cleanup()
+}
+
+func TestProgramClusterRoutes(t *testing.T) {
+	for _, be := range activeBackends {
+		t.Run(be.name, func(t *testing.T) {
+			d := startConfdDaemon(t, be)
+			ctx := context.Background()
+
+			// Step 1: as for mesh/restart-time test oneshot test.
+			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh/restart-time/input.yaml")
+			t.Cleanup(cleanup)
+			d.expectOutput("mesh/restart-time")
+
+			// Step 2: update BGPConfiguration to disable cluster route programming.
+			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			cfg.Spec.ProgramClusterRoutes = ptr.To("Disabled")
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("mesh/restart-time/pcr-disabled")
+
+			// Step 3: update BGPConfiguration to enable cluster route programming.
+			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+			require.NoError(t, err)
+			cfg.Spec.ProgramClusterRoutes = ptr.To("Enabled")
+			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+			require.NoError(t, err)
+			d.expectOutput("mesh/restart-time")
+		})
+	}
 }

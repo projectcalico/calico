@@ -607,21 +607,16 @@ blocks:
           value: calico
         - name: FUNCTIONAL_AREA
           value: "e2e-gcp.yml"
-        - name: RUN_LOCAL_TESTS
-          value: "true"
         - name: USE_PRIVATE_REGISTRY
           value: "true"
         - name: PRIVATE_REGISTRY
           value: "quay.io/"
-        - name: K8S_E2E_FLAGS
-          # Label filter selects sig-calico tests and excludes:
-          # - Slow: long-running tests not suitable for CI
-          # - Disruptive: tests that break cluster state for other tests
-          # - RequiresBGPMesh: requires BGP routing, but this cluster uses VXLAN
-          # - NoEncap: requires non-encapsulated routing, but this cluster uses VXLAN
-          # - Feature:Istio: Calico policy not enforced with Istio ambient on BPF dataplane
-          # - ExternalNode: requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured
-          value: "--ginkgo.label-filter=sig-calico&&!Slow&&!Disruptive&&!RequiresBGPMesh&&!NoEncap&&!Feature:Istio&&!ExternalNode"
+        - name: RUN_LOCAL_TESTS
+          value: "true"
+        - name: E2E_TEST_CONFIG
+          # Test selection is driven by the config file; see gcp-bpf.yaml for the
+          # include/exclude rationale.
+          value: "e2e/config/gcp-bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
       jobs:
@@ -675,8 +670,6 @@ blocks:
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "BIRD"
             - name: STORE_BUILD_CACHE
               value: "true"
       epilogue:
@@ -705,8 +698,8 @@ blocks:
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
           env_vars:
-            - name: CLUSTER_ROUTING
-              value: "FELIX"
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-felix-routing.yaml"
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
@@ -874,28 +867,13 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
             # Only building the code, not the image here because the felix image is now only used for FV tests, which
             # only run on AMD64 at the moment.
             - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
-  - name: "Felix: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Felix: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd felix
-      jobs:
-        - name: "Felix: build arm64 binaries"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build ARCH=arm64
   - name: "Felix: Build Windows binaries"
     run:
       when: "true"
@@ -1368,6 +1346,7 @@ blocks:
           matrix:
             - env_var: ARCH
               values:
+                - arm64
                 - ppc64le
                 - s390x
           commands:
@@ -1378,22 +1357,6 @@ blocks:
         - name: "Node: build Windows image"
           commands:
             - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-  - name: "Node: Build - native arm64 runner"
-    run:
-      when: "true"
-    dependencies:
-      - "Node: Build"
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-4
-      prologue:
-        commands:
-          - cd node
-      jobs:
-        - name: "Node: build arm64 image"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
   - name: "Node: kind-cluster tests"
     run:
       # KinD tests also build and run all the other images.

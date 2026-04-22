@@ -17,12 +17,16 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
@@ -34,7 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/cli"
 
-	"github.com/projectcalico/calico/crypto/pkg/tls"
+	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
@@ -43,10 +47,11 @@ import (
 )
 
 var (
-	certFile string
-	keyFile  string
-	logLevel string
-	port     int
+	certFile     string
+	keyFile      string
+	clientCAFile string
+	logLevel     string
+	port         int
 )
 
 var WebhookCommand = &cobra.Command{
@@ -69,6 +74,7 @@ var VersionCommand = &cobra.Command{
 func init() {
 	WebhookCommand.Flags().StringVar(&certFile, "tls-cert-file", "", "File containing the default x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	WebhookCommand.Flags().StringVar(&keyFile, "tls-private-key-file", "", "File containing the default x509 private key matching --tls-cert-file.")
+	WebhookCommand.Flags().StringVar(&clientCAFile, "client-ca-file", "", "If set, enables mTLS by requiring and verifying client certificates signed by this CA.")
 	WebhookCommand.Flags().IntVar(&port, "port", 6443, "Secure port that the webhook listens on")
 	WebhookCommand.Flags().StringVar(&logLevel, "log-level", "info", "Logrus log level to output (trace, debug, info, warning, error, fatal, panic)")
 }
@@ -115,13 +121,30 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	registerHooks(cs, calicoCS)
 
 	// Create and run the server.
-	cfg, err := tls.NewTLSConfig()
+	cfg, err := ctls.NewTLSConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create TLS config")
 	}
+	if clientCAFile != "" {
+		caCert, err := os.ReadFile(clientCAFile)
+		if err != nil {
+			logrus.WithError(err).Fatalf("Failed to read client CA file %q", clientCAFile)
+		}
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(caCert) {
+			logrus.Fatalf("Failed to parse client CA certificate from %q: file must contain PEM-encoded certificates", clientCAFile)
+		}
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+		cfg.ClientCAs = certPool
+		logrus.Info("mTLS enabled: requiring and verifying client certificates")
+	}
 	server := &http.Server{
-		Addr:      fmt.Sprintf(":%d", port),
-		TLSConfig: cfg,
+		Addr:           fmt.Sprintf(":%d", port),
+		TLSConfig:      cfg,
+		ReadTimeout:    5 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		IdleTimeout:    30 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
 	logrus.Infof("Listening on port %d", port)
@@ -157,10 +180,15 @@ func handleFn(handler utils.AdmissionReviewHandler) func(http.ResponseWriter, *h
 // handleRequest handles an incoming HTTP request, decodes the AdmissionReview, processes it, and writes the response.
 func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.AdmissionReviewHandler) {
 	// Decode the AdmissionReview request.
-	obj, gvk, err := decodeAdmissionReview(r)
+	obj, gvk, err := decodeAdmissionReview(w, r)
 	if err != nil {
 		logrus.Error(err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -185,13 +213,19 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 	}
 }
 
-func decodeAdmissionReview(r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
+// maxRequestBodyBytes is the maximum size of an admission review request body.
+// The Kubernetes API server limits API objects to 3MB, so an AdmissionReview
+// wrapping a Calico resource will not legitimately exceed this.
+const maxRequestBodyBytes = 3 << 20 // 3MB
+
+func decodeAdmissionReview(w http.ResponseWriter, r *http.Request) (runtime.Object, *schema.GroupVersionKind, error) {
 	var body []byte
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 		if data, err := io.ReadAll(r.Body); err == nil {
 			body = data
 		} else {
-			return nil, nil, fmt.Errorf("could not read request body: %v", err)
+			return nil, nil, fmt.Errorf("could not read request body: %w", err)
 		}
 	} else {
 		return nil, nil, fmt.Errorf("empty body")
