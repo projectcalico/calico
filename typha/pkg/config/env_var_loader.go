@@ -37,8 +37,9 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		if strings.HasPrefix(key, "typha_") {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			log.Infof("Found typha environment variable: %#v=%#v",
-				paramName, value)
+			// Do not log env var values, they may contain sensitive credentials.
+			log.Infof("Found typha environment variable: %s=<set>",
+				paramName)
 			result[paramName] = value
 		}
 	}
