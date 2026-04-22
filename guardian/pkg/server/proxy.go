@@ -111,11 +111,12 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logCtx := logrus.WithField("dst", tgt)
+		// Do not log the full Target struct, it may contain OAuth tokens and client certs.
+		logCtx := logrus.WithField("dst", tgt.Dest.Host)
 		if tgt.PathRegexp != nil {
 			if !tgt.PathRegexp.MatchString(r.URL.Path) {
 				http.Error(w, "Not found", 404)
-				logCtx.Debugf("Received request %s rejected by PathRegexp %q", r.RequestURI, tgt.PathRegexp)
+				logCtx.Debugf("Received request %s rejected by PathRegexp %q", r.URL.Path, tgt.PathRegexp)
 				return
 			}
 			if tgt.PathReplace != nil {
@@ -140,7 +141,8 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 			tok.SetAuthHeader(r)
 		}
 
-		logCtx.Debugf("Received request %s will proxy to %s", r.RequestURI, tgt.Dest)
+		// Do not log r.RequestURI or the full target URL, they may contain query-string credentials.
+		logCtx.Debugf("Received request %s will proxy to %s", r.URL.Path, tgt.Dest.Host)
 
 		p.ServeHTTP(w, r)
 	}, nil
