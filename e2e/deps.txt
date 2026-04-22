@@ -47,11 +47,10 @@ github.com/json-iterator/go v1.1.12
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/leodido/go-urn v1.4.0
 github.com/mailru/easyjson v0.7.7
-
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
 github.com/mdlayher/socket v0.5.1
-github.com/moby/spdystream v0.5.0
+github.com/moby/spdystream v0.5.1
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -73,8 +72,8 @@ github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stoewer/go-strcase v1.3.0
-github.com/tigera/api v0.0.0-20260227222130-df0b9e289a34
-github.com/tigera/operator/api v0.0.0-20260313201632-bb0fdd128e6b
+github.com/tigera/api v0.0.0-20260310182635-546021df243c
+github.com/tigera/operator/api v0.0.0-20260420175011-b93a68d9cae0
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
