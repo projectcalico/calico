@@ -1,15 +1,17 @@
 #################################################################################################
 # This file contains Makefile configuration parameters and metadata for this branch.
 #################################################################################################
-
+# The project Go version
+GO_VERSION=1.26.2
+# Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
+K8S_VERSION=v1.35.4
+# The version of LLVM to use for go-build and calico/base images.
+LLVM_VERSION=20.1.8
 # Calico toolchain versions and the calico/base image to use.
-GO_BUILD_VER=1.26.2-llvm20.1.8-k8s1.35.4
+GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
 RUST_BUILD_VER=1.94.1
 
 CALICO_BASE_VER=ubi9-1776708455
-
-# Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
-K8S_VERSION=v1.35.2
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
