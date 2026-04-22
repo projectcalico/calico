@@ -1871,6 +1871,15 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
 							defer tcpdump0.Stop()
 
+							// Wait for the dataplane to settle before sending fragmented
+							// traffic. Reset expectations first so CheckConnectivity does not
+							// re-fire the ext-client probe from above, which would land on
+							// tcpdump1 and inflate the fragment count.
+							cc.ResetExpectations()
+							cc.Expect(Some, w[0][0], w[1][0])
+							cc.CheckConnectivity()
+							cc.ResetExpectations()
+
 							// Send a packet with large payload without the DNF flag
 							// 16,000 bytes is the typical limit on the size of a
 							// single skb, which in turn is the limit on the size
