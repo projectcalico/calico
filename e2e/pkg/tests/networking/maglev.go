@@ -747,8 +747,9 @@ func verifyExternalNodeSubnetReachability(extNode *externalnode.Client, nodeIPv4
 		if errors.As(err, &invalidNexthop) {
 			Skip(fmt.Sprintf("External node cannot route to cluster nodes (different subnet) — %v", err))
 		}
-		framework.Logf("Warning: test route check returned unexpected error: %v", err)
-		return
+		// Fail fast: subsequent route programming in the test will hit
+		// the same underlying error and fail with less context.
+		Expect(err).NotTo(HaveOccurred(), "External node early reachability check failed for an unexpected reason")
 	}
 	removeRoute(extNode, testDest, nodeIPv4s[0], false)
 	framework.Logf("External node subnet reachability verified via node %s", nodeIPv4s[0])
