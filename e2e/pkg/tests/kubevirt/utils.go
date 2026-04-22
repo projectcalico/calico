@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -1134,6 +1135,225 @@ func startNodeVethCapture(f *framework.Framework, nodeName, vmIP string) func() 
 		// Stop tcpdump and collect output.
 		out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
 			"sh", "-c", "pkill tcpdump 2>/dev/null; sleep 1; tail -200 /tmp/veth-tcpdump.log 2>/dev/null || echo '(no tcpdump output)'").Exec()
+		return out
+	}
+}
+
+// conntrackMonitor continuously polls /proc/net/nf_conntrack on one or more
+// nodes, filtering for entries that contain both the VM IP and the TOR IP.
+// It logs every state change with a timestamp so we can see exactly when the
+// kernel creates, updates, or removes conntrack entries for the migrated flow.
+//
+// Usage:
+//
+//	mon := newConntrackMonitor(f, vmIP, torIP)
+//	mon.addNode("node-2")          // start polling node-2
+//	mon.addNode("node-1")          // can add more nodes later
+//	defer mon.stop()               // stops all goroutines, prints summary
+type conntrackMonitor struct {
+	f     *framework.Framework
+	vmIP  string
+	torIP string
+
+	mu      sync.Mutex
+	stopChs map[string]chan struct{} // nodeName → stop channel
+	logs    []string                // timestamped log entries
+}
+
+func newConntrackMonitor(f *framework.Framework, vmIP, torIP string) *conntrackMonitor {
+	return &conntrackMonitor{
+		f:       f,
+		vmIP:    strings.Split(vmIP, "/")[0],
+		torIP:   strings.Split(torIP, "/")[0],
+		stopChs: make(map[string]chan struct{}),
+	}
+}
+
+func (m *conntrackMonitor) addNode(nodeName string) {
+	m.mu.Lock()
+	if _, exists := m.stopChs[nodeName]; exists {
+		m.mu.Unlock()
+		return
+	}
+	stopCh := make(chan struct{})
+	m.stopChs[nodeName] = stopCh
+	m.mu.Unlock()
+
+	// Find the calico-node pod on this node.
+	ctx := context.Background()
+	pods, err := m.f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil || len(pods.Items) == 0 {
+		logrus.Warnf("CT-MONITOR: no calico-node pod on %s", nodeName)
+		return
+	}
+	podName := pods.Items[0].Name
+
+	m.log("START monitoring %s (pod %s) for VM=%s TOR=%s", nodeName, podName, m.vmIP, m.torIP)
+
+	// Start conntrack -E (event stream) in background on the node.
+	// This captures real-time events: [NEW], [UPDATE], [DESTROY].
+	// For mid-flow pickup via tcp_loose: [NEW] tcp ESTABLISHED
+	// For normal SYN handshake: [NEW] tcp SYN_SENT → [UPDATE] ESTABLISHED
+	logFile := fmt.Sprintf("/tmp/ct-events-%s.log", nodeName)
+	_, evtErr := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+		"sh", "-c", fmt.Sprintf(
+			"rm -f %s; conntrack -E -p tcp 2>/dev/null > %s &", logFile, logFile)).Exec()
+	if evtErr != nil {
+		m.log("[%s] conntrack -E start failed: %v (falling back to polling)", nodeName, evtErr)
+	} else {
+		m.log("[%s] conntrack -E started, logging to %s", nodeName, logFile)
+	}
+
+	// Polling goroutine: reads /proc/net/nf_conntrack for current state
+	// AND tails the conntrack -E event log for real-time events.
+	go func() {
+		var lastEntry string
+		var lastEventLines int
+		for {
+			select {
+			case <-stopCh:
+				// On stop, kill conntrack -E and collect final event log.
+				evtOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+					"sh", "-c", fmt.Sprintf(
+						"pkill -f 'conntrack -E' 2>/dev/null; cat %s 2>/dev/null | grep -E '%s|%s' || true",
+						logFile, m.vmIP, m.torIP)).Exec()
+				if evtOut = strings.TrimSpace(evtOut); evtOut != "" {
+					m.log("[%s] CT-EVENTS final dump:\n%s", nodeName, evtOut)
+				}
+				return
+			default:
+			}
+
+			// Poll /proc/net/nf_conntrack for current state.
+			out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+				"sh", "-c", fmt.Sprintf("cat /proc/net/nf_conntrack 2>/dev/null | grep %s || true", m.vmIP)).Exec()
+			out = strings.TrimSpace(out)
+
+			var matched []string
+			for _, line := range strings.Split(out, "\n") {
+				if strings.Contains(line, m.torIP) {
+					matched = append(matched, line)
+				}
+			}
+			entry := strings.Join(matched, "\n")
+
+			if entry != lastEntry {
+				if entry == "" {
+					m.log("[%s] CT entry GONE (was: %s)", nodeName, lastEntry)
+				} else if lastEntry == "" {
+					m.log("[%s] CT entry CREATED:\n  %s", nodeName, entry)
+				} else {
+					m.log("[%s] CT entry CHANGED:\n  %s", nodeName, entry)
+				}
+				lastEntry = entry
+			}
+
+			// Check conntrack -E event log for new events matching our IPs.
+			evtOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+				"sh", "-c", fmt.Sprintf(
+					"cat %s 2>/dev/null | grep -E '%s|%s' || true",
+					logFile, m.vmIP, m.torIP)).Exec()
+			evtOut = strings.TrimSpace(evtOut)
+			if evtOut != "" {
+				evtLines := strings.Split(evtOut, "\n")
+				if len(evtLines) > lastEventLines {
+					for _, line := range evtLines[lastEventLines:] {
+						m.log("[%s] CT-EVENT: %s", nodeName, line)
+					}
+					lastEventLines = len(evtLines)
+				}
+			}
+
+			time.Sleep(200 * time.Millisecond)
+		}
+	}()
+}
+
+func (m *conntrackMonitor) log(format string, args ...interface{}) {
+	ts := time.Now().Format("15:04:05.000")
+	msg := fmt.Sprintf("[CT-MONITOR %s] %s", ts, fmt.Sprintf(format, args...))
+	logrus.Info(msg)
+	m.mu.Lock()
+	m.logs = append(m.logs, msg)
+	m.mu.Unlock()
+}
+
+func (m *conntrackMonitor) stop() {
+	m.mu.Lock()
+	for nodeName, ch := range m.stopChs {
+		close(ch)
+		delete(m.stopChs, nodeName)
+	}
+	logs := make([]string, len(m.logs))
+	copy(logs, m.logs)
+	m.mu.Unlock()
+
+	logrus.Infof("CT-MONITOR SUMMARY (%d events):\n%s", len(logs), strings.Join(logs, "\n"))
+}
+
+// startTORMigrationCapture starts a tcpdump on the TOR capturing all packets
+// matching the TOR's ephemeral port for the TCP connection. This port is stable
+// across migration — it's the TOR client's source port. Filtering on it catches:
+//   - Normal packets: VM:9999 → TOR:<ephPort> and TOR:<ephPort> → VM:9999
+//   - MASQUERADE'd packets: Node:<randomPort> → TOR:<ephPort> (src port 9999 is gone!)
+//
+// Must be called AFTER the nc client is connected so we can discover the port.
+func startTORMigrationCapture(tor *externalnode.Client, vmIP string) func() string {
+	ip := strings.Split(vmIP, "/")[0]
+
+	// Discover TOR's ephemeral port from ss.
+	ssOut := runOnTOR(tor, fmt.Sprintf("ss -tn 2>/dev/null | grep '%s:9999' || true", ip))
+	logrus.Infof("DIAG-CAPTURE: TOR ss output:\n%s", ssOut)
+
+	var ephPort string
+	for _, line := range strings.Split(ssOut, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, ":9999") {
+			continue
+		}
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if strings.HasSuffix(f, ":9999") && i > 0 {
+				local := fields[i-1]
+				parts := strings.Split(local, ":")
+				if len(parts) >= 2 {
+					ephPort = parts[len(parts)-1]
+				}
+				break
+			}
+		}
+		if ephPort != "" {
+			break
+		}
+	}
+
+	filter := "tcp"
+	if ephPort != "" {
+		filter = fmt.Sprintf("port %s", ephPort)
+		logrus.Infof("DIAG-CAPTURE: filtering on TOR ephemeral port %s", ephPort)
+	} else {
+		logrus.Warn("DIAG-CAPTURE: could not find ephemeral port, capturing all TCP")
+	}
+
+	const captureFile = "/tmp/tor-migration-capture.log"
+	runOnTOR(tor, fmt.Sprintf("sudo rm -f %s", captureFile))
+	runOnTOR(tor, fmt.Sprintf(
+		"sudo sh -c 'nohup tcpdump -i l2tpeth8-5 -nn -l %s > %s 2>&1 &'",
+		filter, captureFile))
+
+	var stopped bool
+	return func() string {
+		if stopped {
+			return "(already collected)"
+		}
+		stopped = true
+		runOnTOR(tor, "sudo pkill -f 'tcpdump.*tor-migration-capture' 2>/dev/null || true")
+		time.Sleep(1 * time.Second)
+		out := runOnTOR(tor, fmt.Sprintf("sudo cat %s 2>/dev/null || echo '(no capture)'", captureFile))
+		logrus.Infof("DIAG-CAPTURE: TOR migration capture:\n%s", out)
 		return out
 	}
 }

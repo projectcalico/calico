@@ -17,6 +17,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -223,6 +224,20 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing")
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
+			// Start conntrack monitor on all nodes, tracking VM↔client flows.
+			By("Starting conntrack monitor on all nodes for iBGP test")
+			clientPodObj, cpErr := f.ClientSet.CoreV1().Pods(ns).Get(ctx, clientPod.Name, metav1.GetOptions{})
+			Expect(cpErr).NotTo(HaveOccurred())
+			clientPodIP := clientPodObj.Status.PodIP
+			logrus.Infof("Client pod IP: %s (on node %s)", clientPodIP, clientPodObj.Spec.NodeName)
+			ctMon := newConntrackMonitor(f, serverIP, clientPodIP)
+			nodeList, listErr := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			Expect(listErr).NotTo(HaveOccurred())
+			for _, n := range nodeList.Items {
+				ctMon.addNode(n.Name)
+			}
+			DeferCleanup(ctMon.stop)
+
 			By("First migration")
 			migration1 := &testVMIM{name: serverVMName + "-migration1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
 			migration1.Create(ctx)
@@ -296,20 +311,32 @@ var _ = describe.CalicoDescribe(
 			By("Setting up eBGP peering between TOR and cluster nodes")
 			setupEBGPPeering(f, tor)
 
-			// Disable natOutgoing on the default IPPool to prevent Calico's
-			// cali-nat-outgoing masquerade rule from SNATing VM→TOR traffic
-			// after migration (the new node has no conntrack entry for the
-			// existing flow, so it would be treated as NEW and masqueraded).
-			By("Disabling natOutgoing on default IPPool to prevent masquerade breaking TCP after migration")
-			_, err := kubectl.NewKubectlCommand("", "patch", "ippool", "default-ipv4-ippool",
-				"--type=merge", "-p", `{"spec":{"natOutgoing":false}}`).Exec()
+			// Disable natOutgoing via the Installation resource (not the IPPool directly,
+			// because the tigera-operator reconciles the IPPool from Installation and
+			// would revert any direct IPPool patch).
+			By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
+			_, err := kubectl.NewKubectlCommand("", "patch", "installation", "default",
+				"--type=json", "-p",
+				`[{"op":"replace","path":"/spec/calicoNetwork/ipPools/0/natOutgoing","value":"Disabled"}]`).Exec()
 			Expect(err).NotTo(HaveOccurred())
+			// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
+			// When natOutgoing is disabled, the field is omitted from the IPPool spec
+			// (jsonpath returns empty string rather than "false").
+			logrus.Info("Waiting for natOutgoing=Disabled to propagate...")
+			Eventually(func() string {
+				out, _ := kubectl.NewKubectlCommand("", "get", "ippool", "default-ipv4-ippool",
+					"-o", "jsonpath={.spec.natOutgoing}").Exec()
+				return strings.TrimSpace(out)
+			}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
+				"natOutgoing should not be true on IPPool after Installation patch")
+			logrus.Info("natOutgoing disabled confirmed on IPPool")
 			DeferCleanup(func() {
-				By("Re-enabling natOutgoing on default IPPool")
-				_, restoreErr := kubectl.NewKubectlCommand("", "patch", "ippool", "default-ipv4-ippool",
-					"--type=merge", "-p", `{"spec":{"natOutgoing":true}}`).Exec()
+				By("Re-enabling natOutgoing via Installation")
+				_, restoreErr := kubectl.NewKubectlCommand("", "patch", "installation", "default",
+					"--type=json", "-p",
+					`[{"op":"replace","path":"/spec/calicoNetwork/ipPools/0/natOutgoing","value":"Enabled"}]`).Exec()
 				if restoreErr != nil {
-					logrus.WithError(restoreErr).Warn("Failed to restore natOutgoing on default IPPool")
+					logrus.WithError(restoreErr).Warn("Failed to restore natOutgoing on Installation")
 				}
 			})
 
@@ -413,6 +440,37 @@ var _ = describe.CalicoDescribe(
 			By("Starting tcpdump on TOR for migration diagnostics")
 			stopTORDump := startTCPDumpOnTOR(tor, vmIP)
 			DeferCleanup(func() { stopTORDump() })
+
+			// Find TOR L2TP IP for conntrack monitor.
+			bgpSubnet := &net.IPNet{IP: net.ParseIP("172.16.8.0"), Mask: net.CIDRMask(24, 32)}
+			var torL2tpIP string
+			for _, ip := range tor.IPs() {
+				if bgpSubnet.Contains(net.ParseIP(ip)) {
+					torL2tpIP = ip
+					break
+				}
+			}
+
+			// Start conntrack monitor on all worker nodes before migration.
+			// Polls every 200ms so we catch the exact moment an entry appears.
+			By("Starting conntrack monitor on all nodes")
+			ctMon := newConntrackMonitor(f, vmIP, torL2tpIP)
+			nodeList, listErr := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+			Expect(listErr).NotTo(HaveOccurred())
+			for _, n := range nodeList.Items {
+				ctMon.addNode(n.Name)
+			}
+			DeferCleanup(ctMon.stop)
+
+			// Capture traffic on TOR's ephemeral port to see whether MASQUERADE
+			// rewrites the VM's source IP to a node IP after migration.
+			// Filter on ephemeral port (not 9999) because MASQUERADE changes src port too.
+			By("Starting migration capture on TOR")
+			stopMigrationCapture := startTORMigrationCapture(tor, vmIP)
+			DeferCleanup(func() {
+				dump := stopMigrationCapture()
+				logrus.Infof("DIAG-CAPTURE: final capture:\n%s", dump)
+			})
 
 			// ---- First migration ----
 			By("First migration")
