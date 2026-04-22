@@ -107,7 +107,7 @@ func NewMetricScraper(f *framework.Framework, nodeIP string, metricsPort int) (s
 
 // Metric returns a func which can be repeatedly-called to poll a metric
 // on the given endpoint.
-func (scraper MetricScraper) Metric(metricName string) func() (float64, error) {
+func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) {
 	return func() (float64, error) {
 		errOutFile := fmt.Sprintf("metrics-err-%s-%d", metricName, time.Now().UnixNano())
 		url := "http://" + net.JoinHostPort(scraper.metricsEPIP, strconv.Itoa(scraper.metricsEPPort)) + "/metrics"
