@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	v1 "github.com/tigera/operator/api/v1"
@@ -63,7 +64,9 @@ func IsCalicoOSS() bool {
 	return os.Getenv("PRODUCT") == "calico"
 }
 
-// IsCalicoEE returns true if the PRODUCT environment variable is "calico-enterprise".
+// IsCalicoEE returns true if an installation resource exists, and
+// spec.variant is "TigeraSecureEnterprise".
+// If no installation exists, or variant differs from above, returns false.
 func IsCalicoEE(ctx context.Context, cli client.Client) (bool, error) {
 	installation := &v1.Installation{}
 	err := cli.Get(ctx, client.ObjectKey{Name: "default"}, installation)
@@ -84,12 +87,22 @@ func IsCalicoEE(ctx context.Context, cli client.Client) (bool, error) {
 }
 
 // parseVersion parses a "vMAJOR.MINOR" string and returns major, minor.
+// Any additional components (e.g. a patch version) cause an error — the
+// expected format is strictly major.minor.
 func parseVersion(v string) (int, int, error) {
+	orig := v
 	v = strings.TrimPrefix(v, "v")
-	var major, minor int
-	n, err := fmt.Sscanf(v, "%d.%d", &major, &minor)
-	if err != nil || n != 2 {
-		return 0, 0, fmt.Errorf("cannot parse version %q", v)
+	parts := strings.Split(v, ".")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("cannot parse version %q: expected format vMAJOR.MINOR", orig)
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("couldn't parse major version in %q: %w", orig, err)
+	}
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("couldn't parse minor version in %q: %w", orig, err)
 	}
 	return major, minor, nil
 }
