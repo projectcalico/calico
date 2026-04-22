@@ -70,7 +70,38 @@ func TestE2E(t *testing.T) {
 			t.Fatalf("Failed to apply test config %q: %v", path, err)
 		}
 	}
+	overrideK8sDefaultSkip()
 	e2e.RunE2ETests(t)
+}
+
+// overrideK8sDefaultSkip prevents the upstream k8s e2e framework from
+// auto-installing `\[Flaky\]|\[Feature:.+\]` as the default ginkgo skip
+// pattern. Upstream applies that default inside CreateGinkgoConfig whenever
+// --ginkgo.focus, --ginkgo.skip, and --ginkgo.label-filter are all empty
+// (see k8s.io/kubernetes/test/e2e/framework/test_context.go CreateGinkgoConfig).
+//
+// That default assumes Feature-labelled tests are experimental and opt-in.
+// Calico uses describe.WithFeature on every test as a mandatory tag, so the
+// upstream default silently hides the entire suite from plain `--dry-run -v`
+// or ad-hoc runs. We install a benign `\[Flaky\]` default instead - it blocks
+// the upstream override but matches no Calico test. The override only fires
+// when no filter flag has been set by the command line or a test config, so
+// user intent still takes precedence.
+func overrideK8sDefaultSkip() {
+	hasValue := func(name string) bool {
+		f := flag.Lookup(name)
+		if f == nil {
+			return false
+		}
+		v := f.Value.String()
+		return v != "" && v != "[]"
+	}
+	if hasValue("ginkgo.skip") || hasValue("ginkgo.focus") || hasValue("ginkgo.label-filter") {
+		return
+	}
+	if err := flag.Set("ginkgo.skip", `\[Flaky\]`); err != nil {
+		logrus.WithError(err).Warn("Failed to override upstream k8s default ginkgo.skip")
+	}
 }
 
 // applyTestConfig loads a YAML test selection config and injects its label
