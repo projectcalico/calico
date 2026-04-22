@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ func convertNetworkSetV2ToV1Value(val any) (any, error) {
 				"CIDR":       cidrString,
 				"networkSet": v3res.GetName(),
 			}).Warn("Invalid CIDR")
+			continue
 		}
 		addrs = append(addrs, *ipNet)
 	}

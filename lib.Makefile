@@ -1480,8 +1480,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 
-	# Install mutating admission policies.
+	# Install mutating admission policies (only for v3 CRDs, since they reference projectcalico.org/v3 resources).
+ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+endif
 
 	touch $@
 
@@ -1684,7 +1686,7 @@ $(ENVTEST_ASSETS_MARKER):
 	mkdir -p $(ENVTEST_DIR)
 	rm -f $(ENVTEST_DIR)/.envtest-*
 	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20251218032627-56d9e70af999 \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
 	touch $@
 
@@ -1702,7 +1704,7 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 	@echo "Setting up envtest binaries for minimum K8s $(ENVTEST_MIN_K8S_VERSION)..."
 	mkdir -p $(ENVTEST_DIR)
 	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@v0.0.0-20251218032627-56d9e70af999 \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
 

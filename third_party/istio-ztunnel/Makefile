@@ -9,7 +9,7 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/istio-ztunnel
 ZTUNNEL_IMAGE ?= istio-ztunnel
 BUILD_IMAGES ?= $(ZTUNNEL_IMAGE)
 
-ZTUNNEL_VERSION = 1.28.1
+ZTUNNEL_VERSION = 1.29.2
 
 # required for ci/cd
 LATEST_IMAGE_TAG = v$(ZTUNNEL_VERSION)-$(BRANCH_NAME)

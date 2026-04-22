@@ -1182,13 +1182,16 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			// Let's just print out the entire ruleset for debugging purposes.
-			cmd := t.newCmd("nft", "list", "ruleset")
+			// Dump our table's state for debugging. We scope this to our
+			// own table rather than using "nft list ruleset" to avoid
+			// parsing objects from other tables that may contain udata
+			// written by a newer nft, which can crash older nft binaries.
+			cmd := t.newCmd("nft", "list", "table", t.name)
 			output, err2 := cmd.Output()
 			if err2 != nil {
-				t.logCxt.WithError(err2).Error("Failed to load nftables ruleset")
+				t.logCxt.WithError(err2).Error("Failed to load nftables table state")
 			} else {
-				t.logCxt.WithField("ruleset", string(output)).Error("Current ruleset after error")
+				t.logCxt.WithField("tableState", string(output)).Error("Current table state after error")
 			}
 
 			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")

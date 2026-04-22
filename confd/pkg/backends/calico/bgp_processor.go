@@ -229,7 +229,7 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
 		fmt.Sprintf("      krt_metric = %d;", config.NormalRoutePriority),
 		"      if (defined(bgp_local_pref)) then {",
-		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
+		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
 		"      }",
 		fmt.Sprintf("      if (krt_metric < %d) then {", config.NormalRoutePriority),
 		fmt.Sprintf("          preference = %d;", birdOverridePreference),
@@ -633,22 +633,6 @@ func truncateBGPFilterName(name string) string {
 }
 
 const (
-	// This is a value we use when converting between priority/metric values and bgp_local_pref.
-	// The range of Linux priority/metric values is from 0 to 2^32-1, i.e. a uint32, with lower
-	// values meaning higher priority.  The range of bgp_local_pref is also 0 to 2^32-1, i.e. a
-	// uint32, but with higher values meaning higher priority.  But we also have to consider:
-	//
-	// 1. In FelixConfiguration and BGPConfiguration we use int fields, i.e. signed, to
-	// configure the priority values that we use.
-	//
-	// 2. The "0" value has a special meaning in Linux.  For IPv6 routes it gets "normalized" to
-	// 1024.
-	//
-	// Therefore we restrict the range of priority/metric values that Felix can actually use to
-	// be from 1 to 2^31-2, and we convert between priority/metric and bgp_local_pref with `x =
-	// 2^31-1 - y`.  The following value is 2^31-1.
-	birdIntMaxValue = 2147483647
-
 	// This is the 'preference' value we use when we want an imported route to override a local
 	// workload route - i.e. for the kernel to say "for <IP1> go via remote node <N1>" even
 	// though there might also be a local workload with <IP1>.  This scenario occurs in live
@@ -699,22 +683,6 @@ func (c *client) buildImportFilter(
 ) string {
 	var filterLines []string
 
-	// On import, always default krt_metric to our normal route priority.
-	filterLines = append(filterLines,
-		fmt.Sprintf("krt_metric = %d;", normalRoutePriority),
-	)
-
-	// For iBGP peers, convert from LOCAL_PREF to krt_metric.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: krt_metric = INT_MAX -
-	// bgp_local_pref.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			"if (defined(bgp_local_pref)) then {",
-			fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
-			"}",
-		)
-	}
-
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
@@ -745,7 +713,7 @@ func (c *client) buildImportFilter(
 	// If we now have a higher than normal priority route, set 'preference' attribute to allow
 	// it to override an existing local workload route in the kernel.
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (krt_metric < %d) then", normalRoutePriority),
+		fmt.Sprintf("if (defined(bgp_local_pref)&&(bgp_local_pref > %d)) then", template.BirdIntMaxValue-normalRoutePriority),
 		fmt.Sprintf("  preference = %d;", birdOverridePreference),
 	)
 
@@ -764,19 +732,41 @@ func (c *client) buildExportFilter(
 ) string {
 	var filterLines []string
 
-	// Default krt_metric to our normal route priority, if not already set.
+	// Ensure both krt_metric and bgp_local_pref are set for the rest of
+	// the export filter. BGPFilter Priority matching needs bgp_local_pref,
+	// and calico_aggr() needs krt_metric (it checks "krt_metric < 1024"
+	// to let elevated-priority /32s escape aggregation into /26 blocks).
+	//
+	// There are two cases depending on where the route came from:
+	//
+	// Re-exported route (learned via iBGP): this happens when a node acts
+	// as a route reflector (RR) re-advertising iBGP routes to its clients,
+	// or when a node peers with an external eBGP TOR and re-exports iBGP
+	// routes to it. In both cases, bgp_local_pref is already set by the
+	// BGP protocol from the originating node's export. It is the
+	// authoritative source of priority — just use it. We still derive
+	// krt_metric from it so calico_aggr() can check the route's priority.
+	//
+	// Locally-originated route (learned from kernel): krt_metric is set by
+	// Felix (e.g. 512 for elevated, 1024 for normal). For routes without
+	// krt_metric (e.g. static routes for service IP advertisement),
+	// default to the normal route priority. Convert krt_metric →
+	// bgp_local_pref so BGPFilter Priority matching and iBGP transmission
+	// work correctly.
+	// Note: we cannot use `defined(bgp_local_pref)` to distinguish these
+	// cases because BIRD 1.x initializes bgp_local_pref to 100 (the BGP
+	// default) for all routes during BGP export preparation, so it is
+	// always "defined". Instead, use `source = RTS_BGP` which is only
+	// true for routes learned from a BGP peer (iBGP/eBGP), not for
+	// kernel-imported routes (which have source = RTS_INHERIT).
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		"if (defined(source) && source = RTS_BGP && defined(bgp_local_pref)) then {",
+		fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
+		"} else {",
+		fmt.Sprintf("  if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		fmt.Sprintf("  bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+		"}",
 	)
-
-	// For iBGP peers, convert from krt_metric to LOCAL_PREF.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX
-	// - krt_metric.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			fmt.Sprintf("bgp_local_pref = %d - krt_metric;", birdIntMaxValue),
-		)
-	}
 
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
@@ -966,7 +956,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
 //   - ippool: IPPool resource.
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP routes.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
@@ -1023,7 +1013,7 @@ func (c *client) processIPPool(
 		if programClusterRoutes {
 			var extraStatement string
 			if forProgrammingKernel && ipVersion == 4 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
+				// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
 				// our fork of BIRD.
 				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 			}
@@ -1061,8 +1051,8 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
 	case v3.Never:
-		// No-encap case.
-		return `krt_tunnel="";`
+		// No encapsulation needed; no need to set krt_tunnel.
+		return ``
 	default:
 		return ``
 	}

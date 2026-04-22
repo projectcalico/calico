@@ -2346,6 +2346,22 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
@@ -2650,6 +2666,14 @@ spec:
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true
 ---
@@ -3318,7 +3342,7 @@ spec:
                 attributes:
                   items:
                     properties:
-                      alternate:
+                      alternateOwnerAttrs:
                         additionalProperties:
                           type: string
                         type: object
@@ -5712,8 +5736,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/300
-    policy.networking.k8s.io/bundle-version: v0.1.7
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
+    policy.networking.k8s.io/bundle-version: v0.2.0
     policy.networking.k8s.io/channel: standard
   name: clusternetworkpolicies.policy.networking.k8s.io
 spec:
@@ -6936,16 +6960,17 @@ rules:
       - update
       - watch
   # IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ipreservations
     verbs:
       - list
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
       - ipamblocks
       - ipamhandles
+      - ipamconfigurations
       - ipamconfigs
       - tiers
     verbs:
@@ -6956,14 +6981,14 @@ rules:
       - delete
       - watch
   # Pools are watched to maintain a mapping of blocks to IP pools.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
     verbs:
       - list
       - watch
   # kube-controllers manages hostendpoints.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - hostendpoints
     verbs:
@@ -6974,7 +6999,7 @@ rules:
       - delete
       - watch
   # Needs access to update clusterinformations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - clusterinformations
     verbs:
@@ -6984,7 +7009,7 @@ rules:
       - update
       - watch
   # KubeControllersConfiguration is where it gets its config
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - kubecontrollersconfigurations
     verbs:
@@ -6997,14 +7022,14 @@ rules:
       - update
       # watch for changes
       - watch
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - kubecontrollersconfigurations/status
     verbs:
       - get
       - update
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
@@ -7017,14 +7042,65 @@ rules:
       - create
       - update
       - delete
-  # Needed for policy name migrator to check calico/node daemonset status.
+  # Needed for migration controller to watch calico-node and calico-typha status.
   - apiGroups: ["apps"]
     resources:
       - daemonsets
+      - deployments
     verbs:
       - get
-    resourceNames:
-      - calico-node
+      - list
+      - watch
+  # Migration controller: manage DatastoreMigration CRs.
+  - apiGroups: ["migration.projectcalico.org"]
+    resources:
+      - datastoremigrations
+      - datastoremigrations/status
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  # Migration controller: read, watch, and delete CRDs during migration.
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+      - delete
+  # Migration controller: manage API services during migration.
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources:
+      - apiservices
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+  # Migration controller: read v1 resources and write v3 resources.
+  - apiGroups: ["projectcalico.org"]
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -7112,13 +7188,13 @@ rules:
     verbs:
       - patch
   # Calico monitors various CRDs for config.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - globalfelixconfigs
+      - globalbgpconfigs
       - felixconfigurations
       - bgppeers
       - bgpfilters
-      - globalbgpconfigs
       - bgpconfigurations
       - ippools
       - ipreservations
@@ -7140,13 +7216,13 @@ rules:
       - list
       - watch
   # Calico creates some tiers on startup.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - tiers
     verbs:
       - create
   # Calico must create and update some CRDs on startup.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - ippools
       - felixconfigurations
@@ -7156,7 +7232,7 @@ rules:
       - create
       - update
   # Calico must update some CRDs.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - caliconodestatuses
     verbs:
@@ -7171,7 +7247,7 @@ rules:
       - watch
   # These permissions are only required for upgrade from v2.6, and can
   # be removed after upgrade or on fresh installations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - bgpconfigurations
       - bgppeers
@@ -7179,7 +7255,7 @@ rules:
       - create
       - update
   # These permissions are required for Calico CNI to perform IPAM allocations.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
       - ipamblocks
@@ -7192,14 +7268,15 @@ rules:
       - delete
   # The CNI plugin and calico/node need to be able to create a default
   # IPAMConfiguration
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
+      - ipamconfigurations
       - ipamconfigs
     verbs:
       - get
       - create
   # Block affinities must also be watchable by confd for route aggregation.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
     verbs:
@@ -7239,7 +7316,7 @@ rules:
       - pods/status
     verbs:
       - patch
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
       - ipamblocks
@@ -7247,6 +7324,7 @@ rules:
       - clusterinformations
       - ippools
       - ipreservations
+      - ipamconfigurations
       - ipamconfigs
     verbs:
       - get

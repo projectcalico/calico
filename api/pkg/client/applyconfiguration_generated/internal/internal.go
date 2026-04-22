@@ -28,7 +28,7 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.AllocationAttribute
   map:
     fields:
-    - name: alternate
+    - name: alternateOwnerAttrs
       type:
         map:
           elementType:
@@ -1236,6 +1236,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: nftablesRefreshInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: nodeSelector
+      type:
+        scalar: string
     - name: openstackRegion
       type:
         scalar: string

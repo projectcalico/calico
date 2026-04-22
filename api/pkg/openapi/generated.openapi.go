@@ -502,7 +502,7 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
-					"alternate": {
+					"alternateOwnerAttrs": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
@@ -2902,6 +2902,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 				Description: "FelixConfigurationSpec contains the values of the Felix configuration.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is an optional label selector that restricts this FelixConfiguration to apply only to nodes that match the given selector. This field is only valid on FelixConfiguration resources whose name is not \"default\" and does not start with \"node.\". For resources named \"default\", the configuration applies globally to all nodes. For resources named \"node.<nodename>\", the configuration applies to the named node only.\n\nAt most one selector-scoped FelixConfiguration should match any given node. If multiple selector-scoped resources match, the oldest (by creation timestamp) is used and a warning is logged. This prevents an accidentally created conflicting resource from disrupting an existing, working configuration.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"useInternalDataplaneDriver": {
 						SchemaProps: spec.SchemaProps{
 							Description: "UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.",

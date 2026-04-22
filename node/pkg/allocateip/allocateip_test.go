@@ -723,7 +723,7 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 		Entry("VXLAN-v6", ipam.AttributeTypeVXLANV6),
 	)
 
-	DescribeTable("should panic on datastore errors", func(tunnelType string) {
+	DescribeTable("should return error on datastore errors", func(tunnelType string) {
 		pa := newIPPoolErrorAccessor(cerrors.ErrorDatastoreError{Err: errors.New("mock datastore error"), Identifier: nil})
 		cc := newShimClientWithPoolAccessor(c, be, pa)
 
@@ -738,13 +738,8 @@ var _ = Describe("ensureHostTunnelAddress", func() {
 
 		_, ipnet, _ := net.ParseCIDR(cidr2)
 
-		defer func() {
-			if err := recover(); err == nil {
-				Fail("Panic didn't occur!")
-			}
-		}()
 		_, err = ensureHostTunnelAddress(ctx, cc, node, []net.IPNet{*ipnet}, tunnelType)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(HaveOccurred())
 	},
 		Entry("IPIP", ipam.AttributeTypeIPIP),
 		Entry("VXLAN", ipam.AttributeTypeVXLAN),
@@ -957,11 +952,11 @@ var _ = Describe("Running as daemon", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("starting the IP allocation daemon")
-		done := make(chan struct{})
+		ctx, cancel := context.WithCancel(ctx)
 		completed := make(chan struct{})
 		go func() {
-			run("test.node", cfg, c, felixconfig.New(), done)
-			close(completed)
+			defer close(completed)
+			_ = run(ctx, "test.node", cfg, c, felixconfig.New(), false)
 		}()
 
 		// Wireguard is assigned first, then IPIP.  Note that this is an implementation detail rather than a requirement
@@ -1020,9 +1015,8 @@ var _ = Describe("Running as daemon", func() {
 		expectTunnelAddressEmptyForNodeName(c, "test.node", ipam.AttributeTypeIPIP)
 		expectTunnelAddressForNodeName(c, "test.node", ipam.AttributeTypeVXLAN, "172.16.0.2")
 
-		// Close the done channel to trigger completion.
 		By("shutting down the daemon")
-		close(done)
+		cancel()
 		Eventually(completed).Should(BeClosed(), "2s", "200ms")
 	})
 })

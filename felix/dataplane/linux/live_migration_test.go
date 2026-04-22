@@ -891,6 +891,95 @@ func TestVMINameTracking(t *testing.T) {
 			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs to be called")
 		}
 	})
+
+	t.Run("IPAM swap executed on missed GARP path (Target to TimeWait)", func(t *testing.T) {
+		g := NewWithT(t)
+		m := newTestMonitor(testConvergenceTime)
+
+		wepIDWithNS := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "ep-1",
+		}
+
+		called := make(chan struct{}, 1)
+		m.ensureActiveVMOwnerAttrs = func(
+			ctx context.Context,
+			ipamClient ipam.Interface,
+			networkName string,
+			namespace string,
+			vmiName string,
+			targetPodName string,
+		) error {
+			g.Expect(namespace).To(Equal("test-ns"))
+			g.Expect(vmiName).To(Equal("my-vmi"))
+			g.Expect(targetPodName).To(Equal("virt-launcher-vm1-abc"))
+			called <- struct{}{}
+			return nil
+		}
+
+		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		drainUpdates(m)
+
+		// Trigger Target→TimeWait (missed GARP path) via NoRole.
+		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
+		drainUpdates(m)
+
+		select {
+		case <-called:
+			// Success — IPAM swap was invoked on missed GARP path.
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for ensureActiveVMOwnerAttrs on missed GARP path")
+		}
+	})
+
+	t.Run("IPAM swap only called once when going Live then TimeWait", func(t *testing.T) {
+		m := newTestMonitor(testConvergenceTime)
+
+		wepIDWithNS := types.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "test-ns/virt-launcher-vm1-abc",
+			EndpointId:     "ep-1",
+		}
+
+		called := make(chan struct{}, 2)
+		m.ensureActiveVMOwnerAttrs = func(
+			ctx context.Context,
+			ipamClient ipam.Interface,
+			networkName string,
+			namespace string,
+			vmiName string,
+			targetPodName string,
+		) error {
+			called <- struct{}{}
+			return nil
+		}
+
+		m.OnUpdate(wepUpdateWithVMIName(wepIDWithNS, proto.LiveMigrationRole_TARGET, "uid-1", "my-vmi"))
+		drainUpdates(m)
+
+		// Target→Live via GARP (first IPAM swap).
+		m.OnGARPDetected(wepIDWithNS)
+		drainUpdates(m)
+
+		select {
+		case <-called:
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for first IPAM swap call")
+		}
+
+		// Live→TimeWait via NoRole (should NOT trigger second swap).
+		m.OnUpdate(wepUpdate(wepIDWithNS, proto.LiveMigrationRole_NO_ROLE))
+		drainUpdates(m)
+
+		// Verify no second call arrives.
+		select {
+		case <-called:
+			t.Fatal("IPAM swap should only be called once, got second call")
+		case <-time.After(200 * time.Millisecond):
+			// Expected: no second call.
+		}
+	})
 }
 
 func TestLiveMigrationStateString(t *testing.T) {

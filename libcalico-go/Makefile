@@ -6,12 +6,8 @@ LOCAL_CHECKS = check-gen-files
 
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
-# For a branch/tag use this format:
-# NETPOL_CNP_REF = refs/heads/main
-# For a commit, just use the commit ID:
-# NETPOL_CNP_REF = <commit ID>
-NETPOL_CNP_REF = 6bb86defe1a70ee81974dbf6b59090835a32a8f0
-NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/$(NETPOL_CNP_REF)/config/crd/standard
+NETPOL_CNP_VER = v0.2.0
+NETPOL_CNP_CRD_URL = https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/refs/tags/$(NETPOL_CNP_VER)/config/crd/standard
 NETPOL_CNP_CRD = policy.networking.k8s.io_clusternetworkpolicies.yaml
 
 ###############################################################################
@@ -138,7 +134,7 @@ GINKGO_SKIP?=
 ut:
 	mkdir -p report
 	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
-		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r --junit-report=libcalico_go_ut.xml --output-dir=report/ -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
@@ -162,7 +158,7 @@ fv-fast:
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-v $(KIND_KUBECONFIG):/kubeconfig.yaml \
 		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=libcalico_go_fv.xml --output-dir=report/ -skip "$(GINKGO_SKIP)" -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r --junit-report=libcalico_go_fv.xml --output-dir=report/ -skip "$(GINKGO_SKIP)" -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 # Create a kind cluster, and deploy some resources required for the libcalico-go tests.
 # TODO: Remove the need for this extra target, these should be created by the tests that need them.
