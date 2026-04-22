@@ -1878,6 +1878,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// Wait for the new policy to be programmed and BPF
 							// dataplane to settle before sending fragmented traffic.
+							// Reset expectations first so CheckConnectivity does not
+							// re-fire the ext-client probe from above, which would
+							// land on tcpdump1 and inflate the fragment count.
+							cc.ResetExpectations()
 							cc.Expect(Some, w[0][0], w[1][0])
 							cc.CheckConnectivity()
 							cc.ResetExpectations()
