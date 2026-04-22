@@ -57,17 +57,19 @@ type IPMaps struct {
 }
 
 type CommonMaps struct {
-	StateMap         maps.Map
-	IfStateMap       maps.Map
-	RuleCountersMap  maps.Map
-	CountersMap      maps.Map
-	ProgramsMaps     []maps.Map
-	JumpMaps         []maps.MapWithDeleteIfExists
-	XDPProgramsMap   maps.Map
-	XDPJumpMap       maps.MapWithDeleteIfExists
-	ProfilingMap     maps.Map
-	CTLBProgramsMaps []maps.Map
-	QoSMap           maps.MapWithUpdateWithFlags
+	StateMap           maps.Map
+	IfStateMap         maps.Map
+	RuleCountersMap    maps.Map
+	CountersMap        maps.Map
+	ProgramsMaps       []maps.Map
+	JumpMaps           []maps.MapWithDeleteIfExists
+	NetkitProgramsMaps []maps.Map
+	NetkitJumpMaps     []maps.MapWithDeleteIfExists
+	XDPProgramsMap     maps.Map
+	XDPJumpMap         maps.MapWithDeleteIfExists
+	ProfilingMap       maps.Map
+	CTLBProgramsMaps   []maps.Map
+	QoSMap             maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -105,6 +107,11 @@ func getCommonMaps() *CommonMaps {
 	jumpMaps := jump.Maps()
 	for _, jm := range jumpMaps {
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
+	}
+	commonMaps.NetkitProgramsMaps = hook.NewNetkitProgramsMaps()
+	netkitJumpMaps := jump.NetkitMaps()
+	for _, jm := range netkitJumpMaps {
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, jm.(maps.MapWithDeleteIfExists))
 	}
 	return commonMaps
 }
@@ -202,8 +209,12 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.QoSMap,
 	}
 	mapslice = append(mapslice, c.ProgramsMaps...)
+	mapslice = append(mapslice, c.NetkitProgramsMaps...)
 	mapslice = append(mapslice, c.CTLBProgramsMaps...)
 	for _, m := range c.JumpMaps {
+		mapslice = append(mapslice, m)
+	}
+	for _, m := range c.NetkitJumpMaps {
 		mapslice = append(mapslice, m)
 	}
 	return mapslice
