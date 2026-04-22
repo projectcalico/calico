@@ -45,7 +45,7 @@ func EnsurePrometheusMetricsEnabled(cli client.Client) (cleanup func(), err erro
 	})
 
 	if err != nil {
-		return cleanup, fmt.Errorf("Couldn't enable Prometheus metrics: %w", err)
+		return cleanup, fmt.Errorf("couldn't enable Prometheus metrics: %w", err)
 	}
 
 	return cleanup, nil
