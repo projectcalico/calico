@@ -460,12 +460,12 @@ var (
 		f := []cli.Flag{
 			imagesFlag(!hashrelease, envPublishImages),
 			helmChartsFlag(true, envPublishCharts),
-			helmIndexFlag,
 		}
 		if hashrelease {
 			return f
 		}
 		return append(f,
+			helmIndexFlag,
 			gitRefFlag,
 			githubReleaseFlag)
 	}
