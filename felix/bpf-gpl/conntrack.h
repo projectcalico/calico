@@ -1097,8 +1097,31 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	if (syn) {
 		CALI_CT_DEBUG("packet is SYN");
 		ct_result_set_flag(result.rc, CT_RES_SYN);
-	}
 
+		/* For ingress connection limit: mark the CT entry when a SYN is
+		 * first seen at a WEP ingress. The CONNLIMIT_INGRESS flag on the
+		 * CT value prevents double-counting on SYN retransmissions.
+		 * CT_RES_CONNLIMIT_FIRST_SYN is set in the result ONLY on the
+		 * first SYN, so the accepted_entrypoint knows to increment.
+		 *
+		 * Also disable redirect_peer for this connection so that if the
+		 * connlimit check rejects the SYN, retransmissions still go
+		 * through to_wep (instead of bypassing via bpf_redirect_peer).
+		 */
+		if (CALI_F_TO_WEP && INGRESS_CONN_LIMIT_CONFIGURED) {
+			if (!(ct_value_get_flags(v) & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
+				ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_INGRESS |
+						      CALI_CT_FLAG_SKIP_REDIR_PEER);
+				ct_result_set_flag(result.rc, CT_RES_CONNLIMIT_FIRST_SYN);
+			}
+			/* Propagate REJECTED flag so accepted_entrypoint can
+			 * unconditionally reject retransmissions of previously
+			 * rejected connections. */
+			if (ct_value_get_flags(v) & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_REJECTED;
+			}
+		}
+	}
 
 	CALI_CT_DEBUG("result: 0x%x", result.rc);
 
