@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,7 +45,12 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	logrus.Infof("Starting Calico Guardian %s", cfg.String())
+	// Log config with VoltronURL userinfo redacted.
+	sanitized := cfg.Config
+	if u, err := url.Parse(sanitized.VoltronURL); err == nil {
+		sanitized.VoltronURL = u.Redacted()
+	}
+	logrus.Infof("Starting Calico Guardian %s", sanitized.String())
 	daemon.Run(GetShutdownContext(), cfg.Config, cfg.Targets())
 }
 
