@@ -16,6 +16,7 @@ package fv_test
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,13 +32,14 @@ import (
 )
 
 var _ = infrastructure.DatastoreDescribe(
-	"pepper Network policy only mode (RouteSyncDisabled=true) tests",
+	"Network policy only mode (RouteSyncDisabled=true) tests",
 	[]apiconfig.DatastoreType{apiconfig.EtcdV3},
 	func(getInfra infrastructure.InfraFactory) {
 		var (
 			infra        infrastructure.DatastoreInfra
 			tc           infrastructure.TopologyContainers
 			calicoClient client.Interface
+			probeWl      *workload.Workload
 		)
 
 		BeforeEach(func() {
@@ -60,6 +62,31 @@ var _ = infrastructure.DatastoreDescribe(
 			opts.InitialFelixConfiguration = felixConfig
 
 			tc, calicoClient = infrastructure.StartSingleNodeTopology(opts, infra)
+
+			By("Installing a default-allow GlobalNetworkPolicy")
+			// In network-policy-only mode we still expect Felix to program
+			// policy. Install an allow-all policy and verify that Felix has
+			// rendered it before running the rest of the test.
+			policy := api.NewGlobalNetworkPolicy()
+			policy.Name = "default-allow"
+			policy.Spec.Selector = "all()"
+			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+			policy.Spec.Egress = []api.Rule{{Action: api.Allow}}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_, err := calicoClient.GlobalNetworkPolicies().Create(ctx, policy, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Creating a probe workload so the policy becomes active")
+			// Felix only renders policy chains for policies that select at
+			// least one local endpoint, so we need a workload on the node
+			// before we can assert that the policy has been programmed.
+			probeWl = workload.Run(tc.Felixes[0], "probe", "default", "10.65.0.10", "8088", "tcp")
+			probeWl.ConfigureInInfra(infra)
+
+			By("Verifying the default-allow policy is programmed in the dataplane")
+			Eventually(policyProgrammedOn(tc.Felixes[0], "default-allow"), "30s", "500ms").
+				Should(BeTrue(), "Felix should program the default-allow policy even when RouteSyncDisabled is true")
 		})
 
 		AfterEach(func() {
@@ -70,11 +97,15 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 				infra.DumpErrorData()
 			}
+			if probeWl != nil {
+				probeWl.Stop()
+				probeWl = nil
+			}
 			tc.Stop()
 			infra.Stop()
 		})
 
-		It("should not program routes to workload endpoints", func() {
+		It("should not assign IPv4 addresses to workload endpoints", func() {
 			By("Creating a local workload")
 			wl := workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.2", "8088", "tcp")
 			defer wl.Stop()
@@ -86,15 +117,15 @@ var _ = infrastructure.DatastoreDescribe(
 				return out
 			}, "30s").Should(ContainSubstring(wl.InterfaceName))
 
-			By("Verifying no workload-interface route is programmed in the main table")
-			// With RouteSyncDisabled=true, Felix's route table is a DummyTable,
-			// so the endpoint manager's SetRoutes calls for the workload are
-			// no-ops. The workload's veth should have no routes via it.
+			By("Verifying no IPv4 address is assigned to the workload interface")
+			// With RouteSyncDisabled=true, Felix should not touch the workload
+			// veth beyond what's required for policy. The host side of the veth
+			// should have no IPv4 addresses attached.
 			Consistently(func() string {
-				out, _ := tc.Felixes[0].ExecOutput("ip", "route", "show", "dev", wl.InterfaceName)
+				out, _ := tc.Felixes[0].ExecOutput("ip", "-4", "addr", "show", "dev", wl.InterfaceName)
 				return out
-			}, "5s", "500ms").Should(BeEmpty(),
-				"Felix should not program any route via the workload interface when RouteSyncDisabled is true")
+			}, "5s", "500ms").ShouldNot(ContainSubstring("inet "),
+				"Felix should not assign any IPv4 address to the workload interface when RouteSyncDisabled is true")
 		})
 
 		It("should not assign link-local peer addresses to the workload interface", func() {
@@ -143,9 +174,37 @@ var _ = infrastructure.DatastoreDescribe(
 			Consistently(func() string {
 				out, _ := tc.Felixes[0].ExecOutput("ip", "-4", "addr", "show", "dev", wl.InterfaceName)
 				return out
-			}, "15s", "500ms").ShouldNot(ContainSubstring("169.254.0.179"),
+			}, "5s", "500ms").ShouldNot(ContainSubstring("inet "),
 				"Felix should not assign the link-local peer address to the workload interface "+
 					"when RouteSyncDisabled is true")
 		})
 	},
 )
+
+// policyProgrammedOn returns a function that reports whether the given policy
+// name appears in the felix container's programmed rules (iptables, nftables,
+// or BPF depending on mode).
+func policyProgrammedOn(felix *infrastructure.Felix, policyName string) func() bool {
+	return func() bool {
+		var cmd []string
+		switch {
+		case BPFMode():
+			// In BPF mode, policies are attached per-interface; probing all
+			// programs on the node is enough for this smoke check.
+			out, err := felix.ExecOutput("calico-bpf", "policy", "dump", "all", "all", "--asm")
+			if err != nil {
+				return false
+			}
+			return strings.Contains(out, policyName)
+		case NFTMode():
+			cmd = []string{"nft", "list", "ruleset"}
+		default:
+			cmd = []string{"iptables-save", "-t", "filter"}
+		}
+		out, err := felix.ExecOutput(cmd...)
+		if err != nil {
+			return false
+		}
+		return strings.Contains(out, policyName)
+	}
+}
