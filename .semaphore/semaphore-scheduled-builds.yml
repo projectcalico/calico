@@ -881,7 +881,11 @@ blocks:
           execution_time_limit:
             minutes: 20
           commands:
-            - make build image ut-bpf-prereqs fv-prereqs
+            # Skip `make build` (which on amd64 also cross-compiles
+            # bin/calico-felix.exe) since the Windows binary is produced by the
+            # dedicated "Felix: Build Windows binaries" block and nothing in the
+            # Linux FV path consumes it.
+            - make bin/calico-felix image ut-bpf-prereqs fv-prereqs
             - ./.semaphore/cache-test-artifacts
         - name: "Felix: UT"
           priority:
