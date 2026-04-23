@@ -48,10 +48,7 @@ var (
 	imageReleaseDirs = utils.ImageReleaseDirs
 
 	// Directories that publish windows images.
-	windowsReleaseDirs = []string{
-		"node",
-		"cni-plugin",
-	}
+	windowsReleaseDirs = utils.WindowsReleaseDirs
 
 	defaultOrg    = utils.ProjectCalicoOrg
 	defaultRepo   = utils.CalicoRepoName
@@ -1160,22 +1157,21 @@ func (r *CalicoManager) buildContainerImages() error {
 	}
 
 	for _, dir := range releaseDirs {
-		// Use an absolute path for the directory to build.
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
 		if err != nil {
 			logrus.Error(out)
 			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
-		if slices.Contains(windowsReleaseDirs, dir) {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
-			if err != nil {
-				logrus.Error(out)
-				return fmt.Errorf("failed to build %s windows images: %s", dir, err)
-			}
-			logrus.Info(out)
+	}
 
+	for _, dir := range windowsReleaseDirs {
+		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
+		if err != nil {
+			logrus.Error(out)
+			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
 		}
+		logrus.Info(out)
 	}
 	return nil
 }
@@ -1265,10 +1261,10 @@ func (r *CalicoManager) publishContainerImages() error {
 	// We allow for a certain number of retries when publishing each directory, since
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
-	for _, dir := range imageReleaseDirs {
+	publish := func(dir, target string) error {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-publish", env...)
+			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -1276,31 +1272,20 @@ func (r *CalicoManager) publishContainerImages() error {
 					continue
 				}
 				logrus.Error(out)
-				return fmt.Errorf("failed to publish %s: %s", dir, err)
+				return fmt.Errorf("failed to publish %s (%s): %s", dir, target, err)
 			}
-
-			// Success - move on to the next directory.
 			logrus.Info(out)
-			break
+			return nil
 		}
-		if slices.Contains(windowsReleaseDirs, dir) {
-			attempt := 0
-			for {
-				out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-windows", env...)
-				if err != nil {
-					if attempt < maxRetries {
-						logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
-						attempt++
-						continue
-					}
-					logrus.Error(out)
-					return fmt.Errorf("failed to publish %s windows images: %s", dir, err)
-				}
-
-				// Success - move on to the next directory.
-				logrus.Info(out)
-				break
-			}
+	}
+	for _, dir := range imageReleaseDirs {
+		if err := publish(dir, "release-publish"); err != nil {
+			return err
+		}
+	}
+	for _, dir := range windowsReleaseDirs {
+		if err := publish(dir, "release-windows"); err != nil {
+			return err
 		}
 	}
 	return nil

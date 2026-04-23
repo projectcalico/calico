@@ -52,10 +52,13 @@ build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
 build-race: $(BINDIR)/calico-race-$(ARCH)
 
-$(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 ifeq ($(FIPS),true)
+# The FIPS binary is cgo-linked via build_cgo_boring_binary, so it needs libbpf
+# available in the build container for transitive felix/bpf/libbpf imports.
+$(BINDIR)/calico-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	$(call build_cgo_boring_binary, ./, $@)
 else
+$(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
 endif
 
@@ -105,3 +108,30 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
+
+###############################################################################
+# Release
+###############################################################################
+## Produces a clean build of the combined calico image at the specified version.
+.PHONY: release-build
+release-build: .release-$(VERSION).created
+.release-$(VERSION).created:
+	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
+	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
+	touch $@
+
+## Pushes the combined calico image to the registries.
+.PHONY: release-publish
+release-publish: release-prereqs .release-$(VERSION).published
+.release-$(VERSION).published:
+	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+	touch $@
+
+release-prereqs:
+ifndef VERSION
+	$(error VERSION is undefined - set VERSION=vX.Y.Z)
+endif
