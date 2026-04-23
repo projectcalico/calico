@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/filter"
 	"github.com/projectcalico/calico/felix/bpf/hook"
@@ -2475,9 +2476,16 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			ap.SkipEgressRedirect = true
 		}
 
-		if wep.QosControls.IngressPacketRate > 0 {
-			// Ingress packet rate is configured
-			ap.IngressPacketRateConfigured = true
+		// Handle ingress QoS (packet rate + connection limit) in a single map entry
+		hasIngressPR := wep.QosControls.IngressPacketRate > 0
+		hasIngressCL := wep.QosControls.IngressMaxConnections > 0
+		if hasIngressPR || hasIngressCL {
+			if hasIngressPR {
+				ap.IngressPacketRateConfigured = true
+			}
+			if hasIngressCL {
+				ap.IngressConnLimitConfigured = true
+			}
 
 			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
 			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
@@ -2485,27 +2493,38 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
 				return state, err
 			}
-			qosVal := qos.ValueFromBytes(qosValBytes)
-			qosPacketRate := qosVal.PacketRate()
-			qosPacketBurst := qosVal.PacketBurst()
-			qosTokens := qosVal.PacketRateTokens()
-			qosLastUpdate := qosVal.PacketRateLastUpdate()
-			// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
-			if qosVal.PacketRate() != int16(wep.QosControls.IngressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
-				qosPacketRate = int16(wep.QosControls.IngressPacketRate)
-				qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
-				qosTokens = int16(-1)
-				qosLastUpdate = uint64(0)
+			existing := qos.ValueFromBytes(qosValBytes)
+
+			// Packet rate fields
+			var qosPacketRate, qosPacketBurst, qosTokens int16
+			var qosLastUpdate uint64
+			if hasIngressPR {
+				qosPacketRate = existing.PacketRate()
+				qosPacketBurst = existing.PacketBurst()
+				qosTokens = existing.PacketRateTokens()
+				qosLastUpdate = existing.PacketRateLastUpdate()
+				// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
+				if existing.PacketRate() != int16(wep.QosControls.IngressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
+					qosPacketRate = int16(wep.QosControls.IngressPacketRate)
+					qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
+					qosTokens = int16(-1)
+					qosLastUpdate = uint64(0)
+				}
 			}
 
-			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
+			// Connection limit fields
+			var maxConnections, currentCount int32
+			if hasIngressCL {
+				maxConnections = int32(wep.QosControls.IngressMaxConnections)
+				currentCount = existing.CurrentCount() // preserve current count
+			}
 
+			qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
 			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating ingress entry in QoS map.")
 				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
 			}
 		} else {
-			// Ingress packet rate not configured, clean up existing state if present
 			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
 			err = m.QoSMap.Delete(qosKey.AsBytes())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -2513,39 +2532,57 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 				return state, err
 			}
 		}
-		if wep.QosControls.EgressPacketRate > 0 {
-			// Egress packet rate is configured
-			ap.EgressPacketRateConfigured = true
 
-			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
+		// Handle egress QoS (packet rate + connection limit) in a single map entry
+		hasEgressPR := wep.QosControls.EgressPacketRate > 0
+		hasEgressCL := wep.QosControls.EgressMaxConnections > 0
+		if hasEgressPR || hasEgressCL {
+			if hasEgressPR {
+				ap.EgressPacketRateConfigured = true
+			}
+			if hasEgressCL {
+				ap.EgressConnLimitConfigured = true
+			}
+
+			qosKey := qos.NewKey(uint32(ifindex), 0) // egress=0
 			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving egress entry from QoS map.")
 				return state, err
 			}
-			qosVal := qos.ValueFromBytes(qosValBytes)
-			qosPacketRate := qosVal.PacketRate()
-			qosPacketBurst := qosVal.PacketBurst()
-			qosTokens := qosVal.PacketRateTokens()
-			qosLastUpdate := qosVal.PacketRateLastUpdate()
-			// Reset state if config changed
-			if qosVal.PacketRate() != int16(wep.QosControls.EgressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
-				// Safe to cast to int16 since the maximum value is 10000
-				qosPacketRate = int16(wep.QosControls.EgressPacketRate)
-				qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
-				qosTokens = int16(-1)
-				qosLastUpdate = uint64(0)
+			existing := qos.ValueFromBytes(qosValBytes)
+
+			// Packet rate fields
+			var qosPacketRate, qosPacketBurst, qosTokens int16
+			var qosLastUpdate uint64
+			if hasEgressPR {
+				qosPacketRate = existing.PacketRate()
+				qosPacketBurst = existing.PacketBurst()
+				qosTokens = existing.PacketRateTokens()
+				qosLastUpdate = existing.PacketRateLastUpdate()
+				// Reset state if config changed
+				if existing.PacketRate() != int16(wep.QosControls.EgressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
+					qosPacketRate = int16(wep.QosControls.EgressPacketRate)
+					qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
+					qosTokens = int16(-1)
+					qosLastUpdate = uint64(0)
+				}
 			}
 
-			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
+			// Connection limit fields
+			var maxConnections, currentCount int32
+			if hasEgressCL {
+				maxConnections = int32(wep.QosControls.EgressMaxConnections)
+				currentCount = existing.CurrentCount() // preserve current count
+			}
 
+			qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
 			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating egress entry in QoS map.")
 				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
 			}
 		} else {
-			// Egress packet rate not configured, clean up existing state if present
-			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
+			qosKey := qos.NewKey(uint32(ifindex), 0) // egress=0
 			err = m.QoSMap.Delete(qosKey.AsBytes())
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
@@ -5314,4 +5351,68 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 			"stack":     pa.freeStack,
 		}).Panic("Free set and free stack got out of sync")
 	}
+}
+
+// GetConnLimitedPodInfo returns a map of pod IPs (as string keys) to their
+// connection limit info. Used by the ConnLimitScanner to recount active TCP
+// connections per interface+direction.
+func (m *bpfEndpointManager) GetConnLimitedPodInfo() map[string]bpfconntrack.ConnLimitPodInfo {
+	result := make(map[string]bpfconntrack.ConnLimitPodInfo)
+
+	// Build a reverse mapping from WEP ID to interface info.
+	wepToIface := make(map[types.WorkloadEndpointID]bpfInterfaceInfo)
+	for _, iface := range m.nameToIface {
+		if iface.info.endpointID != nil {
+			wepToIface[*iface.info.endpointID] = iface.info
+		}
+	}
+
+	for wlID, wep := range m.allWEPs {
+		if wep == nil || wep.QosControls == nil {
+			continue
+		}
+		hasIngress := wep.QosControls.IngressMaxConnections > 0
+		hasEgress := wep.QosControls.EgressMaxConnections > 0
+		if !hasIngress && !hasEgress {
+			continue
+		}
+
+		ifaceInfo, ok := wepToIface[wlID]
+		if !ok {
+			continue
+		}
+		ifIndex := uint32(ifaceInfo.ifIndex)
+		if ifIndex == 0 {
+			continue
+		}
+
+		info := bpfconntrack.ConnLimitPodInfo{
+			IfIndex:         ifIndex,
+			HasIngressLimit: hasIngress,
+			HasEgressLimit:  hasEgress,
+		}
+
+		for _, ipNet := range wep.Ipv4Nets {
+			ip, _, err := net.ParseCIDR(ipNet)
+			if err != nil {
+				continue
+			}
+			ip4 := ip.To4()
+			if ip4 != nil {
+				result[string(ip4)] = info
+			}
+		}
+		for _, ipNet := range wep.Ipv6Nets {
+			ip, _, err := net.ParseCIDR(ipNet)
+			if err != nil {
+				continue
+			}
+			ip16 := ip.To16()
+			if ip16 != nil {
+				result[string(ip16)] = info
+			}
+		}
+	}
+
+	return result
 }

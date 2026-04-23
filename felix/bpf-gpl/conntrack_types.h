@@ -42,6 +42,8 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SET_DSCP	0x8000 /* marks connections that needs to set DSCP */
 #define CALI_CT_FLAG_MAGLEV	0X10000 /* marks Maglev connections. Allows packets of an existing to arrive via a different tunnel after failover. */
 #define CALI_CT_FLAG_SEND_RESET	0x20000 /* marks connections where we should send a TCP RST on behalf of the workload */
+#define CALI_CT_FLAG_CONNLIMIT_INGRESS	0x40000 /* marks connections counted against an ingress connection limit */
+#define CALI_CT_FLAG_CONNLIMIT_REJECTED	0x80000 /* marks connections rejected by the connection limit */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -134,6 +136,13 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 	ret;												\
 })
 
+#define ct_value_clear_flags(v, f) do {		\
+	(v)->flags  &= ~((f) & 0xff);		\
+	(v)->flags2 &= ~(((f) >> 8) & 0xff);	\
+	(v)->flags3 &= ~(((f) >> 16) & 0xff);	\
+	(v)->flags4 &= ~(((f) >> 24) & 0xff);	\
+} while(0)
+
 struct ct_lookup_ctx {
 	__u8 proto;
 	DECLARE_IP_ADDR(src);
@@ -219,6 +228,7 @@ enum calico_ct_result_type {
 #define CT_RES_SYN		0x1000
 #define CT_RES_CONFIRMED	0x2000
 #define CT_RES_TO_WORKLOAD	0x4000
+#define CT_RES_CONNLIMIT_FIRST_SYN	0x8000
 
 #define ct_result_rc(rc)			((rc) & 0xff)
 #define ct_result_flags(rc)			((rc) & ~0xff)
