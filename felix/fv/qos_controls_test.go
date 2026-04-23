@@ -279,36 +279,66 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				}
 
+				qosMapName := qos.MapParams.VersionedName()
+
+				getBPFQoSValue := func(felixId, wlId int, hook string) *qos.Value {
+					var ingress uint32
+					switch hook {
+					case "ingress":
+						ingress = 1
+					case "egress":
+						ingress = 0
+					default:
+						Expect(true).To(BeFalse(), "hook must be either 'ingress' or 'egress', '%s' is invalid", hook)
+					}
+
+					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), ingress)
+					keyStr := bytesToHexString(key.AsBytes())
+
+					args := []string{"bash", "-c", fmt.Sprintf(`bpftool map dump name %s -j | jq '.[].elements[] | select(.key | join(" ") == "%s") | .value | join(" ")'`, qosMapName, keyStr)}
+
+					out, _ := tc.Felixes[felixId].ExecOutput(args...)
+					logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
+					valueStr := strings.Trim(strings.TrimSuffix(out, "\n"), "\"")
+					if valueStr == "" {
+						return nil
+					}
+					valueBytes := hexStringToBytes(valueStr)
+
+					value := qos.ValueFromBytes(valueBytes)
+
+					logrus.Infof("value: %s", value.String())
+
+					return &value
+				}
+
 				getBPFPacketRateAndBurst := func(felixId, wlId int, hook string) func() string {
 					return func() string {
-						var ingress uint32
-						switch hook {
-						case "ingress":
-							ingress = 1
-						case "egress":
-							ingress = 0
-						default:
-							Expect(true).To(BeFalse(), "hook must be either 'ingress' or 'egress', '%s' is invalid", hook)
-						}
-
-						key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), ingress)
-						keyStr := bytesToHexString(key.AsBytes())
-
-						args := []string{"bash", "-c", fmt.Sprintf(`bpftool map dump name cali_qos -j | jq '.[].elements[] | select(.key | join(" ") == "%s") | .value | join(" ")'`, keyStr)}
-
-						out, _ := tc.Felixes[felixId].ExecOutput(args...)
-						logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
-						valueStr := strings.Trim(strings.TrimSuffix(out, "\n"), "\"")
-						if valueStr == "" {
+						value := getBPFQoSValue(felixId, wlId, hook)
+						if value == nil {
 							return "0 0"
 						}
-						valueBytes := hexStringToBytes(valueStr)
-
-						value := qos.ValueFromBytes(valueBytes)
-
-						logrus.Infof("value: %s", value.String())
-
 						return fmt.Sprintf("%d %d", value.PacketRate(), value.PacketBurst())
+					}
+				}
+
+				getBPFMaxConnections := func(felixId, wlId int, hook string) func() int32 {
+					return func() int32 {
+						value := getBPFQoSValue(felixId, wlId, hook)
+						if value == nil {
+							return 0
+						}
+						return value.MaxConnections()
+					}
+				}
+
+				getBPFCurrentCount := func(felixId, wlId int, hook string) func() int32 {
+					return func() int32 {
+						value := getBPFQoSValue(felixId, wlId, hook)
+						if value == nil {
+							return 0
+						}
+						return value.CurrentCount()
 					}
 				}
 
@@ -592,11 +622,6 @@ var _ = infrastructure.DatastoreDescribe(
 				})
 
 				Context("With connection limits", func() {
-					BeforeEach(func() {
-						if BPFMode() {
-							Skip("Skipping QoS control connection limit tests on BPF mode.")
-						}
-					})
 					tryConnect := func(w *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
 						return func() error {
 							logrus.Info("Trying to start connection")
@@ -632,17 +657,23 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						w[0].UpdateInInfra(infra)
 
-						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
-						if NFTMode() {
-							// ingress config should be present
-							Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
-							// egress config should not be present
-							Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+						if BPFMode() {
+							By("Waiting for ingress connection limit to appear in QoS map")
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Consistently(getBPFMaxConnections(0, 0, "egress"), "5s", "1s").Should(Equal(int32(0)))
 						} else {
-							// ingress config should be present
-							Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + `.*-j REJECT --reject-with tcp-reset`))
-							// egress config should not be present
-							Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
+							if NFTMode() {
+								// ingress config should be present
+								Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+								// egress config should not be present
+								Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+							} else {
+								// ingress config should be present
+								Eventually(getRules(0), "10s", "1s").Should(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + `.*-j REJECT --reject-with tcp-reset`))
+								// egress config should not be present
+								Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							}
 						}
 
 						By("Starting persistent connections on workload 1")
@@ -657,8 +688,16 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Stopping one persistent connection to free up a spot in the limit")
 						pcs[len(pcs)-1].Stop()
 
+						if BPFMode() {
+							// In BPF mode, the connlimit counter is updated by the CT
+							// scanner (every ~10s). Wait for the scanner to recount and
+							// drop the current_count below the limit.
+							By("Waiting for BPF CT scanner to recount connections")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(BeNumerically("<", int32(numConnections)))
+						}
+
 						By("Starting nth connection on workload 1, expecting success")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "30s", "1s").ShouldNot(HaveOccurred())
 						logrus.Infof("%dth connection failed as expected", numConnections-1)
 
 						By("Stopping remaining persistent connections")
@@ -670,17 +709,22 @@ var _ = infrastructure.DatastoreDescribe(
 						w[0].WorkloadEndpoint.Spec.QoSControls = nil
 						w[0].UpdateInInfra(infra)
 
-						By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
-						if NFTMode() {
-							// ingress config should be present
-							Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
-							// egress config should not be present
-							Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+						if BPFMode() {
+							By("Waiting for connection limit to be removed from QoS map")
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(0)))
 						} else {
-							// ingress config should be present
-							Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
-							// egress config should not be present
-							Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
+							if NFTMode() {
+								// ingress config should be present
+								Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+								// egress config should not be present
+								Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-fw-` + w[0].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+							} else {
+								// ingress config should be present
+								Eventually(getRules(0), "10s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+								// egress config should not be present
+								Consistently(getRules(0), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[0].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							}
 						}
 
 						By("Setting connection limit for egress on workload 1 (clients)")
@@ -689,17 +733,23 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 						w[1].UpdateInInfra(infra)
 
-						By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
-						if NFTMode() {
-							// ingress config should not be present
-							Consistently(getRules(1), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
-							// egress config should be present
-							Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+						if BPFMode() {
+							By("Waiting for egress connection limit to appear in QoS map")
+							Consistently(getBPFMaxConnections(1, 1, "ingress"), "5s", "1s").Should(Equal(int32(0)))
+							Eventually(getBPFMaxConnections(1, 1, "egress"), "10s", "1s").Should(Equal(int32(numConnections)))
 						} else {
-							// ingress config should not be present
-							Consistently(getRules(1), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
-							// egress config should be present
-							Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
+							if NFTMode() {
+								// ingress config should not be present
+								Consistently(getRules(1), "5s", "1s").ShouldNot(MatchRegexp(`(?s)chain filter-cali-tw-` + w[1].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+								// egress config should be present
+								Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`(?s)chain filter-cali-fw-` + w[1].InterfaceName + ` {[^}]*ct count over ` + fmt.Sprintf("%d", numConnections) + ` reject with tcp reset`))
+							} else {
+								// ingress config should not be present
+								Consistently(getRules(1), "5s", "1s").ShouldNot(MatchRegexp(`-A cali-tw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+								// egress config should be present
+								Eventually(getRules(1), "10s", "1s").Should(MatchRegexp(`-A cali-fw-` + regexp.QuoteMeta(w[1].InterfaceName) + ` .*-m connlimit .*--connlimit-above ` + fmt.Sprintf("%d", numConnections) + ` .*-j REJECT --reject-with tcp-reset`))
+							}
 						}
 
 						By("Starting persistent connections on workload 1")

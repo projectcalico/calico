@@ -34,7 +34,7 @@ func SetMapSize(size int) {
 
 const (
 	KeySize    = 4 + 4
-	ValueSize  = 4 + 2 + 2 + 2 + 3*2 + 8
+	ValueSize  = 4 + 2 + 2 + 2 + 3*2 + 8 + 4 + 4
 	MaxEntries = 2 * ifstate.MaxEntries
 )
 
@@ -45,7 +45,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_qos",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      1,
+	Version:      2,
 	UpdatedByBPF: true,
 }
 
@@ -93,6 +93,8 @@ func NewValue(
 	packetBurst,
 	packetRateTokens int16,
 	packetRateLastUpdate uint64,
+	maxConnections,
+	currentCount int32,
 ) Value {
 	var v Value
 
@@ -101,7 +103,9 @@ func NewValue(
 	binary.LittleEndian.PutUint16(v[6:8], uint16(packetBurst))
 	binary.LittleEndian.PutUint16(v[8:10], uint16(packetRateTokens))
 	// skip padding (v[10:16])
-	binary.LittleEndian.PutUint64(v[16:16+8], uint64(packetRateLastUpdate))
+	binary.LittleEndian.PutUint64(v[16:24], uint64(packetRateLastUpdate))
+	binary.LittleEndian.PutUint32(v[24:28], uint32(maxConnections))
+	binary.LittleEndian.PutUint32(v[28:32], uint32(currentCount))
 
 	return v
 }
@@ -123,13 +127,22 @@ func (v Value) PacketRateTokens() int16 {
 }
 
 func (v Value) PacketRateLastUpdate() uint64 {
-	return binary.LittleEndian.Uint64(v[16 : 16+8])
+	return binary.LittleEndian.Uint64(v[16:24])
+}
+
+func (v Value) MaxConnections() int32 {
+	return int32(binary.LittleEndian.Uint32(v[24:28]))
+}
+
+func (v Value) CurrentCount() int32 {
+	return int32(binary.LittleEndian.Uint32(v[28:32]))
 }
 
 func (v Value) String() string {
 	return fmt.Sprintf(
-		"{PacketRate: %d, PacketBurst: %d, PacketRateTokens: %d, PacketRateLastUpdate: %d}",
-		v.PacketRate(), v.PacketBurst(), v.PacketRateTokens(), v.PacketRateLastUpdate())
+		"{PacketRate: %d, PacketBurst: %d, PacketRateTokens: %d, PacketRateLastUpdate: %d, MaxConnections: %d, CurrentCount: %d}",
+		v.PacketRate(), v.PacketBurst(), v.PacketRateTokens(), v.PacketRateLastUpdate(),
+		v.MaxConnections(), v.CurrentCount())
 }
 
 func ValueFromBytes(b []byte) Value {
