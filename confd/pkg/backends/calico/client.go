@@ -1824,7 +1824,9 @@ func isValidCommunity(communityValue string) bool {
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
 // We use this purely for logging.
 func (c *client) ParseFailed(rawKey string, rawValue string) {
-	// Do not log rawValue, it may contain sensitive datastore entries (e.g. passwords).
+	// Do not log the raw value — future keys may carry credentials.
+	// The key and length are sufficient to alert; the actual value can be
+	// retrieved directly from the datastore when debugging.
 	log.Errorf("Unable to parse datastore entry Key=%s; ValueLen=%d", rawKey, len(rawValue))
 }
 

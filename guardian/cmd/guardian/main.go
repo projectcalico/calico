@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,11 +45,12 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Do not log the full config, it may contain sensitive URL credentials and cert paths.
-	logrus.WithFields(logrus.Fields{
-		"listenPort":    cfg.ListenPort,
-		"healthEnabled": cfg.HealthEnabled,
-	}).Info("Starting Calico Guardian")
+	// Log config with VoltronURL userinfo redacted.
+	sanitized := cfg.Config
+	if u, err := url.Parse(sanitized.VoltronURL); err == nil {
+		sanitized.VoltronURL = u.Redacted()
+	}
+	logrus.Infof("Starting Calico Guardian %s", sanitized.String())
 	daemon.Run(GetShutdownContext(), cfg.Config, cfg.Targets())
 }
 

@@ -26,9 +26,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	// Do not log the full config struct, Typha config contains TLS key/cert file paths.
-	log.Infof("Config: confDir=%s onetime=%t syncOnly=%t typhaAddr=%s typhaTLS=%t",
-		c.ConfDir, c.Onetime, c.SyncOnly, c.Typha.Addr, c.Typha.KeyFile != "")
+	// Config fields are file paths, flags, and connection params — no inline credentials or key material.
+	log.Infof("Config: %#v", c)
 
 	// Run confd.
 	run.Run(c)

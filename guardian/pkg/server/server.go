@@ -77,9 +77,9 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 	}
 
 	for _, target := range srv.targets {
-		// Do not log target.Dest directly, it may contain sensitive credentials in URL userinfo.
+		// Use Redacted() — target.Dest may contain credentials in URL userinfo.
 		if target.Dest != nil {
-			logrus.Infof("Will route traffic to %s for requests matching %s", target.Dest.Host, target.Path)
+			logrus.Infof("Will route traffic to %s for requests matching %s", target.Dest.Redacted(), target.Path)
 		} else {
 			logrus.Infof("Will route traffic for requests matching %s, but destination is not configured", target.Path)
 		}

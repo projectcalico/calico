@@ -20,6 +20,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
@@ -121,12 +122,17 @@ func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 }
 
 func Run(ctx context.Context, cfg Config) {
-	// Do not log the full cfg struct, PushURL may contain sensitive credentials.
-	logrus.WithFields(logrus.Fields{
-		"port":       cfg.Port,
-		"logLevel":   cfg.LogLevel,
-		"hasPushURL": cfg.PushURL != "",
-	}).Info("Loaded configuration")
+	// Log a copy with PushURL passed through url.Redacted() as a precaution —
+	// the default URL has no credentials, but user-supplied values could.
+	sanitized := cfg
+	if sanitized.PushURL != "" {
+		if u, err := url.Parse(sanitized.PushURL); err == nil {
+			sanitized.PushURL = u.Redacted()
+		} else {
+			sanitized.PushURL = "<invalid-url>"
+		}
+	}
+	logrus.WithField("cfg", sanitized).Info("Loaded configuration")
 	defer logrus.Warn("Shutting down")
 
 	// Make an initial report that says we're live but not yet ready.

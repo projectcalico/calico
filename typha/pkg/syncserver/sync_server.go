@@ -160,6 +160,30 @@ type Config struct {
 	DebugLogWrites bool
 }
 
+// LogFields returns a logrus.Fields map with all config values included,
+// but with TLS key/cert file paths redacted.
+func (c Config) LogFields() log.Fields {
+	return log.Fields{
+		"host":                           c.Host,
+		"port":                           c.Port,
+		"maxMessageSize":                 c.MaxMessageSize,
+		"binarySnapshotTimeout":          c.BinarySnapshotTimeout,
+		"maxFallBehind":                  c.MaxFallBehind,
+		"newClientFallBehindGracePeriod": c.NewClientFallBehindGracePeriod,
+		"minBatchingAgeThreshold":        c.MinBatchingAgeThreshold,
+		"pingInterval":                   c.PingInterval,
+		"pongTimeout":                    c.PongTimeout,
+		"handshakeTimeout":               c.HandshakeTimeout,
+		"writeTimeout":                   c.WriteTimeout,
+		"dropInterval":                   c.DropInterval,
+		"shutdownTimeout":                c.ShutdownTimeout,
+		"shutdownMaxDropInterval":        c.ShutdownMaxDropInterval,
+		"maxConns":                       c.MaxConns,
+		"tlsEnabled":                     c.requiringTLS(),
+		"writeBufferSize":                c.WriteBufferSize,
+	}
+}
+
 const (
 	healthName     = "SyncServer"
 	healthInterval = 10 * time.Second
@@ -279,11 +303,7 @@ func (c *Config) requiringTLS() bool {
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
-	// Do not log the full config struct, it contains TLS key/cert file paths.
-	log.WithFields(log.Fields{
-		"port":       config.Port,
-		"tlsEnabled": config.KeyFile != "",
-	}).Info("Creating server")
+	log.WithFields(config.LogFields()).Info("Creating server")
 	s := &Server{
 		config:               config,
 		caches:               caches,

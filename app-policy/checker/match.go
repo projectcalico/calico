@@ -161,8 +161,6 @@ func computeNamespaceMatch(
 // matchRequest checks if the request part of the Rule matches the request. It returns true if the
 // Rule matches, false otherwise.
 func matchRequest(rule *proto.Rule, req *requestCache) bool {
-	// Do not log the request object, it may contain sensitive HTTP headers and bodies.
-	log.Debug("Matching request.")
 	return matchHTTP(rule.GetHttpMatch(), req.GetHttpMethod(), req.GetHttpPath())
 }
 
