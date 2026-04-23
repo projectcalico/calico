@@ -265,7 +265,7 @@ func TestConnLimitScannerSkipsUnlimitedPods(t *testing.T) {
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			// Pod at 10.65.0.2 has limits, but the connection is between
-			// two unlimted IPs.
+			// two unlimited IPs.
 			string(net.ParseIP("10.65.0.2").To4()): podInfo(9, true, false),
 		},
 	}
@@ -278,7 +278,7 @@ func TestConnLimitScannerSkipsUnlimitedPods(t *testing.T) {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
 	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for unlimted pods, got %v", scanner.counts)
+		t.Errorf("expected no counts for unlimited pods, got %v", scanner.counts)
 	}
 }
 
