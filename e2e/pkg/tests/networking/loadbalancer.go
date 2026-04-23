@@ -230,7 +230,6 @@ var _ = describe.CalicoDescribe(
 
 		It("test service ip load balancing behavior before and after maglev annotation (IPv4)", makeMaglevTest(false))
 		It("test service ip load balancing behavior before and after maglev annotation (IPv6)", makeMaglevTest(true))
-
 	})
 
 type MaglevTests struct {
