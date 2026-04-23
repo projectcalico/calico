@@ -131,6 +131,11 @@ type BreadcrumbProvider interface {
 	CurrentBreadcrumb() *snapcache.Breadcrumb
 }
 
+// Config holds the configuration for the Typha sync server.
+//
+// IMPORTANT: When adding new fields, also update LogFields() below so the
+// field appears in startup logs.  Do NOT add fields that contain credentials,
+// private keys, or other secrets — LogFields() is logged at Info level.
 type Config struct {
 	Host                           string
 	Port                           int
