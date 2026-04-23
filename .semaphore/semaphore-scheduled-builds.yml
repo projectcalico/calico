@@ -394,10 +394,7 @@ blocks:
             # land in the shared build cache. Felix FV consumes calico-cgo (for
             # BPF) or calico-race (when FV_RACE_DETECTOR_ENABLED=true).
             - make -C cmd/calico build-cgo build-race
-            # Save both the bare and prefixed tags so consumers can load the
-            # image under whichever name they reference (felix FV uses the bare
-            # tag via FV_TYPHAIMAGE, cache-test-artifacts uses the bare tag too).
-            - docker save calico/calico:latest-amd64 calico:latest-amd64 -o /tmp/calico-image.tar
+            - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
             - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
             # Upload the cgo + race binaries so Felix FV can consume them
