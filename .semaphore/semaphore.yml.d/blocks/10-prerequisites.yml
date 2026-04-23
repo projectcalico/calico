@@ -126,9 +126,123 @@
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
           - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+- name: "Pull: go-build image"
+  # Populate the GCS cache of calico/go-build so that every downstream job can
+  # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
+  # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
+  # the tarball survives across workflows — the common case is a no-op
+  # `gcloud storage ls` on a cache hit.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: SKIP_CACHE_RESTORE
+        value: "true"
+    jobs:
+      - name: "Cache calico/go-build to GCS"
+        commands:
+          - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+          - |-
+            if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+              echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
+            else
+              echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
+              docker pull "calico/go-build:${GO_BUILD_VER}"
+              docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
+              zstd -3 --rm /tmp/go-build.tar
+              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+            fi
+- name: "Build: calico image"
+  # Always build and cache the calico image so that downstream CI blocks can
+  # load it from GCS instead of rebuilding per component. This block is the
+  # sole producer for the "calico" build-cache group — every Go component
+  # block on master restores the module + build cache populated here.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico"
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache calico image"
+        env_vars:
+          - name: STORE_BUILD_CACHE
+            value: "true"
+        commands:
+          - make -C cmd/calico image
+          # Also build the cgo and race variants so their GOCACHE fingerprints
+          # land in the shared build cache. Felix FV consumes calico-cgo (for
+          # BPF) or calico-race (when FV_RACE_DETECTOR_ENABLED=true).
+          - make -C cmd/calico build-cgo build-race
+          # Save both the bare and prefixed tags so consumers can load the
+          # image under whichever name they reference (felix FV uses the bare
+          # tag via FV_TYPHAIMAGE, cache-test-artifacts uses the bare tag too).
+          - docker save calico/calico:latest-amd64 calico:latest-amd64 -o /tmp/calico-image.tar
+          - zstd -3 --rm /tmp/calico-image.tar
+          - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+          # Upload the cgo + race binaries so Felix FV can consume them
+          # directly instead of rebuilding. Felix Build downloads these into
+          # cmd/calico/bin/ so the working-copy tarball carries them through
+          # to the test VMs.
+          - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
+          - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+          # TEMPORARY for PR #12225: warm master's "calico" build cache from this
+          # PR so downstream PR-consumer blocks get a realistic warm-cache
+          # measurement. REVERT BEFORE MERGE — once this lands on master, the
+          # normal branch-build epilogue repopulates the cache.
+          - |-
+            pushd $HOME
+            tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
+            gcloud storage cp /tmp/build-cache.tar.zstd "${GCS_CACHE_DIR}/master/build-cache-calico.tar.zstd"
+            popd
+- name: "Build: node image"
+  # Builds the node image on top of the combined calico binary. The underlying
+  # Go state lives in the "calico" build cache populated by "Build: calico
+  # image", so this block does not participate in build-cache storage.
+  run:
+    when: "${CHANGE_IN(node)}"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache node image"
+        commands:
+          - make -C node image
+          - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
+          - zstd -3 --rm /tmp/node-image.tar
+          - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+- name: "Build: whisker image"
+  # Whisker is a TypeScript/React frontend — no Go build cache to populate.
+  run:
+    when: >-
+      ${FORCE_RUN} or
+      change_in(['/metadata.mk', '/lib.Makefile', '/whisker/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+  dependencies: []
+  task:
+    jobs:
+      - name: "Build and cache whisker image"
+        commands:
+          - make -C whisker image
+          - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
+          - zstd -3 --rm /tmp/whisker-image.tar
+          - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.
+    # Only the pre-flight checks gate on this; the per-image build blocks are
+    # wired in directly as dependencies on the consumer blocks that actually
+    # load those cached images, so unrelated component blocks don't serialize
+    # behind them.
     when: "true"
   dependencies:
     - Check SemaphoreCI files
@@ -139,6 +253,7 @@
     - Check protobufs
     - Manifests and API docs
     - Store working copy
+    - "Pull: go-build image"
   task:
     jobs:
       - name: Pre-flight checks

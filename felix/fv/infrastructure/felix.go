@@ -175,9 +175,13 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	arch := utils.GetSysArch()
 
+	// The FV container runs the combined calico binary mounted at
+	// /usr/local/bin/calico-felix; it dispatches to the felix subcommand via
+	// cobra (see felix/docker-image/calico-felix-wrapper). The cgo variant
+	// is used by default so BPF FV works without FV_BINARY being set.
 	fvBin := os.Getenv("FV_BINARY")
 	if fvBin == "" {
-		fvBin = fmt.Sprintf("bin/calico-felix-%s", arch)
+		fvBin = fmt.Sprintf("../cmd/calico/bin/calico-cgo-%s", arch)
 	}
 
 	if cwLogDir == "" {

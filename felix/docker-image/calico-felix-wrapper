@@ -45,8 +45,11 @@ while true; do
   source /extra-env.sh
 
   echo "calico-felix-wrapper: Starting calico-felix"
+  # calico-felix here is the combined calico binary, dispatched via cobra to
+  # the felix subcommand. argv[0] stays "calico-felix" so /proc comm and
+  # GetSinglePID("calico-felix") continue to work.
   # Only enable tracebacks for Felix, not other binaries.
-  GOTRACEBACK=${FELIX_GOTRACEBACK} calico-felix &
+  GOTRACEBACK=${FELIX_GOTRACEBACK} calico-felix component felix &
   pid=$!
   echo "calico-felix-wrapper: Started calico-felix, PID=$pid"
   wait $pid
