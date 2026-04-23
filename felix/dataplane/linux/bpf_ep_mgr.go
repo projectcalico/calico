@@ -411,10 +411,10 @@ type bpfEndpointManager struct {
 	updateRateLimitedLog    *logutilslc.RateLimitedLogger
 	istioDSCP               uint8
 
-	QoSMap             maps.MapWithUpdateWithFlags
-	connLimitPodInfo   atomic.Pointer[map[string]bpfconntrack.ConnLimitPodInfo]
-	maglevLUTSize      int
-	ipFragTimeout uint32
+	QoSMap           maps.MapWithUpdateWithFlags
+	connLimitPodInfo atomic.Pointer[map[string]bpfconntrack.ConnLimitPodInfo]
+	maglevLUTSize    int
+	ipFragTimeout    uint32
 
 	workloadSourceSpoofing bool
 }
