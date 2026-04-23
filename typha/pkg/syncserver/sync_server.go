@@ -165,8 +165,10 @@ type Config struct {
 	DebugLogWrites bool
 }
 
-// LogFields returns a logrus.Fields map with all config values included,
-// but with TLS key/cert file paths redacted.
+// LogFields returns a logrus.Fields map with operational config values
+// for logging.  TLS-related fields (KeyFile, CertFile, CAFile, ClientCN,
+// ClientURISAN) and internal fields (HealthAggregator, DebugLogWrites)
+// are omitted; a "tlsEnabled" boolean is included instead.
 func (c Config) LogFields() log.Fields {
 	return log.Fields{
 		"host":                           c.Host,
