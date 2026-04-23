@@ -541,11 +541,9 @@ func (syn *etcdSyncer) sendUpdate(key string, value string, revision uint64, upd
 
 	parsedValue, err = model.ParseValue(parsedKey, []byte(value))
 	if err != nil {
-		// Do not log the raw value, it may contain sensitive datastore entries.
-		log.Warningf("Failed to parse value for %v (len=%d)", key, len(value))
+		log.Warningf("Failed to parse value for %v: %#v", key, value)
 	}
-	// Do not log the parsed value, it may contain sensitive datastore entries.
-	log.Debugf("Parsed value type: %T", parsedValue)
+	log.Debugf("Parsed value: %#v", parsedValue)
 
 	updates := []api.Update{
 		{

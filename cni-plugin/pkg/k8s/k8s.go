@@ -299,13 +299,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 				newData, err := json.Marshal(stdinData)
 				if err != nil {
-					// Do not log the full stdinData map, it may contain sensitive credentials
-					// (K8sAuthToken, K8sClientKey, K8sCertificateAuthority). Log only the keys.
-					keys := make([]string, 0, len(stdinData))
-					for k := range stdinData {
-						keys = append(keys, k)
-					}
-					logger.WithError(err).WithField("keys", keys).Error("Error marshaling CNI stdin data")
+					logger.WithField("stdinData", stdinData).Error("Error Marshaling data")
 					return nil, err
 				}
 				args.StdinData = newData
@@ -992,8 +986,7 @@ func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtC
 
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
 	ns, err := client.CoreV1().Namespaces().Get(context.Background(), podNamespace, metav1.GetOptions{})
-	// Do not log the full Namespace object, it may contain sensitive data in annotations.
-	logrus.Debugf("namespace info name=%s", podNamespace)
+	logrus.Debugf("namespace info %+v", ns)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,8 +995,7 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []internalapi.WorkloadEndpointPort, profiles []string, generateName, serviceAccount string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
-	// Do not log the full Pod object, it may contain sensitive data in env vars.
-	logrus.Debugf("pod info name=%s namespace=%s", podName, podNamespace)
+	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
 		return nil, nil, nil, nil, "", "", err
 	}

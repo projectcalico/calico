@@ -25,37 +25,6 @@ import (
 // An environment entry of "TYPHA_FOO=bar" is translated to "foo": "bar".
 func LoadConfigFromEnvironment(environ []string) map[string]string {
 	result := make(map[string]string)
-	// isSensitiveParam checks whether a config parameter name suggests its value
-	// may contain credentials. Matching params have their values redacted in logs.
-	// Note: params ending in "file" (e.g. "etcdkeyfile") are file paths, not secrets.
-	sensitiveSubstrings := []string{
-		"password", "passwd", "passphrase",
-		"token", "bearer",
-		"secret",
-		"credential",
-		"authorization",
-		"cookie",
-		"private",
-	}
-	sensitiveSuffixes := []string{"key", "cert", "kubeconfig", "kubeconfiginline"}
-	isSensitiveParam := func(name string) bool {
-		lower := strings.ToLower(name)
-		// Params ending in "file" or "path" are file paths, not inline secrets.
-		if strings.HasSuffix(lower, "file") || strings.HasSuffix(lower, "path") {
-			return false
-		}
-		for _, sub := range sensitiveSubstrings {
-			if strings.Contains(lower, sub) {
-				return true
-			}
-		}
-		for _, suffix := range sensitiveSuffixes {
-			if strings.HasSuffix(lower, suffix) {
-				return true
-			}
-		}
-		return false
-	}
 	for _, kv := range environ {
 		splits := strings.SplitN(kv, "=", 2)
 		if len(splits) < 2 {
@@ -68,14 +37,8 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		if strings.HasPrefix(key, "typha_") {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			// Redact values for env vars that may contain sensitive credentials.
-			if isSensitiveParam(paramName) {
-				log.Infof("Found typha environment variable: %s=<redacted>",
-					paramName)
-			} else {
-				log.Infof("Found typha environment variable: %s=%q",
-					paramName, value)
-			}
+			log.Infof("Found typha environment variable: %#v=%#v",
+				paramName, value)
 			result[paramName] = value
 		}
 	}

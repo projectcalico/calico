@@ -44,11 +44,7 @@ func main() {
 		logrus.Fatal(err)
 	}
 
-	// Do not log the full config, it may contain sensitive URL credentials and cert paths.
-	logrus.WithFields(logrus.Fields{
-		"listenPort":    cfg.ListenPort,
-		"healthEnabled": cfg.HealthEnabled,
-	}).Info("Starting Calico Guardian")
+	logrus.Infof("Starting Calico Guardian %s", cfg.String())
 	daemon.Run(GetShutdownContext(), cfg.Config, cfg.Targets())
 }
 

@@ -360,8 +360,7 @@ func filterEtcdList(n *etcd.Node, l model.ListInterface) []*model.KVPair {
 			kvs = append(kvs, kv)
 		}
 	}
-	// Do not log the KVPair values, they may contain sensitive datastore entries.
-	log.Debugf("Returning %d results", len(kvs))
+	log.Debugf("Returning: %#v", kvs)
 	return kvs
 }
 
