@@ -667,10 +667,11 @@ func isValidWindowsHandle(backend bapi.Client, ipPoolsWindows *ipamtestutils.IPP
 	opts := model.BlockListOptions{IPVersion: 4}
 	datastoreObjs, _ := backend.List(context.Background(), opts, "")
 	var block allocationBlock
+	config := IPAMConfig{}
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockKey)
 		if k.CIDR.IP.String() == blockCIDR.IP.String() && k.CIDR.Mask.String() == blockCIDR.Mask.String() {
-			block = blockFromBackend(o.Value.(*model.AllocationBlock))
+			block = blockFromBackend(&config, o.Value.(*model.AllocationBlock))
 		}
 
 	}

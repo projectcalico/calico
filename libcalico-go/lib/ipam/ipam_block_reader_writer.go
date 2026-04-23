@@ -154,7 +154,7 @@ func (rw blockReaderWriter) findUsableBlock(
 			AffinityType: affinityType,
 			Host:         host,
 		}
-		block := blockFromBackend(allocBlock)
+		block := blockFromBackend(&config, allocBlock)
 		numFree := block.NumFreeAddresses(reservations)
 		exists[e.Key.(model.BlockKey).CIDR.String()] = blockInfo{
 			numFree:     numFree,
@@ -213,7 +213,7 @@ func (rw blockReaderWriter) findUsableBlock(
 					block.cidr.String(), age.Seconds())
 				continue
 			}
-			err := rw.releaseBlockAffinity(ctx, block.affinityCfg, block.cidr, releaseAffinityOpts{
+			err := rw.releaseBlockAffinity(ctx, &config, block.affinityCfg, block.cidr, releaseAffinityOpts{
 				RequireEmpty: true,
 				// Pass the sequence number through to make sure that we only
 				// release the affinity if the block hasn't been changed since
@@ -318,7 +318,7 @@ func (rw blockReaderWriter) claimAffineBlock(ctx context.Context, aff *model.KVP
 			}
 
 			// Pull out the allocationBlock object.
-			b := blockFromBackend(obj.Value.(*model.AllocationBlock))
+			b := blockFromBackend(&config, obj.Value.(*model.AllocationBlock))
 
 			if b.Affinity != nil && *b.Affinity == affinityKeyStr {
 				// Block has affinity to this host, meaning another
@@ -390,6 +390,7 @@ type releaseAffinityOpts struct {
 // the host does not claim an affinity for the block.
 func (rw blockReaderWriter) releaseBlockAffinity(
 	ctx context.Context,
+	config *IPAMConfig,
 	affinityCfg AffinityConfig,
 	blockCIDR cnet.IPNet,
 	opts releaseAffinityOpts,
@@ -417,7 +418,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(
 		logCtx.WithError(err).Warnf("Error getting block")
 		return err
 	}
-	b := blockFromBackend(obj.Value.(*model.AllocationBlock))
+	b := blockFromBackend(config, obj.Value.(*model.AllocationBlock))
 
 	if opts.RequiredBlockSequenceNumber != nil && *opts.RequiredBlockSequenceNumber != b.SequenceNumber {
 		// Block modified since caller read it and they want us to abort in
