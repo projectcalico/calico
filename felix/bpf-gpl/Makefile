@@ -129,15 +129,13 @@ ut-objs: $(UT_OBJS)
 map-objs: $(MAP_OBJS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
+# Clone libbpf at the pinned version in a single network round-trip.
+# Using `--branch $(LIBBPF_VERSION)` with `--depth 1` avoids a separate
+# `git fetch --tags` call, which was a flake source (GitHub occasionally
+# returns HTTP 500 for tag listings).
 $(LIBBPF_FILE_CREATED):
-ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
-	$(info "Directory does not exist.")
-	@echo "Directory does not exist."
-	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
-endif
-	rm -rf .libbpf-*
-	cd $(LIBBPF_DIR) && \
-		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
+	rm -rf $(LIBBPF_DIR) .libbpf-*
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git
 	touch $(LIBBPF_FILE_CREATED)
 
 
