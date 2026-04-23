@@ -227,17 +227,50 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		}, true)
 	})
 
-	It("should reset the missing-API backoff on a successful List via markInstalled", func() {
-		// Unit-level regression: markInstalled() must reset missingAPIBackoff to 0, so
-		// a later disappearance of the backing API starts a fresh exponential ramp
-		// from MissingAPIInitialRetry rather than continuing from the capped value.
-		// This is simpler and more reliable than plumbing a full disappear/reappear
-		// cycle through the watcher-syncer state machine.
-		wc := watchersyncer.NewTestWatcherCache(r1)
-		wc.SetMissingAPIBackoff(60 * time.Second)
-		wc.MarkInstalled()
-		Expect(wc.MissingAPIBackoff()).To(BeZero(),
-			"markInstalled() must reset missingAPIBackoff so the next retry ramp starts at MissingAPIInitialRetry")
+	It("should recover through NotFound -> success -> watch-fail -> NotFound -> success", func() {
+		// Drive the watcher through a full disappearance/reappearance cycle twice,
+		// verifying the missing-API path does not wedge on the second NotFound and
+		// updates continue to flow after the backing API churns.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
+		defer setMissingAPIRetry(watchersyncer.MissingAPIInitialRetry, watchersyncer.MissingAPIMaxRetry)
+		setMissingAPIRetry(50*time.Millisecond, 500*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		// Queue the full response sequence up front so the syncer goroutine can
+		// consume them as it progresses through the cycle. Using caliTooOldRV
+		// to end each watch keeps the test driven by the test goroutine rather
+		// than by polling timers.
+		// Both lists use the same key so only Add/Update events are emitted
+		// (no delete for a vanished entry), keeping the expected sequence small.
+		list1 := &model.KVPairList{
+			KVPairs:  []*model.KVPair{{Key: l1Key1, Value: "v1", Revision: "r1"}},
+			Revision: "r1",
+		}
+		list2 := &model.KVPairList{
+			KVPairs:  []*model.KVPair{{Key: l1Key1, Value: "v2", Revision: "r2"}},
+			Revision: "r2",
+		}
+		// Cycle 1: NotFound -> success list1 -> watch fails.
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.clientListResponse(r1, list1)
+		rs.clientWatchResponse(r1, caliTooOldRV)
+		// Cycle 2: NotFound again -> success list2 -> watch succeeds (and stays
+		// watching, which is fine; test ends after list2 update is observed).
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.clientListResponse(r1, list2)
+		rs.clientWatchResponse(r1, nil)
+
+		rs.watcherSyncer.Start()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Both list1 and list2 should reach the syncer.
+		rs.ExpectUpdates([]api.Update{
+			{KVPair: *list1.KVPairs[0], UpdateType: api.UpdateTypeKVNew},
+			{KVPair: *list2.KVPairs[0], UpdateType: api.UpdateTypeKVUpdated},
+		}, false)
 	})
 
 	It("should handle reconnection if watchers fail to be created", func() {
