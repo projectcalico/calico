@@ -3,4 +3,4 @@
 # Only targets load balancer E2Es e.g. Maglev tests.
 
 include:
-  - Feature:Maglev
+  - Feature:LoadBalancer

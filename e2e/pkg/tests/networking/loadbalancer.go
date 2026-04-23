@@ -56,7 +56,7 @@ func init() {
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("Maglev"),
+	describe.WithFeature("LoadBalancer"),
 	describe.WithCategory(describe.Networking),
 	describe.WithExternalNode(),
 	describe.WithDataplane(describe.BPF),

@@ -67,7 +67,7 @@ var features = map[string]bool{
 	"HostPorts":       true,
 	"OwnerReferences": true,
 	"MTU":             true,
-	"Maglev":          true,
+	"LoadBalancer":    true,
 	"BGPPeer":         true,
 	"IPIP":            true,
 	"Tiered-RBAC":     true,
