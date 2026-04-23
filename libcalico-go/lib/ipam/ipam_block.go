@@ -32,9 +32,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// TODO: get this from config
-const MinIPReclaimAgeSeconds = 0
-
 // windowsReservedHandle is the handle used to reserve addresses required for Windows
 // networking so that workloads do not get assigned these addresses.
 const WindowsReservedHandle = "windows-reserved-ipam-handle"
@@ -47,9 +44,9 @@ type allocationBlock struct {
 
 // blockFromBackend creates a new allocationBlock from a backend type, performing
 // garbage collection before teturning,
-func blockFromBackend(b *model.AllocationBlock) allocationBlock {
+func blockFromBackend(config *IPAMConfig, b *model.AllocationBlock) allocationBlock {
 	block := allocationBlock{b}
-	block.garbageCollect(MinIPReclaimAgeSeconds) // TODO: get this value from config
+	block.garbageCollect(config.MinIPReclaimAgeSeconds)
 	return block
 }
 
@@ -271,7 +268,7 @@ func (b allocationBlock) inUseIPs() []string {
 // release tries to release addresses matching the release options, on success,
 // returns slice of IPs that were *skipped* due to not being allocated and a
 // map from handle ID to count of IPs released for that handle.
-func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
+func (b *allocationBlock) release(cfg *IPAMConfig, addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
 	unallocated := []cnet.IP{}
 	countByHandle := map[string]int{}
@@ -374,7 +371,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 
 	// Perform garbage collection in case this or other IPs can be deallocated
 	// by now.
-	b.garbageCollect(MinIPReclaimAgeSeconds)
+	b.garbageCollect(cfg.MinIPReclaimAgeSeconds)
 
 	return unallocated, countByHandle, nil
 }
@@ -400,7 +397,7 @@ func sanitizeHandle(handleID string) string {
 //
 // If opts.SequenceNumber is set, and any affected allocations' sequence numbers
 // do not match, those allocations are not released.
-func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
+func (b *allocationBlock) releaseByHandle(cfg *IPAMConfig, opts ReleaseOptions) int {
 	handleID := opts.Handle
 	attrIndexes := b.attributeIndexesByHandle(handleID)
 	log.Debugf("Attribute indexes to release: %v", attrIndexes)
@@ -437,7 +434,7 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 
 	// Perform garbage collection in case this or other IPs can be deallocated
 	// by now.
-	b.garbageCollect(MinIPReclaimAgeSeconds)
+	b.garbageCollect(cfg.MinIPReclaimAgeSeconds)
 
 	return releaseCount
 }
