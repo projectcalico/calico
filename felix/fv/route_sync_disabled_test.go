@@ -85,30 +85,13 @@ var _ = infrastructure.DatastoreDescribe(
 			probeWl.ConfigureInInfra(infra)
 
 			By("Verifying the default-allow policy is programmed in the dataplane")
-			Eventually(policyProgrammedOn(tc.Felixes[0], "default-allow"), "30s", "500ms").
+			Eventually(policyProgrammedOn(tc.Felixes[0], probeWl.InterfaceName, "default-allow"), "30s", "500ms").
 				Should(BeTrue(), "Felix should program the default-allow policy even when RouteSyncDisabled is true")
-		})
-
-		AfterEach(func() {
-			if CurrentSpecReport().Failed() {
-				for _, felix := range tc.Felixes {
-					felix.Exec("ip", "r")
-					felix.Exec("ip", "a")
-				}
-				infra.DumpErrorData()
-			}
-			if probeWl != nil {
-				probeWl.Stop()
-				probeWl = nil
-			}
-			tc.Stop()
-			infra.Stop()
 		})
 
 		It("should not assign IPv4 addresses to workload endpoints", func() {
 			By("Creating a local workload")
 			wl := workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.2", "8088", "tcp")
-			defer wl.Stop()
 			wl.ConfigureInInfra(infra)
 
 			By("Waiting for the workload's veth to exist on the host")
@@ -132,13 +115,9 @@ var _ = infrastructure.DatastoreDescribe(
 			// When a workload is selected as a local BGP peer, the endpoint
 			// manager calls LinkAddrsManager.SetLinkLocalAddress, which issues
 			// netlink AddrAdd on the workload's veth. That peer address is only
-			// useful when Felix is also programming routes, so assigning it
-			// while RouteSyncDisabled is true is a known bug: the link-address
-			// manager should be inert (or the endpoint manager should skip the
-			// peer-IP path) when route sync is disabled.
+			// useful when Felix is also programming routes, but not when RouteSyncDisabled is true.
 			By("Creating a workload labelled for local BGP peering")
 			wl := workload.Run(tc.Felixes[0], "w0", "default", "10.65.0.2", "8088", "tcp")
-			defer wl.Stop()
 			wl.WorkloadEndpoint.Labels["role"] = "bgp-peer"
 			wl.ConfigureInInfra(infra)
 
@@ -182,23 +161,32 @@ var _ = infrastructure.DatastoreDescribe(
 )
 
 // policyProgrammedOn returns a function that reports whether the given policy
-// name appears in the felix container's programmed rules (iptables, nftables,
-// or BPF depending on mode).
-func policyProgrammedOn(felix *infrastructure.Felix, policyName string) func() bool {
+// is programmed on the given workload interface. In BPF mode it inspects the
+// per-interface BPF policy dump for the canonical
+// "Policy: GlobalNetworkPolicy <name>" marker — the tool's "all" pseudo-iface
+// cannot be used here because the debug JSON is keyed by real interface name
+// and the command silently produces no output when the file is missing. In
+// iptables/nftables mode, policy chain names embed the policy name, so a
+// ruleset grep is sufficient.
+func policyProgrammedOn(felix *infrastructure.Felix, ifaceName, policyName string) func() bool {
 	return func() bool {
-		var cmd []string
-		switch {
-		case BPFMode():
-			// In BPF mode, policies are attached per-interface; probing all
-			// programs on the node is enough for this smoke check.
-			out, err := felix.ExecOutput("calico-bpf", "policy", "dump", "all", "all", "--asm")
-			if err != nil {
-				return false
+		if BPFMode() {
+			marker := "Policy: GlobalNetworkPolicy " + policyName
+			for _, hook := range []string{"ingress", "egress"} {
+				out, err := felix.ExecOutput("calico-bpf", "policy", "dump", ifaceName, hook)
+				if err != nil {
+					continue
+				}
+				if strings.Contains(out, marker) {
+					return true
+				}
 			}
-			return strings.Contains(out, policyName)
-		case NFTMode():
+			return false
+		}
+		var cmd []string
+		if NFTMode() {
 			cmd = []string{"nft", "list", "ruleset"}
-		default:
+		} else {
 			cmd = []string{"iptables-save", "-t", "filter"}
 		}
 		out, err := felix.ExecOutput(cmd...)
