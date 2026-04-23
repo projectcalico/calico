@@ -1,6 +1,6 @@
 # CustomResourceDefinitions for Calico the Hard Way
 ---
-# Source: crds/crd.projectcalico.org_bgpconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_bgpconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -300,7 +300,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_bgpfilters.yaml
+# Source: calico/crds/crd.projectcalico.org_bgpfilters.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1200,7 +1200,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_bgppeers.yaml
+# Source: calico/crds/crd.projectcalico.org_bgppeers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1449,7 +1449,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_blockaffinities.yaml
+# Source: calico/crds/crd.projectcalico.org_blockaffinities.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1516,7 +1516,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_caliconodestatuses.yaml
+# Source: calico/crds/crd.projectcalico.org_caliconodestatuses.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1859,7 +1859,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crds/crd.projectcalico.org_clusterinformations.yaml
+# Source: calico/crds/crd.projectcalico.org_clusterinformations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1931,7 +1931,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_felixconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_felixconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3043,6 +3043,22 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
@@ -3376,10 +3392,18 @@ spec:
                     == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
                     == 6)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_globalnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_globalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4681,7 +4705,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_globalnetworksets.yaml
+# Source: calico/crds/crd.projectcalico.org_globalnetworksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4740,7 +4764,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_hostendpoints.yaml
+# Source: calico/crds/crd.projectcalico.org_hostendpoints.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -4867,7 +4891,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamblocks.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamblocks.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5005,7 +5029,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamconfigs.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamconfigs.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5083,7 +5107,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_ipamhandles.yaml
+# Source: calico/crds/crd.projectcalico.org_ipamhandles.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5142,7 +5166,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_ippools.yaml
+# Source: calico/crds/crd.projectcalico.org_ippools.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5402,7 +5426,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crds/crd.projectcalico.org_ipreservations.yaml
+# Source: calico/crds/crd.projectcalico.org_ipreservations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5459,7 +5483,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
+# Source: calico/crds/crd.projectcalico.org_kubecontrollersconfigurations.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -5952,7 +5976,7 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crds/crd.projectcalico.org_networkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_networkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -7205,7 +7229,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_networksets.yaml
+# Source: calico/crds/crd.projectcalico.org_networksets.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -7262,7 +7286,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagedglobalnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagedglobalnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -8574,7 +8598,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagedkubernetesnetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagedkubernetesnetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -9106,7 +9130,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_stagednetworkpolicies.yaml
+# Source: calico/crds/crd.projectcalico.org_stagednetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10370,7 +10394,7 @@ spec:
       served: true
       storage: true
 ---
-# Source: crds/crd.projectcalico.org_tiers.yaml
+# Source: calico/crds/crd.projectcalico.org_tiers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -10545,13 +10569,13 @@ spec:
       subresources:
         status: {}
 ---
-# Source: crds/policy.networking.k8s.io_clusternetworkpolicies.yaml
+# Source: calico/crds/policy.networking.k8s.io_clusternetworkpolicies.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/300
-    policy.networking.k8s.io/bundle-version: v0.1.7
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
+    policy.networking.k8s.io/bundle-version: v0.2.0
     policy.networking.k8s.io/channel: standard
   name: clusternetworkpolicies.policy.networking.k8s.io
 spec:

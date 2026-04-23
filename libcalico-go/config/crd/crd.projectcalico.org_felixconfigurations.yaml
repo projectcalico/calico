@@ -1109,6 +1109,22 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
@@ -1442,5 +1458,13 @@ spec:
                     == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
                     == 6)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true

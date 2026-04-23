@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
@@ -225,18 +225,16 @@ func (b BirdInfo) Show() {
 
 // printStatus prints out bird status.
 func printStatus(status *birdStatus, out io.Writer) {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader([]string{"Ready", "Version", "RouteID", "ServerTime", "LastBoot", "LastReconfig"})
-
-	row := []string{
-		fmt.Sprintf("%t", status.ready),
+	t := table.NewWriter()
+	t.SetOutputMirror(out)
+	t.AppendHeader(table.Row{"Ready", "Version", "RouteID", "ServerTime", "LastBoot", "LastReconfig"})
+	t.AppendRow(table.Row{
+		status.ready,
 		status.version,
 		status.routerID,
 		status.serverTime,
 		status.lastBootTime,
 		status.lastReconfigTime,
-	}
-	table.Append(row)
-
-	table.Render()
+	})
+	t.Render()
 }

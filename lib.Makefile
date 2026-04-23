@@ -214,7 +214,7 @@ define build_windows_binary
 		-e GOARCH=amd64 \
 		-e GOOS=windows \
 		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -1663,8 +1663,26 @@ $(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
 # actual built images, so it can run in parallel with component builds.
-$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
-	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+# Track the operator source selection in a generated inputs file so
+# changes to repo/branch invalidate the operator stamp.
+.PHONY: FORCE
+FORCE:
+
+$(REPO_ROOT)/.stamp.operator.inputs: FORCE
+	@printf '%s\n' \
+	  'OPERATOR_ORGANIZATION=$(OPERATOR_ORGANIZATION)' \
+	  'OPERATOR_GIT_REPO=$(OPERATOR_GIT_REPO)' \
+	  'OPERATOR_BRANCH=$(OPERATOR_BRANCH)' > $@.tmp
+	@if test -f $@ && cmp -s $@.tmp $@; then \
+	  rm -f $@.tmp; \
+	else \
+	  mv -f $@.tmp $@; \
+	fi
+
+$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml $(REPO_ROOT)/.stamp.operator.inputs
+	cd $(KIND_INFRA_DIR) && \
+	  REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
+	  BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.

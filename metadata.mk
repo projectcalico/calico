@@ -3,22 +3,22 @@
 #################################################################################################
 
 # Calico toolchain versions and the calico/base image to use.
-GO_BUILD_VER=1.26.2-llvm20.1.8-k8s1.35.3-1
+GO_BUILD_VER=1.26.2-llvm20.1.8-k8s1.35.4
 RUST_BUILD_VER=1.94.1
 
-CALICO_BASE_VER=ubi9-1776282488
+CALICO_BASE_VER=ubi9-1776893948
 
 # Version of Kubernetes to use for tests, rancher/kubectl, and kubectl binary release.
 K8S_VERSION=v1.35.2
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.21.3
-ETCD_VERSION=v3.5.24
-GHR_VERSION=v0.17.0
-GITHUB_CLI_VERSION=2.76.2
+CRANE_VERSION=v0.21.5
+ETCD_VERSION=v3.5.29
+GHR_VERSION=v0.18.3
+GITHUB_CLI_VERSION=2.90.0
 GOTESTSUM_VERSION=v1.13.0
-HELM_VERSION=v3.11.3
+HELM_VERSION=v3.20.2
 KINDEST_NODE_VERSION=v1.35.1
 KIND_VERSION=v0.31.0
 

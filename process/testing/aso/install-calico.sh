@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,12 @@ set -o pipefail
 . ../util/utils.sh
 . ./export-env.sh
 
-# Trap to show pod status on failure for debugging
-trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Showing pod status for debugging:"; echo "========================================"; ./bin/kubectl get pod -A -o wide --kubeconfig=./kubeconfig 2>/dev/null || true; fi; exit $exit_code' EXIT
+# On failure, capture describe + logs for every non-Ready pod so CI has something
+# actionable to look at. Under Semaphore we drop straight into /home/semaphore/fv.log/
+# (the job's artifact staging dir); otherwise fall back to /tmp for hand runs.
+diag_dir="${DIAG_DIR:-/home/semaphore/fv.log/diagnostics}"
+[[ -d /home/semaphore ]] || diag_dir="/tmp/pod-diagnostics"
+trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Collecting pod diagnostics..."; echo "========================================"; KUBECTL=./bin/kubectl KUBECONFIG=./kubeconfig collect_pod_diagnostics "'"${diag_dir}"'"; fi; exit $exit_code' EXIT
 
 # Use kubectl with kubeconfig from install-kubeadm.sh
 : "${KUBECTL:=./bin/kubectl}"
