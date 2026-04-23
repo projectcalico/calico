@@ -15,15 +15,10 @@
 package utils
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
-
-	v1 "github.com/tigera/operator/api/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ReleaseStreamIsAtLeast returns true if the RELEASE_STREAM environment
@@ -55,35 +50,6 @@ func ReleaseStreamIsAtLeast(minVersion string) (bool, error) {
 		return rsMajor > minMajor, nil
 	}
 	return rsMinor >= minMinor, nil
-}
-
-// IsCalicoOSS returns true if the PRODUCT environment variable is "calico".
-// Installation isn't probed in-case we are testing a manifest-based installation.
-// Container image tags can vary in format, so they are also avoided as a means of version-checking.
-func IsCalicoOSS() bool {
-	return os.Getenv("PRODUCT") == "calico"
-}
-
-// IsCalicoEE returns true if an installation resource exists, and
-// spec.variant is "TigeraSecureEnterprise".
-// If no installation exists, or variant differs from above, returns false.
-func IsCalicoEE(ctx context.Context, cli client.Client) (bool, error) {
-	installation := &v1.Installation{}
-	err := cli.Get(ctx, client.ObjectKey{Name: "default"}, installation)
-	if apierrors.IsNotFound(err) {
-		// No installation means we're on OSS (manifest installation).
-		return false, nil
-	}
-	// Any other errors should bubble.
-	if err != nil {
-		return false, err
-	}
-
-	if installation.Spec.Variant == v1.TigeraSecureEnterprise {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // parseVersion parses a "vMAJOR.MINOR" string and returns major, minor.
