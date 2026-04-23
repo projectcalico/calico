@@ -235,7 +235,7 @@ func (r *CalicoManager) PreBuildValidation() error {
 	if (r.images || r.archiveImages) && len(r.imageRegistries) == 0 {
 		errStack = errors.Join(errStack, fmt.Errorf("no image registries specified"))
 	}
-	if r.ocpBundle && !r.manifests {
+	if r.isHashRelease && r.ocpBundle && !r.manifests {
 		errStack = errors.Join(errStack, fmt.Errorf("cannot build OCP bundle without manifests; set --manifests to 'true'"))
 	}
 	if errStack != nil {
@@ -1063,6 +1063,10 @@ func (r *CalicoManager) uploadDir() string {
 // TODO: We should produce a tar per architecture that we ship.
 // TODO: We should produce windows tars
 func (r *CalicoManager) buildReleaseTar() error {
+	if !r.tarball {
+		logrus.Info("Skipping building release tarball")
+		return nil
+	}
 	baseReleaseOutputDir := filepath.Dir(r.uploadDir())
 	releaseBase := filepath.Join(baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion))
 	releaseTarFilePath := filepath.Join(r.uploadDir(), fmt.Sprintf("release-%s.tgz", r.calicoVersion))
@@ -1379,7 +1383,7 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 }
 
 func (r *CalicoManager) updateHelmChartIndex() error {
-	if !r.helmCharts {
+	if !r.helmIndex {
 		logrus.Info("Skipping updating helm index")
 		return nil
 	}

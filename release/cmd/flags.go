@@ -40,7 +40,6 @@ var debugFlag = &cli.BoolFlag{
 
 // Product repository flags are flags used to interact with the product repository
 var (
-	gitFlags     = []cli.Flag{orgFlag, repoFlag, repoRemoteFlag}
 	productFlags = []cli.Flag{
 		orgFlag,
 		repoFlag,
@@ -249,7 +248,7 @@ var (
 		Name:     "operator",
 		Category: operatorCategory,
 		Usage:    "Include Tigera operator in the release steps",
-		Sources:  cli.EnvVars("OPERATOR"),
+		Sources:  cli.EnvVars("RELEASE_OPERATOR"),
 		Value:    true,
 	}
 )
@@ -381,7 +380,7 @@ var (
 	githubTokenFlag = &cli.StringFlag{
 		Name:    "github-token",
 		Usage:   "The GitHub token to use when interacting with the GitHub API",
-		Sources: cli.EnvVars("GITHUB_TOKEN"),
+		Sources: cli.EnvVars("GITHUB_TOKEN", "GH_TOKEN"),
 		Action: func(_ context.Context, c *cli.Command, s string) error {
 			if s == "" {
 				if c.Bool(ciFlag.Name) {
@@ -439,9 +438,8 @@ const (
 	envPublishCharts   = "PUBLISH_CHARTS"
 
 	// Windows.
-	windowsArchiveFlagName   = "windows-archive"
-	envBuildWindowsArchive   = "BUILD_WINDOWS_ARCHIVE"
-	envPublishWindowsArchive = "PUBLISH_WINDOWS_ARCHIVE"
+	windowsArchiveFlagName = "windows-archive"
+	envBuildWindowsArchive = "BUILD_WINDOWS_ARCHIVE"
 )
 
 var (
@@ -459,7 +457,11 @@ var (
 		}
 	}
 	publishStepFlags = func(hashrelease bool) []cli.Flag {
-		f := buildStepFlags(hashrelease)
+		f := []cli.Flag{
+			imagesFlag(!hashrelease, envPublishImages),
+			helmChartsFlag(true, envPublishCharts),
+			helmIndexFlag,
+		}
 		if hashrelease {
 			return f
 		}
