@@ -102,16 +102,17 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				// Configure the builder.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
@@ -120,10 +121,8 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithTarball(c.Bool(tarballFlag.Name)),
 					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlag.Name)),
-				}
-				if c.Bool(skipValidationFlag.Name) {
-					opts = append(opts, calico.WithValidate(false))
-					opts = append(opts, calico.WithReleaseBranchValidation(false))
+					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -311,6 +310,7 @@ func releaseBuildFlags() []cli.Flag {
 		archFlag,
 		registryFlag,
 		githubTokenFlag,
+		skipBranchCheckFlag,
 		skipValidationFlag)
 	return f
 }
@@ -323,8 +323,7 @@ func releasePublishFlags() []cli.Flag {
 		helmRegistryFlag,
 		githubTokenFlag,
 		awsProfileFlag,
-		s3BucketFlag,
-		skipValidationFlag)
+		s3BucketFlag)
 	return f
 }
 

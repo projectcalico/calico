@@ -146,29 +146,30 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				opts := []calico.Option{
+					calico.IsHashRelease(),
+					calico.WithHashrelease(*hashrel, *serverCfg),
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(data.ProductVersion()),
 					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
 					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
-					calico.WithRepoRoot(cfg.RepoRootDir),
-					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					calico.IsHashRelease(),
-					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithImages(c.Bool(imagesFlagName)),
-					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
 					calico.WithBinaries(c.Bool(binariesFlag.Name)),
 					calico.WithOCPBundle(c.Bool(ocpBundleFlag.Name)),
 					calico.WithTarball(c.Bool(tarballFlag.Name)),
+					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlag.Name)),
+					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 				}
 				if len(productRegistriesFromFlag) > 0 {
 					opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -250,21 +251,21 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				opts := []calico.Option{
-					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
+					calico.WithHashrelease(*hashrel, *serverCfg),
+					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(hashrel.ProductVersion),
 					calico.WithOperatorVersion(hashrel.Operator.Version),
+					calico.WithOutputDir(hashrel.Source),
+					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithOutputDir(hashrel.Source),
-					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlag.Name)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
+					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts,
@@ -365,7 +366,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 
 // hashreleasePublishFlags returns the flags for the hashrelease publish command.
 func hashreleasePublishFlags() []cli.Flag {
-	f := append(gitFlags, publishStepFlags(true)...)
+	f := append(productFlags, publishStepFlags(true)...)
 	f = append(f,
 		registryFlag,
 		helmRegistryFlag,
