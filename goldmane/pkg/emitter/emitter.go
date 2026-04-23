@@ -329,4 +329,3 @@ func (e *Emitter) loadCachedState() error {
 	e.latestTimestamp = ts
 	return nil
 }
-
