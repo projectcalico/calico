@@ -227,6 +227,19 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		}, true)
 	})
 
+	It("should reset the missing-API backoff on a successful List via markInstalled", func() {
+		// Unit-level regression: markInstalled() must reset missingAPIBackoff to 0, so
+		// a later disappearance of the backing API starts a fresh exponential ramp
+		// from MissingAPIInitialRetry rather than continuing from the capped value.
+		// This is simpler and more reliable than plumbing a full disappear/reappear
+		// cycle through the watcher-syncer state machine.
+		wc := watchersyncer.NewTestWatcherCache(r1)
+		wc.SetMissingAPIBackoff(60 * time.Second)
+		wc.MarkInstalled()
+		Expect(wc.MissingAPIBackoff()).To(BeZero(),
+			"markInstalled() must reset missingAPIBackoff so the next retry ramp starts at MissingAPIInitialRetry")
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
 		// Since we are timing the processing, we still need the interval to be sufficiently

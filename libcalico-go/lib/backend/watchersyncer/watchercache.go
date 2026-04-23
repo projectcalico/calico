@@ -268,12 +268,6 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 					// This is a valid long-term state, so we don't want to keep retrying rapidly.
 					// Consider ourselves in sync, then apply exponential backoff — start short so a CRD
 					// installed shortly after startup is picked up quickly, doubling up to MissingAPIMaxRetry.
-					if !wc.hasSynced {
-						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
-						wc.finishResync()
-					} else {
-						wc.logger.Debug("Backing API still not installed, retrying later.")
-					}
 					// Grow the backoff: start at initial (clamped to max in case of
 					// misconfiguration), then saturate-double so the cap is honored even if
 					// MissingAPIMaxRetry is ever increased toward the int64 limit.
@@ -286,6 +280,13 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 						wc.missingAPIBackoff = MissingAPIMaxRetry
 					} else {
 						wc.missingAPIBackoff *= 2
+					}
+					logger := wc.logger.WithField("retryAfter", wc.missingAPIBackoff)
+					if !wc.hasSynced {
+						logger.Info("Backing API not installed, marking as in-sync and retrying later.")
+						wc.finishResync()
+					} else {
+						logger.Debug("Backing API still not installed, retrying later.")
 					}
 					wc.resyncBlockedUntil = time.Now().Add(wc.missingAPIBackoff)
 					wc.crdInstalled = false
