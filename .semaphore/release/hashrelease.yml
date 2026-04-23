@@ -29,15 +29,19 @@ global_job_config:
 
   prologue:
     commands:
+      - sudo rm -rf ~/.phpbrew ~/.kerl ~/.sbt ~/.nvm ~/.npm ~/.kiex /usr/local/golang/ /usr/lib/jvm /opt/* /opt/az
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
       # Checkout the code and unshallow it.
       - checkout
       - retry git fetch --quiet --unshallow
       # Log in to container registries needed for release.
-      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
-      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin quay.io
-      - echo $QUAY_TOKEN | helm registry login --username "$QUAY_USER" --password-stdin quay.io
+      - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER"
+        --password-stdin
+      - echo $QUAY_TOKEN | docker login --username "$QUAY_USER" --password-stdin
+        quay.io
+      - echo $QUAY_TOKEN | helm registry login --username "$QUAY_USER"
+        --password-stdin quay.io
       # Credentials for accessing gcloud
       - echo "${SEMAPHORE_OIDC_TOKEN}" > "${SEMAPHORE_TOKEN_FILE_PATH}"
       - |
