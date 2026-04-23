@@ -695,6 +695,41 @@ blocks:
       secrets:
         - name: dynamo-read-creds
 
+  - name: BPF load balancer tests
+    dependencies: []
+    task:
+      jobs:
+        - name: aws-kubeadm + bpf + external node + single-subnet + dual IP stack
+          execution_time_limit:
+            hours: 1
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable"
+            - name: PROVISIONER
+              value: aws-kubeadm
+            - name: ENABLE_EXTERNAL_NODE
+              value: "true"
+            - name: VPC_CIDR
+              value: "172.16.0.0/16"
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]'
+            - name: ENABLE_BPF_DSR
+              value: "true"
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: BGP_STATUS
+              value: Enabled
+            - name: IP_FAMILY
+              value: "dual"
+            - name: ENABLE_DUAL_STACK
+              value: "true"
+            - name: E2E_TEST_CONFIG
+              # Test selection is driven by the config file; see load-balancer.yaml for the
+              # include/exclude rationale.
+              value: "e2e/config/load-balancer.yaml"
+
 promotions:
   - name: Cleanup jobs
     pipeline_file: cleanup.yml
