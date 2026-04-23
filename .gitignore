@@ -46,3 +46,5 @@ pod2daemon/node-driver-registrar/
 
 /* Created by libcalico-go UTs */
 ut-tmp-dir
+
+.remember
