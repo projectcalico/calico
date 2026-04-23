@@ -55,8 +55,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	// Do not log filter objects, they may contain user identifiers.
-	logrus.Debug("Applying filters.")
+	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
 
 	filter := toProtoFilter(params.Filters)
 	if params.Watch {
@@ -85,8 +84,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 						break
 					}
 
-					// Do not log full flow objects, they contain flow metadata that can be a bulk-exfil vector.
-					logrus.Debug("Received flow from stream.")
+					logrus.WithField("flow", flow).Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}

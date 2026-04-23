@@ -88,8 +88,7 @@ func NewEmitter(opts ...Option) *Emitter {
 	if err != nil {
 		logrus.Fatalf("Error creating emitter client: %v", err)
 	}
-	// Do not log the emitter URL, it may contain sensitive credentials in userinfo or query params.
-	logrus.Info("Created emitter client.")
+	logrus.WithField("url", e.url).Info("Created emitter client.")
 
 	if e.kcli == nil {
 		logrus.Warn("No k8s client provided, will not be able to cache state.")
@@ -154,8 +153,7 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Emit the bucket.
 		if err := e.emit(bucket); err != nil {
-			// Do not log the emitter URL, it may contain sensitive credentials.
-			logrus.Errorf("Error emitting flows: %v", err)
+			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
 			e.retry(key)
 			continue
 		}

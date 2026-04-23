@@ -28,11 +28,7 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config) {
-	// Do not log the full config, it contains TLS key/cert paths.
-	logrus.WithFields(logrus.Fields{
-		"goldmaneHost": cfg.GoldmaneHost,
-		"tlsEnabled":   cfg.TLSKeyPath != "",
-	}).Info("Applying configuration...")
+	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)

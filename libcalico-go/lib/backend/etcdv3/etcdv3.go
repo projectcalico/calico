@@ -156,8 +156,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for create
 	keyCopy := d.Key
 
-	// Do not log d.Value, it may contain sensitive resource specs.
-	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "ttl": d.TTL, "rev": d.Revision})
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Create request")
 
 	err := defaultPolicyName(d)
@@ -227,8 +226,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	// Take a copy of the key before we default any policy names, we use this key for error returns to return the same name that user provided for update
 	keyCopy := d.Key
 
-	// Do not log d.Value, it may contain sensitive resource specs.
-	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "ttl": d.TTL, "rev": d.Revision})
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
 
 	err := defaultPolicyName(d)
@@ -302,8 +300,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 // It's possible that we will just perform that processing in the clients (e.g. calicoctl),
 // but that is to be decided.
 func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
-	// Do not log d.Value, it may contain sensitive resource specs.
-	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "ttl": d.TTL, "rev": d.Revision})
+	logCxt := log.WithFields(log.Fields{"etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Apply request")
 
 	err := defaultPolicyName(d)
@@ -614,8 +611,7 @@ func (c *etcdV3Client) getTTLOption(ctx context.Context, d *model.KVPair) ([]cli
 // getKeyValueStrings returns the etcdv3 etcdKey and serialized value calculated from the
 // KVPair.
 func getKeyValueStrings(d *model.KVPair) (string, string, error) {
-	// Do not log d.Value, it may contain sensitive resource specs.
-	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key})
+	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value})
 	key, err := model.KeyToDefaultPath(d.Key)
 	if err != nil {
 		logCxt.WithError(err).Error("Failed to convert model-etcdKey to etcdv3 etcdKey")

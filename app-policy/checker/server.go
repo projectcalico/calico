@@ -86,13 +86,8 @@ func (as *authServer) RegisterGRPCServices(gs *grpc.Server) {
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	hostname, _ := os.Hostname()
 	logCtx := log.WithContext(ctx).WithField("hostname", hostname)
-	// Do not log req.Attributes.String() or req.String(), they contain sensitive HTTP
-	// headers (Authorization, Cookie) and request bodies.
 	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
-		logCtx.WithFields(log.Fields{
-			"method": req.GetAttributes().GetRequest().GetHttp().GetMethod(),
-			"path":   req.GetAttributes().GetRequest().GetHttp().GetPath(),
-		}).Debug("Check start")
+		logCtx.Debug("Check start: ", req.Attributes.String())
 	}
 
 	resp := &authz.CheckResponse{Status: &status.Status{Code: INTERNAL}}
@@ -157,12 +152,11 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 		}
 	})
 
-	// Do not log the full CheckRequest, it may contain sensitive HTTP headers and bodies.
 	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
 		logCtx.WithFields(log.Fields{
 			"code": code.Code(resp.Status.Code),
 			"msg":  resp.Status.Message,
-		}).Debug("Check complete")
+		}).Debug("Check complete: ", req.String())
 	}
 
 	return resp, nil
