@@ -19,10 +19,8 @@ package networking
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -77,31 +75,6 @@ var _ = describe.CalicoDescribe(
 			var err error
 			Expect(err).NotTo(HaveOccurred(), "failed to create an API client at beginning of setup")
 
-			// Skip unsupported Calico OSS versions.
-			pr := os.Getenv("PRODUCT")
-			switch pr {
-			case "calico":
-				supported, err := utils.ReleaseStreamIsAtLeast("v3.32")
-				Expect(err).NotTo(HaveOccurred(), "Couldn't check OSS release stream")
-				if !supported {
-					Skip(fmt.Sprintf("Maglev is not supported on OSS release stream %s (requires >=v3.32)", os.Getenv("RELEASE_STREAM")))
-				}
-			case "calient":
-				supported, err := utils.ReleaseStreamIsAtLeast("v3.23")
-				Expect(err).NotTo(HaveOccurred(), "Couldn't check EE release stream")
-				if !supported {
-					Skip(fmt.Sprintf("Maglev is not supported on EE release stream %s (requires >=v3.23)", os.Getenv("RELEASE_STREAM")))
-				}
-			default:
-				Fail(fmt.Sprintf("Unexpected PRODUCT '%s'", pr))
-			}
-
-			// Initialize external node for testing
-			extNode = externalnode.NewClient()
-			if extNode == nil {
-				Skip("External node not available - required for Maglev testing")
-			}
-
 			// Pre-pull the rapidclient image on the external node to avoid
 			// timeout issues when the image is not cached.
 			By("pre-pulling rapidclient image on external node")
@@ -124,12 +97,6 @@ var _ = describe.CalicoDescribe(
 			nodeIPv6s := nodesInfo.GetIPv6s()
 			Expect(len(nodeNames)).Should(BeNumerically(">", 0), "Expected at least one schedulable node")
 			framework.Logf("Found %d nodes for testing: %v", len(nodeNames), nodeNames)
-
-			// Verify that the external node shares a subnet with the cluster
-			// nodes. The test programs static routes with node IPs as gateways,
-			// which requires the gateway to be directly reachable on a connected
-			// interface.
-			verifyExternalNodeSubnetReachability(extNode, nodeIPv4s, nodeIPv6s)
 
 			// Initialize the test helper
 			maglevTests = NewMaglevTests(f)
@@ -156,7 +123,6 @@ var _ = describe.CalicoDescribe(
 				ipVer = "IPv6"
 			}
 			return func() {
-				maglevTests.SkipUnsupportedIPVersion(isIPv6)
 				// Ensure we have at least 3 nodes for the test
 				Expect(len(nodeNames)).Should(BeNumerically(">=", 3), "Need at least 3 nodes for this test")
 
@@ -221,8 +187,8 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		It("test service ip load balancing behavior before and after maglev annotation (IPv4)", makeMaglevTest(false))
-		It("test service ip load balancing behavior before and after maglev annotation (IPv6)", makeMaglevTest(true))
+		It("test IPv4 Maglev service ip load balancing behavior before and after annotation", makeMaglevTest(false))
+		It("test IPv6 Maglev service ip load balancing behavior before and after annotation", makeMaglevTest(true))
 	})
 
 type MaglevTests struct {
@@ -296,18 +262,6 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	}
 
 	return backendName, nil
-}
-
-func (m *MaglevTests) SkipUnsupportedIPVersion(isIPv6 bool) {
-	if isIPv6 {
-		if len(m.nodeNameToIPv6) == 0 {
-			Skip("IPv6 is not configured, skipping")
-		}
-	} else {
-		if len(m.nodeNameToIPv4) == 0 {
-			Skip("IPv4 is not configured, skipping")
-		}
-	}
 }
 
 func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) map[string]string {
@@ -521,11 +475,11 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 		targetNodeIPv4, exists := m.nodeNameToIPv4[targetNodeName]
 		if exists && targetNodeIPv4 != "" {
 			dest := fmt.Sprintf("%s/32", m.serviceClusterIPv4)
-			err := addRoute(extNode, dest, targetNodeIPv4, false)
+			err := extNode.AddRoute(dest, targetNodeIPv4, false)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv4 route to %s via %s", m.serviceClusterIPv4, targetNodeIPv4))
 
 			DeferCleanup(func() {
-				removeRoute(extNode, dest, targetNodeIPv4, false)
+				extNode.RemoveRoute(dest, targetNodeIPv4, false)
 			})
 
 			framework.Logf("Added IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
@@ -539,11 +493,11 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 		targetNodeIPv6, exists := m.nodeNameToIPv6[targetNodeName]
 		if exists && targetNodeIPv6 != "" {
 			dest := fmt.Sprintf("%s/128", m.serviceClusterIPv6)
-			err := addRoute(extNode, dest, targetNodeIPv6, true)
+			err := extNode.AddRoute(dest, targetNodeIPv6, true)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv6 route to %s via %s", m.serviceClusterIPv6, targetNodeIPv6))
 
 			DeferCleanup(func() {
-				removeRoute(extNode, dest, targetNodeIPv6, true)
+				extNode.RemoveRoute(dest, targetNodeIPv6, true)
 			})
 
 			framework.Logf("Added IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
@@ -560,7 +514,7 @@ func (m *MaglevTests) RemoveExternalNodeClientRoutes(extNode *externalnode.Clien
 	if m.serviceClusterIPv4 != "" {
 		targetNodeIPv4, exists := m.nodeNameToIPv4[targetNodeName]
 		if exists && targetNodeIPv4 != "" {
-			removeRoute(extNode, fmt.Sprintf("%s/32", m.serviceClusterIPv4), targetNodeIPv4, false)
+			extNode.RemoveRoute(fmt.Sprintf("%s/32", m.serviceClusterIPv4), targetNodeIPv4, false)
 			framework.Logf("Removed IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
 		} else {
 			framework.Logf("Warning: No IPv4 address found for node %s, skipping IPv4 route removal", targetNodeName)
@@ -570,7 +524,7 @@ func (m *MaglevTests) RemoveExternalNodeClientRoutes(extNode *externalnode.Clien
 	if m.serviceClusterIPv6 != "" {
 		targetNodeIPv6, exists := m.nodeNameToIPv6[targetNodeName]
 		if exists && targetNodeIPv6 != "" {
-			removeRoute(extNode, fmt.Sprintf("%s/128", m.serviceClusterIPv6), targetNodeIPv6, true)
+			extNode.RemoveRoute(fmt.Sprintf("%s/128", m.serviceClusterIPv6), targetNodeIPv6, true)
 			framework.Logf("Removed IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
 		} else {
 			framework.Logf("Warning: No IPv6 address found for node %s, skipping IPv6 route removal", targetNodeName)
@@ -670,97 +624,4 @@ func (m *MaglevTests) TestMaglevConsistentHashing(extNode *externalnode.Client, 
 func (m *MaglevTests) SetSourcePort(port int) {
 	framework.Logf("Setting source port to %d for subsequent requests", port)
 	m.maglevConfig.SourcePort = port
-}
-
-// ErrInvalidNexthop is returned when the kernel rejects a route because the
-// gateway address is not on a directly-connected subnet.
-type ErrInvalidNexthop struct {
-	Gateway string
-	Output  string
-}
-
-func (e *ErrInvalidNexthop) Error() string {
-	return fmt.Sprintf("invalid nexthop gateway %s: %s", e.Gateway, e.Output)
-}
-
-// addRoute programs a static route on the external node, routing traffic to
-// destCIDR via gatewayIP. Returns *ErrInvalidNexthop when the gateway is not
-// directly reachable from the external node (different L2 subnet).
-func addRoute(extNode *externalnode.Client, destCIDR, gatewayIP string, ipv6 bool) error {
-	var routeCmd string
-	if ipv6 {
-		routeCmd = fmt.Sprintf("sudo ip -6 route add %s via %s 2>&1", destCIDR, gatewayIP)
-	} else {
-		routeCmd = fmt.Sprintf("sudo ip route add %s via %s 2>&1", destCIDR, gatewayIP)
-	}
-	output, err := extNode.Exec("sh", "-c", routeCmd)
-	if err != nil {
-		if strings.Contains(output, "Nexthop has invalid gateway") ||
-			strings.Contains(output, "Network is unreachable") {
-			return &ErrInvalidNexthop{Gateway: gatewayIP, Output: output}
-		}
-		return fmt.Errorf("failed to add route to %s via %s: %s (err: %w)", destCIDR, gatewayIP, output, err)
-	}
-	return nil
-}
-
-// removeRoute removes a static route from the external node. Logs a warning
-// if the route doesn't exist instead of failing.
-func removeRoute(extNode *externalnode.Client, destCIDR, gatewayIP string, ipv6 bool) {
-	var routeCmd string
-	if ipv6 {
-		routeCmd = fmt.Sprintf("sudo ip -6 route del %s via %s", destCIDR, gatewayIP)
-	} else {
-		routeCmd = fmt.Sprintf("sudo ip route del %s via %s", destCIDR, gatewayIP)
-	}
-	_, err := extNode.Exec("sh", "-c", routeCmd)
-	if err != nil {
-		framework.Logf("Note: route to %s via %s may have already been removed: %v", destCIDR, gatewayIP, err)
-	}
-}
-
-// verifyExternalNodeSubnetReachability checks that the external node can
-// program a static route via a cluster node IP, for each IP family that has
-// at least one node address. If the kernel rejects the nexthop (nodes are on
-// different L2 subnets), the test is skipped.
-func verifyExternalNodeSubnetReachability(extNode *externalnode.Client, nodeIPv4s, nodeIPv6s []string) {
-	By("verifying external node can route to cluster nodes")
-
-	if len(nodeIPv4s) == 0 && len(nodeIPv6s) == 0 {
-		framework.Logf("No cluster node IPs available for reachability probe; skipping check")
-		return
-	}
-
-	// RFC 5737 TEST-NET-2 (IPv4) and RFC 3849 documentation prefix (IPv6).
-	// These addresses are reserved for documentation and are guaranteed not
-	// to collide with any real cluster CIDR. We only need the kernel to
-	// evaluate the nexthop; no packets are sent to these addresses.
-	if len(nodeIPv4s) > 0 {
-		probeReachability(extNode, "198.51.100.1/32", nodeIPv4s[0], false)
-	} else {
-		framework.Logf("No IPv4 node IPs available; skipping IPv4 reachability probe")
-	}
-	if len(nodeIPv6s) > 0 {
-		probeReachability(extNode, "2001:db8::1/128", nodeIPv6s[0], true)
-	} else {
-		framework.Logf("No IPv6 node IPs available; skipping IPv6 reachability probe")
-	}
-}
-
-// probeReachability attempts to add a throw-away route via gatewayIP and
-// removes it on success. On *ErrInvalidNexthop, the test is skipped; on any
-// other error, the test fails fast.
-func probeReachability(extNode *externalnode.Client, testDest, gatewayIP string, ipv6 bool) {
-	err := addRoute(extNode, testDest, gatewayIP, ipv6)
-	if err != nil {
-		var invalidNexthop *ErrInvalidNexthop
-		if errors.As(err, &invalidNexthop) {
-			Skip(fmt.Sprintf("External node cannot route to cluster nodes (different subnet) — %v", err))
-		}
-		// Fail fast: subsequent route programming in the test will hit
-		// the same underlying error and fail with less context.
-		Expect(err).NotTo(HaveOccurred(), "External node early reachability check failed for an unexpected reason")
-	}
-	removeRoute(extNode, testDest, gatewayIP, ipv6)
-	framework.Logf("External node subnet reachability verified via node %s", gatewayIP)
 }

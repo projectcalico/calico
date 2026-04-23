@@ -1,0 +1,6 @@
+# load-balancer.yaml - test selection config for load balancer e2e pipeline.
+#
+# Only targets load balancer E2Es e.g. Maglev tests.
+
+include:
+  - Feature:Maglev
