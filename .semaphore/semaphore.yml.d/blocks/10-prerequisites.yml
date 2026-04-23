@@ -184,6 +184,12 @@
           - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
           - zstd -3 --rm /tmp/calico-image.tar
           - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+          # Upload the cgo + race binaries so Felix FV can consume them
+          # directly instead of rebuilding. Felix Build downloads these into
+          # cmd/calico/bin/ so the working-copy tarball carries them through
+          # to the test VMs.
+          - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
+          - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
           # TEMPORARY for PR #12225: warm master's "calico" build cache from this
           # PR so downstream PR-consumer blocks get a realistic warm-cache
           # measurement. REVERT BEFORE MERGE — once this lands on master, the

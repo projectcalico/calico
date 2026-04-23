@@ -397,6 +397,12 @@ blocks:
             - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
             - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+            # Upload the cgo + race binaries so Felix FV can consume them
+            # directly instead of rebuilding. Felix Build downloads these into
+            # cmd/calico/bin/ so the working-copy tarball carries them through
+            # to the test VMs.
+            - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
+            - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
             # TEMPORARY for PR #12225: warm master's "calico" build cache from this
             # PR so downstream PR-consumer blocks get a realistic warm-cache
             # measurement. REVERT BEFORE MERGE — once this lands on master, the
@@ -2473,12 +2479,22 @@ blocks:
         '/typha/**/*_test.go']})
     dependencies:
       - Prerequisites
+      - "Build: calico image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
       prologue:
         commands:
+          # Load the pre-built calico image (touches the marker so the nested
+          # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op)
+          # and pull the cgo + race binaries into place so build-calico-cgo /
+          # build-calico-race skip their rebuilds.
+          - .semaphore/load-cached-images
+          - mkdir -p cmd/calico/bin
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+          - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -2499,7 +2515,12 @@ blocks:
             # bin/calico-felix.exe) since the Windows binary is produced by the
             # dedicated "Felix: Build Windows binaries" block and nothing in the
             # Linux FV path consumes it.
-            - make bin/calico-felix image ut-bpf-prereqs fv-prereqs
+            #
+            # REMOTE_DEPS= overrides the Makefile's default which would invoke
+            # `make -C cmd/calico image` and `make -C cmd/calico build-race`;
+            # the calico-image producer block has already built those and the
+            # prologue preloaded the image and race binary.
+            - make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
             - ./.semaphore/cache-test-artifacts
         - name: "Felix: UT"
           priority:
@@ -2518,8 +2539,10 @@ blocks:
           execution_time_limit:
             minutes: 15
           commands:
-            - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+            # REMOTE_DEPS= relies on the prologue having preloaded the calico
+            # image + cgo/race binaries (see Build FV prereqs job for details).
+            - ../.semaphore/run-and-monitor k8sfv-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+            - ../.semaphore/run-and-monitor k8sfv-no-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
         - name: "Felix: Static checks"
           priority:
             # This job is on the critical path so we increase its priority.
