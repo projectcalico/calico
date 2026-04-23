@@ -3,12 +3,34 @@
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - Prerequisites
+    - "Build: calico image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "felix"
+        value: "calico"
+      # Fail loud if `make` tries to clone libbpf — the prologue restores
+      # the pre-built tarball from GCS, and a re-clone would negate the
+      # cache and re-expose the github.com/libbpf HTTP 500 flake.
+      - name: NO_LIBBPF_CLONE
+        value: "true"
     prologue:
       commands:
+        # Load the pre-built calico image (touches the marker so the nested
+        # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op)
+        # and pull the cgo + race binaries into place so build-calico-cgo /
+        # build-calico-race skip their rebuilds.
+        - .semaphore/load-cached-images
+        - mkdir -p cmd/calico/bin
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+        - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+        # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
+        # produced by "Build: calico image". Verify the compiled static
+        # lib landed so a broken tarball fails fast rather than triggering
+        # the NO_LIBBPF_CLONE guard mid-build.
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+        - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+        - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
         - cd felix
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -22,33 +44,20 @@
         # This job is on the critical path so we increase its priority.
           - value: 51
             when: "pull_request =~ '.+'"
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
         execution_time_limit:
           minutes: 20
         commands:
-          - make build image ut-bpf-prereqs fv-prereqs
+          # Skip `make build` (which on amd64 also cross-compiles
+          # bin/calico-felix.exe) since the Windows binary is produced by the
+          # dedicated "Felix: Build Windows binaries" block and nothing in the
+          # Linux FV path consumes it.
+          #
+          # REMOTE_DEPS= overrides the Makefile's default which would invoke
+          # `make -C cmd/calico image` and `make -C cmd/calico build-race`;
+          # the calico-image producer block has already built those and the
+          # prologue preloaded the image and race binary.
+          - make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
           - ./.semaphore/cache-test-artifacts
-      - name: "Felix: UT"
-        priority:
-          # This job is on the critical path so we increase its priority.
-          - value: 51
-            when: "pull_request =~ '.+'"
-        execution_time_limit:
-          minutes: 30
-        commands:
-          - ../.semaphore/run-and-monitor ut.log make ut
-      - name: "Felix: k8sfv"
-        priority:
-          # This job is on the critical path so we increase its priority.
-          - value: 51
-            when: "pull_request =~ '.+'"
-        execution_time_limit:
-          minutes: 15
-        commands:
-          - ../.semaphore/run-and-monitor k8sfv-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
       - name: "Felix: Static checks"
         priority:
           # This job is on the critical path so we increase its priority.
@@ -63,27 +72,59 @@
         commands:
           - ./.semaphore/analyze-test-failures --ut || true
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-- name: "Felix: multi-arch build"
+# Felix UT and k8sfv don't produce artifacts consumed by Felix: FV, so they
+# run in their own block in parallel with Felix: FV instead of blocking it.
+# They still need the preloaded calico image + race binary (k8sfv runs the
+# combined binary as `component typha`), so the prologue mirrors Felix: Build.
+- name: "Felix: UT"
   run:
-    when: "${CHANGE_IN(felix)}"
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
-    - "Felix: Build"
+    - Prerequisites
+    - "Build: calico image"
   task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico"
+      - name: NO_LIBBPF_CLONE
+        value: "true"
     prologue:
       commands:
+        - .semaphore/load-cached-images
+        - mkdir -p cmd/calico/bin
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+        - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+        - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+        - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
         - cd felix
+        - gcloud config set project unique-caldron-775
+        - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+    secrets:
+      - name: google-service-account-for-gce
+      - name: gemini-api-key
+      - name: fv-tests-guru-github-token
     jobs:
-      - name: "Felix: build multi-arch binaries"
-        matrix:
-          - env_var: ARCH
-            values:
-              - arm64
-              - ppc64le
-              - s390x
+      - name: "Felix: UT"
+        execution_time_limit:
+          minutes: 30
         commands:
-          # Only building the code, not the image here because the felix image is now only used for FV tests, which
-          # only run on AMD64 at the moment.
-          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+          - ../.semaphore/run-and-monitor ut.log make ut
+      - name: "Felix: k8sfv"
+        execution_time_limit:
+          minutes: 15
+        commands:
+          # REMOTE_DEPS= relies on the prologue having preloaded the calico
+          # image + cgo/race binaries (see Felix: Build and cache FV prerequisites
+          # for details).
+          - ../.semaphore/run-and-monitor k8sfv-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/analyze-test-failures --ut || true
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: Build Windows binaries"
   run:
     when: "${CHANGE_IN(felix)}"
@@ -92,7 +133,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "felix"
+        value: "calico"
     jobs:
       - name: "Felix: Build Windows binaries"
         commands:
@@ -126,7 +167,7 @@
           - cd ~/calico/process/testing/aso && make dist-clean
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "felix"
+        value: "calico"
       - name: FV_TYPE
         value: "calico-felix"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
@@ -139,12 +180,20 @@
           - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-rg
           - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
           - ../.semaphore/run-and-monitor win-fv-felix.log ~/calico/process/testing/winfv-felix/run-win-fv.sh
-- name: "Felix: iptables tests on Ubuntu 22.04"
+- name: "Felix: FV"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
+    epilogue:
+      always:
+        commands:
+          - source felix/.semaphore/fv-epilogue
+    secrets:
+      - name: google-service-account-for-gce
+      - name: gemini-api-key
+      - name: fv-tests-guru-github-token
     jobs:
       - name: "Felix: iptables tests on Ubuntu 22.04"
         execution_time_limit:
@@ -158,21 +207,6 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: nftables tests on Ubuntu 22.04"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
       - name: "Felix: nftables tests on Ubuntu 22.04"
         execution_time_limit:
           minutes: 60
@@ -185,22 +219,7 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF tests on Ubuntu 24.04"
+      - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
         execution_time_limit:
           minutes: 60
         env_vars:
@@ -212,21 +231,6 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=60
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
       - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
         execution_time_limit:
           minutes: 60
@@ -243,22 +247,7 @@
           - export FV_FOCUS='_BPF_.*ct=true'
           - export NUM_FV_BATCHES=10
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF program-loading check on 25.10 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF program-loading check on 25.10"
+      - name: "Felix: BPF program-loading check on 25.10 (nftables)"
         execution_time_limit:
           minutes: 30
         env_vars:
@@ -273,22 +262,7 @@
           # Only run the UT that checks that the precompiled BPF binaries are loadable.
           - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
-  run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
-  dependencies:
-    - "Felix: Build"
-  task:
-    jobs:
-      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
+      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
         execution_time_limit:
           minutes: 60
         env_vars:
@@ -304,11 +278,3 @@
           - export FV_FOCUS='_BPF_.*tcp.*ct=true'
           - export NUM_FV_BATCHES=16
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-    epilogue:
-      always:
-        commands:
-          - source felix/.semaphore/fv-epilogue
-    secrets:
-      - name: google-service-account-for-gce
-      - name: gemini-api-key
-      - name: fv-tests-guru-github-token

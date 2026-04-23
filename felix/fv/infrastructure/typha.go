@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,9 +68,8 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		options.ExtraVolumes[CertDir] = CertDir
 	}
 
-	args = append(args,
-		utils.Config.TyphaImage,
-	)
+	args = append(args, utils.Config.TyphaImage)
+	args = append(args, utils.TyphaCmd...)
 
 	c := containers.Run("typha",
 		containers.RunOpts{AutoRemove: true},
