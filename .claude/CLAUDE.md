@@ -12,6 +12,52 @@ Project Calico is a large monorepo providing container networking and security f
 **Default branch:** `master` (not `main`)
 **Separate docs repo**  https://github.com/tigera/docs/
 
+## Documentation map
+
+Calico's documentation is split by purpose. Before working in a
+component, know where to look.
+
+- **`<component>/DESIGN.md`** — architecture, invariants, and
+  per-section review notes for that component. Authoritative source
+  for "what does this code promise?". A coding agent writing a PR
+  and a reviewer checking one read the same file and apply the
+  same embedded review notes.
+- **Complex components have an index.** Felix has
+  [`felix/DESIGN.md`](../felix/DESIGN.md) at its root listing
+  per-topic sub-designs under
+  [`felix/design/`](../felix/design/) with an "applies to" glob
+  per topic. A PR touching multiple globs must load every matching
+  sub-design. This pattern applies to any component that grows
+  more than one design topic.
+- **`<component>/CLAUDE.md`** (or `AGENTS.md`) — operational
+  agent guidance: build commands, test invocation, debugging,
+  in-repo conventions. **Not** for architecture. If you are looking
+  for invariants or design rationale, look for a `DESIGN.md`, not
+  here.
+- **[`.github/copilot-instructions.md`](../.github/copilot-instructions.md)**
+  and
+  **[`.github/instructions/*.instructions.md`](../.github/instructions/)**
+  — repo-wide and path-scoped Copilot configuration. The
+  path-scoped files are thin pointers to the relevant `DESIGN.md`
+  plus meta-rules (update rule, `@copilot` invocation pattern).
+  They do not restate design content.
+
+**Rules for agents reading this repo:**
+
+1. Before writing or reviewing code in a component, read that
+   component's `DESIGN.md` (or, for Felix, the topic sub-designs
+   that match the paths you're touching).
+2. Follow links. A sub-design may reference sibling docs, other
+   components' designs, or external references. Load them — a
+   design is a graph, not a single node.
+3. A PR that changes how a component works in a way that
+   introduces a new invariant, flag, map, mark, sub-program, or
+   alters the packet/data path must update the relevant
+   `DESIGN.md` in the same PR. Exemptions: bug fix restoring
+   documented behaviour, mechanical refactor, comment or
+   log-message edits, dependency bumps. If in doubt, update the
+   doc.
+
 ## Gotchas
 
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets

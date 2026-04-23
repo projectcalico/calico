@@ -242,6 +242,32 @@ make image                   # Build all images (slow)
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
+## Documentation map
+
+Calico's docs are split by purpose. Architecture lives in
+`DESIGN.md` files; operational guidance (build, test, debug)
+lives in `CLAUDE.md` / `AGENTS.md`; path-scoped review rules
+live under `.github/instructions/*.instructions.md`. Do not look
+for architecture in `CLAUDE.md`.
+
+- `<component>/DESIGN.md` — architecture, invariants, embedded
+  per-section review notes. Read before writing or reviewing a
+  change in that component.
+- Complex components have an index: [`felix/DESIGN.md`](../felix/DESIGN.md)
+  lists per-topic sub-designs under [`felix/design/`](../felix/design/)
+  with an "applies to" glob each. A PR touching multiple globs
+  must load every matching sub-design.
+- [`.github/instructions/*.instructions.md`](instructions/) are
+  thin path-scoped pointers to `DESIGN.md` files plus meta-rules
+  (the update rule, the `@copilot` invocation pattern). They do
+  not restate design content — always read the pointed-at
+  `DESIGN.md`.
+- A PR changing how a component works (new invariant, flag, map,
+  mark, sub-program, packet-path change) must update the relevant
+  `DESIGN.md` in the same PR. Exemptions: bug fix restoring
+  documented behaviour, mechanical refactor, comment/log edits,
+  dependency bump. If in doubt, update the doc.
+
 ## eBPF Dataplane Review
 
 Changes that touch the eBPF dataplane have their own design and review guide: [`felix/design/bpf-dataplane.md`](../felix/design/bpf-dataplane.md). It describes the packet path, TC program layout, service NAT, Maglev, CTLB, the bpfnat workaround, VXLAN flow-mode device, RPF, conntrack cleanup, IP fragmentation, ICMP error generation, `*tables`→BPF migration, third-party DNAT interop, log filters, flow logs, QoS, fast-path cost discipline, and cross-cutting review rules. Each section has a **Review notes** block listing the invariants a PR in that area must respect — cross-check it when reviewing BPF changes.
