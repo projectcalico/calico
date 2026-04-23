@@ -18,9 +18,6 @@ exclude:
     - label: Disruptive
       reason: "breaks cluster state for other parallel tests"
 
-    - label: ExternalNode
-      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
-
     - label: RequiresBGPMesh
       reason: "requires BGP routing, but this cluster uses VXLAN"
 
