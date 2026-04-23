@@ -212,11 +212,15 @@ absence as "read the code and ask"; do not assume anything goes.
   respect. At write-time, respect them; at review-time, apply
   them.
 - **Update rule.** A change to how Felix works in a given area
-  must update the relevant sub-design in the same PR. Exemptions:
-  (a) a bug fix that restores behaviour the doc already
-  describes, (b) a mechanical refactor with no observable
-  change, (c) comment or log-message edits, (d) dependency
-  bumps. If in doubt, update the doc. The path-scoped
+  must update the relevant file under
+  [`felix/design/`](./design/) in the same PR — typically the
+  sub-design covering the area. This index
+  (`felix/DESIGN.md`) is also updated when the sub-design
+  table, a `applies to` scope, or §1's architecture overview
+  changes. Exemptions: (a) a bug fix that restores behaviour
+  the doc already describes, (b) a mechanical refactor with no
+  observable change, (c) comment or log-message edits, (d)
+  dependency bumps. If in doubt, update. The path-scoped
   [`.github/instructions/*.instructions.md`](../.github/instructions/)
   files wire this rule into Copilot's automated review.
 

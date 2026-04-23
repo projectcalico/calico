@@ -264,9 +264,13 @@ for architecture in `CLAUDE.md`.
   `DESIGN.md`.
 - A PR changing how a component works (new invariant, flag, map,
   mark, sub-program, packet-path change) must update the relevant
-  `DESIGN.md` in the same PR. Exemptions: bug fix restoring
-  documented behaviour, mechanical refactor, comment/log edits,
-  dependency bump. If in doubt, update the doc.
+  `DESIGN.md` in the same PR. For components with a design
+  directory (Felix uses `felix/design/`), this means update the
+  relevant file under that directory — the sub-design covering
+  the area — and/or the index itself when the sub-design table
+  or scope changes. Exemptions: bug fix restoring documented
+  behaviour, mechanical refactor, comment/log edits, dependency
+  bump. If in doubt, update the doc.
 
 ## eBPF Dataplane Review
 

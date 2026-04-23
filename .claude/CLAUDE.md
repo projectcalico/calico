@@ -53,10 +53,14 @@ component, know where to look.
 3. A PR that changes how a component works in a way that
    introduces a new invariant, flag, map, mark, sub-program, or
    alters the packet/data path must update the relevant
-   `DESIGN.md` in the same PR. Exemptions: bug fix restoring
-   documented behaviour, mechanical refactor, comment or
-   log-message edits, dependency bumps. If in doubt, update the
-   doc.
+   `DESIGN.md` in the same PR. For components with a design
+   directory (Felix uses `felix/design/`), "update `DESIGN.md`"
+   means update the relevant file under that directory — the
+   sub-design covering the area — and/or the index itself when
+   the sub-design table or scope changes. Exemptions: bug fix
+   restoring documented behaviour, mechanical refactor, comment
+   or log-message edits, dependency bumps. If in doubt, update
+   the doc.
 
 ## Gotchas
 
