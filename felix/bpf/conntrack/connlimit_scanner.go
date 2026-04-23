@@ -84,7 +84,7 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	if ctKey.Proto() != 6 { // TCP only
 		return ScanVerdictOK, 0
 	}
-	if ctVal.Type() == 1 { // Skip NAT_FWD
+	if ctVal.Type() == TypeNATForward {
 		return ScanVerdictOK, 0
 	}
 
@@ -176,6 +176,9 @@ func (s *ConnLimitScanner) updateCount(ifindex, direction uint32, count int32) {
 	qosKey := qos.NewKey(ifindex, direction)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {
+		if !maps.IsNotExists(err) {
+			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading QoS map entry.")
+		}
 		return
 	}
 	existing := qos.ValueFromBytes(qosValBytes)

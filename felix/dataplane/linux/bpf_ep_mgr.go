@@ -411,8 +411,9 @@ type bpfEndpointManager struct {
 	updateRateLimitedLog    *logutilslc.RateLimitedLogger
 	istioDSCP               uint8
 
-	QoSMap        maps.MapWithUpdateWithFlags
-	maglevLUTSize int
+	QoSMap             maps.MapWithUpdateWithFlags
+	connLimitPodInfo   atomic.Pointer[map[string]bpfconntrack.ConnLimitPodInfo]
+	maglevLUTSize      int
 	ipFragTimeout uint32
 
 	workloadSourceSpoofing bool
@@ -1865,6 +1866,12 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
+
+	// Rebuild the connlimit pod info snapshot for the CT scanner goroutine.
+	// This is safe because CompleteDeferredWork runs on the main dataplane
+	// loop, which is the only writer of allWEPs. nameToIface is guarded by
+	// ifacesLock inside buildConnLimitPodInfo.
+	m.connLimitPodInfo.Store(m.buildConnLimitPodInfo())
 
 	return nil
 }
@@ -5353,19 +5360,30 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 	}
 }
 
-// GetConnLimitedPodInfo returns a map of pod IPs (as string keys) to their
-// connection limit info. Used by the ConnLimitScanner to recount active TCP
-// connections per interface+direction.
+// GetConnLimitedPodInfo returns a snapshot of pod IPs to their connection
+// limit info. Safe to call from any goroutine — reads an atomic pointer
+// updated by the main dataplane loop.
 func (m *bpfEndpointManager) GetConnLimitedPodInfo() map[string]bpfconntrack.ConnLimitPodInfo {
+	if p := m.connLimitPodInfo.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
+// buildConnLimitPodInfo builds the pod IP → ConnLimitPodInfo mapping from
+// current endpoint state. Must be called from the main dataplane loop.
+func (m *bpfEndpointManager) buildConnLimitPodInfo() *map[string]bpfconntrack.ConnLimitPodInfo {
 	result := make(map[string]bpfconntrack.ConnLimitPodInfo)
 
 	// Build a reverse mapping from WEP ID to interface info.
 	wepToIface := make(map[types.WorkloadEndpointID]bpfInterfaceInfo)
+	m.ifacesLock.Lock()
 	for _, iface := range m.nameToIface {
 		if iface.info.endpointID != nil {
 			wepToIface[*iface.info.endpointID] = iface.info
 		}
 	}
+	m.ifacesLock.Unlock()
 
 	for wlID, wep := range m.allWEPs {
 		if wep == nil || wep.QosControls == nil {
@@ -5414,5 +5432,5 @@ func (m *bpfEndpointManager) GetConnLimitedPodInfo() map[string]bpfconntrack.Con
 		}
 	}
 
-	return result
+	return &result
 }
