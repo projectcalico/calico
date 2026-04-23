@@ -1103,6 +1103,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			collectorConntrackInfoReader = collectorCtInfoReader
 		}
 
+		// Add connection limit scanner as a safety net for counter drift correction.
+		// The scanner periodically recounts active TCP connections and writes the
+		// true count to the cali_qos map, correcting any drift from missed
+		// decrements or LRU eviction.
+		if bpfEndpointManager != nil {
+			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
+				return bpfEndpointManager.GetConnLimitedPodInfo()
+			}
+			if conntrackScannerV4 != nil {
+				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSMap, connLimitProvider))
+			}
+			if conntrackScannerV6 != nil {
+				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSMap, connLimitProvider))
+			}
+		}
+
 		if conntrackScannerV4 != nil {
 			conntrackScannerV4.Start()
 		}
@@ -3064,6 +3082,7 @@ func startBPFDataplaneComponents(
 	}
 
 	workloadRemoveChan := make(chan string, 1000)
+
 	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
