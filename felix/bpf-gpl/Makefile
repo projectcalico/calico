@@ -133,7 +133,17 @@ libbpf: $(LIBBPF_FILE_CREATED)
 # Using `--branch $(LIBBPF_VERSION)` with `--depth 1` avoids a separate
 # `git fetch --tags` call, which was a flake source (GitHub occasionally
 # returns HTTP 500 for tag listings).
+#
+# NO_LIBBPF_CLONE=1 turns the clone into a hard failure. CI sets this
+# after restoring the libbpf tarball from GCS so that a missing marker
+# surfaces as an error instead of silently re-cloning (which would
+# negate the cache and restore the HTTP 500 flake risk).
 $(LIBBPF_FILE_CREATED):
+	@if [ -n "$$NO_LIBBPF_CLONE" ]; then \
+		echo "ERROR: libbpf clone triggered but NO_LIBBPF_CLONE is set." >&2; \
+		echo "       The GCS-cached libbpf tarball was not restored correctly." >&2; \
+		exit 1; \
+	fi
 	rm -rf $(LIBBPF_DIR) .libbpf-*
 	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git
 	touch $(LIBBPF_FILE_CREATED)

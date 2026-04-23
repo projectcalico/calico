@@ -403,6 +403,18 @@ blocks:
             # to the test VMs.
             - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
             - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+            # Upload the libbpf clone + compiled static lib. `make -C
+            # cmd/calico build-cgo` above transitively built it via the Felix
+            # CGO dependency chain; the test-or-build below keeps this a
+            # no-op on a warm tree but still produces the artifact if the
+            # dependency chain is ever severed. Consumers (Felix: Build,
+            # Felix: UT) extract this into felix/bpf-gpl/ to skip the clone,
+            # avoiding the known github.com/libbpf/libbpf HTTP 500 flake
+            # and saving the ~30s build step across all Felix jobs.
+            - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
+            - LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
+            - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
             # TEMPORARY for PR #12225: warm master's "calico" build cache from this
             # PR so downstream PR-consumer blocks get a realistic warm-cache
             # measurement. REVERT BEFORE MERGE — once this lands on master, the
@@ -870,6 +882,11 @@ blocks:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
+        # Fail loud if `make` tries to clone libbpf — the prologue restores
+        # the pre-built tarball from GCS, and a re-clone would negate the
+        # cache and re-expose the github.com/libbpf HTTP 500 flake.
+        - name: NO_LIBBPF_CLONE
+          value: "true"
       prologue:
         commands:
           # Load the pre-built calico image (touches the marker so the nested
@@ -881,6 +898,13 @@ blocks:
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+          # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
+          # produced by "Build: calico image". Verify the compiled static
+          # lib landed so a broken tarball fails fast rather than triggering
+          # the NO_LIBBPF_CLONE guard mid-build.
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -936,6 +960,8 @@ blocks:
       env_vars:
         - name: BUILD_CACHE_GROUP
           value: "calico"
+        - name: NO_LIBBPF_CLONE
+          value: "true"
       prologue:
         commands:
           - .semaphore/load-cached-images
@@ -943,6 +969,9 @@ blocks:
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json

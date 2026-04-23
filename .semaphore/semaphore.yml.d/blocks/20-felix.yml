@@ -8,6 +8,11 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "calico"
+      # Fail loud if `make` tries to clone libbpf — the prologue restores
+      # the pre-built tarball from GCS, and a re-clone would negate the
+      # cache and re-expose the github.com/libbpf HTTP 500 flake.
+      - name: NO_LIBBPF_CLONE
+        value: "true"
     prologue:
       commands:
         # Load the pre-built calico image (touches the marker so the nested
@@ -19,6 +24,13 @@
         - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
         - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
         - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+        # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
+        # produced by "Build: calico image". Verify the compiled static
+        # lib landed so a broken tarball fails fast rather than triggering
+        # the NO_LIBBPF_CLONE guard mid-build.
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+        - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+        - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
         - cd felix
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -74,6 +86,8 @@
     env_vars:
       - name: BUILD_CACHE_GROUP
         value: "calico"
+      - name: NO_LIBBPF_CLONE
+        value: "true"
     prologue:
       commands:
         - .semaphore/load-cached-images
@@ -81,6 +95,9 @@
         - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
         - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
         - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+        - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
+        - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
         - cd felix
         - gcloud config set project unique-caldron-775
         - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
