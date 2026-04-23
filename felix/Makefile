@@ -62,7 +62,7 @@ SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
-FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico/calico:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
@@ -163,7 +163,11 @@ $(LIBBPF_FILE_CREATED):
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	# Build the static libbpf.a with -fPIC so the objects can be linked into
+	# either a PDE or a PIE executable. The combined calico binary pulls in
+	# Go packages that cause the linker to emit -Wl,-z,nocopyreloc, which
+	# rejects libbpf's non-PIC references to glibc symbols like stderr.
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
 DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
@@ -250,11 +254,14 @@ routetable/routeclass_string.go: routetable/defs.go
 # Build the calico/felix-test docker image, which contains only Felix.
 .PHONY: $(FELIX_IMAGE) $(FELIX_IMAGE)-$(ARCH)
 
-# Whether or not to use race-detector in the produced image.
+# FV runs the combined calico binary (mounted at /usr/local/bin/calico-felix
+# in the felix-test container, dispatched via `calico component felix`). BPF
+# FV requires CGO so the non-race path uses calico-cgo-$(ARCH); the race
+# variant is also CGO and adds -race.
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-FV_BINARY=bin/calico-felix-race-$(ARCH)
+FV_BINARY=../cmd/calico/bin/calico-race-$(ARCH)
 else
-FV_BINARY=bin/calico-felix-$(ARCH)
+FV_BINARY=../cmd/calico/bin/calico-cgo-$(ARCH)
 endif
 
 # by default, build the image for the target architecture
@@ -312,18 +319,33 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-typha
+REMOTE_DEPS=build-calico-image
+ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
+REMOTE_DEPS+=build-calico-race
+else
+REMOTE_DEPS+=build-calico-cgo
+endif
 
-build-typha:
-	make -C ../typha image DEV_REGISTRIES=felix-test
+# Typha runs from the combined calico image as `component typha` (see
+# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
+# preloaded from the calico-image GCS cache.
+build-calico-image:
+	$(MAKE) -C ../cmd/calico image
 
-.PHONY: fv fv-prereqs fv-no-build
+# FV mounts the combined binary into the felix-test container. The cgo
+# variant supports BPF; the race variant adds -race for the race detector.
+build-calico-cgo:
+	$(MAKE) -C ../cmd/calico build-cgo
+
+build-calico-race:
+	$(MAKE) -C ../cmd/calico build-race
+
+.PHONY: fv fv-prereqs fv-no-build build-calico-image build-calico-cgo build-calico-race
 
 # Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
 # this target to build everything so that it can be cached and shared between downstream jobs.
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
-            $(FV_BINARY) \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \

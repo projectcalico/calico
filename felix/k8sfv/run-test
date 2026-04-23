@@ -218,7 +218,8 @@ if ${USE_TYPHA}; then
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
        --restart=on-failure:2 \
-       $FV_TYPHAIMAGE
+       $FV_TYPHAIMAGE \
+       component typha
     typha_ip=$(get_container_ip ${prefix}-typha)
     typha_hostname=$(get_container_hostname ${prefix}-typha)
     typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
