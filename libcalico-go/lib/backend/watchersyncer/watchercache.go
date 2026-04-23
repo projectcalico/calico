@@ -274,13 +274,18 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 					} else {
 						wc.logger.Debug("Backing API still not installed, retrying later.")
 					}
+					// Grow the backoff: start at initial (clamped to max in case of
+					// misconfiguration), then saturate-double so the cap is honored even if
+					// MissingAPIMaxRetry is ever increased toward the int64 limit.
 					if wc.missingAPIBackoff == 0 {
 						wc.missingAPIBackoff = MissingAPIInitialRetry
-					} else {
-						wc.missingAPIBackoff *= 2
 						if wc.missingAPIBackoff > MissingAPIMaxRetry {
 							wc.missingAPIBackoff = MissingAPIMaxRetry
 						}
+					} else if wc.missingAPIBackoff > MissingAPIMaxRetry/2 {
+						wc.missingAPIBackoff = MissingAPIMaxRetry
+					} else {
+						wc.missingAPIBackoff *= 2
 					}
 					wc.resyncBlockedUntil = time.Now().Add(wc.missingAPIBackoff)
 					wc.crdInstalled = false
