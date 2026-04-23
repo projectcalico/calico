@@ -29,6 +29,7 @@ global_job_config:
 
   prologue:
     commands:
+      - sudo rm -rf ~/.phpbrew ~/.kerl ~/.sbt ~/.nvm ~/.npm ~/.kiex /usr/local/golang/ /usr/lib/jvm /opt/* /opt/az
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
       # Checkout the code and unshallow it.
