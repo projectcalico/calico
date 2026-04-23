@@ -229,3 +229,34 @@ func (e *Client) TestCalicoServiceReady(service string) error {
 	}
 	return nil
 }
+
+// AddRoute runs `ip [-6] route add` on the node.
+func (e *Client) AddRoute(destCIDR, gatewayIP string, ipv6 bool) error {
+	var routeCmd string
+	if ipv6 {
+		routeCmd = fmt.Sprintf("sudo ip -6 route add %s via %s 2>&1", destCIDR, gatewayIP)
+	} else {
+		routeCmd = fmt.Sprintf("sudo ip route add %s via %s 2>&1", destCIDR, gatewayIP)
+	}
+	output, err := e.Exec("sh", "-c", routeCmd)
+	if err != nil {
+		return fmt.Errorf("failed to add route to %s via %s: %s (err: %w)", destCIDR, gatewayIP, output, err)
+	}
+	return nil
+}
+
+// RemoveRoute runs `ip [-6] route del` on the node.
+func (e *Client) RemoveRoute(destCIDR, gatewayIP string, ipv6 bool) error {
+	var routeCmd string
+	if ipv6 {
+		routeCmd = fmt.Sprintf("sudo ip -6 route del %s via %s", destCIDR, gatewayIP)
+	} else {
+		routeCmd = fmt.Sprintf("sudo ip route del %s via %s", destCIDR, gatewayIP)
+	}
+	_, err := e.Exec("sh", "-c", routeCmd)
+	if err != nil {
+		return fmt.Errorf("Note: route to %s via %s may have already been removed: %v", destCIDR, gatewayIP, err)
+	}
+
+	return nil
+}

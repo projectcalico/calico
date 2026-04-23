@@ -72,11 +72,15 @@ var _ = describe.CalicoDescribe(
 		)
 
 		BeforeEach(func() {
-			// Initialize external node for testing
-			extNode = externalnode.NewClient()
-			if extNode == nil {
-				Skip("External node not available - required for Maglev testing")
-			}
+			var err error
+			Expect(err).NotTo(HaveOccurred(), "failed to create an API client at beginning of setup")
+
+			// Pre-pull the rapidclient image on the external node to avoid
+			// timeout issues when the image is not cached.
+			By("pre-pulling rapidclient image on external node")
+			prePullCmd := fmt.Sprintf("sudo docker pull %s", images.RapidClient)
+			_, err = extNode.ExecTimeout(120, "sh", "-c", prePullCmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to pre-pull rapidclient image on external node")
 
 			// Get available nodes for pod distribution
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -119,7 +123,6 @@ var _ = describe.CalicoDescribe(
 				ipVer = "IPv6"
 			}
 			return func() {
-				maglevTests.SkipUnsupportedIPVersion(isIPv6)
 				// Ensure we have at least 3 nodes for the test
 				Expect(len(nodeNames)).Should(BeNumerically(">=", 3), "Need at least 3 nodes for this test")
 
@@ -184,9 +187,8 @@ var _ = describe.CalicoDescribe(
 			}
 		}
 
-		It("test service ip load balancing behavior before and after maglev annotation (IPv4)", makeMaglevTest(false))
-		It("test service ip load balancing behavior before and after maglev annotation (IPv6)", makeMaglevTest(true))
-
+		It("test IPv4 Maglev service ip load balancing behavior before and after annotation", makeMaglevTest(false))
+		It("test IPv6 Maglev service ip load balancing behavior before and after annotation", makeMaglevTest(true))
 	})
 
 type MaglevTests struct {
@@ -260,18 +262,6 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	}
 
 	return backendName, nil
-}
-
-func (m *MaglevTests) SkipUnsupportedIPVersion(isIPv6 bool) {
-	if isIPv6 {
-		if len(m.nodeNameToIPv6) == 0 {
-			Skip("IPv6 is not configured, skipping")
-		}
-	} else {
-		if len(m.nodeNameToIPv4) == 0 {
-			Skip("IPv4 is not configured, skipping")
-		}
-	}
 }
 
 func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) map[string]string {
@@ -484,19 +474,12 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 	if m.serviceClusterIPv4 != "" {
 		targetNodeIPv4, exists := m.nodeNameToIPv4[targetNodeName]
 		if exists && targetNodeIPv4 != "" {
-			// Add route from external node to the service cluster IPv4 via the specified Kubernetes node
-			routeCmd := fmt.Sprintf("sudo ip route add %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
-			_, err := extNode.Exec("sh", "-c", routeCmd)
+			dest := fmt.Sprintf("%s/32", m.serviceClusterIPv4)
+			err := extNode.AddRoute(dest, targetNodeIPv4, false)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv4 route to %s via %s", m.serviceClusterIPv4, targetNodeIPv4))
 
-			// Add cleanup to remove the IPv4 route
 			DeferCleanup(func() {
-				deleteRouteCmd := fmt.Sprintf("sudo ip route del %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
-				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				if err != nil {
-					// Route may have already been removed, log but don't fail
-					framework.Logf("Note: IPv4 route to %s via %s may have already been removed: %v", m.serviceClusterIPv4, targetNodeIPv4, err)
-				}
+				extNode.RemoveRoute(dest, targetNodeIPv4, false)
 			})
 
 			framework.Logf("Added IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
@@ -509,19 +492,12 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 	if m.serviceClusterIPv6 != "" {
 		targetNodeIPv6, exists := m.nodeNameToIPv6[targetNodeName]
 		if exists && targetNodeIPv6 != "" {
-			// Add route from external node to the service cluster IPv6 via the specified Kubernetes node
-			routeCmd := fmt.Sprintf("sudo ip -6 route add %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
-			_, err := extNode.Exec("sh", "-c", routeCmd)
+			dest := fmt.Sprintf("%s/128", m.serviceClusterIPv6)
+			err := extNode.AddRoute(dest, targetNodeIPv6, true)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to add IPv6 route to %s via %s", m.serviceClusterIPv6, targetNodeIPv6))
 
-			// Add cleanup to remove the IPv6 route
 			DeferCleanup(func() {
-				deleteRouteCmd := fmt.Sprintf("sudo ip -6 route del %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
-				_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-				if err != nil {
-					// Route may have already been removed, log but don't fail
-					framework.Logf("Note: IPv6 route to %s via %s may have already been removed: %v", m.serviceClusterIPv6, targetNodeIPv6, err)
-				}
+				extNode.RemoveRoute(dest, targetNodeIPv6, true)
 			})
 
 			framework.Logf("Added IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
@@ -535,35 +511,21 @@ func (m *MaglevTests) SetupExternalNodeClientRoutingToSpecificNode(extNode *exte
 func (m *MaglevTests) RemoveExternalNodeClientRoutes(extNode *externalnode.Client, targetNodeName string) {
 	By(fmt.Sprintf("removing routes from external node to service cluster IPs via node %s", targetNodeName))
 
-	// Remove IPv4 routing if IPv4 cluster IP exists
 	if m.serviceClusterIPv4 != "" {
 		targetNodeIPv4, exists := m.nodeNameToIPv4[targetNodeName]
 		if exists && targetNodeIPv4 != "" {
-			// Remove route from external node to the service cluster IPv4
-			deleteRouteCmd := fmt.Sprintf("sudo ip route del %s/32 via %s", m.serviceClusterIPv4, targetNodeIPv4)
-			_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-			if err != nil {
-				framework.Logf("Warning: Failed to remove IPv4 route (may not exist): %v", err)
-			} else {
-				framework.Logf("Removed IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
-			}
+			extNode.RemoveRoute(fmt.Sprintf("%s/32", m.serviceClusterIPv4), targetNodeIPv4, false)
+			framework.Logf("Removed IPv4 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv4, targetNodeName, targetNodeIPv4)
 		} else {
 			framework.Logf("Warning: No IPv4 address found for node %s, skipping IPv4 route removal", targetNodeName)
 		}
 	}
 
-	// Remove IPv6 routing if IPv6 cluster IP exists
 	if m.serviceClusterIPv6 != "" {
 		targetNodeIPv6, exists := m.nodeNameToIPv6[targetNodeName]
 		if exists && targetNodeIPv6 != "" {
-			// Remove route from external node to the service cluster IPv6
-			deleteRouteCmd := fmt.Sprintf("sudo ip -6 route del %s/128 via %s", m.serviceClusterIPv6, targetNodeIPv6)
-			_, err := extNode.Exec("sh", "-c", deleteRouteCmd)
-			if err != nil {
-				framework.Logf("Warning: Failed to remove IPv6 route (may not exist): %v", err)
-			} else {
-				framework.Logf("Removed IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
-			}
+			extNode.RemoveRoute(fmt.Sprintf("%s/128", m.serviceClusterIPv6), targetNodeIPv6, true)
+			framework.Logf("Removed IPv6 route to service cluster IP %s via node %s (IP: %s)", m.serviceClusterIPv6, targetNodeName, targetNodeIPv6)
 		} else {
 			framework.Logf("Warning: No IPv6 address found for node %s, skipping IPv6 route removal", targetNodeName)
 		}
