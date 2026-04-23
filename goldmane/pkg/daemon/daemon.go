@@ -20,7 +20,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/kelseyhightower/envconfig"
@@ -40,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type Config struct {
@@ -122,15 +122,11 @@ func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 }
 
 func Run(ctx context.Context, cfg Config) {
-	// Log a copy with PushURL passed through url.Redacted() as a precaution —
+	// Log a copy with PushURL passed through RedactURL as a precaution —
 	// the default URL has no credentials, but user-supplied values could.
 	sanitized := cfg
 	if sanitized.PushURL != "" {
-		if u, err := url.Parse(sanitized.PushURL); err == nil {
-			sanitized.PushURL = u.Redacted()
-		} else {
-			sanitized.PushURL = "<invalid-url>"
-		}
+		sanitized.PushURL = logutils.RedactURL(sanitized.PushURL)
 	}
 	logrus.WithField("cfg", sanitized).Info("Loaded configuration")
 	defer logrus.Warn("Shutting down")

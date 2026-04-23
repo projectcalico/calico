@@ -14,7 +14,10 @@
 
 package logutils
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // sensitiveSubstrings are substrings that, when found in a lowercased
 // config parameter name, indicate the value may contain credentials.
@@ -52,4 +55,15 @@ func IsSensitiveParam(name string) bool {
 		}
 	}
 	return false
+}
+
+// RedactURL parses a URL string and returns its Redacted() form, which masks
+// any userinfo password while preserving the scheme, host, port, and path.
+// If the URL cannot be parsed, it returns "<invalid-url>".
+func RedactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	return u.Redacted()
 }
