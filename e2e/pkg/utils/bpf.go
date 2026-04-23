@@ -75,6 +75,7 @@ func findServiceBackends[
 	FK frontendKey,
 	BV nat.BackendValueInterface,
 	FEMap ~map[FK]nat.FrontendValue,
+	// This works for v4 and v6 because BackendKeyV6 is an alias for BackendKey.
 	BEMap ~map[nat.BackendKey]BV,
 ](
 	pod *corev1.Pod,

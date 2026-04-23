@@ -22,6 +22,7 @@ SRC_FILES=$(shell find pkg cmd -name '*.go')
 ###############################################################################
 
 build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test $(SRC_FILES)
+
 bin/k8s/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@

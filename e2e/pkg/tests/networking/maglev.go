@@ -119,7 +119,7 @@ var _ = describe.CalicoDescribe(
 				ipVer = "IPv6"
 			}
 			return func() {
-				maglevTests.SkipUnsupportedIPVersions(isIPv6)
+				maglevTests.SkipUnsupportedIPVersion(isIPv6)
 				// Ensure we have at least 3 nodes for the test
 				Expect(len(nodeNames)).Should(BeNumerically(">=", 3), "Need at least 3 nodes for this test")
 
@@ -262,7 +262,7 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	return backendName, nil
 }
 
-func (m *MaglevTests) SkipUnsupportedIPVersions(isIPv6 bool) {
+func (m *MaglevTests) SkipUnsupportedIPVersion(isIPv6 bool) {
 	if isIPv6 {
 		if len(m.nodeNameToIPv6) == 0 {
 			Skip("IPv6 is not configured, skipping")
