@@ -46,27 +46,6 @@
           # prologue preloaded the image and race binary.
           - make REMOTE_DEPS= bin/calico-felix image ut-bpf-prereqs fv-prereqs
           - ./.semaphore/cache-test-artifacts
-      - name: "Felix: UT"
-        priority:
-          # This job is on the critical path so we increase its priority.
-          - value: 51
-            when: "pull_request =~ '.+'"
-        execution_time_limit:
-          minutes: 30
-        commands:
-          - ../.semaphore/run-and-monitor ut.log make ut
-      - name: "Felix: k8sfv"
-        priority:
-          # This job is on the critical path so we increase its priority.
-          - value: 51
-            when: "pull_request =~ '.+'"
-        execution_time_limit:
-          minutes: 15
-        commands:
-          # REMOTE_DEPS= relies on the prologue having preloaded the calico
-          # image + cgo/race binaries (see Build FV prereqs job for details).
-          - ../.semaphore/run-and-monitor k8sfv-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
       - name: "Felix: Static checks"
         priority:
           # This job is on the critical path so we increase its priority.
@@ -76,6 +55,54 @@
           minutes: 15
         commands:
           - ../.semaphore/run-and-monitor static-checks.log make static-checks
+    epilogue:
+      always:
+        commands:
+          - ./.semaphore/analyze-test-failures --ut || true
+          - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+# Felix UT and k8sfv don't produce artifacts consumed by Felix: FV, so they
+# run in their own block in parallel with Felix: FV instead of blocking it.
+# They still need the preloaded calico image + race binary (k8sfv runs the
+# combined binary as `component typha`), so the prologue mirrors Felix: Build.
+- name: "Felix: UT"
+  run:
+    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+  dependencies:
+    - Prerequisites
+    - "Build: calico image"
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: "calico"
+    prologue:
+      commands:
+        - .semaphore/load-cached-images
+        - mkdir -p cmd/calico/bin
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+        - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+        - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
+        - cd felix
+        - gcloud config set project unique-caldron-775
+        - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+    secrets:
+      - name: google-service-account-for-gce
+      - name: gemini-api-key
+      - name: fv-tests-guru-github-token
+    jobs:
+      - name: "Felix: UT"
+        execution_time_limit:
+          minutes: 30
+        commands:
+          - ../.semaphore/run-and-monitor ut.log make ut
+      - name: "Felix: k8sfv"
+        execution_time_limit:
+          minutes: 15
+        commands:
+          # REMOTE_DEPS= relies on the prologue having preloaded the calico
+          # image + cgo/race binaries (see Felix: Build and cache FV prerequisites
+          # for details).
+          - ../.semaphore/run-and-monitor k8sfv-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+          - ../.semaphore/run-and-monitor k8sfv-no-typha.log make REMOTE_DEPS= k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
     epilogue:
       always:
         commands:
