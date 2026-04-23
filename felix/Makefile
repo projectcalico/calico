@@ -62,7 +62,7 @@ SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
-FV_TYPHAIMAGE?=calico:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico/calico:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 

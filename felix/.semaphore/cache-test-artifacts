@@ -24,7 +24,7 @@ artifact push job bin &
 docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 # The combined calico image provides Typha (via `component typha`) and other
 # components used by the FVs.
-docker save -o /tmp/calico-image.tar calico:latest-amd64
+docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
 cd ../..
 
 # Future work: Split UT and FV artifacts so we can be even more selective.
