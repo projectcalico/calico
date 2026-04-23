@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
@@ -88,7 +89,8 @@ func NewEmitter(opts ...Option) *Emitter {
 	if err != nil {
 		logrus.Fatalf("Error creating emitter client: %v", err)
 	}
-	logrus.WithField("url", e.url).Info("Created emitter client.")
+	// Do not log the raw emitter URL — it may contain credentials in userinfo or query params.
+	logrus.WithField("url", logutils.RedactURL(e.url)).Info("Created emitter client.")
 
 	if e.kcli == nil {
 		logrus.Warn("No k8s client provided, will not be able to cache state.")
@@ -153,7 +155,8 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Emit the bucket.
 		if err := e.emit(bucket); err != nil {
-			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
+			// Do not log the raw emitter URL — use redactURL to mask userinfo.
+			logrus.Errorf("Error emitting flows to %s: %v", logutils.RedactURL(e.url), err)
 			e.retry(key)
 			continue
 		}
@@ -326,3 +329,4 @@ func (e *Emitter) loadCachedState() error {
 	e.latestTimestamp = ts
 	return nil
 }
+
