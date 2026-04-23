@@ -3,6 +3,18 @@ include ../metadata.mk
 PACKAGE_NAME=github.com/projectcalico/calico/e2e
 include ../lib.Makefile
 
+# libbpf headers are needed because the e2e tests import felix/bpf packages
+# that use CGO with libbpf.h.
+LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src
+BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
+LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+DOCKER_RUN_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS)
+
+$(LIBBPF_A):
+	$(MAKE) -C ../felix libbpf
+
 SRC_FILES=$(shell find pkg cmd -name '*.go')
 
 ###############################################################################
@@ -11,13 +23,13 @@ SRC_FILES=$(shell find pkg cmd -name '*.go')
 
 build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test $(SRC_FILES)
 
-bin/k8s/e2e.test: $(SRC_FILES)
+bin/k8s/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
+	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
 
-bin/clusternetworkpolicy/e2e.test: $(SRC_FILES)
+bin/clusternetworkpolicy/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
+	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
 
 # Multi-arch e2e binary targets. Each architecture gets its own binary, built
 # via cross-compilation inside the calico/go-build container. Uses a pattern
@@ -45,4 +57,3 @@ publish-test-images: test-images
 
 clean:
 	rm -rf bin/
-
