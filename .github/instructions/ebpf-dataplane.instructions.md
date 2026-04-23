@@ -4,13 +4,13 @@ applyTo:
   - "felix/bpf/**"
   - "felix/dataplane/linux/bpf_*.go"
   - "felix/dataplane/linux/vxlan_mgr.go"
-  - "felix/bpf/DESIGN.md"
+  - "felix/design/bpf-dataplane.md"
 ---
 
 # eBPF dataplane review instructions
 
 The authoritative design and review guide for Calico's eBPF dataplane
-is [`felix/bpf/DESIGN.md`](../../felix/bpf/DESIGN.md). Each of its
+is [`felix/design/bpf-dataplane.md`](../../felix/design/bpf-dataplane.md). Each of its
 topic sections ends with a **Review notes** block listing the
 invariants a change in that area must respect. When reviewing a
 change that touches a file matching this instruction's `applyTo`,
@@ -65,7 +65,7 @@ pointer.
 ## The update rule
 
 A BPF dataplane PR that **changes how the dataplane works** must
-update `felix/bpf/DESIGN.md` in the same PR. This includes:
+update `felix/design/bpf-dataplane.md` in the same PR. This includes:
 
 - A new BPF sub-program or tail-call target.
 - A new CT flag or reuse of an existing one for a new purpose.
@@ -96,7 +96,7 @@ ready-to-paste `@copilot` prompt that specifies which section
 needs updating and what new invariant or mechanic to cover, for
 example:
 
-> `@copilot update felix/bpf/DESIGN.md §13 to cover the new CT flag CALI_CT_FLAG_FOO — the fields it uses, where it is set, how it interacts with the fast path.`
+> `@copilot update felix/design/bpf-dataplane.md §13 to cover the new CT flag CALI_CT_FLAG_FOO — the fields it uses, where it is set, how it interacts with the fast path.`
 
 The reviewer (or the PR author) drops that into a new PR comment
 to invoke the Copilot coding agent, which pushes a commit with
