@@ -653,8 +653,7 @@ func (p *EndpointListParam) Parse(raw string) (result any, err error) {
 		if u.Opaque != "" || u.User != nil || u.Path != "/" ||
 			u.RawPath != "" || u.RawQuery != "" ||
 			u.Fragment != "" {
-			// Do not log the full URL, it may contain credentials in userinfo.
-			log.WithField("url", u.Host).Error(
+			log.WithField("url", fmt.Sprintf("%#v", u)).Error(
 				"Unsupported URL part")
 			err = p.parseFailed(raw,
 				"endpoint contained unsupported URL part; "+

@@ -121,12 +121,7 @@ func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 }
 
 func Run(ctx context.Context, cfg Config) {
-	// Do not log the full cfg struct, PushURL may contain sensitive credentials.
-	logrus.WithFields(logrus.Fields{
-		"port":       cfg.Port,
-		"logLevel":   cfg.LogLevel,
-		"hasPushURL": cfg.PushURL != "",
-	}).Info("Loaded configuration")
+	logrus.WithField("cfg", cfg).Info("Loaded configuration")
 	defer logrus.Warn("Shutting down")
 
 	// Make an initial report that says we're live but not yet ready.
