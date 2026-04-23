@@ -191,11 +191,12 @@ var _ = Describe("Getting summary information about a block", func() {
 })
 
 var _ = Describe("Releasing IPs", func() {
+	minIPReclaimAgeZeroCfg := IPAMConfig{}
 	It("deallocates a single IP", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13}, "unlucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 			Handle:  "unlucky",
 		}})
@@ -211,7 +212,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13, 26, 39}, "lucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 		}})
 		Expect(err).To(Succeed())
@@ -229,7 +230,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{13, 26, 39}, "lucky")
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{
+		unallocated, countByHandle, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{
 			{Address: "100.64.0.13"},
 			{Address: "100.64.0.26"},
 			{Address: "100.64.0.39"},
@@ -246,7 +247,7 @@ var _ = Describe("Releasing IPs", func() {
 	It("does nothing when no such IP exists", func() {
 		block := makeTestBlock()
 
-		unallocated, countByHandle, err := block.release([]ReleaseOptions{{
+		unallocated, countByHandle, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{{
 			Address: "100.64.0.13",
 			Handle:  "unlucky",
 		}})
@@ -261,7 +262,7 @@ var _ = Describe("Releasing IPs", func() {
 		block := makeTestBlock()
 		block.allocate([]int{100}, "newstuff")
 
-		_, _, err := block.release([]ReleaseOptions{{
+		_, _, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{{
 			Address: "100.64.0.100",
 			Handle:  "oldstuff",
 		}})
@@ -275,7 +276,7 @@ var _ = Describe("Releasing IPs", func() {
 		block.allocate([]int{13}, "unlucky")
 		block.SequenceNumberForAllocation["13"] = 10
 
-		_, _, err := block.release([]ReleaseOptions{{
+		_, _, err := block.release(&minIPReclaimAgeZeroCfg, []ReleaseOptions{{
 			Address:        "100.64.0.13",
 			Handle:         "unlucky",
 			SequenceNumber: new(uint64(999)),
@@ -287,9 +288,10 @@ var _ = Describe("Releasing IPs", func() {
 })
 
 var _ = Describe("Releasing IPs by Handle", func() {
+	minIPReclaimAgeZeroCfg := IPAMConfig{}
 	It("does nothing when no such handle exists", func() {
 		block := makeTestBlock()
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&minIPReclaimAgeZeroCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "nosuchhandle",
 			SequenceNumber: nil,
@@ -303,7 +305,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block := makeTestBlock()
 		block.allocate([]int{15}, "fifteen")
 		block.allocate([]int{20}, "twenty")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&minIPReclaimAgeZeroCfg, ReleaseOptions{
 			Address:        "100.64.0.99", // No need for this to match ordinal.
 			Handle:         "fifteen",
 			SequenceNumber: nil,
@@ -326,7 +328,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block.SequenceNumberForAllocation["17"] = 999 // not removed
 		block.SequenceNumberForAllocation["18"] = 10
 
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&minIPReclaimAgeZeroCfg, ReleaseOptions{
 			Handle:         "teens",
 			SequenceNumber: new(uint64(10)),
 		})
@@ -341,7 +343,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 		block.allocate([]int{15}, "several")
 		block.allocate([]int{25}, "several")
 		block.allocate([]int{35}, "several")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&minIPReclaimAgeZeroCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "several",
 			SequenceNumber: nil,
@@ -357,7 +359,7 @@ var _ = Describe("Releasing IPs by Handle", func() {
 	It("removes multiple existing allocations with the same handle and attributes", func() {
 		block := makeTestBlock()
 		block.allocate([]int{15, 25, 35}, "several")
-		released := block.releaseByHandle(ReleaseOptions{
+		released := block.releaseByHandle(&minIPReclaimAgeZeroCfg, ReleaseOptions{
 			Address:        "100.64.0.99",
 			Handle:         "several",
 			SequenceNumber: nil,
