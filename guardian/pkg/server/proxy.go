@@ -111,11 +111,13 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logCtx := logrus.WithField("dst", tgt)
+		// Do not log the full Target struct — it contains OAuth tokens and client cert paths.
+		// Use Redacted() on the URL to mask any userinfo credentials.
+		logCtx := logrus.WithField("dst", tgt.Dest.Redacted())
 		if tgt.PathRegexp != nil {
 			if !tgt.PathRegexp.MatchString(r.URL.Path) {
 				http.Error(w, "Not found", 404)
-				logCtx.Debugf("Received request %s rejected by PathRegexp %q", r.RequestURI, tgt.PathRegexp)
+				logCtx.Debugf("Received request %s rejected by PathRegexp %q", r.URL.Path, tgt.PathRegexp)
 				return
 			}
 			if tgt.PathReplace != nil {
@@ -136,11 +138,13 @@ func newTargetHandler(tgt Target) (func(http.ResponseWriter, *http.Request), err
 			if err != nil {
 				http.Error(w, "Internal Server Error, token read failure", 500)
 				logCtx.Errorf("Loading token failed %s", err)
+				return
 			}
 			tok.SetAuthHeader(r)
 		}
 
-		logCtx.Debugf("Received request %s will proxy to %s", r.RequestURI, tgt.Dest)
+		// Do not log r.RequestURI — it may contain query-string credentials (?access_token=...).
+		logCtx.Debugf("Received request %s will proxy to %s", r.URL.Path, tgt.Dest.Redacted())
 
 		p.ServeHTTP(w, r)
 	}, nil
