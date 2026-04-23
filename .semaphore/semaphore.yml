@@ -2518,7 +2518,7 @@ blocks:
           # the NO_LIBBPF_CLONE guard mid-build.
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
           - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
+          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -2698,7 +2698,7 @@ blocks:
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
           - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
           - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || { echo "ERROR: libbpf tarball missing compiled libbpf.a"; exit 1; }
+          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
