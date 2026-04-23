@@ -287,7 +287,11 @@ func (c *Config) requiringTLS() bool {
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
-	log.WithField("config", config).Info("Creating server")
+	// Do not log the full config struct, it contains TLS key/cert file paths.
+	log.WithFields(log.Fields{
+		"port":       config.Port,
+		"tlsEnabled": config.KeyFile != "",
+	}).Info("Creating server")
 	s := &Server{
 		config:               config,
 		caches:               caches,
