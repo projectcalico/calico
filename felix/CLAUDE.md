@@ -1,89 +1,8 @@
-# Felix Development Guide
+# Felix Operational Guide
 
-## Architecture Overview
+This file is **operational guidance** for agents working in Felix: how to build, run tests, debug, and use Felix-specific tooling.
 
-Felix is the per-node agent in Calico that enforces network policy and programs routing. The data pipeline flows:
-
-**Datastore syncer** → **AsyncCalcGraph** → **CalcGraph** (dispatcher + calculation nodes) → **EventSequencer** → **InternalDataplane** (managers) → **dataplane operations**
-
-1. Datastore updates (Kubernetes, etcd) arrive via a syncer
-2. `CalcGraph` processes them through a graph of calculation nodes (policy resolution, route resolution, IP set indexing, etc.)
-3. `EventSequencer` buffers and coalesces the outputs, flushing in dependency-safe order
-4. The dataplane driver fans updates to managers, each owning a slice of dataplane state
-
-Felix supports multiple dataplane backends: **BPF**, **iptables**, **nftables**, and **Windows** (HNS/HCN).
-
-Key files: `daemon/daemon.go`, `calc/calc_graph.go`, `dataplane/linux/int_dataplane.go`, `dataplane/driver.go`
-
-## Calc Graph Engine (`calc/`)
-
-The calc graph is an event-processing pipeline that transforms raw datastore updates into dataplane-ready instructions.
-
-### Key Components
-
-- **`AllUpdDispatcher`** (`*dispatcher.Dispatcher` field on `CalcGraph`) — fans out datastore updates by resource type to downstream nodes
-- **`ActiveRulesCalculator`** — tracks which policies/profiles are active based on endpoint labels
-- **`RuleScanner`** — scans rules for selector references, feeds the IP set index
-- **`PolicyResolver`** — resolves per-endpoint policy ordering (tiers, priorities)
-- **`L3RouteResolver`** — computes routes from IP pools, workload endpoints, and host IPs
-- **`VXLANResolver`** — computes VTEP (VXLAN tunnel endpoint) entries
-- **`EncapsulationResolver`** — determines encapsulation mode from IP pool config
-
-### PipelineCallbacks
-
-`PipelineCallbacks` is a composite interface (`calc/calc_graph.go`) assembling all callback types the calc graph emits: IP sets, active rules, routes, endpoints, config, encapsulation, VTEPs, wireguard keys, and service updates. `EventSequencer` is the primary implementation.
-
-### EventSequencer
-
-`EventSequencer` (`calc/event_sequencer.go`) buffers updates in `pending*` maps/sets and flushes them via `Flush()` in dependency-safe order (e.g., IP sets before policies that reference them). It coalesces rapid updates so only the final state is sent downstream.
-
-Key files: `calc/calc_graph.go`, `calc/event_sequencer.go`, `calc/active_rules_calculator.go`, `calc/l3_route_resolver.go`
-
-## Dataplane Manager Pattern (`dataplane/linux/`)
-
-### Manager Interface
-
-All dataplane managers implement:
-
-```go
-type Manager interface {
-    OnUpdate(protoBufMsg any)
-    CompleteDeferredWork() error
-}
-```
-
-Extended interfaces: `ManagerWithRouteTables` (exposes route table syncers), `ManagerWithRouteRules` (exposes routing rules), `UpdateBatchResolver` (pre-apply batch resolution).
-
-### Event Loop
-
-`InternalDataplane` (`int_dataplane.go`) runs the main loop:
-
-1. Receive messages from the calc graph
-2. Fan out via `OnUpdate()` to all registered managers
-3. Throttled `apply()` cycle: call `CompleteDeferredWork()` on each manager, then sync route tables and rules
-
-### Managers
-
-Managers are registered via `RegisterManager()`. Key managers include:
-
-| Manager | Handles |
-|---------|---------|
-| `endpointManager` / `bpfEndpointManager` | Workload/host endpoint programming |
-| `policyManager` / `rawEgressPolicyManager` | Policy chain/rule generation |
-| `ipsetsManager` | IP set synchronization |
-| `noEncapManager` / `vxlanManager` | Route management for encap modes |
-| `ipipManager` | IPIP tunnel interfaces |
-| `wireguardManager` | WireGuard tunnel setup |
-| `masqManager` | IP masquerade rules |
-| `hostIPManager` | Host IP tracking |
-| `floatingIPManager` | Floating IP NAT |
-| `dscpManager` | DSCP marking |
-| `serviceLoopManager` | Service loop prevention |
-| `failsafeMgr` | BPF failsafe port programming |
-
-IPv4 and IPv6 each get their own manager instances. `dataplane/driver.go` is the factory that constructs and wires the dataplane.
-
-Key file: `dataplane/linux/int_dataplane.go`
+For **architecture, invariants, and review criteria**, see [`felix/DESIGN.md`](./DESIGN.md) — the design index — and the per-topic sub-designs under [`felix/design/`](./design/). Do not look here for invariants; look there.
 
 ## Running Tests
 
@@ -181,147 +100,16 @@ fv-tests-guru -debug-logfile <log-path> -ai-provider gemini -calico-repo <path-t
 
 Add `-ut` for unit test logs. Use `-extra-context "..."` to provide hints about the branch under test.
 
-## BPF Dataplane
-
-### BPF Code Structure
-
-#### C Source Code (`bpf-gpl/`)
-
-GPL-licensed BPF programs compiled to eBPF bytecode with clang/LLVM.
-
-##### Entry Point Programs
-
-| File | Purpose |
-|------|---------|
-| `tc.c` | Main TC (Traffic Control) hook — processes ingress/egress traffic |
-| `xdp.c` | XDP hook — early packet processing at NIC driver level |
-| `connect_balancer.c` | IPv4 cgroup connect-time load balancer |
-| `connect_balancer_v6.c` | IPv6 cgroup connect-time load balancer |
-| `connect_balancer_v46.c` | Dual-stack balancer variant |
-| `conntrack_cleanup.c` | Connection tracking garbage collection |
-| `policy_default.c` | Default policy fallback rules |
-| `tc_preamble.c` / `xdp_preamble.c` | Hook initialization/setup |
-
-##### Key Headers (`bpf-gpl/*.h`)
-
-- **Infrastructure**: `bpf.h`, `types.h`, `globals.h` — core definitions, compile flags, global state maps
-- **Parsing**: `parsing.h`, `parsing4.h`, `parsing6.h`, `skb.h` — packet parsing helpers
-- **NAT**: `nat.h`, `nat4.h`, `nat6.h`, `nat_types.h`, `nat_lookup.h`
-- **Conntrack**: `conntrack.h`, `conntrack_types.h` — connection tracking state
-- **Policy**: `policy.h`, `failsafe.h` — policy evaluation, failsafe rules
-- **Routing**: `routes.h`, `fib.h`, `fib_common.h`, `fib_co_re.h`
-- **Protocol**: `tcp4.h`, `tcp6.h`, `icmp.h`, `icmp4.h`, `icmp6.h`, `arp.h`
-- **Load Balancing**: `jenkins_hash.h`, `maglev.h`, `ctlb.h`
-- **Utilities**: `jump.h` (tail calls), `log.h`, `events.h`, `counters.h`
-
-Dual-stack support uses separate IPv4/IPv6 header variants and `#ifdef IPVER6` for conditional compilation. Compile flags (`CALI_COMPILE_FLAGS`) control which code paths are active.
-
-##### Subdirectories
-
-- `bpf-gpl/bin/` — compiled eBPF `.o` object files
-- `bpf-gpl/libbpf/` — libbpf dependency (kernel headers, BPF helpers)
-- `bpf-gpl/ut/` — C-level unit test programs (ICMP, parsing, NAT, perf)
-
-#### Go User-Space Code (`bpf/`)
-
-Go packages that manage BPF programs and maps from user space.
-
-| Package | Purpose |
-|---------|---------|
-| `bpf/*.go` | Main interface — program management, attach/detach, syscalls |
-| `conntrack/` | Conntrack map versioning (v2–v4), cleanup, scanner |
-| `nat/` | NAT map management |
-| `polprog/` | Policy program code generation |
-| `ipsets/` | IP set map construction |
-| `maps/` | Generic BPF map operations |
-| `routes/` | Route/FIB lookups |
-| `hook/` | Hook attachment (TC, XDP, cgroup) |
-| `tc/`, `xdp/` | TC/XDP specific logic |
-| `jump/` | Tail call jump management |
-| `counters/`, `events/`, `perf/` | Stats, events, perf ringbuffers |
-| `failsafes/`, `filter/`, `arp/` | Failsafe rules, filtering, ARP |
-| `proxy/` | Kube-proxy replacement — implements service load balancing in BPF |
-| `ut/` | BPF unit tests (Go test harness) |
-
-#### BPF Unit Test Pattern (`bpf/ut/`)
+## BPF unit test harness (`bpf/ut/`)
 
 `bpf/ut/bpf_prog_test.go` is the test harness. Each file in `bpf/ut/` presents a set of tests for one feature (NAT, ICMP handling, policy, BPF load verification, etc.). Each test has sub-tests that exercise a BPF program attached to a single interface in a single direction (ingress or egress) in a single scenario. The scenario (maps, routes, conntrack entries, etc.) is set up outside the sub-test.
 
 Typically, back-to-back sub-tests simulate a packet traversing from one interface to the next — for example, host to workload or workload to workload on the same host. Assigning to `hostIP` and running host-to-host back-to-back sub-tests simulates a packet traversing from one host to another within the cluster.
 
-#### BPF Dataplane Management (`dataplane/linux/`)
+## Configuration parameters
 
-`dataplane/linux/bpf_*.go` — manages the BPF dataplane from user space (program lifecycle, map syncing, endpoint management).
+Felix parameters are declared in `config/config_params.go` with types and validation in `config/param_types.go`. When adding a new parameter, both files are updated; the docs under `felix/docs/config-params.md` are regenerated by `make generate`.
 
-### eBPF Dataplane Design & Review Guide
+## Design and review criteria
 
-`felix/design/bpf-dataplane.md` is the authoritative design and review guide for the eBPF dataplane. It covers the packet path, TC program layout (preamble + jump maps + fast/debug paths), XDP→TC handoff, intra-cluster & external service NAT, Maglev, session affinity, the BPF kube-proxy replacement, CTLB, the bpfnat workaround, VXLAN flow-mode, RPF, conntrack cleanup, IP fragmentation, BPF-synthesised ICMP errors, `*tables`→BPF migration, third-party DNAT interop, log filters, flow logs, QoS, the fast-path cost discipline, and cross-cutting review rules. Each section ends with a **Review notes** block listing the invariants a PR in that area must respect.
-
-**When reviewing a BPF dataplane change with `/review` or the `review` skill,** read the relevant DESIGN.md section(s) before forming an opinion and use the Review notes there as the checklist. Path-specific Copilot rules mirror the same checks and live in `.github/instructions/ebpf-dataplane.instructions.md`.
-
-Before signing off on any BPF dataplane PR, answer §22's question in plain prose: *does this change the per-packet cost for any class of flows?* This includes changes that don't add new fast-path code but route more flows through existing slow-path work — e.g., a CT flag whose effect is to suppress a fast-path return code, or a condition that gates the policy program on a wider set of packets. If the per-packet cost changes for any class of flows and the PR doesn't address it, the review must flag it.
-
-**Update rule.** A BPF dataplane PR that changes how the dataplane works — new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision — must update `felix/design/bpf-dataplane.md` in the same PR. Exemptions: (a) a bug fix that restores behaviour `DESIGN.md` already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
-
-**When `/review` finds a BPF dataplane PR that meets the update rule above but has no `DESIGN.md` change:** propose the update as a concrete diff in the review output — name the section, the invariant or mechanic being added, and the exact wording. If the reviewer confirms, write the amendment to `felix/design/bpf-dataplane.md` and push it as an additional commit on the PR branch rather than leaving the doc drift to a follow-up PR. `/review` already has `gh` and push access when run locally; use them. The trust level is the same as making a code suggestion in review — this is just writing documentation prose for a well-defined gap.
-
-## Iptables/Nftables Dataplane
-
-The netfilter-based policy engine uses a layered architecture:
-
-### generictables/
-
-Abstract table interface (`table.go`, `actions.go`, `match_builder.go`, `rules.go`) shared by both iptables and nftables backends. Defines `Table`, `Chain`, `Rule`, `Action`, and `MatchCriteria` types.
-
-### iptables/
-
-Legacy netfilter backend: `table.go` (table sync via `iptables-restore`), `actions.go`, `match_builder.go`, `renderer.go` (renders rules to iptables syntax).
-
-### nftables/
-
-Modern netfilter backend: `table.go` (table sync via nftables API), `ipsets.go`, `maps.go`, `match_builder.go`.
-
-### rules/
-
-Shared rule generation logic used by both backends:
-
-- `dispatch.go` — per-endpoint dispatch chains
-- `policy.go` — policy chain generation from Calico policy model
-- `endpoints.go` — endpoint-specific chain setup
-- `static.go` — static/boilerplate chains (filter, NAT, mangle)
-- `nat.go` — NAT rule generation
-
-### Backend Selection
-
-Controlled by `NFTablesMode` config parameter. Both backends implement the `generictables` interface, allowing the dataplane to switch between them. Key managers: `endpoint_mgr.go`, `policy_mgr.go` in `dataplane/linux/`.
-
-## Windows Dataplane (`dataplane/windows/`)
-
-HNS/HCN-based policy engine for Windows nodes.
-
-- `win_dataplane.go` — main dataplane driver (analogous to `int_dataplane.go` on Linux)
-- `endpoint_mgr.go` — Windows endpoint management
-- `policy_mgr.go` — Windows policy sets
-- `vxlan_mgr.go` — VXLAN overlay on Windows
-
-Subdirectories: `hns/` (Host Networking Service), `hcn/` (Host Compute Network), `ipsets/`, `policysets/`
-
-## Networking and Routing
-
-Shared networking subsystems used across dataplanes:
-
-| Package | Purpose |
-|---------|---------|
-| `routetable/` | Linux route table management via netlink (`route_table.go`) |
-| `routerule/` | Policy-based routing rules |
-| `vxlanfdb/` | VXLAN forwarding database management |
-| `wireguard/` | WireGuard tunnel setup and key management |
-| `ifacemonitor/` | Interface state monitoring (link up/down, address changes) |
-| `nfnetlink/` | Conntrack and nflog via netfilter netlink |
-| `netlinkshim/` | Netlink abstraction layer for testing and portability |
-
-## Configuration
-
-- `config/config_params.go` — all Felix parameters with defaults and metadata
-- `config/param_types.go` — parameter type definitions, parsing, and validation
-- Configuration is loaded from environment variables, config files, and the Calico datastore (in that priority order)
+Architecture, invariants, and review criteria live in the design index [`felix/DESIGN.md`](./DESIGN.md) and the per-topic sub-designs under [`felix/design/`](./design/). Path-scoped Copilot rules that reference each sub-design live under [`.github/instructions/`](../.github/instructions/). Do not look here for dataplane invariants, calc-graph internals, or rule-generation rules — look in the matching sub-design.
