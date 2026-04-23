@@ -6,7 +6,6 @@
 #   - dot-directories (e.g. .git, .go-pkg-cache, .claude, .idea); these have
 #     no component Go code but many inodes, so descending into them is slow.
 #   - lib/ and pkg/ (separate go.mod modules / not standalone components).
-#   - crypto/ (shared utility package, not a top-level component).
 #
 # Usage:
 #   hack/list-go-sources.sh dirs   # top-level dirs containing *.go files
@@ -15,7 +14,7 @@ set -euo pipefail
 
 # Directory-name excludes applied to top-level entries. `.*` excludes
 # dot-directories; the rest are component-layout exclusions.
-EXCLUDES=( '.*' lib pkg crypto )
+EXCLUDES=( '.*' lib pkg )
 
 excluded() {
   local d=$1 pat
@@ -54,7 +53,6 @@ list_files() {
          -name '.*' \
       -o -path './lib' \
       -o -path './pkg' \
-      -o -path './crypto' \
     \) -prune \) \
     -o -name '*.go' -print
 }
