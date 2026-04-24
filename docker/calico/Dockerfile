@@ -1,5 +1,5 @@
-ARG CALICO_BASE=calico/base:latest
-ARG UBI_IMAGE=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG CALICO_BASE
+ARG UBI_IMAGE
 
 FROM --platform=$BUILDPLATFORM ${UBI_IMAGE} AS builder
 
