@@ -98,7 +98,7 @@ $(REGISTRAR_BIN):
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
-$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN)
+$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
 	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
@@ -108,6 +108,13 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 sub-image-fips-%:
 	$(MAKE) image FIPS=true ARCH=$*
+
+###############################################################################
+# CI/CD
+###############################################################################
+## Deploys images to registry
+.PHONY: cd
+cd: image-all cd-common
 
 ###############################################################################
 # Release
