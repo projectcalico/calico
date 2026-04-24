@@ -61,7 +61,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithExternalNode(),
 	describe.WithDataplane(describe.BPF),
 	describe.WithSerial(),
-	describe.WithAWS(),
+	describe.RequiresAWS(),
 	"Maglev load balancing tests",
 	func() {
 		var (
