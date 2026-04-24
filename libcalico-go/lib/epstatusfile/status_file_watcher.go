@@ -244,7 +244,7 @@ func (w *FileWatcher) scanDirectory() {
 		if !exists {
 			log.WithField("file", path).Debug("New file detected")
 			w.callbacks.OnFileCreation(path)
-		} else if oldInfo.ModTime() != info.ModTime() || oldInfo.Size() != info.Size() {
+		} else if !oldInfo.ModTime().Equal(info.ModTime()) || oldInfo.Size() != info.Size() {
 			log.WithField("file", path).Debug("File modified")
 			w.callbacks.OnFileUpdate(path)
 		}
