@@ -61,4 +61,27 @@ func TestExpBackoff(t *testing.T) {
 			require.Greater(t, d, time.Duration(0), "delay must stay positive (no overflow)")
 		}
 	})
+
+	t.Run("Initial equal to Max never grows", func(t *testing.T) {
+		b := &backoff.Exp{Initial: 5 * time.Second, Max: 5 * time.Second}
+		for i := range 10 {
+			require.Equal(t, 5*time.Second, b.Next(), "call %d should return Max", i)
+		}
+	})
+
+	t.Run("Reset before any Next is a safe no-op", func(t *testing.T) {
+		b := &backoff.Exp{Initial: 1 * time.Second, Max: 10 * time.Second}
+		require.NotPanics(t, b.Reset)
+		require.Equal(t, 1*time.Second, b.Next(), "Next() after Reset returns Initial")
+	})
+
+	t.Run("produces a deterministic sequence", func(t *testing.T) {
+		b := &backoff.Exp{Initial: 5 * time.Second, Max: 30 * time.Second}
+		want := []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 30 * time.Second, 30 * time.Second, 30 * time.Second}
+		got := make([]time.Duration, 0, len(want))
+		for range len(want) {
+			got = append(got, b.Next())
+		}
+		require.Equal(t, want, got)
+	})
 }
