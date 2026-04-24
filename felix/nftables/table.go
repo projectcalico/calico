@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/backoff"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -892,7 +893,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	// Retry until we succeed. This could be a transient programming error. It's also possible that we're bugged
 	// and trying to write bad data so we give up eventually.
 	retries := 10
-	backoffTime := 1 * time.Millisecond
+	backoffTime := backoff.Exp{Initial: 1 * time.Millisecond, Max: 1 * time.Second}
 	failedAtLeastOnce := false
 	for {
 		if !t.inSyncWithDataPlane {
@@ -922,8 +923,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
-				t.timeSleep(backoffTime)
-				backoffTime *= 2
+				t.timeSleep(backoffTime.Next())
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue

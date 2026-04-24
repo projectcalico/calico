@@ -192,6 +192,94 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.InSync)
 	})
 
+	It("should pick up a CRD installed after startup within the exponential backoff window", func() {
+		// Regression test: when a watched CRD is absent at startup but installed a short time later
+		// (e.g. KubeVirt installed moments after Calico), the watcher must pick it up quickly instead
+		// of waiting for the full MissingAPIMaxBackoff. Exponential backoff starts at
+		// MissingAPIInitialBackoff and doubles up to MissingAPIMaxBackoff, so the first few retries are
+		// cheap and events flow within seconds on a fresh cluster.
+		defer setMissingAPIBackoff(watchersyncer.MissingAPIInitialBackoff, watchersyncer.MissingAPIMaxBackoff)
+		setMissingAPIBackoff(50*time.Millisecond, 500*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		// First list: CRD not installed yet.
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.watcherSyncer.Start()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Simulate the CRD being installed after some time. The next List should now succeed
+		// and return an item, which must reach the syncer within the backoff window — not
+		// after MissingAPIMaxBackoff.
+		list := &model.KVPairList{
+			KVPairs: []*model.KVPair{
+				{Key: l1Key1, Value: "value1", Revision: "rev1"},
+			},
+			Revision: "rev1",
+		}
+		rs.clientListResponse(r1, list)
+		// With MissingAPIMaxBackoff set to 500ms in this test, the retry should fire well
+		// within a few seconds. This catches a regression where the original 30-minute
+		// fixed sleep sneaks back in and events are never delivered.
+		rs.ExpectUpdates([]api.Update{
+			{KVPair: *list.KVPairs[0], UpdateType: api.UpdateTypeKVNew},
+		}, true)
+	})
+
+	It("should recover through NotFound -> success -> watch-fail -> NotFound -> success", func() {
+		// Drive the watcher through a full disappearance/reappearance cycle twice,
+		// verifying the missing-API path does not wedge on the second NotFound and
+		// updates continue to flow after the backing API churns.
+		//
+		// Note: this does not specifically distinguish "markInstalled() resets the
+		// backoff" from "reset is broken". The reset itself is a one-line call to
+		// backoff.Exp.Reset(), and backoff.Exp is tested in isolation in the
+		// libcalico-go/lib/backoff package. This test covers the integration path;
+		// a white-box reset assertion was deliberately dropped in favor of the
+		// unit test on the underlying type.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
+		defer setMissingAPIBackoff(watchersyncer.MissingAPIInitialBackoff, watchersyncer.MissingAPIMaxBackoff)
+		setMissingAPIBackoff(50*time.Millisecond, 500*time.Millisecond)
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		// Queue the full response sequence up front so the syncer goroutine can
+		// consume them as it progresses through the cycle. Using caliTooOldRV
+		// to end each watch keeps the test driven by the test goroutine rather
+		// than by polling timers.
+		// Both lists use the same key so only Add/Update events are emitted
+		// (no delete for a vanished entry), keeping the expected sequence small.
+		list1 := &model.KVPairList{
+			KVPairs:  []*model.KVPair{{Key: l1Key1, Value: "v1", Revision: "r1"}},
+			Revision: "r1",
+		}
+		list2 := &model.KVPairList{
+			KVPairs:  []*model.KVPair{{Key: l1Key1, Value: "v2", Revision: "r2"}},
+			Revision: "r2",
+		}
+		// Cycle 1: NotFound -> success list1 -> watch fails.
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.clientListResponse(r1, list1)
+		rs.clientWatchResponse(r1, caliTooOldRV)
+		// Cycle 2: NotFound again -> success list2 -> watch succeeds (and stays
+		// watching, which is fine; test ends after list2 update is observed).
+		rs.clientListResponse(r1, apierrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
+		rs.clientListResponse(r1, list2)
+		rs.clientWatchResponse(r1, nil)
+
+		rs.watcherSyncer.Start()
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Both list1 and list2 should reach the syncer.
+		rs.ExpectUpdates([]api.Update{
+			{KVPair: *list1.KVPairs[0], UpdateType: api.UpdateTypeKVNew},
+			{KVPair: *list2.KVPairs[0], UpdateType: api.UpdateTypeKVUpdated},
+		}, false)
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		// Temporarily reduce the watch and list poll interval to make the tests faster.
 		// Since we are timing the processing, we still need the interval to be sufficiently
@@ -910,6 +998,11 @@ func setWatchIntervals(minRetryInterval, listRetryInterval, watchPollInterval ti
 	watchersyncer.MinResyncInterval = minRetryInterval
 	watchersyncer.ListRetryInterval = listRetryInterval
 	watchersyncer.WatchPollInterval = watchPollInterval
+}
+
+func setMissingAPIBackoff(initial, max time.Duration) {
+	watchersyncer.MissingAPIInitialBackoff = initial
+	watchersyncer.MissingAPIMaxBackoff = max
 }
 
 // Fake converter used to cover error and update handling paths.
