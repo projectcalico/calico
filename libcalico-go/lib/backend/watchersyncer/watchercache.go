@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backoff"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -56,6 +57,12 @@ type watcherCache struct {
 	// crdInstalled tracks whether or not we've detected that the backing API for this
 	// resource type is installed in the cluster.
 	crdInstalled bool
+
+	// missingAPIBackoff produces the sleep duration applied when the backing API
+	// returns NotFound. Starts at MissingAPIInitialRetry and doubles each failure up to
+	// MissingAPIMaxRetry, so a CRD installed shortly after startup is picked up in
+	// seconds rather than after the full max interval. Reset on successful List.
+	missingAPIBackoff backoff.Exp
 }
 
 const (
@@ -68,10 +75,14 @@ var (
 	WatchPollInterval        = 5000 * time.Millisecond
 	DefaultWatchRetryTimeout = 600 * time.Second
 
-	// If the backing API is not installed, we consider ourselves in-sync but retry
-	// infrequently. If the API is eventually installed, we will resync after this timer pops.
-	// However, it's good practice to restart Calico when installing a new API to expedite this.
-	MissingAPIRetryTime = 30 * time.Minute
+	// If the backing API is not installed, we retry with exponential backoff:
+	// MissingAPIInitialRetry (first delay), doubling each failure, capped at
+	// MissingAPIMaxRetry. This keeps discovery cheap in the common case where
+	// the CRD appears within a few minutes of startup (e.g. KubeVirt installed
+	// right after Calico on a fresh cluster), while still decaying to infrequent
+	// polling for clusters that never install the optional API.
+	MissingAPIInitialRetry = 5 * time.Second
+	MissingAPIMaxRetry     = 30 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -95,6 +106,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		resyncBlockedUntil:   time.Now(),
 		watchRetryTimeout:    watchTimeout,
 		crdInstalled:         true, // Assume true until we detect otherwise.
+		missingAPIBackoff:    backoff.Exp{Initial: MissingAPIInitialRetry, Max: MissingAPIMaxRetry},
 	}
 }
 
@@ -203,6 +215,7 @@ func (wc *watcherCache) markInstalled() {
 		wc.logger.Info("Backing API has been installed")
 		wc.crdInstalled = true
 	}
+	wc.missingAPIBackoff.Reset()
 }
 
 // maybeResyncAndCreateWatcher loops performing resync processing until it successfully
@@ -254,15 +267,17 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				if kerrors.IsNotFound(err) {
 					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
-					// This is a valid long-term state, so we don't want to keep retrying rapidly.
-					// Consider ourselves in sync, and then sleep for a long time.
+					// Consider ourselves in sync, then apply exponential backoff so a CRD
+					// installed shortly after startup is picked up in seconds.
+					delay := wc.missingAPIBackoff.Next()
+					logger := wc.logger.WithField("retryAfter", delay)
 					if !wc.hasSynced {
-						wc.logger.Info("Backing API not installed, marking as in-sync and retrying later.")
+						logger.Info("Backing API not installed, marking as in-sync and retrying later.")
 						wc.finishResync()
 					} else {
-						wc.logger.Debug("Backing API still not installed, retrying later.")
+						logger.Debug("Backing API still not installed, retrying later.")
 					}
-					wc.resyncBlockedUntil = time.Now().Add(MissingAPIRetryTime)
+					wc.resyncBlockedUntil = time.Now().Add(delay)
 					wc.crdInstalled = false
 					continue
 				}
