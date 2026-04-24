@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/backoff"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -57,11 +58,11 @@ type watcherCache struct {
 	// resource type is installed in the cluster.
 	crdInstalled bool
 
-	// missingAPIBackoff holds the current sleep duration applied when the backing API
+	// missingAPIBackoff produces the sleep duration applied when the backing API
 	// returns NotFound. Starts at MissingAPIInitialRetry and doubles each failure up to
 	// MissingAPIMaxRetry, so a CRD installed shortly after startup is picked up in
-	// seconds rather than after the full max interval. Reset to 0 on successful List.
-	missingAPIBackoff time.Duration
+	// seconds rather than after the full max interval. Reset on successful List.
+	missingAPIBackoff backoff.Exp
 }
 
 const (
@@ -105,6 +106,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		resyncBlockedUntil:   time.Now(),
 		watchRetryTimeout:    watchTimeout,
 		crdInstalled:         true, // Assume true until we detect otherwise.
+		missingAPIBackoff:    backoff.Exp{Initial: MissingAPIInitialRetry, Max: MissingAPIMaxRetry},
 	}
 }
 
@@ -213,7 +215,7 @@ func (wc *watcherCache) markInstalled() {
 		wc.logger.Info("Backing API has been installed")
 		wc.crdInstalled = true
 	}
-	wc.missingAPIBackoff = 0
+	wc.missingAPIBackoff.Reset()
 }
 
 // maybeResyncAndCreateWatcher loops performing resync processing until it successfully
@@ -265,30 +267,17 @@ func (wc *watcherCache) maybeResyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				if kerrors.IsNotFound(err) {
 					// The resource type doesn't exist yet.  This is possible if the CRD backing this API has not been installed.
-					// This is a valid long-term state, so we don't want to keep retrying rapidly.
-					// Consider ourselves in sync, then apply exponential backoff — start short so a CRD
-					// installed shortly after startup is picked up quickly, doubling up to MissingAPIMaxRetry.
-					// Grow the backoff: start at initial (clamped to max in case of
-					// misconfiguration), then saturate-double so the cap is honored even if
-					// MissingAPIMaxRetry is ever increased toward the int64 limit.
-					if wc.missingAPIBackoff == 0 {
-						wc.missingAPIBackoff = MissingAPIInitialRetry
-						if wc.missingAPIBackoff > MissingAPIMaxRetry {
-							wc.missingAPIBackoff = MissingAPIMaxRetry
-						}
-					} else if wc.missingAPIBackoff > MissingAPIMaxRetry/2 {
-						wc.missingAPIBackoff = MissingAPIMaxRetry
-					} else {
-						wc.missingAPIBackoff *= 2
-					}
-					logger := wc.logger.WithField("retryAfter", wc.missingAPIBackoff)
+					// Consider ourselves in sync, then apply exponential backoff so a CRD
+					// installed shortly after startup is picked up in seconds.
+					delay := wc.missingAPIBackoff.Next()
+					logger := wc.logger.WithField("retryAfter", delay)
 					if !wc.hasSynced {
 						logger.Info("Backing API not installed, marking as in-sync and retrying later.")
 						wc.finishResync()
 					} else {
 						logger.Debug("Backing API still not installed, retrying later.")
 					}
-					wc.resyncBlockedUntil = time.Now().Add(wc.missingAPIBackoff)
+					wc.resyncBlockedUntil = time.Now().Add(delay)
 					wc.crdInstalled = false
 					continue
 				}
