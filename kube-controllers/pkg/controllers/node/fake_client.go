@@ -282,12 +282,14 @@ func (f *fakeNodeClient) Watch(ctx context.Context, opts options.ListOptions) (w
 // fakeIPAMClient implements ipam.Interface for testing purposes.
 type fakeIPAMClient struct {
 	sync.Mutex
+	config             ipam.IPAMConfig
 	affinitiesReleased map[string]bool
 	handlesReleased    map[string]bool
 	// Tracking for UpgradeHost calls
 	upgradeCalls     int
 	upgradeNodeNames []string
 	upgradeErrors    []error // returned in order on successive calls
+	garbageCollected bool
 
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
@@ -419,7 +421,7 @@ func (f *fakeIPAMClient) ReleasePoolAffinities(ctx context.Context, pool cnet.IP
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
 func (f *fakeIPAMClient) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error) {
-	panic("not implemented") // TODO: Implement
+	return &f.config, nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only
@@ -447,6 +449,13 @@ func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtiliz
 // It returns IPv4, IPv6 block CIDR and any error encountered.
 func (f *fakeIPAMClient) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.IPNet, *cnet.IPNet, error) {
 	panic("not implemented") // TODO: Implement
+}
+
+func (f *fakeIPAMClient) GarbageCollectBlock(ctx context.Context, config *ipam.IPAMConfig, kvp *model.KVPair) error {
+	f.Lock()
+	defer f.Unlock()
+	f.garbageCollected = true
+	return nil
 }
 
 func (c *fakeIPAMClient) UpgradeHost(ctx context.Context, nodeName string) error {
