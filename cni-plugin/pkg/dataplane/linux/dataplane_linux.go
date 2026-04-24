@@ -16,6 +16,7 @@ package linux
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -47,6 +48,7 @@ type LinuxDataplane struct {
 	allowIPForwarding bool
 	mtu               int
 	queues            int
+	deviceType        string
 	logger            *logrus.Entry
 }
 
@@ -55,6 +57,7 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *LinuxDataplane
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
 		queues:            conf.NumQueues,
+		deviceType:        conf.DeviceType,
 		logger:            logger,
 	}
 }
@@ -141,17 +144,16 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 		la.MTU = d.mtu
 		la.NumTxQueues = d.queues
 		la.NumRxQueues = d.queues
-		veth := &netlink.Veth{
-			LinkAttrs:     la,
-			PeerName:      hostVethName,
-			PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
-		}
 
 		var expectedHostSideIPv6Addr net.IP
-		if err := netlink.LinkAdd(veth); err != nil {
-			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
+		createdType, err := d.addWorkloadLink(la, hostVethName, hostNS)
+		if err != nil {
 			return err
 		}
+		d.logger.WithFields(logrus.Fields{
+			"type":      createdType,
+			"requested": d.deviceType,
+		}).Info("Created pod interface")
 
 		hostVeth, err := hostNlHandle.LinkByName(hostVethName)
 		if err != nil {
@@ -589,6 +591,61 @@ func (d *LinuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error 
 		}
 	}
 	return nil
+}
+
+// addWorkloadLink creates the virtual device pair (veth or netkit L2) with the
+// container end in the current (container) netns and the host end atomically
+// placed in hostNS. When d.deviceType requests netkit but the kernel does not
+// support it, it silently falls back to veth. Returns the actual type created.
+func (d *LinuxDataplane) addWorkloadLink(la netlink.LinkAttrs, hostName string, hostNS ns.NetNS) (string, error) {
+	if d.deviceType == types.DeviceTypeNetkit {
+		nk := &netlink.Netkit{
+			LinkAttrs:  la,
+			Mode:       netlink.NETKIT_MODE_L2,
+			Policy:     netlink.NETKIT_POLICY_FORWARD,
+			PeerPolicy: netlink.NETKIT_POLICY_FORWARD,
+		}
+		peerAttrs := netlink.NewLinkAttrs()
+		peerAttrs.Name = hostName
+		peerAttrs.Namespace = netlink.NsFd(int(hostNS.Fd()))
+		nk.SetPeerAttrs(&peerAttrs)
+
+		err := netlink.LinkAdd(nk)
+		if err == nil {
+			return types.DeviceTypeNetkit, nil
+		}
+		if !isNetkitUnsupported(err) {
+			d.logger.WithError(err).Errorf("Error adding netkit link %+v", nk)
+			return "", err
+		}
+		d.logger.WithError(err).Info(
+			"netkit not supported on this kernel; falling back to veth")
+	}
+
+	veth := &netlink.Veth{
+		LinkAttrs:     la,
+		PeerName:      hostName,
+		PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
+	}
+	if err := netlink.LinkAdd(veth); err != nil {
+		d.logger.Errorf("Error adding veth %+v: %s", veth, err)
+		return "", err
+	}
+	return types.DeviceTypeVeth, nil
+}
+
+// isNetkitUnsupported reports whether the error returned by netlink.LinkAdd on a
+// netkit device indicates that the kernel does not know about the netkit link
+// kind. Narrowed to errnos the kernel is known to emit for an unrecognised link
+// type; anything broader risks masking real failures (EEXIST, EPERM, etc.).
+func isNetkitUnsupported(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	// On Linux, syscall.EOPNOTSUPP and syscall.ENOTSUP alias the same
+	// value (95), so one case covers both.
+	return errno == syscall.EOPNOTSUPP
 }
 
 // writeProcSys takes the sysctl path and a string value to set i.e. "0" or "1" and sets the sysctl.
