@@ -18,7 +18,7 @@ exclude:
     - label: Disruptive
       reason: "breaks cluster state for other parallel tests"
 
-    - label: RunsOnAWS
+    - label: RequiresAWS
       reason: "requires AWS-specific infrastructure (VPC routing layout, etc.)"
 
     - label: RequiresBGPMesh
