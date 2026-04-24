@@ -211,8 +211,25 @@ func (t *TokenRefresher) startTokenFileWatcher() (<-chan fsnotify.Event, func())
 		_ = watcher.Close()
 		return nil, func() {}
 	}
+
+	// fsnotify requires both Events and Errors channels to be drained.
+	// Leaving Errors unread can block the watcher's internal goroutine and
+	// stop further events from being delivered. Spawn a drainer that exits
+	// naturally when the watcher is closed — the Errors channel closes too.
+	errorsDone := make(chan struct{})
+	go func() {
+		defer close(errorsDone)
+		for err := range watcher.Errors {
+			logrus.WithError(err).WithField("dir", dir).Warn("fsnotify error on service account token directory")
+		}
+	}()
+
 	logrus.WithField("dir", dir).Info("Watching service account token directory for rotation")
-	return watcher.Events, func() { _ = watcher.Close() }
+	cleanup := func() {
+		_ = watcher.Close()
+		<-errorsDone
+	}
+	return watcher.Events, cleanup
 }
 
 // drainEvents non-blockingly drains any events queued on ch.
