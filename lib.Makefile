@@ -361,8 +361,37 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
-# Re-use the local user's GOCACHE directory, if there is one; otherwise, use the old .go-pkg-cache dir
-LOCAL_GO_PKG_CACHE ?= $(if $(shell go env GOCACHE),$(shell go env GOCACHE),$(REPOROOT)/.go-pkg-cache)
+# Set the repository root
+REPOROOT := $(shell git rev-parse --show-toplevel)
+
+# Set the default go cache path if we can't find one automatically
+DEFAULT_GO_CACHE_PATH := $(REPOROOT)/.go-pkg-cache
+
+# Detect what path to use as the user's go cache path.
+# 
+# Setting LOCAL_GO_PKG_CACHE in your environment overrides this
+# unconditionally; setting GOCACHE overrides it if the value
+# you provide passes the sanity checks below.
+
+# Set the path (outside of containers) to mount as the go cache path
+GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
+# If the result is empty, skip it
+ifneq ($(GOENV_GOCACHE),)
+# If the result is 'off', skip that
+ifneq ($(GOENV_GOCACHE),off)
+# If the result isn't an absolute path, or if it
+# doesn't start with ./ or ../, then skip it
+ifneq ($(filter /% ./% ../%,$(GOENV_GOCACHE)),)
+LOCAL_GO_PKG_CACHE ?= $(GOENV_GOCACHE)
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # filter
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # off
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # blank
 
 DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
