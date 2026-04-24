@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/bpf/proxy"
-	"github.com/projectcalico/calico/lib/std/ptr"
 )
 
 func log(format string, a ...any) {
@@ -96,22 +96,22 @@ var _ = Describe("BPF Proxy", func() {
 		AddressType: discovery.AddressTypeIPv4,
 		Ports: []discovery.EndpointPort{
 			{
-				Name:     ptr.ToPtr("1234"),
-				Port:     ptr.ToPtr(int32(1234)),
-				Protocol: ptr.ToPtr(v1.ProtocolTCP),
+				Name:     ptr.To("1234"),
+				Port:     ptr.To(int32(1234)),
+				Protocol: ptr.To(v1.ProtocolTCP),
 			},
 		},
 		Endpoints: []discovery.Endpoint{
 			{
 				Addresses: []string{"10.1.2.1"},
 				Conditions: discovery.EndpointConditions{
-					Ready: ptr.ToPtr(true),
+					Ready: ptr.To(true),
 				},
 			},
 			{
 				Addresses: []string{"10.1.2.2"},
 				Conditions: discovery.EndpointConditions{
-					Ready: ptr.ToPtr(true),
+					Ready: ptr.To(true),
 				},
 			},
 		},
@@ -145,16 +145,16 @@ var _ = Describe("BPF Proxy", func() {
 		AddressType: discovery.AddressTypeIPv4,
 		Ports: []discovery.EndpointPort{
 			{
-				Port:     ptr.ToPtr(int32(1231)),
-				Name:     ptr.ToPtr("1221"),
-				Protocol: ptr.ToPtr(v1.ProtocolTCP),
+				Port:     ptr.To(int32(1231)),
+				Name:     ptr.To("1221"),
+				Protocol: ptr.To(v1.ProtocolTCP),
 			},
 		},
 		Endpoints: []discovery.Endpoint{
 			{
 				Addresses: []string{"10.1.2.11", "10.1.2.22"},
 				Conditions: discovery.EndpointConditions{
-					Ready: ptr.ToPtr(true),
+					Ready: ptr.To(true),
 				},
 			},
 		},
@@ -251,16 +251,16 @@ var _ = Describe("BPF Proxy", func() {
 						AddressType: discovery.AddressTypeIPv4,
 						Ports: []discovery.EndpointPort{
 							{
-								Port:     ptr.ToPtr(int32(1221)),
-								Name:     ptr.ToPtr("1221"),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Port:     ptr.To(int32(1221)),
+								Name:     ptr.To("1221"),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.11"},
 								Conditions: discovery.EndpointConditions{
-									Ready: ptr.ToPtr(true),
+									Ready: ptr.To(true),
 								},
 							},
 						},
@@ -307,34 +307,34 @@ var _ = Describe("BPF Proxy", func() {
 						AddressType: discovery.AddressTypeIPv4,
 						Ports: []discovery.EndpointPort{
 							{
-								Name:     ptr.ToPtr("http"),
-								Port:     ptr.ToPtr(int32(80)),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Name:     ptr.To("http"),
+								Port:     ptr.To(int32(80)),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 							{
-								Name:     ptr.ToPtr("http-alt"),
-								Port:     ptr.ToPtr(int32(8080)),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Name:     ptr.To("http-alt"),
+								Port:     ptr.To(int32(8080)),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 							{
-								Name:     ptr.ToPtr("https"),
-								Port:     ptr.ToPtr(int32(443)),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Name:     ptr.To("https"),
+								Port:     ptr.To(int32(443)),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.111"},
-								NodeName:  ptr.ToPtr("testnode"),
+								NodeName:  ptr.To("testnode"),
 								Conditions: discovery.EndpointConditions{
-									Ready: ptr.ToPtr(true),
+									Ready: ptr.To(true),
 								},
 							},
 							{
 								Addresses: []string{"10.1.2.222"},
-								NodeName:  ptr.ToPtr("anothertestnode"),
+								NodeName:  ptr.To("anothertestnode"),
 								Conditions: discovery.EndpointConditions{
-									Ready: ptr.ToPtr(true),
+									Ready: ptr.To(true),
 								},
 							},
 						},
@@ -373,16 +373,16 @@ var _ = Describe("BPF Proxy", func() {
 						AddressType: discovery.AddressTypeIPv4,
 						Ports: []discovery.EndpointPort{
 							{
-								Name:     ptr.ToPtr("666"),
-								Port:     ptr.ToPtr(int32(666)),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Name:     ptr.To("666"),
+								Port:     ptr.To(int32(666)),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.244"},
 								Conditions: discovery.EndpointConditions{
-									Ready: ptr.ToPtr(true),
+									Ready: ptr.To(true),
 								},
 							},
 						},
@@ -426,16 +426,16 @@ var _ = Describe("BPF Proxy", func() {
 						AddressType: discovery.AddressTypeIPv4,
 						Ports: []discovery.EndpointPort{
 							{
-								Name:     ptr.ToPtr("1234"),
-								Port:     ptr.ToPtr(int32(1234)),
-								Protocol: ptr.ToPtr(v1.ProtocolTCP),
+								Name:     ptr.To("1234"),
+								Port:     ptr.To(int32(1234)),
+								Protocol: ptr.To(v1.ProtocolTCP),
 							},
 						},
 						Endpoints: []discovery.Endpoint{
 							{
 								Addresses: []string{"10.1.2.1"},
 								Conditions: discovery.EndpointConditions{
-									Ready: ptr.ToPtr(true),
+									Ready: ptr.To(true),
 								},
 							},
 						},
@@ -504,9 +504,9 @@ var _ = Describe("BPF Proxy", func() {
 					AddressType: discovery.AddressTypeIPv4,
 					Ports: []discovery.EndpointPort{
 						{
-							Name:     ptr.ToPtr("1234"),
-							Port:     ptr.ToPtr(int32(1234)),
-							Protocol: ptr.ToPtr(v1.ProtocolTCP),
+							Name:     ptr.To("1234"),
+							Port:     ptr.To(int32(1234)),
+							Protocol: ptr.To(v1.ProtocolTCP),
 						},
 					},
 					Endpoints: []discovery.Endpoint{
@@ -514,21 +514,21 @@ var _ = Describe("BPF Proxy", func() {
 							Addresses: []string{"10.1.2.1"},
 							NodeName:  &testNodeName,
 							Conditions: discovery.EndpointConditions{
-								Ready: ptr.ToPtr(true),
+								Ready: ptr.To(true),
 							},
 						},
 						{
 							Addresses: []string{"10.1.2.2"},
 							NodeName:  &testNodeNameOther,
 							Conditions: discovery.EndpointConditions{
-								Ready: ptr.ToPtr(true),
+								Ready: ptr.To(true),
 							},
 						},
 						{
 							Addresses: []string{"10.1.2.3"},
 							NodeName:  nil,
 							Conditions: discovery.EndpointConditions{
-								Ready: ptr.ToPtr(true),
+								Ready: ptr.To(true),
 							},
 						},
 					},
@@ -568,8 +568,8 @@ var _ = Describe("BPF Proxy", func() {
 
 				By("placing one endpoint to terminating state")
 
-				testSvcEpsSlice.Endpoints[0].Conditions.Ready = ptr.ToPtr(false)
-				testSvcEpsSlice.Endpoints[0].Conditions.Terminating = ptr.ToPtr(true)
+				testSvcEpsSlice.Endpoints[0].Conditions.Ready = ptr.To(false)
+				testSvcEpsSlice.Endpoints[0].Conditions.Terminating = ptr.To(true)
 				err := k8s.Tracker().Update(discovery.SchemeGroupVersion.WithResource("endpointslices"),
 					testSvcEpsSlice, "default")
 				Expect(err).NotTo(HaveOccurred())

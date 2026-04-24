@@ -16,7 +16,9 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
+	"bytes"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"
@@ -228,46 +230,58 @@ func main() {
 				}()
 			}
 
-			decoder := json.NewDecoder(conn)
+			connReader := bufio.NewReader(conn)
 			w := bufio.NewWriter(conn)
+
+			// Use a long-lived jsontext.Decoder so we can stream multiple JSON
+			// values from the same connection. json.UnmarshalRead is NOT a
+			// drop-in for json.NewDecoder.Decode in a loop — it expects the
+			// reader to contain exactly one top-level JSON value and errors
+			// out with "unexpected EOF" or "invalid character after top-level
+			// value" on back-to-back messages.
+			dec := jsontext.NewDecoder(connReader)
 
 			for {
 				var request connectivity.Request
 
-				err := decoder.Decode(&request)
+				err := json.UnmarshalDecode(dec, &request)
 				if err != nil {
 					log.WithError(err).Error("failed to read request")
 					return
 				}
 
 				if request.SendSize > 0 {
-					rcv := request.SendSize
-					buff := make([]byte, 4096)
-
-					r := decoder.Buffered()
-
-					for rcv > 0 {
-						n, err := r.Read(buff)
-						rcv -= n
-						if err == io.EOF {
-							break
-						}
+					// Consume exactly request.SendSize bytes of raw payload.
+					// Two subtleties to handle correctly:
+					//
+					//   1. The jsontext.Decoder may have read bytes from
+					//      connReader past the end of the request JSON
+					//      while parsing — those bytes are the start of
+					//      the SendSize payload and sit in the decoder's
+					//      internal buffer. Surface them via UnreadBuffer
+					//      and feed them back into the stream first.
+					//   2. Reads on connReader are not capped to the
+					//      payload length; left uncapped, a single Read
+					//      could return bytes belonging to the next
+					//      request JSON and desynchronize the stream.
+					//      io.LimitReader bounds the total to SendSize.
+					//
+					// After consuming, rebuild connReader and dec so
+					// subsequent iterations continue from the correct
+					// stream position.
+					unread := dec.UnreadBuffer()
+					src := io.MultiReader(bytes.NewReader(unread), connReader)
+					got, err := io.Copy(io.Discard, io.LimitReader(src, int64(request.SendSize)))
+					if err != nil {
+						log.WithError(err).Errorf("Reading from connection failed. %d bytes too short", int64(request.SendSize)-got)
+						return
 					}
-
-					for rcv > 0 {
-						var err error
-						n := 0
-						if rcv < 4096 {
-							n, err = conn.Read(buff[:rcv])
-						} else {
-							n, err = conn.Read(buff)
-						}
-						rcv -= n
-						if err != nil {
-							log.Errorf("Reading from connection failed. %d bytes too short\n", rcv)
-							return
-						}
+					if got < int64(request.SendSize) {
+						log.Errorf("Short read of SendSize payload: got %d, wanted %d", got, request.SendSize)
+						return
 					}
+					connReader = bufio.NewReader(src)
+					dec = jsontext.NewDecoder(connReader)
 				}
 
 				seenSrc := "<unknown>"

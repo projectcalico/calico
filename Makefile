@@ -76,6 +76,9 @@ check-mockery-config:
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
 
+check-encoding-json-v2:
+	./hack/check-encoding-json-v2.sh
+
 check-ocp-no-crds:
 	@echo "Checking for files in manifests/ocp with CustomResourceDefinitions"
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi

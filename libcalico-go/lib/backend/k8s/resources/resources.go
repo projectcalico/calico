@@ -15,7 +15,7 @@
 package resources
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -75,8 +75,12 @@ func SetK8sAnnotationsFromCalicoMetadata(k8sRes Resource, calicoRes Resource) {
 	if a == nil {
 		a = make(map[string]string)
 	}
+	// Deterministic must stay on both Marshal calls below: the output is
+	// stored as the VALUE of a Kubernetes annotation. Non-deterministic
+	// map key ordering would make every reconcile see a "changed"
+	// annotation and rewrite it, causing needless API churn.
 	if labels := calicoRes.GetObjectMeta().GetLabels(); len(labels) > 0 {
-		if lann, err := json.Marshal(labels); err != nil {
+		if lann, err := json.Marshal(labels, json.Deterministic(true)); err != nil {
 			log.WithError(err).Warning("unable to store labels as an annotation")
 		} else {
 			a[labelsAnnotation] = string(lann)
@@ -86,7 +90,7 @@ func SetK8sAnnotationsFromCalicoMetadata(k8sRes Resource, calicoRes Resource) {
 		delete(a, labelsAnnotation)
 	}
 	if annotations := calicoRes.GetObjectMeta().GetAnnotations(); len(annotations) > 0 {
-		if aann, err := json.Marshal(annotations); err != nil {
+		if aann, err := json.Marshal(annotations, json.Deterministic(true)); err != nil {
 			log.WithError(err).Warning("unable to store annotations as an annotation")
 		} else {
 			a[annotationsAnnotation] = string(aann)

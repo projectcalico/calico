@@ -788,3 +788,41 @@ func TestVersionParse(t *testing.T) {
 		Expect(ver1.Compare(ver2)).To(Equal(test.expected))
 	}
 }
+
+// TestIterMapCmdOutputDuplicateNames verifies that bpftool output containing
+// duplicate empty-string member names (from anonymous C unions in conntrack
+// BTF) parses successfully under encoding/json/v2. This reproduces the shape
+// of `bpftool --json --pretty map dump pinned /sys/fs/bpf/tc/globals/cali_v4_ct4`
+// output; v2 rejects duplicate names by default, but we only consume the
+// top-level key/value arrays and tolerate duplicates inside the ignored
+// "formatted" block.
+func TestIterMapCmdOutputDuplicateNames(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Abridged capture: one entry, two anonymous unions (duplicate "" keys)
+	// nested within formatted.value, matching the conntrack map layout.
+	output := []byte(`[{
+	    "key": ["0x06","0x00","0x00","0x00"],
+	    "value": ["0xaa","0xbb","0xcc","0xdd"],
+	    "formatted": {
+	        "key": {"protocol": 6},
+	        "value": {
+	            "flags": 0,
+	            "": {
+	                "": {"a_to_b": {"bytes": 1268}},
+	                "": {"nat_sport": 19}
+	            }
+	        }
+	    }
+	}]`)
+
+	var gotKeys, gotVals [][]byte
+	err := IterMapCmdOutput(output, func(k, v []byte) {
+		gotKeys = append(gotKeys, k)
+		gotVals = append(gotVals, v)
+	})
+	Expect(err).NotTo(HaveOccurred(), "IterMapCmdOutput should tolerate duplicate names in bpftool's formatted block")
+	Expect(gotKeys).To(HaveLen(1))
+	Expect(gotKeys[0]).To(Equal([]byte{0x06, 0x00, 0x00, 0x00}))
+	Expect(gotVals[0]).To(Equal([]byte{0xaa, 0xbb, 0xcc, 0xdd}))
+}
