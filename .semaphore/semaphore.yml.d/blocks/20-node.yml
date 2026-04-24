@@ -55,6 +55,11 @@
               - s390x
         commands:
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+          # Cache the freshly-built image so the CD promotion pipeline can load
+          # it via .semaphore/cd-load-or-build instead of rebuilding from
+          # source. Only one tag is produced per arch here; FIPS and amd64 are
+          # produced by the "Build: node image" block in 10-prerequisites.yml.
+          - ../.semaphore/cache-built-image node:latest-$ARCH cd-node-$ARCH.tar.zst
       - name: "Node: build Windows archive"
         commands:
           - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive

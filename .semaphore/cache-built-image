@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Save a locally-built Docker image to the per-workflow GCS cache so that later
+# jobs in the same workflow (e.g. CD promotions) can load it instead of
+# rebuilding from source.
+#
+# Usage: cache-built-image <docker-tag> <gcs-key>
+# Example: cache-built-image node:latest-amd64 cd-node-amd64.tar.zst
+
+set -euo pipefail
+
+if [ "$#" -ne 2 ]; then
+    echo "usage: $0 <docker-tag> <gcs-key>" >&2
+    exit 2
+fi
+
+image=$1
+gcs_key=$2
+
+: "${GCS_WORKFLOW_DIR:?GCS_WORKFLOW_DIR must be set}"
+
+tar_path="/tmp/${gcs_key%.zst}"
+docker save "$image" -o "$tar_path"
+zstd -3 --rm "$tar_path"
+gcloud storage cp "${tar_path}.zst" "${GCS_WORKFLOW_DIR}/${gcs_key}"
+rm -f "${tar_path}.zst"
