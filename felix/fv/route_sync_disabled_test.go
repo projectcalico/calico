@@ -115,8 +115,9 @@ var _ = infrastructure.DatastoreDescribe(
 					flag = "-6"
 				}
 				query := func() string {
-					out, _ := tc.Felixes[0].ExecOutput(
+					out, err := tc.Felixes[0].ExecOutput(
 						"ip", flag, "route", "show", "table", "all", addr, "dev", iface)
+					Expect(err).NotTo(HaveOccurred())
 					return out
 				}
 				Eventually(query, "5s", "500ms").Should(BeEmpty(),
