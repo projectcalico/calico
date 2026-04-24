@@ -1907,6 +1907,12 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, assertionTimeout, 100*time.Millisecond).Should(BeTrue(), "Affinity for dead-node should be released")
 	})
 
+	It("should garbage-collect blocks (deallocate released allocations)", func() {
+		fc := cli.(*FakeCalicoClient)
+		c.syncIPAM()
+		Expect(fc.ipamClient.(*fakeIPAMClient).garbageCollected).To(BeTrue())
+	})
+
 	Context("with a 1hr grace period", func() {
 		ns := "test-namespace"
 		podsNode1 := []v1.Pod{

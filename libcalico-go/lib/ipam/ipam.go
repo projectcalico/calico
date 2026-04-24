@@ -1386,6 +1386,17 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, config *IPAMConfig,
 	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
+func (c ipamClient) GarbageCollectBlock(ctx context.Context, config *IPAMConfig, kvp *model.KVPair) error {
+	block := allocationBlock{kvp.Value.(*model.AllocationBlock)}
+	if block.garbageCollect(config.MinIPReclaimAgeSeconds) {
+		log.WithField("cidr", kvp.Key).Debug("Block GC: writing back GC'd block")
+		_, err := c.blockReaderWriter.updateBlock(ctx, kvp)
+		return err
+	}
+
+	return nil
+}
+
 func (c ipamClient) assignFromExistingBlock(ctx context.Context, config *IPAMConfig, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter, maxAlloc int) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
 	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "block": blockCIDR})
