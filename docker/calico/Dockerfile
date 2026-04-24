@@ -1,7 +1,7 @@
-ARG CALICO_BASE
-ARG UBI_IMAGE
+ARG CALICO_BASE=calico/base:latest
+ARG UBI_IMAGE=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-FROM ${UBI_IMAGE} AS builder
+FROM --platform=$BUILDPLATFORM ${UBI_IMAGE} AS builder
 
 ARG TARGETARCH
 ARG BIN_DIR
