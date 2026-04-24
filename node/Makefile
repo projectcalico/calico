@@ -403,8 +403,13 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 .PHONY: ci
 ci: static-checks ut image image-windows
 
-## Deploys images to registry
-cd: image-all cd-common
+## Deploys images to registry. Pulls per-arch images from the workflow GCS cache
+## populated by the build blocks in the main pipeline; any cache miss falls back
+## to rebuilding that arch from source.
+cd: cd-load-or-build cd-common
+
+cd-load-or-build:
+	$(REPO_ROOT)/.semaphore/cd-load-or-build node $(NODE_IMAGE) $(VALIDARCHES) --fips amd64
 
 ###############################################################################
 # Release
