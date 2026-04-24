@@ -113,7 +113,7 @@ Description:
 			if parsedArgs["--force"] != nil {
 				force = parsedArgs["--force"].(bool)
 			}
-			err = releaseFromReports(ctx, client, force, reportFiles, version)
+			err = ReleaseFromReports(ctx, client, force, reportFiles, version)
 			if err != nil {
 				return err
 			}
@@ -147,7 +147,7 @@ Description:
 	return nil
 }
 
-func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
+func ReleaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
 	// Grab the cluster info for checking against the report metadata.
 	clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
