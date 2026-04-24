@@ -3,8 +3,12 @@ include ../metadata.mk
 PACKAGE_NAME=github.com/projectcalico/calico/e2e
 include ../lib.Makefile
 
+.SECONDEXPANSION:
+
 # libbpf headers are needed because the e2e tests import felix/bpf packages
-# that use CGO with libbpf.h.
+# that use CGO with libbpf.h. Only the amd64 build compiles the //go:build cgo
+# path in pkg/utils/bpf.go; other arches default to CGO off (lib.Makefile) and
+# compile the bpf_stub.go variant, so libbpf is not needed.
 LIBBPF_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl/libbpf/src
 BPFGPL_CONTAINER_PATH=/go/src/github.com/projectcalico/calico/felix/bpf-gpl
 LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
@@ -23,25 +27,22 @@ SRC_FILES=$(shell find pkg cmd -name '*.go')
 
 build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test $(SRC_FILES)
 
-bin/k8s/e2e.test: $(LIBBPF_A) $(SRC_FILES)
-	mkdir -p bin
-	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/k8s -c -o $@
+bin/k8s/e2e.test: bin/k8s/e2e-linux-$(ARCH).test
+	ln -f $< $@
 
 bin/clusternetworkpolicy/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
 
-# Multi-arch e2e binary targets. Each architecture gets its own binary, built
-# via cross-compilation inside the calico/go-build container. Uses a pattern
-# rule so that any arch in VALIDARCHES (including ppc64le, s390x) works.
-# The recursive make sets ARCH so that DOCKER_RUN passes the correct GOARCH.
-bin/k8s/e2e-linux-%.test: $(SRC_FILES)
+# Per-arch binaries. Secondary expansion gates the libbpf prereq on the stem
+# so only amd64 demands it; other arches get just the source prereqs.
+bin/k8s/e2e-linux-%.test: $$(if $$(filter amd64,$$*),$$(LIBBPF_A)) $(SRC_FILES)
 	mkdir -p bin/k8s
 	$(MAKE) build-e2e-binary ARCH=$* OUTPUT=$@
 
 .PHONY: build-e2e-binary
 build-e2e-binary:
-	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/k8s -c -o $(OUTPUT)
+	$(if $(filter amd64,$(ARCH)),$(DOCKER_RUN_CGO),$(DOCKER_RUN)) $(CALICO_BUILD) go test ./cmd/k8s -c -o $(OUTPUT)
 
 .PHONY: build-all
 build-all: $(addprefix bin/k8s/e2e-linux-,$(addsuffix .test,$(VALIDARCHES)))
