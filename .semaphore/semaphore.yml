@@ -676,7 +676,7 @@ blocks:
             # tag) so the publish pipeline's cd-load-or-build can skip the amd64
             # rebuild. The tarball above carries "calico/node:latest-amd64", which
             # is what load-cached-images expects for downstream tests.
-            - ../.semaphore/cache-built-image node:latest-amd64 cd-node-amd64.tar.zst
+            - .semaphore/cache-built-image node:latest-amd64 cd-node-amd64.tar.zst
   - name: "Build: whisker image"
     # Whisker is a TypeScript/React frontend — no Go build cache to populate.
     run:
