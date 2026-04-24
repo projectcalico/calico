@@ -415,15 +415,6 @@ blocks:
             - LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
             - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
             - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
-            # TEMPORARY for PR #12225: warm master's "calico" build cache from this
-            # PR so downstream PR-consumer blocks get a realistic warm-cache
-            # measurement. REVERT BEFORE MERGE — once this lands on master, the
-            # normal branch-build epilogue repopulates the cache.
-            - |-
-              pushd $HOME
-              tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
-              gcloud storage cp /tmp/build-cache.tar.zstd "${GCS_CACHE_DIR}/master/build-cache-calico.tar.zstd"
-              popd
   - name: "Build: node image"
     # Builds the node image on top of the combined calico binary. The underlying
     # Go state lives in the "calico" build cache populated by "Build: calico
