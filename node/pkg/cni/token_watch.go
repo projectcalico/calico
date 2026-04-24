@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -39,10 +41,24 @@ type TokenRefresher struct {
 	minTokenRetryDuration  time.Duration
 	defaultRefreshFraction time.Duration
 
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 
 	namespace          string
 	serviceAccountName string
+
+	// tokenFilePath is the path to the in-pod projected service account token
+	// that this TokenRefresher uses (via the in-cluster client) to authenticate
+	// to the API server. The directory containing this file is watched with
+	// fsnotify so that the refresh loop wakes up immediately when kubelet
+	// rotates the projected token — otherwise an externally-invalidated CNI
+	// kubeconfig token can sit on disk for up to 12 hours before we notice.
+	// Overridable for tests.
+	tokenFilePath string
+
+	// watcherFactory builds the fsnotify events channel (and cleanup func)
+	// used by Run. Overridable for tests that need to inject a pre-closed or
+	// deterministic channel without setting up real fsnotify watches.
+	watcherFactory func() (<-chan fsnotify.Event, func())
 
 	tokenChan chan TokenUpdate
 	stopChan  chan struct{}
@@ -61,7 +77,7 @@ func NamespaceOfUsedServiceAccount() string {
 	return string(namespace)
 }
 
-func BuildClientSet() (*kubernetes.Clientset, error) {
+func BuildClientSet() (kubernetes.Interface, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
 	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
@@ -71,12 +87,12 @@ func BuildClientSet() (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(cfg)
 }
 
-func NewTokenRefresher(clientset *kubernetes.Clientset, namespace string, serviceAccountName string) *TokenRefresher {
+func NewTokenRefresher(clientset kubernetes.Interface, namespace string, serviceAccountName string) *TokenRefresher {
 	return NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, defaultCNITokenValiditySeconds, minTokenRetryDuration, defaultRefreshFraction)
 }
 
-func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
-	return &TokenRefresher{
+func NewTokenRefresherWithCustomTiming(clientset kubernetes.Interface, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
+	t := &TokenRefresher{
 		tokenSupported:         false,
 		tokenOnce:              &sync.Once{},
 		tokenValiditySeconds:   tokenValiditySeconds,
@@ -85,9 +101,12 @@ func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespac
 		clientset:              clientset,
 		namespace:              namespace,
 		serviceAccountName:     serviceAccountName,
+		tokenFilePath:          winutils.GetHostPath(tokenFile),
 		tokenChan:              make(chan TokenUpdate),
 		stopChan:               make(chan struct{}),
 	}
+	t.watcherFactory = t.startTokenFileWatcher
+	return t
 }
 
 func (t *TokenRefresher) UpdateToken() (TokenUpdate, error) {
@@ -124,6 +143,17 @@ func (t *TokenRefresher) Stop() {
 }
 
 func (t *TokenRefresher) Run() {
+	// Watch the directory containing our own projected service account token
+	// so that we wake up as soon as kubelet rotates it. Two common cases make
+	// this important: (a) a signing-key rotation invalidates every
+	// previously-issued token while the exp claim is still in the future, so
+	// the timer alone wouldn't notice until the next scheduled refresh (up to
+	// ~12 hours later); (b) kubelet may re-project the token faster than our
+	// refresh cadence, and picking up the new token promptly keeps the CNI
+	// kubeconfig as fresh as possible.
+	tokenRotated, cleanupWatcher := t.watcherFactory()
+	defer cleanupWatcher()
+
 	var nextExpiration time.Time
 	for {
 		tu, err := t.UpdateToken()
@@ -145,9 +175,76 @@ func (t *TokenRefresher) Run() {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.Debugf("Going to sleep for %s", sleepTime.String())
 		}
+		timer := time.NewTimer(sleepTime)
 		select {
-		case <-time.After(sleepTime):
+		case <-timer.C:
+		case ev, ok := <-tokenRotated:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			if !ok {
+				// Watcher was closed — fall back to timer-only behaviour.
+				tokenRotated = nil
+			} else {
+				logrus.WithField("event", ev.String()).Info("Projected service account token changed; refreshing CNI kubeconfig immediately")
+				// Drain any additional events the watcher may have queued so
+				// we don't thrash on a burst of rotations in quick succession.
+				drainEvents(tokenRotated)
+			}
 		case <-t.stopChan:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		}
+	}
+}
+
+// startTokenFileWatcher sets up an fsnotify watcher on the directory
+// containing the projected service account token. It returns a receive-only
+// events channel and a cleanup func. On any error it logs and returns a nil
+// channel plus a no-op cleanup so the caller can fall back to timer-only
+// behaviour — this preserves the original semantics on platforms where
+// fsnotify isn't supported.
+func (t *TokenRefresher) startTokenFileWatcher() (<-chan fsnotify.Event, func()) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		logrus.WithError(err).Warn("Failed to create fsnotify watcher; CNI token refresh will rely on timer only")
+		return nil, func() {}
+	}
+	dir := filepath.Dir(t.tokenFilePath)
+	if err := watcher.Add(dir); err != nil {
+		logrus.WithError(err).WithField("dir", dir).Warn("Failed to watch service account token directory; CNI token refresh will rely on timer only")
+		_ = watcher.Close()
+		return nil, func() {}
+	}
+
+	// fsnotify requires both Events and Errors channels to be drained.
+	// Leaving Errors unread can block the watcher's internal goroutine and
+	// stop further events from being delivered. Spawn a drainer that exits
+	// naturally when the watcher is closed — the Errors channel closes too.
+	errorsDone := make(chan struct{})
+	go func() {
+		defer close(errorsDone)
+		for err := range watcher.Errors {
+			logrus.WithError(err).WithField("dir", dir).Warn("fsnotify error on service account token directory")
+		}
+	}()
+
+	logrus.WithField("dir", dir).Info("Watching service account token directory for rotation")
+	cleanup := func() {
+		_ = watcher.Close()
+		<-errorsDone
+	}
+	return watcher.Events, cleanup
+}
+
+// drainEvents non-blockingly drains any events queued on ch.
+func drainEvents(ch <-chan fsnotify.Event) {
+	for {
+		select {
+		case <-ch:
+		default:
 			return
 		}
 	}
@@ -176,7 +273,7 @@ func (t *TokenRefresher) getSleepTime(nextExpiration *time.Time) time.Duration {
 	return sleepTime
 }
 
-func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) bool {
+func (t *TokenRefresher) tokenRequestSupported(clientset kubernetes.Interface) bool {
 	t.tokenOnce.Do(func() {
 		resources, err := clientset.Discovery().ServerResourcesForGroupVersion("v1")
 		if err != nil {
