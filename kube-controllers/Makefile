@@ -70,11 +70,18 @@ endif
 # to interact with docker.
 TEST_BINARIES=$(addsuffix /ut.test,$(WHAT))
 
+# Install gotestsum using the version pinned by metadata.mk, building it with
+# the Go toolchain from the calico/go-build container for consistency. The
+# binary runs on the host because run-uts invokes test binaries outside the
+# container so they can talk to docker.
+bin/gotestsum:
+	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
 # calico-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
 test: ut
-ut fv: $(TEST_BINARIES) setup-envtest
+ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest bin/gotestsum
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -82,6 +89,7 @@ ut fv: $(TEST_BINARIES) setup-envtest
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
+		   GOTESTSUM=$(abspath bin/gotestsum) \
 		   ./run-uts $(WHAT)
 
 # Produce test binaries for each package that needs them.
