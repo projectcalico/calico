@@ -414,52 +414,10 @@ current-context: calico-context`
 	// Replace the placeholders.
 	data := fmt.Sprintf(template, cfg.Host, base64.StdEncoding.EncodeToString(cfg.CAData), token)
 
-	path := winutils.GetHostPath(kubeconfigPath)
-	if err := writeFileAtomic(path, []byte(data), 0600); err != nil {
+	// Write the filled out config to disk.
+	if err := os.WriteFile(winutils.GetHostPath(kubeconfigPath), []byte(data), 0600); err != nil {
 		logrus.WithError(err).Error("Failed to write CNI plugin kubeconfig file")
 		return
 	}
-	logrus.WithField("path", path).Info("Wrote updated CNI kubeconfig file.")
-}
-
-// writeFileAtomic writes data to path by first writing to a temporary file in
-// the same directory, fsyncing, and then renaming into place. On POSIX this
-// guarantees a concurrent reader — in particular the CNI plugin invoked by
-// containerd between refreshes — sees either the old complete contents or the
-// new complete contents, never a partially written or zero-length file.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) (retErr error) {
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-	tmp, err := os.CreateTemp(dir, "."+base+".tmp.*")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	committed := false
-	defer func() {
-		if !committed {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod temp file: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("fsync temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-	committed = true
-	return nil
+	logrus.WithField("path", winutils.GetHostPath(kubeconfigPath)).Info("Wrote updated CNI kubeconfig file.")
 }

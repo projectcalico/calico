@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -32,75 +31,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	ktesting "k8s.io/client-go/testing"
 )
-
-func TestWriteFileAtomic_ReplacesContentAndLeavesNoTempFiles(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "calico-kubeconfig")
-
-	if err := os.WriteFile(path, []byte("old-contents"), 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	newContents := []byte("brand-new-contents")
-	if err := writeFileAtomic(path, newContents, 0o600); err != nil {
-		t.Fatalf("writeFileAtomic: %v", err)
-	}
-
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if string(got) != string(newContents) {
-		t.Fatalf("content mismatch: got %q, want %q", got, newContents)
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
-	}
-	for _, e := range entries {
-		if e.Name() != filepath.Base(path) {
-			t.Errorf("unexpected leftover file in target dir: %s", e.Name())
-		}
-	}
-}
-
-func TestWriteFileAtomic_PreservesPermissionMode(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "calico-kubeconfig")
-
-	if err := writeFileAtomic(path, []byte("data"), 0o600); err != nil {
-		t.Fatalf("writeFileAtomic: %v", err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	if got := info.Mode().Perm(); got != 0o600 {
-		t.Errorf("mode: got %o, want 0600", got)
-	}
-}
-
-func TestWriteFileAtomic_NoLeftoverTempOnRewrite(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "calico-kubeconfig")
-
-	for i := 0; i < 5; i++ {
-		if err := writeFileAtomic(path, []byte("rev"+string(rune('a'+i))), 0o600); err != nil {
-			t.Fatalf("writeFileAtomic iter %d: %v", i, err)
-		}
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
-	}
-	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".") {
-			t.Errorf("temp file leaked: %s", e.Name())
-		}
-	}
-}
 
 // TestTokenRefresher_WakesUpOnTokenFileChange verifies the fsnotify-based
 // fast path: when something in the watched directory changes, the refresh
@@ -218,96 +148,6 @@ func TestTokenRefresher_FallsBackWhenWatcherSetupFails(t *testing.T) {
 
 	if err := waitForCalls(&callCount, 1, 2*time.Second); err != nil {
 		t.Fatalf("initial UpdateToken did not fire in fallback mode: %v", err)
-	}
-}
-
-// TestWriteFileAtomic_ConcurrentReaderNeverSeesPartialContent proves the
-// property that motivated the switch from os.WriteFile to a rename-based
-// atomic write: a concurrent reader — in production, the CNI plugin invoked
-// by containerd — must never see an empty, truncated, or partially-written
-// file while the refresh loop is rewriting the kubeconfig.
-//
-// Flakiness notes:
-//   - The reader loops until writerDone is closed, so it's not sensitive to
-//     CPU scheduling speed — no races with an iteration budget.
-//   - Assertions only check "the read bytes equal one of the known valid
-//     contents", so they're deterministic regardless of which revision is
-//     observed.
-//   - The t.TempDir() filesystem on typical Linux CI is ext4/tmpfs where
-//     rename(2) is atomic, which is the precondition the code relies on.
-func TestWriteFileAtomic_ConcurrentReaderNeverSeesPartialContent(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "calico-kubeconfig")
-
-	const numRevisions = 100
-	revisions := make([][]byte, numRevisions)
-	valid := make(map[string]bool, numRevisions)
-	for i := 0; i < numRevisions; i++ {
-		// Vary the length significantly so a truncate-then-write race would
-		// be observable as a prefix of a longer revision or vice versa.
-		content := fmt.Sprintf("rev-%03d-%s", i, strings.Repeat("x", (i%16)*64))
-		revisions[i] = []byte(content)
-		valid[content] = true
-	}
-
-	// Seed with the first revision so the reader always has something valid
-	// to observe from the very first iteration.
-	if err := writeFileAtomic(path, revisions[0], 0o600); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	writerDone := make(chan struct{})
-	var readErr atomic.Value // holds error
-	var reads atomic.Int64
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-writerDone:
-				return
-			default:
-			}
-			got, err := os.ReadFile(path)
-			if err != nil {
-				readErr.Store(fmt.Errorf("read: %w", err))
-				return
-			}
-			if !valid[string(got)] {
-				readErr.Store(fmt.Errorf("reader saw unexpected content (len=%d): %q", len(got), got))
-				return
-			}
-			reads.Add(1)
-		}
-	}()
-
-	for i := 1; i < numRevisions; i++ {
-		if err := writeFileAtomic(path, revisions[i], 0o600); err != nil {
-			close(writerDone)
-			wg.Wait()
-			t.Fatalf("write revision %d: %v", i, err)
-		}
-	}
-	close(writerDone)
-	wg.Wait()
-
-	if err, ok := readErr.Load().(error); ok {
-		t.Fatal(err)
-	}
-	if reads.Load() == 0 {
-		t.Fatal("reader never observed any content — test did not exercise the atomic write path")
-	}
-}
-
-// TestWriteFileAtomic_ErrorsWhenDirectoryMissing exercises the error path of
-// os.CreateTemp when the parent directory does not exist. Fully deterministic.
-func TestWriteFileAtomic_ErrorsWhenDirectoryMissing(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "does-not-exist", "calico-kubeconfig")
-	err := writeFileAtomic(path, []byte("data"), 0o600)
-	if err == nil {
-		t.Fatal("expected error when parent directory is missing, got nil")
 	}
 }
 
