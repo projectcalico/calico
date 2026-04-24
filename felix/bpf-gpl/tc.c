@@ -1574,6 +1574,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	if (state->flags & CALI_ST_SKIP_REDIR_PEER) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
 	}
+	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP && EGRESS_CONN_LIMIT_CONFIGURED) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_CONNLIMIT_EGRESS;
+	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
 			/* If the packet wasn't seen, must come from host. There is no

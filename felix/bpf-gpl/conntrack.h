@@ -11,6 +11,7 @@
 #include "icmp.h"
 #include "types.h"
 #include "rpf.h"
+#include "qos.h"
 
 #ifdef IPVER6
 #define IPPROTO_ICMP_46	IPPROTO_ICMPV6
@@ -997,6 +998,43 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
+
+		/* Decrement connlimit counter when a TCP connection closes.
+		 * Detect "both FINs seen" or "RST seen" after the flag update.
+		 * CONNLIMIT_DEC prevents double-decrement across CPUs/programs.
+		 * The scanner remains as a safety net for missed decrements,
+		 * LRU evictions, and timeouts.
+		 */
+		{
+			__u32 cl_flags = ct_value_get_flags(v);
+			if ((cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS)) &&
+					!(cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC)) {
+				bool closing = (src_to_dst->fin_seen && dst_to_src->fin_seen) ||
+					       tcp_header->rst;
+				if (closing) {
+					ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
+
+					if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+						/* Ingress: pod is the responder (non-opener). */
+						__u32 pod_ifindex = v->a_to_b.opener
+							? v->b_to_a.ifindex
+							: v->a_to_b.ifindex;
+						if (pod_ifindex != CT_INVALID_IFINDEX) {
+							qos_connlimit_decrement(ctx, pod_ifindex, 1);
+						}
+					}
+					if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
+						/* Egress: pod is the opener. */
+						__u32 pod_ifindex = v->a_to_b.opener
+							? v->a_to_b.ifindex
+							: v->b_to_a.ifindex;
+						if (pod_ifindex != CT_INVALID_IFINDEX) {
+							qos_connlimit_decrement(ctx, pod_ifindex, 0);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	__u32 ifindex = CALI_F_TO_HOST ? ctx->skb->ifindex : skb_ingress_ifindex(ctx->skb);
