@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/backoff"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -1081,7 +1082,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 	// It's also possible that we're bugged and trying to write bad data so we give up
 	// eventually.
 	retries := 10
-	backoffTime := 1 * time.Millisecond
+	backoffTime := backoff.Exp{Initial: 1 * time.Millisecond, Max: 1 * time.Second}
 	failedAtLeastOnce := false
 	for {
 		if !t.inSyncWithDataPlane {
@@ -1095,8 +1096,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			if retries > 0 {
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program iptables, will retry")
-				t.timeSleep(backoffTime)
-				backoffTime *= 2
+				t.timeSleep(backoffTime.Next())
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue
