@@ -4293,6 +4293,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"hostSubnetNeighResponses": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostSubnetNeighResponses controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"windowsManageFirewallRules": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]",
