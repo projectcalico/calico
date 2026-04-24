@@ -53,4 +53,16 @@ for PKG in "$@"; do
 	fi
 done
 
+# Defense-in-depth: if a test binary exits 0 but the JUnit XML records a
+# failure or error (e.g. because an os.Exit() call inside the test killed
+# the binary mid-run), the pipe exit code above won't catch it. Scan the
+# published XMLs and fail the run if any failures or errors were recorded.
+for xml in report/*.xml; do
+	[ -f "$xml" ] || continue
+	if grep -qE '<(failure|error)(\s|>|/>)' "$xml"; then
+		echo "FAIL: detected failures/errors in ${xml}"
+		((RC++))
+	fi
+done
+
 exit ${RC}
