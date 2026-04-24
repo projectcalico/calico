@@ -361,7 +361,10 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
+# Re-use the local user's GOCACHE directory, if there is one; otherwise, use the old .go-pkg-cache dir
+LOCAL_GO_PKG_CACHE ?= $(if $(shell go env GOCACHE),$(shell go env GOCACHE),$(REPOROOT)/.go-pkg-cache)
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -375,7 +378,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
