@@ -130,6 +130,7 @@ local:libcalico-go/lib/backend/syncersv1/bgpsyncer
 local:libcalico-go/lib/backend/syncersv1/dedupebuffer
 local:libcalico-go/lib/backend/syncersv1/updateprocessors
 local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/backoff
 local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/epstatusfile
 local:libcalico-go/lib/errors

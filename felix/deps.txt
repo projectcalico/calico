@@ -326,6 +326,7 @@ local:libcalico-go/lib/backend/syncersv1/dedupebuffer
 local:libcalico-go/lib/backend/syncersv1/felixsyncer
 local:libcalico-go/lib/backend/syncersv1/updateprocessors
 local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/backoff
 local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/consistenthash
 local:libcalico-go/lib/debugserver

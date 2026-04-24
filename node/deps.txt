@@ -334,6 +334,7 @@ local:libcalico-go/lib/backend/syncersv1/nodestatussyncer
 local:libcalico-go/lib/backend/syncersv1/tunnelipsyncer
 local:libcalico-go/lib/backend/syncersv1/updateprocessors
 local:libcalico-go/lib/backend/watchersyncer
+local:libcalico-go/lib/backoff
 local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/consistenthash
 local:libcalico-go/lib/debugserver
