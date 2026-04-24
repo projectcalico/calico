@@ -361,7 +361,39 @@ DOCKER_BUILD=docker buildx build --load --platform=linux/$(ARCH) $(DOCKER_PULL) 
 	--build-arg GIT_VERSION=$(GIT_VERSION) \
 	--build-arg UBI_IMAGE=$(UBI_IMAGE)
 
-DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) && \
+# Set the repository root
+REPOROOT := $(shell git rev-parse --show-toplevel)
+
+# Set the default go cache path if we can't find one automatically
+DEFAULT_GO_CACHE_PATH := $(REPOROOT)/.go-pkg-cache
+
+# Detect what path to use as the user's go cache path.
+# 
+# Setting LOCAL_GO_PKG_CACHE in your environment overrides this
+# unconditionally; setting GOCACHE overrides it if the value
+# you provide passes the sanity checks below.
+
+# Set the path (outside of containers) to mount as the go cache path
+GOENV_GOCACHE := $(strip $(shell go env GOCACHE 2>/dev/null))
+# If the result is empty, skip it
+ifneq ($(GOENV_GOCACHE),)
+# If the result is 'off', skip that
+ifneq ($(GOENV_GOCACHE),off)
+# If the result isn't an absolute path, or if it
+# doesn't start with ./ or ../, then skip it
+ifneq ($(filter /% ./% ../%,$(GOENV_GOCACHE)),)
+LOCAL_GO_PKG_CACHE ?= $(GOENV_GOCACHE)
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # filter
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # off
+else
+LOCAL_GO_PKG_CACHE ?= $(DEFAULT_GO_CACHE_PATH)
+endif # blank
+
+DOCKER_RUN_PRIV_NET := mkdir -p $(LOCAL_GO_PKG_CACHE) bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--init \
 		$(EXTRA_DOCKER_ARGS) \
@@ -375,7 +407,7 @@ DOCKER_RUN_PRIV_NET := mkdir -p $(REPO_ROOT)/.go-pkg-cache bin $(GOMOD_CACHE) &&
 		-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico:rw \
-		-v $(REPO_ROOT)/.go-pkg-cache:/go-cache:rw \
+		-v $(LOCAL_GO_PKG_CACHE):/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
 DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
