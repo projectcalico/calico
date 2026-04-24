@@ -20,5 +20,5 @@
 set -ex
 
 docker load -i /tmp/calico-felix-test.tar
-docker load -i /tmp/calico-image.tar
+zstd -d --stdout /tmp/calico-image.tar.zst | docker load
 docker tag calico/felix-test:latest-amd64 felix-test:latest-amd64
