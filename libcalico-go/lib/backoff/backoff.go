@@ -32,20 +32,44 @@ import "time"
 // loop. If Initial > Max, the first Next() is clamped to Max. Next() uses
 // saturating multiplication so the cap is honored even if Max is set close to
 // the time.Duration (int64) limit.
+//
+// Initial and Max must both be positive: Next() panics on the first call if
+// either is zero or negative. Prefer the New constructor, which validates
+// eagerly.
 type Exp struct {
 	// Initial is the delay returned by the first call to Next() after
 	// construction or Reset(). Must be positive.
 	Initial time.Duration
 
 	// Max caps the delay. Subsequent calls to Next() saturate at Max.
+	// Must be positive.
 	Max time.Duration
 
 	current time.Duration
 }
 
+// New returns an Exp validated at construction time. Panics if initial or max
+// is not positive, catching misconfiguration at the call site rather than on
+// the first retry.
+func New(initial, max time.Duration) *Exp {
+	if initial <= 0 {
+		panic("backoff.New: initial must be positive")
+	}
+	if max <= 0 {
+		panic("backoff.New: max must be positive")
+	}
+	return &Exp{Initial: initial, Max: max}
+}
+
 // Next returns the next delay and advances internal state.
 func (b *Exp) Next() time.Duration {
 	if b.current == 0 {
+		if b.Initial <= 0 {
+			panic("backoff.Exp: Initial must be positive")
+		}
+		if b.Max <= 0 {
+			panic("backoff.Exp: Max must be positive")
+		}
 		b.current = b.Initial
 		if b.current > b.Max {
 			b.current = b.Max

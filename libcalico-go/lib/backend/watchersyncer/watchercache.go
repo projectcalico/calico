@@ -59,9 +59,10 @@ type watcherCache struct {
 	crdInstalled bool
 
 	// missingAPIBackoff produces the sleep duration applied when the backing API
-	// returns NotFound. Starts at MissingAPIInitialRetry and doubles each failure up to
-	// MissingAPIMaxRetry, so a CRD installed shortly after startup is picked up in
-	// seconds rather than after the full max interval. Reset on successful List.
+	// returns NotFound. Starts at MissingAPIInitialBackoff and doubles each failure up to
+	// MissingAPIMaxBackoff, so a CRD installed shortly after startup is picked up in
+	// seconds rather than after the full max interval. Reset when the backing API is
+	// known or assumed to be installed (successful List, or any non-NotFound error).
 	missingAPIBackoff backoff.Exp
 }
 
@@ -76,13 +77,13 @@ var (
 	DefaultWatchRetryTimeout = 600 * time.Second
 
 	// If the backing API is not installed, we retry with exponential backoff:
-	// MissingAPIInitialRetry (first delay), doubling each failure, capped at
-	// MissingAPIMaxRetry. This keeps discovery cheap in the common case where
+	// MissingAPIInitialBackoff (first delay), doubling each failure, capped at
+	// MissingAPIMaxBackoff. This keeps discovery cheap in the common case where
 	// the CRD appears within a few minutes of startup (e.g. KubeVirt installed
 	// right after Calico on a fresh cluster), while still decaying to infrequent
 	// polling for clusters that never install the optional API.
-	MissingAPIInitialRetry = 5 * time.Second
-	MissingAPIMaxRetry     = 30 * time.Minute
+	MissingAPIInitialBackoff = 5 * time.Second
+	MissingAPIMaxBackoff     = 30 * time.Minute
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -106,7 +107,7 @@ func newWatcherCache(client api.Client, resourceType ResourceType, results chan<
 		resyncBlockedUntil:   time.Now(),
 		watchRetryTimeout:    watchTimeout,
 		crdInstalled:         true, // Assume true until we detect otherwise.
-		missingAPIBackoff:    backoff.Exp{Initial: MissingAPIInitialRetry, Max: MissingAPIMaxRetry},
+		missingAPIBackoff:    backoff.Exp{Initial: MissingAPIInitialBackoff, Max: MissingAPIMaxBackoff},
 	}
 }
 
@@ -212,7 +213,7 @@ func (wc *watcherCache) loopReadingFromWatcher(ctx context.Context) {
 
 func (wc *watcherCache) markInstalled() {
 	if !wc.crdInstalled {
-		wc.logger.Info("Backing API has been installed")
+		wc.logger.Info("Backing API has been installed; resetting missing-API backoff")
 		wc.crdInstalled = true
 	}
 	wc.missingAPIBackoff.Reset()

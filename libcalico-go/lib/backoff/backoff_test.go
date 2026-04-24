@@ -84,4 +84,48 @@ func TestExpBackoff(t *testing.T) {
 		}
 		require.Equal(t, want, got)
 	})
+
+	t.Run("Next panics on zero or negative Initial", func(t *testing.T) {
+		require.PanicsWithValue(t, "backoff.Exp: Initial must be positive", func() {
+			(&backoff.Exp{Initial: 0, Max: time.Second}).Next()
+		})
+		require.PanicsWithValue(t, "backoff.Exp: Initial must be positive", func() {
+			(&backoff.Exp{Initial: -1 * time.Second, Max: time.Second}).Next()
+		})
+	})
+
+	t.Run("Next panics on zero or negative Max", func(t *testing.T) {
+		require.PanicsWithValue(t, "backoff.Exp: Max must be positive", func() {
+			(&backoff.Exp{Initial: time.Second, Max: 0}).Next()
+		})
+		require.PanicsWithValue(t, "backoff.Exp: Max must be positive", func() {
+			(&backoff.Exp{Initial: time.Second, Max: -1 * time.Second}).Next()
+		})
+	})
+}
+
+func TestNew(t *testing.T) {
+	t.Run("returns a usable Exp", func(t *testing.T) {
+		b := backoff.New(5*time.Second, 30*time.Second)
+		require.Equal(t, 5*time.Second, b.Next())
+		require.Equal(t, 10*time.Second, b.Next())
+	})
+
+	t.Run("panics on zero or negative initial", func(t *testing.T) {
+		require.PanicsWithValue(t, "backoff.New: initial must be positive", func() {
+			backoff.New(0, time.Second)
+		})
+		require.PanicsWithValue(t, "backoff.New: initial must be positive", func() {
+			backoff.New(-1*time.Second, time.Second)
+		})
+	})
+
+	t.Run("panics on zero or negative max", func(t *testing.T) {
+		require.PanicsWithValue(t, "backoff.New: max must be positive", func() {
+			backoff.New(time.Second, 0)
+		})
+		require.PanicsWithValue(t, "backoff.New: max must be positive", func() {
+			backoff.New(time.Second, -1*time.Second)
+		})
+	})
 }

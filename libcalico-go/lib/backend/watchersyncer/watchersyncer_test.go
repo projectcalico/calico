@@ -195,11 +195,11 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	It("should pick up a CRD installed after startup within the exponential backoff window", func() {
 		// Regression test: when a watched CRD is absent at startup but installed a short time later
 		// (e.g. KubeVirt installed moments after Calico), the watcher must pick it up quickly instead
-		// of waiting for the full MissingAPIMaxRetry. Exponential backoff starts at
-		// MissingAPIInitialRetry and doubles up to MissingAPIMaxRetry, so the first few retries are
+		// of waiting for the full MissingAPIMaxBackoff. Exponential backoff starts at
+		// MissingAPIInitialBackoff and doubles up to MissingAPIMaxBackoff, so the first few retries are
 		// cheap and events flow within seconds on a fresh cluster.
-		defer setMissingAPIRetry(watchersyncer.MissingAPIInitialRetry, watchersyncer.MissingAPIMaxRetry)
-		setMissingAPIRetry(50*time.Millisecond, 500*time.Millisecond)
+		defer setMissingAPIBackoff(watchersyncer.MissingAPIInitialBackoff, watchersyncer.MissingAPIMaxBackoff)
+		setMissingAPIBackoff(50*time.Millisecond, 500*time.Millisecond)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		// First list: CRD not installed yet.
@@ -211,7 +211,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		// Simulate the CRD being installed after some time. The next List should now succeed
 		// and return an item, which must reach the syncer within the backoff window — not
-		// after MissingAPIMaxRetry.
+		// after MissingAPIMaxBackoff.
 		list := &model.KVPairList{
 			KVPairs: []*model.KVPair{
 				{Key: l1Key1, Value: "value1", Revision: "rev1"},
@@ -219,7 +219,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Revision: "rev1",
 		}
 		rs.clientListResponse(r1, list)
-		// With MissingAPIMaxRetry set to 500ms in this test, the retry should fire well
+		// With MissingAPIMaxBackoff set to 500ms in this test, the retry should fire well
 		// within a few seconds. This catches a regression where the original 30-minute
 		// fixed sleep sneaks back in and events are never delivered.
 		rs.ExpectUpdates([]api.Update{
@@ -231,10 +231,17 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Drive the watcher through a full disappearance/reappearance cycle twice,
 		// verifying the missing-API path does not wedge on the second NotFound and
 		// updates continue to flow after the backing API churns.
+		//
+		// Note: this does not specifically distinguish "markInstalled() resets the
+		// backoff" from "reset is broken". The reset itself is a one-line call to
+		// backoff.Exp.Reset(), and backoff.Exp is tested in isolation in the
+		// libcalico-go/lib/backoff package. This test covers the integration path;
+		// a white-box reset assertion was deliberately dropped in favor of the
+		// unit test on the underlying type.
 		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(50*time.Millisecond, 100*time.Millisecond, 500*time.Millisecond)
-		defer setMissingAPIRetry(watchersyncer.MissingAPIInitialRetry, watchersyncer.MissingAPIMaxRetry)
-		setMissingAPIRetry(50*time.Millisecond, 500*time.Millisecond)
+		defer setMissingAPIBackoff(watchersyncer.MissingAPIInitialBackoff, watchersyncer.MissingAPIMaxBackoff)
+		setMissingAPIBackoff(50*time.Millisecond, 500*time.Millisecond)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		// Queue the full response sequence up front so the syncer goroutine can
@@ -993,9 +1000,9 @@ func setWatchIntervals(minRetryInterval, listRetryInterval, watchPollInterval ti
 	watchersyncer.WatchPollInterval = watchPollInterval
 }
 
-func setMissingAPIRetry(initial, max time.Duration) {
-	watchersyncer.MissingAPIInitialRetry = initial
-	watchersyncer.MissingAPIMaxRetry = max
+func setMissingAPIBackoff(initial, max time.Duration) {
+	watchersyncer.MissingAPIInitialBackoff = initial
+	watchersyncer.MissingAPIMaxBackoff = max
 }
 
 // Fake converter used to cover error and update handling paths.
