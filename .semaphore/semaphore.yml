@@ -1049,6 +1049,8 @@ blocks:
           value: "e2e/config/gcp-bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
+        - name: ENABLE_EXTERNAL_NODE
+          value: "true"
       jobs:
         - name: gcp-kubeadm - e2e local binary
           execution_time_limit:
