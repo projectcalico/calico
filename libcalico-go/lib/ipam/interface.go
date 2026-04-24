@@ -113,6 +113,14 @@ type Interface interface {
 	// finds any that are in older formats, upgrades them.  It is idempotent.
 	UpgradeHost(ctx context.Context, nodeName string) error
 
+	// GarbageCollectBlock runs garbage collection on the given pre-loaded
+	// block, deallocating any IPs whose ReleasedAt timestamp has exceeded
+	// the configured MinIPReclaimAgeSeconds, and writing the block back to
+	// the datastore if it was modified. Garbage collection is run by the
+	// CNI plugin every time a block is loaded, so this acts as a failsafe
+	// to ensure any otherwise-untouched blocks get collected.
+	GarbageCollectBlock(ctx context.Context, config *IPAMConfig, kvp *model.KVPair) error
+
 	// SetOwnerAttributes sets ActiveOwnerAttrs and/or AlternateOwnerAttrs for an IP atomically.
 	//
 	// Parameters:
