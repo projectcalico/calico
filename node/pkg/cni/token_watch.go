@@ -55,6 +55,11 @@ type TokenRefresher struct {
 	// Overridable for tests.
 	tokenFilePath string
 
+	// watcherFactory builds the fsnotify events channel (and cleanup func)
+	// used by Run. Overridable for tests that need to inject a pre-closed or
+	// deterministic channel without setting up real fsnotify watches.
+	watcherFactory func() (<-chan fsnotify.Event, func())
+
 	tokenChan chan TokenUpdate
 	stopChan  chan struct{}
 }
@@ -87,7 +92,7 @@ func NewTokenRefresher(clientset kubernetes.Interface, namespace string, service
 }
 
 func NewTokenRefresherWithCustomTiming(clientset kubernetes.Interface, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
-	return &TokenRefresher{
+	t := &TokenRefresher{
 		tokenSupported:         false,
 		tokenOnce:              &sync.Once{},
 		tokenValiditySeconds:   tokenValiditySeconds,
@@ -100,6 +105,8 @@ func NewTokenRefresherWithCustomTiming(clientset kubernetes.Interface, namespace
 		tokenChan:              make(chan TokenUpdate),
 		stopChan:               make(chan struct{}),
 	}
+	t.watcherFactory = t.startTokenFileWatcher
+	return t
 }
 
 func (t *TokenRefresher) UpdateToken() (TokenUpdate, error) {
@@ -144,7 +151,7 @@ func (t *TokenRefresher) Run() {
 	// ~12 hours later); (b) kubelet may re-project the token faster than our
 	// refresh cadence, and picking up the new token promptly keeps the CNI
 	// kubeconfig as fresh as possible.
-	tokenRotated, cleanupWatcher := t.startTokenFileWatcher()
+	tokenRotated, cleanupWatcher := t.watcherFactory()
 	defer cleanupWatcher()
 
 	var nextExpiration time.Time
