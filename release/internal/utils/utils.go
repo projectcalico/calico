@@ -80,37 +80,62 @@ func AllReleaseCharts() []string {
 var once sync.Once
 
 var (
+	// ImageReleaseDirs enumerates the component directories whose Makefiles
+	// publish standalone images via release-build/release-publish.
+	// Components bundled into the combined calico image (kube-controllers,
+	// apiserver, dikastes, webhooks, typha, goldmane, guardian,
+	// whisker-backend, key-cert-provisioner, CSI, flexvol, Linux CNI) live
+	// under cmd/calico and are not listed here.
 	ImageReleaseDirs = []string{
-		"apiserver",
-		"app-policy",
-		"calicoctl",
-		"cni-plugin",
-		"goldmane",
-		"guardian",
+		"cmd/calico",
 		"istio",
-		"key-cert-provisioner",
-		"kube-controllers",
 		"node",
-		"pod2daemon",
 		"third_party/envoy-gateway",
 		"third_party/envoy-proxy",
 		"third_party/envoy-ratelimit",
-		"typha",
-		"webhooks",
 		"whisker",
-		"whisker-backend",
 	}
+
+	// WindowsReleaseDirs enumerates component directories that ship a
+	// Windows image. Some of these (node) also have a Linux release-build
+	// and appear in ImageReleaseDirs; others (cni-plugin) ship only a
+	// Windows image — their Linux counterparts are bundled into the
+	// combined calico image.
+	WindowsReleaseDirs = []string{
+		"cni-plugin",
+		"node",
+	}
+
 	releaseImages = []string{}
 )
+
+// imageDiscoveryDirs returns the union of ImageReleaseDirs and
+// WindowsReleaseDirs, preserving order and de-duplicating. Used to discover
+// every image the release produces, regardless of which target builds it.
+func imageDiscoveryDirs() []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(ImageReleaseDirs)+len(WindowsReleaseDirs))
+	for _, dirs := range [][]string{ImageReleaseDirs, WindowsReleaseDirs} {
+		for _, d := range dirs {
+			if _, ok := seen[d]; ok {
+				continue
+			}
+			seen[d] = struct{}{}
+			out = append(out, d)
+		}
+	}
+	return out
+}
 
 func initReleaseImages() {
 	rootDir, err := command.GitDir()
 	if err != nil {
 		logrus.Panicf("Cannot determine root git dir: %v", err)
 	}
-	images, err := BuildReleaseImageList(rootDir, ImageReleaseDirs...)
+	dirs := imageDiscoveryDirs()
+	images, err := BuildReleaseImageList(rootDir, dirs...)
 	if err != nil {
-		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(ImageReleaseDirs, ","), err)
+		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(dirs, ","), err)
 	}
 	releaseImages = images
 }

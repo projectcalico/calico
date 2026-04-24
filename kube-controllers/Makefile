@@ -2,13 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME = github.com/projectcalico/calico/kube-controllers
 
-# Name of the images.
-# e.g., <registry>/<name>:<tag>
-KUBE_CONTROLLERS_IMAGE  ?=kube-controllers
-FLANNEL_MIGRATION_IMAGE ?=flannel-migration-controller
-
-BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -17,94 +10,35 @@ BUILD_IMAGES            ?=$(KUBE_CONTROLLERS_IMAGE) $(FLANNEL_MIGRATION_IMAGE)
 include ../lib.Makefile
 
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
-KUBE_CONTROLLER_CONTAINER_CREATED=.image.created-$(ARCH)
-KUBE_CONTROLLER_CONTAINER_FIPS_CREATED=.image.created-$(ARCH)-fips
 
-FIPS ?= false
-
-ifeq ($(FIPS),true)
-KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-BINDIR=bin/$(ARCH)-fips
-else
-KUBE_CONTROLLER_CONTAINER_MARKER=$(KUBE_CONTROLLER_CONTAINER_CREATED)
 BINDIR=bin
-endif
 
 ###############################################################################
 
 ## Removes all build artifacts.
 clean:
-	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -f report/*.xml
 	rm -f tests/fv/fv.test
 	rm -rf bin image.created-$(ARCH) build report/*.xml release-notes-*
-	-docker image rm -f $$(docker images $(FLANNEL_MIGRATION_IMAGE) -a -q)
-	-docker image rm -f $$(docker images $(KUBE_CONTROLLERS_IMAGE) -a -q)
 
 ###############################################################################
 # Building the binary
 ###############################################################################
+# The kube-controllers and check-status binaries are only built standalone
+# here for local development; in CI they ship inside the combined calico image.
 build: $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH)
-build-all: $(addprefix sub-build-,$(VALIDARCHES))
-sub-build-%:
-	$(MAKE) build ARCH=$*
 
 $(BINDIR)/kube-controllers-linux-$(ARCH): $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/kube-controllers/, $@)
-else
 	$(call build_binary, ./cmd/kube-controllers/, $@)
-endif
-
-$(BINDIR)/wrapper-$(ARCH): $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/wrapper, $@)
-else
-	$(call build_binary, ./cmd/wrapper, $@)
-endif
 
 $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./cmd/check-status, $@)
 
-$(BINDIR)/kubectl-$(ARCH):
-	curl -sSf -L --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
-	chmod +x $@
-
-###############################################################################
-# Building the image
-###############################################################################
-## Builds the controller binary and docker image.
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
-sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
-
-image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
-
-IMAGE_DEPS = Dockerfile docker-image/flannel-migration/Dockerfile
-# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
-$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
-	cp ../LICENSE.md $(BINDIR)/LICENSE
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile .
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
-	cp ../LICENSE.md $(BINDIR)/LICENSE
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
-	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
-	touch $@
-
 ###############################################################################
 # Static checks
 ###############################################################################
-# Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
 
@@ -144,13 +78,14 @@ bin/gotestsum:
 	$(DOCKER_RUN) -e GOBIN=/go/src/$(PACKAGE_NAME)/bin/ $(CALICO_BUILD) go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
 ## Run the unit tests in a container.
+# kube-controllers tests use the combined calico/calico image (loaded from the
+# calico-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
 test: ut
 ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest bin/gotestsum
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
-		   CONTAINER_NAME=$(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) \
-		   MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) \
+		   CONTAINER_NAME=calico/calico:latest-$(ARCH) \
 		   CRDS=$(REPO_ROOT)/$(CALICO_CRD_PATH) \
 		   CERTS_PATH=$(CERTS_PATH) \
 		   KUBEBUILDER_ASSETS=$$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1) \
@@ -171,42 +106,4 @@ ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest bin/g
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download image-all static-checks ut
-
-###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
-# Release
-###############################################################################
-## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created
-.release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
-	# Generate the `latest` images.
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
-	touch $@
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
-
-# WARNING: Only run this target if this release is the latest stable release. Do NOT
-# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
-## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
-	# Check latest versions match.
-	if ! docker run $(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(KUBE_CONTROLLERS_IMAGE):latest --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+ci: clean mod-download static-checks ut
