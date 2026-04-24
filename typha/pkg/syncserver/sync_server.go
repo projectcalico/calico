@@ -131,6 +131,11 @@ type BreadcrumbProvider interface {
 	CurrentBreadcrumb() *snapcache.Breadcrumb
 }
 
+// Config holds the configuration for the Typha sync server.
+//
+// IMPORTANT: When adding new fields, also update LogFields() below so the
+// field appears in startup logs.  Do NOT add fields that contain credentials,
+// private keys, or other secrets — LogFields() is logged at Info level.
 type Config struct {
 	Host                           string
 	Port                           int
@@ -158,6 +163,32 @@ type Config struct {
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
+}
+
+// LogFields returns a logrus.Fields map with operational config values
+// for logging.  TLS-related fields (KeyFile, CertFile, CAFile, ClientCN,
+// ClientURISAN) and internal fields (HealthAggregator, DebugLogWrites)
+// are omitted; a "tlsEnabled" boolean is included instead.
+func (c Config) LogFields() log.Fields {
+	return log.Fields{
+		"host":                           c.Host,
+		"port":                           c.Port,
+		"maxMessageSize":                 c.MaxMessageSize,
+		"binarySnapshotTimeout":          c.BinarySnapshotTimeout,
+		"maxFallBehind":                  c.MaxFallBehind,
+		"newClientFallBehindGracePeriod": c.NewClientFallBehindGracePeriod,
+		"minBatchingAgeThreshold":        c.MinBatchingAgeThreshold,
+		"pingInterval":                   c.PingInterval,
+		"pongTimeout":                    c.PongTimeout,
+		"handshakeTimeout":               c.HandshakeTimeout,
+		"writeTimeout":                   c.WriteTimeout,
+		"dropInterval":                   c.DropInterval,
+		"shutdownTimeout":                c.ShutdownTimeout,
+		"shutdownMaxDropInterval":        c.ShutdownMaxDropInterval,
+		"maxConns":                       c.MaxConns,
+		"tlsEnabled":                     c.requiringTLS(),
+		"writeBufferSize":                c.WriteBufferSize,
+	}
 }
 
 const (
@@ -279,7 +310,7 @@ func (c *Config) requiringTLS() bool {
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
-	log.WithField("config", config).Info("Creating server")
+	log.WithFields(config.LogFields()).Info("Creating server")
 	s := &Server{
 		config:               config,
 		caches:               caches,
