@@ -32,6 +32,7 @@ ifeq ($(FIPS),true)
 BINDIR = bin/$(ARCH)-fips
 CONTAINER_MARKER = .image.created-$(ARCH)-fips
 IMAGE_TAG = latest-fips
+VALIDARCHES=amd64
 else
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
