@@ -24,9 +24,13 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-# The calicoctl CLI is still published as a standalone binary for operators
-# running it outside a cluster. In-cluster usage runs `calico ctl` from the
-# calico/calico image.
+# The calicoctl CLI is published as a standalone binary for operators running
+# it outside a cluster. On Linux it is the combined `calico` binary from
+# cmd/calico, dispatched to the ctl subcommand via argv[0] basename matching
+# (see cmd/calico/main.go). The same binary serves both as the in-cluster
+# `calico/calico` entrypoint and as the calicoctl CLI on Linux. On darwin and
+# windows, where the combined binary cannot cross-compile (felix has Linux-only
+# deps), we still build a standalone calicoctl from calicoctl/calicoctl.go.
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64
@@ -41,10 +45,19 @@ bin/calicoctl-%-s390x: ARCH=s390x
 bin/calicoctl-darwin-amd64: BUILDOS=darwin ARCH=amd64
 bin/calicoctl-darwin-arm64: BUILDOS=darwin ARCH=arm64
 bin/calicoctl-windows-amd64: BUILDOS=windows
-bin/calicoctl-linux-%: BUILDOS=linux
-# We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values
-# for multi-platform builds are used. When make is initially invoked, BUILDOS
-# and ARCH are defined with default values (Linux and amd64).
+
+# Linux: ship the combined `calico` monobinary as calicoctl. We always recurse
+# into cmd/calico so its Makefile owns the build dependency tracking and only
+# rebuilds when source files change.
+bin/calicoctl-linux-%:
+	$(MAKE) -C ../cmd/calico build ARCH=$*
+	mkdir -p bin
+	cp ../cmd/calico/bin/calico-$* $@
+
+# Non-Linux platforms still build the standalone calicoctl. We reinvoke make
+# here to re-evaluate BUILDOS and ARCH so the correct values for multi-platform
+# builds are used. When make is initially invoked, BUILDOS and ARCH are
+# defined with default values (Linux and amd64).
 bin/calicoctl-%: $(SRC_FILES)
 	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
 build-calicoctl:
