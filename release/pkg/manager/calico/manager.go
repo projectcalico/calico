@@ -1114,15 +1114,13 @@ func (r *CalicoManager) buildE2EBinaries() error {
 }
 
 func (r *CalicoManager) buildBinaries() error {
-	// Skip building binaries if we are building images
-	// binaries are built as part of "release-build" target.
-	if r.buildImages {
-		return nil
-	}
-	m := map[string]string{
-		"calicoctl":  "build-all",
-		"cni-plugin": "build-all",
-		"felix":      "release-build",
+	// calicoctl is no longer produced as a side effect of an image build after
+	// the consolidation in #12225, so build it unconditionally. cni-plugin and
+	// felix binaries are built as part of their image release-build targets.
+	m := map[string]string{"calicoctl": "build-all"}
+	if !r.buildImages {
+		m["cni-plugin"] = "build-all"
+		m["felix"] = "release-build"
 	}
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
