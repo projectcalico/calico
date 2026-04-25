@@ -24,37 +24,43 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-# The calicoctl CLI is still published as a standalone binary for operators
-# running it outside a cluster. In-cluster usage runs `calico ctl` from the
-# calico/calico image.
+# The calicoctl CLI is the combined `calico` binary from cmd/calico, dispatched
+# to the ctl subcommand via argv[0] basename matching (see cmd/calico/main.go).
+# The same binary serves both as the in-cluster `calico/calico` entrypoint on
+# Linux and as the calicoctl CLI on every platform we publish (Linux, macOS,
+# Windows). On macOS and Windows, the in-cluster components (felix, CNI,
+# dataplane) are gated behind //go:build linux, so the binary ships only the
+# user-facing CLI commands.
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
-build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64
+build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
+
 .PHONY: build
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
-# The supported different binary names. For each, ensure that an OS and ARCH is set
-bin/calicoctl-%-amd64: ARCH=amd64
-bin/calicoctl-%-arm64: ARCH=arm64
-bin/calicoctl-%-ppc64le: ARCH=ppc64le
-bin/calicoctl-%-s390x: ARCH=s390x
-bin/calicoctl-darwin-amd64: BUILDOS=darwin ARCH=amd64
-bin/calicoctl-darwin-arm64: BUILDOS=darwin ARCH=arm64
-bin/calicoctl-windows-amd64: BUILDOS=windows
-bin/calicoctl-linux-%: BUILDOS=linux
-# We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values
-# for multi-platform builds are used. When make is initially invoked, BUILDOS
-# and ARCH are defined with default values (Linux and amd64).
-bin/calicoctl-%: $(SRC_FILES)
-	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
-build-calicoctl:
-	$(call build_binary, ./calicoctl/calicoctl.go, bin/calicoctl-$(BUILDOS)-$(ARCH))
 
-# Overrides for the binaries that need different output names
+# Each artifact is produced by cmd/calico; we hard-link the result into
+# calicoctl/bin/ so the release staging (and anything else pointing at
+# calicoctl/bin/) sees the expected files without duplicating 100-200 MB on
+# disk per binary.
+bin/calicoctl-linux-%:
+	$(MAKE) -C ../cmd/calico bin/calicoctl-linux-$*
+	mkdir -p bin
+	cp -fl ../cmd/calico/bin/calicoctl-linux-$* $@
+
+bin/calicoctl-darwin-%:
+	$(MAKE) -C ../cmd/calico bin/calicoctl-darwin-$*
+	mkdir -p bin
+	cp -fl ../cmd/calico/bin/calicoctl-darwin-$* $@
+
+bin/calicoctl-windows-%.exe:
+	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-$*.exe
+	mkdir -p bin
+	cp -fl ../cmd/calico/bin/calicoctl-windows-$*.exe $@
+
+# Unqualified `bin/calicoctl` is the linux-amd64 artifact (historical name).
 bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@
-bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
-	mv $< $@
 
 CALICO_VERSION_HELPER_DIR=tests/fv/helper
 CALICO_VERSION_HELPER_BIN=$(CALICO_VERSION_HELPER_DIR)/bin/calico_version_helper
