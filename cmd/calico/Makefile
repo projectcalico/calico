@@ -63,6 +63,29 @@ $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
 endif
 
+.PHONY: calicoctl
+calicoctl: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
+
+bin/calicoctl-linux-%: $(SRC_FILES)
+	$(MAKE) build ARCH=$*
+	mkdir -p bin
+	cp bin/calico-$* $@
+
+# Re-invoke make so BUILDOS/ARCH reach DOCKER_RUN's GOOS/GOARCH env, which is
+# expanded at variable definition time and ignores target-specific overrides.
+bin/calicoctl-darwin-%: $(SRC_FILES)
+	$(MAKE) build-cross-binary BUILDOS=darwin ARCH=$* OUTPUT=$@
+
+bin/calicoctl-windows-%: $(SRC_FILES)
+	$(MAKE) build-cross-binary BUILDOS=windows ARCH=$* OUTPUT=$@
+
+build-cross-binary:
+	mkdir -p $(dir $(OUTPUT))
+	$(call build_binary, ./, $(OUTPUT))
+
+bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
+	mv $< $@
+
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./, $@)

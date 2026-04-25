@@ -1114,19 +1114,17 @@ func (r *CalicoManager) buildE2EBinaries() error {
 }
 
 func (r *CalicoManager) buildBinaries() error {
-	// Skip building binaries if we are building images
-	// binaries are built as part of "release-build" target.
-	if r.buildImages {
-		return nil
-	}
-	m := map[string]string{
-		"calicoctl":  "build-all",
-		"cni-plugin": "build-all",
-		"felix":      "release-build",
-	}
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 	)
+
+	// calicoctl is the cmd/calico binary, so always produce it — the image
+	// build doesn't populate calicoctl/bin/ for the staging step.
+	m := map[string]string{"calicoctl": "build-all"}
+	if !r.buildImages {
+		m["cni-plugin"] = "build-all"
+		m["felix"] = "release-build"
+	}
 	for dir, target := range m {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 		if err != nil {

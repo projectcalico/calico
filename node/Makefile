@@ -238,8 +238,11 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
-$(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ../cmd/calico-windows, $@)
+# Use the combined binary with name-based dispatch.
+$(WINDOWS_BINARY):
+	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
+	mkdir -p $(dir $@)
+	cp -fl ../cmd/calico/bin/calicoctl-windows-amd64.exe $@
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
 	cp $(WINDOWS_BINARY) $@
