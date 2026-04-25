@@ -22,6 +22,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
+// Valid values for NetConf.DeviceType.
+const (
+	DeviceTypeVeth   = "veth"
+	DeviceTypeNetkit = "netkit"
+)
+
 // Policy is a struct to hold policy config (which currently happens to also contain some K8s config)
 type Policy struct {
 	PolicyType              string `json:"type"`
@@ -107,6 +113,15 @@ type NetConf struct {
 	ContainerSettings    ContainerSettings `json:"container_settings"`
 	IncludeDefaultRoutes bool              `json:"include_default_routes,omitempty"`
 	DataplaneOptions     map[string]any    `json:"dataplane_options,omitempty"`
+
+	// DeviceType selects the virtual device type used for the pod interface
+	// on Linux. Valid values:
+	//   ""       - default; create a veth pair.
+	//   "veth"   - create a veth pair.
+	//   "netkit" - create a netkit L2 pair on kernels that support it (6.7+);
+	//              fall back to veth on kernels without support.
+	// Ignored on Windows.
+	DeviceType string `json:"device_type,omitempty"`
 
 	// Windows-specific configuration.
 	// WindowsPodDeletionTimestampTimeout defines number of seconds before a pod deletion timestamp timeout and
