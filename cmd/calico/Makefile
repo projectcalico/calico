@@ -143,11 +143,13 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of the combined calico image at the specified version.
+## Produces a clean build of the combined calico image at the specified version,
+## along with the calicoctl artifacts that ship from the same source.
 .PHONY: release-build
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) -C $(REPO_ROOT)/calicoctl build-all
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips

@@ -1114,16 +1114,18 @@ func (r *CalicoManager) buildE2EBinaries() error {
 }
 
 func (r *CalicoManager) buildBinaries() error {
+	if r.buildImages {
+		// cmd/calico's release-build produces calicoctl alongside the image,
+		// and cni-plugin / felix are built as part of their image release.
+		return nil
+	}
 	env := append(os.Environ(),
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 	)
-
-	// calicoctl is the cmd/calico binary, so always produce it — the image
-	// build doesn't populate calicoctl/bin/ for the staging step.
-	m := map[string]string{"calicoctl": "build-all"}
-	if !r.buildImages {
-		m["cni-plugin"] = "build-all"
-		m["felix"] = "release-build"
+	m := map[string]string{
+		"calicoctl":  "build-all",
+		"cni-plugin": "build-all",
+		"felix":      "release-build",
 	}
 	for dir, target := range m {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
