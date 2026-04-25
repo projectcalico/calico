@@ -18,12 +18,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
+)
 
-	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
-	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
-	"github.com/projectcalico/calico/pkg/buildinfo"
+// Platform-specific hooks. Default to no-ops on macOS, where the binary is
+// calicoctl-only; linux/windows files override these in init().
+var (
+	addCNICommand       = func(*cobra.Command) {}
+	addComponentCommand = func(*cobra.Command) {}
+	runCNIMode          = func(dispatchMode) {
+		fmt.Fprintln(os.Stderr, "CNI plugin invocation is not supported on this platform")
+		os.Exit(1)
+	}
 )
 
 func newRootCommand() *cobra.Command {
@@ -34,15 +42,13 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	// Component subcommands (internal use by the operator).
-	cmd.AddCommand(newComponentCommand())
-
-	// User-facing commands.
 	cmd.AddCommand(
 		newCtlCommand(),
 		newHealthCommand(),
 		newVersionCommand(),
 	)
+	addCNICommand(cmd)
+	addComponentCommand(cmd)
 
 	return cmd
 }
@@ -51,60 +57,80 @@ func newRootCommand() *cobra.Command {
 type dispatchMode int
 
 const (
-	// modeCobra runs the Cobra command tree (including the calicoctl subcommand).
+	// modeCobra runs the full Cobra command tree rooted at "calico" (with
+	// "ctl", "health", "version", and on Linux the "component" subcommand).
 	modeCobra dispatchMode = iota
+
+	// modeCalicoctl runs the ctl command tree as the root so help text
+	// reads "calicoctl <subcommand>" rather than "calico ctl <subcommand>".
+	modeCalicoctl
+
 	// modeCNI runs the CNI plugin entry point.
 	modeCNI
+
 	// modeCNIIPAM runs the IPAM plugin entry point.
 	modeCNIIPAM
 )
 
 // dispatch decides which handler to run based on argv and the CNI_COMMAND
-// env var, and returns the (possibly rewritten) argv to use. It is pure so
-// that the dispatch rules can be covered by unit tests without invoking the
-// actual handlers.
+// env var. It is pure so the dispatch rules can be covered by unit tests
+// without invoking the actual handlers.
 //
 // Rules:
-//   - argv[0] basename of "calico-ipam" → CNI IPAM plugin.
-//   - argv[0] basename of "calicoctl" → Cobra, with "ctl" inserted between
-//     argv[0] and the rest of the args. argv[0] itself is preserved so that
-//     panic traces, log prefixes, and kubectl-plugin detection still see the
-//     original invocation name.
+//   - argv[0] basename of "calico-ipam" (or "calico-ipam.exe" on Windows) →
+//     CNI IPAM plugin.
+//   - argv[0] basename starting with "calicoctl" → run the ctl command tree
+//     as root. The prefix match covers the plain "calicoctl" name as well as
+//     the per-platform release artifacts (e.g. "calicoctl-linux-amd64",
+//     "calicoctl-windows-amd64.exe") so users don't have to rename the
+//     downloaded binary.
 //   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
 //     only when no subcommand args were passed. This guards against a stray
 //     CNI_COMMAND in a shell environment silently hijacking "calicoctl get
 //     nodes" or "calico component foo".
-//   - Otherwise, Cobra.
-func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
+//   - Otherwise, the full Cobra tree.
+func dispatch(args []string, cniCommand string) dispatchMode {
 	_, filename := filepath.Split(args[0])
-	switch filename {
-	case "calico-ipam":
-		return modeCNIIPAM, args
-	case "calicoctl":
-		rewritten := append([]string{args[0], "ctl"}, args[1:]...)
-		return modeCobra, rewritten
+	filename = strings.TrimSuffix(filename, ".exe")
+	switch {
+	case filename == "calico-ipam":
+		return modeCNIIPAM
+	case strings.HasPrefix(filename, "calicoctl"):
+		return modeCalicoctl
 	default:
 		if len(args) == 1 && cniCommand != "" {
-			return modeCNI, args
+			return modeCNI
 		}
-		return modeCobra, args
+		return modeCobra
 	}
 }
 
+// newCalicoctlCommand returns the ctl command tree ready to run as a root
+// command — it renames the Use field so help output reads "calicoctl ..."
+// instead of "ctl ...".
+func newCalicoctlCommand() *cobra.Command {
+	cmd := newCtlCommand()
+	cmd.Use = "calicoctl"
+	return cmd
+}
+
 func main() {
-	mode, newArgs := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
-	os.Args = newArgs
+	mode := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
 
 	switch mode {
-	case modeCNIIPAM:
-		ipamplugin.Main(buildinfo.Version)
-		return
-	case modeCNI:
-		plugin.Main(buildinfo.Version)
+	case modeCNIIPAM, modeCNI:
+		runCNIMode(mode)
 		return
 	}
 
-	if err := newRootCommand().Execute(); err != nil {
+	var root *cobra.Command
+	if mode == modeCalicoctl {
+		root = newCalicoctlCommand()
+	} else {
+		root = newRootCommand()
+	}
+
+	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

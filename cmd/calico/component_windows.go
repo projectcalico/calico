@@ -12,51 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
-
 package main
 
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/calico/app-policy/pkg/dikastes"
-	"github.com/projectcalico/calico/goldmane/cmd/goldmane"
-	"github.com/projectcalico/calico/guardian/cmd/guardian"
-	"github.com/projectcalico/calico/key-cert-provisioner/pkg/keycert"
-	"github.com/projectcalico/calico/kube-controllers/pkg/kubecontrollers"
 	"github.com/projectcalico/calico/node/pkg/node"
-	"github.com/projectcalico/calico/pod2daemon/pkg/csi"
-	"github.com/projectcalico/calico/pod2daemon/pkg/flexvol"
-	"github.com/projectcalico/calico/typha/cmd/typha"
-	"github.com/projectcalico/calico/webhooks/pkg/webhook"
-	"github.com/projectcalico/calico/whisker-backend/cmd/whiskerbackend"
 )
 
+// On Windows the component subcommand exposes only node, felix, and confd —
+// the other in-cluster daemons (typha, kube-controllers, goldmane, etc.) have
+// Linux-only dependencies (netlink, eBPF, syscall.Mount, syslog).
 func init() {
 	addComponentCommand = func(parent *cobra.Command) {
 		cmd := &cobra.Command{
 			Use:   "component",
 			Short: "Run Calico components (internal use by the operator)",
 		}
-
 		cmd.AddCommand(
+			node.NewCommand(),
 			node.NewFelixCommand(),
 			node.NewConfdCommand(),
-			goldmane.NewCommand(),
-			guardian.NewCommand(),
-			whiskerbackend.NewCommand(),
-			keycert.NewCommand(),
-			typha.NewCommand(),
-			dikastes.NewCommand(),
-			csi.NewCommand(),
-			flexvol.NewCommand(),
-			webhook.NewCommand(),
-			kubecontrollers.NewCommand(),
-			newAPIServerCommand(),
-			newCNICommand(),
-			node.NewCommand(),
 		)
-
 		parent.AddCommand(cmd)
 	}
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !darwin
+
 package main
 
 import (
@@ -24,10 +26,20 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-// newCNICommand is defined here rather than in the CNI package because the CNI
-// plugin/IPAM entry points are simple function calls, not full CLI frameworks.
-// The container runtime also invokes the binary directly (detected in main.go
-// via CNI_COMMAND env var or binary name), bypassing this subcommand entirely.
+func init() {
+	addCNICommand = func(parent *cobra.Command) {
+		parent.AddCommand(newCNICommand())
+	}
+	runCNIMode = func(mode dispatchMode) {
+		switch mode {
+		case modeCNIIPAM:
+			ipamplugin.Main(buildinfo.Version)
+		case modeCNI:
+			plugin.Main(buildinfo.Version)
+		}
+	}
+}
+
 func newCNICommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cni",
