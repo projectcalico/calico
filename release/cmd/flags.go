@@ -117,25 +117,33 @@ var (
 var (
 	developmentCategory = "Development"
 
-	skipValidationFlag = &cli.BoolFlag{
-		Name:     "skip-validation",
+	validateFlagName = "validate"
+	validateFlag     = &cli.BoolWithInverseFlag{
+		Name:     validateFlagName,
 		Category: developmentCategory,
-		Usage:    "Skip all validation while performing the action",
-		Sources:  cli.EnvVars("SKIP_VALIDATION"),
-		Value:    false,
-	}
-	skipBranchCheckFlag = &cli.BoolFlag{
-		Name:     "skip-branch-check",
-		Category: developmentCategory,
-		Usage:    "Skip checking if current branch is a valid branch for release",
-		Sources:  cli.EnvVars("SKIP_BRANCH_CHECK"),
-		Value:    false,
+		Usage:    "Run validation checks",
+		Sources:  cli.EnvVars("RELEASE_VALIDATE"),
+		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if c.Bool(skipValidationFlag.Name) && !b {
-				return fmt.Errorf("must skip branch check if %s is set", skipValidationFlag)
+			if b {
+				return nil
+			}
+			if c.Bool(validateBranchFlagName) {
+				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(validateBranchFlagName), inverseFlagName(validateFlagName))
+			}
+			if c.Bool(imageScanFlagName) {
+				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(imageScanFlagName), inverseFlagName(validateFlagName))
 			}
 			return nil
 		},
+	}
+	validateBranchFlagName = "validate-branch"
+	validateBranchFlag     = &cli.BoolWithInverseFlag{
+		Name:     validateBranchFlagName,
+		Category: developmentCategory,
+		Usage:    "Validate that the current branch is a valid branch for release",
+		Sources:  cli.EnvVars("RELEASE_VALIDATE_BRANCH"),
+		Value:    true,
 	}
 )
 
@@ -192,11 +200,18 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorCategory   = "Tigera Operator"
-	operatorGitFlags   = []cli.Flag{operatorOrgFlag, operatorRepoFlag}
-	operatorBuildFlags = append(operatorGitFlags, operatorFlag,
-		operatorBranchFlag, operatorReleaseBranchPrefixFlag,
-		operatorRegistryFlag, operatorImageFlag)
+	operatorCategory = "Tigera Operator"
+
+	operatorBuildCommandFlags = []cli.Flag{
+		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
+		operatorReleaseBranchPrefixFlag,
+		operatorRegistryFlag, operatorImageFlag,
+		operatorFlag(envBuildOperator, envReleaseOperator),
+	}
+
+	operatorPublishCommandFlags = []cli.Flag{
+		operatorFlag(envPublishOperator, envReleaseOperator),
+	}
 
 	// Operator git flags
 	operatorOrgFlag = &cli.StringFlag{
@@ -244,12 +259,18 @@ var (
 		Value:    operator.DefaultImage,
 	}
 
-	operatorFlag = &cli.BoolFlag{
-		Name:     "operator",
-		Category: operatorCategory,
-		Usage:    "Include Tigera operator in the release steps",
-		Sources:  cli.EnvVars("RELEASE_OPERATOR"),
-		Value:    true,
+	operatorFlagName   = "operator"
+	envBuildOperator   = "BUILD_OPERATOR"
+	envPublishOperator = "PUBLISH_OPERATOR"
+	envReleaseOperator = "RELEASE_OPERATOR"
+	operatorFlag       = func(envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
+			Name:     operatorFlagName,
+			Category: operatorCategory,
+			Usage:    "Include Tigera operator in the release steps",
+			Sources:  cli.EnvVars(envVars...),
+			Value:    true,
+		}
 	}
 )
 
@@ -312,7 +333,7 @@ var (
 		Usage:    "The Slack channel to post messages",
 		Sources:  cli.EnvVars("SLACK_CHANNEL"),
 	}
-	notifyFlag = &cli.BoolFlag{
+	notifyFlag = &cli.BoolWithInverseFlag{
 		Name:     "notify",
 		Category: slackCategory,
 		Usage:    "Sending notifications to Slack",
@@ -333,7 +354,7 @@ var (
 	// Image scanner flags for interacting with the image scanning service
 	imageScannerCategory = "Image Scanning Service"
 	imageScanFlags       = []cli.Flag{
-		skipImageScanFlag,
+		imageScanFlag,
 		imageScannerAPIFlag,
 		imageScannerTokenFlag,
 		imageScannerSelectFlag,
@@ -357,20 +378,19 @@ var (
 		Sources:  cli.EnvVars("IMAGE_SCANNER_SELECT"),
 		Value:    "all",
 	}
-	skipImageScanFlagName = "skip-image-scan"
-	skipImageScanFlag     = &cli.BoolFlag{
-		Name:     skipImageScanFlagName,
+	imageScanFlagName = "image-scan"
+	imageScanFlag     = &cli.BoolWithInverseFlag{
+		Name:     imageScanFlagName,
 		Category: imageScannerCategory,
-		Usage:    "Skip sending the image to the image scan service",
-		Sources:  cli.EnvVars("SKIP_IMAGE_SCAN"),
-		Value:    false,
+		Usage:    "Submit the image to the image scan service",
+		Sources:  cli.EnvVars("RELEASE_IMAGE_SCAN"),
+		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			logrus.WithField(skipImageScanFlagName, b).Info("Image scanning configuration")
-			if !b && !imageScanningAPIConfig(c).Valid() {
+			if b && !imageScanningAPIConfig(c).Valid() {
 				if !c.Bool(ciFlag.Name) {
 					logrus.Warn("Image scanning configuration is incomplete")
 				}
-				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s to 'true'", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, skipImageScanFlagName)
+				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, inverseFlagName(imageScanFlagName))
 			}
 			return nil
 		},
@@ -399,14 +419,14 @@ var (
 	// Hashrelease server configuration flags.
 	hashreleaseServerCategory = "Hashrelease Server"
 	hashreleaseServerFlags    = []cli.Flag{hashreleaseServerBucketFlag}
-	publishHashreleaseFlag    = &cli.BoolFlag{
+	publishHashreleaseFlag    = &cli.BoolWithInverseFlag{
 		Name:     "publish-to-hashrelease-server",
 		Category: hashreleaseServerCategory,
 		Usage:    "Publish the hashrelease to the hashrelease server",
 		Sources:  cli.EnvVars("PUBLISH_TO_HASHRELEASE_SERVER"),
 		Value:    true,
 	}
-	latestFlag = &cli.BoolFlag{
+	latestFlag = &cli.BoolWithInverseFlag{
 		Name:     "latest",
 		Category: hashreleaseServerCategory,
 		Usage:    "Publish the hashrelease as the latest hashrelease",
@@ -426,61 +446,107 @@ const (
 	stepControlCategory = "Step Control"
 
 	// Images.
-	imagesFlagName        = "images"
-	envBuildImages        = "BUILD_CONTAINER_IMAGES"
-	envPublishImages      = "PUBLISH_IMAGES"
-	archiveImagesFlagName = "archive-images"
-	envArchiveImages      = "ARCHIVE_IMAGES"
+	imagesFlagName          = "images"
+	envBuildImages          = "BUILD_CONTAINER_IMAGES"
+	envPublishImages        = "PUBLISH_IMAGES"
+	envReleaseImages        = "RELEASE_IMAGES"
+	archiveImagesFlagName   = "archive-images"
+	envArchiveImages        = "ARCHIVE_IMAGES"
+	envBuildArchiveImages   = "BUILD_IMAGES_ARCHIVE"
+	envReleaseArchiveImages = "RELEASE_IMAGES_ARCHIVE"
 
-	// Helm Charts.
+	// Helm charts.
 	helmChartsFlagName = "helm-charts"
 	envBuildCharts     = "BUILD_CHARTS"
 	envPublishCharts   = "PUBLISH_CHARTS"
+	envReleaseCharts   = "RELEASE_CHARTS"
 
-	// Windows.
-	windowsArchiveFlagName = "windows-archive"
-	envBuildWindowsArchive = "BUILD_WINDOWS_ARCHIVE"
+	// Helm index.
+	helmIndexFlagName   = "helm-index"
+	envHelmIndexLegacy  = "UPDATE_HELM_INDEX"
+	envBuildHelmIndex   = "BUILD_HELM_INDEX"
+	envPublishHelmIndex = "PUBLISH_HELM_INDEX"
+	envReleaseHelmIndex = "RELEASE_HELM_INDEX"
+
+	// Windows archive (build-only).
+	windowsArchiveFlagName   = "windows-archive"
+	envBuildWindowsArchive   = "BUILD_WINDOWS_ARCHIVE"
+	envReleaseWindowsArchive = "RELEASE_WINDOWS_ARCHIVE"
+
+	// Build-only.
+	envBuildManifests     = "BUILD_MANIFESTS"
+	envReleaseManifests   = "RELEASE_MANIFESTS"
+	envBuildOCPBundle     = "BUILD_OCP_BUNDLE"
+	envReleaseOCPBundle   = "RELEASE_OCP_BUNDLE"
+	envBuildBinaries      = "BUILD_BINARIES"
+	envReleaseBinaries    = "RELEASE_BINARIES"
+	envBuildTarball       = "BUILD_TARBALL"
+	envReleaseTarball     = "RELEASE_TARBALL"
+	envBuildE2EBinaries   = "BUILD_E2E_BINARIES"
+	envReleaseE2EBinaries = "RELEASE_E2E_BINARIES"
+	envBuildReleaseNotes  = "BUILD_RELEASE_NOTES"
+	envReleaseNotes       = "RELEASE_NOTES"
+
+	// Publish-only.
+	envPublishGitRefLegacy  = "PUBLISH_GIT_TAG"
+	envPublishGitRef        = "PUBLISH_GIT_REF"
+	envReleaseGitRef        = "RELEASE_GIT_REF"
+	envPublishGithubRelease = "PUBLISH_GITHUB_RELEASE"
+	envReleaseGithubRelease = "RELEASE_GITHUB_RELEASE"
 )
 
 var (
 	buildStepFlags = func(hashrelease bool) []cli.Flag {
-		return []cli.Flag{
+		f := []cli.Flag{
 			manifestsFlag,
 			ocpBundleFlag,
-			imagesFlag(!hashrelease, envBuildImages),
-			archiveImagesFlag(!hashrelease, envArchiveImages),
+			imagesFlag(!hashrelease, envBuildImages, envReleaseImages),
+			archiveImagesFlag(!hashrelease, envArchiveImages, envBuildArchiveImages, envReleaseArchiveImages),
 			binariesFlag,
-			helmChartsFlag(true, envBuildCharts),
-			helmIndexFlag,
+			helmChartsFlag(true, envBuildCharts, envReleaseCharts),
+			helmIndexFlag(envHelmIndexLegacy, envBuildHelmIndex, envReleaseHelmIndex),
 			tarballFlag,
-			windowsArchiveFlag(true, envBuildWindowsArchive),
+			windowsArchiveFlag(true, envBuildWindowsArchive, envReleaseWindowsArchive),
 		}
+		if hashrelease {
+			f = append(f, e2eBinariesFlag, releaseNotesFlag)
+		}
+		return f
 	}
 	publishStepFlags = func(hashrelease bool) []cli.Flag {
 		f := []cli.Flag{
-			imagesFlag(!hashrelease, envPublishImages),
-			helmChartsFlag(true, envPublishCharts),
+			imagesFlag(!hashrelease, envPublishImages, envReleaseImages),
+			helmChartsFlag(true, envPublishCharts, envReleaseCharts),
 		}
 		if hashrelease {
 			return f
 		}
 		return append(f,
-			helmIndexFlag,
+			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
 			gitRefFlag,
 			githubReleaseFlag)
 	}
 
-	imagesFlag = func(value bool, envVars ...string) *cli.BoolFlag {
-		return &cli.BoolFlag{
+	imagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
 			Name:     imagesFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include container images in the release step",
 			Sources:  cli.EnvVars(envVars...),
 			Value:    value,
+			Action: func(_ context.Context, c *cli.Command, b bool) error {
+				if !b && c.Bool(archiveImagesFlagName) {
+					return fmt.Errorf("cannot archive images without building them; use --%s flag to build images", imagesFlagName)
+				}
+				if b && !c.Bool(archiveImagesFlagName) {
+					logrus.Warnf("Images are included but not archived; to include images in the archive set --%s", archiveImagesFlagName)
+				}
+				return nil
+			},
 		}
 	}
-	archiveImagesFlag = func(value bool, envVars ...string) *cli.BoolFlag {
-		return &cli.BoolFlag{
+	archiveImagesFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
 			Name:     archiveImagesFlagName,
 			Category: stepControlCategory,
 			Usage:    "Archive container images in the release tarball",
@@ -488,51 +554,79 @@ var (
 			Value:    value,
 			Action: func(_ context.Context, c *cli.Command, b bool) error {
 				if b && !c.Bool(imagesFlagName) {
-					return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", imagesFlagName)
+					return fmt.Errorf("cannot archive images without building them; use --%s flag to build images", imagesFlagName)
+				}
+				if !b && c.Bool(imagesFlagName) {
+					logrus.Warnf("Images are included but not archived; to include images in the archive set --%s", archiveImagesFlagName)
 				}
 				return nil
 			},
 		}
 	}
-	helmChartsFlag = func(value bool, envVars ...string) *cli.BoolFlag {
-		return &cli.BoolFlag{
+	helmChartsFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
 			Name:     helmChartsFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Helm charts in the release step",
 			Sources:  cli.EnvVars(envVars...),
 			Value:    value,
+			Action: func(_ context.Context, c *cli.Command, b bool) error {
+				if b {
+					return nil
+				}
+				if c.Bool(helmIndexFlagName) {
+					return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(helmIndexFlagName), inverseFlagName(helmChartsFlagName))
+				}
+				return nil
+			},
 		}
 	}
-	helmIndexFlag = &cli.BoolFlag{
-		Name:     "helm-index",
-		Category: stepControlCategory,
-		Usage:    "Update the Helm chart index",
-		Sources:  cli.EnvVars("RELEASE_HELM_INDEX", "UPDATE_HELM_INDEX"),
-		Value:    true,
+	helmIndexFlag = func(envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
+			Name:     helmIndexFlagName,
+			Category: stepControlCategory,
+			Usage:    "Build/update the Helm chart index",
+			Sources:  cli.EnvVars(envVars...),
+			Value:    true,
+		}
 	}
-	binariesFlag = &cli.BoolFlag{
+	binariesFlag = &cli.BoolWithInverseFlag{
 		Name:     "binaries",
 		Category: stepControlCategory,
 		Usage:    "Include binaries in the release step",
-		Sources:  cli.EnvVars("RELEASE_BINARIES"),
+		Sources:  cli.EnvVars(envBuildBinaries, envReleaseBinaries),
 		Value:    true,
 	}
-	manifestsFlag = &cli.BoolFlag{
+	e2eBinariesFlag = &cli.BoolWithInverseFlag{
+		Name:     "e2e-binaries",
+		Category: stepControlCategory,
+		Usage:    "Build multi-arch e2e test binaries",
+		Sources:  cli.EnvVars(envBuildE2EBinaries, envReleaseE2EBinaries),
+		Value:    true,
+	}
+	releaseNotesFlag = &cli.BoolWithInverseFlag{
+		Name:     "release-notes",
+		Category: stepControlCategory,
+		Usage:    "Generate release notes",
+		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
+		Value:    true,
+	}
+	manifestsFlag = &cli.BoolWithInverseFlag{
 		Name:     "manifests",
 		Category: stepControlCategory,
 		Usage:    "Include manifests in the release step",
-		Sources:  cli.EnvVars("RELEASE_MANIFESTS"),
+		Sources:  cli.EnvVars(envBuildManifests, envReleaseManifests),
 		Value:    true,
 	}
-	ocpBundleFlag = &cli.BoolFlag{
+	ocpBundleFlag = &cli.BoolWithInverseFlag{
 		Name:     "ocp-bundle",
 		Category: stepControlCategory,
 		Usage:    "Include OCP bundle in the release step",
-		Sources:  cli.EnvVars("RELEASE_OCP_BUNDLE"),
+		Sources:  cli.EnvVars(envBuildOCPBundle, envReleaseOCPBundle),
 		Value:    true,
 	}
-	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolFlag {
-		return &cli.BoolFlag{
+	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+		return &cli.BoolWithInverseFlag{
 			Name:     windowsArchiveFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Windows archive in the release step",
@@ -540,25 +634,25 @@ var (
 			Value:    value,
 		}
 	}
-	tarballFlag = &cli.BoolFlag{
+	tarballFlag = &cli.BoolWithInverseFlag{
 		Name:     "tarball",
 		Category: stepControlCategory,
 		Usage:    "Include the release tarball in the release step",
-		Sources:  cli.EnvVars("RELEASE_TARBALL"),
+		Sources:  cli.EnvVars(envBuildTarball, envReleaseTarball),
 		Value:    true,
 	}
-	gitRefFlag = &cli.BoolFlag{
+	gitRefFlag = &cli.BoolWithInverseFlag{
 		Name:     "git-ref",
 		Category: stepControlCategory,
 		Usage:    "Push the git ref(s) to the remote",
-		Sources:  cli.EnvVars("PUBLISH_GIT_TAG", "PUBLISH_GIT_REF"),
+		Sources:  cli.EnvVars(envPublishGitRefLegacy, envPublishGitRef, envReleaseGitRef),
 		Value:    true,
 	}
-	githubReleaseFlag = &cli.BoolFlag{
+	githubReleaseFlag = &cli.BoolWithInverseFlag{
 		Name:     "github-release",
 		Category: stepControlCategory,
 		Usage:    "Publish the GitHub release",
-		Sources:  cli.EnvVars("PUBLISH_GITHUB_RELEASE"),
+		Sources:  cli.EnvVars(envPublishGithubRelease, envReleaseGithubRelease),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {
@@ -568,3 +662,7 @@ var (
 		},
 	}
 )
+
+func inverseFlagName(name string) string {
+	return "no-" + name
+}

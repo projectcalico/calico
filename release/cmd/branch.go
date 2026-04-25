@@ -50,7 +50,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				devTagSuffixFlag,
 				operatorBranchFlag,
 				localFlag,
-				skipValidationFlag,
+				validateFlag,
 			},
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut.log")
@@ -62,7 +62,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					calico.WithValidate(c.Bool(validateFlag.Name)),
 				)
 
 				m := branch.NewManager(
@@ -72,7 +72,7 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					branch.WithRepoManager(calicoManager),
-					branch.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					branch.WithValidate(c.Bool(validateFlag.Name)),
 					branch.WithPublish(!c.Bool(localFlag.Name)))
 				return m.CutReleaseBranch()
 			},

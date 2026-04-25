@@ -120,9 +120,9 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithOCPBundle(c.Bool(ocpBundleFlag.Name)),
 					calico.WithTarball(c.Bool(tarballFlag.Name)),
 					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
-					calico.WithHelmIndex(c.Bool(helmIndexFlag.Name)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithValidate(c.Bool(validateFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -156,7 +156,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
-					calico.WithHelmIndex(c.Bool(helmIndexFlag.Name)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
 					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
 				}
@@ -254,8 +254,8 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			operatorRepoFlag,
 			operatorBranchFlag,
 			githubTokenFlag,
-			skipBranchCheckFlag,
-			skipValidationFlag,
+			validateBranchFlag,
+			validateFlag,
 			localFlag,
 		},
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
@@ -288,8 +288,8 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
-				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
+				calico.WithValidate(c.Bool(validateFlag.Name)),
+				calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
 				calico.WithGitRef(!c.Bool(localFlag.Name)),
 			}
 			r := calico.NewManager(opts...)
@@ -310,8 +310,8 @@ func releaseBuildFlags() []cli.Flag {
 		archFlag,
 		registryFlag,
 		githubTokenFlag,
-		skipBranchCheckFlag,
-		skipValidationFlag)
+		validateBranchFlag,
+		validateFlag)
 	return f
 }
 

@@ -77,6 +77,7 @@ func NewManager(opts ...Option) *CalicoManager {
 		windowsArchive:    true,
 		helmCharts:        true,
 		helmIndex:         true,
+		e2eBinaries:       true,
 		gitRef:            true,
 		githubRelease:     true,
 		imageRegistries:   defaultRegistries,
@@ -209,6 +210,7 @@ type CalicoManager struct {
 	tarball        bool
 	helmCharts     bool
 	helmIndex      bool
+	e2eBinaries    bool
 }
 
 func releaseImages(images []string, version, registry, operatorImage, operatorVersion, operatorRegistry string) []string {
@@ -322,8 +324,12 @@ func (r *CalicoManager) Build() error {
 		}
 
 		// Build multi-arch e2e test binaries and copy them into the output directory.
-		if err = r.buildE2EBinaries(); err != nil {
-			return err
+		if r.e2eBinaries {
+			if err = r.buildE2EBinaries(); err != nil {
+				return err
+			}
+		} else {
+			logrus.Info("Skipping building e2e test binaries")
 		}
 	} else {
 		if err = r.buildOCPBundle(); err != nil {
