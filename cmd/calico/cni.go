@@ -26,17 +26,16 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-func init() {
-	addCNICommand = func(parent *cobra.Command) {
-		parent.AddCommand(newCNICommand())
-	}
-	runCNIMode = func(mode dispatchMode) {
-		switch mode {
-		case modeCNIIPAM:
-			ipamplugin.Main(buildinfo.Version)
-		case modeCNI:
-			plugin.Main(buildinfo.Version)
-		}
+func addCNICommand(parent *cobra.Command) {
+	parent.AddCommand(newCNICommand())
+}
+
+func runCNIMode(mode dispatchMode) {
+	switch mode {
+	case modeCNIIPAM:
+		ipamplugin.Main(buildinfo.Version)
+	case modeCNI:
+		plugin.Main(buildinfo.Version)
 	}
 }
 

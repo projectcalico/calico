@@ -15,23 +15,21 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
+	"fmt"
+	"os"
 
-	"github.com/projectcalico/calico/node/pkg/node"
+	"github.com/spf13/cobra"
 )
 
-// On Windows the component subcommand exposes only node, felix, and confd —
-// the other in-cluster daemons (typha, kube-controllers, goldmane, etc.) have
-// Linux-only dependencies (netlink, eBPF, syscall.Mount, syslog).
-func addComponentCommand(parent *cobra.Command) {
-	cmd := &cobra.Command{
-		Use:   "component",
-		Short: "Run Calico components (internal use by the operator)",
-	}
-	cmd.AddCommand(
-		node.NewCommand(),
-		node.NewFelixCommand(),
-		node.NewConfdCommand(),
-	)
-	parent.AddCommand(cmd)
+// On macOS the binary ships only the user-facing CLI commands (ctl, health,
+// version) — the in-cluster components and the CNI plugin have Linux/Windows
+// dependencies that don't cross-compile.
+
+func addCNICommand(_ *cobra.Command) {}
+
+func addComponentCommand(_ *cobra.Command) {}
+
+func runCNIMode(_ dispatchMode) {
+	fmt.Fprintln(os.Stderr, "CNI plugin invocation is not supported on this platform")
+	os.Exit(1)
 }

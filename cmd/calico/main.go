@@ -23,17 +23,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Platform-specific hooks. Default to no-ops on macOS, where the binary is
-// calicoctl-only; linux/windows files override these in init().
-var (
-	addCNICommand       = func(*cobra.Command) {}
-	addComponentCommand = func(*cobra.Command) {}
-	runCNIMode          = func(dispatchMode) {
-		fmt.Fprintln(os.Stderr, "CNI plugin invocation is not supported on this platform")
-		os.Exit(1)
-	}
-)
-
 func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "calico",
