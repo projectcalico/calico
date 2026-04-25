@@ -118,6 +118,15 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 			if link.Type() != tc.wantType {
 				t.Errorf("host link kernel type = %q, want %q", link.Type(), tc.wantType)
 			}
+			if tc.wantType == types.DeviceTypeNetkit {
+				nk, ok := link.(*netlink.Netkit)
+				if !ok {
+					t.Fatalf("host link is %T, want *netlink.Netkit", link)
+				}
+				if !nk.IsPrimary() {
+					t.Errorf("host-side netkit must be primary (Felix attaches BPF_NETKIT_PRIMARY here)")
+				}
+			}
 		})
 	}
 }

@@ -597,28 +597,44 @@ func (d *LinuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error 
 // container end in the current (container) netns and the host end atomically
 // placed in hostNS. When d.deviceType requests netkit but the kernel does not
 // support it, it silently falls back to veth. Returns the actual type created.
+//
+// Note: la.Name is the container-side interface name; hostName is the
+// host-side. For veth either side can be primary, but for netkit the primary
+// must live in the host netns so Felix can attach BPF_NETKIT_PRIMARY there
+// (and the pod-side BPF_NETKIT_PEER is attached from the host netns too).
+// We therefore call LinkAdd from inside hostNS for netkit, with the peer
+// targeted at the current (container) netns.
 func (d *LinuxDataplane) addWorkloadLink(la netlink.LinkAttrs, hostName string, hostNS ns.NetNS) (string, error) {
 	if d.deviceType == types.DeviceTypeNetkit {
-		nk := &netlink.Netkit{
-			LinkAttrs:  la,
-			Mode:       netlink.NETKIT_MODE_L2,
-			Policy:     netlink.NETKIT_POLICY_FORWARD,
-			PeerPolicy: netlink.NETKIT_POLICY_FORWARD,
-		}
-		peerAttrs := netlink.NewLinkAttrs()
-		peerAttrs.Name = hostName
-		peerAttrs.Namespace = netlink.NsFd(int(hostNS.Fd()))
-		nk.SetPeerAttrs(&peerAttrs)
+		primaryAttrs := la
+		primaryAttrs.Name = hostName
 
-		err := netlink.LinkAdd(nk)
-		if err == nil {
+		var addErr error
+		err := hostNS.Do(func(contNS ns.NetNS) error {
+			peerAttrs := netlink.NewLinkAttrs()
+			peerAttrs.Name = la.Name
+			peerAttrs.Namespace = netlink.NsFd(int(contNS.Fd()))
+			nk := &netlink.Netkit{
+				LinkAttrs:  primaryAttrs,
+				Mode:       netlink.NETKIT_MODE_L2,
+				Policy:     netlink.NETKIT_POLICY_FORWARD,
+				PeerPolicy: netlink.NETKIT_POLICY_FORWARD,
+			}
+			nk.SetPeerAttrs(&peerAttrs)
+			addErr = netlink.LinkAdd(nk)
+			return nil
+		})
+		if err != nil {
+			return "", fmt.Errorf("entering host netns to create netkit: %w", err)
+		}
+		if addErr == nil {
 			return types.DeviceTypeNetkit, nil
 		}
-		if !isNetkitUnsupported(err) {
-			d.logger.WithError(err).Errorf("Error adding netkit link %+v", nk)
-			return "", err
+		if !isNetkitUnsupported(addErr) {
+			d.logger.WithError(addErr).Error("Error adding netkit link")
+			return "", addErr
 		}
-		d.logger.WithError(err).Info(
+		d.logger.WithError(addErr).Info(
 			"netkit not supported on this kernel; falling back to veth")
 	}
 
