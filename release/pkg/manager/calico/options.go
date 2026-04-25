@@ -146,6 +146,13 @@ func WithWindowsArchive(enabled bool) Option {
 	}
 }
 
+func WithE2EBinaries(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.e2eBinaries = enabled
+		return nil
+	}
+}
+
 func WithPublishHashrelease(publish bool) Option {
 	return func(r *CalicoManager) error {
 		r.publishHashrelease = publish
