@@ -49,6 +49,27 @@ func TestDispatch(t *testing.T) {
 			wantArgs:   []string{"/usr/bin/calicoctl", "ctl"},
 		},
 		{
+			name:       "calicoctl-linux-amd64 release artifact dispatches to ctl",
+			args:       []string{"./calicoctl-linux-amd64", "get", "nodes"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"./calicoctl-linux-amd64", "ctl", "get", "nodes"},
+		},
+		{
+			name:       "calicoctl-windows-amd64.exe release artifact dispatches to ctl",
+			args:       []string{"./calicoctl-windows-amd64.exe", "get", "nodes"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"./calicoctl-windows-amd64.exe", "ctl", "get", "nodes"},
+		},
+		{
+			name:       "calicoctl.exe (renamed) dispatches to ctl",
+			args:       []string{"calicoctl.exe", "get", "nodes"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"calicoctl.exe", "ctl", "get", "nodes"},
+		},
+		{
 			name:       "calico-ipam basename dispatches to IPAM plugin",
 			args:       []string{"/opt/cni/bin/calico-ipam"},
 			cniCommand: "ADD",
