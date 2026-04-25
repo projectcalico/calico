@@ -21,10 +21,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
-	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
-	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func newRootCommand() *cobra.Command {
@@ -35,15 +31,18 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	// Component subcommands (internal use by the operator).
-	cmd.AddCommand(newComponentCommand())
-
-	// User-facing commands.
+	// User-facing commands. These work on every platform we ship a binary
+	// for — Linux nodes, plus the macOS and Windows calicoctl downloads.
 	cmd.AddCommand(
 		newCtlCommand(),
 		newHealthCommand(),
 		newVersionCommand(),
 	)
+
+	// In-cluster component subcommands and the CNI shim are Linux-only —
+	// felix, the dataplane, and the CNI plugin all have Linux-only
+	// dependencies that don't cross-compile.
+	addPlatformCommands(cmd)
 
 	return cmd
 }
@@ -100,11 +99,8 @@ func main() {
 	os.Args = newArgs
 
 	switch mode {
-	case modeCNIIPAM:
-		ipamplugin.Main(buildinfo.Version)
-		return
-	case modeCNI:
-		plugin.Main(buildinfo.Version)
+	case modeCNIIPAM, modeCNI:
+		runCNIMode(mode)
 		return
 	}
 

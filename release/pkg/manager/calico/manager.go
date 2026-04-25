@@ -1118,12 +1118,12 @@ func (r *CalicoManager) buildBinaries() error {
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 	)
 
-	// Always build the standalone calicoctl artifacts. They aren't produced
-	// by any image release-build target — calicoctl no longer ships its own
-	// image since components were consolidated into the combined calico
-	// image. On Linux the calicoctl Makefile delegates to cmd/calico to
-	// produce the monobinary; on darwin/windows it builds the standalone
-	// calicoctl source.
+	// Always build the calicoctl artifacts. The calicoctl Makefile routes
+	// all targets through cmd/calico — on every platform, calicoctl is the
+	// combined calico binary dispatched via argv[0] basename matching. The
+	// calicoctl image itself was removed when components were consolidated
+	// into the single calico image, so nothing else in the release flow
+	// produces these CLI binaries.
 	out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, "calicoctl"), "build-all", env...)
 	if err != nil {
 		logrus.Error(out)
