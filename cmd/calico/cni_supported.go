@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux || windows
+
 package main
 
 import (
@@ -22,17 +24,17 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-// addPlatformCommands wires up the Linux-only subcommands — the in-cluster
-// components (felix, typha, kube-controllers, ...) and the CNI shim. Only
-// Linux ships these because felix and the CNI plugin pull in Linux-only
-// netlink and BPF dependencies.
-func addPlatformCommands(cmd *cobra.Command) {
-	cmd.AddCommand(newComponentCommand())
+// addCNICommand registers the `cni` cobra subcommand (install / plugin / ipam).
+// Available on Linux and Windows — the cni-plugin packages are cross-platform
+// with netlink/HCN dataplane selected via build tags. Not available on macOS
+// etc., where the combined binary is calicoctl-only.
+func addCNICommand(cmd *cobra.Command) {
+	cmd.AddCommand(newCNICommand())
 }
 
-// runCNIMode invokes the CNI plugin or IPAM plugin entry point. Reached only
-// when dispatch picks modeCNI or modeCNIIPAM, which the basename rules and
-// CNI_COMMAND env var only do under Linux container runtimes.
+// runCNIMode invokes the CNI or IPAM plugin entry point. Reached via argv[0]
+// basename ("calico-ipam") or via the CNI_COMMAND env var — dispatch selects
+// the mode before reaching here.
 func runCNIMode(mode dispatchMode) {
 	switch mode {
 	case modeCNIIPAM:

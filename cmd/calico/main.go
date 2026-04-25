@@ -39,10 +39,13 @@ func newRootCommand() *cobra.Command {
 		newVersionCommand(),
 	)
 
-	// In-cluster component subcommands and the CNI shim are Linux-only —
-	// felix, the dataplane, and the CNI plugin all have Linux-only
-	// dependencies that don't cross-compile.
-	addPlatformCommands(cmd)
+	// CNI plugin and installer (Linux + Windows). The cni-plugin packages
+	// have netlink/HCN dataplane variants selected by build tags.
+	addCNICommand(cmd)
+
+	// In-cluster component daemons (felix, typha, kube-controllers, ...).
+	// Linux-only — these all have Linux netlink/BPF/proc dependencies.
+	addComponentCommand(cmd)
 
 	return cmd
 }
@@ -68,7 +71,8 @@ const (
 // without invoking the actual handlers.
 //
 // Rules:
-//   - argv[0] basename of "calico-ipam" → CNI IPAM plugin.
+//   - argv[0] basename of "calico-ipam" (or "calico-ipam.exe" on Windows) →
+//     CNI IPAM plugin.
 //   - argv[0] basename starting with "calicoctl" → run the ctl command tree
 //     as root. The prefix match covers the plain "calicoctl" name as well as
 //     the per-platform release artifacts (e.g. "calicoctl-linux-amd64",
@@ -81,6 +85,7 @@ const (
 //   - Otherwise, the full Cobra tree.
 func dispatch(args []string, cniCommand string) dispatchMode {
 	_, filename := filepath.Split(args[0])
+	filename = strings.TrimSuffix(filename, ".exe")
 	switch {
 	case filename == "calico-ipam":
 		return modeCNIIPAM

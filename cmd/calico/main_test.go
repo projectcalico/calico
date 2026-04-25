@@ -62,6 +62,18 @@ func TestDispatch(t *testing.T) {
 			wantMode:   modeCNIIPAM,
 		},
 		{
+			name:       "calico-ipam.exe basename (Windows) dispatches to IPAM plugin",
+			args:       []string{"/opt/cni/bin/calico-ipam.exe"},
+			cniCommand: "ADD",
+			wantMode:   modeCNIIPAM,
+		},
+		{
+			name:       "calico.exe with CNI_COMMAND (Windows) dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico.exe"},
+			cniCommand: "ADD",
+			wantMode:   modeCNI,
+		},
+		{
 			name:       "plain calico with CNI_COMMAND and no args dispatches to CNI plugin",
 			args:       []string{"/opt/cni/bin/calico"},
 			cniCommand: "ADD",

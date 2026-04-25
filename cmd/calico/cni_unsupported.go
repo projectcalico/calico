@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !linux
+//go:build !linux && !windows
 
 package main
 
@@ -23,16 +23,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// addPlatformCommands is a no-op on non-Linux platforms. The combined calico
-// binary on macOS and Windows ships only the user-facing CLI commands (ctl,
-// health, version) — the in-cluster components and CNI plugin have
-// Linux-only dependencies and don't cross-compile.
-func addPlatformCommands(_ *cobra.Command) {}
+// addCNICommand is a no-op on platforms where we don't ship a CNI plugin
+// (currently: macOS). The combined binary there is calicoctl-only.
+func addCNICommand(_ *cobra.Command) {}
 
-// runCNIMode should not be reachable on non-Linux platforms — dispatch returns
-// modeCNI / modeCNIIPAM only when invoked under a Linux container runtime
-// (CNI_COMMAND env var or the calico-ipam basename). Treat reaching here as
-// an unsupported invocation rather than crashing silently.
+// runCNIMode should not be reachable on non-CNI platforms — dispatch returns
+// modeCNI / modeCNIIPAM only when the CNI_COMMAND env var or calico-ipam
+// basename are set by a Linux/Windows container runtime. Treat reaching here
+// as an unsupported invocation rather than crashing silently.
 func runCNIMode(_ dispatchMode) {
 	fmt.Fprintln(os.Stderr, "CNI plugin invocation is not supported on this platform")
 	os.Exit(1)
