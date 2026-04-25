@@ -121,8 +121,8 @@ func (o *OperatorManager) Build() error {
 	if err != nil {
 		return err
 	}
-	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
-	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = r
+	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = i
 	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
 	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
 	if o.isHashRelease {

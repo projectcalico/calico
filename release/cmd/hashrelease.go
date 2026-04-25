@@ -120,8 +120,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithImage(pinned.OperatorCfg.Image),
 					operator.WithRegistry(pinned.OperatorCfg.Registry),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					operator.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
+					operator.WithValidate(c.Bool(validateFlag.Name)),
+					operator.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.WithCalicoVersion(data.ProductVersion()),
@@ -132,7 +132,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				if len(productRegistriesFromFlag) > 0 {
 					operatorOpts = append(operatorOpts, operator.WithProductRegistry(productRegistriesFromFlag[0]))
 				}
-				if !c.Bool(skipOperatorFlag.Name) {
+				if c.Bool(operatorFlagName) {
 					o := operator.NewManager(operatorOpts...)
 					if err := o.Build(); err != nil {
 						return err
@@ -146,23 +146,31 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				opts := []calico.Option{
+					calico.IsHashRelease(),
+					calico.WithHashrelease(*hashrel, *serverCfg),
+					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(data.ProductVersion()),
 					calico.WithOperator(c.String(operatorRegistryFlag.Name), c.String(operatorImageFlag.Name), data.OperatorVersion()),
 					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
-					calico.WithRepoRoot(cfg.RepoRootDir),
-					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					calico.IsHashRelease(),
-					calico.WithHashrelease(*hashrel, *serverCfg),
 					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithBuildImages(c.Bool(buildHashreleaseImagesFlag.Name)),
-					calico.WithArchiveImages(c.Bool(archiveHashreleaseImagesFlag.Name)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
+					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
+					calico.WithManifests(c.Bool(manifestsFlag.Name)),
+					calico.WithBinaries(c.Bool(binariesFlag.Name)),
+					calico.WithOCPBundle(c.Bool(ocpBundleFlag.Name)),
+					calico.WithTarball(c.Bool(tarballFlag.Name)),
+					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
+					calico.WithE2EBinaries(c.Bool(e2eBinariesFlag.Name)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithValidate(c.Bool(validateFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
 				}
 				if len(productRegistriesFromFlag) > 0 {
 					opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -174,19 +182,21 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				// For real releases, release notes are generated prior to building the release.
 				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
-				releaseVersion, err := version.DetermineReleaseVersion(version.New(data.ProductVersion()), c.String(devTagSuffixFlag.Name))
-				if err != nil {
-					return fmt.Errorf("failed to determine release version: %v", err)
-				}
-				if c.String(orgFlag.Name) == utils.TigeraOrg {
-					logrus.Warn("Release notes are not supported for Tigera releases, skipping...")
+				if !c.Bool(releaseNotesFlag.Name) {
+					logrus.Info("Skipping release notes generation")
+				} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg && c.String(repoFlag.Name) != utils.CalicoRepoName {
+					logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
 				} else {
+					releaseVersion, err := version.DetermineReleaseVersion(version.New(data.ProductVersion()), c.String(devTagSuffixFlag.Name))
+					if err != nil {
+						return fmt.Errorf("failed to determine release version: %v", err)
+					}
 					if _, err := outputs.ReleaseNotes(utils.ProjectCalicoOrg, c.String(githubTokenFlag.Name), cfg.RepoRootDir, filepath.Join(hashrel.Source, outputs.ReleaseNotesDir), releaseVersion); err != nil {
 						return err
 					}
 				}
 
-				// Adjsut the formatting of the generated outputs to match the legacy hashrelease format.
+				// Adjust the formatting of the generated outputs to match the legacy hashrelease format.
 				return tasks.ReformatHashrelease(hashrel.Source, cfg.TmpDir)
 			},
 		},
@@ -235,29 +245,29 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithVersion(hashrel.Operator.Version),
 					operator.WithCalicoVersion(hashrel.ProductVersion),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-					operator.WithValidate(!c.Bool(skipValidationFlag.Name)),
+					operator.WithValidate(c.Bool(validateFlag.Name)),
 				)
-				if !c.Bool(skipOperatorFlag.Name) {
+				if c.Bool(operatorFlagName) {
 					if err := o.Publish(); err != nil {
 						return err
 					}
 				}
 
 				opts := []calico.Option{
-					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.IsHashRelease(),
+					calico.WithHashrelease(*hashrel, *serverCfg),
+					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(hashrel.ProductVersion),
 					calico.WithOperatorVersion(hashrel.Operator.Version),
+					calico.WithOutputDir(hashrel.Source),
+					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithOutputDir(hashrel.Source),
-					calico.WithHashrelease(*hashrel, *serverCfg),
-					calico.WithPublishImages(c.Bool(publishHashreleaseImagesFlag.Name)),
-					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
+					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
+					calico.WithValidate(c.Bool(validateFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts,
@@ -265,7 +275,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 						calico.WithImageScanning(false, imagescanner.Config{}), // Disable image scanning if using custom registries.
 					)
 				} else {
-					opts = append(opts, calico.WithImageScanning(!c.Bool(skipImageScanFlag.Name), *imageScanningAPIConfig(c)))
+					opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 				}
 				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
 				if err != nil {
@@ -280,7 +290,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return err
 				}
 
-				if !c.Bool(skipImageScanFlag.Name) {
+				if c.Bool(imageScanFlag.Name) {
 					url, err := imagescanner.RetrieveResultURL(cfg.TmpDir)
 					// Only log error as a warning if the image scan result URL could not be retrieved
 					// as it is not an error that should stop the hashrelease process.
@@ -306,16 +316,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 // hashreleaseBuildFlags returns the flags for the hashrelease build command.
 func hashreleaseBuildFlags() []cli.Flag {
-	f := append(productFlags,
-		registryFlag,
-		buildHashreleaseImagesFlag,
-		archiveHashreleaseImagesFlag,
-		archFlag)
-	f = append(f, operatorBuildFlags...)
+	f := append(productFlags, buildStepFlags(true)...)
 	f = append(f,
-		skipOperatorFlag,
-		skipBranchCheckFlag,
-		skipValidationFlag,
+		registryFlag,
+		archFlag)
+	f = append(f, operatorBuildCommandFlags...)
+	f = append(f,
+		validateBranchFlag,
+		validateFlag,
 		githubTokenFlag)
 	return f
 }
@@ -325,13 +333,6 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	// If using a custom registry for product, ensure operator is also using a custom registry.
 	if len(c.StringSlice(registryFlag.Name)) > 0 && c.String(operatorRegistryFlag.Name) == "" {
 		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, registryFlag)
-	}
-
-	if c.Bool(archiveHashreleaseImagesFlag.Name) && !c.Bool(buildHashreleaseImagesFlag.Name) {
-		return fmt.Errorf("cannot archive images without building them; set --%s to 'true'", buildHashreleaseImagesFlag.Name)
-	}
-	if !c.Bool(archiveHashreleaseImagesFlag.Name) && c.Bool(buildHashreleaseImagesFlag.Name) {
-		logrus.Warnf("Images are built but not archived; to archive images set --%s to 'true'", archiveHashreleaseImagesFlag.Name)
 	}
 
 	// CI conditional checks.
@@ -345,7 +346,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 		}
 	} else {
 		// If building images, log a warning if no registry is specified.
-		if c.Bool(buildHashreleaseImagesFlag.Name) && len(c.StringSlice(registryFlag.Name)) == 0 {
+		if c.Bool(imagesFlagName) && len(c.StringSlice(registryFlag.Name)) == 0 {
 			logrus.Warn("Building images without specifying a registry will result in images being built with the default registries")
 		}
 
@@ -360,18 +361,17 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 
 // hashreleasePublishFlags returns the flags for the hashrelease publish command.
 func hashreleasePublishFlags() []cli.Flag {
-	f := append(gitFlags,
+	f := append(productFlags, publishStepFlags(true)...)
+	f = append(f,
 		registryFlag,
 		helmRegistryFlag,
-		publishHashreleaseImagesFlag,
-		publishChartsFlag,
 		archFlag,
 		publishHashreleaseFlag,
 		latestFlag,
-		skipOperatorFlag,
-		skipValidationFlag,
-		skipImageScanFlag)
-	f = append(f, imageScannerAPIFlags...)
+		validateFlag,
+	)
+	f = append(f, operatorPublishCommandFlags...)
+	f = append(f, imageScanFlags...)
 	return f
 }
 
@@ -394,11 +394,6 @@ func validateHashreleasePublishFlags(c *cli.Command) error {
 				return fmt.Errorf("cannot set hashrelease as latest when building locally, use --%s=false instead", latestFlag.Name)
 			}
 		}
-	}
-
-	// If skipValidationFlag is set, then skipImageScanFlag must also be set.
-	if c.Bool(skipValidationFlag.Name) && !c.Bool(skipImageScanFlag.Name) {
-		return fmt.Errorf("%s must be set if %s is set", skipImageScanFlag, skipValidationFlag)
 	}
 	return nil
 }
@@ -429,7 +424,7 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	if !c.Bool(ciFlag.Name) {
 		return nil
 	}
-	if c.Bool(buildHashreleaseImagesFlag.Name) {
+	if c.Bool(imagesFlagName) {
 		logrus.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
 	}
