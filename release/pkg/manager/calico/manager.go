@@ -1114,19 +1114,19 @@ func (r *CalicoManager) buildE2EBinaries() error {
 }
 
 func (r *CalicoManager) buildBinaries() error {
-	// Skip building binaries if we are building images
-	// binaries are built as part of "release-build" target.
 	if r.buildImages {
+		// cmd/calico's release-build produces calicoctl alongside the image,
+		// and cni-plugin / felix are built as part of their image release.
 		return nil
 	}
+	env := append(os.Environ(),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
+	)
 	m := map[string]string{
 		"calicoctl":  "build-all",
 		"cni-plugin": "build-all",
 		"felix":      "release-build",
 	}
-	env := append(os.Environ(),
-		fmt.Sprintf("VERSION=%s", r.calicoVersion),
-	)
 	for dir, target := range m {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 		if err != nil {

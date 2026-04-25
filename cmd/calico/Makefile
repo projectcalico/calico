@@ -63,6 +63,29 @@ $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
 endif
 
+.PHONY: calicoctl
+calicoctl: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
+
+bin/calicoctl-linux-%: $(SRC_FILES)
+	$(MAKE) build ARCH=$*
+	mkdir -p bin
+	cp bin/calico-$* $@
+
+# Re-invoke make so BUILDOS/ARCH reach DOCKER_RUN's GOOS/GOARCH env, which is
+# expanded at variable definition time and ignores target-specific overrides.
+bin/calicoctl-darwin-%: $(SRC_FILES)
+	$(MAKE) build-cross-binary BUILDOS=darwin ARCH=$* OUTPUT=$@
+
+bin/calicoctl-windows-%: $(SRC_FILES)
+	$(MAKE) build-cross-binary BUILDOS=windows ARCH=$* OUTPUT=$@
+
+build-cross-binary:
+	mkdir -p $(dir $(OUTPUT))
+	$(call build_binary, ./, $(OUTPUT))
+
+bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
+	mv $< $@
+
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./, $@)
@@ -120,11 +143,13 @@ cd: image-all cd-common
 ###############################################################################
 # Release
 ###############################################################################
-## Produces a clean build of the combined calico image at the specified version.
+## Produces a clean build of the combined calico image at the specified version,
+## along with the calicoctl artifacts that ship from the same source.
 .PHONY: release-build
 release-build: .release-$(VERSION).created
 .release-$(VERSION).created:
 	$(MAKE) clean image-all RELEASE=true
+	$(MAKE) -C $(REPO_ROOT)/calicoctl build-all
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
 	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
