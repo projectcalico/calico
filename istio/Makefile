@@ -33,9 +33,14 @@ include ../lib.Makefile
 ISTIO_DOWNLOADED = .istio.downloaded
 ZTUNNEL_DOWNLOADED = .ztunnel.downloaded
 
-.PHONY: init-istio-source init-ztunnel-source
+.PHONY: init-istio-source init-ztunnel-source init-sources
 init-istio-source: $(ISTIO_DOWNLOADED)
 init-ztunnel-source: $(ZTUNNEL_DOWNLOADED)
+
+# init-sources is a barrier: all upstream sources must be downloaded and
+# patched before any per-arch image build runs. Without it, parallel sub-makes
+# race on creating the shared stamp files.
+init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
 $(ISTIO_DOWNLOADED):
 	mkdir -p istio
@@ -89,9 +94,21 @@ ISTIO_PILOT_IMAGE_CREATED = .istio-pilot.created-$(ARCH)
 ISTIO_PROXYV2_IMAGE_CREATED = .istio-proxyv2.created-$(ARCH)
 ISTIO_ZTUNNEL_IMAGE_CREATED = .istio-ztunnel.created-$(ARCH)
 
-# Build images for all architectures
+# Build images for all architectures.
+#
+# Sources are downloaded once via the init-sources barrier, then per-arch
+# sub-makes run in parallel; each sub-image-% sub-make also builds its four
+# istio images concurrently via the inherited jobserver.
+#
+# DOCKER_RUN in lib.Makefile is :=-expanded (so GOARCH is baked at include
+# time), which is why per-arch parallelism has to be a sub-make per arch
+# rather than a flat target matrix in a single process.
+ISTIO_PARALLEL_JOBS ?= 4
+
 .PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all:
+	$(MAKE) init-sources
+	$(MAKE) -j$(ISTIO_PARALLEL_JOBS) $(addprefix sub-image-,$(VALIDARCHES))
 
 sub-image-%:
 	$(MAKE) image ARCH=$*
