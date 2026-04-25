@@ -45,21 +45,14 @@ clean-windows: clean-windows-builder
 ###############################################################################
 # Building the binary
 ###############################################################################
-# Linux binaries are only built locally for running unit tests. The production
-# Linux cni-plugin ships in the calico/calico image.
-#
-# The Windows binary is the combined `calico` binary from cmd/calico —
-# argv[0] basename / CNI_COMMAND dispatch routes invocations to the CNI plugin
-# or IPAM plugin, and `calico cni install` runs the installer. Same dispatch
-# pattern as Linux; we just ship it as a separate Windows image because the
-# rest of the calico/calico image is Linux-only.
+# Linux binaries are only built locally for unit tests; the production Linux
+# CNI plugin ships in the calico/calico image. The Windows binary is the
+# combined `calico` binary from cmd/calico, dispatched by name.
 .PHONY: build
 build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
-# Go only supports amd64 for Windows builds.
 WINDOWS_BIN=bin/windows
-# calico-ipam.exe is not built: `calico cni install` copies calico.exe to both
-# names on the host.
+# `calico cni install` copies calico.exe to both names on the host.
 build: $(WINDOWS_BIN)/calico.exe
 endif
 
@@ -74,9 +67,7 @@ $(BIN)/calico: $(SRC_FILES)
 $(BIN)/calico-ipam: $(BIN)/calico
 	ln -sf "./calico" "$@"
 
-## Build the Calico network and ipam plugins for Windows. We pull the combined
-## binary built by cmd/calico and hard-link it as calico.exe so the windows
-## image picks up CNI plugin, IPAM plugin, and installer in one artifact.
+## Hard-link the combined cmd/calico binary as calico.exe.
 $(WINDOWS_BIN)/calico.exe:
 	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(WINDOWS_BIN)

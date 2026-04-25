@@ -23,6 +23,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Platform-specific hooks. Default to no-ops on macOS, where the binary is
+// calicoctl-only; linux/windows files override these in init().
+var (
+	addCNICommand       = func(*cobra.Command) {}
+	addComponentCommand = func(*cobra.Command) {}
+	runCNIMode          = func(dispatchMode) {
+		fmt.Fprintln(os.Stderr, "CNI plugin invocation is not supported on this platform")
+		os.Exit(1)
+	}
+)
+
 func newRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "calico",
@@ -31,20 +42,12 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	// User-facing commands. These work on every platform we ship a binary
-	// for — Linux nodes, plus the macOS and Windows calicoctl downloads.
 	cmd.AddCommand(
 		newCtlCommand(),
 		newHealthCommand(),
 		newVersionCommand(),
 	)
-
-	// CNI plugin and installer (Linux + Windows). The cni-plugin packages
-	// have netlink/HCN dataplane variants selected by build tags.
 	addCNICommand(cmd)
-
-	// In-cluster component daemons (felix, typha, kube-controllers, ...).
-	// Linux-only — these all have Linux netlink/BPF/proc dependencies.
 	addComponentCommand(cmd)
 
 	return cmd
@@ -57,11 +60,14 @@ const (
 	// modeCobra runs the full Cobra command tree rooted at "calico" (with
 	// "ctl", "health", "version", and on Linux the "component" subcommand).
 	modeCobra dispatchMode = iota
+
 	// modeCalicoctl runs the ctl command tree as the root so help text
 	// reads "calicoctl <subcommand>" rather than "calico ctl <subcommand>".
 	modeCalicoctl
+
 	// modeCNI runs the CNI plugin entry point.
 	modeCNI
+
 	// modeCNIIPAM runs the IPAM plugin entry point.
 	modeCNIIPAM
 )

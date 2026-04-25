@@ -24,13 +24,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-# The calicoctl CLI is the combined `calico` binary from cmd/calico, dispatched
-# to the ctl subcommand via argv[0] basename matching (see cmd/calico/main.go).
-# The same binary serves both as the in-cluster `calico/calico` entrypoint on
-# Linux and as the calicoctl CLI on every platform we publish (Linux, macOS,
-# Windows). On macOS and Windows, the in-cluster components (felix, CNI,
-# dataplane) are gated behind //go:build linux, so the binary ships only the
-# user-facing CLI commands.
+# calicoctl is the combined cmd/calico binary, dispatched by name.
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
@@ -39,10 +33,8 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
 
-# Each artifact is produced by cmd/calico; we hard-link the result into
-# calicoctl/bin/ so the release staging (and anything else pointing at
-# calicoctl/bin/) sees the expected files without duplicating 100-200 MB on
-# disk per binary.
+# Hard-link from cmd/calico/bin/ to keep release staging happy without
+# duplicating 100-200 MB per binary.
 bin/calicoctl-linux-%:
 	$(MAKE) -C ../cmd/calico bin/calicoctl-linux-$*
 	mkdir -p bin
@@ -58,7 +50,6 @@ bin/calicoctl-windows-%.exe:
 	mkdir -p bin
 	cp -fl ../cmd/calico/bin/calicoctl-windows-$*.exe $@
 
-# Unqualified `bin/calicoctl` is the linux-amd64 artifact (historical name).
 bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@
 

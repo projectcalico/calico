@@ -1118,26 +1118,12 @@ func (r *CalicoManager) buildBinaries() error {
 		fmt.Sprintf("VERSION=%s", r.calicoVersion),
 	)
 
-	// Always build the calicoctl artifacts. The calicoctl Makefile routes
-	// all targets through cmd/calico — on every platform, calicoctl is the
-	// combined calico binary dispatched via argv[0] basename matching. The
-	// calicoctl image itself was removed when components were consolidated
-	// into the single calico image, so nothing else in the release flow
-	// produces these CLI binaries.
-	out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, "calicoctl"), "build-all", env...)
-	if err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to build calicoctl: %w", err)
-	}
-
-	// When building images, the remaining binaries are produced as part of
-	// each component's release-build target.
-	if r.buildImages {
-		return nil
-	}
-	m := map[string]string{
-		"cni-plugin": "build-all",
-		"felix":      "release-build",
+	// calicoctl is the cmd/calico binary, so always produce it — the image
+	// build doesn't populate calicoctl/bin/ for the staging step.
+	m := map[string]string{"calicoctl": "build-all"}
+	if !r.buildImages {
+		m["cni-plugin"] = "build-all"
+		m["felix"] = "release-build"
 	}
 	for dir, target := range m {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)

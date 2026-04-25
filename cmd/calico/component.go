@@ -32,36 +32,31 @@ import (
 	"github.com/projectcalico/calico/whisker-backend/cmd/whiskerbackend"
 )
 
-func newComponentCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "component",
-		Short: "Run Calico components (internal use by the operator)",
+func init() {
+	addComponentCommand = func(parent *cobra.Command) {
+		cmd := &cobra.Command{
+			Use:   "component",
+			Short: "Run Calico components (internal use by the operator)",
+		}
+
+		cmd.AddCommand(
+			node.NewFelixCommand(),
+			node.NewConfdCommand(),
+			goldmane.NewCommand(),
+			guardian.NewCommand(),
+			whiskerbackend.NewCommand(),
+			keycert.NewCommand(),
+			typha.NewCommand(),
+			dikastes.NewCommand(),
+			csi.NewCommand(),
+			flexvol.NewCommand(),
+			webhook.NewCommand(),
+			kubecontrollers.NewCommand(),
+			newAPIServerCommand(),
+			newCNICommand(),
+			node.NewCommand(),
+		)
+
+		parent.AddCommand(cmd)
 	}
-
-	// Top-level components — each is a standalone daemon.
-	cmd.AddCommand(
-		node.NewFelixCommand(),
-		node.NewConfdCommand(),
-		goldmane.NewCommand(),
-		guardian.NewCommand(),
-		whiskerbackend.NewCommand(),
-		keycert.NewCommand(),
-		typha.NewCommand(),
-		dikastes.NewCommand(),
-		csi.NewCommand(),
-		flexvol.NewCommand(),
-		webhook.NewCommand(),
-		kubecontrollers.NewCommand(),
-	)
-
-	// Components with their own CLI framework that need shims.
-	cmd.AddCommand(
-		newAPIServerCommand(),
-		newCNICommand(),
-	)
-
-	// Node lifecycle operations.
-	cmd.AddCommand(node.NewCommand())
-
-	return cmd
 }

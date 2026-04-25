@@ -63,35 +63,21 @@ $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
 endif
 
-# Cross-platform calicoctl artifacts. The combined binary's in-cluster
-# components (felix, CNI, dataplane) are gated behind //go:build linux, so on
-# darwin and windows the binary ships only the user-facing CLI commands
-# (ctl, health, version). Naming matches the historical calicoctl release
-# artifacts so users can keep their existing download URLs and scripts.
-.PHONY: build-calicoctl
-build-calicoctl: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
+.PHONY: calicoctl
+calicoctl: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
 
-# On Linux the calicoctl artifact is the same binary as the in-cluster image,
-# dispatched to the ctl subcommand by argv[0] basename matching.
 bin/calicoctl-linux-%: $(SRC_FILES)
 	$(MAKE) build ARCH=$*
 	mkdir -p bin
 	cp bin/calico-$* $@
 
-# Per-target BUILDOS/ARCH for the cross-built binaries. The recipe re-invokes
-# make so that BUILDOS and ARCH propagate as command-line variables into the
-# DOCKER_RUN env (GOOS, GOARCH); target-specific vars don't reach the macro
-# expansion otherwise.
-bin/calicoctl-%-amd64: ARCH=amd64
-bin/calicoctl-%-arm64: ARCH=arm64
-bin/calicoctl-darwin-%: BUILDOS=darwin
-bin/calicoctl-windows-%: BUILDOS=windows
-
+# Re-invoke make so BUILDOS/ARCH reach DOCKER_RUN's GOOS/GOARCH env, which is
+# expanded at variable definition time and ignores target-specific overrides.
 bin/calicoctl-darwin-%: $(SRC_FILES)
-	$(MAKE) build-cross-binary BUILDOS=$(BUILDOS) ARCH=$(ARCH) OUTPUT=$@
+	$(MAKE) build-cross-binary BUILDOS=darwin ARCH=$* OUTPUT=$@
 
 bin/calicoctl-windows-%: $(SRC_FILES)
-	$(MAKE) build-cross-binary BUILDOS=$(BUILDOS) ARCH=$(ARCH) OUTPUT=$@
+	$(MAKE) build-cross-binary BUILDOS=windows ARCH=$* OUTPUT=$@
 
 build-cross-binary:
 	mkdir -p $(dir $(OUTPUT))

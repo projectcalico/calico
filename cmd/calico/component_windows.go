@@ -20,23 +20,20 @@ import (
 	"github.com/projectcalico/calico/node/pkg/node"
 )
 
-// newComponentCommand on Windows registers the subset of in-cluster components
-// that cross-compile (node, felix, confd). The Linux-only components — typha,
-// pod2daemon (csi/flexvol), kube-controllers, goldmane, guardian, dikastes,
-// key-cert-provisioner, webhooks, whisker-backend, apiserver — depend on
-// syscall.Mount, syslog, eBPF, and other Linux-only facilities and are not
-// included in the Windows binary.
-func newComponentCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "component",
-		Short: "Run Calico components (internal use by the operator)",
+// On Windows the component subcommand exposes only node, felix, and confd —
+// the other in-cluster daemons (typha, kube-controllers, goldmane, etc.) have
+// Linux-only dependencies (netlink, eBPF, syscall.Mount, syslog).
+func init() {
+	addComponentCommand = func(parent *cobra.Command) {
+		cmd := &cobra.Command{
+			Use:   "component",
+			Short: "Run Calico components (internal use by the operator)",
+		}
+		cmd.AddCommand(
+			node.NewCommand(),
+			node.NewFelixCommand(),
+			node.NewConfdCommand(),
+		)
+		parent.AddCommand(cmd)
 	}
-
-	cmd.AddCommand(
-		node.NewCommand(),
-		node.NewFelixCommand(),
-		node.NewConfdCommand(),
-	)
-
-	return cmd
 }

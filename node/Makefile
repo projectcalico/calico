@@ -238,10 +238,7 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
-# calico-node.exe is the combined `calico` binary built from cmd/calico, with
-# the Windows-compatible component subset (node, felix, confd, cni, ctl,
-# health, version). Same binary as the Windows CNI image — argv[0] basename
-# and CNI_COMMAND dispatch route invocations to the right entry point.
+# Use the combined binary with name-based dispatch.
 $(WINDOWS_BINARY):
 	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(dir $@)
