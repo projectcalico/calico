@@ -1114,19 +1114,31 @@ func (r *CalicoManager) buildE2EBinaries() error {
 }
 
 func (r *CalicoManager) buildBinaries() error {
-	// Skip building binaries if we are building images
-	// binaries are built as part of "release-build" target.
+	env := append(os.Environ(),
+		fmt.Sprintf("VERSION=%s", r.calicoVersion),
+	)
+
+	// Always build the standalone calicoctl artifacts. They aren't produced
+	// by any image release-build target — calicoctl no longer ships its own
+	// image since components were consolidated into the combined calico
+	// image. On Linux the calicoctl Makefile delegates to cmd/calico to
+	// produce the monobinary; on darwin/windows it builds the standalone
+	// calicoctl source.
+	out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, "calicoctl"), "build-all", env...)
+	if err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to build calicoctl: %w", err)
+	}
+
+	// When building images, the remaining binaries are produced as part of
+	// each component's release-build target.
 	if r.buildImages {
 		return nil
 	}
 	m := map[string]string{
-		"calicoctl":  "build-all",
 		"cni-plugin": "build-all",
 		"felix":      "release-build",
 	}
-	env := append(os.Environ(),
-		fmt.Sprintf("VERSION=%s", r.calicoVersion),
-	)
 	for dir, target := range m {
 		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 		if err != nil {

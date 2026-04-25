@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -66,10 +67,13 @@ const (
 //
 // Rules:
 //   - argv[0] basename of "calico-ipam" → CNI IPAM plugin.
-//   - argv[0] basename of "calicoctl" → Cobra, with "ctl" inserted between
-//     argv[0] and the rest of the args. argv[0] itself is preserved so that
-//     panic traces, log prefixes, and kubectl-plugin detection still see the
-//     original invocation name.
+//   - argv[0] basename starting with "calicoctl" → Cobra, with "ctl" inserted
+//     between argv[0] and the rest of the args. The prefix match covers the
+//     plain "calicoctl" name as well as the per-platform release artifacts
+//     (e.g. "calicoctl-linux-amd64", "calicoctl-windows-amd64.exe") so users
+//     don't have to rename the downloaded binary. argv[0] itself is preserved
+//     so panic traces, log prefixes, and kubectl-plugin detection still see
+//     the original invocation name.
 //   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
 //     only when no subcommand args were passed. This guards against a stray
 //     CNI_COMMAND in a shell environment silently hijacking "calicoctl get
@@ -77,10 +81,10 @@ const (
 //   - Otherwise, Cobra.
 func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
 	_, filename := filepath.Split(args[0])
-	switch filename {
-	case "calico-ipam":
+	switch {
+	case filename == "calico-ipam":
 		return modeCNIIPAM, args
-	case "calicoctl":
+	case strings.HasPrefix(filename, "calicoctl"):
 		rewritten := append([]string{args[0], "ctl"}, args[1:]...)
 		return modeCobra, rewritten
 	default:
