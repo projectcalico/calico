@@ -68,7 +68,7 @@ func (r *RealCommandRunner) RunInDirToFile(dir, name string, args []string, env 
 
 // runInDir is the shared implementation. extraOut and extraErr (if non-nil) receive
 // a copy of the child's stdout / stderr in addition to the captured buffer and the
-// live logger stream.
+// live os.Stdout / os.Stderr stream.
 func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extraOut, extraErr io.Writer) (string, error) {
 	cmd := exec.Command(name, args...)
 	if len(env) != 0 {
@@ -76,17 +76,16 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	}
 	cmd.Dir = dir
 
-	// Stream output through logrus line-by-line so each line gets its own
-	// timestamp in the live job log, and capture into a buffer for callers
-	// that need the full output.
+	// Stream raw bytes to the parent's stdout/stderr so progress is visible in
+	// real time, and capture into a buffer for callers that need the full output.
+	// We deliberately don't pipe through logrus.WriterLevel: it sits on a
+	// synchronous io.Pipe whose scanner goroutine bails out on any line longer
+	// than bufio.MaxScanTokenSize, and after that the pipe has no reader and
+	// the next write from the child deadlocks. docker buildx progress output
+	// is exactly the kind of input that trips this.
 	var outb, errb bytes.Buffer
-	stdoutStream := logrus.StandardLogger().WriterLevel(logrus.InfoLevel)
-	stderrStream := logrus.StandardLogger().WriterLevel(logrus.WarnLevel)
-	defer stdoutStream.Close()
-	defer stderrStream.Close()
-
-	stdoutWriters := []io.Writer{&outb, stdoutStream}
-	stderrWriters := []io.Writer{&errb, stderrStream}
+	stdoutWriters := []io.Writer{&outb, os.Stdout}
+	stderrWriters := []io.Writer{&errb, os.Stderr}
 	if extraOut != nil {
 		stdoutWriters = append(stdoutWriters, extraOut)
 	}
