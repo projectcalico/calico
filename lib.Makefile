@@ -1094,8 +1094,9 @@ push-image-arch-to-registry-%:
 	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 	@$(call log_step,end,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
 	$(if $(filter $*,amd64),\
-		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
-		$(NOECHO) $(NOOP)\
+		$(call log_step,start,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)); \
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
+		$(call log_step,end,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)) \
 	)
 
 # push multi-arch manifest where supported.
