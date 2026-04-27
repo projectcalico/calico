@@ -18,11 +18,16 @@
 // upstream submission.
 //
 // All flags come from sigs.k8s.io/gateway-api/conformance/utils/flags;
-// see that package for the full list.
+// see that package for the full list. One additional flag is defined
+// here, -curated, which selects a pre-baked feature/test/profile set
+// that mirrors a known upstream implementation's curated configuration
+// (currently: envoy-gateway).
 
 package gateway_test
 
 import (
+	"flag"
+	"fmt"
 	"io/fs"
 	"os"
 	"strings"
@@ -43,6 +48,18 @@ import (
 	"sigs.k8s.io/gateway-api/pkg/features"
 	"sigs.k8s.io/yaml"
 )
+
+// curatedFlag selects a pre-baked feature/test/profile set. Empty means
+// "honour the individual upstream flags". Currently supports:
+//
+//	envoy-gateway   - mirrors envoyproxy/gateway v1.7.0's
+//	                  EnvoyGatewaySuite (default mode, no
+//	                  gatewayNamespaceMode): full upstream features
+//	                  minus mesh, plus UDP, with GatewayStaticAddresses
+//	                  and GatewayInfrastructure tests skipped.
+//	                  See internal/gatewayapi/conformance/suite.go in
+//	                  the envoyproxy/gateway v1.7.0 tag.
+var curatedFlag = flag.String("curated", "", "Pre-baked feature/test/profile set: \"envoy-gateway\" or empty.")
 
 func TestGatewayAPIConformance(t *testing.T) {
 	cfg, err := config.GetConfig()
@@ -75,10 +92,6 @@ func TestGatewayAPIConformance(t *testing.T) {
 		}
 		profileNames.Insert(suite.ConformanceProfileName(p))
 	}
-	if profileNames.Len() == 0 {
-		// Default to GATEWAY-HTTP for Calico's Envoy-Gateway-based impl.
-		profileNames.Insert(suite.GatewayHTTPConformanceProfileName)
-	}
 
 	var contacts []string
 	if *flags.ImplementationContact != "" {
@@ -91,9 +104,29 @@ func TestGatewayAPIConformance(t *testing.T) {
 	supportedFeatures := parseFeatures(*flags.SupportedFeatures)
 	exemptFeatures := parseFeatures(*flags.ExemptFeatures)
 	skipTests := splitCSV(*flags.SkipTests)
+	enableAll := *flags.EnableAllSupportedFeatures
 
-	t.Logf("running gateway-api conformance: gatewayClass=%s mode=%s version=%q profiles=%v allFeatures=%t",
-		*flags.GatewayClassName, *flags.Mode, *flags.ImplementationVersion, profileNames.UnsortedList(), *flags.EnableAllSupportedFeatures)
+	if *curatedFlag != "" {
+		curated, err := curatedConfig(*curatedFlag)
+		if err != nil {
+			t.Fatalf("curated config: %v", err)
+		}
+		// Curated overrides individual feature/test/profile flags so the
+		// caller can't accidentally mix and match an inconsistent set.
+		supportedFeatures = curated.SupportedFeatures
+		exemptFeatures = curated.ExemptFeatures
+		skipTests = curated.SkipTests
+		profileNames = curated.Profiles
+		enableAll = false
+	}
+
+	if profileNames.Len() == 0 {
+		// Default to GATEWAY-HTTP for Calico's Envoy-Gateway-based impl.
+		profileNames.Insert(suite.GatewayHTTPConformanceProfileName)
+	}
+
+	t.Logf("running gateway-api conformance: gatewayClass=%s mode=%s version=%q curated=%q profiles=%v allFeatures=%t",
+		*flags.GatewayClassName, *flags.Mode, *flags.ImplementationVersion, *curatedFlag, profileNames.UnsortedList(), enableAll)
 
 	cSuite, err := suite.NewConformanceTestSuite(suite.ConformanceOptions{
 		Client:                     c,
@@ -107,7 +140,7 @@ func TestGatewayAPIConformance(t *testing.T) {
 		AllowCRDsMismatch:          *flags.AllowCRDsMismatch,
 		SupportedFeatures:          supportedFeatures,
 		ExemptFeatures:             exemptFeatures,
-		EnableAllSupportedFeatures: *flags.EnableAllSupportedFeatures,
+		EnableAllSupportedFeatures: enableAll,
 		SkipTests:                  skipTests,
 		SkipProvisionalTests:       *flags.SkipProvisionalTests,
 		RunTest:                    *flags.RunTest,
@@ -172,4 +205,69 @@ func parseFeatures(s string) sets.Set[features.FeatureName] {
 		out.Insert(features.FeatureName(name))
 	}
 	return out
+}
+
+// curatedSet bundles the four conformance suite levers a curated profile
+// drives: which features are claimed, which are exempt, which tests are
+// skipped, and which profiles are exercised.
+type curatedSet struct {
+	SupportedFeatures sets.Set[features.FeatureName]
+	ExemptFeatures    sets.Set[features.FeatureName]
+	SkipTests         []string
+	Profiles          sets.Set[suite.ConformanceProfileName]
+}
+
+func curatedConfig(name string) (curatedSet, error) {
+	switch name {
+	case "envoy-gateway":
+		return envoyGatewayCuratedSet(), nil
+	default:
+		return curatedSet{}, fmt.Errorf("unknown curated set %q (supported: envoy-gateway)", name)
+	}
+}
+
+// envoyGatewayCuratedSet mirrors the curated configuration in
+// envoyproxy/gateway v1.7.0's internal/gatewayapi/conformance/suite.go
+// for the default (non-gatewayNamespaceMode) operating mode. Calico's
+// Gateway API implementation is a Calico-deployed Envoy Gateway, so the
+// supported feature surface is, by construction, the same.
+//
+// Source ref: https://github.com/envoyproxy/gateway/blob/v1.7.0/internal/gatewayapi/conformance/suite.go
+func envoyGatewayCuratedSet() curatedSet {
+	skipFeatures := sets.New(
+		features.GatewayStaticAddressesFeature.Name,
+		features.GatewayInfrastructurePropagationFeature.Name,
+	)
+
+	supported := sets.New[features.FeatureName]()
+	for _, f := range features.AllFeatures.UnsortedList() {
+		if !skipFeatures.Has(f.Name) {
+			supported.Insert(f.Name)
+		}
+	}
+	for _, f := range features.UDPRouteFeatures {
+		supported.Insert(f.Name)
+	}
+
+	exempt := sets.New[features.FeatureName]()
+	for _, f := range features.MeshCoreFeatures.UnsortedList() {
+		exempt.Insert(f.Name)
+	}
+	for _, f := range features.MeshExtendedFeatures.UnsortedList() {
+		exempt.Insert(f.Name)
+	}
+
+	return curatedSet{
+		SupportedFeatures: supported,
+		ExemptFeatures:    exempt,
+		SkipTests: []string{
+			tests.GatewayStaticAddresses.ShortName,
+			tests.GatewayInfrastructure.ShortName,
+		},
+		Profiles: sets.New(
+			suite.GatewayHTTPConformanceProfileName,
+			suite.GatewayTLSConformanceProfileName,
+			suite.GatewayGRPCConformanceProfileName,
+		),
+	}
 }
