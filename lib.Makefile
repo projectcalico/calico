@@ -1582,7 +1582,10 @@ KIND_TEST_BUILD_TAG = test-build
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/calico:$(KIND_TEST_BUILD_TAG)
+	calico/calico:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
 
 # Operator is built separately (build-operator.sh tags it directly as
 # :test-build), so it's not in KIND_CALICO_IMAGES.
@@ -1598,7 +1601,10 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
@@ -1610,6 +1616,18 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 
 $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
+
+# Envoy components: the third_party/envoy-* sub-makes use their own marker
+# names (.envoy-<comp>.created-$(ARCH)). The sub-make handles fetching
+# upstream sources and building the image as calico/envoy-<comp>:latest-$(ARCH).
+$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-gateway image
+
+$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-proxy image
+
+$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
