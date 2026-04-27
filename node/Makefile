@@ -45,21 +45,15 @@ FIPS ?= false
 
 ifeq ($(FIPS),true)
 NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
 VALIDARCHES=amd64
 else
 NODE_CONTAINER_BIN_DIR=dist/bin
-NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
-# Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
+# The node image uses the combined calico binary built with CGO for BPF support.
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 
 ###############################################################################
 
@@ -122,7 +116,6 @@ WINDOWS_ARCHIVE_FILES := \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/blocks.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/confd/templates/peerings.ps1.template \
     $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe \
-    $(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
     $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt \
     $(WINDOWS_ARCHIVE_ROOT)/libs/calico/calico.psm1
@@ -139,7 +132,7 @@ ST_OPTIONS?=
 K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
-NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
+NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/usr/lib/calico/bpf/*')
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
@@ -214,7 +207,14 @@ ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
     ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
-CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+# When cross-compiling, force lld as the linker — GNU ld is single-target,
+# while lld natively links the cross-arch ELF objects produced by clang.
+# (The cross sysroot itself is already supplied via CC's --sysroot flag.)
+CROSS_CGO_LDFLAGS=
+ifneq ($(CROSS_SYSROOT),)
+    CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
+endif
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 else
 CGO_ENABLED=0
@@ -222,28 +222,27 @@ CGO_LDFLAGS=""
 CGO_CFLAGS=""
 endif
 
-$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
+# The node image uses the combined calico binary built with CGO for BPF support.
+# Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
+# it to bin/$(ARCH)-fips, which is where we pick it up from below.
+CMD_CALICO_BINDIR = ../cmd/calico/bin
 ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
-else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
-else
-	$(call build_binary, ./cmd/calico-node/main.go, $@)
+CMD_CALICO_BINDIR = ../cmd/calico/bin/$(ARCH)-fips
 endif
-endif
+
+$(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH) FIPS=$(FIPS)
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+	cp $(CMD_CALICO_BINDIR)/calico-cgo-$(ARCH) $@
 
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
 $(WINDOWS_BINARY): $(SRC_FILES)
-	$(call build_windows_binary, ./cmd/calico-node/main.go, $@)
+	$(call build_windows_binary, ../cmd/calico-windows, $@)
 
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe:
-	$(call build_windows_binary, ./cmd/calico, $@)
-
-$(WINDOWS_ARCHIVE_ROOT)/cni/calico-ipam.exe:
-	$(call build_windows_binary, ./cmd/calico-ipam, $@)
+$(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
+	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
 ifeq ($(CGO_ENABLED),1)
@@ -267,9 +266,8 @@ dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
-# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
-image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
@@ -279,7 +277,7 @@ $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOU
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
@@ -391,6 +389,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v $(KIND_KUBECONFIG):/root/.kube/config \
 	    -v $(KUBECTL):/bin/kubectl \
+	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \

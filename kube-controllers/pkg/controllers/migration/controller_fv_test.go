@@ -158,6 +158,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 		APIRegClient:  fakeAPIReg.ApiregistrationV1(),
 		CRDClient:     fvCRDClient,
 		Migrators:     NewMigrators(bc, fvRTClient),
+		RestartFunc:   func() {},
 	})
 	go ctrl.Run(stop)
 
@@ -185,6 +186,8 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Tiers should exist in v3 with the internal annotation stripped.
 	tier1 := &apiv3.Tier{}
 	h.getV3Resource("default", tier1)
+	// The default tier's order is normalised to DefaultTierOrder during migration
+	// regardless of the v1 value, because the v3 API enforces this requirement.
 	g.Expect(tier1.Spec.Order).To(Equal(ptr.To(apiv3.DefaultTierOrder)))
 	g.Expect(tier1.Annotations).NotTo(HaveKey("projectcalico.org/metadata"))
 

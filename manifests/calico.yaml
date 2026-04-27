@@ -2314,6 +2314,14 @@ spec:
                     [Default: unset - read from net.ipv4.ipfrag_time]
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                bpfIPFragmentReassemblyEnabled:
+                  description: |-
+                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+                    reassembles out-of-order IP fragments from external networks. This program requires
+                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+                    Felix reports not-ready until the user sets this to false. When false, fragmented
+                    packets from external sources are dropped. [Default: true]
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
@@ -3121,6 +3129,22 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
@@ -3454,6 +3478,14 @@ spec:
                     == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
                     == 6)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true
 ---
@@ -10628,8 +10660,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/300
-    policy.networking.k8s.io/bundle-version: v0.1.7
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
+    policy.networking.k8s.io/bundle-version: v0.2.0
     policy.networking.k8s.io/channel: standard
   name: clusternetworkpolicies.policy.networking.k8s.io
 spec:
@@ -12347,9 +12379,9 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
+          command: ["/usr/bin/calico-ipam", "-upgrade"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -12375,9 +12407,9 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/opt/cni/bin/install"]
+          args: ["cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -12421,7 +12453,7 @@ spec:
         - name: "ebpf-bootstrap"
           image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
-          command: ["calico-node", "-init", "-best-effort"]
+          command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
             - mountPath: /sys/fs
               name: sys-fs
@@ -12528,14 +12560,19 @@ spec:
             preStop:
               exec:
                 command:
-                  - /bin/calico-node
-                  - -shutdown
+                  - calico
+                  - component
+                  - node
+                  - shutdown
           livenessProbe:
             exec:
               command:
-                - /bin/calico-node
-                - -felix-live
-                - -bird-live
+                - calico
+                - component
+                - node
+                - health
+                - --felix-live
+                - --bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -12543,9 +12580,12 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /bin/calico-node
-                - -felix-ready
-                - -bird-ready
+                - calico
+                - component
+                - node
+                - health
+                - --felix-ready
+                - --bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
@@ -12668,8 +12708,9 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
+          args: ["component", "kube-controllers"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -12679,7 +12720,10 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -l
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -12688,7 +12732,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -r
             periodSeconds: 10
           securityContext:

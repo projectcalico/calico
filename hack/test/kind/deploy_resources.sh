@@ -25,11 +25,12 @@
 #   KIND_IMAGES - space-separated list of Docker images to load onto the cluster
 #
 # Optional environment variables:
-#   ARCH              - target architecture (default: amd64)
-#   GIT_VERSION       - version for chart lookup (default: git describe)
-#   CALICO_API_GROUP  - which API group to use
-#   CLUSTER_ROUTING   - BIRD (default) or FELIX
-#   VALUES_FILE       - path to helm values file (default: infra/values.yaml)
+#   ARCH               - target architecture (default: amd64)
+#   GIT_VERSION        - version for chart lookup (default: git describe)
+#   CALICO_API_GROUP   - which API group to use
+#   VALUES_FILE        - path to base helm values file (default: infra/values.yaml)
+#   EXTRA_VALUES_FILES - space-separated list of additional helm values files to
+#                        layer on top of VALUES_FILE (later files override earlier)
 
 # Clean up background jobs on exit, and collect diagnostics on failure.
 set -m
@@ -46,6 +47,13 @@ trap 'cleanup' SIGINT SIGHUP SIGTERM EXIT
 : ${REPO_ROOT:?REPO_ROOT must be set}
 : ${KIND:?KIND must be set}
 : ${KIND_NAME:?KIND_NAME must be set}
+
+# Relative paths in VALUES_FILE / EXTRA_VALUES_FILES are resolved against the
+# current working directory, so the script must be invoked from REPO_ROOT.
+if [ "$(pwd)" != "${REPO_ROOT}" ]; then
+  echo "ERROR: deploy_resources.sh must be run from REPO_ROOT (${REPO_ROOT}), got $(pwd)"
+  exit 1
+fi
 
 INFRA_DIR=${REPO_ROOT}/hack/test/kind/infra
 ARCH=${ARCH:-amd64}
@@ -167,53 +175,24 @@ echo
 # CRDs are already created prior to reaching this script from within lib.Makefile as part
 # of kind cluster creation.
 echo "Install Calico using the helm chart"
-${HELM} install calico ${CHART} -f ${VALUES_FILE} -n tigera-operator --create-namespace
 
-if [[ "$CLUSTER_ROUTING" == "FELIX" ]]; then
-  echo "Patching installation resource to Felix cluster routing mode"
-  ${kubectl} patch installation default --type='merge' -p '{"spec": {"calicoNetwork": {"clusterRoutingMode":"Felix"}}}'
-fi
+# Build helm -f args: always include the base VALUES_FILE, then any overlays
+# in EXTRA_VALUES_FILES. Helm deep-merges the files, with later ones winning.
+helm_values_args=(-f "${VALUES_FILE}")
+for extra in ${EXTRA_VALUES_FILES:-}; do
+  helm_values_args+=(-f "${extra}")
+done
+echo "Helm values files: ${VALUES_FILE} ${EXTRA_VALUES_FILES:-}"
+${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
 
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
-echo
-
-echo "Wait for tigera status to be ready"
-if ! ( ${kubectl} wait --for=create --timeout=60s tigerastatus/calico &&
-       ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/calico ); then
-  echo "TigeraStatus for Calico failed to become Available"
-  exit 1
-fi
-
-# Wait for the Calico API server to be available, if not using the projectcalico.org/v3 CRDs.
-# If using the projectcalico.org/v3 CRDs, there is no Calico API server to wait for.
-if [ "$CALICO_API_GROUP" != "projectcalico.org/v3" ]; then
-  echo "Wait for the Calico API server to be ready"
-  if ! ${kubectl} wait --for=condition=Available --timeout=300s tigerastatus/apiserver; then
-    echo "TigeraStatus for API server failed to become Available"
-    exit 1
-  fi
-fi
-
-echo "Wait for Calico to be ready..."
-wait_pod_ready -n calico-system -l k8s-app
-wait_pod_ready -l k8s-app=kube-dns -n kube-system
-wait_pod_ready calicoctl -n kube-system
-
-echo "Calico is running."
 echo
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
 ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
-
-echo "Cluster is ready."
-echo
-
-# Show all the pods running for diags purposes.
-${kubectl} get po --all-namespaces -o wide
-${kubectl} get svc
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
@@ -250,3 +229,10 @@ for attempt in $(seq 1 120); do
 
   sleep 5
 done
+
+echo "Wait for Calico to be ready..."
+wait_pod_ready -l k8s-app=kube-dns -n kube-system
+wait_pod_ready calicoctl -n kube-system
+wait_pod_ready -l k8s-app -n calico-system
+
+echo "Calico is running."

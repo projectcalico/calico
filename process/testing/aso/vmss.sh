@@ -671,6 +671,17 @@ function delete_rg() {
   # Verify required environment variables
   : "${AZURE_RESOURCE_GROUP:?Environment variable empty or not defined.}"
 
+  # Verify az CLI is installed and authenticated
+  if ! command -v az >/dev/null 2>&1; then
+    log_error "Azure CLI ('az') is not installed or not available in PATH."
+    return 1
+  fi
+  local az_error
+  if ! az_error="$(az account show 2>&1)"; then
+    log_error "Unable to use Azure CLI account context: ${az_error}. Running 'az login' may be needed."
+    return 1
+  fi
+
   # Check if resource group exists
   log_info "Checking if resource group '${AZURE_RESOURCE_GROUP}' exists..."
   if ! az group show --name "${AZURE_RESOURCE_GROUP}" &>/dev/null; then

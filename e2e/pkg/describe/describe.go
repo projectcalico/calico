@@ -131,14 +131,14 @@ func WithWindows() any {
 	return framework.WithLabel("RunsOnWindows")
 }
 
-// WithAzure marks tests that must run on Azure.
-func WithAzure() any {
-	return framework.WithLabel("RunsOnAzure")
+// RequiresAzure marks tests that can only run on Azure.
+func RequiresAzure() any {
+	return framework.WithLabel("RequiresAzure")
 }
 
-// WithAWS marks tests that must run on AWS.
-func WithAWS() any {
-	return framework.WithLabel("RunsOnAWS")
+// RequiresAWS marks tests that can only run on AWS.
+func RequiresAWS() any {
+	return framework.WithLabel("RequiresAWS")
 }
 
 // WithExternalNode marks tests that require an external node outside of the base cluster,
@@ -160,6 +160,14 @@ func RequiresRKE2() any {
 // RequiresRKE marks tests that require RHEL nodes.
 func RequiresRHEL() any {
 	return framework.WithLabel("RunsOnRHEL")
+}
+
+// RequiresXtables marks tests that only work on xtables-based dataplanes
+// (iptables or nftables). These tests exercise behavior that doesn't exist
+// on BPF or VPP dataplanes. Exclude on BPF clusters via the RequiresXtables
+// label in the test config.
+func RequiresXtables() any {
+	return framework.WithLabel("RequiresXtables")
 }
 
 // WithSmokeTest marks tests that are considered smoke tests.

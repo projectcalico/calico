@@ -1,12 +1,26 @@
 # gcp-bpf.yaml - GCP kubeadm with BPF dataplane.
 #
 # Used by the in-repo e2e CI block (20-e2e-gcp.yml). Runs sig-calico tests
-# and networking conformance on a VXLAN cluster.
+# on a VXLAN cluster with the BPF dataplane.
+#
+# This config is standalone (doesn't extend base.yaml) because it uses a
+# narrower include scope (sig-calico only, no sig-network Conformance) that
+# can't be expressed as an additive extension of base's broader includes.
 
-extends: base.yaml
+include:
+  - sig-calico
 
 exclude:
   labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
+
+    - label: RequiresAWS
+      reason: "requires AWS-specific infrastructure (VPC routing layout, etc.)"
+
     - label: RequiresBGPMesh
       reason: "requires BGP routing, but this cluster uses VXLAN"
 
@@ -15,3 +29,6 @@ exclude:
 
     - label: Feature:Istio
       reason: "Calico policy not enforced with Istio ambient on BPF dataplane"
+
+    - label: RequiresXtables
+      reason: "requires iptables or nftables dataplane, but this cluster uses BPF"

@@ -18,14 +18,9 @@ spec:
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- if or .Values.podAnnotations .Values.kubernetesServiceEndpoint.host }}
+      {{- with .Values.podAnnotations }}
       annotations:
-        {{- if .Values.kubernetesServiceEndpoint.host }}
-        checksum/endpoints-config: {{ include (print $.Template.BasePath "/tigera-operator/01-kubernetes-services-endpoint.yaml") . | sha256sum }}
-        {{- end }}
-        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-        {{- end }}
       {{- end }}
     spec:
       {{- with .Values.nodeSelector }}
@@ -67,6 +62,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds={{ .Values.manageCRDs }}
+            - -zap-devel={{ .Values.zapDevel }}
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -125,7 +121,7 @@ spec:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - calicoctl
+            - /usr/bin/calicoctl
           args:
             - --allow-version-mismatch
             - create
