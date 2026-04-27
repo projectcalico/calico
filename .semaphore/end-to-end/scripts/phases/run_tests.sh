@@ -46,7 +46,10 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # Run the e2e binary directly via ginkgo inside calico/go-build.
   echo "[INFO] starting e2e tests..."
   pushd "${HOME}/calico" || exit
-  GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+  _go_ver=$(grep '^GO_VERSION=' ./metadata.mk | cut -d= -f2)
+  _llvm_ver=$(grep '^LLVM_VERSION=' ./metadata.mk | cut -d= -f2)
+  _k8s_ver=$(grep '^K8S_VERSION=' ./metadata.mk | cut -d= -f2)
+  GO_BUILD_VER="${_go_ver}-llvm${_llvm_ver}-k8s${_k8s_ver#v}"
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
