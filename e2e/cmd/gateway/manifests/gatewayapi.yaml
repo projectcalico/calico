@@ -1,0 +1,29 @@
+# Operator-driven Envoy Gateway install for Calico's Gateway API
+# implementation. Reconciled by tigera-operator into:
+#   - GatewayClass "tigera-gateway-class"
+#   - Envoy Gateway controller in namespace "tigera-gateway"
+#
+# `envoyProxyRef` points at e2e/cmd/gateway/manifests/envoyproxy.yaml,
+# which sets externalTrafficPolicy: Cluster on the data-plane Service.
+# The conformance test runner lives outside the cluster (Semaphore VM
+# / dev laptop), so deterministic routing from the host through any
+# speaker node is required. See envoyproxy.yaml for the full rationale.
+#
+# The referenced EnvoyProxy resource is in the operator-managed
+# `tigera-gateway` namespace, which only exists once the operator has
+# reconciled this CR enough to install the Envoy Gateway components.
+# `make e2e-gateway-setup` applies this manifest first, waits for the
+# operator to bring up the namespace and the EnvoyProxy CRD, then
+# applies envoyproxy.yaml. Until envoyproxy.yaml lands the operator's
+# reconciliation will requeue with a missing-EnvoyProxy error, which is
+# expected and resolves on the next reconcile loop.
+apiVersion: operator.tigera.io/v1
+kind: GatewayAPI
+metadata:
+  name: default
+spec:
+  gatewayClasses:
+    - name: tigera-gateway-class
+      envoyProxyRef:
+        namespace: tigera-gateway
+        name: gateway-conformance-base
