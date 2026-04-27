@@ -302,9 +302,13 @@ GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/mast
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
 # Calico's tigera-operator-provisioned GatewayClass doesn't populate
 # .status.supportedFeatures, so the conformance suite's auto-inference returns
-# an empty set and refuses to construct. Default to the full upstream feature
-# set; curated runs can override to "" and pass -supported-features explicitly.
-GATEWAY_CONFORMANCE_ALL_FEATURES ?= true
+# an empty set and refuses to construct. Default to the curated envoy-gateway
+# set (see e2e/cmd/gateway/e2e_test.go::envoyGatewayCuratedSet) since Calico's
+# implementation is a Calico-deployed Envoy Gateway and inherits its supported
+# feature surface verbatim. Override GATEWAY_CONFORMANCE_CURATED to "" and set
+# the individual flags below for ad-hoc / debugging runs.
+GATEWAY_CONFORMANCE_CURATED ?= envoy-gateway
+GATEWAY_CONFORMANCE_ALL_FEATURES ?= false
 GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
 GATEWAY_CONFORMANCE_EXEMPT_FEATURES ?=
 
@@ -354,6 +358,7 @@ e2e-run-gateway-conformance:
 	mkdir -p $(dir $(GATEWAY_CONFORMANCE_REPORT))
 	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/gateway/e2e.test \
 	  -gateway-class=$(GATEWAY_CLASS_NAME) \
+	  -curated=$(GATEWAY_CONFORMANCE_CURATED) \
 	  -conformance-profiles=$(GATEWAY_CONFORMANCE_PROFILES) \
 	  -mode=$(GATEWAY_CONFORMANCE_MODE) \
 	  -all-features=$(GATEWAY_CONFORMANCE_ALL_FEATURES) \
