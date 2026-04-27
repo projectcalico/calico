@@ -300,6 +300,13 @@ GATEWAY_CONFORMANCE_PROJECT ?= calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
 GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/GOVERNANCE.md
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+# Calico's tigera-operator-provisioned GatewayClass doesn't populate
+# .status.supportedFeatures, so the conformance suite's auto-inference returns
+# an empty set and refuses to construct. Default to the full upstream feature
+# set; curated runs can override to "" and pass -supported-features explicitly.
+GATEWAY_CONFORMANCE_ALL_FEATURES ?= true
+GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
+GATEWAY_CONFORMANCE_EXEMPT_FEATURES ?=
 
 ## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
 ##
@@ -349,6 +356,9 @@ e2e-run-gateway-conformance:
 	  -gateway-class=$(GATEWAY_CLASS_NAME) \
 	  -conformance-profiles=$(GATEWAY_CONFORMANCE_PROFILES) \
 	  -mode=$(GATEWAY_CONFORMANCE_MODE) \
+	  -all-features=$(GATEWAY_CONFORMANCE_ALL_FEATURES) \
+	  -supported-features=$(GATEWAY_CONFORMANCE_SUPPORTED_FEATURES) \
+	  -exempt-features=$(GATEWAY_CONFORMANCE_EXEMPT_FEATURES) \
 	  -organization=$(GATEWAY_CONFORMANCE_ORG) \
 	  -project=$(GATEWAY_CONFORMANCE_PROJECT) \
 	  -url=$(GATEWAY_CONFORMANCE_URL) \
