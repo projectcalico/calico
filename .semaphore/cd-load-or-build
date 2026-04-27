@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Populate local Docker with the per-arch images needed by a component's CD
+# promotion. For each arch, try to load a tarball uploaded to the per-workflow
+# GCS cache by an earlier build block; fall back to rebuilding from source if
+# the cache is empty.
+#
+# On master pushes where the component's build block ran, every arch hits the
+# cache and the promotion skips the rebuild entirely. When the build block was
+# skipped (e.g. CHANGE_IN did not fire) the fallback preserves correctness at
+# the cost of the rebuild — same behavior as before this script existed.
+#
+# Usage: cd-load-or-build <component-dir> <build-image> <arch> [<arch>...] [--fips <arch> [<arch>...]]
+# Example: cd-load-or-build node node amd64 arm64 ppc64le s390x --fips amd64
+#
+# <component-dir> is relative to the repo root (passed to `make -C`).
+# <build-image> is the BUILD_IMAGE tag used by the Makefile (no registry
+# prefix); the cached tarball contains "<build-image>:latest-<arch>" (and
+# "<build-image>:latest-fips-<arch>" for FIPS).
+
+set -euo pipefail
+
+: "${GCS_WORKFLOW_DIR:?GCS_WORKFLOW_DIR must be set}"
+
+if [ "$#" -lt 3 ]; then
+    echo "usage: $0 <component-dir> <build-image> <arch>... [--fips <arch>...]" >&2
+    exit 2
+fi
+
+component=$1
+build_image=$2
+shift 2
+
+arches=()
+fips_arches=()
+in_fips=false
+for arg in "$@"; do
+    if [ "$arg" = "--fips" ]; then
+        in_fips=true
+        continue
+    fi
+    if $in_fips; then
+        fips_arches+=("$arg")
+    else
+        arches+=("$arg")
+    fi
+done
+
+repo_root=$(git rev-parse --show-toplevel)
+
+try_load() {
+    local gcs_key=$1
+    local blob="${GCS_WORKFLOW_DIR}/${gcs_key}"
+    local tmp="/tmp/${gcs_key}"
+    if ! gcloud storage cp "$blob" "$tmp" 2>/dev/null; then
+        echo "Cache miss: ${gcs_key}"
+        return 1
+    fi
+    local tar="${tmp%.zst}"
+    zstd -d --rm "$tmp" -o "$tar"
+    docker load -i "$tar"
+    rm -f "$tar"
+    echo "Loaded ${gcs_key} from workflow cache"
+    return 0
+}
+
+for arch in "${arches[@]}"; do
+    key="cd-${build_image}-${arch}.tar.zst"
+    if ! try_load "$key"; then
+        echo "Rebuilding ${build_image} for ${arch}"
+        make -C "${repo_root}/${component}" image ARCH="$arch"
+    fi
+done
+
+for arch in "${fips_arches[@]}"; do
+    key="cd-${build_image}-fips-${arch}.tar.zst"
+    if ! try_load "$key"; then
+        echo "Rebuilding ${build_image} FIPS for ${arch}"
+        make -C "${repo_root}/${component}" image ARCH="$arch" FIPS=true
+    fi
+done

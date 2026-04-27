@@ -221,6 +221,11 @@
           - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
           - zstd -3 --rm /tmp/node-image.tar
           - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+          # Also cache the image under the CD blob key (bare "node:latest-amd64"
+          # tag) so the publish pipeline's cd-load-or-build can skip the amd64
+          # rebuild. The tarball above carries "calico/node:latest-amd64", which
+          # is what load-cached-images expects for downstream tests.
+          - .semaphore/cache-built-image node:latest-amd64 cd-node-amd64.tar.zst
 - name: "Build: whisker image"
   # Whisker is a TypeScript/React frontend — no Go build cache to populate.
   run:
