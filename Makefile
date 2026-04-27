@@ -300,6 +300,9 @@ GATEWAY_CONFORMANCE_PROJECT ?= calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
 GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/GOVERNANCE.md
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
+# Name of the docker network kind binds to. The kind default is "kind".
+GATEWAY_KIND_DOCKER_NETWORK ?= kind
 # Calico's tigera-operator-provisioned GatewayClass doesn't populate
 # .status.supportedFeatures, so the conformance suite's auto-inference returns
 # an empty set and refuses to construct. Default to the curated envoy-gateway
@@ -326,6 +329,19 @@ GATEWAY_SETUP_GWC_TIMEOUT ?= 5m
 .PHONY: e2e-gateway-setup
 e2e-gateway-setup:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-gateway-setup: KUBECONFIG must be set"; exit 1; fi
+	@# Compute an L2 metallb pool from the kind docker bridge subnet so the
+	@# conformance test runner (which lives on the host) can reach LB IPs.
+	@# Calico's default metallb pool is BGP-mode + public IPs that aren't
+	@# routable from the host. Mirrors envoyproxy/gateway's create-cluster.sh.
+	@subnet_v4=$$(docker network inspect $(GATEWAY_KIND_DOCKER_NETWORK) 2>/dev/null | jq -r '.[].IPAM.Config[]? | select(.Subnet | contains(":") | not) | .Subnet' | head -1); \
+	if [ -z "$$subnet_v4" ]; then \
+	  echo "e2e-gateway-setup: could not determine IPv4 subnet of docker network '$(GATEWAY_KIND_DOCKER_NETWORK)'. Is the kind cluster up and is jq installed?"; \
+	  exit 1; \
+	fi; \
+	prefix=$$(echo "$$subnet_v4" | awk -F. '{print $$1"."$$2"."$$3}'); \
+	range="$$prefix.200-$$prefix.250"; \
+	echo "Applying L2 metallb pool gateway-conformance with addresses $$range (from $(GATEWAY_KIND_DOCKER_NETWORK) subnet $$subnet_v4)"; \
+	sed "s|__LB_RANGE_V4__|$$range|g" $(GATEWAY_METALLB_POOL) | kubectl --kubeconfig=$(KUBECONFIG) apply -f -
 	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
 	@echo "Waiting up to $(GATEWAY_SETUP_CRD_TIMEOUT)s for tigera-operator to install Gateway API CRDs..."
 	@end=$$(( $$(date +%s) + $(GATEWAY_SETUP_CRD_TIMEOUT) )); \
