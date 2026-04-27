@@ -17,7 +17,9 @@ package utils
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/onsi/gomega"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,14 +65,18 @@ func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlcl
 	}
 
 	return func() {
-		// Re-fetch to get the current resourceVersion before restoring.
-		if err := cli.Get(context.Background(), key, obj); err != nil {
-			framework.Logf("WARNING: failed to get %T for restoration: %v", obj, err)
-			return
-		}
-		original.SetResourceVersion(obj.GetResourceVersion())
-		if err := cli.Update(context.Background(), original); err != nil {
-			framework.Logf("WARNING: failed to restore %T: %v", obj, err)
-		}
+		gomega.Eventually(func() error {
+			// Re-fetch to get the current resourceVersion before restoring.
+			if err := cli.Get(context.Background(), key, obj); err != nil {
+				framework.Logf("WARNING: failed to get %T for restoration: %v", obj, err)
+				return fmt.Errorf("failed to get %T for restoration: %w", obj, err)
+			}
+			original.SetResourceVersion(obj.GetResourceVersion())
+			if err := cli.Update(context.Background(), original); err != nil {
+				framework.Logf("WARNING: failed to restore %T: %v", obj, err)
+				return fmt.Errorf("failed to restore %T: %w", obj, err)
+			}
+			return nil
+		}, 5*time.Second, 500*time.Millisecond).ShouldNot(gomega.HaveOccurred(), "failed to restore %T after retries", obj)
 	}, nil
 }
