@@ -268,7 +268,7 @@ func TestIPAMCleanup(t *testing.T) {
 		reportFile, err := os.ReadFile("/tmp/ipam_report.json")
 		Expect(err).NotTo(HaveOccurred())
 		t.Log("IPAM check report (raw JSON):", string(reportFile))
-		var report ipamcmd.Report
+		var report ipamcmd.CheckReport
 		err = json.Unmarshal(reportFile, &report)
 		Expect(err).NotTo(HaveOccurred())
 
