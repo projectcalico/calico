@@ -1,0 +1,9 @@
+# Operator-driven Envoy Gateway install for Calico's Gateway API
+# implementation. Reconciled by tigera-operator into:
+#   - GatewayClass "tigera-gateway-class" (default name when GatewayClasses is unset)
+#   - Envoy Gateway controller in namespace "tigera-gateway"
+# See operator-crds.yaml -> kind GatewayAPI for the full spec.
+apiVersion: operator.tigera.io/v1
+kind: GatewayAPI
+metadata:
+  name: default
