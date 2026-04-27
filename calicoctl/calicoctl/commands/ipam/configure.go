@@ -35,6 +35,7 @@ func updateIPAMConfig(
 	strictAffinity *bool,
 	maxBlocks *int,
 	persistence *ipam.VMAddressPersistence,
+	minIPReclaimAgeSeconds *int,
 ) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
@@ -54,6 +55,11 @@ func updateIPAMConfig(
 	// Update KubeVirtVMAddressPersistence if specified.
 	if persistence != nil {
 		ipamConfig.KubeVirtVMAddressPersistence = persistence
+	}
+
+	// Update MinIPReclaimAgeSeconds if specified.
+	if minIPReclaimAgeSeconds != nil {
+		ipamConfig.MinIPReclaimAgeSeconds = *minIPReclaimAgeSeconds
 	}
 
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
@@ -216,5 +222,5 @@ Description:
 		return fmt.Errorf("at least one configuration option must be specified")
 	}
 
-	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence, nil) // TODO
 }

@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/docopt/docopt-go"
 	corev1 "k8s.io/api/core/v1"
@@ -226,6 +228,9 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 				}
 				numAllocs++
 				c.recordAllocation(b, ord)
+			}
+			if err := validateBlock(b); err != nil {
+				fmt.Printf("Found invalid IPAM block %s: %s", kvp.Key, err)
 			}
 		}
 		fmt.Printf("IPAM blocks record %d allocations.\n", numAllocs)
@@ -488,7 +493,56 @@ func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
 	return ips, nil
 }
 
-type Report struct {
+func validateBlock(b *model.AllocationBlock) error {
+	// Check that all non-nil Allocations point to valid attributes.
+	seenAttribs := map[int]struct{}{}
+	seenOrdinals := map[int]struct{}{}
+	var o int
+	for o = 0; o < b.NumAddresses(); o++ {
+		if b.Allocations[o] == nil {
+			continue
+		}
+		attrIdx := *b.Allocations[o]
+		if attrIdx < 0 || attrIdx > len(b.Attributes) {
+			return fmt.Errorf("allocation %d indexes a nonexistent attribute %d", o, attrIdx)
+		}
+		seenAttribs[attrIdx] = struct{}{}
+		seenOrdinals[o] = struct{}{}
+	}
+
+	// Check that all attributes are pointed to
+	for i := range b.Attributes {
+		if _, found := seenAttribs[i]; !found {
+			return fmt.Errorf("attribute index %d exists but is not indexed by an allocation", i)
+		}
+		releasedAt := b.Attributes[i].ReleasedAt
+		if releasedAt != nil && releasedAt.After(time.Now()) {
+			return fmt.Errorf("attribute index %d has releasedAt in the future, suggesting clock skew", i)
+		}
+	}
+
+	// Check that all unallocated ordinals are unique and not seen.
+	for i, o := range b.Unallocated {
+		if o < 0 || o >= len(b.Allocations) {
+			return fmt.Errorf("ordinal %d appears in the Unallocated array but is out of the block", o)
+		}
+		if slices.Contains(b.Unallocated[:i], o) {
+			return fmt.Errorf("ordinal %d appears more than once in Unallocated array", o)
+		}
+		if _, found := seenOrdinals[o]; found {
+			return fmt.Errorf("ordinal %d is allocated but appears in Unallocated", o)
+		}
+	}
+
+	if len(b.Unallocated)+len(seenOrdinals) != b.NumAddresses() {
+		return fmt.Errorf("expected %d addresses in this block, but Unallocated (%d) + Allocated (%d) = %d",
+			b.NumAddresses(), len(b.Unallocated), len(seenOrdinals), len(b.Unallocated)+len(seenOrdinals))
+	}
+
+	return nil
+}
+
+type CheckReport struct {
 	// Version of the code that produced the report.
 	Version string `json:"version"`
 
@@ -504,7 +558,7 @@ type Report struct {
 }
 
 func (c *IPAMChecker) printReport() {
-	r := Report{
+	r := CheckReport{
 		Version:             c.version,
 		ClusterGUID:         c.clusterGUID,
 		ClusterType:         c.clusterType,
