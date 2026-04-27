@@ -302,11 +302,43 @@ GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/mast
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
 
 ## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
+##
+## The tigera-operator reconciles the GatewayAPI CR asynchronously: it
+## installs the Gateway API CRDs (gatewayclasses, gateways, httproutes, ...),
+## installs the Envoy Gateway controller, and only then creates the default
+## GatewayClass. `kubectl wait --for=condition` against a resource type that
+## doesn't yet exist on the server errors immediately rather than retrying,
+## so we poll for the CRD first, then wait for the GatewayClass.
+GATEWAY_SETUP_CRD_TIMEOUT ?= 300
+GATEWAY_SETUP_GWC_TIMEOUT ?= 5m
+
 .PHONY: e2e-gateway-setup
 e2e-gateway-setup:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-gateway-setup: KUBECONFIG must be set"; exit 1; fi
 	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
-	kubectl --kubeconfig=$(KUBECONFIG) wait --for=condition=Accepted=true --timeout=5m gatewayclass/$(GATEWAY_CLASS_NAME)
+	@echo "Waiting up to $(GATEWAY_SETUP_CRD_TIMEOUT)s for tigera-operator to install Gateway API CRDs..."
+	@end=$$(( $$(date +%s) + $(GATEWAY_SETUP_CRD_TIMEOUT) )); \
+	until kubectl --kubeconfig=$(KUBECONFIG) get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1; do \
+	  if [ $$(date +%s) -ge $$end ]; then \
+	    echo "Timed out waiting for gatewayclasses.gateway.networking.k8s.io CRD"; \
+	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayapi default -o yaml || true; \
+	    kubectl --kubeconfig=$(KUBECONFIG) get tigerastatus || true; \
+	    kubectl --kubeconfig=$(KUBECONFIG) -n tigera-operator logs deploy/tigera-operator --tail=200 || true; \
+	    exit 1; \
+	  fi; \
+	  sleep 5; \
+	done
+	@echo "Waiting up to $(GATEWAY_SETUP_GWC_TIMEOUT) for $(GATEWAY_CLASS_NAME) GatewayClass to be created..."
+	@end=$$(( $$(date +%s) + 300 )); \
+	until kubectl --kubeconfig=$(KUBECONFIG) get gatewayclass $(GATEWAY_CLASS_NAME) >/dev/null 2>&1; do \
+	  if [ $$(date +%s) -ge $$end ]; then \
+	    echo "Timed out waiting for gatewayclass/$(GATEWAY_CLASS_NAME) to exist"; \
+	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayclass || true; \
+	    exit 1; \
+	  fi; \
+	  sleep 5; \
+	done
+	kubectl --kubeconfig=$(KUBECONFIG) wait --for=condition=Accepted=true --timeout=$(GATEWAY_SETUP_GWC_TIMEOUT) gatewayclass/$(GATEWAY_CLASS_NAME)
 
 ## Run the Gateway API conformance suite. Requires e2e-gateway-setup to have completed.
 e2e-run-gateway-conformance:
