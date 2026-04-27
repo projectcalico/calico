@@ -276,6 +276,64 @@ e2e-run-cnp:
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ###############################################################################
+# Gateway API conformance
+#
+# Runs the upstream sigs.k8s.io/gateway-api conformance suite against
+# Calico's Envoy-Gateway-based implementation on the cluster at $KUBECONFIG,
+# and emits a ConformanceReport YAML for upstream submission.
+#
+# Caller must:
+#   1. set KUBECONFIG (e.g. $(KIND_KUBECONFIG))
+#   2. set GATEWAY_CONFORMANCE_VERSION to a Calico release tag (e.g. v3.31.5)
+#      for upstream submissions; required by the gateway-api report schema.
+#
+# The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
+# tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
+###############################################################################
+GATEWAY_CONFORMANCE_VERSION ?=
+GATEWAY_CLASS_NAME ?= tigera-gateway-class
+GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
+GATEWAY_CONFORMANCE_MODE ?= default
+GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance-report.yaml
+GATEWAY_CONFORMANCE_ORG ?= projectcalico
+GATEWAY_CONFORMANCE_PROJECT ?= calico
+GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
+GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/GOVERNANCE.md
+GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+
+## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
+.PHONY: e2e-gateway-setup
+e2e-gateway-setup:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-gateway-setup: KUBECONFIG must be set"; exit 1; fi
+	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
+	kubectl --kubeconfig=$(KUBECONFIG) wait --for=condition=Accepted=true --timeout=5m gatewayclass/$(GATEWAY_CLASS_NAME)
+
+## Run the Gateway API conformance suite. Requires e2e-gateway-setup to have completed.
+e2e-run-gateway-conformance:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-gateway-conformance: KUBECONFIG must be set"; exit 1; fi
+	@if [ -z "$(GATEWAY_CONFORMANCE_VERSION)" ]; then echo "WARNING: GATEWAY_CONFORMANCE_VERSION is empty; report.implementation.version will be blank and is not acceptable for upstream submission."; fi
+	mkdir -p $(dir $(GATEWAY_CONFORMANCE_REPORT))
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/gateway/e2e.test \
+	  -gateway-class=$(GATEWAY_CLASS_NAME) \
+	  -conformance-profiles=$(GATEWAY_CONFORMANCE_PROFILES) \
+	  -mode=$(GATEWAY_CONFORMANCE_MODE) \
+	  -organization=$(GATEWAY_CONFORMANCE_ORG) \
+	  -project=$(GATEWAY_CONFORMANCE_PROJECT) \
+	  -url=$(GATEWAY_CONFORMANCE_URL) \
+	  -contact=$(GATEWAY_CONFORMANCE_CONTACT) \
+	  -version=$(GATEWAY_CONFORMANCE_VERSION) \
+	  -report-output=$(GATEWAY_CONFORMANCE_REPORT) \
+	  -test.v -test.timeout=60m
+
+## End-to-end: build, kind-up, deploy Envoy Gateway, run conformance, emit report.
+.PHONY: e2e-test-gateway-conformance
+e2e-test-gateway-conformance:
+	$(MAKE) -C e2e bin/gateway/e2e.test
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) e2e-gateway-setup KUBECONFIG=$(KIND_KUBECONFIG)
+	$(MAKE) e2e-run-gateway-conformance KUBECONFIG=$(KIND_KUBECONFIG)
+
+###############################################################################
 # Release logic below
 ###############################################################################
 .PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
