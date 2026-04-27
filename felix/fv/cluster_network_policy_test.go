@@ -64,14 +64,15 @@ import (
 //   7. AdminTier pass + K8s NetworkPolicy implicit deny in default tier→ denied
 //
 // Flow log test:
-//   Setup: KCNP pass in admin tier, NP allow for w[1], GNP deny for w[2], GNP allow-all for w[0]
+//   Setup: KCNP pass in admin tier, NP allow for w[1], GNP pass for w[2],
+//          baseline KCNP allow, GNP allow-all for w[0]
 //   w[0]→w[1] dst: allow  enforced: [kcnp pass, np allow]
-//   w[0]→w[2] dst: deny   enforced: [kcnp pass, gnp deny]
+//   w[0]→w[2] dst: allow  enforced: [kcnp pass, gnp pass, baseline kcnp allow]
 //   w[0]→w[1] src: allow  enforced: [gnp allow-all]
 //   w[0]→w[2] src: allow  enforced: [gnp allow-all]
 
 var _ = infrastructure.DatastoreDescribe(
-	"cluster network policy conversion _BPF-SAFE_",
+	"cluster network policy integration _BPF-SAFE_",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 		const wepPort = 8055
@@ -141,15 +142,6 @@ var _ = infrastructure.DatastoreDescribe(
 					Expect(err).NotTo(HaveOccurred())
 				}
 			}
-
-			for _, wl := range w {
-				if wl != nil {
-					wl.Stop()
-				}
-			}
-
-			tc.Stop()
-			infra.Stop()
 		})
 
 		// policyProgrammed checks whether a policy name appears in Felix[1]'s w[1] dataplane.
@@ -440,7 +432,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Eventually(policyProgrammed("gnp-deny-ingress"), "15s", "200ms").Should(BeFalse())
 
 				// ---- Phase 6: GNP deny in kube-admin tier vs KCNP allow ----
-				By("6. Creating a GNP deny in kube-admin tier alongside a KCNP allow")
+				By("creating a GNP deny in kube-admin tier alongside a KCNP allow")
 				// Create KCNP first so the kube-admin tier exists.
 				createAllowTCPIngressKCNP("kcnp-allow-tcp", clusternetpol.AdminTier, 100)
 				Eventually(policyProgrammed("kcnp-allow-tcp"), "15s", "200ms").Should(BeTrue())
@@ -463,7 +455,7 @@ var _ = infrastructure.DatastoreDescribe(
 				cc.ExpectNone(w[0], w[2])
 				cc.CheckConnectivity()
 
-				By("Deleting the GNP so KCNP allow takes effect")
+				By("deleting the GNP so KCNP allow takes effect")
 				_, err = calicoClient.GlobalNetworkPolicies().Delete(
 					utils.Ctx, "kube-admin.gnp-deny-ingress", options.DeleteOptions{},
 				)
@@ -479,7 +471,7 @@ var _ = infrastructure.DatastoreDescribe(
 				Eventually(policyProgrammed("kcnp-allow-tcp"), "15s", "200ms").Should(BeFalse())
 
 				// ---- Phase 7: KCNP pass + K8s NetworkPolicy deny in default tier ----
-				By("7. Creating KCNP pass in admin tier with K8s NetworkPolicy deny in default tier")
+				By("creating KCNP pass in admin tier with K8s NetworkPolicy deny in default tier")
 				createPassIngressKCNP("kcnp-pass-ingress", clusternetpol.AdminTier, 100)
 				Eventually(policyProgrammed("kcnp-pass-ingress"), "15s", "200ms").Should(BeTrue())
 
@@ -522,7 +514,7 @@ var _ = infrastructure.DatastoreDescribe(
 				testSetup()
 			})
 
-			It("should generate correct flow logs for KCNP pass with GNP and NP in default tier", func() {
+			It("should generate correct flow logs across admin, default, and baseline tiers", func() {
 				// GNP: allow all traffic from/to w[0].
 				gnpAllowSrc := api.NewGlobalNetworkPolicy()
 				gnpAllowSrc.Name = "default.w0-allow-all"
@@ -552,25 +544,29 @@ var _ = infrastructure.DatastoreDescribe(
 				_, err = calicoClient.NetworkPolicies().Create(utils.Ctx, npAllowW1, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
 
-				// GNP: deny ingress to w[2] in default tier.
-				gnpDenyW2 := api.NewGlobalNetworkPolicy()
-				gnpDenyW2.Name = "default.deny-w2"
-				gnpDenyW2.Spec.Order = &orderOne
-				gnpDenyW2.Spec.Tier = "default"
-				gnpDenyW2.Spec.Selector = w[2].NameSelector()
-				gnpDenyW2.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
-				gnpDenyW2.Spec.Ingress = []api.Rule{{Action: api.Deny}}
-				_, err = calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, gnpDenyW2, utils.NoOptions)
+				// GNP: pass ingress to w[2] in default tier so traffic falls through to baseline.
+				gnpPassW2 := api.NewGlobalNetworkPolicy()
+				gnpPassW2.Name = "default.pass-w2"
+				gnpPassW2.Spec.Order = &orderOne
+				gnpPassW2.Spec.Tier = "default"
+				gnpPassW2.Spec.Selector = w[2].NameSelector()
+				gnpPassW2.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+				gnpPassW2.Spec.Ingress = []api.Rule{{Action: api.Pass}}
+				_, err = calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, gnpPassW2, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
+
+				// KCNP: allow ingress in baseline tier so the pass from default tier is accepted.
+				createAllowTCPIngressKCNP("baseline-allow", clusternetpol.BaselineTier, 100)
 
 				Eventually(policyProgrammedOn(tc.Felixes[0], w[0].InterfaceName, "w0-allow-all"), "15s", "200ms").Should(BeTrue())
 				Eventually(policyProgrammed("pass-ingress"), "15s", "200ms").Should(BeTrue())
 				Eventually(policyProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "allow-w1"), "15s", "200ms").Should(BeTrue())
-				Eventually(policyProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "deny-w2"), "15s", "200ms").Should(BeTrue())
+				Eventually(policyProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "pass-w2"), "15s", "200ms").Should(BeTrue())
+				Eventually(policyProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "baseline-allow"), "15s", "200ms").Should(BeTrue())
 
 				cc = &connectivity.Checker{}
 				cc.ExpectSome(w[0], w[1]) // pass from admin, NP allow in default
-				cc.ExpectNone(w[0], w[2]) // pass from admin, GNP deny in default
+				cc.ExpectSome(w[0], w[2]) // pass from admin, GNP pass in default, KCNP allow in baseline
 				cc.CheckConnectivity()
 
 				// Flush conntrack so flows expire quickly.
@@ -634,7 +630,7 @@ var _ = infrastructure.DatastoreDescribe(
 							},
 						})
 
-					// w[0] → w[2] src: egress allowed by GNP allow-all (destination denies).
+					// w[0] → w[2] src: egress allowed by GNP allow-all.
 					flowTester.CheckFlow(
 						flowlog.FlowLog{
 							FlowMeta: flowlog.FlowMeta{
@@ -684,7 +680,8 @@ var _ = infrastructure.DatastoreDescribe(
 							},
 						})
 
-					// w[0] → w[2] dst: KCNP pass in admin tier, then GNP deny in default tier.
+					// w[0] → w[2] dst: KCNP pass in admin tier, GNP pass in default tier,
+					// then KCNP allow in baseline tier.
 					flowTester.CheckFlow(
 						flowlog.FlowLog{
 							FlowMeta: flowlog.FlowMeta{
@@ -692,16 +689,18 @@ var _ = infrastructure.DatastoreDescribe(
 								SrcMeta:    w0Meta,
 								DstMeta:    w2Meta,
 								DstService: flowlog.EmptyService,
-								Action:     "deny",
+								Action:     "allow",
 								Reporter:   "dst",
 							},
 							FlowEnforcedPolicySet: flowlog.FlowPolicySet{
-								"0|kube-admin|kcnp:pass-ingress|pass|0": {},
-								"1|default|gnp:default.deny-w2|deny|0":  {},
+								"0|kube-admin|kcnp:pass-ingress|pass|0":       {},
+								"1|default|gnp:default.pass-w2|pass|0":        {},
+								"2|kube-baseline|kcnp:baseline-allow|allow|0": {},
 							},
 							FlowPendingPolicySet: flowlog.FlowPolicySet{
-								"0|kube-admin|kcnp:pass-ingress|pass|0": {},
-								"1|default|gnp:default.deny-w2|deny|0":  {},
+								"0|kube-admin|kcnp:pass-ingress|pass|0":       {},
+								"1|default|gnp:default.pass-w2|pass|0":        {},
+								"2|kube-baseline|kcnp:baseline-allow|allow|0": {},
 							},
 						})
 
