@@ -300,6 +300,7 @@ GATEWAY_CONFORMANCE_PROJECT ?= calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
 GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/GOVERNANCE.md
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
 GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
 # Name of the docker network kind binds to. The kind default is "kind".
 GATEWAY_KIND_DOCKER_NETWORK ?= kind
@@ -345,9 +346,11 @@ e2e-gateway-setup:
 	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
 	@echo "Waiting up to $(GATEWAY_SETUP_CRD_TIMEOUT)s for tigera-operator to install Gateway API CRDs..."
 	@end=$$(( $$(date +%s) + $(GATEWAY_SETUP_CRD_TIMEOUT) )); \
-	until kubectl --kubeconfig=$(KUBECONFIG) get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1; do \
+	until kubectl --kubeconfig=$(KUBECONFIG) get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1 \
+	   && kubectl --kubeconfig=$(KUBECONFIG) get crd envoyproxies.gateway.envoyproxy.io >/dev/null 2>&1 \
+	   && kubectl --kubeconfig=$(KUBECONFIG) get ns tigera-gateway >/dev/null 2>&1; do \
 	  if [ $$(date +%s) -ge $$end ]; then \
-	    echo "Timed out waiting for gatewayclasses.gateway.networking.k8s.io CRD"; \
+	    echo "Timed out waiting for Gateway API + EnvoyProxy CRDs and tigera-gateway namespace"; \
 	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayapi default -o yaml || true; \
 	    kubectl --kubeconfig=$(KUBECONFIG) get tigerastatus || true; \
 	    kubectl --kubeconfig=$(KUBECONFIG) -n tigera-operator logs deploy/tigera-operator --tail=200 || true; \
@@ -355,6 +358,12 @@ e2e-gateway-setup:
 	  fi; \
 	  sleep 5; \
 	done
+	@# Apply the EnvoyProxy override that the GatewayAPI CR's
+	@# envoyProxyRef points at. Has to land after the operator has
+	@# created the tigera-gateway namespace and installed the
+	@# EnvoyProxy CRD; until it lands the operator will requeue with
+	@# a missing-EnvoyProxy error, which resolves on the next reconcile.
+	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_ENVOY_PROXY)
 	@echo "Waiting up to $(GATEWAY_SETUP_GWC_TIMEOUT) for $(GATEWAY_CLASS_NAME) GatewayClass to be created..."
 	@end=$$(( $$(date +%s) + 300 )); \
 	until kubectl --kubeconfig=$(KUBECONFIG) get gatewayclass $(GATEWAY_CLASS_NAME) >/dev/null 2>&1; do \
