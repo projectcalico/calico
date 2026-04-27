@@ -1579,6 +1579,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         with mock.patch.object(self.driver, "elector") as m_elector:
             m_elector.master.return_value = False
+            m_elector.healthy.return_value = False
+            m_elector.confirmed_master.return_value = False
 
             # Allow the etcd transport's resync thread to run. Nothing will
             # happen.
@@ -2266,7 +2268,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         count = [0]
 
         with mock.patch.object(self.driver, "elector") as m_elector:
+            # _status_updating_thread checks elector.healthy() rather than
+            # master() - configure both for safety.
             m_elector.master.return_value = True
+            m_elector.healthy.return_value = True
 
             def maybe_end_loop(*args, **kwargs):
                 if count[0] == 2:
@@ -2275,6 +2280,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 if count[0] == 4:
                     # After a few loops, stop being the master...
                     m_elector.master.return_value = False
+                    m_elector.healthy.return_value = False
                 if count[0] > 6:
                     # Then terminate the loop after a few more...
                     self.driver._epoch += 1
