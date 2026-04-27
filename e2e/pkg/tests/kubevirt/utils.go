@@ -17,6 +17,7 @@ package kubevirt
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -913,106 +914,180 @@ func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
 	return func() { close(stopCh) }
 }
 
-// checkMasterBIRDRoute queries the master's BIRD routing table for a /32 VM
-// route and logs the full details (bgp_local_pref, community, preference).
-// This is used to diagnose whether the elevated bgp_local_pref from the worker
-// node is preserved through the iBGP route reflector on the master.
-func checkMasterBIRDRoute(f *framework.Framework, vmIP, label string) {
-	ctx := context.Background()
-	masterName := ""
-	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+// torRouteState captures the parsed state of a /32 route on the TOR's BIRD
+// routing table, including all candidate routes and the kernel next hop.
+type torRouteState struct {
+	Has32         bool           `json:"has32"`
+	Routes        []torBIRDRoute `json:"routes"`
+	KernelNextHop string         `json:"kernelNextHop"`
+}
+
+// torBIRDRoute represents a single BIRD route entry for a /32 prefix.
+type torBIRDRoute struct {
+	NextHop   string `json:"nextHop"`
+	LocalPref int    `json:"localPref"`
+	Community string `json:"community"`
+	Best      bool   `json:"best"`
+}
+
+// torPrefixState captures whether a prefix is present in BIRD and its routes.
+type torPrefixState struct {
+	Present bool           `json:"present"`
+	Routes  []torBIRDRoute `json:"routes"`
+}
+
+// torRouteSnapshot captures the full TOR route picture at a point in time:
+// the /32 host route (elevated during migration), the /26 block route
+// (steady-state subnet route), and the kernel next-hop for the VM IP.
+type torRouteSnapshot struct {
+	Host32    torPrefixState `json:"host32"`
+	Block26   torPrefixState `json:"block26"`
+	KernelVia string         `json:"kernelVia"`
+}
+
+// parseBIRDRouteOutput parses the output of "birdcl show route <prefix> all"
+// and returns the list of routes. Returns nil if the output contains
+// "Network not in table" or is empty.
+func parseBIRDRouteOutput(output string) []torBIRDRoute {
+	if strings.Contains(output, "Network not in table") {
+		return nil
+	}
+
+	var routes []torBIRDRoute
+	var current *torBIRDRoute
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimRight(line, "\r")
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "BIRD") {
+			continue
+		}
+
+		// Route line: contains "via" but is not a BGP attribute.
+		if strings.Contains(line, " via ") && !strings.HasPrefix(trimmed, "BGP.") {
+			r := torBIRDRoute{}
+			if idx := strings.Index(line, " via "); idx >= 0 {
+				fields := strings.Fields(line[idx+5:])
+				if len(fields) > 0 {
+					r.NextHop = fields[0]
+				}
+			}
+			// BIRD marks the active/best route with "*" in the output line, e.g.:
+			//   10.244.0.64/32     via 172.16.8.2 on eth0 * [bgp_node0 16:22:38] (100/0) [AS65000i]
+			//                      via 172.16.8.4 on eth0 [bgp_node2 16:21:49] (100/0) [AS65000i]
+			// The first route has "*" (best), the second does not.
+			r.Best = strings.Contains(line, "*")
+			routes = append(routes, r)
+			current = &routes[len(routes)-1]
+			continue
+		}
+
+		// BGP attribute lines.
+		if current != nil {
+			if strings.HasPrefix(trimmed, "BGP.local_pref:") {
+				val := strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.local_pref:"))
+				fmt.Sscanf(val, "%d", &current.LocalPref)
+			} else if strings.HasPrefix(trimmed, "BGP.community:") {
+				current.Community = strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.community:"))
+			}
+		}
+	}
+	return routes
+}
+
+// queryTORRoute queries the TOR's BIRD routing table and kernel for the state
+// of a /32 VM route. Returns Has32=false if BIRD reports "Network not in table".
+func queryTORRoute(tor *externalnode.Client, vmIP string) torRouteState {
+	ip := strings.Split(vmIP, "/")[0]
+
+	out, err := runOnTORE(tor, fmt.Sprintf(
+		"sudo docker exec tor-bird birdcl show route %s/32 all 2>&1", ip))
 	if err != nil {
-		logrus.WithError(err).Warn("checkMasterBIRDRoute: failed to list nodes")
-		return
+		logrus.Warnf("queryTORRoute: SSH error: %v", err)
+		return torRouteState{}
 	}
-	for i := range nodes.Items {
-		if _, ok := nodes.Items[i].Labels["node-role.kubernetes.io/control-plane"]; ok {
-			masterName = nodes.Items[i].Name
-			break
+
+	var state torRouteState
+	state.Routes = parseBIRDRouteOutput(out)
+	state.Has32 = len(state.Routes) > 0
+
+	// Query kernel route for the active next hop.
+	kernOut, _ := runOnTORE(tor, fmt.Sprintf("ip route get %s 2>&1", ip))
+	if idx := strings.Index(kernOut, "via "); idx >= 0 {
+		fields := strings.Fields(kernOut[idx+4:])
+		if len(fields) > 0 {
+			state.KernelNextHop = fields[0]
 		}
 	}
-	if masterName == "" {
-		logrus.Warn("checkMasterBIRDRoute: no master node found")
-		return
+
+	logrus.Infof("queryTORRoute(%s): Has32=%v, %d routes, kernelNextHop=%s",
+		ip, state.Has32, len(state.Routes), state.KernelNextHop)
+	for i, r := range state.Routes {
+		logrus.Infof("  route[%d]: nexthop=%s localPref=%d community=%q best=%v",
+			i, r.NextHop, r.LocalPref, r.Community, r.Best)
 	}
-	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + masterName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warn("checkMasterBIRDRoute: no calico-node pod on master")
-		return
-	}
-	ip := strings.Split(vmIP, "/")[0]
-	out, _ := kubectl.NewKubectlCommand("calico-system", "exec", pods.Items[0].Name, "-c", "calico-node", "--",
-		"birdcl", "show", "route", ip+"/32", "all").Exec()
-	logrus.Infof("MASTER-BIRD [%s] route %s/32:\n%s", label, ip, out)
+
+	return state
 }
 
-// checkWorkerBIRDRoute queries a worker node's kernel route and BIRD table
-// for a /32 VM route. This reveals whether Felix programmed the elevated
-// krt_metric and whether BIRD has the correct bgp_local_pref.
-func checkWorkerBIRDRoute(f *framework.Framework, nodeName, vmIP, label string) {
-	ctx := context.Background()
-	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("checkWorkerBIRDRoute: no calico-node pod on %s", nodeName)
-		return
+// queryTORSnapshot queries the TOR's BIRD routing table for both the /32 host
+// route and the /26 block route, plus the kernel next-hop. This captures the
+// full route picture at a point in time with a single SSH call.
+func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
+	ip := strings.Split(vmIP, "/")[0]
+
+	// Compute /26 block from VM IP.
+	parsed := net.ParseIP(ip).To4()
+	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
+	block26 := fmt.Sprintf("%s/26", blockIP)
+
+	// Single SSH call with section markers.
+	cmd := fmt.Sprintf(
+		"echo '=== /32 ==='; sudo docker exec tor-bird birdcl show route %s/32 all 2>&1; "+
+			"echo '=== /26 ==='; sudo docker exec tor-bird birdcl show route %s all 2>&1; "+
+			"echo '=== kernel ==='; ip route get %s 2>&1",
+		ip, block26, ip)
+	out, err := runOnTORE(tor, cmd)
+	if err != nil {
+		logrus.Warnf("queryTORSnapshot: SSH error: %v", err)
+		return torRouteSnapshot{}
 	}
-	ip := strings.Split(vmIP, "/")[0]
-	podName := pods.Items[0].Name
 
-	// Check kernel route (krt_metric is shown as "metric" in ip route).
-	kernRoute, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf("ip route show %s/32", ip)).Exec()
-	logrus.Infof("WORKER-BIRD [%s] %s kernel route %s/32: %s", label, nodeName, ip, strings.TrimSpace(kernRoute))
+	var snap torRouteSnapshot
 
-	// Check BIRD routing table.
-	birdRoute, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"birdcl", "show", "route", ip+"/32", "all").Exec()
-	logrus.Infof("WORKER-BIRD [%s] %s BIRD route %s/32:\n%s", label, nodeName, ip, birdRoute)
-
-	// Check the worker node's bird.cfg export filter and BIRD export for the mesh peer.
-	exportFilter, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", "grep -A 15 'export filter' /etc/calico/confd/config/bird.cfg | head -30").Exec()
-	logrus.Infof("WORKER-BIRD [%s] %s export filter:\n%s", label, nodeName, exportFilter)
-
-	// Check what BIRD is actually exporting for this /32 to the mesh peers.
-	birdExport, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf("birdcl show route %s/32 export Mesh_172_16_8_1 all 2>&1", ip)).Exec()
-	logrus.Infof("WORKER-BIRD [%s] %s export to master for %s/32:\n%s", label, nodeName, ip, birdExport)
-}
-
-// startTCPDumpOnTOR starts tcpdump on the TOR's L2TP interface capturing all
-// traffic to/from the VM IP. Returns a stop function that kills tcpdump and
-// returns the captured output (last 200 lines). Safe to call the stop function
-// multiple times — subsequent calls return "(already collected)".
-func startTCPDumpOnTOR(tor *externalnode.Client, vmIP string) func() string {
-	ip := strings.Split(vmIP, "/")[0]
-	runOnTOR(tor, "sudo rm -f /tmp/tor-tcpdump.log")
-	runOnTOR(tor, fmt.Sprintf(
-		"sudo sh -c 'nohup tcpdump -i l2tpeth8-5 host %s -nn -v -l > /tmp/tor-tcpdump.log 2>&1 &'", ip))
-	logrus.Infof("DIAG: tcpdump started on TOR for host %s on l2tpeth8-5", ip)
-
-	var stopped bool
-	return func() string {
-		if stopped {
-			return "(already collected)"
+	// Split by section markers and parse each.
+	sections := strings.Split(out, "=== ")
+	for _, sec := range sections {
+		switch {
+		case strings.HasPrefix(sec, "/32 ==="):
+			body := strings.TrimPrefix(sec, "/32 ===")
+			routes := parseBIRDRouteOutput(body)
+			snap.Host32 = torPrefixState{Present: len(routes) > 0, Routes: routes}
+		case strings.HasPrefix(sec, "/26 ==="):
+			body := strings.TrimPrefix(sec, "/26 ===")
+			routes := parseBIRDRouteOutput(body)
+			snap.Block26 = torPrefixState{Present: len(routes) > 0, Routes: routes}
+		case strings.HasPrefix(sec, "kernel ==="):
+			body := strings.TrimPrefix(sec, "kernel ===")
+			if idx := strings.Index(body, "via "); idx >= 0 {
+				fields := strings.Fields(body[idx+4:])
+				if len(fields) > 0 {
+					snap.KernelVia = fields[0]
+				}
+			}
 		}
-		stopped = true
-		runOnTOR(tor, "sudo pkill -f 'tcpdump.*l2tpeth8-5' 2>/dev/null || true")
-		time.Sleep(1 * time.Second)
-		out := runOnTOR(tor, "sudo tail -200 /tmp/tor-tcpdump.log 2>/dev/null || echo '(no capture)'")
-		return out
 	}
+
+	logrus.Infof("queryTORSnapshot(%s): /32=%v(%d) /26=%v(%d) kernelVia=%s",
+		ip, snap.Host32.Present, len(snap.Host32.Routes),
+		snap.Block26.Present, len(snap.Block26.Routes), snap.KernelVia)
+	return snap
 }
 
-// dumpNodeConntrack dumps conntrack entries for the VM IP on a specific node,
-// and checks the nf_conntrack_tcp_loose sysctl.
-func dumpNodeConntrack(f *framework.Framework, nodeName, vmIP string) {
+// queryWorkerMetric queries the kernel route metric for a /32 VM route on a
+// worker node's calico-node pod. Returns the metric value (e.g. 512 for
+// elevated, 1024 for normal) or -1 if the route is not found.
+func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) int {
 	ctx := context.Background()
 	ip := strings.Split(vmIP, "/")[0]
 	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
@@ -1020,123 +1095,111 @@ func dumpNodeConntrack(f *framework.Framework, nodeName, vmIP string) {
 		FieldSelector: "spec.nodeName=" + nodeName,
 	})
 	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("dumpNodeConntrack: no calico-node pod on %s", nodeName)
-		return
+		logrus.Warnf("queryWorkerMetric: no calico-node pod on %s: %v", nodeName, err)
+		return -1
 	}
-	podName := pods.Items[0].Name
-	out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf("cat /proc/net/nf_conntrack 2>/dev/null | grep %s || echo '(no entries for %s)'", ip, ip)).Exec()
-	logrus.Infof("DIAG-CONNTRACK [%s] entries for %s:\n%s", nodeName, ip, strings.TrimSpace(out))
-
-	looseOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", "cat /proc/sys/net/netfilter/nf_conntrack_tcp_loose 2>/dev/null || echo 'unknown'").Exec()
-	logrus.Infof("DIAG-CONNTRACK [%s] nf_conntrack_tcp_loose=%s", nodeName, strings.TrimSpace(looseOut))
-}
-
-// dumpNodeFirewallRules dumps nftables/iptables rules related to connection
-// tracking on a node, to identify rules that might drop mid-stream TCP packets.
-func dumpNodeFirewallRules(f *framework.Framework, nodeName string) {
-	ctx := context.Background()
-	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("dumpNodeFirewallRules: no calico-node pod on %s", nodeName)
-		return
-	}
-	podName := pods.Items[0].Name
-
-	nftOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", "nft list ruleset 2>/dev/null | grep -B3 -A1 -iE '(ct state|invalid)' | head -100 || echo '(nft not available)'").Exec()
-	logrus.Infof("DIAG-NFTABLES [%s] ct state rules:\n%s", nodeName, strings.TrimSpace(nftOut))
-
-	iptOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", "iptables-save 2>/dev/null | grep -iE '(state|conntrack|INVALID)' | head -50 || echo '(iptables-save not available)'").Exec()
-	logrus.Infof("DIAG-IPTABLES [%s] state/conntrack rules:\n%s", nodeName, strings.TrimSpace(iptOut))
-}
-
-// dumpTORSocketState shows the TCP socket state on the TOR for connections to
-// the VM IP, indicating whether nc's connection is still ESTABLISHED or has been reset.
-func dumpTORSocketState(tor *externalnode.Client, vmIP string) {
-	ip := strings.Split(vmIP, "/")[0]
-	out := runOnTOR(tor, fmt.Sprintf("ss -tnp 2>/dev/null | grep %s || echo '(no sockets for %s)'", ip, ip))
-	logrus.Infof("DIAG-SOCKET TOR sockets for %s:\n%s", ip, out)
-}
-
-// startNodeVethCapture starts tcpdump on the VM's veth interface inside the
-// calico-node pod on the given node. Also records interface stats (RX/TX counters)
-// as a fallback if tcpdump isn't available. Returns a stop function that collects
-// the results. Safe to call stop multiple times.
-func startNodeVethCapture(f *framework.Framework, nodeName, vmIP string) func() string {
-	ctx := context.Background()
-	ip := strings.Split(vmIP, "/")[0]
-	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("startNodeVethCapture: no calico-node pod on %s", nodeName)
-		return func() string { return "(no calico-node pod)" }
-	}
-	podName := pods.Items[0].Name
-
-	// Get the veth name from the kernel route for the VM IP.
-	routeOut, err := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
+	out, err := kubectl.NewKubectlCommand("calico-system", "exec", pods.Items[0].Name, "-c", "calico-node", "--",
 		"sh", "-c", fmt.Sprintf("ip route show %s/32", ip)).Exec()
 	if err != nil {
-		logrus.Warnf("startNodeVethCapture: failed to get route for %s: %v", ip, err)
-		return func() string { return "(no route)" }
+		logrus.Warnf("queryWorkerMetric: ip route show failed on %s: %v", nodeName, err)
+		return -1
 	}
-	// Parse "192.168.12.10 dev cali3b065c6b12d scope link metric 512"
-	var vethName string
-	for _, field := range strings.Fields(strings.TrimSpace(routeOut)) {
-		if strings.HasPrefix(field, "cali") {
-			vethName = field
-			break
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return -1
+	}
+	if idx := strings.Index(out, "metric "); idx >= 0 {
+		var metric int
+		fmt.Sscanf(out[idx:], "metric %d", &metric)
+		logrus.Infof("queryWorkerMetric(%s, %s): metric=%d (route: %s)", nodeName, ip, metric, out)
+		return metric
+	}
+	logrus.Infof("queryWorkerMetric(%s, %s): no metric field (route: %s)", nodeName, ip, out)
+	return -1
+}
+
+// routeTimelineEntry captures the route state at a single point in time.
+type routeTimelineEntry struct {
+	Timestamp string           `json:"ts"`
+	Phase     string           `json:"phase"`
+	VMNode    string           `json:"vmNode,omitempty"`
+	TOR       torRouteSnapshot `json:"tor"`
+	TCPLines  int              `json:"tcpLines"`
+}
+
+// routeTimeline collects route state snapshots at key test phases.
+type routeTimeline struct {
+	mu      sync.Mutex
+	entries []routeTimelineEntry
+}
+
+func newRouteTimeline() *routeTimeline {
+	return &routeTimeline{}
+}
+
+// record appends a timestamped entry to the timeline and logs a one-line summary.
+func (t *routeTimeline) record(entry routeTimelineEntry) {
+	entry.Timestamp = time.Now().UTC().Format("15:04:05.000")
+	t.mu.Lock()
+	t.entries = append(t.entries, entry)
+	t.mu.Unlock()
+
+	lp32 := -1
+	if len(entry.TOR.Host32.Routes) > 0 {
+		lp32 = entry.TOR.Host32.Routes[0].LocalPref
+	}
+	logrus.Infof("TIMELINE[%s] phase=%-28s /32=%v(%d) /26=%v(%d) lp32=%-12d tcpLines=%d",
+		entry.Timestamp, entry.Phase,
+		entry.TOR.Host32.Present, len(entry.TOR.Host32.Routes),
+		entry.TOR.Block26.Present, len(entry.TOR.Block26.Routes),
+		lp32, entry.TCPLines)
+}
+
+// writeToTOR logs a summary table, marshals the timeline to JSON, and writes
+// it to /tmp/route-timeline.json on the TOR node via SSH.
+func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
+	t.mu.Lock()
+	entries := make([]routeTimelineEntry, len(t.entries))
+	copy(entries, t.entries)
+	t.mu.Unlock()
+
+	if len(entries) == 0 {
+		logrus.Warn("Route timeline: no entries to write")
+		return
+	}
+
+	// Log compact table summary.
+	logrus.Infof("Route timeline summary (%d entries):", len(entries))
+	logrus.Infof("  %-12s %-28s %-10s %-10s %-12s %s", "TIME", "PHASE", "/32", "/26", "LP32", "TCP_LINES")
+	for _, e := range entries {
+		lp32 := -1
+		if len(e.TOR.Host32.Routes) > 0 {
+			lp32 = e.TOR.Host32.Routes[0].LocalPref
 		}
-	}
-	if vethName == "" {
-		logrus.Warnf("startNodeVethCapture: no cali* veth in route: %s", routeOut)
-		return func() string { return fmt.Sprintf("(no veth in route: %s)", routeOut) }
-	}
-	logrus.Infof("DIAG-VETH: VM %s on %s uses veth %s", ip, nodeName, vethName)
-
-	// Record interface stats before.
-	statsBefore, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf("ip -s link show %s", vethName)).Exec()
-	logrus.Infof("DIAG-VETH [%s] %s stats BEFORE:\n%s", nodeName, vethName, strings.TrimSpace(statsBefore))
-
-	// Try to start tcpdump (best effort — may not be available).
-	// Avoid nohup (not present in minimal calico-node image); backgrounding
-	// with sh -c '... &' is sufficient since kubectl exec returns immediately.
-	tcpdumpOut, tcpdumpErr := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf(
-			"rm -f /tmp/veth-tcpdump.log; tcpdump -i %s -nn -v -l -c 200 > /tmp/veth-tcpdump.log 2>&1 & echo $!",
-			vethName)).Exec()
-	if tcpdumpErr != nil {
-		logrus.Warnf("DIAG-VETH: tcpdump start failed on %s (may not be installed): %v", nodeName, tcpdumpErr)
-	} else {
-		logrus.Infof("DIAG-VETH: tcpdump started on %s:%s (pid=%s)", nodeName, vethName, strings.TrimSpace(tcpdumpOut))
+		logrus.Infof("  %-12s %-28s %-10s %-10s %-12d %d",
+			e.Timestamp, e.Phase,
+			fmt.Sprintf("%v(%d)", e.TOR.Host32.Present, len(e.TOR.Host32.Routes)),
+			fmt.Sprintf("%v(%d)", e.TOR.Block26.Present, len(e.TOR.Block26.Routes)),
+			lp32, e.TCPLines)
 	}
 
-	var stopped bool
-	return func() string {
-		if stopped {
-			return "(already collected)"
-		}
-		stopped = true
-
-		// Record interface stats after.
-		statsAfter, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-			"sh", "-c", fmt.Sprintf("ip -s link show %s", vethName)).Exec()
-		logrus.Infof("DIAG-VETH [%s] %s stats AFTER:\n%s", nodeName, vethName, strings.TrimSpace(statsAfter))
-
-		// Stop tcpdump and collect output.
-		out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-			"sh", "-c", "pkill tcpdump 2>/dev/null; sleep 1; tail -200 /tmp/veth-tcpdump.log 2>/dev/null || echo '(no tcpdump output)'").Exec()
-		return out
+	// Marshal to JSON.
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		logrus.WithError(err).Warn("Route timeline: failed to marshal JSON")
+		return
 	}
+
+	// Write to TOR via base64 — the TOR is an Ubuntu host with base64 available.
+	encoded := base64.StdEncoding.EncodeToString(data)
+	cmd := fmt.Sprintf("echo '%s' | base64 -d > /tmp/route-timeline.json", encoded)
+	_, err = runOnTORE(tor, cmd)
+	if err != nil {
+		logrus.WithError(err).Warn("Route timeline: failed to write JSON to TOR")
+		return
+	}
+	logrus.Infof("Route timeline: wrote %d entries (%d bytes) to TOR:/tmp/route-timeline.json",
+		len(entries), len(data))
 }
 
 // conntrackMonitor continuously polls /proc/net/nf_conntrack on one or more
@@ -1292,70 +1355,6 @@ func (m *conntrackMonitor) stop() {
 	m.mu.Unlock()
 
 	logrus.Infof("CT-MONITOR SUMMARY (%d events):\n%s", len(logs), strings.Join(logs, "\n"))
-}
-
-// startTORMigrationCapture starts a tcpdump on the TOR capturing all packets
-// matching the TOR's ephemeral port for the TCP connection. This port is stable
-// across migration — it's the TOR client's source port. Filtering on it catches:
-//   - Normal packets: VM:9999 → TOR:<ephPort> and TOR:<ephPort> → VM:9999
-//   - MASQUERADE'd packets: Node:<randomPort> → TOR:<ephPort> (src port 9999 is gone!)
-//
-// Must be called AFTER the nc client is connected so we can discover the port.
-func startTORMigrationCapture(tor *externalnode.Client, vmIP string) func() string {
-	ip := strings.Split(vmIP, "/")[0]
-
-	// Discover TOR's ephemeral port from ss.
-	ssOut := runOnTOR(tor, fmt.Sprintf("ss -tn 2>/dev/null | grep '%s:9999' || true", ip))
-	logrus.Infof("DIAG-CAPTURE: TOR ss output:\n%s", ssOut)
-
-	var ephPort string
-	for _, line := range strings.Split(ssOut, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.Contains(line, ":9999") {
-			continue
-		}
-		fields := strings.Fields(line)
-		for i, f := range fields {
-			if strings.HasSuffix(f, ":9999") && i > 0 {
-				local := fields[i-1]
-				parts := strings.Split(local, ":")
-				if len(parts) >= 2 {
-					ephPort = parts[len(parts)-1]
-				}
-				break
-			}
-		}
-		if ephPort != "" {
-			break
-		}
-	}
-
-	filter := "tcp"
-	if ephPort != "" {
-		filter = fmt.Sprintf("port %s", ephPort)
-		logrus.Infof("DIAG-CAPTURE: filtering on TOR ephemeral port %s", ephPort)
-	} else {
-		logrus.Warn("DIAG-CAPTURE: could not find ephemeral port, capturing all TCP")
-	}
-
-	const captureFile = "/tmp/tor-migration-capture.log"
-	runOnTOR(tor, fmt.Sprintf("sudo rm -f %s", captureFile))
-	runOnTOR(tor, fmt.Sprintf(
-		"sudo sh -c 'nohup tcpdump -i l2tpeth8-5 -nn -l %s > %s 2>&1 &'",
-		filter, captureFile))
-
-	var stopped bool
-	return func() string {
-		if stopped {
-			return "(already collected)"
-		}
-		stopped = true
-		runOnTOR(tor, "sudo pkill -f 'tcpdump.*tor-migration-capture' 2>/dev/null || true")
-		time.Sleep(1 * time.Second)
-		out := runOnTOR(tor, fmt.Sprintf("sudo cat %s 2>/dev/null || echo '(no capture)'", captureFile))
-		logrus.Infof("DIAG-CAPTURE: TOR migration capture:\n%s", out)
-		return out
-	}
 }
 
 func ptrInt64(v int64) *int64 { return &v }

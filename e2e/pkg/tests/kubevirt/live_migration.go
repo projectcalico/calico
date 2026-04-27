@@ -343,6 +343,10 @@ var _ = describe.CalicoDescribe(
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
+
+			timeline := newRouteTimeline()
+			DeferCleanup(func() { timeline.writeToTOR(tor) })
+
 			vmName := "e2e-ebgp-tcp"
 			vm := &testVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit, kvClient: kvClient}
 
@@ -437,9 +441,13 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing from TOR")
 			logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
 
-			By("Starting tcpdump on TOR for migration diagnostics")
-			stopTORDump := startTCPDumpOnTOR(tor, vmIP)
-			DeferCleanup(func() { stopTORDump() })
+			preTime := time.Now()
+			timeline.record(routeTimelineEntry{
+				Phase:    "pre-migration",
+				VMNode:   node1,
+				TOR:      queryTORSnapshot(tor, vmIP),
+				TCPLines: preLines,
+			})
 
 			// Find TOR L2TP IP for conntrack monitor.
 			bgpSubnet := &net.IPNet{IP: net.ParseIP("172.16.8.0"), Mask: net.CIDRMask(24, 32)}
@@ -462,16 +470,6 @@ var _ = describe.CalicoDescribe(
 			}
 			DeferCleanup(ctMon.stop)
 
-			// Capture traffic on TOR's ephemeral port to see whether MASQUERADE
-			// rewrites the VM's source IP to a node IP after migration.
-			// Filter on ephemeral port (not 9999) because MASQUERADE changes src port too.
-			By("Starting migration capture on TOR")
-			stopMigrationCapture := startTORMigrationCapture(tor, vmIP)
-			DeferCleanup(func() {
-				dump := stopMigrationCapture()
-				logrus.Infof("DIAG-CAPTURE: final capture:\n%s", dump)
-			})
-
 			// ---- First migration ----
 			By("First migration")
 			logrus.Infof("TIMELINE: starting first migration")
@@ -488,40 +486,54 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("TIMELINE: first migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
 				node1, node2, ms1.StartTimestamp, ms1.EndTimestamp)
 
-			// Check worker's kernel route and BIRD table — should show krt_metric=512 (elevated).
-			checkWorkerBIRDRoute(f, node2, vmIP, "after-first-migration")
-			// Check master's BIRD table — should show elevated bgp_local_pref for /32.
-			checkMasterBIRDRoute(f, vmIP, "after-first-migration")
+			By("Verifying elevated route priority on worker and TOR after first migration")
+			metric := queryWorkerMetric(f, node2, vmIP)
+			Expect(metric).To(Equal(512), "worker kernel metric should be elevated (512) after migration")
 
-			By("Dumping network diagnostics on migration target node")
-			dumpNodeConntrack(f, node2, vmIP)
-			dumpNodeFirewallRules(f, node2)
-			dumpTORSocketState(tor, vmIP)
+			torState := queryTORRoute(tor, vmIP)
+			Expect(torState.Has32).To(BeTrue(), "TOR should have /32 after migration")
+			Expect(torState.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
+			Expect(torState.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
+			Expect(torState.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
 
-			By("Starting tcpdump on node-2 veth to check if VM is generating packets")
-			stopVethDump := startNodeVethCapture(f, node2, vmIP)
-			DeferCleanup(func() { stopVethDump() })
+			firstMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+			timeline.record(routeTimelineEntry{
+				Phase:    "first-migration-complete",
+				VMNode:   node2,
+				TOR:      queryTORSnapshot(tor, vmIP),
+				TCPLines: firstMigLines,
+			})
 
-			// Wait 40s after first migration completes. This exceeds the default
-			// LiveMigrationRouteConvergenceTime (30s), ensuring that when the
-			// second migration starts, the first target node's elevated /32 route
-			// has already reverted to normal priority — avoiding ECMP on the TOR.
-			By("Waiting 40s for route convergence after first migration")
-			time.Sleep(40 * time.Second)
+			// Wait for the elevated /32 route to revert to normal local_pref
+			// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
+			By("Waiting for TOR /32 local_pref to revert to normal after convergence")
+			Eventually(func() int {
+				snap := queryTORSnapshot(tor, vmIP)
+				pollLines, _ := torContainerLineCount(tor, ncClientContainer)
+				timeline.record(routeTimelineEntry{
+					Phase:    "convergence-poll",
+					VMNode:   node2,
+					TOR:      snap,
+					TCPLines: pollLines,
+				})
+				if len(snap.Host32.Routes) > 0 {
+					return snap.Host32.Routes[0].LocalPref
+				}
+				return -1
+			}, 45*time.Second, 2*time.Second).Should(Equal(100),
+				"TOR /32 local_pref should revert to 100 after convergence")
 
-			// Check again — should show normal bgp_local_pref after TimeWait expired.
-			checkMasterBIRDRoute(f, vmIP, "after-40s-wait")
+			convergenceLines, _ := torContainerLineCount(tor, ncClientContainer)
+			timeline.record(routeTimelineEntry{
+				Phase:    "convergence-done",
+				VMNode:   node2,
+				TOR:      queryTORSnapshot(tor, vmIP),
+				TCPLines: convergenceLines,
+			})
+
 			midLines, _ := torContainerLineCount(tor, ncClientContainer)
 			logrus.Infof("TIMELINE: after first migration wait lines=%d (pre=%d, delta=%d)", midLines, preLines, midLines-preLines)
-
-			By("Collecting network diagnostics after first migration wait")
-			dumpNodeConntrack(f, node2, vmIP)
-			dumpTORSocketState(tor, vmIP)
-			torDump := stopTORDump()
-			logrus.Infof("DIAG: TOR tcpdump (last 200 lines):\n%s", torDump)
-			vethDump := stopVethDump()
-			logrus.Infof("DIAG: Node-2 veth tcpdump (last 200 lines):\n%s", vethDump)
-
+			Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
 			// Cordon node1 (the original node) so the second migration cannot
 			// go back there — we want the VM to land on a third node so that a
 			// new /32 route is needed.
@@ -562,28 +574,88 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("TIMELINE: second migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
 				node2, node3, ms2.StartTimestamp, ms2.EndTimestamp)
 
-			// Check master — should show elevated /32 from the new target node.
-			checkMasterBIRDRoute(f, vmIP, "after-second-migration")
+			By("Verifying TOR route state after second migration")
+			torState = queryTORRoute(tor, vmIP)
+			Expect(torState.Has32).To(BeTrue(), "TOR should have /32 after second migration")
 
-			// Wait 60s, logging seq and routes throughout, but do NOT assert.
+			// Find best route — it must have elevated local_pref (no ECMP).
+			var bestRoute, nonBestRoute *torBIRDRoute
+			for i := range torState.Routes {
+				if torState.Routes[i].Best {
+					bestRoute = &torState.Routes[i]
+				} else {
+					nonBestRoute = &torState.Routes[i]
+				}
+			}
+			Expect(bestRoute).NotTo(BeNil(), "TOR should have a best /32 route")
+			Expect(bestRoute.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
+			Expect(bestRoute.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
+			// After the second migration, two /32 routes must exist: the new
+			// node's elevated route and the old node's normal route. They must
+			// have different local_pref to avoid ECMP.
+			Expect(nonBestRoute).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
+			Expect(nonBestRoute.LocalPref).NotTo(Equal(bestRoute.LocalPref),
+				"two /32 routes must have different local_pref to avoid ECMP")
+
+			secondMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+			timeline.record(routeTimelineEntry{
+				Phase:    "second-migration-complete",
+				VMNode:   node3,
+				TOR:      queryTORSnapshot(tor, vmIP),
+				TCPLines: secondMigLines,
+			})
+
+			// Poll for 60s, capturing route state every 5s, instead of a
+			// blind sleep — this builds the timeline for the second migration's
+			// route convergence.
 			By("Observing route and seq timeline after second migration (60s)")
-			time.Sleep(60 * time.Second)
+			deadline := time.Now().Add(60 * time.Second)
+			for time.Now().Before(deadline) {
+				lines, _ := torContainerLineCount(tor, ncClientContainer)
+				timeline.record(routeTimelineEntry{
+					Phase:    "final-wait",
+					VMNode:   node3,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: lines,
+				})
+				time.Sleep(5 * time.Second)
+			}
 			finalLines, _ := torContainerLineCount(tor, ncClientContainer)
 			logrus.Infof("TIMELINE: after second migration wait lines=%d (mid=%d, delta=%d)", finalLines, midLines, finalLines-midLines)
+			Expect(finalLines).To(BeNumerically(">", midLines),
+				"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
 
-			// Dump full seq log for analysis.
-			By("Dumping full TCP stream log")
+			// Dump full seq log and assert on sequence integrity.
+			By("Verifying TCP stream integrity")
 			streamAll, err := runOnTORE(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null", ncClientContainer))
-			if err == nil {
-				lines := strings.Split(strings.TrimSpace(streamAll), "\n")
-				logrus.Infof("TIMELINE: total lines=%d, first=%s, last=%s", len(lines), lines[0], lines[len(lines)-1])
-				// Show the last 30 lines for quick inspection.
-				start := 0
-				if len(lines) > 30 {
-					start = len(lines) - 30
-				}
-				logrus.Infof("TIMELINE: tail of stream:\n%s", strings.Join(lines[start:], "\n"))
+			Expect(err).NotTo(HaveOccurred(), "failed to retrieve TCP stream from TOR")
+			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
+			logrus.Infof("TIMELINE: total lines=%d, first=%s, last=%s", len(lines), lines[0], lines[len(lines)-1])
+			// Show the last 30 lines for quick inspection.
+			start := 0
+			if len(lines) > 30 {
+				start = len(lines) - 30
 			}
+			logrus.Infof("TIMELINE: tail of stream:\n%s", strings.Join(lines[start:], "\n"))
+
+			seqGaps, lastSeq := countSequenceGaps(lines)
+			elapsed := time.Since(preTime).Seconds()
+			logrus.Infof("Sequence: %d gaps, last seq=%d, elapsed=%.0fs across 2 eBGP migrations",
+				seqGaps, lastSeq, elapsed)
+			Expect(seqGaps).To(BeNumerically("==", 0),
+				"eBGP live migration must not drop any TCP segments")
+			// The server sends seq=N once per second. The actual count should be
+			// within 80% of the elapsed wall-clock time — allowing for connection
+			// setup delay and scheduling jitter but catching major data loss.
+			Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
+				fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
+
+			timeline.record(routeTimelineEntry{
+				Phase:    "test-complete",
+				VMNode:   node3,
+				TOR:      queryTORSnapshot(tor, vmIP),
+				TCPLines: finalLines,
+			})
 
 			logrus.Infof("TIMELINE: test complete — analyse route-monitor and seq-monitor logs above")
 		})
