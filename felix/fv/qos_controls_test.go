@@ -648,7 +648,11 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Stopping persistent connections")
 						for i := range len(pcs) {
+							if pcs[i] == nil {
+								continue
+							}
 							pcs[i].Stop()
+							pcs[i] = nil
 						}
 
 						By("Setting connection limit for ingress on workload 0")
@@ -676,33 +680,72 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 						}
 
-						By("Starting persistent connections on workload 1")
+						By("Starting persistent connections on workload 1 (one with SendRST)")
 						for i := range len(pcs) {
-							pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							opts := workload.PersistentConnectionOpts{}
+							if i == len(pcs)-1 {
+								// Last connection uses SendRST so that Stop()
+								// closes with TCP RST instead of graceful FIN.
+								opts.SendRST = true
+							}
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055, opts)
+							Expect(err).NotTo(HaveOccurred())
+							pcs[i] = pc
 						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
 						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
 						logrus.Infof("%dth connection failed as expected", numConnections)
 
-						By("Stopping one persistent connection to free up a spot in the limit")
+						// Test RST close path: stop the last connection (SendRST=true)
+						// and verify a new connection can be established.
+						By("Stopping one persistent connection (with RST) to free up a spot")
 						pcs[len(pcs)-1].Stop()
+						pcs[len(pcs)-1] = nil
 
 						if BPFMode() {
-							// In BPF mode, the connlimit counter is updated by the CT
-							// scanner (every ~10s). Wait for the scanner to recount and
-							// drop the current_count below the limit.
-							By("Waiting for BPF CT scanner to recount connections")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(BeNumerically("<", int32(numConnections)))
+							By("Waiting for BPF connlimit counter to reflect closed connection")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", int32(numConnections)))
 						}
 
-						By("Starting nth connection on workload 1, expecting success")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "30s", "1s").ShouldNot(HaveOccurred())
-						logrus.Infof("%dth connection failed as expected", numConnections-1)
+						By("Re-filling the connection slot after RST close")
+						Eventually(func() error {
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							if err == nil {
+								pcs[len(pcs)-1] = pc
+							}
+							return err
+						}, "10s", "1s").ShouldNot(HaveOccurred())
+						logrus.Infof("Connection after RST close succeeded as expected")
+
+						// Test graceful FIN close path: stop a regular connection
+						// (SendRST=false) and verify a new connection can be established.
+						By("Stopping one persistent connection (with graceful FIN) to free up a spot")
+						pcs[len(pcs)-1].Stop()
+						pcs[len(pcs)-1] = nil
+
+						if BPFMode() {
+							By("Waiting for BPF connlimit counter to reflect closed connection")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", int32(numConnections)))
+						}
+
+						By("Re-filling the connection slot after FIN close")
+						Eventually(func() error {
+							pc, err := w[1].StartPersistentConnectionMayFail(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							if err == nil {
+								pcs[len(pcs)-1] = pc
+							}
+							return err
+						}, "10s", "1s").ShouldNot(HaveOccurred())
+						logrus.Infof("Connection after FIN close succeeded as expected")
 
 						By("Stopping remaining persistent connections")
-						for i := range len(pcs) - 1 {
+						for i := range len(pcs) {
+							if pcs[i] == nil {
+								continue
+							}
 							pcs[i].Stop()
+							pcs[i] = nil
 						}
 
 						By("Removing all limits from workload 0")
@@ -752,6 +795,24 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 						}
 
+						if BPFMode() {
+							// Flush stale CT entries and keep flushing until the
+							// egress counter reaches 0. The egress counter is
+							// per-interface, so stale CT entries from the ingress
+							// test (same interface, different direction) inflate it.
+							// Entries may be recreated by in-flight packets from
+							// the server side, so we flush in a loop.
+							By("Flushing conntrack entries until egress count is 0")
+							Eventually(func() int32 {
+								tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
+								tc.Felixes[1].Exec("calico-bpf", "conntrack", "clean")
+								// Wait for the scanner to complete a full cycle
+								// after the flush so the recount reflects reality.
+								time.Sleep(12 * time.Second)
+								return getBPFCurrentCount(1, 1, "egress")()
+							}, "60s", "1s").Should(Equal(int32(0)))
+						}
+
 						By("Starting persistent connections on workload 1")
 						for i := range len(pcs) {
 							pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
@@ -763,7 +824,11 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Stopping persistent connections")
 						for i := range len(pcs) {
+							if pcs[i] == nil {
+								continue
+							}
 							pcs[i].Stop()
+							pcs[i] = nil
 						}
 
 						By("Removing all limits from workload 1")
@@ -794,7 +859,11 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Stopping persistent connections")
 						for i := range len(pcs) {
+							if pcs[i] == nil {
+								continue
+							}
 							pcs[i].Stop()
+							pcs[i] = nil
 						}
 					})
 				})
