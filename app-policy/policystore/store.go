@@ -40,6 +40,7 @@ type PolicyStore struct {
 	IPSetByID          map[string]IPSet
 	Endpoint           *proto.WorkloadEndpoint
 	Endpoints          map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
+	HostEndpoints      map[types.HostEndpointID]*proto.HostEndpoint
 	ServiceAccountByID map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	NamespaceByID      map[types.NamespaceID]*proto.NamespaceUpdate
 }
@@ -48,6 +49,7 @@ func NewPolicyStore() *PolicyStore {
 	return &PolicyStore{
 		IPToIndexes:        apptypes.NewIPToEndpointsIndex(),
 		Endpoints:          make(map[types.WorkloadEndpointID]*proto.WorkloadEndpoint),
+		HostEndpoints:      make(map[types.HostEndpointID]*proto.HostEndpoint),
 		RWMutex:            sync.RWMutex{},
 		IPSetByID:          make(map[string]IPSet),
 		ProfileByID:        make(map[types.ProfileID]*proto.Profile),
