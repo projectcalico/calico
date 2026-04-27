@@ -2,7 +2,7 @@ include ../../metadata.mk
 
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-proxy
 
-ENVOY_PROXY_IMAGE ?= envoy-proxy
+ENVOY_PROXY_IMAGE ?= calico/envoy-proxy
 BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
 # For updating this version please see
