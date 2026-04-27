@@ -253,6 +253,20 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		return nil
 	}
 
+	// getFromContainerNS runs an HTTP GET from inside the kube-controllers
+	// network namespace.  This is needed for endpoints that bind to loopback
+	// only (e.g. the pprof debug server), which are not reachable from the host.
+	getFromContainerNS := func(url string) error {
+		cmd := exec.Command("docker", "run", "--rm",
+			"--network=container:"+kubectrls.Name,
+			os.Getenv("KUBE_IMAGE"), "wget", "-q", "-O", "/dev/null", "-T", "2", url)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("wget %q failed: %v: %s", url, err, string(out))
+		}
+		return nil
+	}
+
 	It("should not expose pprof endpoints on the prometheus port", func() {
 		// By checking that prometheus metrics are available on the default port.
 		metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
@@ -261,9 +275,14 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		// By checking that pprof endpoints are not available on the prometheus port.
 		Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
 
-		// By checking that pprof endpoints are available on the pprof port.
+		// pprof binds to loopback only, so it must be queried from inside the
+		// container's network namespace.
+		Expect(getFromContainerNS("http://127.0.0.1:9095/debug/pprof/profile?seconds=1")).To(Succeed())
+
+		// Confirm that the pprof port is NOT reachable from outside the
+		// container (i.e. not bound to 0.0.0.0).
 		pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
-		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).To(Succeed())
+		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
 	})
 })
 
