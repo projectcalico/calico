@@ -93,7 +93,7 @@ var _ = describe.CalicoDescribe(
 				stopCh = make(chan time.Time, 1)
 
 				// We read flow logs from whisker-backend, we start port forward so we can query the flows
-				localPort, err := kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
+				localPort, _, err := kubectl.PortForward("calico-system", "deployment/whisker", "3002", "", stopCh)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Build url to get flows from whisker
