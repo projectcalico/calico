@@ -62,7 +62,7 @@ tag() {
 operator() {
     mkdir -p "$STAMP_DIR"
     versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
-    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_BRANCH}:${versions_hash}"
+    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_REPO}:${OPERATOR_BRANCH}:${versions_hash}"
     stamp="${STAMP_DIR}/operator.inputs"
     prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
 
