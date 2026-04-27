@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type Config struct {
@@ -122,7 +123,13 @@ func newGRPCServer(cfg *Config) (*grpc.Server, error) {
 }
 
 func Run(ctx context.Context, cfg Config) {
-	logrus.WithField("cfg", cfg).Info("Loaded configuration")
+	// Log a copy with PushURL passed through RedactURL as a precaution —
+	// the default URL has no credentials, but user-supplied values could.
+	sanitized := cfg
+	if sanitized.PushURL != "" {
+		sanitized.PushURL = logutils.RedactURL(sanitized.PushURL)
+	}
+	logrus.WithField("cfg", sanitized).Info("Loaded configuration")
 	defer logrus.Warn("Shutting down")
 
 	// Make an initial report that says we're live but not yet ready.
