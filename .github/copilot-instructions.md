@@ -242,5 +242,43 @@ make image                   # Build all images (slow)
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
+## Documentation map
+
+Calico's docs are split by purpose. Architecture lives in
+`DESIGN.md` files; operational guidance (build, test, debug)
+lives in `CLAUDE.md` / `AGENTS.md`; path-scoped review rules
+live under `.github/instructions/*.instructions.md`. Do not look
+for architecture in `CLAUDE.md`.
+
+- `<component>/DESIGN.md` — architecture, invariants, embedded
+  per-section review notes. Read before writing or reviewing a
+  change in that component.
+- Complex components have an index: [`felix/DESIGN.md`](../felix/DESIGN.md)
+  lists per-topic sub-designs under [`felix/design/`](../felix/design/)
+  with an "applies to" glob each. A PR touching multiple globs
+  must load every matching sub-design.
+- [`.github/instructions/*.instructions.md`](instructions/) are
+  thin path-scoped pointers to `DESIGN.md` files plus meta-rules
+  (the update rule, the `@copilot` invocation pattern). They do
+  not restate design content — always read the pointed-at
+  `DESIGN.md`.
+- A PR changing how a component works (new invariant, flag, map,
+  mark, sub-program, packet-path change) must update the relevant
+  `DESIGN.md` in the same PR. For components with a design
+  directory (Felix uses `felix/design/`), this means update the
+  relevant file under that directory — the sub-design covering
+  the area — and/or the index itself when the sub-design table
+  or scope changes. Exemptions: bug fix restoring documented
+  behaviour, mechanical refactor, comment/log edits, dependency
+  bump. If in doubt, update the doc.
+
+## eBPF Dataplane Review
+
+Changes that touch the eBPF dataplane have their own design and review guide: [`felix/design/bpf-dataplane.md`](../felix/design/bpf-dataplane.md). It describes the packet path, TC program layout, service NAT, Maglev, CTLB, the bpfnat workaround, VXLAN flow-mode device, RPF, conntrack cleanup, IP fragmentation, ICMP error generation, `*tables`→BPF migration, third-party DNAT interop, log filters, flow logs, QoS, fast-path cost discipline, and cross-cutting review rules. Each section has a **Review notes** block listing the invariants a PR in that area must respect — cross-check it when reviewing BPF changes.
+
+Path-specific reviewer rules for BPF files live in [`.github/instructions/ebpf-dataplane.instructions.md`](instructions/ebpf-dataplane.instructions.md) and apply automatically to files under `felix/bpf-gpl/`, `felix/bpf/`, `felix/dataplane/linux/bpf_*.go`, and `felix/dataplane/linux/vxlan_mgr.go`.
+
+**Update rule.** A BPF dataplane PR that changes how the dataplane works (new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision) must update `felix/design/bpf-dataplane.md` in the same PR. Exemptions: (a) a bug fix that restores behaviour `DESIGN.md` already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
+
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.
