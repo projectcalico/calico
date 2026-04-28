@@ -50,13 +50,9 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         self.clientv3.get_prefix.return_value = []
         self.clientv3.watch_prefix.return_value = (iter(()), mock.Mock())
 
-        # Reset the driver
-        mech_calico.mech_driver = None
-
     def tearDown(self):
         # Reset global etcd client.
         etcdv3._client = None
-        mech_calico.mech_driver = None
 
         super(TestMechanismDriverVoting, self).tearDown()
 
