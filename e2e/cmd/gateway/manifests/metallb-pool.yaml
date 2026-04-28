@@ -5,7 +5,7 @@
 # get programmed as routes inside the cluster via Calico's BGP fan-out, so
 # in-cluster pods can reach them, but the Gateway API conformance test
 # binary runs from the host (Semaphore VM or developer laptop) where there
-# is no BGP session and the IPs don't resolve.
+# is no BGP session and so the IPs aren't reachable.
 #
 # This file adds a SECOND, namespace-scoped pool in L2 mode whose addresses
 # come from the kind docker bridge subnet. Hosts have a direct route to
