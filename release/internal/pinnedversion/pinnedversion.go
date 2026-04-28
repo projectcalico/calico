@@ -47,12 +47,13 @@ var FlannelComponent = registry.Component{
 }
 
 var (
-	// Map of component names to their image names.
-	componentToImageMap = map[string]string{
-		"calicoctl":                 "ctl",
-		"flexvol":                   "pod2daemon-flexvol",
-		"csi-node-driver-registrar": "node-driver-registrar",
-	}
+	// Map of component names to their image names. After the #12225
+	// consolidation the previous entries (calicoctl/ctl, flexvol/pod2daemon-flexvol,
+	// csi-node-driver-registrar/node-driver-registrar) no longer ship as
+	// independent images, so the map is empty. It is kept as the extension
+	// point for any future component whose pinned-version key differs from
+	// its image name.
+	componentToImageMap = map[string]string{}
 	// Map of image names to their component names.
 	// It is initialized lazily and should be accessed via mapImageToComponent.
 	imageToComponentMap = map[string]string{}
