@@ -1419,6 +1419,10 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 }
 
 func (r *CalicoManager) updateHelmChartIndex() error {
+	if !r.helmCharts {
+		logrus.Info("Skipping updating helm index (charts disabled)")
+		return nil
+	}
 	if !r.helmIndex {
 		logrus.Info("Skipping updating helm index")
 		return nil
