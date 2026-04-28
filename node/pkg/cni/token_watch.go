@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -212,7 +213,19 @@ func (t *TokenRefresher) Run() {
 // channel plus a no-op cleanup so the caller can fall back to timer-only
 // behaviour — this preserves the original semantics on platforms where
 // fsnotify isn't supported.
+//
+// On Windows the watcher is intentionally skipped. fsnotify on Windows uses
+// ReadDirectoryChangesW, whose event delivery can vary depending on how the
+// writer updates the file (rename vs. truncate vs. atomic-symlink-swap),
+// and projected SA token volumes on Windows host-process containers do not
+// follow the same kubelet atomic-writer pattern this watcher was designed
+// against. Forcing timer-only on Windows keeps behaviour identical to the
+// pre-fsnotify implementation — no regression risk on Windows nodes.
 func (t *TokenRefresher) startTokenFileWatcher() (<-chan fsnotify.Event, func()) {
+	if runtime.GOOS == "windows" {
+		logrus.Info("fsnotify-based CNI token fast path is disabled on Windows; refresh will rely on timer only")
+		return nil, func() {}
+	}
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create fsnotify watcher; CNI token refresh will rely on timer only")
