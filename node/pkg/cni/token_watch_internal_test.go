@@ -334,6 +334,22 @@ func TestTokenRefresher_RecoversAfterTransientUpdateTokenError(t *testing.T) {
 	}
 }
 
+// skipIfNotKubeletPosix skips tests that depend on the Linux/POSIX branch of
+// kubelet's atomic-writer: os.Rename over an existing symlink and unprivileged
+// os.Symlink. On Windows kubelet takes a different code path
+// (atomic_writer.go:224-231 — Remove + Symlink + Remove instead of Rename),
+// and os.Symlink itself requires Administrator privileges or Developer Mode.
+// On macOS the helpers work but kubelet's projected-volume layout differs in
+// ways we don't care to model. Calico-node's production fast path on Windows
+// would also fall back to timer-only because the projected SA token mount
+// path differs there, so the kubelet-style test wouldn't be meaningful.
+func skipIfNotKubeletPosix(t *testing.T) {
+	t.Helper()
+	if goruntime.GOOS != "linux" {
+		t.Skipf("kubelet atomic-writer simulation is Linux-only (GOOS=%s)", goruntime.GOOS)
+	}
+}
+
 // kubeletNewTimestampDir mirrors AtomicWriter.newTimestampDir from
 // kubernetes/kubernetes v1.35.4 pkg/volume/util/atomic_writer.go (line ~398):
 // uses os.MkdirTemp under the target dir with the prefix
@@ -428,6 +444,7 @@ func kubeletAtomicRotate(t *testing.T, dir, oldTsDir string, files map[string]st
 // actually delivers events for that specific sequence on Linux, or whether
 // the rename of an internal symlink is silently swallowed.
 func TestFsnotifyDetectsKubeletAtomicWriterRotation(t *testing.T) {
+	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
 	files := map[string]string{
 		"token":     "initial-token",
@@ -492,6 +509,7 @@ collect:
 // atomic-writer pattern and assert that UpdateToken fires soon after the
 // rotation — which is the actual behaviour the fix promises.
 func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
+	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
 	files := map[string]string{
 		"token":     "initial-token",
@@ -579,6 +597,7 @@ func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
 // before drainEvents in production code, which is not worth it for this
 // failure rate.
 func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
+	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
 	files := map[string]string{"token": "v0", "ca.crt": "ca-cert-pem", "namespace": "kube-system"}
 	currentTs := kubeletAtomicSetUpInitial(t, dir, files)
