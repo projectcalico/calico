@@ -49,6 +49,7 @@ type IPAMBlockSpec struct {
 	// Array of allocations in-use within this block. nil entries mean the allocation is free.
 	// For non-nil entries at index i, the index is the ordinal of the allocation within this block
 	// and the value is the index of the associated attributes in the Attributes array.
+	// +calico:nullableItems
 	Allocations []*int `json:"allocations"`
 
 	// Unallocated is an ordered list of allocations which are free in the block.
