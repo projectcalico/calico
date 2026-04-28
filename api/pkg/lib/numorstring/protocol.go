@@ -40,6 +40,7 @@ var (
 	}
 )
 
+// +calico:numOrString
 type Protocol Uint8OrString
 
 // ProtocolFromInt creates a Protocol struct from an integer value.
