@@ -1,0 +1,34 @@
+# Base EnvoyProxy used by the Gateway API conformance flow.
+#
+# Envoy Gateway upstream defaults the data-plane Service's
+# `externalTrafficPolicy` to "Local" (api/v1alpha1/shared_types.go in
+# envoyproxy/gateway, +kubebuilder:default:="Local"). Their own
+# conformance CI gets away with this because it uses a single-node kind
+# cluster (tools/hack/create-cluster.sh defaults NUM_WORKERS to 0), so
+# the metallb speaker that wins the IP and the envoy backend pod always
+# share a node. Calico's kind setup is multi-node (1 control + 3
+# workers), so any test where the speaker and the backend pod land on
+# different nodes is dropped by IPVS — visible as i/o timeouts on
+# BackendTLSPolicy*, HTTPRouteCrossNamespace, etc.
+#
+# Override to "Cluster" so traffic from any speaker node can route to
+# any envoy pod via IPVS. The Calico tigera-operator picks this up
+# through the GatewayAPI CR's envoyProxyRef (see gatewayapi.yaml).
+#
+# This resource is created in the `tigera-gateway` namespace.
+# The gatewayapi controller normally provisions that namespace, but
+# only after it has resolved every envoyProxyRef — which deadlocks on
+# first install. `make e2e-gateway-setup` pre-creates the namespace
+# itself before applying this manifest; the operator subsequently
+# takes ownership when its non-CRD render runs.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: gateway-conformance-base
+  namespace: tigera-gateway
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        externalTrafficPolicy: Cluster
