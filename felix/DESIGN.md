@@ -184,9 +184,33 @@ load **every** matching sub-design before acting. The `applies to`
 column is the authoritative mapping from source path to design
 doc.
 
+The `bpf-*` rows form a single sub-design family for the BPF
+dataplane, deliberately split so a PR touching one area pulls
+only the relevant knowledge. The `bpf-overview` umbrella row is
+the always-pulled foundation (packet-path mental model, fast-path
+cost rule, cross-cutting review notes); the others have tight
+`applyTo` globs scoped to their topic. **Load each of them either
+when you touch a matched file or when you're working on the
+related topic** — the globs cover the common cases, but a change
+in a central file (e.g. `tc.c`, `bpf.h`) may legitimately need a
+sub-design even if the immediate edit site doesn't match its glob
+narrowly, and conversely a PR description that says "this fixes
+the conntrack scanner" should pull `bpf-conntrack-flowstate.md`
+even if the edit happens to land in code paths the glob doesn't
+list. This is the worked example of the multi-file split pattern;
+complex sub-designs in other areas (when they exist) should follow
+the same shape if they grow large.
+
 | Topic | Applies to | Status |
 |---|---|---|
-| [bpf-dataplane](./design/bpf-dataplane.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/vxlan_mgr.go`, BPF-specific parts of `felix/rules/static.go` | ✅ exists |
+| [bpf-overview](./design/bpf-overview.md) | `felix/bpf/**`, `felix/bpf-gpl/**`, `felix/dataplane/linux/bpf_*.go`, `felix/dataplane/linux/vxlan_mgr.go` (umbrella — pulled by every BPF change) | ✅ exists |
+| [bpf-tc-programs](./design/bpf-tc-programs.md) | `felix/bpf-gpl/tc.c`, `tc_preamble.c`, `xdp_preamble.c`, `jump.h`, `bpf.h`, `globals.h`, `types.h`, `felix/bpf/hook/**`, `felix/bpf/tc/**`, `felix/bpf/jump/**`, `felix/bpf/ifstate/**` | ✅ exists |
+| [bpf-xdp](./design/bpf-xdp.md) | `felix/bpf-gpl/xdp.c`, `xdp_preamble.c`, `metadata.h`, `felix/bpf/xdp/**` | ✅ exists |
+| [bpf-services](./design/bpf-services.md) | `felix/bpf/proxy/**`, `felix/bpf/nat/**`, `felix/bpf/consistenthash/**`, `felix/bpf-gpl/connect*.{c,h}`, `nat*.h`, `nat_lookup.h`, `maglev.h`, `ctlb*.h`, `sendrecv.h`, `felix/dataplane/linux/bpf_ep_mgr.go` | ✅ exists |
+| [bpf-host-networking](./design/bpf-host-networking.md) | `felix/dataplane/linux/bpf_ep_mgr.go`, `dataplanedefs/dataplane_defs.go`, `felix/bpf-gpl/fib_co_re.h` | ✅ exists |
+| [bpf-conntrack-flowstate](./design/bpf-conntrack-flowstate.md) | `felix/bpf/conntrack/**`, `felix/bpf-gpl/conntrack*.{c,h}`, `rpf.h`, `felix/bpf/allowsources/**`, `felix/rules/static.go` | ✅ exists |
+| [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan_mgr.go` | ✅ exists |
+| [bpf-observability](./design/bpf-observability.md) | `felix/bpf/filter/**`, `events/**`, `ringbuf/**`, `qos/**`, `felix/bpf-gpl/log.h`, `events*.h`, `qos.h`, `ringbuf.h` | ✅ exists |
 | tables-dataplane | `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, non-BPF parts of `felix/rules/**`, non-BPF parts of `felix/dataplane/linux/` | *not yet written* |
 | calc-graph | `felix/calc/**` | *not yet written* |
 | route-sync | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | *not yet written* |
@@ -204,9 +228,14 @@ absence as "read the code and ask"; do not assume anything goes.
   sub-designs, `.github/instructions/*.instructions.md` files,
   code, or external references. Load them. A design is a graph,
   not a single node.
-- **Load what applies.** If a PR touches both BPF and route-sync
-  code, you need both sub-designs in context. The `applies to`
-  globs above tell you which.
+- **Load what applies — by path or by topic.** The `applies to`
+  globs above are the path-based trigger: if a PR touches both
+  BPF and route-sync code, both sub-designs are needed. The
+  topic of the change matters too — a PR described as "fixing
+  the conntrack scanner" should pull
+  `bpf-conntrack-flowstate.md` even if the edit happens to land
+  only in a central file the glob covers under a broader
+  umbrella. When in doubt, pull the topic-relevant sub-design.
 - **Review notes are the checklist.** Each sub-design embeds
   per-section review notes describing the invariants a PR must
   respect. At write-time, respect them; at review-time, apply
@@ -229,17 +258,36 @@ absence as "read the code and ask"; do not assume anything goes.
 When a topic above graduates from *not yet written* to a real
 doc:
 
-1. Create `felix/design/<topic>.md`. Follow the shape of
-   `bpf-dataplane.md`: narrative prose, architecture, per-section
-   review notes at the end of each section, a cross-cutting
-   review-notes section at the bottom, and a "keep this in sync"
-   bullet.
+1. Create `felix/design/<topic>.md`. Follow the shape of any
+   existing sub-design (the BPF family is the worked example):
+   narrative prose, architecture, per-section review notes at
+   the end of each section, and a "keep this in sync" tail.
 2. Update the sub-design index above: replace *not yet written*
    with a link to the new file and the ✅ exists marker.
-3. Move any orientation content that belongs to the new sub-design
-   out of this file into the new doc (most of the overview
-   sections above are cross-cutting and stay here).
-4. Create a matching `.github/instructions/<topic>.instructions.md`
-   with the `applyTo` globs from the table above plus a pointer
-   to the new design doc. Keep it thin — see the BPF file as the
-   template.
+3. Move any orientation content that belongs to the new
+   sub-design out of this file into the new doc (most of the
+   §1 architecture overview is cross-cutting and stays here).
+4. Create a matching
+   `.github/instructions/<topic>.instructions.md` with the
+   `applyTo` globs from the table above plus a pointer to the
+   new design doc. Keep it thin — see any of the
+   `bpf-*.instructions.md` files as the template.
+
+### When a sub-design grows too big, split it
+
+A single sub-design that grows large enough to bloat AI-tool
+context for narrow PRs (in practice: ~2000+ lines, ~25k+ tokens)
+should split into **a family of focused files** the way the BPF
+dataplane did:
+
+- A short always-pulled `<topic>-overview.md` containing the
+  mental model, the cost / discipline rules, and cross-cutting
+  review notes.
+- Per-area files (`<topic>-<area>.md`) covering specific feature
+  groupings, each with a tight `applyTo` glob in its own
+  `.github/instructions/<topic>-<area>.instructions.md`.
+
+The multi-file family appears in this index as multiple rows,
+all sharing the topic prefix. A PR touching multiple areas
+matches multiple instruction files; only the union of the
+matched sub-designs loads, not the whole family.
