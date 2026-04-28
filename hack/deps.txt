@@ -111,6 +111,7 @@ local:felix/idalloc
 local:felix/logutils
 local:felix/proto
 local:felix/stringutils
+local:hack/cmd/calico-crd-transform
 local:hack/cmd/calico-selector
 local:hack/cmd/coalesce-imports
 local:hack/cmd/deps

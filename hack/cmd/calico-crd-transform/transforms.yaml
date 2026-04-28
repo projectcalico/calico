@@ -1,0 +1,66 @@
+# Post-processing rules for controller-gen-produced CRDs.
+#
+# where: shape | path     selects which schema nodes a rule applies to.
+# apply.patch              JSON-Merge-Patch-style edit; null deletes a key.
+#
+# Field-level metadata (description, default, etc.) is preserved unless the
+# patch explicitly sets or nullifies it.
+#
+# Rules with zero matches across the input directory are an error: a renamed
+# field or upstream behavior change should fail loud, not silently no-op.
+
+rules:
+  - name: numorstring.Port -> int-or-string union
+    description: |
+      numorstring.Port is a struct{ MinPort, MaxPort, PortName } whose
+      MarshalJSON emits either a numeric port, "min:max" range, or named
+      port.  Replace controller-gen's struct walk with the int-or-string
+      union the API server actually validates.
+    where:
+      shape:
+        type: object
+        properties: [minPort, maxPort, portName]
+        requiredProperties: [portName]
+    apply:
+      patch:
+        type: null
+        properties: null
+        required: null
+        x-kubernetes-int-or-string: true
+        anyOf:
+          - type: integer
+          - type: string
+        pattern: ^.*
+
+  - name: numorstring.{Protocol,Uint8OrString} -> int-or-string union
+    description: |
+      numorstring.Protocol is `type Protocol Uint8OrString`; the underlying
+      struct is { NumVal, StrVal, Type } and the JSON form is again number
+      or string.  Same replacement as Port.
+    where:
+      shape:
+        type: object
+        properties: [numVal, strVal, type]
+        requiredProperties: [numVal, strVal, type]
+    apply:
+      patch:
+        type: null
+        properties: null
+        required: null
+        x-kubernetes-int-or-string: true
+        anyOf:
+          - type: integer
+          - type: string
+        pattern: ^.*
+
+  - name: IPAMBlock allocations items -> nullable
+    description: |
+      Allocations is []*int with nil entries meaning "free slot".
+      controller-gen does not auto-detect that []*T elements should be
+      nullable, so mark the array's items schema explicitly.
+    where:
+      crd: ipamblocks.*
+      path: .spec.allocations[*]
+    apply:
+      patch:
+        nullable: true
