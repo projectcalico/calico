@@ -17,7 +17,6 @@ package kubevirt
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -26,13 +25,18 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -40,6 +44,7 @@ import (
 // KubeVirt VMs. The tests cover:
 //   - IPAM attribute ownership handover (Test 1)
 //   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 2-3)
+//   - Kubernetes NetworkPolicy enforcement survives migration (Test 4)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
@@ -224,20 +229,6 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing")
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
-			// Start conntrack monitor on all nodes, tracking VM↔client flows.
-			By("Starting conntrack monitor on all nodes for iBGP test")
-			clientPodObj, cpErr := f.ClientSet.CoreV1().Pods(ns).Get(ctx, clientPod.Name, metav1.GetOptions{})
-			Expect(cpErr).NotTo(HaveOccurred())
-			clientPodIP := clientPodObj.Status.PodIP
-			logrus.Infof("Client pod IP: %s (on node %s)", clientPodIP, clientPodObj.Spec.NodeName)
-			ctMon := newConntrackMonitor(f, serverIP, clientPodIP)
-			nodeList, listErr := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			Expect(listErr).NotTo(HaveOccurred())
-			for _, n := range nodeList.Items {
-				ctMon.addNode(n.Name)
-			}
-			DeferCleanup(ctMon.stop)
-
 			By("First migration")
 			migration1 := &testVMIM{name: serverVMName + "-migration1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
 			migration1.Create(ctx)
@@ -371,8 +362,6 @@ var _ = describe.CalicoDescribe(
 			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
 				"TOR cannot reach VM — eBGP routing may not be configured")
 
-			pauseForDebug(f)
-
 			By("Starting route monitor on TOR")
 			stopMonitor := startRouteMonitor(tor, vmIP)
 			defer stopMonitor()
@@ -448,27 +437,6 @@ var _ = describe.CalicoDescribe(
 				TOR:      queryTORSnapshot(tor, vmIP),
 				TCPLines: preLines,
 			})
-
-			// Find TOR L2TP IP for conntrack monitor.
-			bgpSubnet := &net.IPNet{IP: net.ParseIP("172.16.8.0"), Mask: net.CIDRMask(24, 32)}
-			var torL2tpIP string
-			for _, ip := range tor.IPs() {
-				if bgpSubnet.Contains(net.ParseIP(ip)) {
-					torL2tpIP = ip
-					break
-				}
-			}
-
-			// Start conntrack monitor on all worker nodes before migration.
-			// Polls every 200ms so we catch the exact moment an entry appears.
-			By("Starting conntrack monitor on all nodes")
-			ctMon := newConntrackMonitor(f, vmIP, torL2tpIP)
-			nodeList, listErr := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			Expect(listErr).NotTo(HaveOccurred())
-			for _, n := range nodeList.Items {
-				ctMon.addNode(n.Name)
-			}
-			DeferCleanup(ctMon.stop)
 
 			// ---- First migration ----
 			By("First migration")
@@ -605,23 +573,27 @@ var _ = describe.CalicoDescribe(
 				TCPLines: secondMigLines,
 			})
 
-			// Poll for 60s, capturing route state every 5s, instead of a
-			// blind sleep — this builds the timeline for the second migration's
-			// route convergence.
-			By("Observing route and seq timeline after second migration (60s)")
-			deadline := time.Now().Add(60 * time.Second)
-			for time.Now().Before(deadline) {
-				lines, _ := torContainerLineCount(tor, ncClientContainer)
+			// Wait for the second migration's /32 route to revert to normal
+			// local_pref, same as after the first migration.
+			By("Waiting for TOR /32 local_pref to revert after second migration")
+			Eventually(func() int {
+				snap := queryTORSnapshot(tor, vmIP)
+				pollLines, _ := torContainerLineCount(tor, ncClientContainer)
 				timeline.record(routeTimelineEntry{
-					Phase:    "final-wait",
+					Phase:    "second-convergence-poll",
 					VMNode:   node3,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: lines,
+					TOR:      snap,
+					TCPLines: pollLines,
 				})
-				time.Sleep(5 * time.Second)
-			}
+				if len(snap.Host32.Routes) > 0 {
+					return snap.Host32.Routes[0].LocalPref
+				}
+				return -1
+			}, 45*time.Second, 2*time.Second).Should(Equal(100),
+				"TOR /32 local_pref should revert to 100 after second migration convergence")
+
 			finalLines, _ := torContainerLineCount(tor, ncClientContainer)
-			logrus.Infof("TIMELINE: after second migration wait lines=%d (mid=%d, delta=%d)", finalLines, midLines, finalLines-midLines)
+			logrus.Infof("TIMELINE: after second migration convergence lines=%d (mid=%d, delta=%d)", finalLines, midLines, finalLines-midLines)
 			Expect(finalLines).To(BeNumerically(">", midLines),
 				"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
 
@@ -658,6 +630,126 @@ var _ = describe.CalicoDescribe(
 			})
 
 			logrus.Infof("TIMELINE: test complete — analyse route-monitor and seq-monitor logs above")
+		})
+
+		// Test 4: Kubernetes NetworkPolicy enforcement survives live migration.
+		// After migration, KubeVirt creates a new virt-launcher pod on the target node.
+		// Network policies that selected the old pod must also apply to the new pod.
+		// This test verifies that an allowed client can still connect and a denied
+		// client is still blocked after the VM migrates to a different node.
+		It("should enforce NetworkPolicy after live migration", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			defer cancel()
+			ns := f.Namespace.Name
+
+			vmName := "e2e-netpol-vm"
+			vm := &testVM{
+				name:      vmName,
+				namespace: ns,
+				cloudInit: tcpServerCloudInit,
+				labels:    map[string]string{"app": "vm"},
+				kvClient:  kvClient,
+			}
+
+			By("Creating VM with TCP server and app=vm label")
+			vm.Create(ctx)
+			DeferCleanup(vm.Delete)
+			vmIP, node1 := vm.WaitForRunningWithIP(ctx)
+			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
+
+			By("Creating allowed client pod (role=allowed)")
+			client1Pod, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "client-allowed",
+					Namespace: ns,
+					Labels:    map[string]string{"role": "allowed", utils.TestResourceLabel: "true"},
+				},
+				Spec: corev1.PodSpec{
+					Containers:    []corev1.Container{{Name: "client", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
+					RestartPolicy: corev1.RestartPolicyNever,
+					NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), client1Pod.Name, metav1.DeleteOptions{})
+			})
+			err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, client1Pod.Name, ns, 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), "client-allowed pod not Running")
+
+			By("Creating denied client pod (role=denied)")
+			client2Pod, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "client-denied",
+					Namespace: ns,
+					Labels:    map[string]string{"role": "denied", utils.TestResourceLabel: "true"},
+				},
+				Spec: corev1.PodSpec{
+					Containers:    []corev1.Container{{Name: "client", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
+					RestartPolicy: corev1.RestartPolicyNever,
+					NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), client2Pod.Name, metav1.DeleteOptions{})
+			})
+			err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, client2Pod.Name, ns, 2*time.Minute)
+			Expect(err).NotTo(HaveOccurred(), "client-denied pod not Running")
+
+			By("Verifying both clients can reach VM before policy is applied")
+			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			checkConnectionToTCPServer(ns, client2Pod.Name, vmIP)
+
+			By("Creating NetworkPolicy to allow only role=allowed on TCP/9999")
+			protocol := corev1.ProtocolTCP
+			netpol := &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "allow-client1-only", Namespace: ns},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "vm"},
+					},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+					Ingress: []networkingv1.NetworkPolicyIngressRule{{
+						From: []networkingv1.NetworkPolicyPeer{{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"role": "allowed"},
+							},
+						}},
+						Ports: []networkingv1.NetworkPolicyPort{{
+							Protocol: &protocol,
+							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 9999},
+						}},
+					}},
+				},
+			}
+			_, err = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Create(ctx, netpol, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				_ = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Delete(context.Background(), netpol.Name, metav1.DeleteOptions{})
+			})
+
+			By("Verifying policy is enforced: client1 allowed, client2 denied")
+			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			checkTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+
+			By("Triggering live migration")
+			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
+			migration.Create(ctx)
+			DeferCleanup(migration.Delete)
+			migration.WaitForSuccess(ctx)
+
+			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			node2 := vmi.Status.MigrationState.TargetNode
+			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
+			logrus.Infof("VM migrated: %s -> %s", node1, node2)
+
+			By("Verifying policy survives migration: client1 still allowed, client2 still denied")
+			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			checkTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+			logrus.Info("NetworkPolicy enforcement confirmed after live migration")
 		})
 	},
 )

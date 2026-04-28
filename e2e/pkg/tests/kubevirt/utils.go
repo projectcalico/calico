@@ -118,6 +118,7 @@ type testVM struct {
 	name      string
 	namespace string
 	cloudInit string
+	labels    map[string]string // extra labels propagated to virt-launcher pod
 	kvClient  kubevirtcorev1.KubevirtV1Interface
 }
 
@@ -126,18 +127,22 @@ func (v *testVM) spec() *kubevirtv1.VirtualMachine {
 	if cloudInit == "" {
 		cloudInit = defaultCloudInit
 	}
+	templateLabels := map[string]string{"vm": v.name, utils.TestResourceLabel: "true"}
+	for k, val := range v.labels {
+		templateLabels[k] = val
+	}
 	runStrategy := kubevirtv1.RunStrategyAlways
 	return &kubevirtv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: v.name, Namespace: v.namespace,
-			Labels: map[string]string{"vm": v.name, utils.TestResourceLabel: "true"},
+			Labels: templateLabels,
 		},
 		Spec: kubevirtv1.VirtualMachineSpec{
 			RunStrategy: &runStrategy,
 			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{"kubevirt.io/allow-pod-bridge-network-live-migration": "true"},
-					Labels:      map[string]string{"vm": v.name, utils.TestResourceLabel: "true"},
+					Labels:      templateLabels,
 				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
 					Domain: kubevirtv1.DomainSpec{
@@ -432,6 +437,22 @@ func checkConnectionToTCPServer(ns, podName, vmIP string) {
 	logrus.Infof("TCP server ready on %s:9999", vmIP)
 }
 
+// checkTCPConnectionBlocked verifies that the client pod cannot connect to the VM's TCP
+// server on port 9999. Uses Consistently to confirm that nc never receives "seq=" data
+// over the check window, indicating the connection is blocked by network policy.
+func checkTCPConnectionBlocked(ns, podName, vmIP string) {
+	By(fmt.Sprintf("Verifying TCP connection to %s:9999 is blocked from %s", vmIP, podName))
+	Consistently(func() error {
+		output, _ := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
+			"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1 || true", vmIP)).Exec()
+		if strings.Contains(output, "seq=") {
+			return fmt.Errorf("connection succeeded unexpectedly")
+		}
+		return nil
+	}, 10*time.Second, 2*time.Second).Should(Succeed(),
+		"TCP connection to %s:9999 should be blocked by policy", vmIP)
+}
+
 // tcpStreamLineCount returns the number of lines in the given file inside the given pod.
 // Uses `wc -l < <file>` so the output is a bare integer (no filename suffix) and returns
 // a descriptive error if the kubectl exec fails or the output cannot be parsed.
@@ -526,29 +547,6 @@ func torContainerLineCount(tor *externalnode.Client, container string) (int, err
 		return 0, fmt.Errorf("failed to parse docker logs line count %q: %w", out, scanErr)
 	}
 	return n, nil
-}
-
-// pauseForDebug checks for the existence of a "pause-for-debug" namespace and
-// waits in a loop if it exists, allowing developers to pause test execution for
-// debugging. To pause: kubectl create ns pause-for-debug
-// To resume: kubectl delete ns pause-for-debug
-func pauseForDebug(f *framework.Framework) {
-	const ns = "pause-for-debug"
-	maxWait := 1 * time.Hour
-	start := time.Now()
-	for {
-		_, err := f.ClientSet.CoreV1().Namespaces().Get(context.Background(), ns, metav1.GetOptions{})
-		if err != nil {
-			logrus.Infof("pauseForDebug: namespace %q does not exist, continuing.", ns)
-			return
-		}
-		if time.Since(start) >= maxWait {
-			logrus.Infof("pauseForDebug: timeout after 1 hour, continuing.")
-			return
-		}
-		logrus.Infof("pauseForDebug: namespace %q exists, paused for debugging. Elapsed: %v", ns, time.Since(start))
-		time.Sleep(30 * time.Second)
-	}
 }
 
 // generateTORBirdPeersConf returns a BIRD 1.x peers config for the TOR node.
@@ -1200,161 +1198,6 @@ func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
 	}
 	logrus.Infof("Route timeline: wrote %d entries (%d bytes) to TOR:/tmp/route-timeline.json",
 		len(entries), len(data))
-}
-
-// conntrackMonitor continuously polls /proc/net/nf_conntrack on one or more
-// nodes, filtering for entries that contain both the VM IP and the TOR IP.
-// It logs every state change with a timestamp so we can see exactly when the
-// kernel creates, updates, or removes conntrack entries for the migrated flow.
-//
-// Usage:
-//
-//	mon := newConntrackMonitor(f, vmIP, torIP)
-//	mon.addNode("node-2")          // start polling node-2
-//	mon.addNode("node-1")          // can add more nodes later
-//	defer mon.stop()               // stops all goroutines, prints summary
-type conntrackMonitor struct {
-	f     *framework.Framework
-	vmIP  string
-	torIP string
-
-	mu      sync.Mutex
-	stopChs map[string]chan struct{} // nodeName → stop channel
-	logs    []string                // timestamped log entries
-}
-
-func newConntrackMonitor(f *framework.Framework, vmIP, torIP string) *conntrackMonitor {
-	return &conntrackMonitor{
-		f:       f,
-		vmIP:    strings.Split(vmIP, "/")[0],
-		torIP:   strings.Split(torIP, "/")[0],
-		stopChs: make(map[string]chan struct{}),
-	}
-}
-
-func (m *conntrackMonitor) addNode(nodeName string) {
-	m.mu.Lock()
-	if _, exists := m.stopChs[nodeName]; exists {
-		m.mu.Unlock()
-		return
-	}
-	stopCh := make(chan struct{})
-	m.stopChs[nodeName] = stopCh
-	m.mu.Unlock()
-
-	// Find the calico-node pod on this node.
-	ctx := context.Background()
-	pods, err := m.f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("CT-MONITOR: no calico-node pod on %s", nodeName)
-		return
-	}
-	podName := pods.Items[0].Name
-
-	m.log("START monitoring %s (pod %s) for VM=%s TOR=%s", nodeName, podName, m.vmIP, m.torIP)
-
-	// Start conntrack -E (event stream) in background on the node.
-	// This captures real-time events: [NEW], [UPDATE], [DESTROY].
-	// For mid-flow pickup via tcp_loose: [NEW] tcp ESTABLISHED
-	// For normal SYN handshake: [NEW] tcp SYN_SENT → [UPDATE] ESTABLISHED
-	logFile := fmt.Sprintf("/tmp/ct-events-%s.log", nodeName)
-	_, evtErr := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf(
-			"rm -f %s; conntrack -E -p tcp 2>/dev/null > %s &", logFile, logFile)).Exec()
-	if evtErr != nil {
-		m.log("[%s] conntrack -E start failed: %v (falling back to polling)", nodeName, evtErr)
-	} else {
-		m.log("[%s] conntrack -E started, logging to %s", nodeName, logFile)
-	}
-
-	// Polling goroutine: reads /proc/net/nf_conntrack for current state
-	// AND tails the conntrack -E event log for real-time events.
-	go func() {
-		var lastEntry string
-		var lastEventLines int
-		for {
-			select {
-			case <-stopCh:
-				// On stop, kill conntrack -E and collect final event log.
-				evtOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-					"sh", "-c", fmt.Sprintf(
-						"pkill -f 'conntrack -E' 2>/dev/null; cat %s 2>/dev/null | grep -E '%s|%s' || true",
-						logFile, m.vmIP, m.torIP)).Exec()
-				if evtOut = strings.TrimSpace(evtOut); evtOut != "" {
-					m.log("[%s] CT-EVENTS final dump:\n%s", nodeName, evtOut)
-				}
-				return
-			default:
-			}
-
-			// Poll /proc/net/nf_conntrack for current state.
-			out, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-				"sh", "-c", fmt.Sprintf("cat /proc/net/nf_conntrack 2>/dev/null | grep %s || true", m.vmIP)).Exec()
-			out = strings.TrimSpace(out)
-
-			var matched []string
-			for _, line := range strings.Split(out, "\n") {
-				if strings.Contains(line, m.torIP) {
-					matched = append(matched, line)
-				}
-			}
-			entry := strings.Join(matched, "\n")
-
-			if entry != lastEntry {
-				if entry == "" {
-					m.log("[%s] CT entry GONE (was: %s)", nodeName, lastEntry)
-				} else if lastEntry == "" {
-					m.log("[%s] CT entry CREATED:\n  %s", nodeName, entry)
-				} else {
-					m.log("[%s] CT entry CHANGED:\n  %s", nodeName, entry)
-				}
-				lastEntry = entry
-			}
-
-			// Check conntrack -E event log for new events matching our IPs.
-			evtOut, _ := kubectl.NewKubectlCommand("calico-system", "exec", podName, "-c", "calico-node", "--",
-				"sh", "-c", fmt.Sprintf(
-					"cat %s 2>/dev/null | grep -E '%s|%s' || true",
-					logFile, m.vmIP, m.torIP)).Exec()
-			evtOut = strings.TrimSpace(evtOut)
-			if evtOut != "" {
-				evtLines := strings.Split(evtOut, "\n")
-				if len(evtLines) > lastEventLines {
-					for _, line := range evtLines[lastEventLines:] {
-						m.log("[%s] CT-EVENT: %s", nodeName, line)
-					}
-					lastEventLines = len(evtLines)
-				}
-			}
-
-			time.Sleep(200 * time.Millisecond)
-		}
-	}()
-}
-
-func (m *conntrackMonitor) log(format string, args ...interface{}) {
-	ts := time.Now().Format("15:04:05.000")
-	msg := fmt.Sprintf("[CT-MONITOR %s] %s", ts, fmt.Sprintf(format, args...))
-	logrus.Info(msg)
-	m.mu.Lock()
-	m.logs = append(m.logs, msg)
-	m.mu.Unlock()
-}
-
-func (m *conntrackMonitor) stop() {
-	m.mu.Lock()
-	for nodeName, ch := range m.stopChs {
-		close(ch)
-		delete(m.stopChs, nodeName)
-	}
-	logs := make([]string, len(m.logs))
-	copy(logs, m.logs)
-	m.mu.Unlock()
-
-	logrus.Infof("CT-MONITOR SUMMARY (%d events):\n%s", len(logs), strings.Join(logs, "\n"))
 }
 
 func ptrInt64(v int64) *int64 { return &v }
