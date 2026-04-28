@@ -21,7 +21,7 @@ SRC_FILES=$(shell find pkg cmd -name '*.go')
 # Build e2e test binaries
 ###############################################################################
 
-build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test $(SRC_FILES)
+build: bin/k8s/e2e.test bin/clusternetworkpolicy/e2e.test bin/gateway/e2e.test $(SRC_FILES)
 
 bin/k8s/e2e.test: bin/k8s/e2e-linux-$(ARCH).test
 	mv $< $@
@@ -29,6 +29,10 @@ bin/k8s/e2e.test: bin/k8s/e2e-linux-$(ARCH).test
 bin/clusternetworkpolicy/e2e.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin
 	$(DOCKER_RUN_CGO) $(CALICO_BUILD) go test ./cmd/clusternetworkpolicy -c -o $@
+
+bin/gateway/e2e.test: $(SRC_FILES)
+	mkdir -p bin/gateway
+	$(DOCKER_RUN) $(CALICO_BUILD) go test ./cmd/gateway -c -o $@
 
 bin/k8s/e2e-linux-amd64.test: $(LIBBPF_A) $(SRC_FILES)
 	mkdir -p bin/k8s

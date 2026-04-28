@@ -190,9 +190,27 @@ ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
 echo "Install MetalLB controller for allocating LoadBalancer IPs"
+# metallb-native.yaml ships its own Namespace; create-ns is for legacy
+# layouts and stays here as a no-op safeguard for older clones.
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
-${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
+# metallb-native installs CRDs and a ValidatingWebhookConfiguration; wait
+# for the controller to be Available and the CRDs to be Established before
+# applying any CR-based pool config, otherwise the apply races the webhook
+# and gets "no endpoints available" or "no matches for kind IPAddressPool".
+${kubectl} -n metallb-system rollout status deploy/controller --timeout=2m
+${kubectl} wait --for=condition=Established --timeout=2m \
+  crd/ipaddresspools.metallb.io crd/bgpadvertisements.metallb.io \
+  crd/l2advertisements.metallb.io
+# The webhook can take a couple seconds to start serving even after the
+# Deployment reports Ready. Retry the config apply until it sticks.
+for attempt in $(seq 1 12); do
+  if ${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml; then
+    break
+  fi
+  echo "metallb-config.yaml apply failed (attempt $attempt/12) — retrying in 5s..."
+  sleep 5
+done
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
