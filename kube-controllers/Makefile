@@ -46,8 +46,8 @@ check-copyright:
 # Code generation
 ###############################################################################
 .PHONY: gen-files
-gen-files:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'controller-gen crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
+gen-files: $(REPO_ROOT)/bin/calico-controller-gen
+	$(DOCKER_GO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
 
 ###############################################################################
 # Tests
