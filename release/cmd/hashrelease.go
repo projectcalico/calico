@@ -120,8 +120,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithImage(pinned.OperatorCfg.Image),
 					operator.WithRegistry(pinned.OperatorCfg.Registry),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-					operator.WithValidate(c.Bool(validateFlag.Name)),
-					operator.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
+					operator.WithValidate(c.Bool(validationFlag.Name)),
+					operator.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 					operator.WithVersion(data.OperatorVersion()),
 					operator.WithCalicoDirectory(cfg.RepoRootDir),
 					operator.WithCalicoVersion(data.ProductVersion()),
@@ -169,8 +169,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
 					calico.WithE2EBinaries(c.Bool(e2eBinariesFlag.Name)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
-					calico.WithValidate(c.Bool(validateFlag.Name)),
-					calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
+					calico.WithValidation(c.Bool(validationFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
 				if len(productRegistriesFromFlag) > 0 {
 					opts = append(opts, calico.WithImageRegistries(productRegistriesFromFlag))
@@ -184,7 +184,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
 				if !c.Bool(releaseNotesFlag.Name) {
 					logrus.Info("Skipping release notes generation")
-				} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg && c.String(repoFlag.Name) != utils.CalicoRepoName {
+				} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
 					logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
 				} else {
 					releaseVersion, err := version.DetermineReleaseVersion(version.New(data.ProductVersion()), c.String(devTagSuffixFlag.Name))
@@ -245,7 +245,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					operator.WithVersion(hashrel.Operator.Version),
 					operator.WithCalicoVersion(hashrel.ProductVersion),
 					operator.WithArchitectures(c.StringSlice(archFlag.Name)),
-					operator.WithValidate(c.Bool(validateFlag.Name)),
+					operator.WithValidate(c.Bool(validationFlag.Name)),
 				)
 				if c.Bool(operatorFlagName) {
 					if err := o.Publish(); err != nil {
@@ -267,7 +267,8 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
-					calico.WithValidate(c.Bool(validateFlag.Name)),
+					calico.WithValidation(c.Bool(validationFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts,
@@ -322,8 +323,8 @@ func hashreleaseBuildFlags() []cli.Flag {
 		archFlag)
 	f = append(f, operatorBuildCommandFlags...)
 	f = append(f,
-		validateBranchFlag,
-		validateFlag,
+		branchCheckFlag,
+		validationFlag,
 		githubTokenFlag)
 	return f
 }
@@ -368,7 +369,8 @@ func hashreleasePublishFlags() []cli.Flag {
 		archFlag,
 		publishHashreleaseFlag,
 		latestFlag,
-		validateFlag,
+		branchCheckFlag,
+		validationFlag,
 	)
 	f = append(f, operatorPublishCommandFlags...)
 	f = append(f, imageScanFlags...)

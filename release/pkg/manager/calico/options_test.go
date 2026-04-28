@@ -15,127 +15,190 @@
 package calico
 
 import (
+	"strings"
 	"testing"
 )
 
-func TestWithImages(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithImages(true)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !m.images {
-		t.Error("expected images=true")
-	}
-	if err := WithImages(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.images {
-		t.Error("expected images=false")
+// requiredOpts returns the bare-minimum opts needed for NewManager to pass
+// its constructor-level required-field checks. Tests layer additional opts
+// on top to exercise specific behaviour.
+func requiredOpts() []Option {
+	return []Option{
+		WithRepoRoot("/tmp"),
+		WithGithubOrg("projectcalico"),
+		WithRepoName("calico"),
+		WithRepoRemote("origin"),
 	}
 }
 
-func TestWithArchiveImages(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithArchiveImages(true)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestNewManagerStepDefaults pins down the all-step-flags-default-to-true
+// contract. CLI gating relies on these defaults being on at the manager
+// layer; flipping a default silently breaks every release without a flag set.
+func TestNewManagerStepDefaults(t *testing.T) {
+	m := NewManager(requiredOpts()...)
+	cases := []struct {
+		name string
+		got  bool
+	}{
+		{"validate", m.validate},
+		{"validateBranch", m.validateBranch},
+		{"images", m.images},
+		{"archiveImages", m.archiveImages},
+		{"manifests", m.manifests},
+		{"binaries", m.binaries},
+		{"ocpBundle", m.ocpBundle},
+		{"tarball", m.tarball},
+		{"windowsArchive", m.windowsArchive},
+		{"helmCharts", m.helmCharts},
+		{"helmIndex", m.helmIndex},
+		{"e2eBinaries", m.e2eBinaries},
+		{"gitRef", m.gitRef},
+		{"githubRelease", m.githubRelease},
 	}
-	if !m.archiveImages {
-		t.Error("expected archiveImages=true")
-	}
-}
-
-func TestWithHelmCharts(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithHelmCharts(true)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !m.helmCharts {
-		t.Error("expected helmCharts=true")
-	}
-	if err := WithHelmCharts(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.helmCharts {
-		t.Error("expected helmCharts=false")
-	}
-}
-
-func TestWithHelmIndex(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithHelmIndex(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.helmIndex {
-		t.Error("expected helmIndex=false")
+	for _, tc := range cases {
+		if !tc.got {
+			t.Errorf("default %s: got false, want true", tc.name)
+		}
 	}
 }
 
-func TestWithManifests(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithManifests(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+// TestPreBuildValidation covers the cross-flag invariants enforced at the
+// manager layer. The test exercises the two non-trivial cases this PR
+// introduces: image-registries required when images/archive-images are on,
+// and ocp-bundle requires manifests on the hashrelease path.
+func TestPreBuildValidation(t *testing.T) {
+	cases := []struct {
+		name      string
+		opts      []Option
+		wantErr   string // substring match; empty means "the asserted invariants do not fire"
+		expectErr bool   // true if PreBuildValidation must return non-nil
+	}{
+		{
+			name: "happy path",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+			),
+		},
+		{
+			name: "missing calico version",
+			opts: append(requiredOpts(),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+			),
+			wantErr:   "no calico version specified",
+			expectErr: true,
+		},
+		{
+			name: "missing operator version",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+			),
+			wantErr:   "no operator version specified",
+			expectErr: true,
+		},
+		{
+			name: "images on with no registries errors",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries(nil),
+			),
+			wantErr:   "no image registries specified",
+			expectErr: true,
+		},
+		{
+			name: "images off + archive off skips registry check",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries(nil),
+				WithImages(false),
+				WithArchiveImages(false),
+			),
+		},
+		{
+			name: "archive on with images off still requires registries",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries(nil),
+				WithImages(false),
+			),
+			wantErr:   "no image registries specified",
+			expectErr: true,
+		},
+		{
+			name: "hashrelease ocp-bundle requires manifests",
+			opts: append(requiredOpts(),
+				IsHashRelease(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+				WithManifests(false),
+			),
+			wantErr:   "cannot build OCP bundle without manifests",
+			expectErr: true,
+		},
+		{
+			name: "hashrelease manifests off + ocp-bundle off passes the cross-flag check",
+			opts: append(requiredOpts(),
+				IsHashRelease(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+				WithManifests(false),
+				WithOCPBundle(false),
+			),
+			// PreHashreleaseValidate runs after PreBuildValidation's gates
+			// and may error on its own preconditions; we only assert that
+			// the manifests/ocp-bundle gate above doesn't fire here.
+		},
+		{
+			name: "non-hashrelease build with manifests off is allowed by PreBuildValidation",
+			opts: append(requiredOpts(),
+				WithVersion("v3.99.0"),
+				WithOperatorVersion("v9.99.0"),
+				WithImageRegistries([]string{"example.com/calico"}),
+				WithManifests(false),
+			),
+		},
 	}
-	if m.manifests {
-		t.Error("expected manifests=false")
+	// Substrings owned by PreBuildValidation. Errors from downstream
+	// validators (PreHashreleaseValidate / PreReleaseValidate) may surface
+	// when no real repo is wired up; filter on the substrings we care about.
+	guarded := []string{
+		"no calico version specified",
+		"no operator version specified",
+		"no image registries specified",
+		"cannot build OCP bundle without manifests",
 	}
-}
-
-func TestWithBinaries(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithBinaries(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.binaries {
-		t.Error("expected binaries=false")
-	}
-}
-
-func TestWithOCPBundle(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithOCPBundle(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.ocpBundle {
-		t.Error("expected ocpBundle=false")
-	}
-}
-
-func TestWithTarball(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithTarball(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.tarball {
-		t.Error("expected tarball=false")
-	}
-}
-
-func TestWithGitRef(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithGitRef(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.gitRef {
-		t.Error("expected gitRef=false")
-	}
-}
-
-func TestWithGithubRelease(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithGithubRelease(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.githubRelease {
-		t.Error("expected githubRelease=false")
-	}
-}
-
-func TestWithWindowsArchive(t *testing.T) {
-	m := &CalicoManager{}
-	if err := WithWindowsArchive(false)(m); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if m.windowsArchive {
-		t.Error("expected windowsArchive=false")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := NewManager(tc.opts...)
+			err := m.PreBuildValidation()
+			if tc.expectErr {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+				}
+				return
+			}
+			// Not expecting a guarded-invariant failure. Allow downstream
+			// validator errors to bubble up but fail if any guarded
+			// substring shows up.
+			if err == nil {
+				return
+			}
+			for _, sub := range guarded {
+				if strings.Contains(err.Error(), sub) {
+					t.Fatalf("unexpected guarded-invariant error: %v", err)
+				}
+			}
+		})
 	}
 }

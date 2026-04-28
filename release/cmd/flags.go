@@ -28,6 +28,20 @@ import (
 
 var globalFlags = append([]cli.Flag{debugFlag}, append(ciFlags, slackFlags...)...)
 
+// Flag categories group flags in --help output.
+const (
+	gitCategory               = "Git Repository"
+	developmentCategory       = "Development"
+	containerImageCategory    = "Container Image"
+	cloudCategory             = "Cloud Configuration"
+	operatorCategory          = "Tigera Operator"
+	ciCategory                = "CI Environment"
+	slackCategory             = "Slack"
+	imageScannerCategory      = "Image Scanning Service"
+	hashreleaseServerCategory = "Hashrelease Server"
+	stepControlCategory       = "Step Control"
+)
+
 // debugFlag is a flag used to enable verbose log output
 var debugFlag = &cli.BoolFlag{
 	Name:        "debug",
@@ -49,8 +63,7 @@ var (
 	}
 
 	// Git flags for interacting with the git repository
-	gitCategory = "Git Repository"
-	orgFlag     = &cli.StringFlag{
+	orgFlag = &cli.StringFlag{
 		Name:     "org",
 		Category: gitCategory,
 		Usage:    "The GitHub organization to use for the release",
@@ -115,11 +128,9 @@ var (
 
 // Development flags are flags used to control development behavior of the release process
 var (
-	developmentCategory = "Development"
-
-	validateFlagName = "validation"
-	validateFlag     = &cli.BoolWithInverseFlag{
-		Name:     validateFlagName,
+	validationFlagName = "validation"
+	validationFlag     = &cli.BoolWithInverseFlag{
+		Name:     validationFlagName,
 		Category: developmentCategory,
 		Usage:    "Run validation checks",
 		Sources:  cli.EnvVars("VALIDATION", "RELEASE_VALIDATION"),
@@ -128,18 +139,20 @@ var (
 			if b {
 				return nil
 			}
-			if c.Bool(validateBranchFlagName) {
-				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(validateBranchFlagName), inverseFlagName(validateFlagName))
+			if c.Bool(branchCheckFlagName) {
+				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(branchCheckFlagName), inverseFlagName(validationFlagName))
 			}
-			if c.Bool(imageScanFlagName) {
-				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(imageScanFlagName), inverseFlagName(validateFlagName))
+			// image-scan is only registered on publish commands; only enforce the
+			// dependency where the flag actually exists.
+			if hasFlag(c, imageScanFlagName) && c.Bool(imageScanFlagName) {
+				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(imageScanFlagName), inverseFlagName(validationFlagName))
 			}
 			return nil
 		},
 	}
-	validateBranchFlagName = "branch-check"
-	validateBranchFlag     = &cli.BoolWithInverseFlag{
-		Name:     validateBranchFlagName,
+	branchCheckFlagName = "branch-check"
+	branchCheckFlag     = &cli.BoolWithInverseFlag{
+		Name:     branchCheckFlagName,
 		Category: developmentCategory,
 		Usage:    "Check that the current branch is a valid branch for release",
 		Sources:  cli.EnvVars("BRANCH_CHECK", "RELEASE_BRANCH_CHECK"),
@@ -149,8 +162,7 @@ var (
 
 // Container image flags are flags used to control container image building and publishing
 var (
-	containerImageCategory = "Container Image"
-	registryFlag           = &cli.StringSliceFlag{
+	registryFlag = &cli.StringSliceFlag{
 		Name:     "registry",
 		Category: containerImageCategory,
 		Usage:    "Override default registries for the release. Repeat for multiple registries.",
@@ -183,7 +195,6 @@ var (
 )
 
 var (
-	cloudCategory  = "Cloud Configuration"
 	awsProfileFlag = &cli.StringFlag{
 		Name:     "aws-profile",
 		Category: cloudCategory,
@@ -200,8 +211,6 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorCategory = "Tigera Operator"
-
 	operatorBuildCommandFlags = []cli.Flag{
 		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
 		operatorReleaseBranchPrefixFlag,
@@ -277,7 +286,6 @@ var (
 // External flags are flags used to interact with external services
 var (
 	// CI flags for interacting with CI services (Semaphore)
-	ciCategory  = "CI Environment"
 	ciFlags     = []cli.Flag{ciFlag, ciBaseURLFlag, ciJobIDFlag, ciPipelineIDFlag, ciTokenFlag}
 	semaphoreCI = "semaphore"
 	ciFlag      = &cli.BoolFlag{
@@ -319,7 +327,6 @@ var (
 	}
 
 	// Slack flags for posting messages to Slack
-	slackCategory  = "Slack"
 	slackFlags     = []cli.Flag{slackTokenFlag, slackChannelFlag, notifyFlag}
 	slackTokenFlag = &cli.StringFlag{
 		Name:     "slack-token",
@@ -352,8 +359,7 @@ var (
 	}
 
 	// Image scanner flags for interacting with the image scanning service
-	imageScannerCategory = "Image Scanning Service"
-	imageScanFlags       = []cli.Flag{
+	imageScanFlags = []cli.Flag{
 		imageScanFlag,
 		imageScannerAPIFlag,
 		imageScannerTokenFlag,
@@ -386,6 +392,7 @@ var (
 		Sources:  cli.EnvVars("RELEASE_IMAGE_SCAN"),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			logrus.WithField(imageScanFlagName, b).Info("Image scanning configuration")
 			if b && !imageScanningAPIConfig(c).Valid() {
 				if !c.Bool(ciFlag.Name) {
 					logrus.Warn("Image scanning configuration is incomplete")
@@ -417,9 +424,8 @@ var (
 var (
 
 	// Hashrelease server configuration flags.
-	hashreleaseServerCategory = "Hashrelease Server"
-	hashreleaseServerFlags    = []cli.Flag{hashreleaseServerBucketFlag}
-	publishHashreleaseFlag    = &cli.BoolWithInverseFlag{
+	hashreleaseServerFlags = []cli.Flag{hashreleaseServerBucketFlag}
+	publishHashreleaseFlag = &cli.BoolWithInverseFlag{
 		Name:     "publish-to-hashrelease-server",
 		Category: hashreleaseServerCategory,
 		Usage:    "Publish the hashrelease to the hashrelease server",
@@ -443,8 +449,6 @@ var (
 
 // Step control flags gate logical release steps.
 const (
-	stepControlCategory = "Step Control"
-
 	// Images.
 	imagesFlagName          = "images"
 	envBuildImages          = "BUILD_CONTAINER_IMAGES"
@@ -535,11 +539,13 @@ var (
 			Sources:  cli.EnvVars(envVars...),
 			Value:    value,
 			Action: func(_ context.Context, c *cli.Command, b bool) error {
-				if !b && c.Bool(archiveImagesFlagName) {
+				// archive-images is build-only; only enforce the dependency
+				// where the flag is registered. The "images on but not
+				// archived" warning is emitted from archiveImagesFlag.Action
+				// instead so it doesn't fire on publish commands where
+				// archive-images doesn't exist.
+				if hasFlag(c, archiveImagesFlagName) && !b && c.Bool(archiveImagesFlagName) {
 					return fmt.Errorf("cannot archive images without building them; use --%s flag to build images", imagesFlagName)
-				}
-				if b && !c.Bool(archiveImagesFlagName) {
-					logrus.Warnf("Images are included but not archived; to include images in the archive set --%s", archiveImagesFlagName)
 				}
 				return nil
 			},
@@ -611,19 +617,36 @@ var (
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
 	}
-	manifestsFlag = &cli.BoolWithInverseFlag{
-		Name:     "manifests",
+	manifestsFlagName = "manifests"
+	manifestsFlag     = &cli.BoolWithInverseFlag{
+		Name:     manifestsFlagName,
 		Category: stepControlCategory,
 		Usage:    "Include manifests in the release step",
 		Sources:  cli.EnvVars(envBuildManifests, envReleaseManifests),
 		Value:    true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b {
+				return nil
+			}
+			if hasFlag(c, ocpBundleFlagName) && c.Bool(ocpBundleFlagName) {
+				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(ocpBundleFlagName), inverseFlagName(manifestsFlagName))
+			}
+			return nil
+		},
 	}
-	ocpBundleFlag = &cli.BoolWithInverseFlag{
-		Name:     "ocp-bundle",
+	ocpBundleFlagName = "ocp-bundle"
+	ocpBundleFlag     = &cli.BoolWithInverseFlag{
+		Name:     ocpBundleFlagName,
 		Category: stepControlCategory,
 		Usage:    "Include OCP bundle in the release step",
 		Sources:  cli.EnvVars(envBuildOCPBundle, envReleaseOCPBundle),
 		Value:    true,
+		Action: func(_ context.Context, c *cli.Command, b bool) error {
+			if b && hasFlag(c, manifestsFlagName) && !c.Bool(manifestsFlagName) {
+				return fmt.Errorf("--%s requires --%s; either drop --%s or also set --%s", ocpBundleFlagName, manifestsFlagName, inverseFlagName(manifestsFlagName), inverseFlagName(ocpBundleFlagName))
+			}
+			return nil
+		},
 	}
 	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
@@ -665,4 +688,14 @@ var (
 
 func inverseFlagName(name string) string {
 	return "no-" + name
+}
+
+// hasFlag reports whether the command has a flag registered under the given
+// name (or one of its aliases). Used by cross-flag Action callbacks to skip
+// dependency checks against flags that aren't registered on the current
+// command (e.g. image-scan is publish-only).
+func hasFlag(c *cli.Command, name string) bool {
+	return slices.ContainsFunc(c.Flags, func(f cli.Flag) bool {
+		return slices.Contains(f.Names(), name)
+	})
 }

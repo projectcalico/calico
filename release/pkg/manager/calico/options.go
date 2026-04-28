@@ -38,7 +38,7 @@ func IsHashRelease() Option {
 	}
 }
 
-func WithValidate(validate bool) Option {
+func WithValidation(validate bool) Option {
 	return func(r *CalicoManager) error {
 		r.validate = validate
 		return nil
