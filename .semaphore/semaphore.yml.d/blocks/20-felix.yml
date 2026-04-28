@@ -247,20 +247,21 @@
           - export FV_FOCUS='_BPF_.*ct=true'
           - export NUM_FV_BATCHES=10
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      - name: "Felix: BPF program-loading check on 25.10 (nftables)"
+      - name: "Felix: BPF tests on Ubuntu 25.10 with netkit (nftables)"
         execution_time_limit:
-          minutes: 30
+          minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-25.10-nft-no-fv-with-ut"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
           - name: JOB_TIMEOUT_MINUTES
-            value: "30"
+            value: "60"
+          - name: FELIX_FV_NETKIT
+            value: "Enabled"
         commands:
           - source felix/.semaphore/fv-prologue
-          # Only run the UT that checks that the precompiled BPF binaries are loadable.
-          - export UT_FOCUS="TestPrecompiledBinariesAreLoadable"
+          - export NUM_FV_BATCHES=60
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
       - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
         execution_time_limit:
