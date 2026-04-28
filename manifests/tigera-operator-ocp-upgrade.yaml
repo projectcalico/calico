@@ -557,12 +557,13 @@ rules:
       - list
       - watch
       - delete
-  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
+  # The operator needs to manage NetworkPolicies, GlobalNetworkPolicies, and NetworkSets via the projectcalico.org API group.
   - apiGroups:
       - projectcalico.org
     resources:
       - networkpolicies
       - globalnetworkpolicies
+      - networksets
     verbs:
       - get
       - list
@@ -637,6 +638,7 @@ rules:
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
       - xlistenersets.gateway.networking.x-k8s.io
+      - xmeshes.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
@@ -806,6 +808,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds=true
+            - -zap-devel=false
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -851,12 +854,12 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: quay.io/calico/ctl:master
+          image: quay.io/calico/calico:master
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - calicoctl
+            - /usr/bin/calicoctl
           args:
             - --allow-version-mismatch
             - create

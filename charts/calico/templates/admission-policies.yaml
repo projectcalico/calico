@@ -1,0 +1,6 @@
+{{- if .Values.useV3CRDs }}
+{{ range $path, $_ := .Files.Glob "admission/*" }}
+---
+{{ $.Files.Get $path }}
+{{- end }}
+{{- end }}

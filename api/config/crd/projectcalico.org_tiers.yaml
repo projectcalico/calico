@@ -30,14 +30,32 @@ spec:
       name: v3
       schema:
         openAPIV3Schema:
+          description: |-
+            Tier contains a set of policies that are applied to packets.  Multiple tiers may
+            be created and each tier is applied in the order specified in the tier specification.
+            Tier is globally-scoped (i.e. not Namespaced).
           properties:
             apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
               type: string
             kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
               type: string
             metadata:
               type: object
             spec:
+              description:
+                TierSpec contains the specification for a security policy
+                tier resource.
               properties:
                 defaultAction:
                   allOf:
@@ -50,37 +68,72 @@ spec:
                         - Pass
                         - Deny
                   default: Deny
+                  description: |-
+                    DefaultAction specifies the action applied to traffic that matches a policy in the tier
+                    but does not match any rule within that policy.
+                    [Default: Deny]
                   type: string
                 order:
+                  description: |-
+                    Order is an optional field that specifies the order in which the tier is applied.
+                    Tiers with higher "order" are applied after those with lower order.  If the order
+                    is omitted, it may be considered to be "infinite" - i.e. the tier will be applied
+                    last.  Tiers with identical order will be applied in alphanumerical order based
+                    on the Tier "Name".
                   type: number
               type: object
             status:
+              description: TierStatus contains the status of a Tier resource.
               properties:
                 conditions:
+                  description: |-
+                    Conditions represents the latest observed set of conditions for the resource. A tier with a
+                    "Ready" condition set to "True" is operating as expected.
                   items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
                     properties:
                       lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                         format: date-time
                         type: string
                       message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
                         maxLength: 32768
                         type: string
                       observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
                         format: int64
                         minimum: 0
                         type: integer
                       reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
                         maxLength: 1024
                         minLength: 1
                         pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
                         type: string
                       status:
+                        description: status of the condition, one of True, False, Unknown.
                         enum:
                           - "True"
                           - "False"
                           - Unknown
                         type: string
                       type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
                         maxLength: 316
                         pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                         type: string
@@ -92,6 +145,9 @@ spec:
                       - type
                     type: object
                   type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
               type: object
           required:
             - metadata
@@ -113,6 +169,21 @@ spec:
               rule:
                 "self.metadata.name == 'default' ? (has(self.spec.defaultAction)
                 && self.spec.defaultAction == 'Deny') : true"
+            - message: default tier order must be 1000000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order
+                == 1000000.0)
+            - message: kube-admin tier order must be 1000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order
+                == 1000.0)
+            - message: kube-baseline tier order must be 10000000
+              reason: FieldValueInvalid
+              rule:
+                self.metadata.name != 'kube-baseline' || (has(self.spec.order) &&
+                self.spec.order == 10000000.0)
       served: true
       storage: true
       subresources:

@@ -22,16 +22,20 @@
         value: calico
       - name: FUNCTIONAL_AREA
         value: "e2e-gcp.yml"
-      - name: RUN_LOCAL_TESTS
-        value: "true"
       - name: USE_PRIVATE_REGISTRY
         value: "true"
       - name: PRIVATE_REGISTRY
         value: "quay.io/"
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+      - name: RUN_LOCAL_TESTS
+        value: "true"
+      - name: E2E_TEST_CONFIG
+        # Test selection is driven by the config file; see gcp-bpf.yaml for the
+        # include/exclude rationale.
+        value: "e2e/config/gcp-bpf.yaml"
       - name: USE_API_SERVER
         value: "false"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
     jobs:
       - name: gcp-kubeadm - e2e local binary
         execution_time_limit:

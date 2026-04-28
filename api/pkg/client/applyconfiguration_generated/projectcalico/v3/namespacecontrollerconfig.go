@@ -11,8 +11,8 @@ import (
 // NamespaceControllerConfigApplyConfiguration represents a declarative configuration of the NamespaceControllerConfig type for use
 // with apply.
 //
-// NamespaceControllerConfig configures the service account controller, which syncs Kubernetes
-// service accounts to Calico profiles (only used for etcdv3 datastore).
+// NamespaceControllerConfig configures the namespace controller, which syncs Kubernetes
+// namespaces to Calico profiles (only used for etcdv3 datastore).
 type NamespaceControllerConfigApplyConfiguration struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod *v1.Duration `json:"reconcilerPeriod,omitempty"`

@@ -16,15 +16,16 @@ package calico
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -40,14 +41,24 @@ type bgpConfigCache struct {
 	revision uint64
 }
 
-// configCache is indexed by IP version (4 or 6)
-var configCache map[int]*bgpConfigCache
+type processorContext struct {
+	globalBGPConfig *v3.BGPConfiguration
+}
 
-// configCacheMutex protects concurrent access to configCache
-var configCacheMutex sync.RWMutex
+func (pc *processorContext) getBindMode() (bindMode v3.BindMode) {
+	bindMode = v3.BindModeNone
+	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.BindMode != nil {
+		bindMode = *pc.globalBGPConfig.Spec.BindMode
+	}
+	return
+}
 
-func init() {
-	configCache = make(map[int]*bgpConfigCache)
+func (pc *processorContext) getNodeMeshRestartTime() (restartTimeStr string) {
+	v3res := pc.globalBGPConfig
+	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
+		restartTimeStr = fmt.Sprintf("%v", int(math.Round(v3res.Spec.NodeMeshMaxRestartTime.Seconds())))
+	}
+	return
 }
 
 // GetBirdBGPConfig processes raw datastore data into a clean BGP configuration structure
@@ -56,32 +67,35 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc := log.WithField("ipVersion", ipVersion)
 	currentRevision := c.GetCurrentRevision()
 
-	configCacheMutex.RLock()
-	if cached, ok := configCache[ipVersion]; ok && cached.revision == currentRevision {
-		configCacheMutex.RUnlock()
+	c.configCacheMutex.RLock()
+	if cached, ok := c.configCache[ipVersion]; ok && cached.revision == currentRevision {
+		c.configCacheMutex.RUnlock()
 		logc.Debug("BGP config cache hit, returning cached configuration")
 		return cached.config, nil
 	}
-	configCacheMutex.RUnlock()
+	c.configCacheMutex.RUnlock()
 
 	logc.Debug("BGP config cache miss or expired, processing new configuration")
 
+	pc := c.getBGPProcessorContext()
+
 	config := &types.BirdBGPConfig{
-		NodeName:    NodeName,
-		Peers:       make([]types.BirdBGPPeer, 0),
-		Filters:     make(map[string]string),
-		Communities: make([]types.CommunityRule, 0),
+		NodeName:        NodeName,
+		Peers:           make([]types.BirdBGPPeer, 0),
+		Filters:         make(map[string]string),
+		Communities:     make([]types.CommunityRule, 0),
+		LoadBalancerIPs: getServiceLoadBalancerIPs(pc.globalBGPConfig),
 	}
 
 	// Get basic node configuration
-	if err := c.populateNodeConfig(config, ipVersion); err != nil {
+	if err := c.populateNodeConfig(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to populate node configuration")
 		return nil, err
 	}
 	logc.Debugf("Populated node configuration: node=%s, ip=%s, ipv6=%s, as=%s", config.NodeName, config.NodeIP, config.NodeIPv6, config.ASNumber)
 
 	// Process all peer types
-	if err := c.processPeers(config, ipVersion); err != nil {
+	if err := c.processPeers(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process BGP peers")
 		return nil, err
 	}
@@ -100,7 +114,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 	logc.Debugf("Processed community rules: found %d rules", len(config.Communities))
 
 	// Process ippools.
-	if err := c.processIPPools(config, ipVersion); err != nil {
+	if err := c.processIPPools(pc, config, ipVersion); err != nil {
 		logc.WithError(err).Warn("Failed to process ippools")
 		return nil, err
 	}
@@ -110,20 +124,26 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
 
-	// Update cache with write lock
-	configCacheMutex.Lock()
-	configCache[ipVersion] = &bgpConfigCache{
+	// Update cache with write lock.
+	c.configCacheMutex.Lock()
+	c.configCache[ipVersion] = &bgpConfigCache{
 		config:   config,
 		revision: currentRevision,
 	}
-	configCacheMutex.Unlock()
+	c.configCacheMutex.Unlock()
 	logc.Debug("Updated BGP config cache")
 
 	return config, nil
 }
 
+func (c *client) getBGPProcessorContext() *processorContext {
+	return &processorContext{
+		globalBGPConfig: c.getBGPConfig(),
+	}
+}
+
 // populateNodeConfig fills in basic node configuration
-func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node IPv4 address
 	nodeIPv4Key := fmt.Sprintf("/calico/bgp/v1/host/%s/ip_addr_v4", NodeName)
 	if nodeIP, err := c.GetValue(nodeIPv4Key); err == nil {
@@ -155,11 +175,14 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	switch logLevel {
 	case "none":
 		// DebugMode stays empty (no debug output)
+		// PeerDebugMode stays empty too
 	case "debug":
 		config.DebugMode = "all"
+		config.PeerDebugMode = "debug all;"
 	default:
 		// Default behavior for empty string or any other log level
 		config.DebugMode = "{ states }"
+		config.PeerDebugMode = "debug { states, routes, filters, events };"
 	}
 
 	// Handle router ID logic
@@ -180,9 +203,9 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process bind mode and listen address
-	bindMode, err := c.getNodeOrGlobalValue(NodeName, "bind_mode")
+
 	// Set listen address if bind mode is NodeIP and we have a node IP
-	if err == nil && bindMode == "NodeIP" {
+	if pc.getBindMode() == v3.BindModeNodeIP {
 		if ipVersion == 6 && config.NodeIPv6 != "" {
 			config.ListenAddress = config.NodeIPv6
 		} else if ipVersion == 4 && config.NodeIP != "" {
@@ -197,39 +220,26 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	}
 
 	// Process ignored interfaces and build complete interface string
-	ignoredInterfaces, err := c.getNodeOrGlobalValue(NodeName, "ignored_interfaces")
-
-	// Build the complete interface pattern string
-	if err == nil && ignoredInterfaces != "" {
-		// Parse comma-separated list and build pattern
-		ifaceList := strings.Split(ignoredInterfaces, ",")
-		var patterns []string
-		for _, iface := range ifaceList {
-			patterns = append(patterns, fmt.Sprintf(`-"%s"`, iface))
-		}
-		// Add standard exclusions and wildcard
-		patterns = append(patterns, `-"cali*"`, `-"kube-ipvs*"`, `"*"`)
-		config.DirectInterfaces = strings.Join(patterns, ", ")
-	} else {
-		// Default pattern with explanatory comment
-		config.DirectInterfaces = `-"cali*", -"kube-ipvs*", "*"`
+	var ignoredInterfaces []string
+	if pc.globalBGPConfig != nil {
+		ignoredInterfaces = pc.globalBGPConfig.Spec.IgnoredInterfaces
 	}
+	var patterns []string
+	for _, iface := range ignoredInterfaces {
+		patterns = append(patterns, fmt.Sprintf(`-"%s"`, iface))
+	}
+	// Add standard exclusions and wildcard include.
+	patterns = append(patterns, `-"cali*"`, `-"kube-ipvs*"`, `"*"`)
+	config.DirectInterfaces = strings.Join(patterns, ", ")
 
 	// Set NormalRoutePriority from BGPConfiguration (default 1024).
-	config.NormalRoutePriority = 1024
-	if c.globalBGPConfig != nil {
-		if ipVersion == 4 && c.globalBGPConfig.Spec.IPv4NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv4NormalRoutePriority
-		} else if ipVersion == 6 && c.globalBGPConfig.Spec.IPv6NormalRoutePriority != nil {
-			config.NormalRoutePriority = *c.globalBGPConfig.Spec.IPv6NormalRoutePriority
-		}
-	}
+	config.NormalRoutePriority = getNormalRoutePriority(ipVersion, pc.globalBGPConfig)
 
 	config.SetMetricForBGPRoutes = []string{
 		"  if (defined(source) && (source = RTS_BGP) && !defined(krt_metric)) then {",
 		fmt.Sprintf("      krt_metric = %d;", config.NormalRoutePriority),
 		"      if (defined(bgp_local_pref)) then {",
-		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
+		fmt.Sprintf("          krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
 		"      }",
 		fmt.Sprintf("      if (krt_metric < %d) then {", config.NormalRoutePriority),
 		fmt.Sprintf("          preference = %d;", birdOverridePreference),
@@ -240,13 +250,25 @@ func (c *client) populateNodeConfig(config *types.BirdBGPConfig, ipVersion int) 
 	return nil
 }
 
+func getNormalRoutePriority(ipVersion int, bgpConfig *v3.BGPConfiguration) (priority int) {
+	priority = 1024
+	if bgpConfig != nil {
+		if ipVersion == 4 && bgpConfig.Spec.IPv4NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv4NormalRoutePriority
+		} else if ipVersion == 6 && bgpConfig.Spec.IPv6NormalRoutePriority != nil {
+			priority = *bgpConfig.Spec.IPv6NormalRoutePriority
+		}
+	}
+	return
+}
+
 // processPeers processes all BGP peers (mesh, global, and node-specific)
-func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) processPeers(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	// Get node's route reflector cluster ID
 	nodeClusterID, _ := c.GetValue(fmt.Sprintf("/calico/bgp/v1/host/%s/rr_cluster_id", NodeName))
 
 	// Process node-to-node mesh peers
-	if err := c.processMeshPeers(config, nodeClusterID, ipVersion); err != nil {
+	if err := c.processMeshPeers(pc, config, nodeClusterID, ipVersion); err != nil {
 		return fmt.Errorf("failed to process mesh peers: %w", err)
 	}
 
@@ -264,7 +286,7 @@ func (c *client) processPeers(config *types.BirdBGPConfig, ipVersion int) error 
 }
 
 // processMeshPeers processes node-to-node mesh BGP peers
-func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
+func (c *client) processMeshPeers(pc *processorContext, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) error {
 	logc := log.WithField("ipVersion", ipVersion)
 
 	// If this node is a route reflector, skip mesh processing
@@ -293,10 +315,6 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 		logc.Debug("Node-to-node mesh disabled")
 		return nil
 	}
-
-	// Get global mesh settings
-	meshPassword, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_password")
-	meshRestartTime, _ := c.GetValue("/calico/bgp/v1/global/node_mesh_restart_time")
 
 	// Determine which IP address field to use
 	ipAddrSuffix := "ip_addr_v4"
@@ -376,8 +394,9 @@ func (c *client) processMeshPeers(config *types.BirdBGPConfig, nodeClusterID str
 			ASNumber:        peerAS,
 			Type:            "mesh",
 			SourceAddr:      currentNodeIP,
-			Password:        meshPassword,
-			GracefulRestart: meshRestartTime,
+			TTLSecurity:     "off", // Mesh peers always use ttl security off with multihop
+			Password:        c.getNodeMeshPassword(pc.globalBGPConfig),
+			GracefulRestart: pc.getNodeMeshRestartTime(),
 		}
 
 		// Make mesh unidirectional to avoid race conditions
@@ -441,9 +460,9 @@ func (c *client) processPeersFromPath(peerPath, peerType string, config *types.B
 	logc.Debugf("Found %d peer entries", len(kvPairs))
 
 	// Unmarshal all peers once and separate into remote and local
-	var remotePeers, localPeers []bgpPeer
+	var remotePeers, localPeers []backends.BGPPeer
 	for key, value := range kvPairs {
-		var peerData bgpPeer
+		var peerData backends.BGPPeer
 		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 			logc.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
 			continue
@@ -477,8 +496,8 @@ func (c *client) processPeersFromPath(peerPath, peerType string, config *types.B
 	return nil
 }
 
-// buildPeerFromData constructs a BirdBGPPeer from bgpPeer data
-func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
+// buildPeerFromData constructs a BirdBGPPeer from BGPPeer data
+func (c *client) buildPeerFromData(peer *backends.BGPPeer, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
 	logc := log.WithField("ipVersion", ipVersion)
 
 	peerIP := peer.PeerIP.String()
@@ -525,9 +544,9 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 		result.LocalASNumber = peer.LocalASNum.String()
 	}
 
-	// TTL security
+	// TTL security - store the hop count or "off"
 	if peer.TTLSecurity > 0 {
-		result.TTLSecurity = fmt.Sprintf("on;\n  multihop %d", peer.TTLSecurity)
+		result.TTLSecurity = fmt.Sprintf("%d", peer.TTLSecurity)
 	} else {
 		result.TTLSecurity = "off"
 	}
@@ -633,22 +652,6 @@ func truncateBGPFilterName(name string) string {
 }
 
 const (
-	// This is a value we use when converting between priority/metric values and bgp_local_pref.
-	// The range of Linux priority/metric values is from 0 to 2^32-1, i.e. a uint32, with lower
-	// values meaning higher priority.  The range of bgp_local_pref is also 0 to 2^32-1, i.e. a
-	// uint32, but with higher values meaning higher priority.  But we also have to consider:
-	//
-	// 1. In FelixConfiguration and BGPConfiguration we use int fields, i.e. signed, to
-	// configure the priority values that we use.
-	//
-	// 2. The "0" value has a special meaning in Linux.  For IPv6 routes it gets "normalized" to
-	// 1024.
-	//
-	// Therefore we restrict the range of priority/metric values that Felix can actually use to
-	// be from 1 to 2^31-2, and we convert between priority/metric and bgp_local_pref with `x =
-	// 2^31-1 - y`.  The following value is 2^31-1.
-	birdIntMaxValue = 2147483647
-
 	// This is the 'preference' value we use when we want an imported route to override a local
 	// workload route - i.e. for the kernel to say "for <IP1> go via remote node <N1>" even
 	// though there might also be a local workload with <IP1>.  This scenario occurs in live
@@ -699,22 +702,6 @@ func (c *client) buildImportFilter(
 ) string {
 	var filterLines []string
 
-	// On import, always default krt_metric to our normal route priority.
-	filterLines = append(filterLines,
-		fmt.Sprintf("krt_metric = %d;", normalRoutePriority),
-	)
-
-	// For iBGP peers, convert from LOCAL_PREF to krt_metric.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: krt_metric = INT_MAX -
-	// bgp_local_pref.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			"if (defined(bgp_local_pref)) then {",
-			fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", birdIntMaxValue),
-			"}",
-		)
-	}
-
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
 	if ipVersion == 6 {
@@ -745,7 +732,7 @@ func (c *client) buildImportFilter(
 	// If we now have a higher than normal priority route, set 'preference' attribute to allow
 	// it to override an existing local workload route in the kernel.
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (krt_metric < %d) then", normalRoutePriority),
+		fmt.Sprintf("if (defined(bgp_local_pref)&&(bgp_local_pref > %d)) then", template.BirdIntMaxValue-normalRoutePriority),
 		fmt.Sprintf("  preference = %d;", birdOverridePreference),
 	)
 
@@ -764,19 +751,41 @@ func (c *client) buildExportFilter(
 ) string {
 	var filterLines []string
 
-	// Default krt_metric to our normal route priority, if not already set.
+	// Ensure both krt_metric and bgp_local_pref are set for the rest of
+	// the export filter. BGPFilter Priority matching needs bgp_local_pref,
+	// and calico_aggr() needs krt_metric (it checks "krt_metric < 1024"
+	// to let elevated-priority /32s escape aggregation into /26 blocks).
+	//
+	// There are two cases depending on where the route came from:
+	//
+	// Re-exported route (learned via iBGP): this happens when a node acts
+	// as a route reflector (RR) re-advertising iBGP routes to its clients,
+	// or when a node peers with an external eBGP TOR and re-exports iBGP
+	// routes to it. In both cases, bgp_local_pref is already set by the
+	// BGP protocol from the originating node's export. It is the
+	// authoritative source of priority — just use it. We still derive
+	// krt_metric from it so calico_aggr() can check the route's priority.
+	//
+	// Locally-originated route (learned from kernel): krt_metric is set by
+	// Felix (e.g. 512 for elevated, 1024 for normal). For routes without
+	// krt_metric (e.g. static routes for service IP advertisement),
+	// default to the normal route priority. Convert krt_metric →
+	// bgp_local_pref so BGPFilter Priority matching and iBGP transmission
+	// work correctly.
+	// Note: we cannot use `defined(bgp_local_pref)` to distinguish these
+	// cases because BIRD 1.x initializes bgp_local_pref to 100 (the BGP
+	// default) for all routes during BGP export preparation, so it is
+	// always "defined". Instead, use `source = RTS_BGP` which is only
+	// true for routes learned from a BGP peer (iBGP/eBGP), not for
+	// kernel-imported routes (which have source = RTS_INHERIT).
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		"if (defined(source) && source = RTS_BGP && defined(bgp_local_pref)) then {",
+		fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
+		"} else {",
+		fmt.Sprintf("  if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		fmt.Sprintf("  bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+		"}",
 	)
-
-	// For iBGP peers, convert from krt_metric to LOCAL_PREF.  Higher LOCAL_PREF = higher
-	// priority, but lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX
-	// - krt_metric.
-	if peerAS == nodeAS {
-		filterLines = append(filterLines,
-			fmt.Sprintf("bgp_local_pref = %d - krt_metric;", birdIntMaxValue),
-		)
-	}
 
 	// Determine filter suffix based on IP version
 	filterSuffix := "V4"
@@ -894,7 +903,7 @@ func (c *client) processCommunityRules(config *types.BirdBGPConfig, ipVersion in
 	return nil
 }
 
-func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) error {
+func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	poolKey := fmt.Sprintf("/calico/v1/ipam/v%d/pool", ipVersion)
 	logCtx := log.WithFields(map[string]any{
 		"ipVersion": ipVersion,
@@ -919,8 +928,8 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 	}
 
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if c.globalBGPConfig != nil && c.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*c.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
+	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
+		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
 		programClusterRoutes = false
 		logCtx.Debug("Programming cluster routes is disabled.")
 	} else {
@@ -966,7 +975,7 @@ func (c *client) processIPPools(config *types.BirdBGPConfig, ipVersion int) erro
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
 //   - ippool: IPPool resource.
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP and no-encap IPv4 routes.
+//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP routes.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
@@ -1018,30 +1027,22 @@ func (c *client) processIPPool(
 	}
 
 	// IPIP encapsulation or No-Encap.
-	if ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet ||
-		ippool.IPIPMode == encap.Never || ippool.VXLANMode == encap.Never {
-		if programClusterRoutes {
-			var extraStatement string
-			if forProgrammingKernel && ipVersion == 4 {
-				// For IPv4 IPIP and no-encap routes, we need to set `krt_tunnel` variable which is needed by
-				// our fork of BIRD.
-				extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
-			}
-			return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
+	if programClusterRoutes {
+		var extraStatement string
+		if forProgrammingKernel && ipVersion == 4 {
+			// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
+			// our fork of BIRD.
+			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
 		}
-
-		// Felix is responsible for programming cluster routes, not BIRD.
-		if forProgrammingKernel {
-			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
-		}
-		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+		return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
 	}
 
-	log.WithFields(log.Fields{
-		"ippool":    ippool.CIDR,
-		"ipVersion": ipVersion,
-	}).Error("Invalid ippool")
-	return ""
+	// Felix is responsible for programming cluster routes, not BIRD.
+	if forProgrammingKernel {
+		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
+	}
+
+	return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
@@ -1061,8 +1062,8 @@ func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSub
 		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
 		return fmt.Sprintf(format, localSubnet)
 	case v3.Never:
-		// No-encap case.
-		return `krt_tunnel="";`
+		// No encapsulation needed; no need to set krt_tunnel.
+		return ``
 	default:
 		return ``
 	}

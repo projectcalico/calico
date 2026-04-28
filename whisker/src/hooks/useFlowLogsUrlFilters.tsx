@@ -1,3 +1,4 @@
+import { SelectedOmniFilterValues } from '@/utils/omniFilter';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -16,25 +17,24 @@ const filterKeys = [
     'start_time',
 ] as const;
 
-type FilterKey = (typeof filterKeys)[number];
+export type UrlFilterKey = (typeof filterKeys)[number];
 
-export const transformJSON: Partial<Record<FilterKey, (value: string) => []>> =
-    {
-        policy: (value: string) => {
-            try {
-                return JSON.parse(value);
-            } catch {
-                return [];
-            }
-        },
-    };
-
-type Filters = Partial<Record<FilterKey, string[]>>;
+export const transformJSON: Partial<
+    Record<UrlFilterKey, (value: string) => []>
+> = {
+    policy: (value: string) => {
+        try {
+            return JSON.parse(value);
+        } catch {
+            return [];
+        }
+    },
+};
 
 export const parseFiltersFromParams = (
     searchParams: URLSearchParams,
-): Filters => {
-    const filters: Filters = {};
+): SelectedOmniFilterValues => {
+    const filters: SelectedOmniFilterValues = {};
 
     for (const key of filterKeys) {
         const values = searchParams.getAll(key);
@@ -79,14 +79,14 @@ export const useFlowLogsUrlFilters = () => {
     );
 
     const setMultiFilter = (
-        filters: Partial<Record<FilterKey, string[] | null>>,
+        filters: Partial<Record<UrlFilterKey, string[] | null>>,
     ) => {
         setSearchParams(buildSearchParamsFromFilters(searchParams, filters));
     };
 
     const setFilter = (key: string, values: string[] | null) => {
         setMultiFilter({ [key]: values } as Partial<
-            Record<FilterKey, string[] | null>
+            Record<UrlFilterKey, string[] | null>
         >);
     };
 

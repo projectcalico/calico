@@ -246,12 +246,14 @@ type Config struct {
 	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
+	BPFIPFragmentReassemblyEnabled     bool
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
 	BPFAttachType                      apiv3.BPFAttachOption
+	BPFIPFragTimeout                   time.Duration
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
@@ -362,7 +364,7 @@ type InternalDataplane struct {
 	vxlanManagerV6      *vxlanManager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
-	linkAddrsManagers []*linkaddrs.LinkAddrsManager
+	linkAddrsManagers []linkaddrs.Interface
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -749,7 +751,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.VXLANEnabled {
 		var fdbOpts []vxlanfdb.Option
-		if config.BPFEnabled && bpfutils.BTFEnabled {
+		if config.BPFEnabled {
 			fdbOpts = append(fdbOpts, vxlanfdb.WithNeighUpdatesOnly())
 		}
 		vxlanFDB := vxlanfdb.New(netlink.FAMILY_V4, dataplanedefs.VXLANIfaceNameV4, featureDetector, config.NetlinkTimeout, fdbOpts...)
@@ -767,7 +769,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		dp.vxlanParentIfaceC = make(chan string, 1)
 		vxlanMTU := config.VXLANMTU
-		if config.BPFEnabled && bpfutils.BTFEnabled {
+		if config.BPFEnabled {
 			vxlanMTU = 0
 		}
 		go dp.vxlanManager.keepVXLANDeviceInSync(
@@ -1140,7 +1142,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.arpTables = append(dp.arpTables, arpFilterTable)
 	}
 
-	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	var linkAddrsManagerV4 linkaddrs.Interface
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled. Using default LinkAddrsManager")
+
+		linkAddrsManagerV4 = linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	} else {
+		log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+		linkAddrsManagerV4 = &linkaddrs.DummyLinkAddrsManager{}
+	}
+
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
@@ -1294,7 +1305,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				fdbOpts     []vxlanfdb.Option
 				vxlanMgrOps []vxlanMgrOption
 			)
-			if config.BPFEnabled && bpfutils.BTFEnabled {
+			if config.BPFEnabled {
 				// BPF mode uses the same device for both V4 and V6
 				vxlanName = dataplanedefs.VXLANIfaceNameV4
 				if dp.vxlanManager != nil {
@@ -1319,7 +1330,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			)
 			dp.vxlanParentIfaceCV6 = make(chan string, 1)
 			vxlanMTU := config.VXLANMTUV6
-			if config.BPFEnabled && bpfutils.BTFEnabled {
+			if config.BPFEnabled {
 				vxlanMTU = 0
 			}
 			go dp.vxlanManagerV6.keepVXLANDeviceInSync(
@@ -1353,7 +1364,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
-		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		var linkAddrsManagerV6 linkaddrs.Interface
+		if !config.RouteSyncDisabled {
+			log.Debug("Route management is enabled. Using default LinkAddrsManager")
+			linkAddrsManagerV6 = linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		} else {
+			log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+			linkAddrsManagerV6 = &linkaddrs.DummyLinkAddrsManager{}
+		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(

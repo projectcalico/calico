@@ -284,6 +284,24 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
+                bpfIPFragTimeout:
+                  description: |-
+                    BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+                    This is the maximum time that the BPF dataplane will wait for all fragments of a
+                    fragmented IP packet to arrive before discarding them.  If left unset, the value
+                    is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+                    seconds).
+                    [Default: unset - read from net.ipv4.ipfrag_time]
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                bpfIPFragmentReassemblyEnabled:
+                  description: |-
+                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+                    reassembles out-of-order IP fragments from external networks. This program requires
+                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+                    Felix reports not-ready until the user sets this to false. When false, fragmented
+                    packets from external sources are dropped. [Default: true]
+                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
@@ -447,7 +465,7 @@ spec:
                 bpfRedirectToPeer:
                   description: |-
                     BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-                    Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+                    Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
                     Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
                     which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
                     As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
@@ -537,11 +555,13 @@ spec:
                   description: |-
                     DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
+                  maxLength: 45
                   type: string
                 deviceRouteSourceAddressIPv6:
                   description: |-
                     DeviceRouteSourceAddressIPv6 IPv6 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
+                  maxLength: 45
                   type: string
                 disableConntrackInvalidCheck:
                   description: |-
@@ -751,6 +771,7 @@ spec:
                       - timeout
                     type: object
                   type: array
+                  x-kubernetes-list-type: atomic
                 interfaceExclude:
                   description: |-
                     InterfaceExclude A comma-separated list of interface names that should be excluded when Felix is resolving
@@ -925,6 +946,7 @@ spec:
                       - type: string
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
+                  maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
                   description: |-
@@ -1017,6 +1039,7 @@ spec:
                     NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
+                  maxLength: 45
                   type: string
                 natOutgoingExclusions:
                   description: |-
@@ -1085,6 +1108,22 @@ spec:
                   description:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
+                  type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
                   type: string
                 openstackRegion:
                   description: |-
@@ -1214,6 +1253,10 @@ spec:
                     - max
                     - min
                   type: object
+                  x-kubernetes-validations:
+                    - message: must be a range of route table indices within 1..250
+                      reason: FieldValueInvalid
+                      rule: self.min >= 1 && self.max >= self.min && self.max <= 250
                 routeTableRanges:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
@@ -1229,6 +1272,13 @@ spec:
                       - max
                       - min
                     type: object
+                    x-kubernetes-validations:
+                      - message: min must be >= 1
+                        reason: FieldValueInvalid
+                        rule: self.min >= 1
+                      - message: min must not be greater than max
+                        reason: FieldValueInvalid
+                        rule: self.min <= self.max
                   type: array
                 serviceLoopPrevention:
                   description: |-
@@ -1389,6 +1439,32 @@ spec:
                 - message: routeTableRange and routeTableRanges cannot both be set
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
+                - message: natOutgoingAddress must be a valid IPv4 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
+                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
+                    == 4)"
+                - message: deviceRouteSourceAddress must be a valid IPv4 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
+                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
+                    == 4)"
+                - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
+                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
+                    == 6)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true

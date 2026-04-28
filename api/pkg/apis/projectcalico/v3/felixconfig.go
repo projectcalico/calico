@@ -27,7 +27,7 @@ import (
 // FelixConfigurationList contains a list of FelixConfiguration object.
 type FelixConfigurationList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []FelixConfiguration `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -36,6 +36,7 @@ type FelixConfigurationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' || self.metadata.name.startsWith('node.') ? !has(self.spec.nodeSelector) : true",message="nodeSelector must not be set on the 'default' or per-node ('node.*') FelixConfiguration",reason=FieldValueForbidden
 
 type FelixConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -164,7 +165,26 @@ const (
 
 // FelixConfigurationSpec contains the values of the Felix configuration.
 // +kubebuilder:validation:XValidation:rule="!has(self.routeTableRange) || !has(self.routeTableRanges)",message="routeTableRange and routeTableRanges cannot both be set",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.natOutgoingAddress) || size(self.natOutgoingAddress) == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family() == 4)",message="natOutgoingAddress must be a valid IPv4 address",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress) == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family() == 4)",message="deviceRouteSourceAddress must be a valid IPv4 address",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6) == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family() == 6)",message="deviceRouteSourceAddressIPv6 must be a valid IPv6 address",reason=FieldValueInvalid
 type FelixConfigurationSpec struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to apply only to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// At most one selector-scoped FelixConfiguration should match any given node.
+	// If multiple selector-scoped resources match, the oldest (by creation
+	// timestamp) is used and a warning is logged. This prevents an accidentally
+	// created conflicting resource from disrupting an existing, working
+	// configuration.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`
+
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
@@ -458,6 +478,7 @@ type FelixConfigurationSpec struct {
 	// overridden.  This is useful for working around "false positive" liveness timeouts that can occur
 	// in particularly stressful workloads or if CPU is constrained.  For a list of active
 	// subcomponents, see Felix's logs.
+	// +listType=atomic
 	HealthTimeoutOverrides []HealthTimeoutOverride `json:"healthTimeoutOverrides,omitempty" validate:"omitempty,dive"`
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
@@ -516,6 +537,7 @@ type FelixConfigurationSpec struct {
 
 	// KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
 	// Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
+	// +kubebuilder:validation:MaxItems=7
 	KubeNodePortRanges *[]numorstring.Port `json:"kubeNodePortRanges,omitempty" validate:"omitempty,dive"`
 
 	// PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
@@ -543,6 +565,7 @@ type FelixConfigurationSpec struct {
 	// NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
 	// is leaving the network. By default the address used is an address on the interface the traffic is leaving on
 	// (i.e. it uses the iptables MASQUERADE target).
+	// +kubebuilder:validation:MaxLength=45
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
 	// When a IP pool setting `natOutgoing` is true, packets sent from Calico networked containers in this IP pool to destinations will be masqueraded.
@@ -554,10 +577,12 @@ type FelixConfigurationSpec struct {
 
 	// DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
+	// +kubebuilder:validation:MaxLength=45
 	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
 
 	// DeviceRouteSourceAddressIPv6 IPv6 address to set as the source hint for routes programmed by Felix. When not set
 	// the source address for local traffic from host to workload will be determined by the kernel.
+	// +kubebuilder:validation:MaxLength=45
 	DeviceRouteSourceAddressIPv6 string `json:"deviceRouteSourceAddressIPv6,omitempty"`
 
 	// DeviceRouteProtocol controls the protocol to set on routes programmed by Felix. The protocol is an 8-bit label
@@ -718,6 +743,16 @@ type FelixConfigurationSpec struct {
 	// +optional
 	BPFConntrackTimeouts *BPFConntrackTimeouts `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
 
+	// BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+	// This is the maximum time that the BPF dataplane will wait for all fragments of a
+	// fragmented IP packet to arrive before discarding them.  If left unset, the value
+	// is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+	// seconds).
+	// [Default: unset - read from net.ipv4.ipfrag_time]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	BPFIPFragTimeout *metav1.Duration `json:"bpfIPFragTimeout,omitempty" configv1timescale:"seconds"`
+
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -862,6 +897,13 @@ type FelixConfigurationSpec struct {
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
 
+	// BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+	// reassembles out-of-order IP fragments from external networks. This program requires
+	// a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+	// Felix reports not-ready until the user sets this to false. When false, fragmented
+	// packets from external sources are dropped. [Default: true]
+	BPFIPFragmentReassemblyEnabled *bool `json:"bpfIPFragmentReassemblyEnabled,omitempty" validate:"omitempty"`
+
 	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
 	// or Loose. [Default: Loose]
@@ -890,7 +932,7 @@ type FelixConfigurationSpec struct {
 
 	// BPFExportBufferSizeMB in BPF mode, controls the buffer size used for sending BPF events to felix.
 	// [Default: 1]
-	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty,cidrs"`
+	BPFExportBufferSizeMB *int `json:"bpfExportBufferSizeMB,omitempty" validate:"omitempty"`
 
 	// IstioAmbientMode configures Felix to work together with Tigera's Istio distribution.
 	// [Default: Disabled]
@@ -914,7 +956,7 @@ type FelixConfigurationSpec struct {
 	FlowLogsPolicyEvaluationMode *FlowLogsPolicyEvaluationModeType `json:"flowLogsPolicyEvaluationMode,omitempty"`
 
 	// BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
+	// Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
 	// Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
 	// which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
 	// As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
@@ -1126,11 +1168,14 @@ type HealthTimeoutOverride struct {
 	Timeout metav1.Duration `json:"timeout"`
 }
 
+// +kubebuilder:validation:XValidation:rule="self.min >= 1 && self.max >= self.min && self.max <= 250",message="must be a range of route table indices within 1..250",reason=FieldValueInvalid
 type RouteTableRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`
 }
 
+// +kubebuilder:validation:XValidation:rule="self.min >= 1",message="min must be >= 1",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="min must not be greater than max",reason=FieldValueInvalid
 type RouteTableIDRange struct {
 	Min int `json:"min"`
 	Max int `json:"max"`

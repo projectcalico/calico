@@ -141,6 +141,28 @@ else
 CGO_ENABLED?=0
 endif
 
+# Cross-compilation support using clang.  When building on amd64 for a different
+# target architecture, we use clang as a cross-compiler (it natively supports all
+# targets) with a per-arch sysroot containing the target libraries.  This avoids
+# slow QEMU emulation for CGO builds.
+#
+# Map Go ARCH names to clang target triples.
+# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
+CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
+CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+
+# Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+ifneq ($(CLANG_CROSS_TRIPLE_$(ARCH)),)
+CROSS_TRIPLE := $(CLANG_CROSS_TRIPLE_$(ARCH))
+CROSS_SYSROOT := /usr/$(CROSS_TRIPLE)/sys-root
+CROSS_CC := clang --target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT)
+CROSS_LDFLAGS := -fuse-ld=lld
+endif
+endif
+endif
+
 # Build a binary with boring crypto support.
 # This function expects you to pass in two arguments:
 #   1st arg: path/to/input/package(s)
@@ -151,6 +173,7 @@ endif
 define build_cgo_boring_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
@@ -162,6 +185,7 @@ endef
 define build_cgo_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
+		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
 		-e CGO_CFLAGS=$(CGO_CFLAGS) \
 		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
 		$(CALICO_BUILD) \
@@ -190,7 +214,7 @@ define build_windows_binary
 		-e GOARCH=amd64 \
 		-e GOOS=windows \
 		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
+		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS) -s -w" $(1)'
 endef
 
 # Images used in build / test across multiple directories.
@@ -361,6 +385,7 @@ DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
+		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
@@ -1049,7 +1074,7 @@ define retry_docker_cmd
 	done
 endef
 
-# Configuration options for retrying docker commands 
+# Configuration options for retrying docker commands
 MANIFEST_RETRIES ?= 5
 MANIFEST_RETRY_DELAY ?= 5
 
@@ -1074,14 +1099,14 @@ sub-manifest-%:
 	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
+	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(GIT_VERSION) VALIDARCHES="$(VALIDARCHES)"
 
 # cd-common tags and pushes images with the branch name and git version. This target uses PUSH_IMAGES, BUILD_IMAGE,
 # and BRANCH_NAME env variables to figure out what to tag and where to push it to.
 cd-common: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
-	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
+	$(MAKE) retag-build-images-with-registries push-images-to-registries IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(shell git describe --tags --dirty --long --always --abbrev=12) VALIDARCHES="$(VALIDARCHES)"
 
 ###############################################################################
 # Release targets and helpers
@@ -1162,13 +1187,12 @@ var-require-all-%:
 var-require-one-of-%:
 	@$(MAKE) --quiet --no-print-directory var-require REQUIRED_VARS=$*
 
-# build-images echos the images that would be built.
-# If WINDOWS_IMAGE is set then it echos the windows image that would be built as well.
+# build-images echoes the images that would be built. If WINDOWS_IMAGE is set
+# it is included in the output. $(sort) dedupes in case BUILD_IMAGES and
+# WINDOWS_IMAGE overlap (e.g. a component that only ships a Windows image
+# still needs BUILD_IMAGES set so the retag/push machinery iterates over it).
 build-images: var-require-all-BUILD_IMAGES
-	$(if $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES) $(WINDOWS_IMAGE),\
-		@echo $(BUILD_IMAGES)\
-	)
+	@echo $(sort $(BUILD_IMAGES) $(WINDOWS_IMAGE))
 
 # sem-cut-release triggers the cut-release pipeline (or test-cut-release if CONFIRM is not specified) in semaphore to
 # cut the release. The pipeline is triggered for the current commit, and the branch it's triggered on is calculated
@@ -1480,8 +1504,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/libcalico-go/config/crd/policy.networking.k8s.io_clusternetworkpolicies.yaml; do echo "Waiting for CRDs to be created"; sleep 2; done
 
-	# Install mutating admission policies.
+	# Install mutating admission policies (only for v3 CRDs, since they reference projectcalico.org/v3 resources).
+ifeq ($(CALICO_API_GROUP),projectcalico.org/v3)
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(REPO_ROOT)/api/admission/; do echo "Waiting for mutating admission policies to be created"; sleep 2; done
+endif
 
 	touch $@
 
@@ -1550,20 +1576,13 @@ KIND_TEST_BUILD_TAG = test-build
 
 # Calico images built locally with latest-$(ARCH) tags. kind-build-images
 # re-tags each as :test-build for the kind cluster.
+# Most components are provided by the combined calico/calico image, which
+# uses "calico <subcommand>" as the container command. Only node and
+# whisker (TypeScript/nginx, not a Go binary) remain as separate images.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
-	calico/typha:$(KIND_TEST_BUILD_TAG) \
-	calico/apiserver:$(KIND_TEST_BUILD_TAG) \
-	calico/ctl:$(KIND_TEST_BUILD_TAG) \
-	calico/cni:$(KIND_TEST_BUILD_TAG) \
-	calico/csi:$(KIND_TEST_BUILD_TAG) \
-	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG) \
-	calico/pod2daemon-flexvol:$(KIND_TEST_BUILD_TAG) \
-	calico/kube-controllers:$(KIND_TEST_BUILD_TAG) \
-	calico/goldmane:$(KIND_TEST_BUILD_TAG) \
-	calico/webhooks:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/whisker-backend:$(KIND_TEST_BUILD_TAG)
+	calico/calico:$(KIND_TEST_BUILD_TAG)
 
 # Operator is built separately (build-operator.sh tags it directly as
 # :test-build), so it's not in KIND_CALICO_IMAGES.
@@ -1578,55 +1597,43 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 # runs when sources are newer.
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
-	$(REPO_ROOT)/typha/.image.created-$(ARCH) \
-	$(REPO_ROOT)/apiserver/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH) \
-	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH) \
-	$(REPO_ROOT)/calicoctl/.image.created-$(ARCH) \
-	$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH) \
-	$(REPO_ROOT)/goldmane/.image.created-$(ARCH) \
-	$(REPO_ROOT)/webhooks/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH)
+	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
-
-$(REPO_ROOT)/typha/.image.created-$(ARCH): $(call local-deps-go-files,typha)
-	$(MAKE) -C $(REPO_ROOT)/typha image
-
-$(REPO_ROOT)/apiserver/.image.created-$(ARCH): $(call local-deps-go-files,apiserver)
-	$(MAKE) -C $(REPO_ROOT)/apiserver image
-
-$(REPO_ROOT)/cni-plugin/.image.created-$(ARCH): $(call local-deps-go-files,cni-plugin)
-	$(MAKE) -C $(REPO_ROOT)/cni-plugin image
-
-$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): $(call local-deps-go-files,pod2daemon)
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-
-$(REPO_ROOT)/calicoctl/.image.created-$(ARCH): $(call local-deps-go-files,calicoctl)
-	$(MAKE) -C $(REPO_ROOT)/calicoctl image
-
-$(REPO_ROOT)/kube-controllers/.image.created-$(ARCH): $(call local-deps-go-files,kube-controllers)
-	$(MAKE) -C $(REPO_ROOT)/kube-controllers image
-
-$(REPO_ROOT)/goldmane/.image.created-$(ARCH): $(call local-deps-go-files,goldmane)
-	$(MAKE) -C $(REPO_ROOT)/goldmane image
-
-$(REPO_ROOT)/webhooks/.image.created-$(ARCH): $(call local-deps-go-files,webhooks)
-	$(MAKE) -C $(REPO_ROOT)/webhooks image
+	touch $@
 
 $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
+	touch $@
 
-$(REPO_ROOT)/whisker-backend/.image.created-$(ARCH): $(call local-deps-go-files,whisker-backend)
-	$(MAKE) -C $(REPO_ROOT)/whisker-backend image
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
+	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
 # actual built images, so it can run in parallel with component builds.
-$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml
-	cd $(KIND_INFRA_DIR) && BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
+# Track the operator source selection in a generated inputs file so
+# changes to repo/branch invalidate the operator stamp.
+.PHONY: FORCE
+FORCE:
+
+$(REPO_ROOT)/.stamp.operator.inputs: FORCE
+	@printf '%s\n' \
+	  'OPERATOR_ORGANIZATION=$(OPERATOR_ORGANIZATION)' \
+	  'OPERATOR_GIT_REPO=$(OPERATOR_GIT_REPO)' \
+	  'OPERATOR_BRANCH=$(OPERATOR_BRANCH)' > $@.tmp
+	@if test -f $@ && cmp -s $@.tmp $@; then \
+	  rm -f $@.tmp; \
+	else \
+	  mv -f $@.tmp $@; \
+	fi
+
+$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml $(REPO_ROOT)/.stamp.operator.inputs
+	cd $(KIND_INFRA_DIR) && \
+	  REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
+	  BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
 	touch $@
 
 ## Build all component images needed for kind cluster testing, then tag them.
@@ -1655,16 +1662,21 @@ kind-deploy:
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) \
 	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Rebuild any images whose source files have changed, load onto the kind
-# cluster, and restart pods.
+# cluster, upgrade the Helm release, and restart pods. The chart rebuild
+# and helm upgrade are both fast no-ops when nothing has changed.
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$(shell nproc) kind-build-images
+	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
+		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
+		--reuse-values \
+		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
 
@@ -1690,8 +1702,8 @@ $(ENVTEST_ASSETS_MARKER):
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
 	touch $@
 
-# Minimum supported Kubernetes version for CEL XValidation (GA in 1.29).
-MIN_K8S_VERSION ?= v1.29.0
+# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
+MIN_K8S_VERSION ?= v1.31.0
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
 ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
@@ -1707,6 +1719,20 @@ $(ENVTEST_MIN_ASSETS_MARKER):
 		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
 		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_MIN_K8S_VERSION)'
 	touch $@
+
+###############################################################################
+# Dev image build variables. Targets that use these are in the root Makefile.
+###############################################################################
+DEV_IMAGE_PATH ?= calico
+DEV_IMAGE_TAG ?= $(GIT_VERSION)
+DEV_IMAGE_REGISTRY ?= docker.io
+DEV_STAMP_DIR := $(REPO_ROOT)/.dev-stamps
+
+# Map calico/<name>:test-build → $(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH)/<name>:$(DEV_IMAGE_TAG)
+# filter-registry strips "docker.io/" since Docker Hub doesn't use it in image refs.
+DEV_IMAGE_PREFIX = $(if $(filter docker.io,$(DEV_IMAGE_REGISTRY)),$(DEV_IMAGE_PATH),$(DEV_IMAGE_REGISTRY)/$(DEV_IMAGE_PATH))
+DEV_CALICO_IMAGES = $(foreach img,$(KIND_CALICO_IMAGES),$(DEV_IMAGE_PREFIX)/$(subst calico/,,$(firstword $(subst :, ,$(img)))):$(DEV_IMAGE_TAG))
+DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 
 ###############################################################################
 # Common functions for launching a local etcd instance.

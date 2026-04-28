@@ -31,7 +31,7 @@ const (
 // BGPPeerList is a list of BGPPeer resources.
 type BGPPeerList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []BGPPeer `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
@@ -60,6 +60,8 @@ type BGPPeer struct {
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerIP) || size(self.peerIP) == 0)",message="peerIP must be empty when localWorkloadSelector is set",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (!has(self.peerSelector) || size(self.peerSelector) == 0)",message="peerSelector must be empty when localWorkloadSelector is set",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="(!has(self.localWorkloadSelector) || size(self.localWorkloadSelector) == 0) || (has(self.asNumber) && self.asNumber != 0)",message="asNumber is required when localWorkloadSelector is set",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.reachableBy) || size(self.reachableBy) == 0 || (has(self.peerIP) && size(self.peerIP) > 0)",message="reachableBy must be empty when peerIP is empty",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.keepOriginalNextHop) || !self.keepOriginalNextHop || !has(self.nextHopMode)",message="keepOriginalNextHop and nextHopMode cannot both be set; keepOriginalNextHop is deprecated, use nextHopMode instead",reason=FieldValueForbidden
 type BGPPeerSpec struct {
 	// The node name identifying the Calico node instance that is targeted by this peer.
 	// If this is not set, and no nodeSelector is specified, then this BGP peer selects all
@@ -71,7 +73,7 @@ type BGPPeerSpec struct {
 	// Selector for the nodes that should have this peering.  When this is set, the Node
 	// field must be empty.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 
 	// The IP address of the peer followed by an optional port number to peer with.
@@ -98,7 +100,7 @@ type BGPPeerSpec struct {
 	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
 	// node's NodeBGPSpec.ASNumber, or the global default if that is not set.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	PeerSelector string `json:"peerSelector,omitempty" validate:"omitempty,selector"`
 
 	// Option to keep the original nexthop field when routes are sent to a BGP Peer.
@@ -150,16 +152,18 @@ type BGPPeerSpec struct {
 	// Add an exact, i.e. /32, static route toward peer IP in order to prevent route flapping.
 	// ReachableBy contains the address of the gateway which peer can be reached by.
 	// +optional
+	// +kubebuilder:validation:MaxLength=64
 	ReachableBy string `json:"reachableBy,omitempty" validate:"omitempty,reachableBy"`
 
 	// The ordered set of BGPFilters applied on this BGP peer.
 	// +optional
+	// +listType=atomic
 	Filters []string `json:"filters,omitempty" validate:"omitempty,dive,name"`
 
 	// Selector for the local workload that the node should peer with. When this is set, the peerSelector and peerIP fields must be empty,
 	// and the ASNumber must not be empty.
 	// +optional
-	// +kubebuilder:validation:MaxLength=4096
+	// +kubebuilder:validation:MaxLength=1024
 	LocalWorkloadSelector string `json:"localWorkloadSelector,omitempty" validate:"omitempty,selector"`
 
 	// ReversePeering, for peerings between Calico nodes controls whether

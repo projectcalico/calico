@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,9 @@ func (c *RetryController) ScheduleRetry() {
 }
 
 func (c *RetryController) Success() {
+	if c.successFn != nil {
+		c.successFn()
+	}
 }
 
 func (c *RetryController) scheduledRetry(wait time.Duration) {

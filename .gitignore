@@ -1,5 +1,6 @@
 *.created*
 *.pyc
+.dev-stamps/
 .go-pkg-cache/
 .idea
 .vscode
@@ -24,6 +25,9 @@ builder.coverprofile
 *.pprof
 .release-*.*
 
+/* Docker image tarballs */
+image.tar
+
 /* Image build stamp files for kind testing */
 .stamp.*
 hack/test/kind/infra/operator
@@ -42,3 +46,5 @@ pod2daemon/node-driver-registrar/
 
 /* Created by libcalico-go UTs */
 ut-tmp-dir
+
+.remember

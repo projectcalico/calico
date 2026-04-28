@@ -199,7 +199,7 @@ def retry_until_success(fun,
             elapsed = time.monotonic() - start
             if elapsed > timeout / 2:
                 _log.warning("Function %s succeeded but used %.1fs of %.0fs timeout (%d attempts).",
-                             function_name(fun), elapsed, timeout, attempts)
+                             function_name(fun), elapsed, timeout, attempts, stack_info=True)
             return result
 
 
@@ -262,8 +262,8 @@ def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, retu
                returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
-    return kubectl("exec -i -n kube-system calicoctl -- calicoctl --allow-version-mismatch " + args,
-                   allow_fail=allow_fail)
+    return run("calico ctl --allow-version-mismatch " + args,
+               allow_fail=allow_fail)
 
 
 def calicoctl_apply_dict(object_dict):

@@ -5,12 +5,13 @@ import {
     FlowLog as ApiFlowLog,
     QueryPage,
 } from '@/types/api';
-import { FilterHintValues, FlowLog } from '@/types/render';
+import { FlowLog } from '@/types/render';
 import {
     FilterHintKey,
     FilterHintType,
     FilterHintTypes,
     OmniFilterProperties,
+    SelectedOmniFilterValues,
     transformToFlowsFilterQuery,
     transformToQueryPage,
 } from '@/utils/omniFilter';
@@ -23,7 +24,6 @@ import {
     transformStartTime,
     updateFirstFlowStartTime,
 } from '../utils';
-
 const getFlowLogs = (queryParams?: Record<string, string>) =>
     api.get<FlowLog[]>('flows', {
         queryParams,
@@ -81,14 +81,12 @@ export const useInfiniteFilterQuery = (
 
 export const useFlowLogsStream = (
     startTime: number,
-    filterHintValues: Partial<FilterHintValues>,
+    filterHintValues: SelectedOmniFilterValues,
 ) => {
     const firstFlowStartTime = React.useRef<number | null>(null);
     const restartTime = React.useRef<number | null>(null);
     const streamGeneration = React.useRef(0);
-    const filters = transformToFlowsFilterQuery(
-        filterHintValues as FilterHintValues,
-    );
+    const filters = transformToFlowsFilterQuery(filterHintValues);
     const startTimeGte = transformStartTime(startTime);
     const path = buildStreamPath(startTimeGte, filters);
     const resetStreamState = React.useCallback(() => {

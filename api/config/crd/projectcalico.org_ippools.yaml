@@ -44,15 +44,36 @@ spec:
         openAPIV3Schema:
           properties:
             apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
               type: string
             kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
               type: string
             metadata:
               type: object
             spec:
+              description: IPPoolSpec contains the specification for an IPPool resource.
               properties:
                 allowedUses:
+                  description: |-
+                    AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
+                    ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
                   items:
+                    description: |-
+                      IPPoolAllowedUse defines the allowed uses for an IP pool.
+                      It can be one of "Workload", "Tunnel", or "LoadBalancer".
+                      - "Workload" means the pool is used for workload IP addresses.
+                      - "Tunnel" means the pool is used for tunnel IP addresses.
+                      - "LoadBalancer" means the pool is used for load balancer IP addresses.
                     enum:
                       - Workload
                       - Tunnel
@@ -63,11 +84,18 @@ spec:
                   x-kubernetes-list-type: set
                 assignmentMode:
                   default: Automatic
+                  description:
+                    Determines the mode how IP addresses should be assigned
+                    from this pool
                   enum:
                     - Automatic
                     - Manual
                   type: string
                 blockSize:
+                  description: |-
+                    The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
+                    The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
+                    or equal to the size of the pool CIDR.
                   maximum: 128
                   minimum: 0
                   type: integer
@@ -78,6 +106,7 @@ spec:
                       reason: FieldValueInvalid
                       rule: self == oldSelf
                 cidr:
+                  description: The pool CIDR.
                   format: cidr
                   maxLength: 48
                   type: string
@@ -88,22 +117,44 @@ spec:
                       reason: FieldValueInvalid
                       rule: self == oldSelf
                 disableBGPExport:
+                  description:
+                    "Disable exporting routes from this IP Pool's CIDR over
+                    BGP. [Default: false]"
                   type: boolean
                 disabled:
+                  description:
+                    When disabled is true, Calico IPAM will not assign addresses
+                    from this pool.
                   type: boolean
                 ipipMode:
+                  description: |-
+                    Contains configuration for IPIP tunneling for this pool.
+                    For IPv6 pools, IPIP tunneling must be disabled.
                   enum:
                     - Never
                     - Always
                     - CrossSubnet
                   type: string
                 namespaceSelector:
+                  description: |-
+                    Allows IPPool to allocate for a specific namespace by label selector.
+                    If specified, both namespaceSelector and nodeSelector must match for the pool to be used.
+                  maxLength: 1024
                   type: string
                 natOutgoing:
+                  description: |-
+                    When natOutgoing is true, packets sent from Calico networked containers in
+                    this pool to destinations outside of this pool will be masqueraded.
                   type: boolean
                 nodeSelector:
+                  default: all()
+                  description:
+                    Allows IPPool to allocate for a specific node by label
+                    selector.
+                  maxLength: 1024
                   type: string
                 vxlanMode:
+                  description: Contains configuration for VXLAN tunneling for this pool.
                   enum:
                     - Never
                     - Always
@@ -136,35 +187,80 @@ spec:
                 - message: IPIP is not supported on IPv6 pools
                   reason: FieldValueForbidden
                   rule:
-                    "!self.cidr.contains(':') || !has(self.ipipMode) || self.ipipMode
-                    == 'Never' || size(self.ipipMode) == 0"
+                    cidr(self.cidr).ip().family() != 6 || !has(self.ipipMode) || self.ipipMode
+                    == 'Never' || size(self.ipipMode) == 0
+                - message: LoadBalancer IP pools cannot disable BGP export
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || !has(self.disableBGPExport) || !self.disableBGPExport"
+                - message:
+                    IP Pool with AllowedUse LoadBalancer must have nodeSelector
+                    set to all()
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'LoadBalancer')
+                    || self.nodeSelector == 'all()'"
+                - message: IP Pool with AllowedUse Tunnel cannot have namespaceSelector
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel')
+                    || !has(self.namespaceSelector) || size(self.namespaceSelector) ==
+                    0"
+                - message: global() selector is not valid for IPPool nodeSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.nodeSelector) || !self.nodeSelector.contains('global(')"
+                - message: global() selector is not valid for IPPool namespaceSelector
+                  reason: FieldValueInvalid
+                  rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
             status:
               properties:
                 conditions:
                   items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
                     properties:
                       lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                         format: date-time
                         type: string
                       message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
                         maxLength: 32768
                         type: string
                       observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
                         format: int64
                         minimum: 0
                         type: integer
                       reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
                         maxLength: 1024
                         minLength: 1
                         pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
                         type: string
                       status:
+                        description: status of the condition, one of True, False, Unknown.
                         enum:
                           - "True"
                           - "False"
                           - Unknown
                         type: string
                       type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
                         maxLength: 316
                         pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                         type: string
@@ -176,6 +272,9 @@ spec:
                       - type
                     type: object
                   type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
               type: object
           required:
             - metadata

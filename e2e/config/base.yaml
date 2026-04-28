@@ -1,0 +1,19 @@
+# base.yaml - shared test selection config for all e2e pipelines.
+#
+# Includes all sig-calico tests and sig-network Conformance tests.
+# Excludes labels that are universally inappropriate for CI.
+
+include:
+  - sig-calico
+  - Conformance && sig-network
+
+exclude:
+  labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
+
+    - label: ExternalNode
+      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"

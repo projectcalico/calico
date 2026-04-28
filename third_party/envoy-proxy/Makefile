@@ -7,9 +7,12 @@ BUILD_IMAGES ?= $(ENVOY_PROXY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.35.8-6ddb700081
+# See https://gateway.envoyproxy.io/news/releases/matrix/ for version compatibility.
+ENVOYBINARY_IMAGE ?= quay.io/tigera/envoybinary:v1.37.1-0a0b20ed98
 
-EXCLUDEARCH ?= ppc64le s390x
+# Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
+# from the release manager doesn't override the allowlist.
+ARCHES = amd64 arm64
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -44,7 +47,7 @@ sub-image-%:
 image: $(BUILD_IMAGES)
 
 $(ENVOY_PROXY_IMAGE): $(ENVOY_PROXY_IMAGE_CREATED)
-$(ENVOY_PROXY_IMAGE_CREATED): Dockerfile
+$(ENVOY_PROXY_IMAGE_CREATED): Dockerfile | register
 	$(DOCKER_BUILD) --build-arg ENVOYBINARY_IMAGE=$(ENVOYBINARY_IMAGE) \
 		-t $(ENVOY_PROXY_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest

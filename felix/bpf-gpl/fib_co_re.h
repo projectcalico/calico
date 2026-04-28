@@ -75,6 +75,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	CALI_DEBUG("forward_or_drop fib %d", fwd_fib(&ctx->state->fwd));
+	CALI_DEBUG("forward_or_drop mark 0x%x", ctx->state->fwd.mark);
+	CALI_DEBUG("forward_or_drop state flags 0x%llx", state->flags);
+
 	if (!bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
 		if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			/* needs to go via routing in netfilter unless we have access
@@ -87,7 +91,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
+        if (ctx->state->ip_proto != IPPROTO_ICMP_46 && ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -192,6 +196,10 @@ skip_redir_ifindex:
 
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
+			__u32 __fib_ifindex = ctx->skb->ifindex;
+			if (CALI_F_FROM_WEP && ctx->globals->data.host_ifindex) {
+				__fib_ifindex = ctx->globals->data.host_ifindex;
+			}
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 				.family = 10, /* AF_INET6 */
@@ -199,7 +207,7 @@ skip_redir_ifindex:
 				.family = 2, /* AF_INET */
 #endif
 				.tot_len = 0,
-				.ifindex = ctx->skb->ifindex,
+				.ifindex = __fib_ifindex,
 				.l4_protocol = state->ip_proto,
 			};
 
