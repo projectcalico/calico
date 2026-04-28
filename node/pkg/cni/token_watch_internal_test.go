@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,6 +31,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	ktesting "k8s.io/client-go/testing"
+)
+
+// Constants and helpers below mirror upstream kubelet's atomic projected
+// volume writer. The behaviour we want to verify is whether fsnotify on the
+// parent directory observes the events that real kubelet generates.
+//
+// Source: kubernetes/kubernetes pkg/volume/util/atomic_writer.go
+//
+//	tag: v1.35.4 (the version pinned in this repo's go.mod)
+//	SHA: ee674200d315db92e2ef8274bad32731eefe1104
+//	url: https://github.com/kubernetes/kubernetes/blob/v1.35.4/pkg/volume/util/atomic_writer.go
+const (
+	kubeletDataDirName    = "..data"     // matches atomic_writer.go const
+	kubeletNewDataDirName = "..data_tmp" // matches atomic_writer.go const
 )
 
 // TestTokenRefresher_WakesUpOnTokenFileChange verifies the fsnotify-based
@@ -319,64 +334,88 @@ func TestTokenRefresher_RecoversAfterTransientUpdateTokenError(t *testing.T) {
 	}
 }
 
-// kubeletAtomicSetUpInitial sets up the initial state of a directory the way
-// kubelet's atomic-writer initialises a projected volume: a timestamped data
-// directory holding the real files, a `..data` symlink pointing at it, and
-// user-visible symlinks (token / ca.crt / namespace) pointing through `..data`.
-// Returns the path of the initial timestamped data directory.
-func kubeletAtomicSetUpInitial(t *testing.T, dir string, files map[string]string) string {
+// kubeletNewTimestampDir mirrors AtomicWriter.newTimestampDir from
+// kubernetes/kubernetes v1.35.4 pkg/volume/util/atomic_writer.go (line ~398):
+// uses os.MkdirTemp under the target dir with the prefix
+// time.Now().UTC().Format("..2006_01_02_15_04_05."), then chmods to 0755.
+func kubeletNewTimestampDir(t *testing.T, targetDir string) string {
 	t.Helper()
-	dataDirName := "..2026_04_27_15_00_00.0000000000"
-	dataDir := filepath.Join(dir, dataDirName)
-	if err := os.Mkdir(dataDir, 0o755); err != nil {
-		t.Fatalf("mkdir initial data dir: %v", err)
+	tsDir, err := os.MkdirTemp(targetDir, time.Now().UTC().Format("..2006_01_02_15_04_05."))
+	if err != nil {
+		t.Fatalf("MkdirTemp in %s: %v", targetDir, err)
 	}
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(dataDir, name), []byte(content), 0o600); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
+	if err := os.Chmod(tsDir, 0o755); err != nil {
+		t.Fatalf("chmod tsDir: %v", err)
 	}
-	if err := os.Symlink(dataDirName, filepath.Join(dir, "..data")); err != nil {
-		t.Fatalf("symlink ..data: %v", err)
-	}
-	for name := range files {
-		if err := os.Symlink(filepath.Join("..data", name), filepath.Join(dir, name)); err != nil {
-			t.Fatalf("symlink %s: %v", name, err)
-		}
-	}
-	return dataDir
+	return tsDir
 }
 
-// kubeletAtomicRotate performs the same sequence as kubelet's atomic-writer
-// when re-projecting a token: write a brand-new timestamped data dir, atomically
-// swap the `..data` symlink, then delete the old timestamped dir. The user-
-// visible symlinks (token / ca.crt / namespace) are NOT touched — kubelet
-// relies on them resolving through `..data`. Returns the new data dir.
-func kubeletAtomicRotate(t *testing.T, dir, oldDataDir string, files map[string]string) string {
+// kubeletAtomicSetUpInitial mirrors what kubelet's AtomicWriter produces on
+// the very first projection of a volume: a timestamped data directory holding
+// the real files, a `..data` symlink pointing at it, and user-visible
+// symlinks (token / ca.crt / namespace) that resolve through `..data`.
+// Returns the path of the timestamped data directory.
+func kubeletAtomicSetUpInitial(t *testing.T, dir string, files map[string]string) string {
 	t.Helper()
-	newDataDirName := fmt.Sprintf("..2026_04_27_15_00_%02d.1111111111", time.Now().Unix()%60)
-	newDataDir := filepath.Join(dir, newDataDirName)
-	if err := os.Mkdir(newDataDir, 0o755); err != nil {
-		t.Fatalf("mkdir new data dir: %v", err)
-	}
+	tsDir := kubeletNewTimestampDir(t, dir)
 	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(newDataDir, name), []byte(content), 0o600); err != nil {
-			t.Fatalf("write new %s: %v", name, err)
+		if err := os.WriteFile(filepath.Join(tsDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write payload %s: %v", name, err)
 		}
 	}
-	tmp := filepath.Join(dir, "..data_tmp")
-	if err := os.Symlink(newDataDirName, tmp); err != nil {
-		t.Fatalf("symlink tmp: %v", err)
+	if err := os.Symlink(filepath.Base(tsDir), filepath.Join(dir, kubeletDataDirName)); err != nil {
+		t.Fatalf("symlink %s: %v", kubeletDataDirName, err)
 	}
-	if err := os.Rename(tmp, filepath.Join(dir, "..data")); err != nil {
-		t.Fatalf("rename ..data: %v", err)
-	}
-	if oldDataDir != "" {
-		if err := os.RemoveAll(oldDataDir); err != nil {
-			t.Fatalf("remove old data dir: %v", err)
+	for name := range files {
+		if err := os.Symlink(filepath.Join(kubeletDataDirName, name), filepath.Join(dir, name)); err != nil {
+			t.Fatalf("symlink user-visible %s: %v", name, err)
 		}
 	}
-	return newDataDir
+	return tsDir
+}
+
+// kubeletAtomicRotate is a faithful port of the file-system operations
+// performed by AtomicWriter.Write in kubernetes/kubernetes v1.35.4
+// pkg/volume/util/atomic_writer.go (lines 139–267) when shouldWrite=true,
+// reordered to skip steps that don't touch the watched directory:
+//
+//	(5)  os.MkdirTemp(targetDir, "..<timestamp>.")  — new ts data dir
+//	(6)  os.WriteFile per payload key into ts dir
+//	(8)  os.Symlink(tsDirName, ..data_tmp)
+//	(9)  os.Rename(..data_tmp, ..data)              — atomic swap (Linux path)
+//	(12) os.RemoveAll(oldTsDir)                     — clean up previous gen
+//
+// Skipped: (1) validatePayload, (2) Readlink ..data, (3-4) compare with old
+// payload, (7) optional setPerms, (10) createUserVisibleFiles (no-op when
+// symlinks already exist — see issue #121472), (11) removeUserVisiblePaths
+// (only fires when payload key set changes). None of those produce events
+// that affect the watcher on the parent directory in the steady-state
+// rotation case we care about.
+//
+// The Windows branch of (9) (Remove + re-Symlink instead of Rename) is not
+// modelled here — it would only matter on Windows and the projected volume
+// layout differs there anyway.
+func kubeletAtomicRotate(t *testing.T, dir, oldTsDir string, files map[string]string) string {
+	t.Helper()
+	newTsDir := kubeletNewTimestampDir(t, dir)
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(newTsDir, name), []byte(content), 0o644); err != nil {
+			t.Fatalf("write new payload %s: %v", name, err)
+		}
+	}
+	newDataDirPath := filepath.Join(dir, kubeletNewDataDirName)
+	if err := os.Symlink(filepath.Base(newTsDir), newDataDirPath); err != nil {
+		t.Fatalf("symlink %s -> %s: %v", kubeletNewDataDirName, filepath.Base(newTsDir), err)
+	}
+	if err := os.Rename(newDataDirPath, filepath.Join(dir, kubeletDataDirName)); err != nil {
+		t.Fatalf("rename %s -> %s: %v", kubeletNewDataDirName, kubeletDataDirName, err)
+	}
+	if oldTsDir != "" {
+		if err := os.RemoveAll(oldTsDir); err != nil {
+			t.Fatalf("remove old ts dir %s: %v", oldTsDir, err)
+		}
+	}
+	return newTsDir
 }
 
 // TestFsnotifyDetectsKubeletAtomicWriterRotation answers a specific concern
@@ -520,6 +559,173 @@ func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
 			"This means the fsnotify fast path is not effective in production — "+
 			"see TestFsnotifyDetectsKubeletAtomicWriterRotation for a lower-level "+
 			"diagnostic of what events the kernel delivered.", err)
+	}
+}
+
+// TestTokenRefresher_HandlesBurstRotations covers a worry about the fast path:
+// kubelet's atomic-writer produces ~5 fsnotify events per rotation (CREATE
+// new ts dir, CREATE ..data_tmp, RENAME, CREATE ..data, REMOVE old ts dir).
+// If kubelet rotates several times in quick succession, the loop must (a)
+// keep working, and (b) not call UpdateToken an unbounded number of times.
+//
+// Note: drainEvents() in token_watch.go is intentionally non-blocking — it
+// exits the moment the channel is momentarily empty. fsnotify trickles events
+// from the kernel through its internal goroutine, so events arriving a
+// few milliseconds after one another may not be coalesced. In practice we
+// observe up to ~5 UpdateToken calls per rotation (one per event), which is
+// fine: real-world rotations happen at most once per ~48 min, so even 5x
+// over-call is irrelevant operationally. The bound below reflects that
+// honestly; a much tighter bound would require adding a settling sleep
+// before drainEvents in production code, which is not worth it for this
+// failure rate.
+func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{"token": "v0", "ca.crt": "ca-cert-pem", "namespace": "kube-system"}
+	currentTs := kubeletAtomicSetUpInitial(t, dir, files)
+
+	var callCount int32
+	fakeClient := fake.NewSimpleClientset()
+	fakeClient.PrependReactor("create", "serviceaccounts", func(action ktesting.Action) (bool, runtime.Object, error) {
+		createAction, ok := action.(ktesting.CreateAction)
+		if !ok || createAction.GetSubresource() != "token" {
+			return false, nil, nil
+		}
+		atomic.AddInt32(&callCount, 1)
+		return true, &authv1.TokenRequest{
+			Status: authv1.TokenRequestStatus{
+				Token:               "fake-token",
+				ExpirationTimestamp: metav1.NewTime(time.Now().Add(24 * time.Hour)),
+			},
+		}, nil
+	})
+
+	tr := NewTokenRefresher(fakeClient, "kube-system", "calico-cni-plugin")
+	tr.tokenFilePath = filepath.Join(dir, "token")
+
+	stopDrain := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-tr.TokenChan():
+			case <-stopDrain:
+				return
+			}
+		}
+	}()
+	defer func() {
+		tr.Stop()
+		close(stopDrain)
+		wg.Wait()
+	}()
+
+	go tr.Run()
+
+	if err := waitForCalls(&callCount, 1, 2*time.Second); err != nil {
+		t.Fatalf("initial UpdateToken did not fire: %v", err)
+	}
+
+	const numRotations = 5
+	for i := 0; i < numRotations; i++ {
+		currentTs = kubeletAtomicRotate(t, dir, currentTs, files)
+	}
+
+	// Allow events to settle and the loop to react.
+	time.Sleep(500 * time.Millisecond)
+
+	final := atomic.LoadInt32(&callCount)
+	if final < 2 {
+		t.Fatalf("expected at least 2 UpdateToken calls (1 initial + >=1 wake-up), got %d", final)
+	}
+	// Upper bound: 1 initial + numRotations × maxEventsPerRotation + slack.
+	// kubelet's atomic-writer produces ~5 events per rotation. Allow some
+	// headroom for jitter and the case where an event queued during the
+	// previous UpdateToken triggers another iteration. Anything well above
+	// this bound (e.g. growing without limit, or order-of-magnitude over)
+	// would indicate a real coalescing bug or an event-loop runaway.
+	const maxEventsPerRotation = 5
+	upperBound := int32(1 + numRotations*maxEventsPerRotation + 10)
+	if final > upperBound {
+		t.Fatalf("UpdateToken called more than expected: got %d, soft cap %d. "+
+			"This may indicate the loop is reacting to events from outside the rotation "+
+			"sequence or the drain path is misbehaving — investigate before relaxing the bound.",
+			final, upperBound)
+	}
+	t.Logf("burst of %d rotations triggered %d UpdateToken calls (initial+wake-ups)", numRotations, final)
+}
+
+// TestTokenRefresher_NoGoroutineLeakOnRunStopCycle guards against goroutine
+// leaks in the watcher / errors-drainer / Run() pipeline. Repeatedly start
+// and stop a refresher, then assert the global goroutine count returns to
+// its baseline. A leak in the cleanup path would show up as monotonic growth.
+func TestTokenRefresher_NoGoroutineLeakOnRunStopCycle(t *testing.T) {
+	// Settle and snapshot the baseline.
+	goruntime.GC()
+	time.Sleep(100 * time.Millisecond)
+	baseline := goruntime.NumGoroutine()
+
+	const cycles = 30
+	for i := 0; i < cycles; i++ {
+		dir := t.TempDir()
+		// fsnotify needs the directory to exist for watcher.Add to succeed,
+		// otherwise we exercise the timer-only fallback path which is a
+		// different code path (and uncovered by this test).
+		if err := os.WriteFile(filepath.Join(dir, "token"), []byte("x"), 0o600); err != nil {
+			t.Fatalf("seed token: %v", err)
+		}
+
+		fakeClient := fake.NewSimpleClientset()
+		fakeClient.PrependReactor("create", "serviceaccounts", func(action ktesting.Action) (bool, runtime.Object, error) {
+			createAction, ok := action.(ktesting.CreateAction)
+			if !ok || createAction.GetSubresource() != "token" {
+				return false, nil, nil
+			}
+			return true, &authv1.TokenRequest{
+				Status: authv1.TokenRequestStatus{
+					Token:               "fake-token",
+					ExpirationTimestamp: metav1.NewTime(time.Now().Add(24 * time.Hour)),
+				},
+			}, nil
+		})
+
+		tr := NewTokenRefresher(fakeClient, "kube-system", "calico-cni-plugin")
+		tr.tokenFilePath = filepath.Join(dir, "token")
+
+		runDone := make(chan struct{})
+		go func() {
+			defer close(runDone)
+			tr.Run()
+		}()
+
+		// Drain at least one token to confirm Run got past startup.
+		select {
+		case <-tr.TokenChan():
+		case <-time.After(2 * time.Second):
+			t.Fatalf("cycle %d: Run did not deliver any token", i)
+		}
+
+		tr.Stop()
+		select {
+		case <-runDone:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("cycle %d: Run did not return after Stop", i)
+		}
+	}
+
+	// Let goroutines wind down (watcher Close + errors-drainer exit).
+	goruntime.GC()
+	time.Sleep(300 * time.Millisecond)
+	goruntime.Gosched()
+	final := goruntime.NumGoroutine()
+
+	// Allow some slack for runtime / GC goroutines that may not be exactly
+	// stable across invocations.
+	const slack = 5
+	if final > baseline+slack {
+		t.Fatalf("goroutine leak: baseline=%d final=%d (after %d Run/Stop cycles, slack=%d)",
+			baseline, final, cycles, slack)
 	}
 }
 
