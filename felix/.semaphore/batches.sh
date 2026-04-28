@@ -65,7 +65,11 @@ run_batch() {
   #   a retry loop.
   # - nohup swallows the return code of the process so we use a 'bash -c'
   #   wrapper to capture it in a file.
-  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c 'echo \$\$ > test.pid; $cmd_quot > test.log; echo \$? > test.rc' < /dev/null >& /dev/null & while [ ! -e test.log ]; do sleep 1; done"
+  # - We merge stderr into test.log (2>&1) so that any error emitted by make,
+  #   docker, or the wrapped test command after the test binary exits (e.g.
+  #   docker --rm cleanup hangs) is captured in the artifact rather than
+  #   silently discarded by the outer '>& /dev/null'.
+  VM_NAME="$vm_name" ${remote_exec} "nohup bash -c 'echo \$\$ > test.pid; $cmd_quot > test.log 2>&1; echo \$? > test.rc' < /dev/null >& /dev/null & while [ ! -e test.log ]; do sleep 1; done"
   echo "RUNNER: Started batch '$batch' on VM '$vm_name', monitoring log..." >> "$log_file"
 
   # Subshell to limit scope of trap.
