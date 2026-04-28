@@ -547,6 +547,8 @@ const (
 	GlobalsEgressPacketRateConfigured    uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
 	GlobalsWorkloadSrcSpoofingConfigured uint32 = C.CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED
 	GlobalsUDPGSOLinearize               uint32 = C.CALI_GLOBALS_UDP_GSO_LINEARIZE
+	GlobalsIngressConnLimitConfigured    uint32 = C.CALI_GLOBALS_INGRESS_CONN_LIMIT_CONFIGURED
+	GlobalsEgressConnLimitConfigured     uint32 = C.CALI_GLOBALS_EGRESS_CONN_LIMIT_CONFIGURED
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
