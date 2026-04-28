@@ -1198,25 +1198,17 @@ func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client cli
 func cleanupAllK8sNetworkPolicies(clientset *kubernetes.Clientset, _ client.Interface) {
 	log.Info("Cleaning up Kubernetes network policies")
 	ctx := context.Background()
-	nsList, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	knps, err := clientset.NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.WithError(err).Panic("failed to list namespaces for k8s network policy cleanup")
+		log.WithError(err).Panic("failed to list k8s network policies")
 	}
-	total := 0
-	for _, ns := range nsList.Items {
-		nps, err := clientset.NetworkingV1().NetworkPolicies(ns.Name).List(ctx, metav1.ListOptions{})
+	for _, knp := range knps.Items {
+		err = clientset.NetworkingV1().NetworkPolicies("").Delete(ctx, knp.Name, metav1.DeleteOptions{})
 		if err != nil {
-			log.WithError(err).Panicf("failed to list k8s network policies in namespace %s", ns.Name)
+			log.WithError(err).Panicf("failed to delete k8s network policy %s", knp.Name)
 		}
-		for _, np := range nps.Items {
-			err = clientset.NetworkingV1().NetworkPolicies(ns.Name).Delete(ctx, np.Name, metav1.DeleteOptions{})
-			if err != nil {
-				log.WithError(err).Panicf("failed to delete k8s network policy %s/%s", ns.Name, np.Name)
-			}
-		}
-		total += len(nps.Items)
 	}
-	log.WithField("count", total).Info("Cleaned up Kubernetes network policies")
+	log.WithField("count", len(knps.Items)).Info("Cleaned up Kubernetes network policies")
 }
 
 func cleanupAllK8sClusterNetworkPolicies(kcnpClient *netpolicyclient.PolicyV1alpha2Client) {
