@@ -277,4 +277,8 @@ type AllocationAttribute struct {
 	// AlternateOwnerAttrs contains attributes of the previous or potential owner
 	// (used during live migration to track the source or target pod).
 	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
+	// ReleasedAt is the time this allocation was released, if it has not yet
+	// been deallocated. The time between these two events is the MinIPReclaimAgeSeconds
+	// configuration.
+	ReleasedAt *metav1.Time `json:"releasedAt,omitempty"`
 }

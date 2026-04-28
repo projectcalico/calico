@@ -3517,6 +3517,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var ctx context.Context
 		var affBlocks []cnet.IPNet
 		var s *blockAssignState
+		ipamConfig := IPAMConfig{}
 
 		BeforeEach(func() {
 			Expect(bc.Clean()).To(Succeed())
@@ -3568,7 +3569,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				cnet.MustParseCIDR("10.0.0.0/30"),
 			}
 
-			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks.
 			Expect(newlyClaimed).To(BeFalse())
@@ -3580,7 +3581,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 
 		It("Should find or claim blocks", func() {
-			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks.
 			Expect(newlyClaimed).To(BeFalse())
@@ -3590,7 +3591,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(s.remainingAffineBlocks)).To(Equal(1))
 			Expect(s.remainingAffineBlocks[0].String()).To(Equal("10.0.0.4/30"))
 
-			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks
 			Expect(newlyClaimed).To(BeFalse())
@@ -3599,7 +3600,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			// uncheckedAffBlocks has single element which is the second block of outClaimed.
 			Expect(len(s.remainingAffineBlocks)).To(Equal(0))
 
-			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks
 			Expect(newlyClaimed).To(BeTrue())
@@ -3615,7 +3616,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			outErr := ic.AssignIP(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 
-			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks.
 			Expect(newlyClaimed).To(BeFalse())
@@ -3633,7 +3634,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			outErr = ic.AssignIP(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
 
-			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should claim new block.
 			Expect(newlyClaimed).To(BeTrue())
@@ -3642,7 +3643,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			// Should return error if allowNewClaim is false.
 			s.allowNewClaim = false
-			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr = s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).To(Equal(ErrBlockLimit))
 		})
 
@@ -3651,7 +3652,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			sCopy := *s
 			sCopyPtr := &sCopy
 
-			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr := s.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks.
 			Expect(newlyClaimed).To(BeFalse())
@@ -3661,7 +3662,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(len(s.remainingAffineBlocks)).To(Equal(1))
 			Expect(s.remainingAffineBlocks[0].String()).To(Equal("10.0.0.4/30"))
 
-			b, newlyClaimed, outErr = sCopyPtr.findOrClaimBlock(ctx, 1)
+			b, newlyClaimed, outErr = sCopyPtr.findOrClaimBlock(ctx, &ipamConfig, 1)
 			Expect(outErr).NotTo(HaveOccurred())
 			// Should allocate from host-affine blocks.
 			Expect(newlyClaimed).To(BeFalse())

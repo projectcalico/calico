@@ -1671,6 +1671,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: maxBlocksPerHost
       type:
         scalar: numeric
+    - name: minIPReclaimAgeSeconds
+      type:
+        scalar: numeric
     - name: strictAffinity
       type:
         scalar: boolean
