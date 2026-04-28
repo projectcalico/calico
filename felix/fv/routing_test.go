@@ -1150,6 +1150,9 @@ func createIPIPBaseTopologyOptions(
 	// for these tests.  Since we're testing in containers anyway, checksum offload can't really be
 	// tested but we can verify the state with ethtool.
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
+	// Exercise the no-tunnel-IP path in BPF mode; the route-count assertions in this
+	// file are written for that mode.  Has no effect outside BPF mode.
+	topologyOptions.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "false"
 	topologyOptions.FelixDebugFilenameRegex = "ipip|route_mgr|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }

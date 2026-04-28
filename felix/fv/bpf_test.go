@@ -561,6 +561,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.TriggerDelayedFelixStart = true
 			}
 			options.ExtraEnvVars["FELIX_BPFMapSizeConntrackScaling"] = "Disabled"
+			// Exercise the no-tunnel-IP-on-device path; the BPF route dump expectations
+			// and other assertions in describeBPFTests are written for that mode.
+			options.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "false"
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
