@@ -2,7 +2,7 @@ include ../../metadata.mk
 
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 
-ENVOY_GATEWAY_IMAGE ?= envoy-gateway
+ENVOY_GATEWAY_IMAGE ?= calico/envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
