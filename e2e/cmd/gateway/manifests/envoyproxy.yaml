@@ -15,17 +15,15 @@
 # any envoy pod via IPVS. The Calico tigera-operator picks this up
 # through the GatewayAPI CR's envoyProxyRef (see gatewayapi.yaml).
 #
-# This resource is created in the `tigera-gateway` namespace.
-# The gatewayapi controller normally provisions that namespace, but
-# only after it has resolved every envoyProxyRef — which deadlocks on
-# first install. `make e2e-gateway-setup` pre-creates the namespace
-# itself before applying this manifest; the operator subsequently
-# takes ownership when its non-CRD render runs.
+# Lives in the test-owned `e2e-gateway-conformance` namespace so we can
+# pre-create the ns and apply this CR before the operator finishes
+# rendering its own `tigera-gateway` namespace. See gatewayapi.yaml for
+# why that ordering matters.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
   name: gateway-conformance-base
-  namespace: tigera-gateway
+  namespace: e2e-gateway-conformance
 spec:
   provider:
     type: Kubernetes
