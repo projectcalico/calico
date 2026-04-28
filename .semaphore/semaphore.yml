@@ -672,6 +672,11 @@ blocks:
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
             - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+            # Also cache the image under the CD blob key (bare "node:latest-amd64"
+            # tag) so the publish pipeline's cd-load-or-build can skip the amd64
+            # rebuild. The tarball above carries "calico/node:latest-amd64", which
+            # is what load-cached-images expects for downstream tests.
+            - .semaphore/cache-built-image node:latest-amd64 cd-node-amd64.tar.zst
   - name: "Build: whisker image"
     # Whisker is a TypeScript/React frontend — no Go build cache to populate.
     run:
@@ -4169,6 +4174,11 @@ blocks:
                 - s390x
           commands:
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
+            # Cache the freshly-built image so the CD promotion pipeline can load
+            # it via .semaphore/cd-load-or-build instead of rebuilding from
+            # source. Only one tag is produced per arch here; FIPS and amd64 are
+            # produced by the "Build: node image" block in 10-prerequisites.yml.
+            - ../.semaphore/cache-built-image node:latest-$ARCH cd-node-$ARCH.tar.zst
         - name: "Node: build Windows archive"
           commands:
             - ../.semaphore/run-and-monitor build-windows-archive.log make build-windows-archive
