@@ -40,6 +40,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwapiv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwapiv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
@@ -66,6 +68,11 @@ import (
 var curatedFlag = flag.String("curated", "", "Pre-baked feature/test/profile set: \"envoy-gateway\" or empty.")
 
 func TestGatewayAPIConformance(t *testing.T) {
+	// controller-runtime emits a stack-trace warning the first time any of
+	// its loggers is consulted without SetLogger having been called. Match
+	// the upstream conformance.DefaultOptions and install a zap logger.
+	ctrllog.SetLogger(zap.New(zap.WriteTo(os.Stderr), zap.UseDevMode(true)))
+
 	cfg, err := config.GetConfig()
 	if err != nil {
 		t.Fatalf("loading kube config: %v", err)
