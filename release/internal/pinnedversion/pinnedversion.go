@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -46,17 +45,6 @@ var FlannelComponent = registry.Component{
 	Version:  "v0.12.0",
 }
 
-var (
-	// Map of component names to their image names.
-	componentToImageMap = map[string]string{
-		"calicoctl": "ctl",
-		"flexvol":   "pod2daemon-flexvol",
-	}
-	// Map of image names to their component names.
-	// It is initialized lazily and should be accessed via mapImageToComponent.
-	imageToComponentMap = map[string]string{}
-)
-
 const (
 	pinnedVersionFileName = "pinned_versions.yml"
 )
@@ -67,8 +55,6 @@ const (
 	flannelComponentName          = "flannel"
 	networkingCalicoComponentName = "networking-calico"
 )
-
-var once sync.Once
 
 type PinnedVersions[T version.Versions] interface {
 	GenerateFile() (T, error)
@@ -115,9 +101,7 @@ func (p *PinnedVersion) ImageComponents(includeOperator bool) map[string]registr
 		if slices.Contains(noImageComponents, name) {
 			continue
 		}
-		if img, found := componentToImageMap[name]; found {
-			component.Image = img
-		} else if component.Image == "" {
+		if component.Image == "" {
 			component.Image = name
 		}
 		components[name] = component
@@ -195,22 +179,6 @@ func (p *CalicoPinnedVersions) GenerateFile() (*version.HashreleaseVersions, err
 	return p.versionData, nil
 }
 
-func mapImageToComponent(imageName, version string) (string, registry.Component) {
-	once.Do(func() {
-		// Initialize the image to component map.
-		for c, img := range componentToImageMap {
-			imageToComponentMap[img] = c
-		}
-	})
-	if compName, found := imageToComponentMap[imageName]; found {
-		return compName, registry.Component{
-			Version: version,
-			Image:   imageName,
-		}
-	}
-	return imageName, registry.Component{Version: version}
-}
-
 func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 	pinnedVersionPath := PinnedVersionFilePath(p.Dir)
 	components := map[string]registry.Component{
@@ -226,8 +194,7 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		flannelComponentName: FlannelComponent,
 	}
 	for _, img := range utils.ReleaseImages() {
-		name, c := mapImageToComponent(img, p.versionData.ProductVersion())
-		components[name] = c
+		components[img] = registry.Component{Version: p.versionData.ProductVersion()}
 	}
 	pinned := PinnedVersion{
 		Title:       p.versionData.ProductVersion(),

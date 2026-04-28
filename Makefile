@@ -132,7 +132,7 @@ DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 gen-deps-files:
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
-$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile hack/cmd/deps/*
+$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
