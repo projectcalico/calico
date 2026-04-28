@@ -62,6 +62,7 @@ type TokenRefresher struct {
 
 	tokenChan chan TokenUpdate
 	stopChan  chan struct{}
+	stopOnce  sync.Once
 }
 
 type TokenUpdate struct {
@@ -138,8 +139,13 @@ func (t *TokenRefresher) TokenChan() <-chan TokenUpdate {
 	return t.tokenChan
 }
 
+// Stop signals Run to exit. Safe to call more than once; only the first call
+// closes stopChan. Without this guard a second Stop would panic with
+// "close of closed channel".
 func (t *TokenRefresher) Stop() {
-	close(t.stopChan)
+	t.stopOnce.Do(func() {
+		close(t.stopChan)
+	})
 }
 
 func (t *TokenRefresher) Run() {
