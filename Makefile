@@ -280,25 +280,28 @@ e2e-run-cnp:
 #
 # Runs the upstream sigs.k8s.io/gateway-api conformance suite against
 # Calico's Envoy-Gateway-based implementation on the cluster at $KUBECONFIG,
-# and emits a ConformanceReport YAML for upstream submission.
+# and emits a ConformanceReport YAML.
 #
-# Caller must:
-#   1. set KUBECONFIG (e.g. $(KIND_KUBECONFIG))
-#   2. set GATEWAY_CONFORMANCE_VERSION to a Calico release tag (e.g. v3.31.5)
-#      for upstream submissions; required by the gateway-api report schema.
+# Caller must set KUBECONFIG (e.g. $(KIND_KUBECONFIG)). Everything else
+# is inferred from git: GATEWAY_CONFORMANCE_VERSION defaults to
+# `git describe --tags --always --dirty`, which produces a useful
+# identifier on every build (a clean tag for release builds, a
+# describe-style ref for branch/PR builds). Whether to submit the
+# resulting report upstream is a separate decision and is not gated
+# here.
 #
 # The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
 # tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
 ###############################################################################
-GATEWAY_CONFORMANCE_VERSION ?=
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null)
 GATEWAY_CLASS_NAME ?= tigera-gateway-class
 GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
 GATEWAY_CONFORMANCE_MODE ?= default
 GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance-report.yaml
-GATEWAY_CONFORMANCE_ORG ?= projectcalico
-GATEWAY_CONFORMANCE_PROJECT ?= calico
+GATEWAY_CONFORMANCE_ORG ?= Project Calico
+GATEWAY_CONFORMANCE_PROJECT ?= Calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
-GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/GOVERNANCE.md
+GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/CODE-OF-CONDUCT.md
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
 GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
 GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
@@ -317,88 +320,39 @@ GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
 GATEWAY_CONFORMANCE_EXEMPT_FEATURES ?=
 
 ## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
-##
-## The tigera-operator reconciles the GatewayAPI CR asynchronously: it
-## installs the Gateway API CRDs (gatewayclasses, gateways, httproutes, ...),
-## installs the Envoy Gateway controller, and only then creates the default
-## GatewayClass. `kubectl wait --for=condition` against a resource type that
-## doesn't yet exist on the server errors immediately rather than retrying,
-## so we poll for the CRD first, then wait for the GatewayClass.
 GATEWAY_SETUP_CRD_TIMEOUT ?= 300
 GATEWAY_SETUP_GWC_TIMEOUT ?= 5m
 
 .PHONY: e2e-gateway-setup
 e2e-gateway-setup:
-	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-gateway-setup: KUBECONFIG must be set"; exit 1; fi
-	@# Compute an L2 metallb pool from the kind docker bridge subnet so the
-	@# conformance test runner (which lives on the host) can reach LB IPs.
-	@# Calico's default metallb pool is BGP-mode + public IPs that aren't
-	@# routable from the host. Mirrors envoyproxy/gateway's create-cluster.sh.
-	@subnet_v4=$$(docker network inspect $(GATEWAY_KIND_DOCKER_NETWORK) 2>/dev/null | jq -r '.[].IPAM.Config[]? | select(.Subnet | contains(":") | not) | .Subnet' | head -1); \
-	if [ -z "$$subnet_v4" ]; then \
-	  echo "e2e-gateway-setup: could not determine IPv4 subnet of docker network '$(GATEWAY_KIND_DOCKER_NETWORK)'. Is the kind cluster up and is jq installed?"; \
-	  exit 1; \
-	fi; \
-	prefix=$$(echo "$$subnet_v4" | awk -F. '{print $$1"."$$2"."$$3}'); \
-	range="$$prefix.200-$$prefix.250"; \
-	echo "Applying L2 metallb pool gateway-conformance with addresses $$range (from $(GATEWAY_KIND_DOCKER_NETWORK) subnet $$subnet_v4)"; \
-	sed "s|__LB_RANGE_V4__|$$range|g" $(GATEWAY_METALLB_POOL) | kubectl --kubeconfig=$(KUBECONFIG) apply -f -
-	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
-	@echo "Waiting up to $(GATEWAY_SETUP_CRD_TIMEOUT)s for tigera-operator to install Gateway API CRDs..."
-	@# The gatewayapi controller renders CRDs early (gatewayapi_controller.go:221)
-	@# but only renders the tigera-gateway namespace + non-CRD resources AFTER
-	@# resolving every envoyProxyRef (line 419, after the read at line 350). With
-	@# envoyProxyRef set on first reconcile the operator returns early at line 351
-	@# with "EnvoyProxy ... not found", so the namespace never lands. We unblock
-	@# this by pre-creating the namespace ourselves once the EnvoyProxy CRD is
-	@# in, then dropping the EnvoyProxy CR in. The next reconcile finds it and
-	@# the operator owns the namespace from then on.
-	@end=$$(( $$(date +%s) + $(GATEWAY_SETUP_CRD_TIMEOUT) )); \
-	until kubectl --kubeconfig=$(KUBECONFIG) get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1 \
-	   && kubectl --kubeconfig=$(KUBECONFIG) get crd envoyproxies.gateway.envoyproxy.io >/dev/null 2>&1; do \
-	  if [ $$(date +%s) -ge $$end ]; then \
-	    echo "Timed out waiting for Gateway API + EnvoyProxy CRDs"; \
-	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayapi default -o yaml || true; \
-	    kubectl --kubeconfig=$(KUBECONFIG) get tigerastatus || true; \
-	    kubectl --kubeconfig=$(KUBECONFIG) -n tigera-operator logs deploy/tigera-operator --tail=200 || true; \
-	    exit 1; \
-	  fi; \
-	  sleep 5; \
-	done
-	@echo "Pre-creating tigera-gateway namespace so the EnvoyProxy CR can be applied before the operator reconciles past the EnvoyProxyRef check"
-	kubectl --kubeconfig=$(KUBECONFIG) create namespace tigera-gateway --dry-run=client -o yaml | kubectl --kubeconfig=$(KUBECONFIG) apply -f -
-	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_ENVOY_PROXY)
-	@echo "Waiting up to $(GATEWAY_SETUP_GWC_TIMEOUT) for $(GATEWAY_CLASS_NAME) GatewayClass to be created..."
-	@end=$$(( $$(date +%s) + 300 )); \
-	until kubectl --kubeconfig=$(KUBECONFIG) get gatewayclass $(GATEWAY_CLASS_NAME) >/dev/null 2>&1; do \
-	  if [ $$(date +%s) -ge $$end ]; then \
-	    echo "Timed out waiting for gatewayclass/$(GATEWAY_CLASS_NAME) to exist"; \
-	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayclass || true; \
-	    exit 1; \
-	  fi; \
-	  sleep 5; \
-	done
-	kubectl --kubeconfig=$(KUBECONFIG) wait --for=condition=Accepted=true --timeout=$(GATEWAY_SETUP_GWC_TIMEOUT) gatewayclass/$(GATEWAY_CLASS_NAME)
+	KUBECONFIG=$(KUBECONFIG) \
+	GATEWAY_API_CR=$(GATEWAY_API_CR) \
+	GATEWAY_ENVOY_PROXY=$(GATEWAY_ENVOY_PROXY) \
+	GATEWAY_METALLB_POOL=$(GATEWAY_METALLB_POOL) \
+	GATEWAY_CLASS_NAME=$(GATEWAY_CLASS_NAME) \
+	GATEWAY_KIND_DOCKER_NETWORK=$(GATEWAY_KIND_DOCKER_NETWORK) \
+	GATEWAY_SETUP_CRD_TIMEOUT=$(GATEWAY_SETUP_CRD_TIMEOUT) \
+	GATEWAY_SETUP_GWC_TIMEOUT=$(GATEWAY_SETUP_GWC_TIMEOUT) \
+	$(REPO_ROOT)/hack/test/kind/gateway-setup.sh
 
-## Run the Gateway API conformance suite. Requires e2e-gateway-setup to have completed.
-e2e-run-gateway-conformance:
+## Run the Gateway API conformance suite.
+e2e-run-gateway-conformance: e2e-gateway-setup
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-gateway-conformance: KUBECONFIG must be set"; exit 1; fi
-	@if [ -z "$(GATEWAY_CONFORMANCE_VERSION)" ]; then echo "WARNING: GATEWAY_CONFORMANCE_VERSION is empty; report.implementation.version will be blank and is not acceptable for upstream submission."; fi
 	mkdir -p $(dir $(GATEWAY_CONFORMANCE_REPORT))
 	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/gateway/e2e.test \
-	  -gateway-class=$(GATEWAY_CLASS_NAME) \
-	  -curated=$(GATEWAY_CONFORMANCE_CURATED) \
-	  -conformance-profiles=$(GATEWAY_CONFORMANCE_PROFILES) \
-	  -mode=$(GATEWAY_CONFORMANCE_MODE) \
-	  -all-features=$(GATEWAY_CONFORMANCE_ALL_FEATURES) \
-	  -supported-features=$(GATEWAY_CONFORMANCE_SUPPORTED_FEATURES) \
-	  -exempt-features=$(GATEWAY_CONFORMANCE_EXEMPT_FEATURES) \
-	  -organization=$(GATEWAY_CONFORMANCE_ORG) \
-	  -project=$(GATEWAY_CONFORMANCE_PROJECT) \
-	  -url=$(GATEWAY_CONFORMANCE_URL) \
-	  -contact=$(GATEWAY_CONFORMANCE_CONTACT) \
-	  -version=$(GATEWAY_CONFORMANCE_VERSION) \
-	  -report-output=$(GATEWAY_CONFORMANCE_REPORT) \
+	  -gateway-class='$(GATEWAY_CLASS_NAME)' \
+	  -curated='$(GATEWAY_CONFORMANCE_CURATED)' \
+	  -conformance-profiles='$(GATEWAY_CONFORMANCE_PROFILES)' \
+	  -mode='$(GATEWAY_CONFORMANCE_MODE)' \
+	  -all-features='$(GATEWAY_CONFORMANCE_ALL_FEATURES)' \
+	  -supported-features='$(GATEWAY_CONFORMANCE_SUPPORTED_FEATURES)' \
+	  -exempt-features='$(GATEWAY_CONFORMANCE_EXEMPT_FEATURES)' \
+	  -organization='$(GATEWAY_CONFORMANCE_ORG)' \
+	  -project='$(GATEWAY_CONFORMANCE_PROJECT)' \
+	  -url='$(GATEWAY_CONFORMANCE_URL)' \
+	  -contact='$(GATEWAY_CONFORMANCE_CONTACT)' \
+	  -version='$(GATEWAY_CONFORMANCE_VERSION)' \
+	  -report-output='$(GATEWAY_CONFORMANCE_REPORT)' \
 	  -test.v -test.timeout=60m
 
 ## End-to-end: build, kind-up, deploy Envoy Gateway, run conformance, emit report.
@@ -406,7 +360,6 @@ e2e-run-gateway-conformance:
 e2e-test-gateway-conformance:
 	$(MAKE) -C e2e bin/gateway/e2e.test
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
-	$(MAKE) e2e-gateway-setup KUBECONFIG=$(KIND_KUBECONFIG)
 	$(MAKE) e2e-run-gateway-conformance KUBECONFIG=$(KIND_KUBECONFIG)
 
 ###############################################################################
