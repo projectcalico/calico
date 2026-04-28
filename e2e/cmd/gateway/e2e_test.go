@@ -34,12 +34,16 @@ import (
 	"testing"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwapiv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gwapiv1alpha3 "sigs.k8s.io/gateway-api/apis/v1alpha3"
+	gwapiv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/gateway-api/conformance"
 	confv1 "sigs.k8s.io/gateway-api/conformance/apis/v1"
 	"sigs.k8s.io/gateway-api/conformance/tests"
@@ -77,8 +81,19 @@ func TestGatewayAPIConformance(t *testing.T) {
 		t.Fatalf("clientset: %v", err)
 	}
 
-	if err := gwapiv1.Install(c.Scheme()); err != nil {
-		t.Fatalf("install gateway-api scheme: %v", err)
+	// Install every gateway-api API version that conformance tests touch.
+	// HTTPRoute reference-grant tests delete v1beta1.ReferenceGrant; the
+	// TLSRoute / UDPRoute tests work in v1alpha2; BackendTLSPolicy is
+	// v1alpha3. Mirrors sigs.k8s.io/gateway-api/conformance.DefaultOptions.
+	for _, install := range []func(*runtime.Scheme) error{
+		gwapiv1alpha3.Install,
+		gwapiv1alpha2.Install,
+		gwapiv1beta1.Install,
+		gwapiv1.Install,
+	} {
+		if err := install(c.Scheme()); err != nil {
+			t.Fatalf("install gateway-api scheme: %v", err)
+		}
 	}
 	if err := apiextv1.AddToScheme(c.Scheme()); err != nil {
 		t.Fatalf("install apiextensions scheme: %v", err)
