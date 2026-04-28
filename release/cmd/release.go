@@ -206,7 +206,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(repoRemoteFlag.Name),
+				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			}
 			m := calico.NewManager(opts...)
 			if err := m.ReleasePublic(); err != nil {

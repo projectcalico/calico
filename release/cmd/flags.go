@@ -122,7 +122,7 @@ var (
 		Name:     validateFlagName,
 		Category: developmentCategory,
 		Usage:    "Run validation checks",
-		Sources:  cli.EnvVars("RELEASE_VALIDATE"),
+		Sources:  cli.EnvVars("RELEASE_VALIDATE", "VALIDATE"),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
 			if b {
@@ -142,7 +142,7 @@ var (
 		Name:     validateBranchFlagName,
 		Category: developmentCategory,
 		Usage:    "Validate that the current branch is a valid branch for release",
-		Sources:  cli.EnvVars("RELEASE_VALIDATE_BRANCH"),
+		Sources:  cli.EnvVars("RELEASE_VALIDATE_BRANCH", "VALIDATE_BRANCH"),
 		Value:    true,
 	}
 )
