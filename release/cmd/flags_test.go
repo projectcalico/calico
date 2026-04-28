@@ -162,20 +162,58 @@ func TestImagesArchiveImagesFlagAction(t *testing.T) {
 	})
 }
 
-func TestManifestsOCPBundleFlagAction(t *testing.T) {
+// Non-hashrelease builds tolerate --no-manifests --ocp-bundle (uses checked-in
+// manifests). Hashrelease enforcement lives in validateHashreleaseBuildFlags.
+func TestManifestsOCPBundleNoFlagAction(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"defaults pass", nil},
+		{"--no-manifests alone passes (no flag-level Action)", []string{"--no-manifests"}},
+		{"--no-manifests --no-ocp-bundle passes", []string{"--no-manifests", "--no-ocp-bundle"}},
+		{"--no-ocp-bundle alone passes", []string{"--no-ocp-bundle"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertRun(t, []cli.Flag{manifestsFlag, ocpBundleFlag}, tc.args, "")
+		})
+	}
+}
+
+func TestValidateHashreleaseBuildFlagsOCPManifests(t *testing.T) {
 	cases := []struct {
 		name    string
 		args    []string
 		wantErr string
 	}{
 		{"defaults pass", nil, ""},
-		{"--no-manifests alone errors (default ocp-bundle=true)", []string{"--no-manifests"}, "--no-ocp-bundle must be set"},
+		{"--no-manifests alone errors (ocp-bundle still default true)", []string{"--no-manifests"}, "--ocp-bundle requires --manifests"},
 		{"--no-manifests --no-ocp-bundle passes", []string{"--no-manifests", "--no-ocp-bundle"}, ""},
-		{"--no-ocp-bundle alone passes (dependent disabled)", []string{"--no-ocp-bundle"}, ""},
+		{"--no-ocp-bundle alone passes", []string{"--no-ocp-bundle"}, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assertRun(t, []cli.Flag{manifestsFlag, ocpBundleFlag}, tc.args, tc.wantErr)
+			cmd := &cli.Command{
+				Name:  "test",
+				Flags: hashreleaseBuildFlags(),
+				Action: func(_ context.Context, c *cli.Command) error {
+					return validateHashreleaseBuildFlags(c)
+				},
+			}
+			err := cmd.Run(context.Background(), append([]string{"test"}, tc.args...))
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+			}
 		})
 	}
 }

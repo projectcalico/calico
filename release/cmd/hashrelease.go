@@ -336,6 +336,12 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 		return fmt.Errorf("%s must be set if %s is set", operatorRegistryFlag, registryFlag)
 	}
 
+	// Hashrelease regenerates manifests before building the OCP bundle.
+	if c.Bool(ocpBundleFlagName) && !c.Bool(manifestsFlagName) {
+		return fmt.Errorf("--%s requires --%s on hashrelease builds; either drop --%s or also set --%s",
+			ocpBundleFlagName, manifestsFlagName, inverseFlagName(manifestsFlagName), inverseFlagName(ocpBundleFlagName))
+	}
+
 	// CI conditional checks.
 	if c.Bool(ciFlag.Name) {
 		if !hashreleaseServerConfig(c).Valid() {

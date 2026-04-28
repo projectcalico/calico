@@ -624,15 +624,6 @@ var (
 		Usage:    "Include manifests in the release step",
 		Sources:  cli.EnvVars(envBuildManifests, envReleaseManifests),
 		Value:    true,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b {
-				return nil
-			}
-			if hasFlag(c, ocpBundleFlagName) && c.Bool(ocpBundleFlagName) {
-				return fmt.Errorf("--%s must be set when --%s is set", inverseFlagName(ocpBundleFlagName), inverseFlagName(manifestsFlagName))
-			}
-			return nil
-		},
 	}
 	ocpBundleFlagName = "ocp-bundle"
 	ocpBundleFlag     = &cli.BoolWithInverseFlag{
@@ -641,12 +632,6 @@ var (
 		Usage:    "Include OCP bundle in the release step",
 		Sources:  cli.EnvVars(envBuildOCPBundle, envReleaseOCPBundle),
 		Value:    true,
-		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			if b && hasFlag(c, manifestsFlagName) && !c.Bool(manifestsFlagName) {
-				return fmt.Errorf("--%s requires --%s; either drop --%s or also set --%s", ocpBundleFlagName, manifestsFlagName, inverseFlagName(manifestsFlagName), inverseFlagName(ocpBundleFlagName))
-			}
-			return nil
-		},
 	}
 	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
