@@ -1148,7 +1148,7 @@ blocks:
   - name: "E2E tests: Gateway API Conformance"
     run:
       when: >-
-        true or change_in(['/e2e/cmd/gateway', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
+        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
@@ -1161,16 +1161,11 @@ blocks:
       jobs:
         - name: "Gateway API: Conformance Tests"
           commands:
-            # Build the conformance runner.
-            - make -C e2e bin/gateway/e2e.test
-            # Bring up a kind cluster and deploy Calico (via Helm + tigera-operator).
-            - make kind-up
-            # Apply the GatewayAPI operator CR and wait for the default
-            # GatewayClass to reach Accepted=true.
-            - make e2e-gateway-setup KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
-            # Run the upstream Gateway API conformance suite against the cluster
-            # and emit the ConformanceReport YAML to ./report/.
-            - .semaphore/run-and-monitor gateway-conformance.log make e2e-run-gateway-conformance KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml GATEWAY_CONFORMANCE_VERSION=${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}
+            # Build the runner, bring up kind+Calico, deploy Envoy Gateway,
+            # run the upstream conformance suite, emit ./report/. Each step
+            # is defined in the root Makefile so this YAML and a local
+            # invocation stay in lockstep.
+            - .semaphore/run-and-monitor gateway-conformance.log make e2e-test-gateway-conformance
       epilogue:
         always:
           commands:
