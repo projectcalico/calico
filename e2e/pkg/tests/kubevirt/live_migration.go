@@ -29,8 +29,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
