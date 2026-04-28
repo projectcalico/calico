@@ -258,7 +258,7 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 
 // VersionsFromManifests returns the versions of the product and operator from manifests.
 func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "ctl")
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "calico/calico")
 	if err != nil {
 		return "", "", err
 	}
