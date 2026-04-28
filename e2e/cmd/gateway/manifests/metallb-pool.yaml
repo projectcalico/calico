@@ -18,11 +18,15 @@
 # (matches what envoyproxy/gateway's tools/hack/create-cluster.sh does).
 #
 # serviceAllocation.priority is higher than the default BGP pool so the
-# conformance Services pin here deterministically; namespaces are the
-# three the upstream conformance suite's base manifests create
-# (gateway-conformance-{infra,app-backend,web-backend}) plus
-# tigera-gateway in case the operator places EG-managed LB Services in
-# the controller's namespace rather than the Gateway's.
+# conformance LB Services pin here deterministically. Only tigera-gateway
+# needs to be listed: Envoy Gateway runs in its default mode (rather than
+# GatewayNamespaceMode), so it provisions all data-plane Services in the
+# EG controller namespace, which Calico's tigera-operator hard-codes to
+# tigera-gateway. The Gateway resources themselves live in
+# gateway-conformance-infra, but those are CRs, not LB Services.
+# (Reference: envoyproxy/gateway internal/infrastructure/kubernetes/
+# proxy_infra.go GetResourceNamespace, and tigera-operator's gatewayapi
+# render which leaves Provider.Kubernetes.Deploy unset.)
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -34,9 +38,6 @@ spec:
   serviceAllocation:
     priority: 100
     namespaces:
-      - gateway-conformance-infra
-      - gateway-conformance-app-backend
-      - gateway-conformance-web-backend
       - tigera-gateway
 ---
 apiVersion: metallb.io/v1beta1
