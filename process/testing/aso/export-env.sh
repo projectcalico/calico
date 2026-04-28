@@ -46,5 +46,5 @@ export ASO_LINUX_DATAPLANE="${ASO_LINUX_DATAPLANE:="Iptables"}" # 'Iptables', 'N
 export ASO_KUBE_PROXY_MODE="${ASO_KUBE_PROXY_MODE:="iptables"}" # 'iptables' or 'nftables', use 'nftables' with BPF
 
 export PRODUCT="calico"
-export RELEASE_STREAM="master"
+export RELEASE_STREAM="v3.32"
 export HASH_RELEASE="true"
