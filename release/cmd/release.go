@@ -102,21 +102,27 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 				// Configure the builder.
 				opts := []calico.Option{
 					calico.WithRepoRoot(cfg.RepoRootDir),
+					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithBuildImages(c.Bool(buildImagesFlag.Name)),
-					calico.WithArchiveImages(c.Bool(archiveImagesFlag.Name)),
-				}
-				if c.Bool(skipValidationFlag.Name) {
-					opts = append(opts, calico.WithValidate(false))
-					opts = append(opts, calico.WithReleaseBranchValidation(false))
+					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
+					calico.WithManifests(c.Bool(manifestsFlag.Name)),
+					calico.WithBinaries(c.Bool(binariesFlag.Name)),
+					calico.WithOCPBundle(c.Bool(ocpBundleFlag.Name)),
+					calico.WithTarball(c.Bool(tarballFlag.Name)),
+					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithValidate(c.Bool(validateFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -147,11 +153,12 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithPublishImages(c.Bool(publishImagesFlag.Name)),
-					calico.WithPublishGitRef(c.Bool(publishGitTagFlag.Name)),
-					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
-					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
+					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
+					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -199,7 +206,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(repoRemoteFlag.Name),
+				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			}
 			m := calico.NewManager(opts...)
 			if err := m.ReleasePublic(); err != nil {
@@ -247,8 +254,8 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			operatorRepoFlag,
 			operatorBranchFlag,
 			githubTokenFlag,
-			skipBranchCheckFlag,
-			skipValidationFlag,
+			validateBranchFlag,
+			validateFlag,
 			localFlag,
 		},
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
@@ -281,9 +288,9 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
-				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
-				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
+				calico.WithValidate(c.Bool(validateFlag.Name)),
+				calico.WithReleaseBranchValidation(c.Bool(validateBranchFlag.Name)),
+				calico.WithGitRef(!c.Bool(localFlag.Name)),
 			}
 			r := calico.NewManager(opts...)
 			branch, err := r.PrepareRelease()
@@ -298,29 +305,25 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 
 // releaseBuildFlags returns the flags for release build command.
 func releaseBuildFlags() []cli.Flag {
-	f := append(productFlags,
+	f := append(productFlags, buildStepFlags(false)...)
+	f = append(f,
 		archFlag,
 		registryFlag,
-		buildImagesFlag,
-		archiveImagesFlag,
 		githubTokenFlag,
-		skipValidationFlag)
+		validateBranchFlag,
+		validateFlag)
 	return f
 }
 
 // releasePublishFlags returns the flags for release publish command.
 func releasePublishFlags() []cli.Flag {
-	f := append(productFlags,
+	f := append(productFlags, publishStepFlags(false)...)
+	f = append(f,
 		registryFlag,
 		helmRegistryFlag,
-		publishImagesFlag,
-		publishGitTagFlag,
-		publishGitHubReleaseFlag,
 		githubTokenFlag,
-		publishChartsFlag,
 		awsProfileFlag,
-		s3BucketFlag,
-		skipValidationFlag)
+		s3BucketFlag)
 	return f
 }
 
