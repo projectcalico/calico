@@ -345,12 +345,19 @@ e2e-gateway-setup:
 	sed "s|__LB_RANGE_V4__|$$range|g" $(GATEWAY_METALLB_POOL) | kubectl --kubeconfig=$(KUBECONFIG) apply -f -
 	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_API_CR)
 	@echo "Waiting up to $(GATEWAY_SETUP_CRD_TIMEOUT)s for tigera-operator to install Gateway API CRDs..."
+	@# The gatewayapi controller renders CRDs early (gatewayapi_controller.go:221)
+	@# but only renders the tigera-gateway namespace + non-CRD resources AFTER
+	@# resolving every envoyProxyRef (line 419, after the read at line 350). With
+	@# envoyProxyRef set on first reconcile the operator returns early at line 351
+	@# with "EnvoyProxy ... not found", so the namespace never lands. We unblock
+	@# this by pre-creating the namespace ourselves once the EnvoyProxy CRD is
+	@# in, then dropping the EnvoyProxy CR in. The next reconcile finds it and
+	@# the operator owns the namespace from then on.
 	@end=$$(( $$(date +%s) + $(GATEWAY_SETUP_CRD_TIMEOUT) )); \
 	until kubectl --kubeconfig=$(KUBECONFIG) get crd gatewayclasses.gateway.networking.k8s.io >/dev/null 2>&1 \
-	   && kubectl --kubeconfig=$(KUBECONFIG) get crd envoyproxies.gateway.envoyproxy.io >/dev/null 2>&1 \
-	   && kubectl --kubeconfig=$(KUBECONFIG) get ns tigera-gateway >/dev/null 2>&1; do \
+	   && kubectl --kubeconfig=$(KUBECONFIG) get crd envoyproxies.gateway.envoyproxy.io >/dev/null 2>&1; do \
 	  if [ $$(date +%s) -ge $$end ]; then \
-	    echo "Timed out waiting for Gateway API + EnvoyProxy CRDs and tigera-gateway namespace"; \
+	    echo "Timed out waiting for Gateway API + EnvoyProxy CRDs"; \
 	    kubectl --kubeconfig=$(KUBECONFIG) get gatewayapi default -o yaml || true; \
 	    kubectl --kubeconfig=$(KUBECONFIG) get tigerastatus || true; \
 	    kubectl --kubeconfig=$(KUBECONFIG) -n tigera-operator logs deploy/tigera-operator --tail=200 || true; \
@@ -358,11 +365,8 @@ e2e-gateway-setup:
 	  fi; \
 	  sleep 5; \
 	done
-	@# Apply the EnvoyProxy override that the GatewayAPI CR's
-	@# envoyProxyRef points at. Has to land after the operator has
-	@# created the tigera-gateway namespace and installed the
-	@# EnvoyProxy CRD; until it lands the operator will requeue with
-	@# a missing-EnvoyProxy error, which resolves on the next reconcile.
+	@echo "Pre-creating tigera-gateway namespace so the EnvoyProxy CR can be applied before the operator reconciles past the EnvoyProxyRef check"
+	kubectl --kubeconfig=$(KUBECONFIG) create namespace tigera-gateway --dry-run=client -o yaml | kubectl --kubeconfig=$(KUBECONFIG) apply -f -
 	kubectl --kubeconfig=$(KUBECONFIG) apply -f $(GATEWAY_ENVOY_PROXY)
 	@echo "Waiting up to $(GATEWAY_SETUP_GWC_TIMEOUT) for $(GATEWAY_CLASS_NAME) GatewayClass to be created..."
 	@end=$$(( $$(date +%s) + 300 )); \

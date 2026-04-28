@@ -9,14 +9,14 @@
 # / dev laptop), so deterministic routing from the host through any
 # speaker node is required. See envoyproxy.yaml for the full rationale.
 #
-# The referenced EnvoyProxy resource is in the operator-managed
-# `tigera-gateway` namespace, which only exists once the operator has
-# reconciled this CR enough to install the Envoy Gateway components.
-# `make e2e-gateway-setup` applies this manifest first, waits for the
-# operator to bring up the namespace and the EnvoyProxy CRD, then
-# applies envoyproxy.yaml. Until envoyproxy.yaml lands the operator's
-# reconciliation will requeue with a missing-EnvoyProxy error, which is
-# expected and resolves on the next reconcile loop.
+# Bootstrap order matters: the gatewayapi controller resolves
+# envoyProxyRef before it renders the `tigera-gateway` namespace, so
+# applying this CR alone makes the operator requeue forever with
+# "EnvoyProxy ... not found". `make e2e-gateway-setup` works around
+# this by applying this manifest, waiting for the EnvoyProxy CRD,
+# pre-creating the `tigera-gateway` namespace itself, and then
+# applying envoyproxy.yaml so the next reconcile finds the EnvoyProxy
+# and proceeds.
 apiVersion: operator.tigera.io/v1
 kind: GatewayAPI
 metadata:
