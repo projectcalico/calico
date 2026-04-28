@@ -534,33 +534,37 @@ func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttac
 			mapName, m.KeySize(), m.ValueSize(), pinPath, file)
 	}
 
-	switch progAttachType {
-	case "TCX":
+	if attachType, ok := linkAttachType(progAttachType, pm.expectedAttachType == "ingress"); ok {
 		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if pm.expectedAttachType == "ingress" {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
 			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
-				return fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
-			}
-		}
-	case "Netkit":
-		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
-			// Map direction to netkit attach type:
-			// ingress ProgramsMap (traffic from pod) -> BPF_NETKIT_PEER
-			// egress ProgramsMap (traffic to pod) -> BPF_NETKIT_PRIMARY
-			attachType := libbpf.AttachTypeNetkitPrimary
-			if pm.expectedAttachType == "ingress" {
-				attachType = libbpf.AttachTypeNetkitPeer
-			}
-			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
-				return fmt.Errorf("error setting netkit attach type for program %s: %w", prog.Name(), err)
+				return fmt.Errorf("error setting %s attach type for program %s: %w", progAttachType, prog.Name(), err)
 			}
 		}
 	}
 
 	return nil
+}
+
+// linkAttachType returns the libbpf attach type for the given link-based
+// attachment mode and direction. The bool is false for modes that don't
+// use libbpf-link attachment.
+func linkAttachType(progAttachType string, ingress bool) (uint32, bool) {
+	switch progAttachType {
+	case "TCX":
+		if ingress {
+			return libbpf.AttachTypeTcxIngress, true
+		}
+		return libbpf.AttachTypeTcxEgress, true
+	case "Netkit":
+		// Map direction to netkit attach type:
+		// ingress ProgramsMap (traffic from pod) -> BPF_NETKIT_PEER
+		// egress ProgramsMap (traffic to pod) -> BPF_NETKIT_PRIMARY
+		if ingress {
+			return libbpf.AttachTypeNetkitPeer, true
+		}
+		return libbpf.AttachTypeNetkitPrimary, true
+	}
+	return 0, false
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {

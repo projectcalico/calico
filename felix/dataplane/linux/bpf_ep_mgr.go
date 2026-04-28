@@ -1801,25 +1801,10 @@ func (m *bpfEndpointManager) loadDefaultPolicyPrograms(
 		}
 	}
 
-	switch progAttachType {
-	case string(apiv3.BPFAttachOptionTCX):
+	if attachType, ok := linkAttachTypeForHook(progAttachType, hk); ok {
 		for p, err := obj.FirstProgram(); p != nil && err == nil; p, err = p.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if hk == hook.Ingress {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
 			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
-				return 0, 0, fmt.Errorf("error setting attach type for program %s: %w", p.Name(), err)
-			}
-		}
-	case tc.AttachOptionNetkit:
-		for p, err := obj.FirstProgram(); p != nil && err == nil; p, err = p.NextProgram() {
-			attachType := libbpf.AttachTypeNetkitPrimary
-			if hk == hook.Ingress {
-				attachType = libbpf.AttachTypeNetkitPeer
-			}
-			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
-				return 0, 0, fmt.Errorf("error setting netkit attach type for program %s: %w", p.Name(), err)
+				return 0, 0, fmt.Errorf("error setting %s attach type for program %s: %w", progAttachType, p.Name(), err)
 			}
 		}
 	}
@@ -1841,6 +1826,28 @@ func (m *bpfEndpointManager) loadDefaultPolicyPrograms(
 	allowFD = bpf.ProgFD(fd)
 
 	return allowFD, denyFD, nil
+}
+
+// linkAttachTypeForHook returns the libbpf attach type for the given
+// link-based attachment mode and hook direction. The bool is false for
+// modes that don't use libbpf-link attachment (e.g. classic TC).
+func linkAttachTypeForHook(progAttachType string, hk hook.Hook) (uint32, bool) {
+	switch progAttachType {
+	case string(apiv3.BPFAttachOptionTCX):
+		if hk == hook.Ingress {
+			return libbpf.AttachTypeTcxIngress, true
+		}
+		return libbpf.AttachTypeTcxEgress, true
+	case tc.AttachOptionNetkit:
+		// Map TC hook direction to netkit attach type:
+		// hook.Ingress (traffic from pod) -> BPF_NETKIT_PEER (peer transmits)
+		// hook.Egress (traffic to pod) -> BPF_NETKIT_PRIMARY (primary transmits)
+		if hk == hook.Ingress {
+			return libbpf.AttachTypeNetkitPeer, true
+		}
+		return libbpf.AttachTypeNetkitPrimary, true
+	}
+	return 0, false
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
@@ -3260,7 +3267,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	m.ifacesLock.Unlock()
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit:
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
 		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
 			return tcdefs.EpTypeVXLAN
 		}

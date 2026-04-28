@@ -125,8 +125,11 @@ func (ap *AttachPoint) loadObject(file string, configurator bpf.ObjectConfigurat
 // (pin absent or link severed). Returns err!=nil on hard failures.
 func (ap *AttachPoint) tryUpdateExistingLink(obj *libbpf.Obj, progPinPath string) (needsReattach bool, err error) {
 	if _, err := os.Stat(progPinPath); err != nil {
-		// Pin does not exist; caller must attach anew.
-		return true, nil
+		if os.IsNotExist(err) {
+			// Pin does not exist; caller must attach anew.
+			return true, nil
+		}
+		return false, fmt.Errorf("error stating link pin %s: %w", progPinPath, err)
 	}
 	link, err := libbpf.OpenLink(progPinPath)
 	if err != nil {
@@ -146,21 +149,23 @@ func (ap *AttachPoint) tryUpdateExistingLink(obj *libbpf.Obj, progPinPath string
 	return false, nil
 }
 
-func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
-	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
-		attachType := libbpf.AttachTypeTcxEgress
-		if ap.Hook == hook.Ingress {
-			attachType = libbpf.AttachTypeTcxIngress
-		}
-		return obj.SetAttachType("cali_tc_preamble", attachType)
-	})
+// attachLinkProgram loads, configures, and attaches the BPF preamble using
+// libbpf-link-based attachment (TCX or netkit). The differences between the
+// two are captured by the per-mode setAttachType / attach closures and the
+// pin path.
+func (ap *AttachPoint) attachLinkProgram(
+	binaryToLoad, pinPath string,
+	setAttachType func(*libbpf.Obj) error,
+	attach func(*libbpf.Obj) (*libbpf.Link, error),
+) error {
+	obj, err := ap.loadObject(binaryToLoad, setAttachType)
 	if err != nil {
 		ap.Log().Warn("Failed to load program")
 		return fmt.Errorf("object %w", err)
 	}
 	defer obj.Close()
 
-	needsReattach, err := ap.tryUpdateExistingLink(obj, ap.ProgPinPath())
+	needsReattach, err := ap.tryUpdateExistingLink(obj, pinPath)
 	if err != nil {
 		return err
 	}
@@ -168,16 +173,32 @@ func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
 		return nil
 	}
 
-	link, err := obj.AttachTCX("cali_tc_preamble", ap.Iface)
+	link, err := attach(obj)
 	if err != nil {
 		return err
 	}
 	defer link.Close()
-	err = link.Pin(ap.ProgPinPath())
-	if err != nil {
-		return fmt.Errorf("error pinning link %w", err)
+	if err := link.Pin(pinPath); err != nil {
+		return fmt.Errorf("error pinning link %s: %w", pinPath, err)
 	}
 	return nil
+}
+
+func (ap *AttachPoint) attachTCXProgram(binaryToLoad string) error {
+	return ap.attachLinkProgram(
+		binaryToLoad,
+		ap.ProgPinPath(),
+		func(obj *libbpf.Obj) error {
+			attachType := libbpf.AttachTypeTcxEgress
+			if ap.Hook == hook.Ingress {
+				attachType = libbpf.AttachTypeTcxIngress
+			}
+			return obj.SetAttachType("cali_tc_preamble", attachType)
+		},
+		func(obj *libbpf.Obj) (*libbpf.Link, error) {
+			return obj.AttachTCX("cali_tc_preamble", ap.Iface)
+		},
+	)
 }
 
 // AttachProgram attaches a BPF program from a file to the TC attach point
@@ -256,40 +277,23 @@ func (ap *AttachPoint) NetkitProgPinPath() string {
 }
 
 func (ap *AttachPoint) attachNetkitProgram(binaryToLoad string) error {
-	obj, err := ap.loadObject(binaryToLoad, func(obj *libbpf.Obj) error {
-		// Map TC hook direction to netkit attach type:
-		// hook.Ingress (traffic from pod) -> BPF_NETKIT_PEER (peer transmits)
-		// hook.Egress (traffic to pod) -> BPF_NETKIT_PRIMARY (primary transmits)
-		attachType := libbpf.AttachTypeNetkitPrimary
-		if ap.Hook == hook.Ingress {
-			attachType = libbpf.AttachTypeNetkitPeer
-		}
-		return obj.SetAttachType("cali_tc_preamble", attachType)
-	})
-	if err != nil {
-		ap.Log().Warn("Failed to load program for netkit")
-		return fmt.Errorf("object %w", err)
-	}
-	defer obj.Close()
-
-	needsReattach, err := ap.tryUpdateExistingLink(obj, ap.NetkitProgPinPath())
-	if err != nil {
-		return err
-	}
-	if !needsReattach {
-		return nil
-	}
-
-	link, err := obj.AttachNetkit("cali_tc_preamble", ap.Iface)
-	if err != nil {
-		return err
-	}
-	defer link.Close()
-	err = link.Pin(ap.NetkitProgPinPath())
-	if err != nil {
-		return fmt.Errorf("error pinning netkit link: %w", err)
-	}
-	return nil
+	return ap.attachLinkProgram(
+		binaryToLoad,
+		ap.NetkitProgPinPath(),
+		func(obj *libbpf.Obj) error {
+			// Map TC hook direction to netkit attach type:
+			// hook.Ingress (traffic from pod) -> BPF_NETKIT_PEER (peer transmits)
+			// hook.Egress (traffic to pod) -> BPF_NETKIT_PRIMARY (primary transmits)
+			attachType := libbpf.AttachTypeNetkitPrimary
+			if ap.Hook == hook.Ingress {
+				attachType = libbpf.AttachTypeNetkitPeer
+			}
+			return obj.SetAttachType("cali_tc_preamble", attachType)
+		},
+		func(obj *libbpf.Obj) (*libbpf.Link, error) {
+			return obj.AttachNetkit("cali_tc_preamble", ap.Iface)
+		},
+	)
 }
 
 func (ap *AttachPoint) detachNetkitProgram() error {
