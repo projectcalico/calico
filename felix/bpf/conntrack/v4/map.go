@@ -235,7 +235,11 @@ const (
 	FlagNoRedirPeer uint32 = (1 << 14)
 	FlagSetDSCP     uint32 = (1 << 15)
 	FlagMaglev      uint32 = (1 << 16)
-	FlagSendRST     uint32 = (1 << 17)
+	FlagSendRST      uint32 = (1 << 17)
+	FlagConnLimitIn  uint32 = (1 << 18)
+	FlagConnLimitRej uint32 = (1 << 19)
+	FlagConnLimitOut uint32 = (1 << 20)
+	FlagConnLimitDec uint32 = (1 << 21)
 )
 
 // FlagNames returns the human-readable names for the set bits in flags.
@@ -260,6 +264,10 @@ func FlagNames(flags uint32) []string {
 		{FlagSetDSCP, "dscp"},
 		{FlagMaglev, "maglev"},
 		{FlagSendRST, "send-rst"},
+		{FlagConnLimitIn, "connlimit-in"},
+		{FlagConnLimitRej, "connlimit-rej"},
+		{FlagConnLimitOut, "connlimit-out"},
+		{FlagConnLimitDec, "connlimit-dec"},
 	}
 	var names []string
 	for _, f := range flagTable {

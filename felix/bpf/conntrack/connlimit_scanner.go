@@ -20,6 +20,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -90,8 +91,15 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	data := ctVal.Data()
 
-	// Skip connections that are closing or closed (any FIN or RST).
+	// Skip connections that are closing or closed (any FIN or RST),
+	// or already decremented by the BPF fast path. The CONNLIMIT_DEC
+	// flag is set when the BPF program decrements the counter on
+	// FIN/RST; if we counted these entries, the scanner's recount
+	// would overwrite the decremented value with a higher one.
 	if data.FINsSeenDSR() || data.RSTSeen() {
+		return ScanVerdictOK, 0
+	}
+	if ctVal.Flags()&ctv4.FlagConnLimitDec != 0 {
 		return ScanVerdictOK, 0
 	}
 	// Only count fully established connections.

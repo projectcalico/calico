@@ -18,6 +18,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 )
 
 // TestConnLimitScannerCheckNoPodsIsNoOp verifies that the scanner's Check
@@ -338,6 +340,35 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	ingressKey := connlimitKey{ifindex: 10, direction: 1}
 	if scanner.counts[ingressKey] != 1 {
 		t.Errorf("expected ingress count 1 for pod B, got %v", scanner.counts)
+	}
+}
+
+func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	// Established connection with CONNLIMIT_DEC flag set — the BPF fast
+	// path already decremented the counter for this connection. The scanner
+	// must skip it to avoid recounting and overwriting the decremented value.
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitDec,
+		established(true),
+		established(false),
+	)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("expected no counts for CONNLIMIT_DEC connection, got %v", scanner.counts)
 	}
 }
 
