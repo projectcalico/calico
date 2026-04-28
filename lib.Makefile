@@ -382,6 +382,37 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+###############################################################################
+# Calico-extended controller-gen — wraps sigs.k8s.io/controller-tools and
+# adds the +calico:numOrString and +calico:nullableItems markers.  See
+# //controller-gen.  Built once into $(REPO_ROOT)/bin/ so the binary stays
+# usable across module boundaries (in particular api/'s submodule).
+#
+# Usage:
+#   $(call gen-calico-crds,./pkg/apis/...,config/crd/)
+CALICO_CONTROLLER_GEN_BIN := /go/src/github.com/projectcalico/calico/bin/calico-controller-gen
+CALICO_CONTROLLER_GEN_SRCS := $(shell find $(REPO_ROOT)/controller-gen -name '*.go' 2>/dev/null) \
+                              $(REPO_ROOT)/controller-gen/go.mod \
+                              $(REPO_ROOT)/controller-gen/go.sum
+CALICO_CONTROLLER_GEN := $(CALICO_CONTROLLER_GEN_BIN)
+
+.PHONY: bin/calico-controller-gen
+bin/calico-controller-gen: $(REPO_ROOT)/bin/calico-controller-gen
+$(REPO_ROOT)/bin/calico-controller-gen: $(CALICO_CONTROLLER_GEN_SRCS)
+	$(DOCKER_GO_BUILD) sh -c \
+		'cd controller-gen && go build -o ../bin/calico-controller-gen ./cmd/calico-controller-gen'
+
+# $(1) = Go package path glob; $(2) = output dir.  Override CRD_GEN_EXTRA_ARGS for one-offs.
+CRD_GEN_ARGS ?= crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false
+define gen-calico-crds
+$(MAKE) -C $(REPO_ROOT) bin/calico-controller-gen && \
+$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) $(CRD_GEN_ARGS) $(CRD_GEN_EXTRA_ARGS) paths=$(1) output:crd:dir=$(2)'
+endef
+
+.PHONY: calico-controller-gen-help
+calico-controller-gen-help: $(REPO_ROOT)/bin/calico-controller-gen
+	$(DOCKER_GO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd -www'
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
