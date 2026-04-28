@@ -1049,9 +1049,6 @@ func (r *CalicoManager) buildReleaseTar() error {
 	}
 
 	binaries := map[string]string{
-		// CNI plugin binaries
-		"cni-plugin/bin/": filepath.Join(binDir, "cni"),
-
 		// Calicoctl binaries.
 		"calicoctl/bin/": filepath.Join(binDir, "calicoctl"),
 
@@ -1115,11 +1112,12 @@ func (r *CalicoManager) buildE2EBinaries() error {
 
 func (r *CalicoManager) buildBinaries() error {
 	// calicoctl is no longer produced as a side effect of an image build after
-	// the consolidation in #12225, so build it unconditionally. cni-plugin and
-	// felix binaries are built as part of their image release-build targets.
+	// the consolidation in #12225, so build it unconditionally. The Linux
+	// cni-plugin is bundled into the calico/calico image and no longer ships
+	// standalone binaries. felix binaries are built as part of its image
+	// release-build target.
 	m := map[string]string{"calicoctl": "build-all"}
 	if !r.buildImages {
-		m["cni-plugin"] = "build-all"
 		m["felix"] = "release-build"
 	}
 	env := append(os.Environ(),
