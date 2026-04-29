@@ -822,8 +822,10 @@ func calculateDefaultBranch(semaphoreDir string) (string, error) {
 		// In CI, this env var is set either to the current branch, if we're
 		// building on a branch, or to the target branch if we're building
 		// a PR.
-		logrus.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
-		return branch, nil
+		if branch == "master" || strings.HasPrefix(branch, "release-v") {
+			logrus.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
+			return branch, nil
+		}
 	}
 
 	// Fallback to git.
