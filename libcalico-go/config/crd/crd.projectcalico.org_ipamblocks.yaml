@@ -54,8 +54,10 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    nullable: true
                     type: integer
+                    # TODO: This nullable is manually added in. We should update controller-gen
+                    # to handle []*int properly itself.
+                    nullable: true
                   type: array
                 attributes:
                   description: |-
