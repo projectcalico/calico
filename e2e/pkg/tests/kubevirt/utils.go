@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -180,11 +182,15 @@ func (v *testVM) Create(ctx context.Context) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// Delete removes the VirtualMachine from the cluster.
+// Delete removes the VirtualMachine from the cluster. Tolerates NotFound so a
+// caller registering Delete via DeferCleanup never fails the test for a
+// resource that is already gone (e.g. cleaned up by namespace teardown).
 func (v *testVM) Delete() {
 	logrus.Infof("Cleaning up VM %s/%s", v.namespace, v.name)
 	err := v.kvClient.VirtualMachines(v.namespace).Delete(context.Background(), v.name, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil && !apierrors.IsNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 // Stop sets RunStrategy to Halted, causing KubeVirt to delete the VMI and pod.
@@ -344,10 +350,14 @@ func (m *testVMIM) Create(ctx context.Context) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// Delete removes the VMIM resource from the cluster.
+// Delete removes the VMIM resource from the cluster. Tolerates NotFound so a
+// caller registering Delete via DeferCleanup never fails the test for a
+// resource that is already gone.
 func (m *testVMIM) Delete() {
 	err := m.kvClient.VirtualMachineInstanceMigrations(m.namespace).Delete(context.Background(), m.name, metav1.DeleteOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	if err != nil && !apierrors.IsNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 // WaitForSuccess polls the VMIM until it reaches MigrationSucceeded phase.
@@ -1201,3 +1211,145 @@ func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
 }
 
 func ptrInt64(v int64) *int64 { return &v }
+
+// waitForMigrationStatePopulated returns once the VMI has a non-nil
+// MigrationState with Completed=true and a non-empty TargetPod / TargetNode.
+// migration.WaitForSuccess only checks the VMIM phase; the VMI's
+// MigrationState is populated asynchronously by virt-handler, so a bare read
+// immediately after WaitForSuccess can race. Polling here makes the assertion
+// deterministic.
+func waitForMigrationStatePopulated(ctx context.Context, kvClient kubevirtcorev1.KubevirtV1Interface, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
+	GinkgoHelper()
+	var vmi *kubevirtv1.VirtualMachineInstance
+	Eventually(func(g Gomega) {
+		var err error
+		vmi, err = kvClient.VirtualMachineInstances(namespace).Get(ctx, vmiName, metav1.GetOptions{})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(vmi.Status.MigrationState).NotTo(BeNil(), "VMI MigrationState should be populated")
+		g.Expect(vmi.Status.MigrationState.Completed).To(BeTrue(), "MigrationState should be marked completed")
+		g.Expect(vmi.Status.MigrationState.TargetPod).NotTo(BeEmpty(), "MigrationState.TargetPod should be set")
+		g.Expect(vmi.Status.MigrationState.TargetNode).NotTo(BeEmpty(), "MigrationState.TargetNode should be set")
+	}, 30*time.Second, 1*time.Second).Should(Succeed(),
+		"timed out waiting for VMI %s/%s MigrationState to be fully populated", namespace, vmiName)
+	return vmi
+}
+
+// requireTyphaWatchingLiveMigrations fails the calling test if Typha has not
+// picked up the LiveMigration (KubeVirt VirtualMachineInstanceMigration) CRD.
+//
+// Background: when Calico is installed before the KubeVirt CRDs are available
+// (the common bootstrap order on fresh clusters), Typha's libcalico-go
+// watcher-syncer hits a 30-minute backoff and silently misses VMIM events.
+// Felix never learns that an incoming pod is a migration target, so it
+// programs normal-priority routes and the live-migration tests fail with
+// confusing route/TCP-stream symptoms minutes into the run.
+//
+// This precondition probes Typha's logs for the "Backing API has been
+// installed" line emitted by libcalico-go/lib/backend/watchersyncer/
+// watchercache.go when the CRD is observed. If absent, fail fast with a
+// pointer to the documented Typha-restart workaround.
+func requireTyphaWatchingLiveMigrations(ctx context.Context, f *framework.Framework) {
+	GinkgoHelper()
+
+	// Operator installs use calico-system; manifest installs may use
+	// kube-system. Try both.
+	var typhaPods []corev1.Pod
+	var typhaNamespace string
+	for _, ns := range []string{"calico-system", "kube-system"} {
+		pods, err := f.ClientSet.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{
+			LabelSelector: "k8s-app=calico-typha",
+		})
+		if err == nil && len(pods.Items) > 0 {
+			typhaPods = pods.Items
+			typhaNamespace = ns
+			break
+		}
+	}
+	if len(typhaPods) == 0 {
+		Skip("Typha not deployed; live-migration tests require Typha")
+	}
+
+	const docURL = "https://docs.tigera.io/calico/latest/networking/kubevirt/kubevirt-networking#restart-typha-after-installing-kubevirt"
+	const installedMarker = "Backing API has been installed"
+	const liveMigrationsListRoot = "/v3/pc.org/livemigrations"
+
+	for _, pod := range typhaPods {
+		req := f.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{})
+		stream, err := req.Stream(ctx)
+		Expect(err).NotTo(HaveOccurred(), "reading logs of typha %s/%s", pod.Namespace, pod.Name)
+		b, readErr := io.ReadAll(stream)
+		_ = stream.Close()
+		Expect(readErr).NotTo(HaveOccurred(), "reading logs of typha %s/%s", pod.Namespace, pod.Name)
+
+		// Determine Typha's livemigrations syncer state from logs. Three
+		// scenarios:
+		//
+		//   (a) "Backing API not installed" appears, then later "Backing API
+		//       has been installed"        → recovered, healthy.
+		//   (b) Neither marker appears                        → Typha started
+		//       AFTER the CRD existed; first List succeeded silently. Healthy.
+		//   (c) "Backing API not installed" appears but "Backing API has been
+		//       installed" does not yet     → still in the missing-CRD
+		//       backoff. This is the bug.
+		//
+		// markInstalled() only logs the "installed" line on a transition from
+		// !crdInstalled to crdInstalled, so case (b) silently has no log
+		// entry. We must therefore look at "is 'not installed' the last
+		// observed state", not "did we see 'installed' at all".
+		const notInstalledMarker = "Backing API not installed"
+		var sawNotInstalled, sawInstalled bool
+		for _, line := range strings.Split(string(b), "\n") {
+			if !strings.Contains(line, liveMigrationsListRoot) {
+				continue
+			}
+			if strings.Contains(line, notInstalledMarker) {
+				sawNotInstalled = true
+			} else if strings.Contains(line, installedMarker) {
+				sawInstalled = true
+			}
+		}
+		if sawNotInstalled && !sawInstalled {
+			Fail(fmt.Sprintf(
+				"Typha pod %s/%s is stuck in the missing-CRD backoff for KubeVirt LiveMigration.\n"+
+					"This is a known startup-order issue: Calico was installed before the KubeVirt CRDs.\n"+
+					"Restart Typha to recover, then re-run the tests:\n"+
+					"  kubectl rollout restart deployment calico-typha -n %s\n"+
+					"  kubectl rollout status   deployment calico-typha -n %s --timeout=60s\n"+
+					"Docs: %s",
+				pod.Namespace, pod.Name, typhaNamespace, typhaNamespace, docURL))
+		}
+	}
+}
+
+// patchInstallationPoolNATOutgoing finds the IPPool with the given name in the
+// Installation default and patches its natOutgoing field. Resolves the index by
+// pool name (rather than hard-coding /ipPools/0/) so the test works on clusters
+// with multiple pools. Wrapped in Eventually so a transient apiserver hiccup or
+// operator-reconcile race does not leave the cluster mis-patched.
+func patchInstallationPoolNATOutgoing(poolName, value string) {
+	GinkgoHelper()
+	Eventually(func() error {
+		out, getErr := kubectl.NewKubectlCommand("", "get", "installation", "default",
+			"-o", "jsonpath={range .spec.calicoNetwork.ipPools[*]}{.name}{\"\\n\"}{end}").Exec()
+		if getErr != nil {
+			return fmt.Errorf("get installation: %w", getErr)
+		}
+		idx := -1
+		for i, n := range strings.Split(strings.TrimSpace(out), "\n") {
+			if strings.TrimSpace(n) == poolName {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return fmt.Errorf("IPPool %q not found in Installation default", poolName)
+		}
+		patch := fmt.Sprintf(`[{"op":"replace","path":"/spec/calicoNetwork/ipPools/%d/natOutgoing","value":%q}]`, idx, value)
+		if _, patchErr := kubectl.NewKubectlCommand("", "patch", "installation", "default",
+			"--type=json", "-p", patch).Exec(); patchErr != nil {
+			return fmt.Errorf("patch installation: %w", patchErr)
+		}
+		return nil
+	}, 60*time.Second, 2*time.Second).Should(Succeed(),
+		"failed to patch Installation %q natOutgoing=%s", poolName, value)
+}

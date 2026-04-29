@@ -29,6 +29,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
@@ -51,10 +52,17 @@ import (
 //   - IPAMConfig.kubeVirtVMAddressPersistence set to "Enabled"
 //   - At least 2 schedulable worker nodes (3 recommended for double-migration tests)
 //   - For Test 3: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
+//
+// The live-migration tests mutate cluster-global state — the Installation
+// resource (natOutgoing), global BGPPeer/BGPFilter resources with fixed names
+// (kubevirt-lm, tor-ebgp-peer), and BIRD configuration on the TOR. They must
+// not run in parallel with each other or with other tests that touch Calico
+// configuration.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
 	describe.WithCategory(describe.Networking),
+	describe.WithSerial(),
 	"KubeVirt live migration",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt")
@@ -64,6 +72,14 @@ var _ = describe.CalicoDescribe(
 		BeforeEach(func() {
 			// Live migration needs at least 2 nodes to migrate between.
 			utils.RequireNodeCount(f, 2)
+
+			// Fail fast (with a pointer to the doc workaround) when Typha is
+			// in the missing-CRD backoff for LiveMigration. Otherwise the
+			// real failure surfaces 5 minutes into the test as a confusing
+			// route or TCP-stream timeout.
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			requireTyphaWatchingLiveMigrations(ctx, f)
 
 			var err error
 			kvClient, err = kubevirtcorev1.NewForConfig(f.ClientConfig())
@@ -124,17 +140,11 @@ var _ = describe.CalicoDescribe(
 
 			// Read the target pod and node directly from the VMI's MigrationState,
 			// which KubeVirt populates with the source/target identifiers as part of
-			// the migration. This avoids races with the source virt-launcher pod still
-			// being Running (and the VMI's NodeName flipping) right after the VMIM
-			// reaches Succeeded.
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vmi.Status.MigrationState).NotTo(BeNil(), "VMI MigrationState should be populated")
-			Expect(vmi.Status.MigrationState.Completed).To(BeTrue(), "MigrationState should be marked completed")
+			// the migration. waitForMigrationStatePopulated polls until virt-handler
+			// finishes writing the state (it can lag the VMIM Succeeded phase).
+			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
 			targetPodName := vmi.Status.MigrationState.TargetPod
 			targetNode := vmi.Status.MigrationState.TargetNode
-			Expect(targetPodName).NotTo(BeEmpty(), "MigrationState.TargetPod should be set")
-			Expect(targetNode).NotTo(BeEmpty(), "MigrationState.TargetNode should be set")
 			Expect(targetPodName).NotTo(Equal(sourcePod.Name), "target pod should be a new pod")
 			Expect(targetNode).NotTo(Equal(sourceNode), "VM should have moved to a different node")
 			logrus.Infof("Target pod: %s on %s", targetPodName, targetNode)
@@ -304,18 +314,18 @@ var _ = describe.CalicoDescribe(
 
 			// Disable natOutgoing via the Installation resource (not the IPPool directly,
 			// because the tigera-operator reconciles the IPPool from Installation and
-			// would revert any direct IPPool patch).
+			// would revert any direct IPPool patch). Look up the pool index by name and
+			// retry on transient apiserver / operator-reconcile errors so this never
+			// leaves the cluster with natOutgoing in the wrong state.
+			const vmIPPoolName = "default-ipv4-ippool"
 			By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
-			_, err := kubectl.NewKubectlCommand("", "patch", "installation", "default",
-				"--type=json", "-p",
-				`[{"op":"replace","path":"/spec/calicoNetwork/ipPools/0/natOutgoing","value":"Disabled"}]`).Exec()
-			Expect(err).NotTo(HaveOccurred())
+			patchInstallationPoolNATOutgoing(vmIPPoolName, "Disabled")
 			// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
 			// When natOutgoing is disabled, the field is omitted from the IPPool spec
 			// (jsonpath returns empty string rather than "false").
 			logrus.Info("Waiting for natOutgoing=Disabled to propagate...")
 			Eventually(func() string {
-				out, _ := kubectl.NewKubectlCommand("", "get", "ippool", "default-ipv4-ippool",
+				out, _ := kubectl.NewKubectlCommand("", "get", "ippool", vmIPPoolName,
 					"-o", "jsonpath={.spec.natOutgoing}").Exec()
 				return strings.TrimSpace(out)
 			}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
@@ -323,12 +333,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Info("natOutgoing disabled confirmed on IPPool")
 			DeferCleanup(func() {
 				By("Re-enabling natOutgoing via Installation")
-				_, restoreErr := kubectl.NewKubectlCommand("", "patch", "installation", "default",
-					"--type=json", "-p",
-					`[{"op":"replace","path":"/spec/calicoNetwork/ipPools/0/natOutgoing","value":"Enabled"}]`).Exec()
-				if restoreErr != nil {
-					logrus.WithError(restoreErr).Warn("Failed to restore natOutgoing on Installation")
-				}
+				patchInstallationPoolNATOutgoing(vmIPPoolName, "Enabled")
 			})
 
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -404,19 +409,22 @@ var _ = describe.CalicoDescribe(
 			seqStopCh := make(chan struct{})
 			defer close(seqStopCh)
 			go func() {
+				ticker := time.NewTicker(2 * time.Second)
+				defer ticker.Stop()
 				for {
-					select {
-					case <-seqStopCh:
-						return
-					default:
-					}
 					n, err := torContainerLineCount(tor, ncClientContainer)
 					if err != nil {
 						logrus.Warnf("[seq-monitor] error: %v", err)
 					} else {
 						logrus.Infof("[seq-monitor] lines=%d", n)
 					}
-					time.Sleep(2 * time.Second)
+					// Honor stopCh during the wait so the goroutine doesn't do
+					// one extra SSH after the test body returns.
+					select {
+					case <-seqStopCh:
+						return
+					case <-ticker.C:
+					}
 				}
 			}()
 
@@ -445,9 +453,7 @@ var _ = describe.CalicoDescribe(
 			migration1.Create(ctx)
 			DeferCleanup(migration1.Delete)
 			migration1.WaitForSuccess(ctx)
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1))
 			ms1 := vmi.Status.MigrationState
@@ -506,23 +512,34 @@ var _ = describe.CalicoDescribe(
 			// go back there — we want the VM to land on a third node so that a
 			// new /32 route is needed.
 			By(fmt.Sprintf("Cordoning original node %s to prevent migrate-back", node1))
-			node1Obj, err := f.ClientSet.CoreV1().Nodes().Get(ctx, node1, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			node1Obj.Spec.Unschedulable = true
-			_, err = f.ClientSet.CoreV1().Nodes().Update(ctx, node1Obj, metav1.UpdateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				n, err := f.ClientSet.CoreV1().Nodes().Get(ctx, node1, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				n.Spec.Unschedulable = true
+				_, err = f.ClientSet.CoreV1().Nodes().Update(ctx, n, metav1.UpdateOptions{})
+				return err
+			})).To(Succeed(), "cordoning %s", node1)
 			logrus.Infof("TIMELINE: cordoned %s", node1)
 			DeferCleanup(func() {
 				By(fmt.Sprintf("Uncordoning node %s", node1))
-				n, getErr := f.ClientSet.CoreV1().Nodes().Get(context.Background(), node1, metav1.GetOptions{})
-				if getErr != nil {
-					logrus.WithError(getErr).Warnf("Failed to get node %s for uncordon", node1)
-					return
-				}
-				n.Spec.Unschedulable = false
-				_, updateErr := f.ClientSet.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
-				if updateErr != nil {
-					logrus.WithError(updateErr).Warnf("Failed to uncordon node %s", node1)
+				// Wrap in RetryOnConflict so a transient apiserver hiccup or
+				// concurrent Node update from another controller does not leave
+				// the node cordoned for the rest of the suite.
+				if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					n, err := f.ClientSet.CoreV1().Nodes().Get(context.Background(), node1, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					n.Spec.Unschedulable = false
+					_, err = f.ClientSet.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
+					return err
+				}); err != nil {
+					// Last-resort log; the test has already passed and we don't
+					// want to fail cleanup, but flag loudly so a stuck cordon is
+					// visible in CI artifacts.
+					logrus.WithError(err).Errorf("Failed to uncordon node %s after retries — manual cleanup required", node1)
 				}
 			})
 
@@ -533,9 +550,7 @@ var _ = describe.CalicoDescribe(
 			migration2.Create(ctx)
 			DeferCleanup(migration2.Delete)
 			migration2.WaitForSuccess(ctx)
-			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			vmi = waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
 			node3 := vmi.Status.MigrationState.TargetNode
 			Expect(node3).NotTo(Equal(node2))
 			ms2 := vmi.Status.MigrationState
@@ -739,9 +754,7 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(migration.Delete)
 			migration.WaitForSuccess(ctx)
 
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(vmi.Status.MigrationState).NotTo(BeNil())
+			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("VM migrated: %s -> %s", node1, node2)
