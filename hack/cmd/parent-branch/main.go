@@ -132,7 +132,7 @@ func findRemote(slug string) (string, error) {
 	//   proto://github.com/foo/bar.git
 	//   git@github.com:foo/bar.git
 	// The slug must appear after a separator (: or /) to avoid partial matches.
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, "(fetch)") {
 			// Check for [:/]slug pattern.
 			if strings.Contains(line, "/"+slug) || strings.Contains(line, ":"+slug) {
@@ -152,7 +152,7 @@ func fixCIRemotes() error {
 	if err != nil {
 		return fmt.Errorf("git remote failed: %w", err)
 	}
-	for _, r := range strings.Split(strings.TrimSpace(output), "\n") {
+	for r := range strings.SplitSeq(strings.TrimSpace(output), "\n") {
 		r = strings.TrimSpace(r)
 		if r == "" {
 			continue
@@ -269,7 +269,7 @@ func mergeBaseStrategy(remote string) (string, error) {
 	bestCount := 1000000
 	best := ""
 
-	for _, ref := range strings.Split(output, "\n") {
+	for ref := range strings.SplitSeq(output, "\n") {
 		ref = strings.TrimSpace(ref)
 		if ref == "" || !pattern.MatchString(ref) {
 			continue
