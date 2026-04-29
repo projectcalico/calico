@@ -16,18 +16,13 @@ package fv_test
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net"
-	"net/http"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
@@ -53,7 +48,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 		opts         infrastructure.TopologyOptions
 		tc           infrastructure.TopologyContainers
 		calicoClient client.Interface
-		cnpClient    *netpolicyclient.PolicyV1alpha2Client
+		kcnpClient   *netpolicyclient.PolicyV1alpha2Client
 		w            [3]*workload.Workload
 		cc           *connectivity.Checker
 	)
@@ -90,48 +85,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 		}
 
 		// Create the network-policy-api typed client using the k8s API endpoint.
-		k8sInfra := infra.(*infrastructure.K8sDatastoreInfra)
-		var err error
-		cnpClient, err = netpolicyclient.NewForConfig(&rest.Config{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				DialContext: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).DialContext,
-				TLSHandshakeTimeout: 10 * time.Second,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true,
-				},
-			},
-			Host: k8sInfra.Endpoint,
-		})
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	JustAfterEach(func() {
-		// Clean up ClusterNetworkPolicies before tearing down infra,
-		// since the K8s infra cleanup doesn't handle these CRDs.
-		cnps, err := cnpClient.ClusterNetworkPolicies().List(
-			context.Background(), metav1.ListOptions{},
-		)
-		if err == nil {
-			for _, cnp := range cnps.Items {
-				err := cnpClient.ClusterNetworkPolicies().Delete(
-					context.Background(), cnp.Name, metav1.DeleteOptions{},
-				)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		}
-
-		for _, wl := range w {
-			if wl != nil {
-				wl.Stop()
-			}
-		}
-
-		tc.Stop()
-		infra.Stop()
+		kcnpClient = infra.(*infrastructure.K8sDatastoreInfra).KcnpClient
 	})
 
 	policyProgrammed := func(policyName string) func() bool {
@@ -196,7 +150,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -207,7 +161,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			cc.ExpectNone(w[0], w[2])
 			cc.CheckConnectivity()
 
-			err = cnpClient.ClusterNetworkPolicies().Delete(
+			err = kcnpClient.ClusterNetworkPolicies().Delete(
 				context.Background(), "deny-ingress", metav1.DeleteOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -247,7 +201,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnpDeny, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -284,7 +238,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err = cnpClient.ClusterNetworkPolicies().Create(
+			_, err = kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnpAllow, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -297,7 +251,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 			cc.CheckConnectivity()
 
 			By("Deleting the allow CNP so only the deny remains")
-			err = cnpClient.ClusterNetworkPolicies().Delete(
+			err = kcnpClient.ClusterNetworkPolicies().Delete(
 				context.Background(), "allow-ingress-tcp", metav1.DeleteOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -342,7 +296,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -382,7 +336,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -469,7 +423,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err = cnpClient.ClusterNetworkPolicies().Create(
+			_, err = kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -509,7 +463,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnp, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -610,7 +564,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err := cnpClient.ClusterNetworkPolicies().Create(
+			_, err := kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnpDeny, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -647,7 +601,7 @@ var _ = infrastructure.DatastoreDescribe("cluster network policy conversion _BPF
 					},
 				},
 			}
-			_, err = cnpClient.ClusterNetworkPolicies().Create(
+			_, err = kcnpClient.ClusterNetworkPolicies().Create(
 				context.Background(), cnpAllow, metav1.CreateOptions{},
 			)
 			Expect(err).NotTo(HaveOccurred())
