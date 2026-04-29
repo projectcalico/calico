@@ -252,6 +252,11 @@ func (r *CalicoManager) Build() error {
 		return fmt.Errorf("failed to create output dir: %s", err)
 	}
 
+	// Make sure temp directory exists.
+	if err = os.MkdirAll(r.tmpDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create temp dir: %s", err)
+	}
+
 	if r.validate {
 		if err := r.PreBuildValidation(); err != nil {
 			return fmt.Errorf("failed pre-build validation: %s", err)
