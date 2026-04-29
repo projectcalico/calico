@@ -52,6 +52,7 @@ const (
 // loop must fire a new UpdateToken long before its scheduled 24h-divided
 // timer would otherwise elapse.
 func TestTokenRefresher_WakesUpOnTokenFileChange(t *testing.T) {
+	skipIfFsnotifyFastPathDisabled(t)
 	tokenDir := t.TempDir()
 	tokenPath := filepath.Join(tokenDir, "token")
 
@@ -347,6 +348,18 @@ func skipIfNotKubeletPosix(t *testing.T) {
 	t.Helper()
 	if goruntime.GOOS != "linux" {
 		t.Skipf("kubelet atomic-writer simulation is Linux-only (GOOS=%s)", goruntime.GOOS)
+	}
+}
+
+// skipIfFsnotifyFastPathDisabled mirrors the production guard in
+// startTokenFileWatcher, which short-circuits to a no-op watcher on Windows
+// (see token_watch.go). Tests that assert the fast-path wake-up behavior
+// cannot meaningfully run there: the watcher is intentionally absent and the
+// refresh loop falls back to the timer.
+func skipIfFsnotifyFastPathDisabled(t *testing.T) {
+	t.Helper()
+	if goruntime.GOOS == "windows" {
+		t.Skipf("fsnotify CNI token fast path is disabled on Windows; nothing to wake up (GOOS=%s)", goruntime.GOOS)
 	}
 }
 
