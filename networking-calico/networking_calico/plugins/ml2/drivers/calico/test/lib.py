@@ -215,6 +215,9 @@ class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
         pass
 
+    def run(self):
+        pass
+
     def master(self):
         return True
 
@@ -349,6 +352,8 @@ class Lib(object):
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
+        self.driver.is_master = mock.Mock()
+        self.driver.is_master.return_value = True
 
         # Hook the (mock) Neutron database.
         self.db = mech_calico.plugin_dir.get_plugin()
@@ -589,7 +594,7 @@ class Lib(object):
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            self.driver._post_fork_init(voting=True)
+            self.driver._post_fork_inititialize_common()
             if mech_calico.cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 

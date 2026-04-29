@@ -41,8 +41,9 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
         lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
         lib.m_oslo_config.cfg.CONF.calico.openstack_region = "no-region"
-        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 0
+        lib.m_oslo_config.cfg.CONF.calico.etcd_compaction_period_mins = 10
         lib.m_oslo_config.cfg.CONF.calico.project_name_cache_max = 0
+        lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads = 4
 
         # Mock etcd3gw client so background threads don't touch real etcd.
         etcdv3._client = self.clientv3 = mock.Mock()
@@ -59,100 +60,63 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
         super(TestMechanismDriverVoting, self).tearDown()
 
-    def _disable_background_threads(self, driver):
-        """Disable background threads that would touch etcd or do unrelated things."""
-        driver._do_startup_resync = mock.Mock()
-        driver._status_updating_thread = mock.Mock()
-
-    @mock.patch.object(mech_calico, "Elector")
-    def test_parent_creates_elector(self, m_elector):
+    def test_driver_init_common(self):
         driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
+        driver._post_fork_inititialize_common()
 
-        driver._my_pid = None
-        driver._post_fork_init(voting=True)
+        self.assertIsNotNone(driver.db)
+        self.assertIsNotNone(driver.subnet_syncer)
+        self.assertIsNotNone(driver.policy_syncer)
+        self.assertIsNotNone(driver.endpoint_syncer)
+        self.assertIsNotNone(driver._agent_update_context)
+        self.assertIsNotNone(driver.state_report_rpc)
+
+    @mock.patch("eventlet.spawn")
+    def test_driver_init_calico_resource_syncer(self, m_spawn):
+        m_spawn.return_value = True
+
+        driver = mech_calico.CalicoMechanismDriver()
+        driver._init_and_start_calico_resouce_syncer()
+
+        self.assertTrue(driver.start_up_resync_thread)
+
+    @mock.patch("eventlet.spawn")
+    @mock.patch.object(mech_calico, "Elector")
+    def test_driver_init_calico_manager(self, m_elector, m_spawn):
+        m_spawn.return_value = True
+
+        driver = mech_calico.CalicoMechanismDriver()
+        driver._init_and_start_calico_manager()
+
+        self.assertTrue(driver.election_thread)
+        self.assertTrue(driver.periodic_compaction_thread)
 
         m_elector.assert_called_once()
-        self.assertIs(driver.elector, m_elector.return_value)
 
-    @mock.patch.object(mech_calico, "Elector")
-    def test_worker_does_not_create_elector(self, m_elector):
+    @mock.patch("eventlet.spawn")
+    def test_driver_init_calico_agent_status_watcher(self, m_spawn):
+        m_spawn.return_value = True
+
         driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
+        driver._init_and_start_agent_status_watcher()
 
-        driver._my_pid = None
-        driver._post_fork_init(voting=False)
+        self.assertTrue(driver.agent_status_watch_thread)
 
-        m_elector.assert_not_called()
-        self.assertIsNone(driver.elector)
+    @mock.patch("eventlet.spawn")
+    def test_driver_init_calico_endpoint_status_watcher(self, m_spawn):
+        m_spawn.return_value = True
 
-    @mock.patch.object(mech_calico, "_trigger_class")
-    @mock.patch.object(mech_calico, "Elector")
-    def test_api_worker_does_not_become_voter(self, m_elector, m_trigger_class):
-        """API forks are triggered by ``neutron.wsgi.WorkerService`` at
-        AFTER_INIT.  ``post_fork_initialize`` must dispatch them to
-        ``_post_fork_init(voting=False)`` so they never join the master
-        election -- preserving PR #11580's intent after the periodic-resync
-        rework moved init out of the old ``@requires_state`` decorator."""
         driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
-        driver._my_pid = None
+        driver._init_and_start_endpoint_status_watcher()
 
-        m_trigger_class.return_value = mech_calico.wsgi.WorkerService
-        driver.post_fork_initialize(mock.Mock(), mock.Mock(), mock.Mock())
+        self.assertTrue(driver.endpoint_status_watch_thread)
+        self.assertEqual(
+            len(driver.port_status_update_threads),
+            lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads,
+        )
 
-        m_elector.assert_not_called()
-        self.assertIsNone(driver.elector)
-
-    @mock.patch.object(mech_calico, "_trigger_class")
-    @mock.patch.object(mech_calico, "Elector")
-    def test_resync_worker_runs_resync_only(self, m_elector, m_trigger_class):
-        """``CalicoStartupResyncWorker`` triggers run only the one-shot
-        resync; they don't join the elector or set up the master-only
-        background threads."""
-        driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
-        driver._my_pid = None
-
-        m_trigger_class.return_value = mech_calico.CalicoStartupResyncWorker
-        driver.post_fork_initialize(mock.Mock(), mock.Mock(), mock.Mock())
-
-        driver._do_startup_resync.assert_called_once()
-        m_elector.assert_not_called()
-        self.assertIsNone(driver.elector)
-
-    @mock.patch.object(mech_calico, "_trigger_class")
-    @mock.patch.object(mech_calico, "Elector")
-    def test_other_worker_becomes_voter(self, m_elector, m_trigger_class):
-        """Workers that aren't API workers or the resync worker (RPC,
-        state-report, etc.) get ``voting=True`` and join the master
-        election."""
-        driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
-        driver._my_pid = None
-
-        # An arbitrary non-WSGI, non-resync trigger class.
-        class _RpcWorker:
-            pass
-
-        m_trigger_class.return_value = _RpcWorker
-        driver.post_fork_initialize(mock.Mock(), mock.Mock(), mock.Mock())
-
-        m_elector.assert_called_once()
-        self.assertIs(driver.elector, m_elector.return_value)
-
-    @mock.patch.object(mech_calico, "Elector")
-    def test_worker_init_does_not_override_parent_elector(self, m_elector):
-        driver = mech_calico.CalicoMechanismDriver()
-        self._disable_background_threads(driver)
-
-        driver._my_pid = None
-        driver._post_fork_init(voting=True)
-        parent_elector = driver.elector
-
-        # Simulate a worker re-initializing in the same process object
-        driver._my_pid = 99999
-        driver._post_fork_init(voting=False)
-
-        self.assertIs(driver.elector, parent_elector)
-        m_elector.assert_called_once()
+        # We will also need to ensure that the required queues components
+        # are also created.
+        self.assertIsNotNone(driver._port_status_cache)
+        self.assertIsNotNone(driver._port_status_queue)
+        self.assertIsNotNone(driver._port_status_queue_too_long)
