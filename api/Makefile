@@ -63,16 +63,13 @@ build: gen-files examples
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
+	$(call gen-calico-crds,./pkg/apis/...,config/crd/)
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
-	# Patch in manual tweaks to the generated CRDs.
-	# - Add nullable to IPAM block allocations field to allow null values in the allocations array.
-	# - Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
-	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
-	rm -f config/crd/*.orig config/crd/projectcalico.org_profiles.yaml
+	# Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
+	rm -f config/crd/projectcalico.org_profiles.yaml
 
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
