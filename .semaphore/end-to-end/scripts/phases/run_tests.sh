@@ -43,32 +43,46 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
 fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
-  # Run the e2e binary directly via ginkgo inside calico/go-build.
   echo "[INFO] starting e2e tests..."
   pushd "${HOME}/calico" || exit
-  GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
-  docker run --rm --init --net=host \
-    -e LOCAL_USER_ID="$(id -u)" \
-    -e GOCACHE=/go-cache \
-    -e GOPATH=/go \
-    -e KUBECONFIG=/kubeconfig \
-    -e PRODUCT=${PRODUCT:-calico} \
-    ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
-    -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
-    -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
-    -w /go/src/github.com/projectcalico/calico \
-    "calico/go-build:${GO_BUILD_VER}" \
-    make e2e-run \
-      KUBECONFIG=/kubeconfig \
-      E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
-      E2E_OUTPUT_DIR=report \
-      E2E_JUNIT_REPORT=junit.xml \
-    |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+  if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+    # Local-build path: run ginkgo inside calico/go-build so the build
+    # toolchain matches the one that produced the binary.
+    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    docker run --rm --init --net=host \
+      -e LOCAL_USER_ID="$(id -u)" \
+      -e GOCACHE=/go-cache \
+      -e GOPATH=/go \
+      -e KUBECONFIG=/kubeconfig \
+      -e PRODUCT=${PRODUCT:-calico} \
+      ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+      -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
+      -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+      -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
+      -w /go/src/github.com/projectcalico/calico \
+      "calico/go-build:${GO_BUILD_VER}" \
+      make e2e-run \
+        KUBECONFIG=/kubeconfig \
+        E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml \
+      |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+  else
+    # Pre-built binary path: the test binary is already on disk and the
+    # Semaphore runner has the Go toolchain ginkgo needs, so we can skip
+    # the calico/go-build pull (~2GB) and run on the host directly.
+    PRODUCT="${PRODUCT:-calico}" \
+      make e2e-run \
+        KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" \
+        E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml \
+      |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+  fi
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"
