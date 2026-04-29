@@ -36,8 +36,7 @@ include ./lib.Makefile
 endif
 
 # Override DOCKER_RUN from lib.Makefile. We need to trick this particular directory to think
-# that its package is github.com/projectcalico/api for easier mirroring. The calico repo
-# is bind-mounted alongside so calico-controller-gen (built from //controller-gen) is reachable.
+# that its package is github.com/projectcalico/api for easier mirroring.
 DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
@@ -52,7 +51,6 @@ DOCKER_RUN := mkdir -p ../.go-pkg-cache bin $(GOMOD_CACHE) && \
 		-e GOOS=$(BUILDOS) \
 		-e "GOFLAGS=$(GOFLAGS)" \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/..:/go/src/github.com/projectcalico/calico:ro \
 		-v $(CURDIR)/../.go-pkg-cache:/go-cache:rw \
 		-w /go/src/$(PACKAGE_NAME)
 
@@ -65,13 +63,16 @@ build: gen-files examples
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs
-	$(call gen-calico-crds,./pkg/apis/...,config/crd/)
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
-	# Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
-	rm -f config/crd/projectcalico.org_profiles.yaml
+	# Patch in manual tweaks to the generated CRDs.
+	# - Add nullable to IPAM block allocations field to allow null values in the allocations array.
+	# - Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
+	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
+	rm -f config/crd/*.orig config/crd/projectcalico.org_profiles.yaml
 
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \
