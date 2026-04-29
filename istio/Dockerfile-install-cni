@@ -14,16 +14,72 @@
 
 ARG CALICO_BASE
 
+# nft 1.0.x in AlmaLinux 9 BaseOS segfaults when listing or validating rulesets
+# that contain "udata"-bearing sets created by newer nft (1.1.x+) in the same
+# network namespace (see projectcalico/calico#11750). The fix is upstream
+# nftables commit be737a1, first released in 1.1.4. nftables 1.1.4 in turn
+# requires libnftnl >= 1.3.0, which is also newer than what AlmaLinux 9 ships,
+# so both are built from source below.
+ARG LIBNFTNL_VER=1.3.0
+ARG LIBNFTNL_SHA256=0f4be47a8bb8b77a350ee58cbd4b5fae6260ad486a527706ab15cfe1dd55a3c4
+ARG NFTABLES_VER=1.1.4
+ARG NFTABLES_SHA256=3444f0012af0472399eeae89a758b9c6dc5f311f6c67a48988fa1600fc4bac86
+
 # FIXME(jiawei): iptables-legacy is only available in EPEL 9. We can move to
 # AlmaLinux 10 once we have confirmed that iptables-legacy is no longer required.
 FROM almalinux:9 AS almalinux
 
+ARG LIBNFTNL_VER
+ARG LIBNFTNL_SHA256
+ARG NFTABLES_VER
+ARG NFTABLES_SHA256
+
 RUN dnf upgrade -y && dnf install -y epel-release
 
-RUN dnf install -y \
+RUN dnf --enablerepo=crb install -y \
   iptables-legacy \
   iptables-nft \
-  nftables
+  nftables \
+  # Build deps for nftables / libnftnl source builds.
+  curl \
+  gcc \
+  make \
+  autoconf \
+  automake \
+  bison \
+  flex \
+  gmp-devel \
+  jansson-devel \
+  libmnl-devel \
+  libtool \
+  pkgconfig \
+  xz
+
+# Build libnftnl from source. Required by nftables ${NFTABLES_VER}, which needs
+# libnftnl >= 1.3.0; AlmaLinux 9 only ships 1.2.6.
+RUN curl -sSfL --retry 5 -o /tmp/libnftnl.tar.xz \
+        https://netfilter.org/projects/libnftnl/files/libnftnl-${LIBNFTNL_VER}.tar.xz && \
+    echo "${LIBNFTNL_SHA256}  /tmp/libnftnl.tar.xz" | sha256sum -c - && \
+    tar xJ -C /root -f /tmp/libnftnl.tar.xz && rm -f /tmp/libnftnl.tar.xz && \
+    cd /root/libnftnl-${LIBNFTNL_VER} && \
+    ./configure --prefix=/usr --libdir=/usr/lib64 && \
+    make -j"$(nproc)" && \
+    make install
+
+# Build nftables from source, overlaying the BaseOS package's nft binary and
+# libnftables shared library.
+RUN curl -sSfL --retry 5 -o /tmp/nftables.tar.xz \
+        https://netfilter.org/projects/nftables/files/nftables-${NFTABLES_VER}.tar.xz && \
+    echo "${NFTABLES_SHA256}  /tmp/nftables.tar.xz" | sha256sum -c - && \
+    tar xJ -C /root -f /tmp/nftables.tar.xz && rm -f /tmp/nftables.tar.xz && \
+    cd /root/nftables-${NFTABLES_VER} && \
+    # --with-json: knftables (used by Felix) parses nft JSON output;
+    # --without-cli: we never invoke the interactive shell (`nft -i`) and
+    #                 dropping it removes the editline build dep.
+    ./configure --prefix=/usr --libdir=/usr/lib64 --sbindir=/usr/sbin \
+                --disable-man-doc --with-json --without-cli && \
+    make -j"$(nproc)" && \
+    make install
 
 # Create symlinks to xtables-legacy-multi
 RUN set -eux; \
