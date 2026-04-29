@@ -640,6 +640,9 @@ func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
 	// a base bird.conf that defines router id, protocol kernel, and protocol device.
 	runOnTOR(tor, "sudo docker run -d --privileged --name tor-bird --network host "+
 		"calico/bird:v0.3.3-211-g9111ec3c")
+	// Register cleanup before the readiness wait below — if that wait
+	// panics, we still need to remove the container we just created.
+	DeferCleanup(func() { stopBirdOnTOR(tor) })
 
 	// Wait for the container to be running.
 	Eventually(func() string {
@@ -734,10 +737,11 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
 
 	// Generate peers config with only the master as peer and start BIRD on the TOR.
+	// startBirdOnTOR registers its own DeferCleanup to remove the tor-bird
+	// container, so we don't need a second registration here.
 	peersConf := generateTORBirdPeersConf([]string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
 	startBirdOnTOR(tor, torL2tpIP, peersConf)
-	DeferCleanup(func() { stopBirdOnTOR(tor) })
 
 	// Create a BGPFilter that tags elevated-priority routes with a BGP community
 	// on export to eBGP peers. During KubeVirt live migration, Felix sets
@@ -894,14 +898,13 @@ func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
 	logrus.Infof("Route monitor: tracking /32=%s and /26=%s", ip, block26)
 
 	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
+		defer close(doneCh)
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
 		var lastRoutes string
 		for {
-			select {
-			case <-stopCh:
-				return
-			default:
-			}
 			// Query kernel routes and BIRD routing table for the /32.
 			// The BIRD "show route all" output shows preference, community,
 			// and bgp_local_pref — critical for diagnosing ECMP issues.
@@ -916,10 +919,22 @@ func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
 				logrus.Infof("TOR route change:\n%s", out)
 				lastRoutes = out
 			}
-			time.Sleep(1 * time.Second)
+			// Honor stopCh during the wait so the goroutine exits promptly
+			// after stop() is called and does not start one more SSH RT.
+			select {
+			case <-stopCh:
+				return
+			case <-ticker.C:
+			}
 		}
 	}()
-	return func() { close(stopCh) }
+	// Returned stop closer waits for the goroutine to exit — prevents an
+	// in-flight SSH session from racing other cleanups (e.g. the timeline
+	// writer) that share the same TOR client.
+	return func() {
+		close(stopCh)
+		<-doneCh
+	}
 }
 
 // torRouteState captures the parsed state of a /32 route on the TOR's BIRD
@@ -980,11 +995,20 @@ func parseBIRDRouteOutput(output string) []torBIRDRoute {
 					r.NextHop = fields[0]
 				}
 			}
-			// BIRD marks the active/best route with "*" in the output line, e.g.:
+			// BIRD marks the active/best route with " * " (space-asterisk-space)
+			// in the output line, e.g.:
 			//   10.244.0.64/32     via 172.16.8.2 on eth0 * [bgp_node0 16:22:38] (100/0) [AS65000i]
 			//                      via 172.16.8.4 on eth0 [bgp_node2 16:21:49] (100/0) [AS65000i]
-			// The first route has "*" (best), the second does not.
-			r.Best = strings.Contains(line, "*")
+			// Match the standalone token rather than substring " * " elsewhere
+			// in the line (e.g. interface names containing "*" or AS-path
+			// expressions) so we never wrongly mark a non-best route as best.
+			r.Best = false
+			for _, tok := range strings.Fields(line) {
+				if tok == "*" {
+					r.Best = true
+					break
+				}
+			}
 			routes = append(routes, r)
 			current = &routes[len(routes)-1]
 			continue
@@ -1274,7 +1298,15 @@ func requireTyphaWatchingLiveMigrations(ctx context.Context, f *framework.Framew
 	const liveMigrationsListRoot = "/v3/pc.org/livemigrations"
 
 	for _, pod := range typhaPods {
-		req := f.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{})
+		// Cap the log read so we never slurp hundreds of MB on long-running
+		// Typha pods. The "Backing API …" markers we look for are emitted at
+		// startup or on a transition (early in the log), so reading from the
+		// beginning up to a generous limit is sufficient.
+		const typhaLogLimitBytes = int64(10 * 1024 * 1024)
+		logBytes := typhaLogLimitBytes
+		req := f.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+			LimitBytes: &logBytes,
+		})
 		stream, err := req.Stream(ctx)
 		Expect(err).NotTo(HaveOccurred(), "reading logs of typha %s/%s", pod.Namespace, pod.Name)
 		b, readErr := io.ReadAll(stream)

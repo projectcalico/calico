@@ -271,7 +271,13 @@ var _ = describe.CalicoDescribe(
 			// With 3 worker nodes, second migration moves away from node2.
 			// It could return to node1 — that's fine, we only require it left node2.
 			Expect(node3).NotTo(Equal(node2))
-			logrus.Infof("Second migration: %s -> %s", node2, node3)
+			// Also require the server lands on a different node than the
+			// client pod. Otherwise the post-migration "iBGP cross-node"
+			// claim degrades to a same-node loopback path, which would
+			// trivially have zero seq gaps regardless of routing behaviour.
+			Expect(node3).NotTo(Equal(clientPod.Spec.NodeName),
+				"server must end up on a different node from the client to actually exercise the iBGP path")
+			logrus.Infof("Second migration: %s -> %s (client on %s)", node2, node3, clientPod.Spec.NodeName)
 
 			By("Waiting for TCP data to grow after second migration")
 			Eventually(func() (int, error) {
@@ -317,7 +323,16 @@ var _ = describe.CalicoDescribe(
 			// would revert any direct IPPool patch). Look up the pool index by name and
 			// retry on transient apiserver / operator-reconcile errors so this never
 			// leaves the cluster with natOutgoing in the wrong state.
+			//
+			// Register the re-enable DeferCleanup BEFORE the disable patch so a panic
+			// in the propagation wait below cannot leave the cluster with natOutgoing
+			// permanently disabled. DeferCleanups run in LIFO after the test body, so
+			// the re-enable still runs after every test action.
 			const vmIPPoolName = "default-ipv4-ippool"
+			DeferCleanup(func() {
+				By("Re-enabling natOutgoing via Installation")
+				patchInstallationPoolNATOutgoing(vmIPPoolName, "Enabled")
+			})
 			By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
 			patchInstallationPoolNATOutgoing(vmIPPoolName, "Disabled")
 			// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
@@ -331,10 +346,6 @@ var _ = describe.CalicoDescribe(
 			}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
 				"natOutgoing should not be true on IPPool after Installation patch")
 			logrus.Info("natOutgoing disabled confirmed on IPPool")
-			DeferCleanup(func() {
-				By("Re-enabling natOutgoing via Installation")
-				patchInstallationPoolNATOutgoing(vmIPPoolName, "Enabled")
-			})
 
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -406,9 +417,18 @@ var _ = describe.CalicoDescribe(
 			// Start a goroutine that logs seq count every 2 seconds throughout
 			// the test.  We record but do NOT assert — the goal is to collect
 			// a timeline we can analyse after the test finishes.
+			//
+			// We wait for the goroutine to exit before returning from the It,
+			// so timeline.writeToTOR (registered as DeferCleanup) does not race
+			// the monitor's last SSH session on the shared TOR client.
 			seqStopCh := make(chan struct{})
-			defer close(seqStopCh)
+			seqDoneCh := make(chan struct{})
+			defer func() {
+				close(seqStopCh)
+				<-seqDoneCh
+			}()
 			go func() {
+				defer close(seqDoneCh)
 				ticker := time.NewTicker(2 * time.Second)
 				defer ticker.Stop()
 				for {
@@ -460,15 +480,21 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("TIMELINE: first migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
 				node1, node2, ms1.StartTimestamp, ms1.EndTimestamp)
 
+			// migration.WaitForSuccess returns the moment the VMIM phase is
+			// Succeeded, but Felix programs krt_metric=512 asynchronously and
+			// later reverts it after LiveMigrationRouteConvergenceTime (~30s).
+			// Poll for the elevated state with a budget shorter than the
+			// revert window so we observe it deterministically.
 			By("Verifying elevated route priority on worker and TOR after first migration")
-			metric := queryWorkerMetric(f, node2, vmIP)
-			Expect(metric).To(Equal(512), "worker kernel metric should be elevated (512) after migration")
-
-			torState := queryTORRoute(tor, vmIP)
-			Expect(torState.Has32).To(BeTrue(), "TOR should have /32 after migration")
-			Expect(torState.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
-			Expect(torState.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
-			Expect(torState.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
+			Eventually(func(g Gomega) {
+				g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
+					"worker kernel metric should be elevated (512) after migration")
+				st := queryTORRoute(tor, vmIP)
+				g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
+				g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
+				g.Expect(st.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
+				g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
+			}, 20*time.Second, 1*time.Second).Should(Succeed())
 
 			firstMigLines, _ := torContainerLineCount(tor, ncClientContainer)
 			timeline.record(routeTimelineEntry{
@@ -557,28 +583,32 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("TIMELINE: second migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
 				node2, node3, ms2.StartTimestamp, ms2.EndTimestamp)
 
+			// Same race as after the first migration: Felix programs the
+			// elevated metric asynchronously and reverts it after the
+			// convergence window. Poll for the elevated state.
 			By("Verifying TOR route state after second migration")
-			torState = queryTORRoute(tor, vmIP)
-			Expect(torState.Has32).To(BeTrue(), "TOR should have /32 after second migration")
-
-			// Find best route — it must have elevated local_pref (no ECMP).
-			var bestRoute, nonBestRoute *torBIRDRoute
-			for i := range torState.Routes {
-				if torState.Routes[i].Best {
-					bestRoute = &torState.Routes[i]
-				} else {
-					nonBestRoute = &torState.Routes[i]
+			Eventually(func(g Gomega) {
+				st := queryTORRoute(tor, vmIP)
+				g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after second migration")
+				// Find best route — it must have elevated local_pref (no ECMP).
+				var b, nb *torBIRDRoute
+				for i := range st.Routes {
+					if st.Routes[i].Best {
+						b = &st.Routes[i]
+					} else {
+						nb = &st.Routes[i]
+					}
 				}
-			}
-			Expect(bestRoute).NotTo(BeNil(), "TOR should have a best /32 route")
-			Expect(bestRoute.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
-			Expect(bestRoute.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
-			// After the second migration, two /32 routes must exist: the new
-			// node's elevated route and the old node's normal route. They must
-			// have different local_pref to avoid ECMP.
-			Expect(nonBestRoute).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
-			Expect(nonBestRoute.LocalPref).NotTo(Equal(bestRoute.LocalPref),
-				"two /32 routes must have different local_pref to avoid ECMP")
+				g.Expect(b).NotTo(BeNil(), "TOR should have a best /32 route")
+				g.Expect(b.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
+				g.Expect(b.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
+				// After the second migration, two /32 routes must exist: the new
+				// node's elevated route and the old node's normal route. They
+				// must have different local_pref to avoid ECMP.
+				g.Expect(nb).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
+				g.Expect(nb.LocalPref).NotTo(Equal(b.LocalPref),
+					"two /32 routes must have different local_pref to avoid ECMP")
+			}, 20*time.Second, 1*time.Second).Should(Succeed())
 
 			secondMigLines, _ := torContainerLineCount(tor, ncClientContainer)
 			timeline.record(routeTimelineEntry{
@@ -758,6 +788,25 @@ var _ = describe.CalicoDescribe(
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("VM migrated: %s -> %s", node1, node2)
+
+			// After migration the new virt-launcher pod has its own IP-stack
+			// on a new node. Felix must learn the workload, recompute policy,
+			// and program rules — those are async after VMIM Succeeded. Wait
+			// until both directions match the policy intent on the *new* pod
+			// before asserting Consistently, otherwise the Consistently
+			// window can land on the source's still-active rules and pass
+			// for the wrong reason.
+			By("Waiting for policy to apply on the migrated pod")
+			Eventually(func(g Gomega) {
+				out1, _ := kubectl.NewKubectlCommand(ns, "exec", client1Pod.Name, "--",
+					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1 || true", vmIP)).Exec()
+				g.Expect(out1).To(ContainSubstring("seq="),
+					"client1 (allowed) should reach migrated pod before Consistently asserts")
+				out2, _ := kubectl.NewKubectlCommand(ns, "exec", client2Pod.Name, "--",
+					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1 || true", vmIP)).Exec()
+				g.Expect(out2).NotTo(ContainSubstring("seq="),
+					"client2 (denied) should be blocked from migrated pod before Consistently asserts")
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
 
 			By("Verifying policy survives migration: client1 still allowed, client2 still denied")
 			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
