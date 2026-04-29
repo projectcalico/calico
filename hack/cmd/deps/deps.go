@@ -609,12 +609,14 @@ func generateSemaphoreYamls() {
 	// Next, collect all the CHANGE_IN placeholders and do the heavy-lift
 	// calculation to figure out the dependencies.
 	placeholders := extractChangeInPlaceholders(templates)
-	deps := calculateDeps(placeholders)
+	_ = calculateDeps(placeholders)
 
 	// Build the main file, which is triggered by PRs and uses the calculated
 	// dependencies.
+	// TEMP: pass nil deps to force every block to run regardless of file changes.
+	// This is for measuring full-pipeline runtime; revert before merge.
 	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
-	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, false, defaultBranchStanza)
+	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, nil, false, defaultBranchStanza)
 	if err != nil {
 		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
