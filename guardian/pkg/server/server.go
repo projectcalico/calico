@@ -77,7 +77,12 @@ func New(shutdownCtx context.Context, tunnelCert *tls.Certificate, dialer tunnel
 	}
 
 	for _, target := range srv.targets {
-		logrus.Infof("Will route traffic to %s for requests matching %s", target.Dest, target.Path)
+		// Use Redacted() — target.Dest may contain credentials in URL userinfo.
+		if target.Dest != nil {
+			logrus.Infof("Will route traffic to %s for requests matching %s", target.Dest.Redacted(), target.Path)
+		} else {
+			logrus.Infof("Will route traffic for requests matching %s, but destination is not configured", target.Path)
+		}
 	}
 
 	srv.proxyMux = http.NewServeMux()

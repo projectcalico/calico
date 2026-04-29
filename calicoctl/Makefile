@@ -5,12 +5,6 @@ PACKAGE_NAME = github.com/projectcalico/calico/calicoctl
 KUBE_APISERVER_PORT?=6443
 KUBE_MOCK_NODE_MANIFEST?=mock-node.yaml
 
-# Name of the images.
-# e.g., <registry>/<name>:<tag>
-CALICOCTL_IMAGE       ?=ctl
-BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
-
-
 ###############################################################################
 # Download and include ../lib.Makefile
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -18,24 +12,21 @@ BUILD_IMAGES          ?=$(CALICOCTL_IMAGE)
 ###############################################################################
 include ../lib.Makefile
 
-###############################################################################
-
-CALICOCTL_DIR=calicoctl
-CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
 clean:
-	# Clean .created files which indicate images / releases have been built.
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -rf bin build certs *.tar calicoctl/commands/report $(CALICO_VERSION_HELPER_DIR)/bin
-	-docker image rm -f $$(docker images $(CALICOCTL_IMAGE) -a -q)
 
 ###############################################################################
 # Building the binary
 ###############################################################################
+# The calicoctl CLI is still published as a standalone binary for operators
+# running it outside a cluster. In-cluster usage runs `calico ctl` from the
+# calico/calico image.
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64
@@ -64,24 +55,6 @@ bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@
 bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
-
-###############################################################################
-# Building the image
-###############################################################################
-.PHONY: image $(CALICOCTL_IMAGE)
-image: $(CALICOCTL_IMAGE)
-$(CALICOCTL_IMAGE): $(CTL_CONTAINER_CREATED)
-$(CTL_CONTAINER_CREATED): $(IMAGE_DEPS) bin/calicoctl-linux-$(ARCH)
-	cp ../LICENSE.md bin/LICENSE
-	$(DOCKER_BUILD) -t $(CALICOCTL_IMAGE):latest-$(ARCH) -f Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-# by default, build the image for the target architecture
-.PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
-sub-image-%:
-	$(MAKE) image ARCH=$*
 
 CALICO_VERSION_HELPER_DIR=tests/fv/helper
 CALICO_VERSION_HELPER_BIN=$(CALICO_VERSION_HELPER_DIR)/bin/calico_version_helper
@@ -146,6 +119,7 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 	#   - This also provides access to calicoctl and the docker client
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
+		   -e PYTHONDONTWRITEBYTECODE=1 \
 		   --rm -t \
 		   -v $(CERTS_PATH):/home/user/certs \
 		   -v $(CURDIR):/code \
@@ -231,42 +205,4 @@ stop-kubernetes-control-plane:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: mod-download build-all static-checks test
-
-###############################################################################
-# CD
-###############################################################################
-.PHONY: cd
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
-# Release
-###############################################################################
-## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created
-.release-$(VERSION).created:
-	$(MAKE) clean build-all image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-	touch $@
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
-
-# WARNING: Only run this target if this release is the latest stable release. Do NOT
-# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
-## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
-	# Check latest versions match.
-	if ! docker run $(CALICOCTL_IMAGE):latest-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CALICOCTL_IMAGE):latest-$(ARCH) version` "\nExpected version: $(VERSION)"; \
-	  false; \
-	else \
-	  echo "Version check passed\n"; \
-	fi
-
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+ci: mod-download build static-checks test

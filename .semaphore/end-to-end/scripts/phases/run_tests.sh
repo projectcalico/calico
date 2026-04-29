@@ -43,10 +43,22 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
 fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
-  # Run the e2e binary directly via ginkgo inside calico/go-build.
   echo "[INFO] starting e2e tests..."
   pushd "${HOME}/calico" || exit
-  GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+
+  # Pick a runtime image. The local-build path already pulled
+  # calico/go-build to compile the binary, so reusing it for the run
+  # step is free. The hashrelease path didn't compile anything, so
+  # there's no reason to drag in the build toolchain -- use the
+  # official golang image (debian-bookworm base, glibc-compatible
+  # with the binary, ~800MB vs ~2GB).
+  if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
+  else
+    GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
+    RUN_IMAGE="golang:${GO_VERSION}-bookworm"
+  fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
@@ -62,7 +74,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
-    "calico/go-build:${GO_BUILD_VER}" \
+    "${RUN_IMAGE}" \
     make e2e-run \
       KUBECONFIG=/kubeconfig \
       E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
