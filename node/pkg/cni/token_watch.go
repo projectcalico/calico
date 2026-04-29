@@ -32,6 +32,17 @@ const (
 	minTokenRetryDuration          = 5 * time.Second
 	defaultRefreshFraction         = 4
 	kubeconfigPath                 = "/host/etc/cni/net.d/calico-kubeconfig"
+
+	// coalesceWindow is how long Run waits for the token-directory watcher to
+	// fall silent before issuing a new UpdateToken. Kubelet's atomic-writer
+	// emits ~5 inotify events per rotation (CREATE ts dir, CREATE ..data_tmp,
+	// RENAME, CREATE ..data, REMOVE old ts dir) within a few milliseconds.
+	// Without coalescing, each event triggers its own CreateToken API call,
+	// which on a large cluster with synchronized SA signing-key rotation
+	// would multiply the burst at kube-apiserver. 50 ms is comfortably longer
+	// than the kubelet rotation latency yet still negligible compared to the
+	// timer fallback (multi-hour).
+	coalesceWindow = 50 * time.Millisecond
 )
 
 type TokenRefresher struct {
@@ -194,9 +205,14 @@ func (t *TokenRefresher) Run() {
 				tokenRotated = nil
 			} else {
 				logrus.WithField("event", ev.String()).Info("Projected service account token changed; refreshing CNI kubeconfig immediately")
-				// Drain any additional events the watcher may have queued so
-				// we don't thrash on a burst of rotations in quick succession.
-				drainEvents(tokenRotated)
+				// Coalesce a kubelet atomic-writer rotation burst into a
+				// single UpdateToken so cluster-wide signing-key rotation
+				// does not multiply at kube-apiserver. coalesceRotationBurst
+				// returns false if Stop was requested while waiting, in
+				// which case we exit Run cleanly.
+				if !t.coalesceRotationBurst(tokenRotated) {
+					return
+				}
 			}
 		case <-t.stopChan:
 			if !timer.Stop() {
@@ -258,13 +274,42 @@ func (t *TokenRefresher) startTokenFileWatcher() (<-chan fsnotify.Event, func())
 	return watcher.Events, cleanup
 }
 
-// drainEvents non-blockingly drains any events queued on ch.
-func drainEvents(ch <-chan fsnotify.Event) {
+// coalesceRotationBurst waits until the watcher channel has been quiet for
+// coalesceWindow, draining any events that arrive during that period. This
+// collapses a kubelet atomic-writer rotation burst (~5 events emitted within
+// a few milliseconds) into one UpdateToken call so cluster-wide SA signing
+// key rotation does not turn into a thundering herd at kube-apiserver.
+//
+// Returns true once the window is quiet, or false if Stop was requested
+// while waiting (in which case the caller must exit Run).
+//
+// If events is nil (watcher was previously closed), the function returns
+// once the window elapses with no events.
+func (t *TokenRefresher) coalesceRotationBurst(events <-chan fsnotify.Event) bool {
+	settle := time.NewTimer(coalesceWindow)
+	defer func() {
+		if !settle.Stop() {
+			select {
+			case <-settle.C:
+			default:
+			}
+		}
+	}()
 	for {
 		select {
-		case <-ch:
-		default:
-			return
+		case _, ok := <-events:
+			if !ok {
+				// Watcher closed mid-coalesce; nothing more will arrive.
+				return true
+			}
+			if !settle.Stop() {
+				<-settle.C
+			}
+			settle.Reset(coalesceWindow)
+		case <-settle.C:
+			return true
+		case <-t.stopChan:
+			return false
 		}
 	}
 }
@@ -314,6 +359,15 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		logrus.WithError(err).Error("Failed to read service account token file")
 		return TokenUpdate{}, err
 	}
+	return parseTokenUpdate(tokenBytes)
+}
+
+// parseTokenUpdate decodes a JWT-formatted service account token into a
+// TokenUpdate. Split out from tokenUpdateFromFile so tests can exercise
+// the parsing path (including malformed/missing claims) without writing
+// real files. Returns a typed error for any malformed claim — never panics
+// — so a corrupt token cannot crash the calico-node process.
+func parseTokenUpdate(tokenBytes []byte) (TokenUpdate, error) {
 	token := string(tokenBytes)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != 3 {
@@ -332,14 +386,25 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		return TokenUpdate{}, err
 	}
 	var claimMap map[string]any
-	err = json.Unmarshal(decodedClaims, &claimMap)
-	if err != nil {
+	if err := json.Unmarshal(decodedClaims, &claimMap); err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal service account token claims")
+		return TokenUpdate{}, err
+	}
+	expRaw, ok := claimMap["exp"]
+	if !ok {
+		err := fmt.Errorf("token claims are missing 'exp'")
+		logrus.WithError(err).Error("Service account token has no expiration claim")
+		return TokenUpdate{}, err
+	}
+	expFloat, ok := expRaw.(float64)
+	if !ok {
+		err := fmt.Errorf("token claims 'exp' has unexpected type %T", expRaw)
+		logrus.WithError(err).Error("Service account token expiration claim is not a number")
 		return TokenUpdate{}, err
 	}
 	return TokenUpdate{
 		Token:          token,
-		ExpirationTime: time.Unix(int64(claimMap["exp"].(float64)), 0),
+		ExpirationTime: time.Unix(int64(expFloat), 0),
 	}, nil
 }
 

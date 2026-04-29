@@ -15,6 +15,7 @@
 package cni
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -164,44 +165,6 @@ func TestTokenRefresher_FallsBackWhenWatcherSetupFails(t *testing.T) {
 
 	if err := waitForCalls(&callCount, 1, 2*time.Second); err != nil {
 		t.Fatalf("initial UpdateToken did not fire in fallback mode: %v", err)
-	}
-}
-
-// TestDrainEvents_IsNonBlockingAndDrainsBurst exercises the drainEvents
-// helper directly. Fully deterministic: uses a buffered channel, no timers.
-func TestDrainEvents_IsNonBlockingAndDrainsBurst(t *testing.T) {
-	ch := make(chan fsnotify.Event, 10)
-	for i := 0; i < 7; i++ {
-		ch <- fsnotify.Event{}
-	}
-
-	done := make(chan struct{})
-	go func() {
-		drainEvents(ch)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("drainEvents did not return on a non-empty channel")
-	}
-
-	if got := len(ch); got != 0 {
-		t.Errorf("expected channel drained, still has %d events", got)
-	}
-
-	// Calling drainEvents on an already-empty channel must also return
-	// promptly without blocking.
-	done2 := make(chan struct{})
-	go func() {
-		drainEvents(ch)
-		close(done2)
-	}()
-	select {
-	case <-done2:
-	case <-time.After(2 * time.Second):
-		t.Fatal("drainEvents did not return on an empty channel")
 	}
 }
 
@@ -476,7 +439,13 @@ func TestFsnotifyDetectsKubeletAtomicWriterRotation(t *testing.T) {
 	}
 
 	// Drain anything that may have queued before we issue the rotation.
-	drainEvents(watcher.Events)
+	for draining := true; draining; {
+		select {
+		case <-watcher.Events:
+		default:
+			draining = false
+		}
+	}
 
 	rotated := map[string]string{
 		"token":     "rotated-token",
@@ -593,22 +562,18 @@ func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
 	}
 }
 
-// TestTokenRefresher_HandlesBurstRotations covers a worry about the fast path:
-// kubelet's atomic-writer produces ~5 fsnotify events per rotation (CREATE
-// new ts dir, CREATE ..data_tmp, RENAME, CREATE ..data, REMOVE old ts dir).
-// If kubelet rotates several times in quick succession, the loop must (a)
-// keep working, and (b) not call UpdateToken an unbounded number of times.
+// TestTokenRefresher_HandlesBurstRotations covers the apiserver-burst
+// concern: kubelet's atomic-writer produces ~5 fsnotify events per rotation
+// (CREATE new ts dir, CREATE ..data_tmp, RENAME, CREATE ..data, REMOVE old
+// ts dir). On signing-key rotation the kubelet on every node rotates near-
+// simultaneously, so without coalescing each event would translate to a
+// CreateToken API call — multiplying the burst at kube-apiserver by ~5N.
 //
-// Note: drainEvents() in token_watch.go is intentionally non-blocking — it
-// exits the moment the channel is momentarily empty. fsnotify trickles events
-// from the kernel through its internal goroutine, so events arriving a
-// few milliseconds after one another may not be coalesced. In practice we
-// observe up to ~5 UpdateToken calls per rotation (one per event), which is
-// fine: real-world rotations happen at most once per ~48 min, so even 5x
-// over-call is irrelevant operationally. The bound below reflects that
-// honestly; a much tighter bound would require adding a settling sleep
-// before drainEvents in production code, which is not worth it for this
-// failure rate.
+// Run() now uses coalesceRotationBurst, which waits for `coalesceWindow` of
+// silence on the watcher channel before issuing UpdateToken. A tight burst
+// of N rotations should therefore collapse into a single wake-up. We allow
+// a small slack for the rare case where the loop completes UpdateToken and
+// re-enters select between two rotations.
 func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
 	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
@@ -664,25 +629,26 @@ func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
 		currentTs = kubeletAtomicRotate(t, dir, currentTs, files)
 	}
 
-	// Allow events to settle and the loop to react.
+	// Wait long enough for: every event to surface from fsnotify, the
+	// coalesce window (50 ms) to elapse, and UpdateToken to run.
 	time.Sleep(500 * time.Millisecond)
 
 	final := atomic.LoadInt32(&callCount)
 	if final < 2 {
 		t.Fatalf("expected at least 2 UpdateToken calls (1 initial + >=1 wake-up), got %d", final)
 	}
-	// Upper bound: 1 initial + numRotations × maxEventsPerRotation + slack.
-	// kubelet's atomic-writer produces ~5 events per rotation. Allow some
-	// headroom for jitter and the case where an event queued during the
-	// previous UpdateToken triggers another iteration. Anything well above
-	// this bound (e.g. growing without limit, or order-of-magnitude over)
-	// would indicate a real coalescing bug or an event-loop runaway.
-	const maxEventsPerRotation = 5
-	upperBound := int32(1 + numRotations*maxEventsPerRotation + 10)
+	// Upper bound: 1 initial + a small number of coalesced wake-ups. With
+	// the rotations happening in a tight Go loop they should all fall inside
+	// one coalesce window. Allow a couple of extra wake-ups to absorb
+	// scheduler jitter, but keep the bound far below the un-coalesced
+	// worst case (1 + numRotations × ~5 ≈ 26) so that a regression in the
+	// coalesce path actually fails this test.
+	const maxWakeups = 3
+	upperBound := int32(1 + maxWakeups)
 	if final > upperBound {
-		t.Fatalf("UpdateToken called more than expected: got %d, soft cap %d. "+
-			"This may indicate the loop is reacting to events from outside the rotation "+
-			"sequence or the drain path is misbehaving — investigate before relaxing the bound.",
+		t.Fatalf("UpdateToken called more than coalesced expectation: got %d, cap %d. "+
+			"This usually means the coalesce window is no longer absorbing the "+
+			"kubelet rotation burst — investigate before relaxing the bound.",
 			final, upperBound)
 	}
 	t.Logf("burst of %d rotations triggered %d UpdateToken calls (initial+wake-ups)", numRotations, final)
@@ -782,4 +748,60 @@ func waitForCalls(counter *int32, want int32, timeout time.Duration) error {
 		time.Sleep(20 * time.Millisecond)
 	}
 	return fmt.Errorf("timed out waiting for calls: want=%d got=%d", want, atomic.LoadInt32(counter))
+}
+
+// makeTestJWT builds a JWT-shaped string with the given claims JSON. JWT
+// segments use base64url *without* padding, matching what real Kubernetes
+// service-account tokens look like and what parseTokenUpdate expects.
+func makeTestJWT(claimsJSON string) []byte {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	claims := base64.RawURLEncoding.EncodeToString([]byte(claimsJSON))
+	sig := base64.RawURLEncoding.EncodeToString([]byte("sig"))
+	return []byte(header + "." + claims + "." + sig)
+}
+
+// TestParseTokenUpdate_RejectsMalformedExp verifies that a token whose "exp"
+// claim is not a number returns an error rather than panicking. Before the
+// fix, the unchecked type assertion `claimMap["exp"].(float64)` would panic
+// and tear down the entire calico-node process on any malformed token.
+func TestParseTokenUpdate_RejectsMalformedExp(t *testing.T) {
+	cases := []struct {
+		name   string
+		claims string
+	}{
+		{"exp is string", `{"exp":"not-a-number"}`},
+		{"exp is bool", `{"exp":true}`},
+		{"exp is null", `{"exp":null}`},
+		{"exp is object", `{"exp":{"nested":1}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := parseTokenUpdate(makeTestJWT(tc.claims))
+			if err == nil {
+				t.Fatalf("expected error for claims %q, got nil", tc.claims)
+			}
+		})
+	}
+}
+
+// TestParseTokenUpdate_RejectsMissingExp covers the second half of the same
+// fix: a token with no "exp" claim at all must return an error, not panic.
+func TestParseTokenUpdate_RejectsMissingExp(t *testing.T) {
+	_, err := parseTokenUpdate(makeTestJWT(`{"sub":"system:serviceaccount:kube-system:calico-cni-plugin"}`))
+	if err == nil {
+		t.Fatal("expected error when 'exp' is missing, got nil")
+	}
+}
+
+// TestParseTokenUpdate_AcceptsWellFormedExp is the happy-path counterpart:
+// confirms the safer parsing still produces a usable TokenUpdate.
+func TestParseTokenUpdate_AcceptsWellFormedExp(t *testing.T) {
+	const want int64 = 4102444800 // 2100-01-01T00:00:00Z
+	tu, err := parseTokenUpdate(makeTestJWT(fmt.Sprintf(`{"exp":%d}`, want)))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := tu.ExpirationTime.Unix(); got != want {
+		t.Fatalf("ExpirationTime=%d, want %d", got, want)
+	}
 }
