@@ -84,7 +84,7 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("TempNetNS: %v", err)
 			}
-			defer contNS.Close()
+			defer func() { _ = contNS.Close() }()
 
 			d := &LinuxDataplane{
 				mtu:        1500,
