@@ -40,8 +40,9 @@ RUN dnf --enablerepo=crb install -y \
   iptables-legacy \
   iptables-nft \
   nftables \
-  # Build deps for nftables / libnftnl source builds.
-  curl \
+  # Build deps for nftables / libnftnl source builds. curl-minimal is
+  # preinstalled in the AlmaLinux 9 base image, so don't pull in `curl`
+  # here — it conflicts with curl-minimal.
   gcc \
   make \
   autoconf \
