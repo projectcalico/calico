@@ -343,7 +343,6 @@ class Lib(object):
         self.maxDiff = None
 
         # Create an instance of CalicoMechanismDriver.
-        mech_calico.mech_driver = None
         self.driver = mech_calico.CalicoMechanismDriver()
 
         # Hook the (mock) Neutron database.
