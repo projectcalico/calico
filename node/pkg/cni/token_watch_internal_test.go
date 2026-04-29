@@ -470,7 +470,7 @@ func TestFsnotifyDetectsKubeletAtomicWriterRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new watcher: %v", err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 	if err := watcher.Add(dir); err != nil {
 		t.Fatalf("add watch: %v", err)
 	}
