@@ -30,6 +30,10 @@ type IPAMConfigurationSpecApplyConfiguration struct {
 	// address persistence.
 	// Defaults to Enabled if not specified.
 	KubeVirtVMAddressPersistence *projectcalicov3.VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
+	// MinIPReclaimAgeSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	MinIPReclaimAgeSeconds *int32 `json:"minIPReclaimAgeSeconds,omitempty"`
 }
 
 // IPAMConfigurationSpecApplyConfiguration constructs a declarative configuration of the IPAMConfigurationSpec type for use with
@@ -67,5 +71,13 @@ func (b *IPAMConfigurationSpecApplyConfiguration) WithAutoAllocateBlocks(value b
 // If called multiple times, the KubeVirtVMAddressPersistence field is set to the value of the last call.
 func (b *IPAMConfigurationSpecApplyConfiguration) WithKubeVirtVMAddressPersistence(value projectcalicov3.VMAddressPersistence) *IPAMConfigurationSpecApplyConfiguration {
 	b.KubeVirtVMAddressPersistence = &value
+	return b
+}
+
+// WithMinIPReclaimAgeSeconds sets the MinIPReclaimAgeSeconds field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MinIPReclaimAgeSeconds field is set to the value of the last call.
+func (b *IPAMConfigurationSpecApplyConfiguration) WithMinIPReclaimAgeSeconds(value int32) *IPAMConfigurationSpecApplyConfiguration {
+	b.MinIPReclaimAgeSeconds = &value
 	return b
 }
