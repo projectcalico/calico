@@ -27,6 +27,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -813,6 +814,7 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
 		state.Name)
 	for key, protoHostMetadataV4V6 := range mockDataplane.ActiveHostMetadataV4V6() {
+		logrus.Infof("pepper\n%#v\n%#v", protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])
 		Expect(googleproto.Equal(protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])).To(BeTrue(),
 			"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 			state.Name)
