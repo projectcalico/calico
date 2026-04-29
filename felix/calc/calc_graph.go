@@ -314,7 +314,6 @@ func NewCalculationGraph(
 	//                   |
 	//               <dataplane>
 	//
-	// nftables interval sets reject overlap; Auto resolves to nftables at runtime.
 	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode != "Disabled")
 	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
