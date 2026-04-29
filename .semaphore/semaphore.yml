@@ -1735,7 +1735,7 @@ blocks:
   - name: "E2E tests on GCP kubeadm (local binary)"
     run:
       when: >-
-        false or change_in(['/e2e/**'],
+        false or change_in(['/e2e/**', '/.semaphore/end-to-end/scripts/'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     dependencies:
       - Prerequisites
