@@ -413,12 +413,21 @@ blocks:
             # and saving the ~30s build step across all Felix jobs.
             - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || make -C felix libbpf
             - LIBBPF_VERSION=$(grep -E '^LIBBPF_VERSION[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            # Fail loudly if either path is missing. Without this guard, tar would
+            # warn and still exit 0 on a missing path, and every downstream Felix
+            # job would silently regress to cold libbpf builds.
+            - test -d felix/bpf-gpl/libbpf || (echo "ERROR libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1)
+            - test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || (echo "ERROR libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1)
             - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
             - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
   - name: "Build: node image"
-    # Builds the node image on top of the combined calico binary. The underlying
-    # Go state lives in the "calico" build cache populated by "Build: calico
-    # image", so this block does not participate in build-cache storage.
+    # Builds the node image on top of the combined calico binary. calico/node is
+    # still the canonical DaemonSet image for OSS users, so it continues to ship
+    # alongside the unified calico image. The underlying Go state lives in the
+    # "calico" build cache populated by "Build: calico image" — only the Docker
+    # stage assembly (copying binaries onto the base image) runs here, not the Go
+    # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
+    # can depend on the shared producer→GCS→consumer upload pattern.
     run:
       when: "true"
     dependencies: []
@@ -435,7 +444,9 @@ blocks:
             - zstd -3 --rm /tmp/node-image.tar
             - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
-    # Whisker is a TypeScript/React frontend — no Go build cache to populate.
+    # Whisker is a TypeScript/React frontend that won't consolidate into the
+    # calico binary — it ships as its own image indefinitely. No Go build cache
+    # to populate; only produces the image tarball for consumer blocks.
     run:
       when: >-
         true or
