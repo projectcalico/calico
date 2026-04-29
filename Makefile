@@ -249,14 +249,14 @@ bin/gh:
 
 # Build a release.
 release: release/bin/release
-	@release/bin/release release build
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release build
 
 # Publish an already built release.
 release-publish: release/bin/release bin/ghr bin/helm
-	@release/bin/release release publish
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release publish
 
 release-public: bin/gh release/bin/release
-	@release/bin/release release public
+	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release public
 
 # Create a release branch.
 create-release-branch: release/bin/release
