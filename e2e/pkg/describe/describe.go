@@ -75,6 +75,7 @@ var features = map[string]bool{
 	"QoS":             true,
 	"Datapath":        true,
 	"Istio":           true,
+	"KubeVirt":        true,
 }
 
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
