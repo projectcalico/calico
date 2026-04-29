@@ -221,9 +221,7 @@ spec:
                     cannot insert their own BPF programs to interfere with Calico's. [Default: true]
                   type: boolean
                 bpfEnabled:
-                  description:
-                    "BPFEnabled, if enabled Felix will use the BPF dataplane.
-                    [Default: false]"
+                  description: "BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]"
                   type: boolean
                 bpfEnforceRPF:
                   description: |-
@@ -436,9 +434,6 @@ spec:
                     tunnel IPs).
                   type: integer
                 bpfPSNATPorts:
-                  anyOf:
-                    - type: integer
-                    - type: string
                   description: |-
                     BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port
                     collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and
@@ -446,8 +441,11 @@ spec:
                     32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily
                     a problem if this range overlaps with the operating systems. Both ends of the range are
                     inclusive. [Default: 20000:29999]
-                  pattern: ^.*
                   x-kubernetes-int-or-string: true
+                  anyOf:
+                    - type: integer
+                    - type: string
+                  pattern: ^.*
                 bpfPolicyDebugEnabled:
                   description: |-
                     BPFPolicyDebugEnabled when true, Felix records detailed information
@@ -473,9 +471,7 @@ spec:
                     - Disabled
                   type: string
                 cgroupV2Path:
-                  description:
-                    CgroupV2Path overrides the default location where to
-                    find the cgroup hierarchy.
+                  description: CgroupV2Path overrides the default location where to find the cgroup hierarchy.
                   type: string
                 chainInsertMode:
                   description: |-
@@ -507,9 +503,7 @@ spec:
                     if DebugPort is set. [Default:localhost]
                   type: string
                 debugMemoryProfilePath:
-                  description:
-                    DebugMemoryProfilePath is the path to write the memory
-                    profile to when triggered by signal.
+                  description: DebugMemoryProfilePath is the path to write the memory profile to when triggered by signal.
                   type: string
                 debugPort:
                   description: |-
@@ -602,9 +596,7 @@ spec:
                     use the value "[]". The default value allows ssh access, DHCP, BGP, etcd and the Kubernetes API.
                     [Default: tcp:22, udp:68, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
                   items:
-                    description:
-                      ProtoPort is combination of protocol, port, and CIDR.
-                      Protocol and port must be specified.
+                    description: ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
                     properties:
                       net:
                         type: string
@@ -626,9 +618,7 @@ spec:
                     as well as allowing DHCP, DNS, BGP and the Kubernetes API.
                     [Default: udp:53, udp:67, tcp:179, tcp:2379, tcp:2380, tcp:5473, tcp:6443, tcp:6666, tcp:6667 ]
                   items:
-                    description:
-                      ProtoPort is combination of protocol, port, and CIDR.
-                      Protocol and port must be specified.
+                    description: ProtoPort is combination of protocol, port, and CIDR. Protocol and port must be specified.
                     properties:
                       net:
                         type: string
@@ -670,20 +660,14 @@ spec:
                     printed in their entirety.
                   type: boolean
                 flowLogsFlushInterval:
-                  description:
-                    FlowLogsFlushInterval configures the interval at which
-                    Felix exports flow logs.
+                  description: FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 flowLogsGoldmaneServer:
-                  description:
-                    FlowLogGoldmaneServer is the flow server endpoint to
-                    which flow data should be published.
+                  description: FlowLogGoldmaneServer is the flow server endpoint to which flow data should be published.
                   type: string
                 flowLogsLocalReporter:
-                  description:
-                    "FlowLogsLocalReporter configures local unix socket for
-                    reporting flow data from each node. [Default: Disabled]"
+                  description: "FlowLogsLocalReporter configures local unix socket for reporting flow data from each node. [Default: Disabled]"
                   enum:
                     - Disabled
                     - Enabled
@@ -744,14 +728,10 @@ spec:
                     [Default: false]
                   type: boolean
                 healthHost:
-                  description:
-                    "HealthHost is the host that the health server should
-                    bind to. [Default: localhost]"
+                  description: "HealthHost is the host that the health server should bind to. [Default: localhost]"
                   type: string
                 healthPort:
-                  description:
-                    "HealthPort is the TCP port that the health server should
-                    bind to. [Default: 9099]"
+                  description: "HealthPort is the TCP port that the health server should bind to. [Default: 9099]"
                   type: integer
                 healthTimeoutOverrides:
                   description: |-
@@ -915,9 +895,7 @@ spec:
                     values mean lower priority. [Default: 1024]
                   type: integer
                 ipv6Support:
-                  description:
-                    IPv6Support controls whether Felix enables support for
-                    IPv6 (if supported by the in-use dataplane).
+                  description: IPv6Support controls whether Felix enables support for IPv6 (if supported by the in-use dataplane).
                   type: boolean
                 istioAmbientMode:
                   description: |-
@@ -940,11 +918,18 @@ spec:
                     KubeNodePortRanges holds list of port ranges used for service node ports. Only used if felix detects kube-proxy running in ipvs mode.
                     Felix uses these ranges to separate host and workload traffic. [Default: 30000:32767].
                   items:
+                    description: |-
+                      Port represents either a range of numeric ports or a named port.
+
+                        - For a named port, set the PortName, leaving MinPort and MaxPort as 0.
+                        - For a port range, set MinPort and MaxPort to the (inclusive) port numbers.  Set
+                          PortName to "".
+                        - For a single port, set MinPort = MaxPort and PortName = "".
+                    x-kubernetes-int-or-string: true
                     anyOf:
                       - type: integer
                       - type: string
                     pattern: ^.*
-                    x-kubernetes-int-or-string: true
                   maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
@@ -961,9 +946,7 @@ spec:
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
-                  description:
-                    LogActionRateLimitBurst sets the rate limit burst of
-                    hitting a Log action when LogActionRateLimit is enabled.
+                  description: LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
                   maximum: 9999
                   minimum: 0
                   type: integer
@@ -974,9 +957,7 @@ spec:
                     to Debug level logs.
                   type: string
                 logFilePath:
-                  description:
-                    "LogFilePath is the full path to the Felix log. Set to
-                    none to disable file logging. [Default: /var/log/calico/felix.log]"
+                  description: "LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]"
                   type: string
                 logPrefix:
                   description: |-
@@ -992,15 +973,11 @@ spec:
                   pattern: "^([a-zA-Z0-9%: /_-])*$"
                   type: string
                 logSeverityFile:
-                  description:
-                    "LogSeverityFile is the log severity above which logs
-                    are sent to the log file. [Default: Info]"
+                  description: "LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]"
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeverityScreen:
-                  description:
-                    "LogSeverityScreen is the log severity above which logs
-                    are sent to the stdout. [Default: Info]"
+                  description: "LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]"
                   pattern: ^(?i)(Trace|Debug|Info|Warning|Error|Fatal)?$
                   type: string
                 logSeveritySys:
@@ -1052,14 +1029,14 @@ spec:
                     - IPPoolsAndHostIPs
                   type: string
                 natPortRange:
-                  anyOf:
-                    - type: integer
-                    - type: string
                   description: |-
                     NATPortRange specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the
                     network stack is used.
-                  pattern: ^.*
                   x-kubernetes-int-or-string: true
+                  anyOf:
+                    - type: integer
+                    - type: string
+                  pattern: ^.*
                 netlinkTimeout:
                   description: |-
                     NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming
@@ -1095,18 +1072,14 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: "NFTablesMode configures nftables support in Felix. [Default: Auto]"
                   enum:
                     - Disabled
                     - Enabled
                     - Auto
                   type: string
                 nftablesRefreshInterval:
-                  description:
-                    "NftablesRefreshInterval controls the interval at which
-                    Felix periodically refreshes the nftables rules. [Default: 90s]"
+                  description: "NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
                 nodeSelector:
                   description: |-
@@ -1167,14 +1140,10 @@ spec:
                     This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
                   type: string
                 prometheusMetricsEnabled:
-                  description:
-                    "PrometheusMetricsEnabled enables the Prometheus metrics
-                    server in Felix if set to true. [Default: false]"
+                  description: "PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]"
                   type: boolean
                 prometheusMetricsHost:
-                  description:
-                    "PrometheusMetricsHost is the host that the Prometheus
-                    metrics server should bind to. [Default: empty]"
+                  description: "PrometheusMetricsHost is the host that the Prometheus metrics server should bind to. [Default: empty]"
                   type: string
                 prometheusMetricsKeyFile:
                   description: |-
@@ -1182,9 +1151,7 @@ spec:
                     used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
                   type: string
                 prometheusMetricsPort:
-                  description:
-                    "PrometheusMetricsPort is the TCP port that the Prometheus
-                    metrics server should bind to. [Default: 9091]"
+                  description: "PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. [Default: 9091]"
                   type: integer
                 prometheusProcessMetricsEnabled:
                   description: |-
@@ -1209,9 +1176,7 @@ spec:
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 reportingTTL:
-                  description:
-                    "ReportingTTL is the time-to-live setting for process-wide
-                    status reports. [Default: 90s]"
+                  description: "ReportingTTL is the time-to-live setting for process-wide status reports. [Default: 90s]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 requireMTUFile:
@@ -1288,9 +1253,7 @@ spec:
                   pattern: ^(?i)(Drop|Reject|Disabled)?$
                   type: string
                 sidecarAccelerationEnabled:
-                  description:
-                    "SidecarAccelerationEnabled enables experimental sidecar
-                    acceleration [Default: false]"
+                  description: "SidecarAccelerationEnabled enables experimental sidecar acceleration [Default: false]"
                   type: boolean
                 usageReportingEnabled:
                   description: |-
@@ -1298,15 +1261,11 @@ spec:
                     server. For example, if a significant security vulnerability has been discovered in the version of Calico being used. [Default: true]
                   type: boolean
                 usageReportingInitialDelay:
-                  description:
-                    "UsageReportingInitialDelay controls the minimum delay
-                    before Felix makes a report. [Default: 300s]"
+                  description: "UsageReportingInitialDelay controls the minimum delay before Felix makes a report. [Default: 300s]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 usageReportingInterval:
-                  description:
-                    "UsageReportingInterval controls the interval at which
-                    Felix makes reports. [Default: 86400s]"
+                  description: "UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 useInternalDataplaneDriver:
@@ -1330,9 +1289,7 @@ spec:
                     MTU of the host's interfaces. [Default: 0 (auto-detect)]
                   type: integer
                 vxlanPort:
-                  description:
-                    "VXLANPort is the UDP port number to use for VXLAN traffic.
-                    [Default: 4789]"
+                  description: "VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]"
                   type: integer
                 vxlanVNI:
                   description: |-
@@ -1340,71 +1297,44 @@ spec:
                     in use on your system. [Default: 4096]
                   type: integer
                 windowsManageFirewallRules:
-                  description:
-                    "WindowsManageFirewallRules configures whether or not
-                    Felix will program Windows Firewall rules (to allow inbound access
-                    to its own metrics ports). [Default: Disabled]"
+                  description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]"
                   enum:
                     - Enabled
                     - Disabled
                   type: string
                 wireguardEnabled:
-                  description:
-                    "WireguardEnabled controls whether Wireguard is enabled
-                    for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network).
-                    [Default: false]"
+                  description: "WireguardEnabled controls whether Wireguard is enabled for IPv4 (encapsulating IPv4 traffic over an IPv4 underlay network). [Default: false]"
                   type: boolean
                 wireguardEnabledV6:
-                  description:
-                    "WireguardEnabledV6 controls whether Wireguard is enabled
-                    for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network).
-                    [Default: false]"
+                  description: "WireguardEnabledV6 controls whether Wireguard is enabled for IPv6 (encapsulating IPv6 traffic over an IPv6 underlay network). [Default: false]"
                   type: boolean
                 wireguardHostEncryptionEnabled:
-                  description:
-                    "WireguardHostEncryptionEnabled controls whether Wireguard
-                    host-to-host encryption is enabled. [Default: false]"
+                  description: "WireguardHostEncryptionEnabled controls whether Wireguard host-to-host encryption is enabled. [Default: false]"
                   type: boolean
                 wireguardInterfaceName:
-                  description:
-                    "WireguardInterfaceName specifies the name to use for
-                    the IPv4 Wireguard interface. [Default: wireguard.cali]"
+                  description: "WireguardInterfaceName specifies the name to use for the IPv4 Wireguard interface. [Default: wireguard.cali]"
                   type: string
                 wireguardInterfaceNameV6:
-                  description:
-                    "WireguardInterfaceNameV6 specifies the name to use for
-                    the IPv6 Wireguard interface. [Default: wg-v6.cali]"
+                  description: "WireguardInterfaceNameV6 specifies the name to use for the IPv6 Wireguard interface. [Default: wg-v6.cali]"
                   type: string
                 wireguardKeepAlive:
-                  description:
-                    "WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive
-                    option. Set 0 to disable. [Default: 0]"
+                  description: "WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]"
                   pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
                   type: string
                 wireguardListeningPort:
-                  description:
-                    "WireguardListeningPort controls the listening port used
-                    by IPv4 Wireguard. [Default: 51820]"
+                  description: "WireguardListeningPort controls the listening port used by IPv4 Wireguard. [Default: 51820]"
                   type: integer
                 wireguardListeningPortV6:
-                  description:
-                    "WireguardListeningPortV6 controls the listening port
-                    used by IPv6 Wireguard. [Default: 51821]"
+                  description: "WireguardListeningPortV6 controls the listening port used by IPv6 Wireguard. [Default: 51821]"
                   type: integer
                 wireguardMTU:
-                  description:
-                    "WireguardMTU controls the MTU on the IPv4 Wireguard
-                    interface. See Configuring MTU [Default: 1440]"
+                  description: "WireguardMTU controls the MTU on the IPv4 Wireguard interface. See Configuring MTU [Default: 1440]"
                   type: integer
                 wireguardMTUV6:
-                  description:
-                    "WireguardMTUV6 controls the MTU on the IPv6 Wireguard
-                    interface. See Configuring MTU [Default: 1420]"
+                  description: "WireguardMTUV6 controls the MTU on the IPv6 Wireguard interface. See Configuring MTU [Default: 1420]"
                   type: integer
                 wireguardRoutingRulePriority:
-                  description:
-                    "WireguardRoutingRulePriority controls the priority value
-                    to use for the Wireguard routing rule. [Default: 99]"
+                  description: "WireguardRoutingRulePriority controls the priority value to use for the Wireguard routing rule. [Default: 99]"
                   type: integer
                 wireguardThreadingEnabled:
                   description: |-
@@ -1422,9 +1352,7 @@ spec:
                   pattern: ^(?i)(Disabled|Any)?$
                   type: string
                 xdpEnabled:
-                  description:
-                    "XDPEnabled enables XDP acceleration for suitable untracked
-                    incoming deny rules. [Default: true]"
+                  description: "XDPEnabled enables XDP acceleration for suitable untracked incoming deny rules. [Default: true]"
                   type: boolean
                 xdpRefreshInterval:
                   description: |-
@@ -1440,33 +1368,20 @@ spec:
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
                 - message: natOutgoingAddress must be a valid IPv4 address
                   reason: FieldValueInvalid
-                  rule:
-                    "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
-                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
-                    == 4)"
+                  rule: "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress) == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family() == 4)"
                 - message: deviceRouteSourceAddress must be a valid IPv4 address
                   reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
-                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
-                    == 4)"
+                  rule: "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress) == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family() == 4)"
                 - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
                   reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
-                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
-                    == 6)"
+                  rule: "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6) == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family() == 6)"
           required:
             - metadata
             - spec
           type: object
           x-kubernetes-validations:
-            - message:
-                nodeSelector must not be set on the 'default' or per-node ('node.*')
-                FelixConfiguration
+            - message: nodeSelector must not be set on the 'default' or per-node ('node.*') FelixConfiguration
               reason: FieldValueForbidden
-              rule:
-                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
-                ? !has(self.spec.nodeSelector) : true"
+              rule: "self.metadata.name == 'default' || self.metadata.name.startsWith('node.') ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true
