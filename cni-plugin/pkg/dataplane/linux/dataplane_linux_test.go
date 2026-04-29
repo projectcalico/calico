@@ -54,10 +54,12 @@ func TestIsNetkitUnsupported(t *testing.T) {
 	}
 }
 
-// TestAddWorkloadLinkIntegration exercises addWorkloadLink against a real
-// temporary netns. Requires root (CAP_SYS_ADMIN to unshare netns) and, for the
-// netkit subtest, kernel 6.7+ — both are auto-detected and skipped cleanly
-// when unmet so that unprivileged `go test` runs don't fail.
+// TestAddWorkloadLinkIntegration exercises addWorkloadLink against real
+// temporary netnses. Both the "host" and "container" sides live in fresh
+// unshared netnses so the test is fully isolated from the environment it
+// runs in (avoiding collisions with leftover/real interfaces in CI which may
+// run with --net=host). Requires root (CAP_SYS_ADMIN to unshare netns) and,
+// for the netkit subtest, kernel 6.7+.
 func TestAddWorkloadLinkIntegration(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("skipping integration test: requires root (unshare netns)")
@@ -74,15 +76,21 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 		{"netkit-on-67", types.DeviceTypeNetkit, types.DeviceTypeNetkit, true},
 	}
 
-	for i, tc := range subtests {
+	for _, tc := range subtests {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.needs67 && !kernelAtLeast(t, 6, 7) {
 				t.Skip("skipping: requires kernel 6.7+ for netkit")
 			}
 
+			hostNS, err := ns.TempNetNS()
+			if err != nil {
+				t.Fatalf("TempNetNS (host): %v", err)
+			}
+			defer func() { _ = hostNS.Close() }()
+
 			contNS, err := ns.TempNetNS()
 			if err != nil {
-				t.Fatalf("TempNetNS: %v", err)
+				t.Fatalf("TempNetNS (cont): %v", err)
 			}
 			defer func() { _ = contNS.Close() }()
 
@@ -92,14 +100,14 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 				deviceType: tc.request,
 				logger:     logrus.NewEntry(logrus.New()),
 			}
-			// Distinct name per subtest, plus upfront cleanup, so a
-			// leftover host-side link from a prior run can't cause EEXIST.
-			hostName := fmt.Sprintf("calit%d-%d", os.Getpid(), i)
-			cleanupHostLink(hostName)
-			defer cleanupHostLink(hostName)
+			const hostName = "host0"
 
 			var gotType string
-			err = ns.WithNetNSPath(contNS.Path(), func(hostNS ns.NetNS) error {
+			// Use Do (which switches via fd) rather than WithNetNSPath:
+			// ns.TempNetNS path strings re-resolve through /proc/<pid>/task/<tid>
+			// which may no longer point at the captured netns once the
+			// creating goroutine has been recycled.
+			err = contNS.Do(func(_ ns.NetNS) error {
 				la := netlink.NewLinkAttrs()
 				la.Name = "eth0"
 				la.MTU = 1500
@@ -114,29 +122,29 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 				t.Errorf("created type = %q, want %q", gotType, tc.wantType)
 			}
 
-			link, err := netlink.LinkByName(hostName)
+			err = hostNS.Do(func(_ ns.NetNS) error {
+				link, err := netlink.LinkByName(hostName)
+				if err != nil {
+					return fmt.Errorf("host-side link lookup: %w", err)
+				}
+				if link.Type() != tc.wantType {
+					t.Errorf("host link kernel type = %q, want %q", link.Type(), tc.wantType)
+				}
+				if tc.wantType == types.DeviceTypeNetkit {
+					nk, ok := link.(*netlink.Netkit)
+					if !ok {
+						return fmt.Errorf("host link is %T, want *netlink.Netkit", link)
+					}
+					if !nk.IsPrimary() {
+						t.Errorf("host-side netkit must be primary (Felix attaches BPF_NETKIT_PRIMARY here)")
+					}
+				}
+				return nil
+			})
 			if err != nil {
-				t.Fatalf("host-side link lookup: %v", err)
-			}
-			if link.Type() != tc.wantType {
-				t.Errorf("host link kernel type = %q, want %q", link.Type(), tc.wantType)
-			}
-			if tc.wantType == types.DeviceTypeNetkit {
-				nk, ok := link.(*netlink.Netkit)
-				if !ok {
-					t.Fatalf("host link is %T, want *netlink.Netkit", link)
-				}
-				if !nk.IsPrimary() {
-					t.Errorf("host-side netkit must be primary (Felix attaches BPF_NETKIT_PRIMARY here)")
-				}
+				t.Fatalf("inspecting host-side link: %v", err)
 			}
 		})
-	}
-}
-
-func cleanupHostLink(name string) {
-	if link, err := netlink.LinkByName(name); err == nil {
-		_ = netlink.LinkDel(link)
 	}
 }
 
