@@ -314,7 +314,7 @@ func NewCalculationGraph(
 	//                   |
 	//               <dataplane>
 	//
-	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode == "Enabled")
+	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(shouldSuppressIPSetOverlaps(conf.NFTablesMode))
 	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
 	ipsetMemberIndex.RegisterWith(allUpdDispatcher)
@@ -605,6 +605,13 @@ func (l *remoteEndpointDispatcherReg) RegisterWith(disp *dispatcher.Dispatcher) 
 	disp.Register(model.WorkloadEndpointKey{}, red.OnUpdate)
 	disp.Register(model.HostEndpointKey{}, red.OnUpdate)
 	disp.RegisterStatusHandler(red.OnDatamodelStatus)
+}
+
+// shouldSuppressIPSetOverlaps reports whether to de-dup overlapping CIDRs in
+// IP sets. nftables interval sets reject overlap, and Auto resolves to
+// nftables at runtime, so we suppress for any mode except Disabled.
+func shouldSuppressIPSetOverlaps(nftablesMode string) bool {
+	return nftablesMode != "Disabled"
 }
 
 // remoteEndpointFilter provides an UpdateHandler that filters out endpoints
