@@ -49,6 +49,8 @@ class TestElection(unittest.TestCase):
         # Mock calls to sys.exit.
         self.sys_exit_p = mock.patch("sys.exit")
         self.sys_exit_p.start()
+        # Mock is_master variable
+        self.mock_is_master = mock.MagicMock()
 
     def tearDown(self):
         self.sys_exit_p.stop()
@@ -61,14 +63,26 @@ class TestElection(unittest.TestCase):
         # Test that not elected using defaults.
         with self.assertRaises(ValueError):
             etcdv3._client = stub_etcd.Client()
-            elector = election.Elector("test_basic", "/bloop", interval=-1, ttl=15)
-            self.assertFalse(elector.master())
+            elector = election.Elector(
+                "test_basic",
+                "/bloop",
+                self.mock_is_master,
+                interval=-1,
+                ttl=15,
+            )
+            elector.run()
             self._wait_and_stop(etcdv3._client, elector)
 
         with self.assertRaises(ValueError):
             etcdv3._client = stub_etcd.Client()
-            elector = election.Elector("test_basic", "/bloop", interval=10, ttl=5)
-            self.assertFalse(elector.master())
+            elector = election.Elector(
+                "test_basic",
+                "/bloop",
+                self.mock_is_master,
+                interval=10,
+                ttl=5,
+            )
+            elector.run()
             self._wait_and_stop(etcdv3._client, elector)
 
     def _wait_and_stop(self, client, elector):
@@ -87,15 +101,23 @@ class TestElection(unittest.TestCase):
         client.stop.send()
         # Double-check there were no failures.
         self.assertIsNone(client.failure, msg=client.failure)
+        # Make sure the value is set back to 0
+        self.assertEqual(self.mock_is_master.value, 0)
 
     def test_basic_election(self):
         # Test that not elected using defaults.
         LOG.debug("test_basic_election")
         etcdv3._client = client = stub_etcd.Client()
         client.add_read_result(key="/bloop", value="value")
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
+        )
+        elector.run()
         self._wait_and_stop(client, elector)
-        self.assertFalse(elector.master())
 
     def test_become_master_first_time(self):
         # Become the master after one round
@@ -106,8 +128,14 @@ class TestElection(unittest.TestCase):
         client.add_write_exception(None)
         client.add_write_exception(None)
         elector = election.Elector(
-            "test_basic", "/bloop", old_key="/legacy", interval=5, ttl=15
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            old_key="/legacy",
+            interval=5,
+            ttl=15,
         )
+        elector.run()
         self._wait_and_stop(client, elector)
         client.assert_key_written("/legacy")
 
@@ -118,7 +146,14 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_exception(None)
         client.add_write_exception(e3e.ConnectionFailedError())
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
+        )
+        elector.run()
         self._wait_and_stop(client, elector)
 
     def test_become_master_multiple_attempts(self):
@@ -132,7 +167,14 @@ class TestElection(unittest.TestCase):
             client.add_read_result(key="/bloop", value=None, action=action)
             client.add_write_exception(None)
             client.add_write_exception(None)
-            elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+            elector = election.Elector(
+                "test_basic",
+                "/bloop",
+                self.mock_is_master,
+                interval=5,
+                ttl=15,
+            )
+            elector.run()
             self._wait_and_stop(client, elector)
 
     def test_become_master_implausible(self):
@@ -144,7 +186,14 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_result()
         client.add_write_result()
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
+        )
+        elector.run()
         self._wait_and_stop(client, elector)
 
     def test_initial_read_exceptions(self):
@@ -155,7 +204,14 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(e3e.InternalServerError())
         client.add_read_exception(e3e.ConnectionFailedError())
         client.add_read_exception(e3e.PreconditionFailedError())
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
+        )
+        elector.run()
         self._wait_and_stop(client, elector)
 
     def test_exception_detail_logging(self):
@@ -165,7 +221,14 @@ class TestElection(unittest.TestCase):
             etcdv3._client = client = stub_etcd.Client()
             exc = e3e.Etcd3Exception(detail_text="Unauthorised user")
             client.add_read_exception(exc)
-            elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+            elector = election.Elector(
+                "test_basic",
+                "/bloop",
+                self.mock_is_master,
+                interval=5,
+                ttl=15,
+            )
+            elector.run()
             self._wait_and_stop(client, elector)
 
             # Check that Etcd3Exception detail was logged.
@@ -189,7 +252,14 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(e3e.ConnectionFailedError())
         client.add_read_result(key="/bloop", value="value")
         client.add_read_exception(e3e.PreconditionFailedError())
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
+        )
+        elector.run()
         self._wait_and_stop(client, elector)
 
     def test_master_failure(self):
@@ -208,62 +278,12 @@ class TestElection(unittest.TestCase):
         client.add_read_result(key="/bloop", value=None, action="delete")
         client.add_write_exception(None)
         client.add_write_exception(None)
-        elector = election.Elector("test_basic", "/bloop", interval=5, ttl=15)
-        self._wait_and_stop(client, elector)
-
-        # We are no longer the master, after being told to stop.
-        self.assertFalse(elector.master())
-
-    @mock.patch("os.path.exists")
-    def test_check_master_process_died(self, m_exists):
-        m_exists.return_value = False
-        etcdv3._client = client = mock.Mock()
-        elector = election.Elector("server-id", "/bloop", interval=5, ttl=15)
-        # etcd3 transaction returns False because the key is no longer there.
-        client.transaction.return_value = {}
-        self.assertRaises(
-            election.RestartElection, elector._check_master_process, "server-id:1234"
+        elector = election.Elector(
+            "test_basic",
+            "/bloop",
+            self.mock_is_master,
+            interval=5,
+            ttl=15,
         )
-        self.assertEqual(
-            [
-                mock.call(
-                    {
-                        "compare": [
-                            {
-                                "value": "c2VydmVyLWlkOjEyMzQ=",
-                                "result": "EQUAL",
-                                "key": "L2Jsb29w",
-                                "target": "VALUE",
-                            }
-                        ],
-                        "success": [{"request_delete_range": {"key": "L2Jsb29w"}}],
-                        "failure": [],
-                    }
-                )
-            ],
-            client.transaction.mock_calls,
-        )
-        client.failure = None
-        self._wait_and_stop(client, elector)
-
-    @mock.patch("os.path.exists")
-    def test_check_master_process_other_server(self, m_exists):
-        m_exists.return_value = False
-        etcdv3._client = client = mock.Mock()
-        elector = election.Elector("server-id", "/bloop", interval=5, ttl=15)
-        elector._check_master_process("other-server:1234")
-        self.assertEqual([], client.delete.mock_calls)
-        self.assertEqual([], client.transaction.mock_calls)
-        client.failure = None
-        self._wait_and_stop(client, elector)
-
-    @mock.patch("os.path.exists")
-    def test_check_master_process_still_alive(self, m_exists):
-        m_exists.return_value = True
-        etcdv3._client = client = mock.Mock()
-        elector = election.Elector("server-id", "/bloop", interval=5, ttl=15)
-        elector._check_master_process("server-id:1234")
-        self.assertEqual([], client.delete.mock_calls)
-        self.assertEqual([], client.transaction.mock_calls)
-        client.failure = None
+        elector.run()
         self._wait_and_stop(client, elector)
