@@ -74,7 +74,7 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 		{"netkit-on-67", types.DeviceTypeNetkit, types.DeviceTypeNetkit, true},
 	}
 
-	for _, tc := range subtests {
+	for i, tc := range subtests {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.needs67 && !kernelAtLeast(t, 6, 7) {
 				t.Skip("skipping: requires kernel 6.7+ for netkit")
@@ -92,7 +92,10 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 				deviceType: tc.request,
 				logger:     logrus.NewEntry(logrus.New()),
 			}
-			hostName := fmt.Sprintf("calitest%d", os.Getpid())
+			// Distinct name per subtest, plus upfront cleanup, so a
+			// leftover host-side link from a prior run can't cause EEXIST.
+			hostName := fmt.Sprintf("calit%d-%d", os.Getpid(), i)
+			cleanupHostLink(hostName)
 			defer cleanupHostLink(hostName)
 
 			var gotType string
