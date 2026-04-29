@@ -43,28 +43,21 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
 fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
-  # Run the e2e binary directly via ginkgo inside calico/go-build.
+  # The test binary is already on disk -- either built into
+  # ./e2e/bin/k8s/e2e.test by the local-build branch above (which runs
+  # the build inside calico/go-build via the Makefile) or downloaded
+  # from the hashrelease by the k8s-e2e branch. The Semaphore runner
+  # has the Go toolchain ginkgo needs to drive it, so we run on the
+  # host directly rather than wrapping in calico/go-build (~2GB pull).
   echo "[INFO] starting e2e tests..."
   pushd "${HOME}/calico" || exit
-  GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
-  docker run --rm --init --net=host \
-    -e LOCAL_USER_ID="$(id -u)" \
-    -e GOCACHE=/go-cache \
-    -e GOPATH=/go \
-    -e KUBECONFIG=/kubeconfig \
-    -e PRODUCT=${PRODUCT:-calico} \
-    ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
-    -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
-    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
-    -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
-    -w /go/src/github.com/projectcalico/calico \
-    "calico/go-build:${GO_BUILD_VER}" \
+  PRODUCT="${PRODUCT:-calico}" \
     make e2e-run \
-      KUBECONFIG=/kubeconfig \
+      KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" \
       E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
       E2E_OUTPUT_DIR=report \
       E2E_JUNIT_REPORT=junit.xml \
