@@ -1203,7 +1203,7 @@ func cleanupAllK8sNetworkPolicies(clientset *kubernetes.Clientset, _ client.Inte
 		log.WithError(err).Panic("failed to list k8s network policies")
 	}
 	for _, knp := range knps.Items {
-		err = clientset.NetworkingV1().NetworkPolicies("").Delete(ctx, knp.Name, metav1.DeleteOptions{})
+		err = clientset.NetworkingV1().NetworkPolicies(knp.Namespace).Delete(ctx, knp.Name, metav1.DeleteOptions{})
 		if err != nil {
 			log.WithError(err).Panicf("failed to delete k8s network policy %s", knp.Name)
 		}
