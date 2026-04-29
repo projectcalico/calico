@@ -156,9 +156,9 @@ func ReleaseFromReports(ctx context.Context, c clientv3.Interface, force bool, r
 
 	// Load the reports.
 	var foundCurrent bool
-	var reports []Report
+	var reports []CheckReport
 	for _, reportFile := range reportFiles {
-		r := Report{}
+		r := CheckReport{}
 		bytes, err := os.ReadFile(reportFile)
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ func releaseIPs(ctx context.Context, c clientv3.Interface, notInUseIPs map[strin
 	}
 }
 
-func mergeReports(reports []Report) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
+func mergeReports(reports []CheckReport) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
 	for _, report := range reports {
 		mergedIPs := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {

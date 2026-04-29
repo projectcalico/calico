@@ -1202,6 +1202,13 @@ func (c *IPAMController) syncIPAM() error {
 		return err
 	}
 
+	// Run GC on all known blocks to deallocate IPs that have been released more than
+	// MinIPReclaimAgeSeconds ago.
+	err = c.garbageCollectBlocks()
+	if err != nil {
+		return err
+	}
+
 	// Release any block affinities for empty blocks that are no longer needed.
 	// This ensures Nodes don't hold on to blocks that are no longer in use, allowing them to
 	// to be claimed elsewhere.
@@ -1301,6 +1308,23 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			log.WithError(err).Warn("Failed to garbage collect one or more leaked IP addresses")
+			return err
+		}
+	}
+	return nil
+}
+
+// garbageCollectBlocks runs GC on every known IPAM block, writing back any block
+// that was modified (i.e. had IPs whose ReleasedAt grace period had elapsed).
+func (c *IPAMController) garbageCollectBlocks() error {
+	defer logIfSlow(time.Now(), "Block GC complete")
+	ctx := context.TODO()
+	ipamConfig, err := c.client.IPAM().GetIPAMConfig(ctx)
+	if err != nil {
+		return err
+	}
+	for _, kvp := range c.allBlocks {
+		if err := c.client.IPAM().GarbageCollectBlock(ctx, ipamConfig, &kvp); err != nil {
 			return err
 		}
 	}
