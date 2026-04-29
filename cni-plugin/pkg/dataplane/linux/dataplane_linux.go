@@ -16,6 +16,7 @@ package linux
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -47,6 +48,7 @@ type LinuxDataplane struct {
 	allowIPForwarding bool
 	mtu               int
 	queues            int
+	deviceType        string
 	logger            *logrus.Entry
 }
 
@@ -55,13 +57,15 @@ func NewLinuxDataplane(conf types.NetConf, logger *logrus.Entry) *LinuxDataplane
 		allowIPForwarding: conf.ContainerSettings.AllowIPForwarding,
 		mtu:               conf.MTU,
 		queues:            conf.NumQueues,
+		deviceType:        conf.DeviceType,
 		logger:            logger,
 	}
 }
 
 // DoNetworking sets up the network for the container's netns.  It creates the
-// veth pair with one end in the host network namespace and the other in the
-// container's network namespace.  It also sets up addresses and routes.
+// pod interface pair (veth or netkit) with one end in the host network
+// namespace and the other in the container's network namespace.  It also sets
+// up addresses and routes.
 func (d *LinuxDataplane) DoNetworking(
 	ctx context.Context,
 	calicoClient calicoclient.Interface,
@@ -74,7 +78,7 @@ func (d *LinuxDataplane) DoNetworking(
 	skipHostSideRoutes bool,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
-	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
+	d.logger.Infof("Setting the host side interface name to %s", hostVethName)
 
 	hostNlHandle, err := netlink.NewHandle(syscall.NETLINK_ROUTE)
 	if err != nil {
@@ -100,7 +104,7 @@ func (d *LinuxDataplane) DoNetworking(
 		return "", "", fmt.Errorf("failed to lookup %q: %v", hostVethName, err)
 	}
 
-	// Add the routes to host veth in the host namespace unless explicitly skipped
+	// Add the routes to the host-side interface in the host namespace unless explicitly skipped
 	// (e.g., for KubeVirt migration target pods where Felix will program the route)
 	if !skipHostSideRoutes {
 		err = SetupRoutes(hostNlHandle, hostVeth, result)
@@ -114,7 +118,8 @@ func (d *LinuxDataplane) DoNetworking(
 	return hostVethName, contVethMAC, err
 }
 
-// DoWorkloadNetnsSetUp only sets up the veth and the in-netns routes.
+// DoWorkloadNetnsSetUp only sets up the pod interface (veth or netkit) and
+// the in-netns routes.
 //
 // Note: this method is also used by the Felix FV test-workload to create
 // a simulated workload.
@@ -141,17 +146,16 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 		la.MTU = d.mtu
 		la.NumTxQueues = d.queues
 		la.NumRxQueues = d.queues
-		veth := &netlink.Veth{
-			LinkAttrs:     la,
-			PeerName:      hostVethName,
-			PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
-		}
 
 		var expectedHostSideIPv6Addr net.IP
-		if err := netlink.LinkAdd(veth); err != nil {
-			d.logger.Errorf("Error adding veth %+v: %s", veth, err)
+		createdType, err := d.addWorkloadLink(la, hostVethName, hostNS)
+		if err != nil {
 			return err
 		}
+		d.logger.WithFields(logrus.Fields{
+			"type":      createdType,
+			"requested": d.deviceType,
+		}).Info("Created pod interface")
 
 		hostVeth, err := hostNlHandle.LinkByName(hostVethName)
 		if err != nil {
@@ -161,7 +165,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 
 		macUpdateTimeout := time.After(5 * time.Second)
 		for {
-			// We create the veth with random MAC address because the kernel sometimes
+			// We create the link with a random MAC address because the kernel sometimes
 			// fails to honor a MAC that we set on the LinkAdd request.  In addition,
 			// LinkSetHardwareAddr sometimes fails silently so we retry.
 			if err = hostNlHandle.LinkSetHardwareAddr(hostVeth, hostSideMAC); err != nil {
@@ -180,10 +184,10 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 				expectedHostSideIPv6Addr = hostSideMACAsIPv6LL
 				break
 			}
-			d.logger.Warnf("Host-side veth MAC %s does not match expected %s. Retrying...", hostVeth.Attrs().HardwareAddr, hostSideMAC)
+			d.logger.Warnf("Host-side interface MAC %s does not match expected %s. Retrying...", hostVeth.Attrs().HardwareAddr, hostSideMAC)
 			select {
 			case <-macUpdateTimeout:
-				return fmt.Errorf("timed out waiting for host veth %q to accept MAC %s", hostVethName, hostSideMAC.String())
+				return fmt.Errorf("timed out waiting for host-side interface %q to accept MAC %s", hostVethName, hostSideMAC.String())
 			case <-time.After(100 * time.Millisecond):
 			}
 		}
@@ -225,7 +229,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		// Explicitly set the veth to UP state; the veth won't get a link local address unless it's set to UP state.
+		// Explicitly set the interface to UP state; it won't get a link local address unless it's set to UP state.
 		if err = hostNlHandle.LinkSetUp(hostVeth); err != nil {
 			return fmt.Errorf("failed to set %q up: %w", hostVethName, err)
 		}
@@ -236,7 +240,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			return err
 		}
 
-		// Explicitly set the veth to UP state; the veth won't get a link local address unless it's set to UP state.
+		// Explicitly set the interface to UP state; it won't get a link local address unless it's set to UP state.
 		if err = netlink.LinkSetUp(contVeth); err != nil {
 			return fmt.Errorf("failed to set %q up: %w", contVethName, err)
 		}
@@ -252,20 +256,20 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 
 			err = netlink.LinkSetHardwareAddr(contVeth, tmpContVethMAC)
 			if err != nil {
-				return fmt.Errorf("failed to set container veth MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
+				return fmt.Errorf("failed to set container-side interface MAC to %v as requested via cni.projectcalico.org/hwAddr: %v",
 					requestedContVethMac, err)
 			}
 
 			contVethMAC = tmpContVethMAC.String()
-			d.logger.Infof("successfully configured container veth MAC to %v as requested via cni.projectcalico.org/hwAddr",
+			d.logger.Infof("successfully configured container-side interface MAC to %v as requested via cni.projectcalico.org/hwAddr",
 				contVethMAC)
 		} else {
 			contVethMAC = contVeth.Attrs().HardwareAddr.String()
 		}
 
-		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container veth")
+		d.logger.WithField("MAC", contVethMAC).Debug("Found MAC for container-side interface")
 
-		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
+		// At this point, the pod interface pair has been created, and both ends have the right names.
 
 		// Do the per-IP version set-up.  Add gateway routes etc.
 		if hasIPv4 {
@@ -321,26 +325,26 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 					time.Sleep(50 * time.Millisecond)
 					d.logger.Info("Retry lookup of host-side IPv6 link local address...")
 				}
-				// No need to add a dummy next hop route as the host veth device will already have an IPv6
+				// No need to add a dummy next hop route as the host-side interface will already have an IPv6
 				// link local address that can be used as a next hop.
-				// Just fetch the address of the host end of the veth and use it as the next hop.
+				// Just fetch the address of the host end of the pod interface and use it as the next hop.
 				addresses, err = hostNlHandle.AddrList(hostVeth, netlink.FAMILY_V6)
 				if err != nil {
-					d.logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
+					d.logger.Errorf("Error listing IPv6 addresses for the host side of the pod interface: %s", err)
 				}
 
 				if len(addresses) < 1 {
-					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+					// If the host side doesn't have an IPv6 address then this host probably doesn't
 					// support IPv6. Since a IPv6 address has been allocated that can't be used,
 					// return an error.
-					err = fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
+					err = fmt.Errorf("failed to get IPv6 addresses for host side of the pod interface")
 				} else {
 					if expectedHostSideIPv6Addr != nil && !expectedHostSideIPv6Addr.Equal(addresses[0].IP) {
 						// [Shaun] I think we hit this case if the kernel hasn't finished processing
 						// the MAC update above when we bring the device up.  It uses the original
 						// random MAC to generate the IPv6 link local address.  To work around that,
 						// toggle the device down/up, which refreshes the calculation of the address.
-						d.logger.Warnf("Host-side veth received unexpected link-local IP; toggling it down/up to reset the IP.")
+						d.logger.Warnf("Host-side interface received unexpected link-local IP; toggling it down/up to reset the IP.")
 						if err = hostNlHandle.LinkSetDown(hostVeth); err != nil {
 							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
 						}
@@ -355,7 +359,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 							return fmt.Errorf("failed to set %q down: %w", hostVethName, err)
 						}
 						// Leave an error behind so that we retry the loop.
-						err = fmt.Errorf("host-side veth got wrong link-local IP address: %s", addresses[0].IP)
+						err = fmt.Errorf("host-side interface got wrong link-local IP address: %s", addresses[0].IP)
 					}
 				}
 
@@ -363,7 +367,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 					continue
 				}
 
-				d.logger.Infof("Host-side veth link-local IP found: %s", addresses[0].IP.String())
+				d.logger.Infof("Host-side interface link-local IP found: %s", addresses[0].IP.String())
 				break
 			}
 
@@ -386,7 +390,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 			}
 		}
 
-		// Now add the IPs to the container side of the veth.
+		// Now add the IPs to the container side of the pod interface.
 		for _, addr := range ipAddrs {
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
 				return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
@@ -401,7 +405,7 @@ func (d *LinuxDataplane) DoWorkloadNetnsSetUp(
 	})
 
 	if err != nil {
-		d.logger.Errorf("Error creating veth: %s", err)
+		d.logger.Errorf("Error creating pod interface: %s", err)
 		return "", err
 	}
 
@@ -417,7 +421,7 @@ func disableDAD(contVethName string) error {
 	return nil
 }
 
-// SetupRoutes sets up the routes for the host side of the veth pair.
+// SetupRoutes sets up the routes for the host side of the pod interface.
 func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cniv1.Result) error {
 
 	// Go through all the IPs and add routes for each IP in the result.
@@ -488,7 +492,7 @@ func SetupRoutes(hostNlHandle *netlink.Handle, hostVeth netlink.Link, result *cn
 	return nil
 }
 
-// configureSysctls configures necessary sysctls required for the host side of the veth pair for IPv4 and/or IPv6.
+// configureSysctls configures necessary sysctls required for the host side of the pod interface for IPv4 and/or IPv6.
 func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 	var err error
 
@@ -510,8 +514,8 @@ func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 		// MAC. We install explicit routes into the containers network
 		// namespace and we use a link-local address for the gateway.  Turing on proxy ARP
 		// means that we don't need to assign the link local address explicitly to each
-		// host side of the veth, which is one fewer thing to maintain and one fewer
-		// thing we may clash over.
+		// host side of the pod interface, which is one fewer thing to maintain and one
+		// fewer thing we may clash over.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostVethName), "1"); err != nil {
 			return fmt.Errorf("failed to set net.ipv4.conf.%s.proxy_arp=1: %s", hostVethName, err)
 		}
@@ -591,6 +595,77 @@ func (d *LinuxDataplane) configureContainerSysctls(hasIPv4, hasIPv6 bool) error 
 	return nil
 }
 
+// addWorkloadLink creates the virtual device pair (veth or netkit L2) with the
+// container end in the current (container) netns and the host end atomically
+// placed in hostNS. When d.deviceType requests netkit but the kernel does not
+// support it, it silently falls back to veth. Returns the actual type created.
+//
+// Note: la.Name is the container-side interface name; hostName is the
+// host-side. For veth either side can be primary, but for netkit the primary
+// must live in the host netns so Felix can attach BPF_NETKIT_PRIMARY there
+// (and the pod-side BPF_NETKIT_PEER is attached from the host netns too).
+// We therefore call LinkAdd from inside hostNS for netkit, with the peer
+// targeted at the current (container) netns.
+func (d *LinuxDataplane) addWorkloadLink(la netlink.LinkAttrs, hostName string, hostNS ns.NetNS) (string, error) {
+	if d.deviceType == types.DeviceTypeNetkit {
+		primaryAttrs := la
+		primaryAttrs.Name = hostName
+
+		var addErr error
+		err := hostNS.Do(func(contNS ns.NetNS) error {
+			peerAttrs := netlink.NewLinkAttrs()
+			peerAttrs.Name = la.Name
+			peerAttrs.Namespace = netlink.NsFd(int(contNS.Fd()))
+			nk := &netlink.Netkit{
+				LinkAttrs:  primaryAttrs,
+				Mode:       netlink.NETKIT_MODE_L2,
+				Policy:     netlink.NETKIT_POLICY_FORWARD,
+				PeerPolicy: netlink.NETKIT_POLICY_FORWARD,
+			}
+			nk.SetPeerAttrs(&peerAttrs)
+			addErr = netlink.LinkAdd(nk)
+			return nil
+		})
+		if err != nil {
+			return "", fmt.Errorf("entering host netns to create netkit: %w", err)
+		}
+		if addErr == nil {
+			return types.DeviceTypeNetkit, nil
+		}
+		if !isNetkitUnsupported(addErr) {
+			d.logger.WithError(addErr).Error("Error adding netkit link")
+			return "", addErr
+		}
+		d.logger.WithError(addErr).Info(
+			"netkit not supported on this kernel; falling back to veth")
+	}
+
+	veth := &netlink.Veth{
+		LinkAttrs:     la,
+		PeerName:      hostName,
+		PeerNamespace: netlink.NsFd(int(hostNS.Fd())),
+	}
+	if err := netlink.LinkAdd(veth); err != nil {
+		d.logger.Errorf("Error adding veth %+v: %s", veth, err)
+		return "", err
+	}
+	return types.DeviceTypeVeth, nil
+}
+
+// isNetkitUnsupported reports whether the error returned by netlink.LinkAdd on a
+// netkit device indicates that the kernel does not know about the netkit link
+// kind. Narrowed to errnos the kernel is known to emit for an unrecognised link
+// type; anything broader risks masking real failures (EEXIST, EPERM, etc.).
+func isNetkitUnsupported(err error) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	// On Linux, syscall.EOPNOTSUPP and syscall.ENOTSUP alias the same
+	// value (95), so one case covers both.
+	return errno == syscall.EOPNOTSUPP
+}
+
 // writeProcSys takes the sysctl path and a string value to set i.e. "0" or "1" and sets the sysctl.
 func writeProcSys(path, value string) error {
 	f, err := os.OpenFile(path, os.O_WRONLY, 0)
@@ -620,7 +695,7 @@ func (d *LinuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 
 	logCtx.Info("Deleting workload's device in netns.")
 
-	// We've seen veth deletion hang on some very old kernels so we do it from a background goroutine.
+	// We've seen interface deletion hang on some very old kernels so we do it from a background goroutine.
 	startTime := time.Now()
 	done := make(chan struct{})
 
@@ -629,7 +704,7 @@ func (d *LinuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	go func() {
 		defer close(done)
 		nsErr = ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-			logCtx.Info("Entered netns, deleting veth.")
+			logCtx.Info("Entered netns, deleting pod interface.")
 			ifName := args.IfName
 			var iface netlink.Link
 			iface, linkErr = netlink.LinkByName(ifName)
@@ -656,11 +731,11 @@ func (d *LinuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 
 		if linkErr != nil {
 			if _, ok := linkErr.(netlink.LinkNotFoundError); ok {
-				logCtx.Info("Workload's veth was already gone.  Nothing to do.")
+				logCtx.Info("Workload's pod interface was already gone.  Nothing to do.")
 				return nil
 			}
-			logCtx.WithError(linkErr).Error("Failed to clean up workload's veth.")
-			return fmt.Errorf("failed to clean up workload's veth inside netns: %w", linkErr)
+			logCtx.WithError(linkErr).Error("Failed to clean up workload's pod interface.")
+			return fmt.Errorf("failed to clean up workload's pod interface inside netns: %w", linkErr)
 		}
 
 		logCtx.WithField("after", time.Since(startTime)).Infof("Deleted device in netns.")
