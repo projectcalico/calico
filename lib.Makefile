@@ -1598,7 +1598,8 @@ KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
-	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
+	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
@@ -1610,6 +1611,10 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 
 $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
+
+$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): $(call local-deps-go-files,key-cert-provisioner)
+	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
+	touch $@
 
 # Operator is built from a separate repo/branch. It only needs
 # calico_versions.yml (a static file with version strings), not the
