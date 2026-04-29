@@ -1374,7 +1374,7 @@ func TestAttachNetkit(t *testing.T) {
 	workload0 := createNetkitName("workloadep0")
 	defer deleteLink(workload0)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{

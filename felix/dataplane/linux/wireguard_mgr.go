@@ -69,7 +69,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 			logCtx.WithField("hostname", msg.Hostname).Debug("ignore update for mismatched IP version")
 			return
 		}
-		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromString(msg.Ipv4Addr))
+		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromIPOrCIDRString(msg.Ipv4Addr))
 	case *proto.HostMetadataV4V6Remove:
 		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Remove update")
 		if m.ipVersion != 4 {

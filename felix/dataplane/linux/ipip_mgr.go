@@ -171,7 +171,7 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 		RouteKey: routetable.RouteKey{
 			CIDR: cidr,
 		},
-		GW:       ip.FromString(remoteAddr),
+		GW:       ip.FromIPOrCIDRString(remoteAddr),
 		Protocol: m.routeProtocol,
 		MTU:      m.dpConfig.IPIPMTU,
 	}

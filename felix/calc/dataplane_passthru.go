@@ -18,7 +18,6 @@ import (
 	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
@@ -34,18 +33,36 @@ import (
 // DataplanePassthru passes through some datamodel updates to the dataplane layer, removing some
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
+//
+// HostMetadataV4V6Update is sourced from two streams that may both be live for the
+// same host:
+//   - HostIPKey (IPv4 only, derived from Node BGP by the syncer): provides a /32 fallback.
+//   - Node resource (BGP IPv4/IPv6 + labels + ASN): authoritative when present.
+//
+// We track each source separately so a delete on one side doesn't clobber data
+// from the other side, then recompute and emit the merged view.
 type DataplanePassthru struct {
 	ipv6Support bool
 	callbacks   passthruCallbacks
 
-	hosts map[string]*HostInfo
+	// hostIPv4 is the /32 derived from a HostIPKey update, keyed by hostname.
+	hostIPv4 map[string]string
+	// nodeInfo is the per-host info derived from a Node resource. A non-nil entry
+	// means the Node resource currently exists for that host; nil/missing means it
+	// has been deleted (or was treated as deleted because its BGP spec was empty).
+	nodeInfo map[string]*HostInfo
+	// lastEmitted records the last HostInfo we sent for each host, so we can skip
+	// no-op updates and only emit when the merged view actually changed.
+	lastEmitted map[string]*HostInfo
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
 	return &DataplanePassthru{
 		ipv6Support: ipv6Support,
 		callbacks:   callbacks,
-		hosts:       map[string]*HostInfo{},
+		hostIPv4:    map[string]string{},
+		nodeInfo:    map[string]*HostInfo{},
+		lastEmitted: map[string]*HostInfo{},
 	}
 }
 
@@ -102,145 +119,146 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
+// processModelHostIP handles HostIPKey updates. The value is a bare IPv4 address;
+// store it as a host CIDR (/32) so the format matches the Node-resource path.
 func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
 	hostname := key.Hostname
 	if update.Value == nil {
 		log.WithField("update", update).Debug("Passing-through HostIP deletion")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
-		return
+		delete(h.hostIPv4, hostname)
+	} else {
+		ip := update.Value.(*net.IP)
+		log.WithField("update", update).Debug("Passing-through HostIP update")
+		h.hostIPv4[hostname] = ip.String() + "/32"
 	}
-
-	ip := update.Value.(*net.IP)
-	log.WithField("update", update).Debug("Passing-through HostIP update")
-	hostUpdate := &HostInfo{
-		ip4Addr: ip.String(),
-		//ip6Addr: "", //TODO remove // required for print in event sequencer
-		labels: nil,
-	}
-	h.processNodeUpdate(hostname, hostUpdate, true)
+	h.recomputeAndEmit(hostname)
 }
 
 func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
-	// Handle node resource to pass-through HostMetadataV6Update/HostMetadataV6Remove messages
-	// with IPv6 node address updates. IPv4 updates are handled above with model.HostIPKey updates.
-	log.WithField("update", update).Debug("Passing-through a Node update")
 	hostname := key.Name
 	if update.Value == nil {
 		log.WithField("update", update).Debug("Passing-through Node remove")
-		delete(h.hosts, hostname)
-		h.callbacks.OnHostMetadataRemove(hostname)
+		delete(h.nodeInfo, hostname)
+		h.recomputeAndEmit(hostname)
 		return
 	}
 
 	node, _ := update.Value.(*internalapi.Node)
 	log.WithField("update", update).Debug("Passing-through Node update")
-	data := &HostInfo{
-		//ip4Addr: &net.IPNet{}, // required for print in event sequencer
-		//ip6Addr: &net.IPNet{}, // required for print in event sequencer
-		labels: node.Labels,
+
+	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
+	// Node had been deleted from this stream — there is no useful metadata to
+	// pass through. A nil BGP, by contrast, leaves the Node entry alive (with
+	// empty IPs) since other Node info such as labels may still be relevant.
+	if bgp := node.Spec.BGP; bgp != nil &&
+		bgp.IPv4Address == "" && bgp.IPv6Address == "" && bgp.ASNumber == nil {
+		delete(h.nodeInfo, hostname)
+		h.recomputeAndEmit(hostname)
+		return
 	}
 
+	info := &HostInfo{labels: node.Labels}
 	if node.Spec.BGP != nil {
-		logrus.Infof("tofu0 %v", node.Spec.BGP.IPv4Address)
-		//ip4, ip4net, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv4Address)
-		//ip6, ip6net, _ := net.ParseCIDROrIP(node.Spec.BGP.IPv6Address)
-		data.ip4Addr = node.Spec.BGP.IPv4Address
-		data.ip6Addr = node.Spec.BGP.IPv6Address
-		logrus.Infof("tofu1 %v", data.ip4Addr)
-		/* ip4net != nil {
-			ip4net.IP = ip4.IP
-			data.ip4Addr = ip4net
-			logrus.Infof("tofu2 %v", data.ip4Addr)
+		// BGP IPv4Address/IPv6Address must already be in CIDR form per the v3
+		// CRD validation (`cidrv4`/`cidrv6` tags). Bare IPs are dropped silently
+		// here so the dataplane never sees an ambiguous address.
+		if addr := node.Spec.BGP.IPv4Address; addr != "" {
+			if s, ok := parseBGPCIDR(addr); ok {
+				info.ip4Addr = s
+			} else {
+				log.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
+			}
 		}
-		if ip6net != nil {
-			ip6net.IP = ip6.IP
-			data.ip6Addr = ip6net
-		}*/
+		if addr := node.Spec.BGP.IPv6Address; addr != "" {
+			if s, ok := parseBGPCIDR(addr); ok {
+				info.ip6Addr = s
+			} else {
+				log.WithField("addr", addr).Warn("Ignoring Node BGP IPv6Address: not a CIDR")
+			}
+		}
 		if node.Spec.BGP.ASNumber != nil {
-			data.asnumber = node.Spec.BGP.ASNumber.String()
+			info.asnumber = node.Spec.BGP.ASNumber.String()
 		}
-	}
-
-	if h.ipv6Support && node.Spec.BGP == nil {
-		// BGP is turned off, try to get one from the node resource. This is a
-		// similar fallback as for IPv4, see how HostIPKey is generated in
-		// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go
-		var ipnet *net.IPNet
-		_, ipnet = cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
+	} else if h.ipv6Support {
+		// BGP is turned off; fall back to the Node's address list for IPv6.
+		// Mirrors how HostIPKey is generated for IPv4 in
+		// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go.
+		ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
 		if ipnet == nil {
-			_, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
+			ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
 		}
 		if ipnet != nil {
-			data.ip6Addr = ipnet.String()
+			ipnet.IP = ipv6.IP
+			info.ip6Addr = ipnet.String()
 		}
 	}
 
-	h.processNodeUpdate(hostname, data, false)
+	h.nodeInfo[hostname] = info
+	h.recomputeAndEmit(hostname)
 }
 
-func (h *DataplanePassthru) processNodeUpdate(hostname string, hostUpdate *HostInfo, fromHostIP bool) {
-	updateIsNil := len(hostUpdate.ip4Addr) == 0 && len(hostUpdate.ip6Addr) == 0 &&
-		len(hostUpdate.asnumber) == 0 && len(hostUpdate.labels) == 0
+// recomputeAndEmit derives the merged HostInfo for hostname from the per-source
+// state and emits an Update or Remove only when the merged view differs from
+// what was last sent.
+func (h *DataplanePassthru) recomputeAndEmit(hostname string) {
+	merged := h.merge(hostname)
+	last, hadLast := h.lastEmitted[hostname]
 
-	if updateIsNil {
+	if merged == nil {
+		if hadLast {
+			delete(h.lastEmitted, hostname)
+			h.callbacks.OnHostMetadataRemove(hostname)
+		}
 		return
 	}
 
-	hostInfo := h.hosts[hostname]
-	if hostInfo == nil {
-		h.hosts[hostname] = hostUpdate
-		h.callbacks.OnHostMetadataUpdate(hostname, hostUpdate)
+	if hadLast && hostInfoEqual(merged, last) {
 		return
 	}
 
-	// hostInfo in not nil.
-
-	var nodeChanged bool
-
-	if hostUpdate.ip4Addr != hostInfo.ip4Addr {
-		logrus.Infof("pepper10 %v", hostUpdate.ip4Addr)
-		//if hostUpdate.ip4Addr.IP.String() != hostInfo.ip4Addr.IP.String() {
-		// A HostIP-sourced /32 should not overwrite a more specific BGP-sourced prefix
-		// (e.g., /24 from a Node resource). Node resource updates always take precedence.
-		//if !fromHostIP || !isHostRoute(hostUpdate.ip4Addr) || isHostRoute(hostInfo.ip4Addr) || hostInfo.ip4Addr.IP == nil {
-		hostInfo.ip4Addr = hostUpdate.ip4Addr
-		nodeChanged = true
-		//}
-	}
-
-	if hostUpdate.ip6Addr != hostInfo.ip6Addr {
-		//if !fromHostIP || !isHostRoute(hostUpdate.ip6Addr) || isHostRoute(hostInfo.ip6Addr) || hostInfo.ip6Addr.IP == nil {
-		hostInfo.ip6Addr = hostUpdate.ip6Addr
-		nodeChanged = true
-		//}
-	}
-
-	if hostUpdate.asnumber != hostInfo.asnumber {
-		hostInfo.asnumber = hostUpdate.asnumber
-		nodeChanged = true
-	}
-
-	if !maps.Equal(hostUpdate.labels, hostInfo.labels) {
-		hostInfo.labels = hostUpdate.labels
-		nodeChanged = true
-	}
-
-	if nodeChanged {
-		log.WithField("new node", hostInfo).Debug("Passing-through Node update")
-		h.hosts[hostname] = hostInfo
-		h.callbacks.OnHostMetadataUpdate(hostname, hostInfo)
-	}
+	h.lastEmitted[hostname] = merged
+	h.callbacks.OnHostMetadataUpdate(hostname, merged)
 }
 
-// isHostRoute returns true if the IPNet represents a host route (/32 for IPv4, /128 for IPv6).
-// Returns false for empty/nil IPNets.
-func isHostRoute(n *net.IPNet) bool {
-	if n == nil || n.IP == nil {
-		return false
+// merge returns the HostInfo to publish for hostname, or nil if neither source
+// has live data for it. Node data wins over the HostIPKey fallback when both
+// are present; the HostIPKey-derived /32 only fills in IPv4 when there is no
+// Node-derived value for it.
+func (h *DataplanePassthru) merge(hostname string) *HostInfo {
+	node, hasNode := h.nodeInfo[hostname]
+	hostIP, hasHostIP := h.hostIPv4[hostname]
+
+	if !hasNode && !hasHostIP {
+		return nil
 	}
-	ones, bits := n.Mask.Size()
-	return ones == bits && bits > 0
+
+	if hasNode {
+		merged := *node
+		if merged.ip4Addr == "" && hasHostIP {
+			merged.ip4Addr = hostIP
+		}
+		return &merged
+	}
+	return &HostInfo{ip4Addr: hostIP}
+}
+
+func hostInfoEqual(a, b *HostInfo) bool {
+	return a.ip4Addr == b.ip4Addr &&
+		a.ip6Addr == b.ip6Addr &&
+		a.asnumber == b.asnumber &&
+		maps.Equal(a.labels, b.labels)
+}
+
+// parseBGPCIDR strictly parses a CIDR string and returns it normalized to "host
+// IP / mask" form (e.g. "192.168.0.2/24" rather than "192.168.0.0/24"). Returns
+// false if the string is not a valid CIDR — bare IPs are rejected.
+func parseBGPCIDR(s string) (string, bool) {
+	ip, ipnet, err := net.ParseCIDR(s)
+	if err != nil || ipnet == nil {
+		return "", false
+	}
+	ipnet.IP = ip.IP
+	return ipnet.String(), true
 }
 
 func kubernetesServiceToProto(s *kapiv1.Service) *proto.ServiceUpdate {
