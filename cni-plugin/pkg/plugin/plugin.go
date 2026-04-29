@@ -208,6 +208,17 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		conf.NumQueues = 1
 	}
 
+	// Validate and normalize DeviceType. Unknown values fall back to veth to
+	// keep old and misconfigured CNI configs working.
+	switch conf.DeviceType {
+	case "", types.DeviceTypeVeth, types.DeviceTypeNetkit:
+		// OK.
+	default:
+		logrus.WithField("device_type", conf.DeviceType).Warn(
+			"Unknown device_type in CNI config, falling back to veth.")
+		conf.DeviceType = ""
+	}
+
 	// Determine which node name to use.
 	nodename := utils.DetermineNodename(conf)
 
