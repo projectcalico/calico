@@ -57,3 +57,12 @@ shell-test:
 .PHONY: ci
 ## Run what CI runs
 ci: clean static-checks test shell-test
+
+$(BINDIR):
+	@mkdir -p $(BINDIR)
+
+parent-branch: $(BINDIR)/parent-branch
+
+$(BINDIR)/parent-branch: $(BINDIR) cmd/parent-branch/main.go
+	$(eval LDFLAGS=-X main.gitRepoSlug=$(ORGANIZATION)/$(GIT_REPO) -X main.releasePrefix=$(RELEASE_BRANCH_PREFIX)-v)
+	$(call build_binary, ./cmd/parent-branch, $(BINDIR)/parent-branch)
