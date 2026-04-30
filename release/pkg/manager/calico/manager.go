@@ -85,9 +85,9 @@ func NewManager(opts ...Option) *CalicoManager {
 		helmRepoURL:       utils.CalicoHelmRepoURL,
 		operatorRegistry:  operator.DefaultRegistry,
 		operatorImage:     operator.DefaultImage,
-		operatorGithubOrg: operator.DefaultOrg,
-		operatorRepo:      operator.DefaultRepoName,
-		operatorBranch:    operator.DefaultBranchName,
+		operatorGithubOrg: operator.Organization(),
+		operatorRepo:      operator.Repo(),
+		operatorBranch:    operator.Branch(),
 	}
 
 	// Run through provided options.
