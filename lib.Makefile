@@ -1601,7 +1601,19 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)
 
-$(REPO_ROOT)/node/.image.created-$(ARCH): $(call local-deps-go-files,node)
+# Shared libbpf clone marker. Both node and cmd/calico (and the felix
+# sub-make steps invoked from them) need libbpf, and `kind-build-images`
+# runs the per-image markers under `make -j`. Without a shared prereq,
+# the parallel sub-makes race in felix/bpf-gpl: each runs `rm -rf libbpf
+# && git clone`, and one fails with "destination path 'libbpf' already
+# exists". Pointing both image markers at this single node makes Make
+# clone exactly once before the parallel image builds start.
+LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/.libbpf-$(LIBBPF_VERSION)
+
+$(LIBBPF_MARKER):
+	$(MAKE) -C $(REPO_ROOT)/felix clone-libbpf
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): $(LIBBPF_MARKER) $(call local-deps-go-files,node)
 	$(MAKE) -C $(REPO_ROOT)/node image
 	touch $@
 
@@ -1609,7 +1621,7 @@ $(REPO_ROOT)/whisker/.image.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/whisker image
 	touch $@
 
-$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(call local-deps-go-files,cmd)
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(LIBBPF_MARKER) $(call local-deps-go-files,cmd)
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
 
 $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): $(call local-deps-go-files,key-cert-provisioner)
