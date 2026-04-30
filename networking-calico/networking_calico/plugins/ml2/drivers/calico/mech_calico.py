@@ -26,9 +26,11 @@
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
 from datetime import datetime, timedelta
+import inspect
 import os
 import re
 import threading
+import time
 import uuid
 from functools import wraps
 
@@ -52,6 +54,9 @@ from neutron_lib import constants
 from neutron_lib import context as ctx
 from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
+from neutron_lib.callbacks import events
+from neutron_lib.callbacks import registry
+from neutron_lib.callbacks import resources
 from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
@@ -84,6 +89,7 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import (
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
+import networking_calico.plugins.ml2.drivers.calico.endpoint_syncer as worker
 
 
 # Register [AGENT] options, which we need in order to successfully use
@@ -264,6 +270,13 @@ task_id_lock = threading.Lock()
 last_task_id = 0
 
 
+# This is from commmon.ovn.utils
+def get_method_class(method):
+    if not inspect.ismethod(method):
+        return
+    return method.__self__.__class__
+
+
 class TrackTask(oslo_context.context.RequestContext):
     def __init__(self, log_string):
         super(TrackTask, self).__init__(overwrite=True)
@@ -296,6 +309,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             "tap",
             {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
         )
+        # Let's start the process of switching to use native threading :)
+        from eventlet import patcher
+        self.native_threading = patcher.original("threading")
+
         qos_driver.register(self)
         # Lock to prevent concurrent initialisation.
         self._init_lock = Semaphore()
@@ -336,6 +353,61 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Make sure we initialise even if we don't see any API calls.
         eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init, voting=True)
         LOG.info("Created Calico mechanism driver %s", self)
+
+    def initialize(self):
+        self.subscribe()
+
+    def subscribe(self):
+        registry.subscribe(self.post_fork_initialize,
+                           resources.PROCESS,
+                           events.AFTER_INIT,
+                           cancellable=True)
+
+    def post_fork_initialize(self, resource, event, trigger, payload=None):
+        trigger_class = get_method_class(trigger)
+
+        if trigger_class == worker.WorkloadEndPointSyncer:
+            LOG.info("Initializing WorkloadEndpointSyncer")
+
+            # Init the DB.
+            self.db = None
+            self._get_db()
+
+            # Create a Keystone client.
+            authcfg = cfg.CONF.keystone_authtoken
+            LOG.debug("authcfg = %r", authcfg)
+            for key in authcfg:
+                if "password" in key:
+                    LOG.debug("authcfg[%s] = %s", key, "***")
+                else:
+                    LOG.debug("authcfg[%s] = %s", key, authcfg[key])
+
+            auth = v3.Password(
+                user_domain_name=authcfg.user_domain_name,
+                username=authcfg.username,
+                password=authcfg.password,
+                project_domain_name=authcfg.project_domain_name,
+                project_name=authcfg.project_name,
+                auth_url=re.sub(r"/v3/?$", "", authcfg.auth_url) + "/v3",
+            )
+            sess = session.Session(auth=auth)
+            keystone_client = KeystoneClient(session=sess)
+            LOG.debug("Keystone client = %r", keystone_client)
+
+            self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
+            self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
+            self.endpoint_syncer = WorkloadEndpointSyncer(
+                self.db, self._txn_from_context, self.policy_syncer, keystone_client
+            )
+
+            self.native_and_in_another_process_resync_thread = \
+                threading.Thread(target=self.do_periodic_resync)
+
+            LOG.info("Starting the resync thread")
+            self.native_and_in_another_process_resync_thread.start()
+
+    def get_workers(self):
+        return [worker.WorkloadEndPointSyncer()]
 
     @logging_exceptions(LOG)
     def _post_fork_init(self, voting=False):
@@ -408,11 +480,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.debug("Keystone client = %r", keystone_client)
 
             # Create syncers.
-            self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
-            self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
-            self.endpoint_syncer = WorkloadEndpointSyncer(
-                self.db, self._txn_from_context, self.policy_syncer, keystone_client
-            )
+            # self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
+            # self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
+            # self.endpoint_syncer = WorkloadEndpointSyncer(
+            #     self.db, self._txn_from_context, self.policy_syncer, keystone_client
+            # )
 
             # Admin context used by (only) the thread that updates Felix agent
             # status.
@@ -449,8 +521,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 # We deliberately do this last, to ensure that all of the setup
                 # above is complete before we start running.
                 self._epoch += 1
-                eventlet.spawn(self.resync_monitor_thread, self._epoch)
-                eventlet.spawn(self.periodic_resync_thread, self._epoch)
+                # eventlet.spawn(self.resync_monitor_thread, self._epoch)
+                # eventlet.spawn(self.periodic_resync_thread, self._epoch)
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     eventlet.spawn(self.periodic_compaction_thread, self._epoch)
                 eventlet.spawn(self._status_updating_thread, self._epoch)
@@ -1248,7 +1320,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.elector.stop()
             raise
 
-    def periodic_resync_thread(self, launch_epoch):
+    def do_periodic_resync(self):
         """Periodic Neutron DB -> etcd resynchronization logic.
 
         On a fixed interval, spin over relevant Neutron DB objects and
@@ -1258,61 +1330,50 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("RESYNC")
         try:
             LOG.info("Periodic resync thread started")
-            while self._epoch == launch_epoch:
-                # Only do the resync if we are the master node.
-                if self.elector.master():
-                    LOG.info("I am master: doing periodic resync")
-                    start_time = datetime.now()
+            while True:
+                LOG.info("Doing periodic resync")
+                start_time = datetime.now()
 
-                    # Since this thread is not associated with any particular
-                    # request, we use our own admin context for accessing the
-                    # database.
-                    admin_context = ctx.get_admin_context()
+                # Since this thread is not associated with any particular
+                # request, we use our own admin context for accessing the
+                # database.
+                admin_context = ctx.get_admin_context()
 
-                    try:
-                        # Resync subnets.
-                        self.subnet_syncer.resync(admin_context)
+                try:
+                    # Resync subnets.
+                    self.subnet_syncer.resync(admin_context)
 
-                        # Resync policies.  Do this before endpoints because
-                        # it's worse to have incorrect or missing policy for a
-                        # known endpoint, than it is to have a briefly
-                        # incorrect or missing endpoint.
-                        self.policy_syncer.resync(admin_context)
+                    # Resync policies.  Do this before endpoints because
+                    # it's worse to have incorrect or missing policy for a
+                    # known endpoint, than it is to have a briefly
+                    # incorrect or missing endpoint.
+                    self.policy_syncer.resync(admin_context)
 
-                        # Resync endpoints.
-                        self.endpoint_syncer.resync(admin_context)
+                    # Resync endpoints.
+                    self.endpoint_syncer.resync(admin_context)
 
-                        # Resync ClusterInformation and FelixConfiguration.
-                        self.provide_felix_config()
+                    # Resync ClusterInformation and FelixConfiguration.
+                    self.provide_felix_config()
 
-                        # mark this resync as finished.
-                        self.last_resync_time = datetime.now()
-                        LOG.info(
-                            "The periodic resync finished after"
-                            f" {self.last_resync_time - start_time}"
-                        )
-                    except Exception:
-                        LOG.exception("Error in periodic resync thread.")
+                    # mark this resync as finished.
+                    self.last_resync_time = datetime.now()
+                    LOG.info(
+                        "The periodic resync finished after"
+                        f" {self.last_resync_time - start_time}"
+                    )
+                except Exception:
+                    LOG.exception("Error in periodic resync thread.")
 
-                    if cfg.CONF.calico.resync_interval_secs == 0:
-                        # No continuing periodic resync.
-                        break
+                if cfg.CONF.calico.resync_interval_secs == 0:
+                    # No continuing periodic resync.
+                    break
 
-                    # Reschedule ourselves.
-                    eventlet.sleep(cfg.CONF.calico.resync_interval_secs)
-                else:
-                    # Shorter sleep interval before we check if we've become
-                    # the master.  Avoids waiting a whole resync_interval_secs
-                    # if we just miss the master update.
-                    LOG.debug("I am not master")
-                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
+                # Take a nice nap, in new process and new threads :D
+                time.sleep(cfg.CONF.calico.resync_interval_secs)
+
         except Exception:
             # TODO(nj) Should we tear down the process.
             LOG.exception("Periodic resync thread died!")
-            if self.elector:
-                # Stop the elector so that we give up the mastership.
-                self.elector.stop()
-            raise
         else:
             LOG.warning("Periodic resync thread exiting.")
 
