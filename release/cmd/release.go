@@ -227,7 +227,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 
 func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
 	// Clone the operator repository to determine the operator version.
-	operatorDir := filepath.Join(tmpDir, operator.DefaultRepoName)
+	operatorDir := filepath.Join(tmpDir, c.String(operatorRepoFlag.Name))
 	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
 		return "", fmt.Errorf("clone operator repository: %w", err)
 	}
