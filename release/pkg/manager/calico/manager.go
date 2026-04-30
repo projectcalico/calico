@@ -786,6 +786,17 @@ func (r *CalicoManager) componentImages() map[string]string {
 	return components
 }
 
+// CheckImagesPublished is the exported entry point for running the gate
+// (checkHashreleaseImagesPublished) without going through the surrounding
+// publishPrereqs validation chain. It is intended for use as a preflight
+// gate in hashrelease build, where we want to validate component image
+// existence before Phase 1's expensive build work begins. The existing
+// publishPrereqs path remains the canonical entry point at Phase 2 publish
+// time.
+func (r *CalicoManager) CheckImagesPublished() error {
+	return r.checkHashreleaseImagesPublished()
+}
+
 // checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
 func (r *CalicoManager) checkHashreleaseImagesPublished() error {
 	logrus.Info("Checking images required for hashrelease have already been published")
