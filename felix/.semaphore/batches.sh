@@ -31,7 +31,7 @@ run_batch() {
           FELIX_FV_NETKIT="$FELIX_FV_NETKIT"
           FV_EXTRA_REPORT_SUFFIX="$FV_EXTRA_REPORT_SUFFIX"
           FELIX_FV_BPFATTACHTYPE="$FELIX_FV_BPFATTACHTYPE"
-          GINKGO_FOCUS="${FV_FOCUS}"
+          FOCUS="${FV_FOCUS}"
           FV_NUM_BATCHES="$num_fv_batches"
           FV_BATCHES_TO_RUN="$batch"
           check-wireguard

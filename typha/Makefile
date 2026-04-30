@@ -29,10 +29,15 @@ clean:
 ###############################################################################
 # Unit Tests
 ###############################################################################
+WHAT?=.
+FOCUS?=.*
+SKIP?=
+GINKGO_ARGS?=
+
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 ###############################################################################
 # CI/CD
@@ -67,12 +72,12 @@ st:
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -skip="$(SKIP)" -focus="$(FOCUS)" $(GINKGO_ARGS) $(WHAT)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
