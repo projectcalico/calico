@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 from neutron.db import models_v2
 from neutron.db.models.l3 import FloatingIP
 from neutron.db.qos import models as qos_models
@@ -91,8 +93,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.cache_port_project_data()
 
     def resync(self, context):
-        super(WorkloadEndpointSyncer, self).resync(context)
-        self._resync_live_migrations(context)
+        summary = super(WorkloadEndpointSyncer, self).resync(context)
+        lm_summary = self._resync_live_migrations(context)
+        if summary is not None and lm_summary is not None:
+            summary.update(lm_summary)
+        return summary
 
     def _resync_live_migrations(self, context):
         """Ensure LiveMigration resources and destination WEPs are consistent.
@@ -100,9 +105,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         For each Neutron port with migrating_to set, ensure a destination WEP
         and LiveMigration resource exist.  For each LiveMigration in etcd that
         doesn't correspond to a migrating port, delete it.
+
+        Returns a dict with ``lm_created`` / ``lm_deleted`` /
+        ``lm_total_ms`` for inclusion in the resync summary.
         """
+        lm_start = time.monotonic()
         LOG.info("Starting LiveMigration resync")
         namespace = self.namespace
+        lm_created = 0
+        lm_deleted = 0
 
         # Build the set of LiveMigration names that should exist, based on
         # Neutron ports with migrating_to set.
@@ -123,6 +134,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 # Ensure LiveMigration and destination WEP exist.
                 self.write_live_migration(port, dest_port)
                 self.write_endpoint(dest_port, context, reread=False)
+                lm_created += 1
                 LOG.info(
                     "LiveMigration resync: ensured LM and dest WEP for %s",
                     dest_wep_name,
@@ -133,8 +145,20 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             if name not in expected_lm_names:
                 LOG.warning("LiveMigration resync: deleting orphaned LM %s", name)
                 self.delete_live_migration(name, mod_revision=mod_revision)
+                lm_deleted += 1
 
-        LOG.info("LiveMigration resync done")
+        lm_total_ms = int((time.monotonic() - lm_start) * 1000)
+        LOG.info(
+            "LiveMigration resync done in %.3fs: %d created, %d deleted",
+            lm_total_ms / 1000.0,
+            lm_created,
+            lm_deleted,
+        )
+        return {
+            "lm_created": lm_created,
+            "lm_deleted": lm_deleted,
+            "lm_total_ms": lm_total_ms,
+        }
 
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:

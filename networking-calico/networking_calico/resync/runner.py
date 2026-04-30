@@ -191,18 +191,19 @@ def run_resync(
 
 
 def _run_phase(fn) -> Dict[str, Any]:
-    """Time ``fn`` and return a phase summary dict."""
+    """Time ``fn`` and return a phase summary dict.
+
+    If ``fn`` itself returns a dict (the resource syncers do, with
+    item counts and per-step timings), it is merged into the
+    summary so callers see both the wall-clock total and the
+    syncer-internal breakdown.
+    """
     t0 = time.monotonic()
-    error = None
-    try:
-        fn()
-    except Exception as exc:
-        error = "%s: %s" % (type(exc).__name__, exc)
-        LOG.exception("Resync phase failed")
-        raise
-    finally:
-        total_ms = int((time.monotonic() - t0) * 1000)
-    return {"total_ms": total_ms, "error": error}
+    detail = fn()
+    summary = {"total_ms": int((time.monotonic() - t0) * 1000), "error": None}
+    if isinstance(detail, dict):
+        summary.update(detail)
+    return summary
 
 
 def _run_narrow(
