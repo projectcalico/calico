@@ -25,11 +25,9 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
-from datetime import datetime, timedelta
 import os
 import re
 import threading
-import uuid
 from functools import wraps
 
 import eventlet
@@ -70,6 +68,7 @@ from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdv3
+from networking_calico import resync as resync_pkg
 from networking_calico.common import config as calico_config
 from networking_calico.common import intern_string
 from networking_calico.logutils import logging_exceptions
@@ -92,12 +91,6 @@ config.register_agent_state_opts_helper(cfg.CONF)
 
 LOG = log.getLogger(__name__)
 
-
-# The default interval between periodic resyncs, in seconds.
-DEFAULT_RESYNC_INTERVAL_SECS = 60
-
-# The default maximum interval between resync completions, in seconds.
-DEFAULT_RESYNC_MAX_INTERVAL_SECS = 3600
 
 calico_opts = [
     cfg.IntOpt(
@@ -132,23 +125,40 @@ calico_opts = [
         default=100,
         help="The maximum allowed size of our cache of project names.",
     ),
-    cfg.IntOpt(
-        "resync_interval_secs",
-        default=DEFAULT_RESYNC_INTERVAL_SECS,
+    cfg.StrOpt(
+        "startup_resync",
+        default="always",
+        choices=["always", "never"],
         help=(
-            "If non-zero, configures how frequently Calico rechecks its state against"
-            " the Neutron DB.  Zero means to disable any periodic rechecking.  Please"
-            " note that Calico _always_ performs an _initial_ check when the Neutron"
-            " server starts or is restarted."
+            "Whether the driver should run a full Neutron DB -> etcd "
+            "resync when neutron-server starts.  'always' (default) "
+            "spawns a one-shot greenthread from each fork that drives "
+            "the resync and exits.  'never' disables the start-of-day "
+            "resync; an operator must drive resyncs out-of-band using "
+            "the calico-resync CLI."
         ),
     ),
     cfg.IntOpt(
-        "resync_max_interval_secs",
-        default=DEFAULT_RESYNC_MAX_INTERVAL_SECS,
-        help=(
-            "Calico will log an error if the interval between periodic"
-            " resync completions surpasses this maximum (in seconds)."
+        "resync_interval_secs",
+        default=0,
+        deprecated_for_removal=True,
+        deprecated_reason=(
+            "The driver no longer runs a periodic resync thread. "
+            "Resync is now driven once at start-of-day and on demand "
+            "via the calico-resync CLI.  This option has no effect."
         ),
+        help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
+    ),
+    cfg.IntOpt(
+        "resync_max_interval_secs",
+        default=0,
+        deprecated_for_removal=True,
+        deprecated_reason=(
+            "The driver no longer runs a periodic resync thread, so "
+            "there is no inter-resync interval to police.  This option "
+            "has no effect."
+        ),
+        help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
     ),
 ]
 cfg.CONF.register_opts(calico_opts, "calico")
@@ -308,7 +318,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._etcd_watcher_thread = None
         self._my_pid = None
         self._epoch = 0
-        self.in_resync = False
         # Mapping from (hostname, port-id) to Calico's status for a port.  The
         # hostname is included to disambiguate between multiple copies of a
         # port, which may exist during a migration or a re-schedule.
@@ -329,9 +338,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # limiting.  Note: monotonic_time() uses its own epoch so it's only
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
-
-        # Last resync completion time
-        self.last_resync_time = datetime.now()
 
         # Make sure we initialise even if we don't see any API calls.
         eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init, voting=True)
@@ -443,19 +449,26 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                     current_pid,
                 )
 
-                # Start our resynchronization process and status updating. Just in
-                # case we ever get two same threads running, use an epoch counter
-                # to tell the old thread to die.
-                # We deliberately do this last, to ensure that all of the setup
-                # above is complete before we start running.
+                # Start our long-running threads.  Just in case we ever get
+                # two same threads running, use an epoch counter to tell the
+                # old thread to die.  We deliberately do this last, to ensure
+                # that all of the setup above is complete before we start
+                # running.
                 self._epoch += 1
-                eventlet.spawn(self.resync_monitor_thread, self._epoch)
-                eventlet.spawn(self.periodic_resync_thread, self._epoch)
                 if cfg.CONF.calico.etcd_compaction_period_mins > 0:
                     eventlet.spawn(self.periodic_compaction_thread, self._epoch)
                 eventlet.spawn(self._status_updating_thread, self._epoch)
                 for _ in range(cfg.CONF.calico.num_port_status_threads):
                     eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
+
+                # Start-of-day resync.  Runs once in this fork and exits.
+                # Multiple forks racing each other is harmless: the writes
+                # are idempotent and the etcd transactions are
+                # mod_revision-conditioned, so only the first writer wins
+                # for any given key.  Operators can drive further resyncs
+                # out-of-band with the calico-resync CLI.
+                if cfg.CONF.calico.startup_resync == "always":
+                    eventlet.spawn(self._run_startup_resync)
             else:
                 LOG.info(
                     "PID %s: Not a voting participant; "
@@ -1205,116 +1218,34 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             LOG.info("Port unbound, attempting delete if needed.")
             self.endpoint_syncer.delete_endpoint(port)
 
-    def resync_monitor_thread(self, launch_epoch):
-        """Monitor the interval between completed resyncs.
+    @logging_exceptions(LOG)
+    def _run_startup_resync(self):
+        """Drive a one-shot start-of-day resync from this fork.
 
-        Logs an error if the periodic resync duration surpasses
-        the configured maximum time in seconds.
-        """
-        try:
-            LOG.info("Resync monitor thread started")
+        Spawned from ``_post_fork_init`` when ``[calico]
+        startup_resync`` is ``always`` (the default).  Delegates to the
+        resync runner package, which is the same code path used by the
+        ``calico-resync`` CLI.  Exits on completion; failures are
+        logged (including the structured JSON outcome) and swallowed -
+        operators can drive a retry with ``calico-resync --all``.
 
-            while self._epoch == launch_epoch:
-                # Only monitor the resync if we are the master node.
-                if self.elector.master():
-                    LOG.info("I am master: monitoring periodic resync")
-
-                    curr_time = datetime.now()
-                    time_delta = curr_time - self.last_resync_time
-                    if (
-                        time_delta.total_seconds()
-                        > cfg.CONF.calico.resync_max_interval_secs
-                    ):
-                        LOG.error(
-                            "The time since the last resync completion has surpassed"
-                            f" {cfg.CONF.calico.resync_max_interval_secs} seconds"
-                        )
-
-                    deadline = self.last_resync_time + timedelta(
-                        seconds=cfg.CONF.calico.resync_max_interval_secs
-                    )
-                    time_left = (deadline - curr_time).total_seconds()
-                    polling_rate = cfg.CONF.calico.resync_max_interval_secs / 5
-                    sleep_time = time_left if deadline > curr_time else polling_rate
-                    eventlet.sleep(sleep_time)
-                else:
-                    LOG.debug("I am not master")
-                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
-        except Exception:
-            # TODO(nj) Should we tear down the process.
-            LOG.exception("Resync monitor thread died!")
-            if self.elector:
-                # Stop the elector so that we give up the mastership.
-                self.elector.stop()
-            raise
-
-    def periodic_resync_thread(self, launch_epoch):
-        """Periodic Neutron DB -> etcd resynchronization logic.
-
-        On a fixed interval, spin over relevant Neutron DB objects and
-        reconcile them with etcd, ensuring that the etcd database and Neutron
-        are in synchronization with each other.
+        We pass the driver's own syncers into the runner rather than
+        letting it build fresh ones, so the same Keystone client and
+        project-data cache are reused.
         """
         TrackTask("RESYNC")
-        try:
-            LOG.info("Periodic resync thread started")
-            while self._epoch == launch_epoch:
-                # Only do the resync if we are the master node.
-                if self.elector.master():
-                    LOG.info("I am master: doing periodic resync")
-                    start_time = datetime.now()
-
-                    # Since this thread is not associated with any particular
-                    # request, we use our own admin context for accessing the
-                    # database.
-                    admin_context = ctx.get_admin_context()
-
-                    try:
-                        # Resync subnets.
-                        self.subnet_syncer.resync(admin_context)
-
-                        # Resync policies.  Do this before endpoints because
-                        # it's worse to have incorrect or missing policy for a
-                        # known endpoint, than it is to have a briefly
-                        # incorrect or missing endpoint.
-                        self.policy_syncer.resync(admin_context)
-
-                        # Resync endpoints.
-                        self.endpoint_syncer.resync(admin_context)
-
-                        # Resync ClusterInformation and FelixConfiguration.
-                        self.provide_felix_config()
-
-                        # mark this resync as finished.
-                        self.last_resync_time = datetime.now()
-                        LOG.info(
-                            "The periodic resync finished after"
-                            f" {self.last_resync_time - start_time}"
-                        )
-                    except Exception:
-                        LOG.exception("Error in periodic resync thread.")
-
-                    if cfg.CONF.calico.resync_interval_secs == 0:
-                        # No continuing periodic resync.
-                        break
-
-                    # Reschedule ourselves.
-                    eventlet.sleep(cfg.CONF.calico.resync_interval_secs)
-                else:
-                    # Shorter sleep interval before we check if we've become
-                    # the master.  Avoids waiting a whole resync_interval_secs
-                    # if we just miss the master update.
-                    LOG.debug("I am not master")
-                    eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
-        except Exception:
-            # TODO(nj) Should we tear down the process.
-            LOG.exception("Periodic resync thread died!")
-            if self.elector:
-                # Stop the elector so that we give up the mastership.
-                self.elector.stop()
-            raise
+        LOG.info("Start-of-day resync thread started")
+        result = resync_pkg.run_resync(
+            resync_pkg.Scope.all(),
+            db_plugin=self.db,
+            subnet_syncer=self.subnet_syncer,
+            policy_syncer=self.policy_syncer,
+            endpoint_syncer=self.endpoint_syncer,
+        )
+        if result.ok:
+            LOG.info("Start-of-day resync done: %s", result.to_dict())
         else:
-            LOG.warning("Periodic resync thread exiting.")
+            LOG.error("Start-of-day resync failed: %s", result.to_dict())
 
     def periodic_compaction_thread(self, launch_epoch):
         """Periodic etcd compaction logic.
@@ -1353,133 +1284,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             raise
         else:
             LOG.warning("Periodic compaction thread exiting.")
-
-    @etcdv3.logging_exceptions
-    def provide_felix_config(self):
-        """provide_felix_config
-
-        Specify the prefix of the TAP interfaces that Felix should
-        look for and work with.  This config setting does not have a
-        default value, because different cloud systems will do
-        different things.  Here we provide the prefix that Neutron
-        uses.
-        """
-        LOG.info("Providing Felix configuration")
-
-        rewrite_cluster_info = True
-        while rewrite_cluster_info:
-            # Get existing global ClusterInformation.  We will add to this,
-            # rather than trampling on anything that may already be there, and
-            # will also take care to avoid an overlapping write with some other
-            # orchestrator.
-            try:
-                cluster_info, ci_mod_revision = datamodel_v3.get(
-                    "ClusterInformation", "default"
-                )
-            except etcdv3.KeyNotFound:
-                cluster_info = {}
-                ci_mod_revision = 0
-            rewrite_cluster_info = False
-            LOG.info(
-                "Read ClusterInformation %s mod_revision %r",
-                cluster_info,
-                ci_mod_revision,
-            )
-
-            # Generate a cluster GUID if there isn't one already.
-            if not cluster_info.get(datamodel_v3.CLUSTER_GUID):
-                cluster_info[datamodel_v3.CLUSTER_GUID] = uuid.uuid4().hex
-                rewrite_cluster_info = True
-
-            # Add "openstack" to the cluster type, unless there already.
-            cluster_type = cluster_info.get(datamodel_v3.CLUSTER_TYPE, "")
-            if cluster_type:
-                if "openstack" not in cluster_type:
-                    cluster_info[datamodel_v3.CLUSTER_TYPE] = (
-                        cluster_type + ",openstack"
-                    )
-                    rewrite_cluster_info = True
-            else:
-                cluster_info[datamodel_v3.CLUSTER_TYPE] = "openstack"
-                rewrite_cluster_info = True
-
-            # Note, we don't touch the Calico version field here, as we don't
-            # know it.  (With other orchestrators, it is calico/node's
-            # responsibility to set the Calico version.  But we don't run
-            # calico/node in Calico for OpenStack.)
-
-            # Set the datastore to ready, if the datastore readiness state
-            # isn't already set at all.  This field is intentionally tri-state,
-            # i.e. it can be explicitly True, explicitly False, or not set.  If
-            # it has been set explicitly to False, that is probably because
-            # another orchestrator is doing an upgrade or wants for some other
-            # reason to suspend processing of the Calico datastore.
-            if datamodel_v3.DATASTORE_READY not in cluster_info:
-                cluster_info[datamodel_v3.DATASTORE_READY] = True
-                rewrite_cluster_info = True
-
-            # Rewrite ClusterInformation, if we changed anything above.
-            if rewrite_cluster_info:
-                LOG.info("New ClusterInformation: %s", cluster_info)
-                if datamodel_v3.put(
-                    "ClusterInformation",
-                    datamodel_v3.NOT_NAMESPACED,
-                    "default",
-                    cluster_info,
-                    mod_revision=ci_mod_revision,
-                ):
-                    rewrite_cluster_info = False
-                else:
-                    # Short sleep to avoid a tight loop.
-                    eventlet.sleep(1)
-
-        rewrite_felix_config = True
-        while rewrite_felix_config:
-            # Get existing global FelixConfiguration.  We will add to this,
-            # rather than trampling on anything that may already be there, and
-            # will also take care to avoid an overlapping write with some other
-            # orchestrator.
-            try:
-                felix_config, fc_mod_revision = datamodel_v3.get(
-                    "FelixConfiguration", "default"
-                )
-            except etcdv3.KeyNotFound:
-                felix_config = {}
-                fc_mod_revision = 0
-            rewrite_felix_config = False
-            LOG.info(
-                "Read FelixConfiguration %s mod_revision %r",
-                felix_config,
-                fc_mod_revision,
-            )
-
-            # Enable endpoint reporting.
-            if not felix_config.get(datamodel_v3.ENDPOINT_REPORTING_ENABLED, False):
-                felix_config[datamodel_v3.ENDPOINT_REPORTING_ENABLED] = True
-                rewrite_felix_config = True
-
-            # Ensure that interface prefixes include 'tap'.
-            interface_prefix = felix_config.get(datamodel_v3.INTERFACE_PREFIX)
-            prefixes = interface_prefix.split(",") if interface_prefix else []
-            if "tap" not in prefixes:
-                prefixes.append("tap")
-                felix_config[datamodel_v3.INTERFACE_PREFIX] = ",".join(prefixes)
-                rewrite_felix_config = True
-
-            # Rewrite FelixConfiguration, if we changed anything above.
-            if rewrite_felix_config:
-                LOG.info("New FelixConfiguration: %s", felix_config)
-                if datamodel_v3.put(
-                    "FelixConfiguration",
-                    datamodel_v3.NOT_NAMESPACED,
-                    "default",
-                    felix_config,
-                    mod_revision=fc_mod_revision,
-                ):
-                    rewrite_felix_config = False
-                else:
-                    # Short sleep to avoid a tight loop.
-                    eventlet.sleep(1)
 
 
 def port_status_change(port, original):
