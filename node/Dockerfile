@@ -78,8 +78,7 @@ COPY patches/svlogd_use_0644_permission_instead_of_0744.patch /svlogd_use_0644_p
 
 # Backport of upstream nftables commit be737a1 ("src: netlink: fix crash when
 # ops doesn't support udata"), used in the nftables build below.
-COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch \
-     /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
+COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 
 # runit is not available in ubi or AlmaLinux repos so build it.
 # get it from the debian repos as the official website doesn't support https

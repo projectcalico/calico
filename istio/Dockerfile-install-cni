@@ -67,8 +67,7 @@ RUN dnf --enablerepo=crb install -y \
 
 # Backport of upstream nftables commit be737a1 ("src: netlink: fix crash when
 # ops doesn't support udata"), used in the nftables build below.
-COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch \
-     /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
+COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 
 # Build libnftnl from source so the nftables build below can link against it.
 # Install over the BaseOS libnftnl so the runtime image picks up our build via
