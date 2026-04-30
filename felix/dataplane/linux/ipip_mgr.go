@@ -124,8 +124,14 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataV4V6Update:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname && msg.Ipv4Addr != "" {
+		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		}
+		// An empty Ipv4Addr means the host has no v4 BGP/host IP (e.g. its BGP
+		// spec was cleared). Drop the map entry so tunnelRoute won't try to
+		// install onlink routes via a nil gateway.
+		if msg.Ipv4Addr == "" {
+			delete(m.activeHostnameToIP, msg.Hostname)
 		} else {
 			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}

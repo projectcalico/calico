@@ -47,10 +47,12 @@ type DataplanePassthru struct {
 
 	// hostIPv4 is the /32 derived from a HostIPKey update, keyed by hostname.
 	hostIPv4 map[string]string
+
 	// nodeInfo is the per-host info derived from a Node resource. A non-nil entry
 	// means the Node resource currently exists for that host; nil/missing means it
 	// has been deleted (or was treated as deleted because its BGP spec was empty).
 	nodeInfo map[string]*HostInfo
+
 	// lastEmitted records the last HostInfo we sent for each host, so we can skip
 	// no-op updates and only emit when the merged view actually changed.
 	lastEmitted map[string]*HostInfo
@@ -150,26 +152,26 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	// Node had been deleted from this stream — there is no useful metadata to
 	// pass through. A nil BGP, by contrast, leaves the Node entry alive (with
 	// empty IPs) since other Node info such as labels may still be relevant.
-	if bgp := node.Spec.BGP; bgp != nil &&
-		bgp.IPv4Address == "" && bgp.IPv6Address == "" && bgp.ASNumber == nil {
+	bgpSpec := node.Spec.BGP
+	if bgpSpec != nil && bgpSpec.IPv4Address == "" && bgpSpec.IPv6Address == "" && bgpSpec.ASNumber == nil {
 		delete(h.nodeInfo, hostname)
 		h.recomputeAndEmit(hostname)
 		return
 	}
 
 	info := &HostInfo{labels: node.Labels}
-	if node.Spec.BGP != nil {
+	if bgpSpec != nil {
 		// BGP IPv4Address/IPv6Address must already be in CIDR form per the v3
 		// CRD validation (`cidrv4`/`cidrv6` tags). Bare IPs are dropped silently
 		// here so the dataplane never sees an ambiguous address.
-		if addr := node.Spec.BGP.IPv4Address; addr != "" {
+		if addr := bgpSpec.IPv4Address; addr != "" {
 			if s, ok := parseBGPCIDR(addr); ok {
 				info.ip4Addr = s
 			} else {
 				log.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
 			}
 		}
-		if addr := node.Spec.BGP.IPv6Address; addr != "" {
+		if addr := bgpSpec.IPv6Address; addr != "" {
 			if s, ok := parseBGPCIDR(addr); ok {
 				info.ip6Addr = s
 			} else {
@@ -179,17 +181,19 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		if node.Spec.BGP.ASNumber != nil {
 			info.asnumber = node.Spec.BGP.ASNumber.String()
 		}
-	} else if h.ipv6Support {
-		// BGP is turned off; fall back to the Node's address list for IPv6.
-		// Mirrors how HostIPKey is generated for IPv4 in
-		// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go.
-		ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
-		if ipnet == nil {
-			ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
-		}
-		if ipnet != nil {
-			ipnet.IP = ipv6.IP
-			info.ip6Addr = ipnet.String()
+	} else { // node.Spec.BGP is nil
+		if h.ipv6Support {
+			// BGP is turned off; fall back to the Node's address list for IPv6.
+			// Mirrors how HostIPKey is generated for IPv4 in
+			// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go.
+			ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
+			if ipnet == nil {
+				ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
+			}
+			if ipnet != nil {
+				ipnet.IP = ipv6.IP
+				info.ip6Addr = ipnet.String()
+			}
 		}
 	}
 
