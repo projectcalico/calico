@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -673,7 +673,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	genHostMetadataV6Update := func(ip string) func() {
 		return func() {
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{
+			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{
 				Hostname: "uthost",
 				Ipv6Addr: ip,
 			})

@@ -126,6 +126,12 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		}
+		// An empty Ipv4Addr means the host has no v4 BGP/host IP (e.g. its BGP
+		// spec was cleared). Drop the map entry so tunnelRoute won't try to
+		// install onlink routes via a nil gateway.
+		if msg.Ipv4Addr == "" {
+			delete(m.activeHostnameToIP, msg.Hostname)
 		} else {
 			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
@@ -171,7 +177,7 @@ func (m *ipipManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetabl
 		RouteKey: routetable.RouteKey{
 			CIDR: cidr,
 		},
-		GW:       ip.FromString(remoteAddr),
+		GW:       ip.FromIPOrCIDRString(remoteAddr),
 		Protocol: m.routeProtocol,
 		MTU:      m.dpConfig.IPIPMTU,
 	}

@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -944,25 +944,15 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 		m.onProfileRemove(msg)
 
 	case *proto.HostMetadataUpdate:
-		if m.v4 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
-		}
-	case *proto.HostMetadataV6Update:
-		if m.v6 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
-		}
-	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
 			break
 		}
 		if m.v4 != nil {
-			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
+			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
 			m.updateHostIP(msg.Ipv4Addr, 4)
 		}
 		if m.v6 != nil {
-			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
+			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
 			m.updateHostIP(msg.Ipv6Addr, 6)
 		}
 	case *proto.ServiceUpdate:
