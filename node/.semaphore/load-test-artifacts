@@ -24,11 +24,11 @@ REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 
 # Load any pre-built images that were cached by the Prerequisites build blocks.
 for item in calico-image:cmd/calico node-image:node whisker-image:whisker; do
-  tarball="${item%%:*}.tar.zstd"
+  tarball="${item%%:*}.tar.zst"
   marker_dir="${item#*:}"
   if [ -f "/tmp/${tarball}" ]; then
     echo "Loading cached ${tarball}..."
-    zstd -d "/tmp/${tarball}" | docker load
+    zstd -dc "/tmp/${tarball}" | docker load
     mkdir -p "${REPO_ROOT}/${marker_dir}"
     touch "${REPO_ROOT}/${marker_dir}/.image.created-${ARCH}"
     rm -f "/tmp/${tarball}"
