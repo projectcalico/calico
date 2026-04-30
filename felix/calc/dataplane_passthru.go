@@ -34,7 +34,7 @@ import (
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
 //
-// HostMetadataV4V6Update is sourced from two streams that may both be live for the
+// HostMetadataUpdate is sourced from two streams that may both be live for the
 // same host:
 //   - HostIPKey (IPv4 only, derived from Node BGP by the syncer): provides a /32 fallback.
 //   - Node resource (BGP IPv4/IPv6 + labels + ASN): authoritative when present.
@@ -52,10 +52,6 @@ type DataplanePassthru struct {
 	// means the Node resource currently exists for that host; nil/missing means it
 	// has been deleted (or was treated as deleted because its BGP spec was empty).
 	nodeInfo map[string]*HostInfo
-
-	// lastEmitted records the last HostInfo we sent for each host, so we can skip
-	// no-op updates and only emit when the merged view actually changed.
-	lastEmitted map[string]*HostInfo
 }
 
 func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
@@ -64,7 +60,6 @@ func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *Datapl
 		callbacks:   callbacks,
 		hostIPv4:    map[string]string{},
 		nodeInfo:    map[string]*HostInfo{},
-		lastEmitted: map[string]*HostInfo{},
 	}
 }
 
@@ -125,6 +120,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 // store it as a host CIDR (/32) so the format matches the Node-resource path.
 func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
 	hostname := key.Hostname
+	before := h.merge(hostname)
 	if update.Value == nil {
 		logrus.WithField("update", update).Debug("Passing-through HostIP deletion")
 		delete(h.hostIPv4, hostname)
@@ -133,15 +129,17 @@ func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.U
 		logrus.WithField("update", update).Debug("Passing-through HostIP update")
 		h.hostIPv4[hostname] = ip.String() + "/32"
 	}
-	h.recomputeAndEmit(hostname)
+	h.emitTransition(hostname, before)
 }
 
 func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
 	hostname := key.Name
+	before := h.merge(hostname)
+
 	if update.Value == nil {
 		logrus.WithField("update", update).Debug("Passing-through Node remove")
 		delete(h.nodeInfo, hostname)
-		h.recomputeAndEmit(hostname)
+		h.emitTransition(hostname, before)
 		return
 	}
 
@@ -155,7 +153,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	bgpSpec := node.Spec.BGP
 	if bgpSpec != nil && bgpSpec.IPv4Address == "" && bgpSpec.IPv6Address == "" && bgpSpec.ASNumber == nil {
 		delete(h.nodeInfo, hostname)
-		h.recomputeAndEmit(hostname)
+		h.emitTransition(hostname, before)
 		return
 	}
 
@@ -198,30 +196,26 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	}
 
 	h.nodeInfo[hostname] = info
-	h.recomputeAndEmit(hostname)
+	h.emitTransition(hostname, before)
 }
 
-// recomputeAndEmit derives the merged HostInfo for hostname from the per-source
-// state and emits an Update or Remove only when the merged view differs from
-// what was last sent.
-func (h *DataplanePassthru) recomputeAndEmit(hostname string) {
-	merged := h.merge(hostname)
-	last, hadLast := h.lastEmitted[hostname]
-
-	if merged == nil {
-		if hadLast {
-			delete(h.lastEmitted, hostname)
+// emitTransition emits an Update or Remove based on how the merged view changed
+// for hostname. before is the merged HostInfo computed before the source maps
+// were mutated; the post-mutation view is recomputed here. Caller must invoke
+// this after every change so consecutive calls see consistent before/after
+// states.
+func (h *DataplanePassthru) emitTransition(hostname string, before *HostInfo) {
+	after := h.merge(hostname)
+	if after == nil {
+		if before != nil {
 			h.callbacks.OnHostMetadataRemove(hostname)
 		}
 		return
 	}
-
-	if hadLast && hostInfoEqual(merged, last) {
+	if before != nil && hostInfoEqual(before, after) {
 		return
 	}
-
-	h.lastEmitted[hostname] = merged
-	h.callbacks.OnHostMetadataUpdate(hostname, merged)
+	h.callbacks.OnHostMetadataUpdate(hostname, after)
 }
 
 // merge returns the HostInfo to publish for hostname, or nil if neither source
