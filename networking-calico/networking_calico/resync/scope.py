@@ -81,10 +81,10 @@ class ExpandedScope:
     def to_dict(self) -> dict:
         return {
             "all": self.is_all,
-            "networks": len(self.network_ids),
-            "subnets": len(self.subnet_ids),
-            "ports": len(self.port_ids),
-            "security_groups": len(self.security_group_ids),
+            "networks": sorted(self.network_ids),
+            "subnets": sorted(self.subnet_ids),
+            "ports": sorted(self.port_ids),
+            "security_groups": sorted(self.security_group_ids),
         }
 
 
