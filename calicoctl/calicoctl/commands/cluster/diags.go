@@ -170,18 +170,20 @@ func collectDiags(opts *diagOpts) error {
 		fmt.Printf("ERROR creating clients: %v\n", err)
 		return err
 	}
+	calicoNamespaces := set.New[string]()
 	if kubeClient != nil {
+		calicoNamespaces = discoverCalicoNamespaces(kubeClient)
 		collectTLSSecrets(kubeClient, dir+"/tls")
-		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts)
+		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts, calicoNamespaces)
 	}
-	collectGlobalClusterInformation(dir + "/cluster")
+	collectGlobalClusterInformation(dir+"/cluster", calicoNamespaces)
 	collectUnsupportedAnnotations(tempDir, directoryName)
 	createArchive(tempDir, directoryName, archiveName)
 
 	return nil
 }
 
-func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts) {
+func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts, calicoNamespaces set.Typed[string]) {
 	// If --focus-nodes is specified, put those node names at the start of the node list.
 	nodeList := strings.Split(opts.FocusNodes, ",")
 
@@ -212,14 +214,23 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 		return
 	}
 	for _, ns := range nsl.Items {
-		if !strings.Contains(ns.Name, "calico") && !strings.Contains(ns.Name, "tigera") {
+		if !calicoNamespaces.Contains(ns.Name) {
 			continue
 		}
 
 		fmt.Printf("Collecting detailed diags for namespace %v...\n", ns.Name)
 
+		// For namespaces whose name doesn't itself indicate Calico/Tigera (e.g. kube-system
+		// when Calico is installed via manifests), restrict workload listings to known
+		// Calico components plus kube-proxy.  Otherwise we'd pick up every unrelated workload
+		// in kube-system (CSI drivers, kube-proxy variants, etc.).
+		listOpts := v1.ListOptions{}
+		if !isCalicoNamedNamespace(ns.Name) {
+			listOpts.LabelSelector = calicoWorkloadSelector
+		}
+
 		// Iterate through DaemonSets in this namespace.
-		dsl, err := kubeClient.AppsV1().DaemonSets(ns.Name).List(context.TODO(), v1.ListOptions{})
+		dsl, err := kubeClient.AppsV1().DaemonSets(ns.Name).List(context.TODO(), listOpts)
 		if err != nil {
 			fmt.Printf("ERROR listing DaemonSets in namespace %v: %v\n", ns.Name, err)
 			// Continue because deployments or other namespaces might work.
@@ -230,7 +241,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 		}
 
 		// Iterate through Deployments in this namespace.
-		dl, err := kubeClient.AppsV1().Deployments(ns.Name).List(context.TODO(), v1.ListOptions{})
+		dl, err := kubeClient.AppsV1().Deployments(ns.Name).List(context.TODO(), listOpts)
 		if err != nil {
 			fmt.Printf("ERROR listing Deployments in namespace %v: %v\n", ns.Name, err)
 			// Continue because other namespaces might work.
@@ -241,7 +252,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 		}
 
 		// Iterate through StatefulSets in this namespace.
-		sl, err := kubeClient.AppsV1().StatefulSets(ns.Name).List(context.TODO(), v1.ListOptions{})
+		sl, err := kubeClient.AppsV1().StatefulSets(ns.Name).List(context.TODO(), listOpts)
 		if err != nil {
 			fmt.Printf("ERROR listing StatefulSets in namespace %v: %v\n", ns.Name, err)
 			// Continue because other namespaces might work.
@@ -251,6 +262,60 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			}
 		}
 	}
+}
+
+// calicoWorkloadSelector matches Calico components and kube-proxy.  kube-proxy is
+// included because kube-proxy state is frequently load-bearing when debugging
+// Calico connectivity issues, and its absence from diags bundles on manifest
+// installs has been a recurring gap.
+const calicoWorkloadSelector = "k8s-app in (calico-node,calico-kube-controllers,calico-typha,kube-proxy)"
+
+// isCalicoNamedNamespace returns true if the namespace name itself is a
+// Calico/Tigera namespace (calico-system, tigera-operator, tigera-prometheus,
+// etc.), in which case dumping the whole namespace is appropriate.
+func isCalicoNamedNamespace(name string) bool {
+	return strings.Contains(name, "calico") || strings.Contains(name, "tigera")
+}
+
+// discoverCalicoNamespaces returns the set of namespaces that host Calico
+// components, regardless of whether Calico is operator-managed (calico-system,
+// tigera-operator) or manifest-installed (typically kube-system).
+//
+// The set always includes any namespace whose name contains "calico" or
+// "tigera" (so Tigera Enterprise sub-namespaces are still picked up even when
+// they don't contain a labelled Calico pod), plus any namespace containing a
+// pod with one of the known Calico component labels.
+func discoverCalicoNamespaces(kubeClient kubernetes.Interface) set.Typed[string] {
+	namespaces := set.New[string]()
+
+	nsl, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
+	if err != nil {
+		fmt.Printf("ERROR listing namespaces while discovering Calico namespaces: %v\n", err)
+	} else {
+		for _, ns := range nsl.Items {
+			if isCalicoNamedNamespace(ns.Name) {
+				namespaces.Add(ns.Name)
+			}
+		}
+	}
+
+	for _, selector := range []string{
+		"k8s-app=calico-node",
+		"k8s-app=calico-kube-controllers",
+		"k8s-app=calico-typha",
+		"k8s-app=tigera-operator",
+	} {
+		pl, err := kubeClient.CoreV1().Pods("").List(context.TODO(), v1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			fmt.Printf("ERROR listing pods with selector %q: %v\n", selector, err)
+			continue
+		}
+		for _, p := range pl.Items {
+			namespaces.Add(p.Namespace)
+		}
+	}
+
+	return namespaces
 }
 
 func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, ns string, selector *v1.LabelSelector) {
@@ -413,31 +478,34 @@ func collectCalicoResource(dir string) {
 	common.ExecAllCmdsWriteToFile(commands)
 }
 
-func collectCalicoSystemNamespace(dir string) {
+// collectCalicoRelatedNamespaces dumps the contents of each namespace that
+// hosts Calico components.  For namespaces whose name itself indicates
+// Calico/Tigera, the entire namespace contents are collected.  For other
+// namespaces (e.g. kube-system on a manifest install) the dump is restricted
+// via label selector to Calico components plus kube-proxy, so we don't pull in
+// unrelated workloads like CSI drivers.
+func collectCalicoRelatedNamespaces(dir string, namespaces set.Typed[string]) {
+	if namespaces.Len() == 0 {
+		// Fall back to the historical behaviour so we still produce something
+		// useful when the kube client wasn't available to run discovery.
+		namespaces = set.From(common.CalicoNamespace, common.TigeraOperatorNamespace)
+	}
 	commands := []common.Cmd{}
-	commands = append(commands, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.CalicoNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o yaml", common.CalicoNamespace),
-		FilePath: fmt.Sprintf("%s/calico-system.yaml", dir),
-	}, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (wide text)", common.CalicoNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.CalicoNamespace),
-		FilePath: fmt.Sprintf("%s/calico-system.txt", dir),
-	})
-	common.ExecAllCmdsWriteToFile(commands)
-}
-
-func collectTigeraOperatorNamespace(dir string) {
-	commands := []common.Cmd{}
-	commands = append(commands, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.TigeraOperatorNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o yaml", common.TigeraOperatorNamespace),
-		FilePath: fmt.Sprintf("%s/tigera-operator.yaml", dir),
-	}, common.Cmd{
-		Info:     fmt.Sprintf("Collect all in %s (wide text)", common.TigeraOperatorNamespace),
-		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.TigeraOperatorNamespace),
-		FilePath: fmt.Sprintf("%s/tigera-operator.txt", dir),
-	})
+	for ns := range namespaces.All() {
+		filter := ""
+		if !isCalicoNamedNamespace(ns) {
+			filter = fmt.Sprintf(" -l '%s'", calicoWorkloadSelector)
+		}
+		commands = append(commands, common.Cmd{
+			Info:     fmt.Sprintf("Collect all in %s (yaml)", ns),
+			CmdStr:   fmt.Sprintf("kubectl get all -n %s%s -o yaml", ns, filter),
+			FilePath: fmt.Sprintf("%s/%s.yaml", dir, ns),
+		}, common.Cmd{
+			Info:     fmt.Sprintf("Collect all in %s (wide text)", ns),
+			CmdStr:   fmt.Sprintf("kubectl get all -n %s%s -o wide", ns, filter),
+			FilePath: fmt.Sprintf("%s/%s.txt", dir, ns),
+		})
+	}
 	common.ExecAllCmdsWriteToFile(commands)
 }
 
@@ -657,7 +725,7 @@ func censorSecret(secret *apiv1.Secret) {
 }
 
 // collectGlobalClusterInformation collects the Kubernetes resource, Calico Resource and Tigera operator details
-func collectGlobalClusterInformation(dir string) {
+func collectGlobalClusterInformation(dir string, calicoNamespaces set.Typed[string]) {
 	fmt.Println("Collecting kubernetes version...")
 	common.ExecAllCmdsWriteToFile([]common.Cmd{
 		{
@@ -668,8 +736,7 @@ func collectGlobalClusterInformation(dir string) {
 	})
 
 	collectCalicoResource(dir + "/crd")
-	collectTigeraOperatorNamespace(dir + "/tigera-operator")
-	collectCalicoSystemNamespace(dir + "/calico-system")
+	collectCalicoRelatedNamespaces(dir+"/namespaces", calicoNamespaces)
 	collectKubernetesResource(dir + "/kubernetes")
 	collectThirdPartyResource(dir + "/third-party")
 }
