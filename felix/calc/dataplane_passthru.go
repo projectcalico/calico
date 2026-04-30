@@ -18,7 +18,7 @@ import (
 	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -81,19 +81,19 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		h.processModelHostIP(key, update)
 	case model.IPPoolKey:
 		if update.Value == nil {
-			log.WithField("update", update).Debug("Passing-through IPPool deletion")
+			logrus.WithField("update", update).Debug("Passing-through IPPool deletion")
 			h.callbacks.OnIPPoolRemove(key)
 		} else {
-			log.WithField("update", update).Debug("Passing-through IPPool update")
+			logrus.WithField("update", update).Debug("Passing-through IPPool update")
 			pool := update.Value.(*model.IPPool)
 			h.callbacks.OnIPPoolUpdate(key, pool)
 		}
 	case model.WireguardKey:
 		if update.Value == nil {
-			log.WithField("update", update).Debug("Passing-through Wireguard deletion")
+			logrus.WithField("update", update).Debug("Passing-through Wireguard deletion")
 			h.callbacks.OnWireguardRemove(key.NodeName)
 		} else {
-			log.WithField("update", update).Debug("Passing-through Wireguard update")
+			logrus.WithField("update", update).Debug("Passing-through Wireguard update")
 			wg := update.Value.(*model.Wireguard)
 			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
 		}
@@ -101,12 +101,12 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		switch key.Kind {
 		case v3.KindBGPConfiguration:
 			if key.Name == "default" {
-				log.WithField("update", update).Debug("Passing through global BGPConfiguration")
+				logrus.WithField("update", update).Debug("Passing through global BGPConfiguration")
 				bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
 				h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
 			}
 		case model.KindKubernetesService:
-			log.WithField("update", update).Debug("Passing through a Service")
+			logrus.WithField("update", update).Debug("Passing through a Service")
 			if update.Value == nil {
 				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
 			} else {
@@ -115,7 +115,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		case internalapi.KindNode:
 			h.processKindNode(key, update)
 		default:
-			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
+			logrus.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
 		}
 	}
 	return
@@ -126,11 +126,11 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
 	hostname := key.Hostname
 	if update.Value == nil {
-		log.WithField("update", update).Debug("Passing-through HostIP deletion")
+		logrus.WithField("update", update).Debug("Passing-through HostIP deletion")
 		delete(h.hostIPv4, hostname)
 	} else {
 		ip := update.Value.(*net.IP)
-		log.WithField("update", update).Debug("Passing-through HostIP update")
+		logrus.WithField("update", update).Debug("Passing-through HostIP update")
 		h.hostIPv4[hostname] = ip.String() + "/32"
 	}
 	h.recomputeAndEmit(hostname)
@@ -139,14 +139,14 @@ func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.U
 func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
 	hostname := key.Name
 	if update.Value == nil {
-		log.WithField("update", update).Debug("Passing-through Node remove")
+		logrus.WithField("update", update).Debug("Passing-through Node remove")
 		delete(h.nodeInfo, hostname)
 		h.recomputeAndEmit(hostname)
 		return
 	}
 
 	node, _ := update.Value.(*internalapi.Node)
-	log.WithField("update", update).Debug("Passing-through Node update")
+	logrus.WithField("update", update).Debug("Passing-through Node update")
 
 	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
 	// Node had been deleted from this stream — there is no useful metadata to
@@ -168,14 +168,14 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 			if s, ok := parseBGPCIDR(addr); ok {
 				info.ip4Addr = s
 			} else {
-				log.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
+				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
 			}
 		}
 		if addr := bgpSpec.IPv6Address; addr != "" {
 			if s, ok := parseBGPCIDR(addr); ok {
 				info.ip6Addr = s
 			} else {
-				log.WithField("addr", addr).Warn("Ignoring Node BGP IPv6Address: not a CIDR")
+				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv6Address: not a CIDR")
 			}
 		}
 		if node.Spec.BGP.ASNumber != nil {

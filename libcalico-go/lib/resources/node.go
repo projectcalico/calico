@@ -21,7 +21,6 @@ import (
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-// TODO: Upadate this
 // FindNodeAddress returns node address of the specified type. Type can be one of
 // CalicoNodeIP, InternalIP or ExternalIP
 func FindNodeAddress(node *internalapi.Node, ipType string, ipVersion int) (*cnet.IP, *cnet.IPNet) {

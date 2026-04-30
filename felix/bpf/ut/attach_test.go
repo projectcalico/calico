@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -1563,9 +1563,9 @@ func BenchmarkAttachProgram(b *testing.B) {
 	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
 
-	logLevel := log.GetLevel()
-	log.SetLevel(log.PanicLevel)
-	defer log.SetLevel(logLevel)
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.PanicLevel)
+	defer logrus.SetLevel(logLevel)
 
 	b.StartTimer()
 
