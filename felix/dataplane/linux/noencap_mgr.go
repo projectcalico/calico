@@ -91,7 +91,7 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
+	case *proto.HostMetadataUpdate:
 		if msg.Hostname != m.hostname {
 			break
 		}
@@ -101,7 +101,7 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 		} else if m.ipVersion == 6 && msg.Ipv6Addr != "" {
 			m.routesNeedUpdate(msg.Ipv6Addr)
 		}
-	case *proto.HostMetadataV4V6Remove:
+	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routesNeedUpdate("")

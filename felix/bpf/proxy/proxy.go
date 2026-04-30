@@ -60,7 +60,7 @@ type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
 	SetHostIPs([]net.IP)
-	SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool)
+	SetHostMetadata(updates map[string]*proto.HostMetadataUpdate, requestResync bool)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -98,7 +98,7 @@ type proxy struct {
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
 
-	hostMetadataByHostname map[string]*proto.HostMetadataV4V6Update
+	hostMetadataByHostname map[string]*proto.HostMetadataUpdate
 
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
@@ -152,7 +152,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
 
-		hostMetadataByHostname: make(map[string]*proto.HostMetadataV4V6Update),
+		hostMetadataByHostname: make(map[string]*proto.HostMetadataUpdate),
 
 		recorder: new(loggerRecorder),
 
@@ -398,7 +398,7 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 		npa, p.healthzServer)
 }
 
-func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool) {
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataUpdate, requestResync bool) {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 

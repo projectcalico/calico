@@ -63,15 +63,15 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 	logCtx := log.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
-		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Update update")
+	case *proto.HostMetadataUpdate:
+		logCtx.WithField("msg", msg).Debug("HostMetadataUpdate update")
 		if m.ipVersion == 4 {
 			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromIPOrCIDRString(msg.Ipv4Addr))
 		} else {
 			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromIPOrCIDRString(msg.Ipv6Addr))
 		}
-	case *proto.HostMetadataV4V6Remove:
-		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Remove update")
+	case *proto.HostMetadataRemove:
+		logCtx.WithField("msg", msg).Debug("HostMetadataRemove update")
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
 	case *proto.RouteUpdate:
 		logCtx.WithField("msg", msg).Debug("RouteUpdate update")

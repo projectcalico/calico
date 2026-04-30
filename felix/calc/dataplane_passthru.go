@@ -34,7 +34,7 @@ import (
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
 //
-// HostMetadataV4V6Update is sourced from two streams that may both be live for the
+// HostMetadataUpdate is sourced from two streams that may both be live for the
 // same host:
 //   - HostIPKey (IPv4 only, derived from Node BGP by the syncer): provides a /32 fallback.
 //   - Node resource (BGP IPv4/IPv6 + labels + ASN): authoritative when present.

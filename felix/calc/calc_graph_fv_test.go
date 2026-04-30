@@ -812,12 +812,12 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveWireguardV6Endpoints()).To(Equal(state.ExpectedWireguardV6Endpoints),
 		"Active IPv6 Wireguard Endpoints were incorrect after moving to state: %v",
 		state.Name)
-	for key, protoHostMetadataV4V6 := range mockDataplane.ActiveHostMetadataV4V6() {
-		Expect(googleproto.Equal(protoHostMetadataV4V6, state.ExpectedHostMetadataV4V6[key])).To(BeTrue(),
+	for key, protoHostMetadata := range mockDataplane.ActiveHostMetadata() {
+		Expect(googleproto.Equal(protoHostMetadata, state.ExpectedHostMetadata[key])).To(BeTrue(),
 			"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 			state.Name)
 	}
-	Expect(mockDataplane.ActiveHostMetadataV4V6()).To(Equal(state.ExpectedHostMetadataV4V6),
+	Expect(mockDataplane.ActiveHostMetadata()).To(Equal(state.ExpectedHostMetadata),
 		"Active Host MetadataV4V6 were incorrect after moving to state: %v",
 		state.Name)
 	// Comparing stringified versions of the routes here so that, on failure, we get much more readable output.
