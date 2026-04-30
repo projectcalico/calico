@@ -22,6 +22,9 @@ import (
 
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
@@ -152,4 +155,52 @@ func TestDiags(t *testing.T) {
 			FocusNodes:           "infra1,control2",
 			AllowVersionMismatch: false,
 		})
+}
+
+func TestDiscoverCalicoNamespaces(t *testing.T) {
+	RegisterTestingT(t)
+
+	mkNS := func(name string) *corev1.Namespace {
+		return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	}
+	mkPod := func(ns, name string, labels map[string]string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: labels},
+		}
+	}
+
+	// Operator-style cluster: pods in calico-system / tigera-operator, plus
+	// auxiliary tigera namespace with no labelled pods.
+	t.Run("operator install", func(t *testing.T) {
+		RegisterTestingT(t)
+		client := fake.NewSimpleClientset(
+			mkNS("kube-system"),
+			mkNS("default"),
+			mkNS("calico-system"),
+			mkNS("tigera-operator"),
+			mkNS("tigera-prometheus"),
+			mkPod("calico-system", "calico-node-abc", map[string]string{"k8s-app": "calico-node"}),
+			mkPod("calico-system", "calico-kube-controllers-1", map[string]string{"k8s-app": "calico-kube-controllers"}),
+			mkPod("tigera-operator", "tigera-operator-1", map[string]string{"k8s-app": "tigera-operator"}),
+			mkPod("kube-system", "kube-proxy-1", map[string]string{"k8s-app": "kube-proxy"}),
+		)
+		got := discoverCalicoNamespaces(client).Slice()
+		Expect(got).To(ConsistOf("calico-system", "tigera-operator", "tigera-prometheus"))
+	})
+
+	// Manifest install: calico-node lives in kube-system.  Discovery must
+	// surface kube-system even though its name doesn't contain "calico"
+	// or "tigera".
+	t.Run("manifest install", func(t *testing.T) {
+		RegisterTestingT(t)
+		client := fake.NewSimpleClientset(
+			mkNS("kube-system"),
+			mkNS("default"),
+			mkPod("kube-system", "calico-node-xyz", map[string]string{"k8s-app": "calico-node"}),
+			mkPod("kube-system", "calico-kube-controllers-1", map[string]string{"k8s-app": "calico-kube-controllers"}),
+			mkPod("kube-system", "kube-proxy-1", map[string]string{"k8s-app": "kube-proxy"}),
+		)
+		got := discoverCalicoNamespaces(client).Slice()
+		Expect(got).To(ConsistOf("kube-system"))
+	})
 }
