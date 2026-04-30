@@ -316,3 +316,56 @@ func TestInverseFlagName(t *testing.T) {
 		})
 	}
 }
+
+func TestNonEmptyStringAction(t *testing.T) {
+	cases := []struct {
+		name     string
+		flagName string
+		value    string
+		wantErr  string
+	}{
+		{"empty value errors", "org", "", "--org must not be empty"},
+		{"empty value errors with different flag name", "operator-branch", "", "--operator-branch must not be empty"},
+		{"non-empty value passes", "org", "foo", ""},
+		{"whitespace passes (Action does not trim)", "org", "  ", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action := nonEmptyStringAction(tc.flagName)
+			err := action(context.Background(), nil, tc.value)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestStringFlagsRejectEmpty(t *testing.T) {
+	cases := []struct {
+		flag     cli.Flag
+		flagName string
+	}{
+		{orgFlag, "org"},
+		{repoFlag, "repo"},
+		{repoRemoteFlag, "remote"},
+		{releaseBranchPrefixFlag, "release-branch-prefix"},
+		{devTagSuffixFlag, "dev-tag-suffix"},
+		{operatorOrgFlag, "operator-org"},
+		{operatorRepoFlag, "operator-repo"},
+		{operatorBranchFlag, "operator-branch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.flagName, func(t *testing.T) {
+			assertRun(t, []cli.Flag{tc.flag}, []string{"--" + tc.flagName, ""}, "--"+tc.flagName+" must not be empty")
+		})
+	}
+}

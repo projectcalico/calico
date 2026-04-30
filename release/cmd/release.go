@@ -105,6 +105,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -205,6 +206,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -225,7 +227,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 
 func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
 	// Clone the operator repository to determine the operator version.
-	operatorDir := filepath.Join(tmpDir, operator.DefaultRepoName)
+	operatorDir := filepath.Join(tmpDir, operator.Repo)
 	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
 		return "", fmt.Errorf("clone operator repository: %w", err)
 	}
@@ -285,6 +287,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),

@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 )
 
 const (
@@ -67,6 +68,24 @@ const (
 	// CalicoHelmRepoURL is the URL for the Calico Helm charts.
 	CalicoHelmRepoURL = "https://docs.tigera.io/calico/charts"
 )
+
+var (
+	Organization        = FirstNonEmpty(defaults.Organization(), ProjectCalicoOrg)
+	Repo                = FirstNonEmpty(defaults.Repo(), CalicoRepoName)
+	Remote              = FirstNonEmpty(defaults.Remote(), DefaultRemote)
+	ReleaseBranchPrefix = FirstNonEmpty(defaults.ReleaseBranchPrefix(), "release")
+	DevTagSuffix        = FirstNonEmpty(defaults.DevTagSuffix(), "0.dev")
+)
+
+// FirstNonEmpty returns the first non-empty string from values, or "".
+func FirstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // AllReleaseCharts returns a list of all Helm charts to be released.
 func AllReleaseCharts() []string {

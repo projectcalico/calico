@@ -4,26 +4,22 @@ PACKAGE_NAME = github.com/projectcalico/calico/release
 
 include ../lib.Makefile
 
-export ORGANIZATION
-export GIT_REPO
-export RELEASE_BRANCH_PREFIX
-export DEV_TAG_SUFFIX
-export DEV_REGISTRIES
-export OPERATOR_ORGANIZATION
-export OPERATOR_GIT_REPO
-export OPERATOR_BRANCH
-
 .PHONY: build
 build: bin/release
 
 clean:
 	@rm -rf ./bin ./output ./_output ./report ./tmp
+	@rm -f ./internal/defaults/metadata.mk
 	@find ../ -name '*release*.log' -delete
 	@find . -name '*.received.*' -delete
 
-bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl")
-	@mkdir -p bin && \
-	$(call build_binary, ./cmd, bin/release)
+bin/release: $(shell find . -name "*.go" -or -name "*.gotmpl") ../metadata.mk
+	@mkdir -p bin
+	@cp ../metadata.mk internal/defaults/metadata.mk
+	@$(DOCKER_RUN) \
+		-e CGO_ENABLED=0 \
+		$(CALICO_BUILD) \
+		sh -c '$(GIT_CONFIG_SSH) go build -o bin/release -v -buildvcs=false -tags with_embed -ldflags "$(LDFLAGS)" ./cmd'
 
 POSTRELEASE_TEST_PACKAGE		:= $(PACKAGE_NAME)/pkg/postrelease
 UNIT_TEST_PACKAGES	:= $(shell go list ./... | grep -v $(POSTRELEASE_TEST_PACKAGE))
