@@ -2311,7 +2311,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     )
     def test_endpoint_status_thread_mainline(self, m_watcher):
         count = [0]
-        m_watcher.__name__ = "StatusWatcher"
+        m_watcher.__name__ = "EndpointStatusWatcher"
         self.driver.is_master = mock.Mock()
         self.driver.is_master.return_value = True
 
