@@ -507,7 +507,6 @@ define update_calico_base_pin
 		fi'
 endef
 
-GIT_REMOTE?=origin
 API_BRANCH?=$(PIN_BRANCH)
 API_REPO?=github.com/projectcalico/calico/api
 BASE_API_REPO?=github.com/projectcalico/calico/api
