@@ -1963,7 +1963,14 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			fmt.Sprintf("Optional BPF program(s) failed to load: %s. "+
 				"Disable the feature(s) in FelixConfiguration or upgrade the kernel. "+
 				"See Felix logs for details.", strings.Join(names, ", ")))
-	} else if m.dirtyIfaceNames.Len() == 0 {
+	} else if m.dirtyIfaceNames.Len() == 0 && m.allHostIPsKnown() {
+		// Only clean up the old jump maps once all interfaces have actually
+		// been (re-)programmed with the new preambles. While host IP for an
+		// enabled IP family is missing, attachDataIfaceProgram early-returns
+		// and the new preambles are never installed; if we removed the old
+		// jump maps now, the previous Felix's preambles (still attached to
+		// the host interfaces) would lose their referenced sub-programs and
+		// every packet through them would be dropped. See issue #12642.
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
 			if err := os.RemoveAll(oldBase); err != nil && os.IsNotExist(err) {
@@ -1977,6 +1984,8 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 			m.legacyCleanUp = false
 		}
 		m.reportHealth(true, "")
+	} else if !m.allHostIPsKnown() {
+		m.reportHealth(false, "Waiting for host IP from datastore.")
 	} else {
 		for iface := range m.dirtyIfaceNames.All() {
 			m.updateRateLimitedLog.WithField("name", iface).Info("Interface remains dirty.")
@@ -1985,6 +1994,21 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	}
 
 	return nil
+}
+
+// allHostIPsKnown reports whether every enabled IP family has its host IP
+// populated. Used to gate cleanup of the old jump maps: while the host IP
+// is unknown, the new preambles cannot be programmed (see
+// attachDataIfaceProgram) so we must not remove the old jump maps that the
+// previous Felix's still-attached preambles depend on.
+func (m *bpfEndpointManager) allHostIPsKnown() bool {
+	if m.v4 != nil && m.v4.hostIP == nil {
+		return false
+	}
+	if m.v6 != nil && m.v6.hostIP == nil {
+		return false
+	}
+	return true
 }
 
 func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
