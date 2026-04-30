@@ -42,6 +42,7 @@ clean:
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
 	$(MAKE) -C cmd/calico clean
+	$(MAKE) -C hack clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
