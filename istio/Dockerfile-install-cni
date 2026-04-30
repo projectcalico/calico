@@ -28,8 +28,8 @@ ARG CALICO_BASE
 #   - writes do not poison the kernel for older nft elsewhere on the host.
 #
 # Do not bump past 1.1.1 — see issue #11750 for context.
-ARG LIBNFTNL_VER=1.2.6
-ARG LIBNFTNL_SHA256=ceeaea2cd92147da19f13a35a7f1a4bc2767ff897e838e4b479cf54b59c777f4
+ARG LIBNFTNL_VER=1.2.8
+ARG LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 ARG NFTABLES_VER=1.1.1
 ARG NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
 
