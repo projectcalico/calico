@@ -39,6 +39,8 @@ from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
 from networking_calico.plugins.ml2.drivers.calico import status
+from networking_calico.resync import runner as resync_runner
+from networking_calico.resync import scope as resync_scope
 
 _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
@@ -366,9 +368,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = (
-            mech_calico.DEFAULT_RESYNC_INTERVAL_SECS
-        )
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -443,16 +443,40 @@ class TestPluginEtcdBase(_TestEtcdBase):
         context._plugin_context.to_dict.return_value = {}
         return context
 
+    def _trigger_resync(self):
+        """Drive a fresh full resync via the resync runner.
+
+        Wraps the same ``run_resync`` entry point used by the driver's
+        start-of-day path and the ``calico-resync`` CLI, but reuses the
+        syncers already wired on ``self.driver`` so the mocked DB and
+        Keystone come along for free.  Used by tests that previously
+        triggered a periodic resync by advancing simulated time.
+        """
+        return resync_runner.run_resync(
+            resync_scope.Scope.all(),
+            db_plugin=self.driver.db,
+            admin_context=mech_calico.ctx.get_admin_context(),
+            subnet_syncer=self.driver.subnet_syncer,
+            policy_syncer=self.driver.policy_syncer,
+            endpoint_syncer=self.driver.endpoint_syncer,
+        )
+
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data."""
         # Provide two Neutron ports.
         self.osdb_networks = [lib.network1, lib.network2]
         self.osdb_ports = [lib.port1, lib.port2]
 
-        # Allow the etcd transport's resync thread to run.
+        # Let the eventlet spawn_after machinery fire _post_fork_init and
+        # the spawned start-of-day resync, then drive a resync explicitly
+        # so test_etcd_reset (which calls this method in a loop) gets a
+        # fresh resync on every iteration.  The explicit call is a no-op
+        # on the first iteration because the SOD spawn already wrote
+        # everything.
         with lib.FixedUUID("uuid-start-two-ports"):
             self.give_way()
             self.simulated_time_advance(31)
+            self._trigger_resync()
 
         ep_deadbeef_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
@@ -551,7 +575,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Allow it to run again, this time auditing against the etcd data that
         # was written on the first iteration.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -575,7 +599,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Do another resync - expect no changes to the etcd data.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -618,7 +642,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # resync will now discover that.
         _log.info("Resync with existing etcd data")
         self.osdb_ports[0]["binding:host_id"] = "felix-host-1"
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
 
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace("new--host", "felix--host--1")
@@ -869,7 +893,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Resync with all latest data - expect no etcd writes or deletes.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([]))
 
@@ -924,7 +948,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # cleaned up.
         self.osdb_ports = [context.original]
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(
             set(
@@ -967,7 +991,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
             {"subnet_id": "subnet-id-10.65.0--24", "ip_address": "10.65.0.188"}
         ]
         _log.info("Resync with edited data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
 
         ep_hello_value_v3["spec"]["ipNetworks"] = ["10.65.0.188/32"]
         ep_hello_value_v3["spec"]["ipv4Gateway"] = "10.65.0.1"
@@ -1261,7 +1285,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Allow the etcd transport's resync thread to run again.  Expect no
         # change in etcd subnet data.
         self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -1293,7 +1317,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         with lib.FixedUUID("uuid-subnet-hooks-2"):
             self.give_way()
             self.etcd_data = {}
-            self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+            self._trigger_resync()
 
         expected_writes[
             "/calico/resources/v3/projectcalico.org/clusterinformations/" + "default"
@@ -1317,7 +1341,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         subnet1["enable_dhcp"] = True
         subnet2["enable_dhcp"] = False
         self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites(
             {
                 "/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24": {
@@ -1338,7 +1362,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # changed a Calico-relevant property of a DHCP-enabled subnet.
         subnet1["gateway_ip"] = "10.65.0.2"
         self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites(
             {
                 "/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24": {
@@ -1571,20 +1595,12 @@ class TestPluginEtcd(TestPluginEtcdBase):
             },
         )
 
-    def test_not_master_does_not_resync(self):
-        """Test that a driver that is not master does not resync."""
-        # Initialize the state early to put the elector in place, then override
-        # it to claim that the driver is not master.
-        self.driver._post_fork_init()
-
-        with mock.patch.object(self.driver, "elector") as m_elector:
-            m_elector.master.return_value = False
-
-            # Allow the etcd transport's resync thread to run. Nothing will
-            # happen.
-            self.give_way()
-            self.simulated_time_advance(31)
-            self.assertEtcdWrites({})
+    def test_startup_resync_disabled(self):
+        """With startup_resync=never, nothing is written at start-of-day."""
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
+        self.give_way()
+        self.simulated_time_advance(31)
+        self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = policy._neutron_rule_to_etcd_rule(neutron_rule)
@@ -2079,19 +2095,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
-
-    def _trigger_resync(self):
-        """Trigger a periodic resync by advancing simulated time.
-
-        The resync thread sleeps for RESYNC_INTERVAL_SECS (default 60s)
-        between resyncs.  We advance by 61s to ensure the next resync
-        fires, and give_way to let eventlet threads run.
-        """
-        self.recent_writes = {}
-        self.recent_deletes = set()
-        with lib.FixedUUID("uuid-resync"):
-            self.simulated_time_advance(61)
-            self.give_way()
 
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
