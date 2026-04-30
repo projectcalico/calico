@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,8 +69,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))).To(BeTrue())
-		case *proto.HostMetadataUpdate:
-			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))).To(BeTrue())
+		case *proto.HostMetadataV4V6Update:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataV4V6Update), expUpdate.(*proto.HostMetadataV4V6Update))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointUpdate:
@@ -95,8 +95,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolRemove:
 			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))).To(BeTrue())
-		case *proto.HostMetadataRemove:
-			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))).To(BeTrue())
+		case *proto.HostMetadataV4V6Remove:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataV4V6Remove), expRemove.(*proto.HostMetadataV4V6Remove))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointRemove:
@@ -141,11 +141,11 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 	Entry("HostIP",
 		model.HostIPKey{Hostname: "foo"},
 		&testIP,
-		&proto.HostMetadataUpdate{
+		&proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		},
-		&proto.HostMetadataRemove{
+		&proto.HostMetadataV4V6Remove{
 			Hostname: "foo",
 		}),
 	Entry("Global BGPConfiguration",
@@ -263,9 +263,9 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(1))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 	It("should pass on genuine changes", func() {
@@ -286,13 +286,13 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(2))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.2",
+			Ipv4Addr: "10.0.0.2/32",
 		})).To(BeTrue())
 	})
 	It("should pass on delete and recreate", func() {
@@ -320,16 +320,16 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(3))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataV4V6Remove), &proto.HostMetadataV4V6Remove{
 			Hostname: "foo",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
+		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 })
