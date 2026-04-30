@@ -63,7 +63,7 @@ type endpointCallbacks interface {
 }
 
 type configCallbacks interface {
-	OnConfigUpdate(globalConfig, hostConfig map[string]string)
+	OnConfigUpdate(globalConfig, selectorConfig, hostConfig map[string]string)
 	OnDatastoreNotReady()
 }
 
@@ -314,7 +314,7 @@ func NewCalculationGraph(
 	//                   |
 	//               <dataplane>
 	//
-	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode == "Enabled")
+	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode != "Disabled")
 	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
 	ipsetMemberIndex.RegisterWith(allUpdDispatcher)

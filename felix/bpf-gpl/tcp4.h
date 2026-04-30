@@ -64,8 +64,23 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	}
 	th->check = 0;
 
+	/* Compute checksums before calling helpers (which invalidate skb pointers).
+	 *
+	 * TCP checksum is computed from scratch including pseudo-header.
+	 * We cannot use BPF_F_PSEUDO_HDR because that does an incremental
+	 * update based on stale skb checksum state from the original
+	 * incoming packet, which produces a wrong result for a packet
+	 * built from scratch.
+	 */
 	__wsum ip_csum = bpf_csum_diff(0, 0, ctx->ip_header, sizeof(struct iphdr), 0);
-	__wsum tcp_csum = bpf_csum_diff(0, 0, (__u32 *)th, len - sizeof(struct iphdr) - skb_iphdr_offset(ctx), 0);
+	__wsum tcp_csum = bpf_csum_diff(0, 0, (__u32 *)th, TCP_SIZE, 0);
+
+	__u32 pseudo[3];
+	pseudo[0] = ip_orig.daddr; /* new saddr (IPs were swapped) */
+	pseudo[1] = ip_orig.saddr; /* new daddr */
+	pseudo[2] = bpf_htonl((__u32)IPPROTO_TCP << 16 | TCP_SIZE);
+	tcp_csum = bpf_csum_diff(0, 0, pseudo, sizeof(pseudo), tcp_csum);
+
 	if (bpf_l3_csum_replace(ctx->skb,
 			skb_iphdr_offset(ctx) + offsetof(struct iphdr, check), 0, ip_csum, 0)) {
 		CALI_DEBUG("TCP reset v4 reply: set ip csum failed");
@@ -73,7 +88,7 @@ static CALI_BPF_INLINE int tcp_v4_rst(struct cali_tc_ctx *ctx) {
 	}
 
 	err = bpf_l4_csum_replace(ctx->skb, skb_l4hdr_offset(ctx) +
-			offsetof(struct tcphdr, check), 0, tcp_csum, BPF_F_PSEUDO_HDR);
+			offsetof(struct tcphdr, check), 0, tcp_csum, 0);
 	if (err) {
 		CALI_DEBUG("TCP reset v4 reply: set tcp csum failed %d", err);
 		return -1;

@@ -81,6 +81,7 @@ type mockDataplane struct {
 	ensureStartedFn        func()
 	ensureQdiscFn          func(string) (bool, error)
 	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
+	ensureProgramLoadedFn  func(ap attachPoint, ipFamily proto.IPVersion) error
 	ensureProgramLoadedErr error // if set, ensureProgramLoaded returns this error
 
 	jitHarden             bool
@@ -141,6 +142,10 @@ func (m *mockDataplane) ensureProgramAttached(ap attachPoint) error {
 func (m *mockDataplane) ensureProgramLoaded(ap attachPoint, ipFamily proto.IPVersion) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	if m.ensureProgramLoadedFn != nil {
+		return m.ensureProgramLoadedFn(ap, ipFamily)
+	}
 
 	if m.ensureProgramLoadedErr != nil {
 		return m.ensureProgramLoadedErr
@@ -460,6 +465,10 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		jumpMapEgr = mock.NewMockMap(progsParamsEg)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapIng)
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jumpMapEgr)
+		// Netkit jump maps are needed even in non-netkit tests because the
+		// bpfEndpointManager indexes into them unconditionally (e.g. syncIfStateMap).
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsIng))
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsEg))
 		xdpJumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.XDPJumpMap = xdpJumpMap
 
@@ -1095,6 +1104,37 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHostMetadataV6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
+		})
+	})
+
+	Context("with netkit workload endpoint", func() {
+		JustBeforeEach(func() {
+			newBpfEpMgr(false)
+			err := dp.createIface("calinkit0", 50, "netkit")
+			Expect(err).NotTo(HaveOccurred())
+			genWLUpdate("calinkit0")()
+			genIfaceUpdate("calinkit0", ifacemonitor.StateUp, 50)()
+		})
+
+		It("should detect netkit interface type", func() {
+			bpfEpMgr.ifacesLock.Lock()
+			iface := bpfEpMgr.nameToIface["calinkit0"]
+			bpfEpMgr.ifacesLock.Unlock()
+			Expect(iface.info.ifaceType).To(Equal(IfaceTypeNetkit))
+		})
+
+		It("should allocate jump indices for netkit workload", func() {
+			bpfEpMgr.ifacesLock.Lock()
+			iface := bpfEpMgr.nameToIface["calinkit0"]
+			bpfEpMgr.ifacesLock.Unlock()
+			// Netkit workload should have policy indices allocated.
+			Expect(iface.dpState.v4.policyIdx[hook.Ingress]).To(BeNumerically(">=", 0))
+			Expect(iface.dpState.v4.policyIdx[hook.Egress]).To(BeNumerically(">=", 0))
+		})
+
+		It("should clean up netkit jump maps on interface removal", func() {
+			genIfaceUpdate("calinkit0", ifacemonitor.StateNotPresent, 50)()
+			genWLUpdateEpRemove("calinkit0")()
 		})
 	})
 
@@ -3091,6 +3131,61 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(bookkeepingSetV6.Len()).To(Equal(0))
 		})
 
+	})
+
+	Context("with optional defrag program load failure on FROM_HEP ingress", func() {
+		JustBeforeEach(func() {
+			dp = newMockDataplane()
+			mockDP = dp
+			newBpfEpMgr(false)
+			// Simulate the optional defrag program failing to load on ingress.
+			// The real code retries without the optional program and records
+			// the skipped program in failedOptionalProgs. We mimic that here
+			// by hooking ensureProgramLoaded.
+			dp.ensureProgramLoadedFn = func(ap attachPoint, ipFamily proto.IPVersion) error {
+				if ap.HookName() == hook.Ingress && ipFamily == proto.IPVersion_IPV4 {
+					info := hook.GetOptionalSubProgInfo(hook.SubProgIPFrag)
+					if info != nil {
+						bpfEpMgr.recordSkippedOptional([]hook.OptionalSubProgInfo{*info})
+					}
+				}
+
+				if apxdp, ok := ap.(*xdp.AttachPoint); ok {
+					apxdp.HookLayoutV4 = hook.Layout{
+						hook.SubProgXDPAllowed: 123,
+						hook.SubProgXDPDrop:    456,
+					}
+				}
+
+				key := ap.IfaceName() + ":" + ap.HookName().String()
+				if _, exists := dp.progs[key]; exists {
+					return nil
+				}
+				dp.lastProgID += 1
+				dp.progs[key] = dp.lastProgID
+				return nil
+			}
+		})
+
+		It("should program the interface and report failed optional programs", func() {
+			bpfEpMgr.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp, Index: 3})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// The interface should be programmed (not dirty).
+			Expect(bpfEpMgr.dirtyIfaceNames.Len()).To(Equal(0),
+				"interface should not remain dirty after successful load with skipped optional")
+
+			// No permanent error — the program loaded, just without defrag.
+			Expect(bpfEpMgr.permanentBPFErr).To(BeNil())
+
+			// The failed optional program should be recorded.
+			Expect(bpfEpMgr.failedOptionalProgs).To(HaveKey("IP fragment reassembly"))
+
+			// Programs should still be attached for eth0 ingress and egress.
+			Expect(dp.progs).To(HaveKey("eth0:ingress"))
+			Expect(dp.progs).To(HaveKey("eth0:egress"))
+		})
 	})
 
 	Context("with permanent BPF load failure", func() {

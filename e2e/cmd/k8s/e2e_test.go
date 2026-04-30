@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
@@ -26,6 +27,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework/config"
 
 	caliconfig "github.com/projectcalico/calico/e2e/pkg/config"
+	"github.com/projectcalico/calico/e2e/pkg/testconfig"
 
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
@@ -64,5 +66,43 @@ func init() {
 }
 
 func TestE2E(t *testing.T) {
+	if path := caliconfig.TestConfigPath(); path != "" {
+		if err := applyTestConfig(path); err != nil {
+			t.Fatalf("Failed to apply test config %q: %v", path, err)
+		}
+	}
 	e2e.RunE2ETests(t)
+}
+
+// applyTestConfig loads a YAML test selection config and injects its label
+// filter and skip patterns into Ginkgo's suite config via the standard flag
+// interface. Ginkgo binds --ginkgo.label-filter and --ginkgo.skip against its
+// package-level suite config at init time, so setting them here before
+// e2e.RunE2ETests reads the config is equivalent to passing them on the
+// command line. This lets us reuse the upstream RunE2ETests unchanged rather
+// than forking it.
+func applyTestConfig(path string) error {
+	cfg, err := testconfig.Load(path)
+	if err != nil {
+		return fmt.Errorf("load: %w", err)
+	}
+
+	flags, err := testconfig.ToFlags(cfg)
+	if err != nil {
+		return fmt.Errorf("convert to flags: %w", err)
+	}
+
+	if flags.LabelFilter != "" {
+		logrus.Infof("Test config: ginkgo.label-filter = %s", flags.LabelFilter)
+		if err := flag.Set("ginkgo.label-filter", flags.LabelFilter); err != nil {
+			return fmt.Errorf("set ginkgo.label-filter: %w", err)
+		}
+	}
+	if skip := flags.SkipString(); skip != "" {
+		logrus.Infof("Test config: ginkgo.skip = %s", skip)
+		if err := flag.Set("ginkgo.skip", skip); err != nil {
+			return fmt.Errorf("set ginkgo.skip: %w", err)
+		}
+	}
+	return nil
 }

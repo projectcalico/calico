@@ -13,11 +13,12 @@ ISTIO_ZTUNNEL_IMAGE ?= istio-ztunnel
 
 BUILD_IMAGES ?= $(ISTIO_CNI_IMAGE) $(ISTIO_PILOT_IMAGE) $(ISTIO_PROXYV2_IMAGE) $(ISTIO_ZTUNNEL_IMAGE)
 
-# Istio artifacts are only supported for amd64 and arm64.
-ARCHES ?= amd64 arm64
+# Only amd64 and arm64 are supported. `=` (not `?=`) so env-provided ARCHES
+# from the release manager doesn't override the allowlist.
+ARCHES = amd64 arm64
 
 # Upstream version (configurable)
-ISTIO_VERSION ?= 1.28.1
+ISTIO_VERSION ?= 1.29.2
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -32,9 +33,14 @@ include ../lib.Makefile
 ISTIO_DOWNLOADED = .istio.downloaded
 ZTUNNEL_DOWNLOADED = .ztunnel.downloaded
 
-.PHONY: init-istio-source init-ztunnel-source
+.PHONY: init-istio-source init-ztunnel-source init-sources
 init-istio-source: $(ISTIO_DOWNLOADED)
 init-ztunnel-source: $(ZTUNNEL_DOWNLOADED)
+
+# init-sources is a barrier: all upstream sources must be downloaded and
+# patched before any per-arch image build runs. Without it, parallel sub-makes
+# race on creating the shared stamp files.
+init-sources: $(ISTIO_DOWNLOADED) $(ZTUNNEL_DOWNLOADED)
 
 $(ISTIO_DOWNLOADED):
 	mkdir -p istio
@@ -75,7 +81,7 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
-bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
+bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED) | register
 	$(DOCKER_RUST_BUILD) \
 		sh -c 'cd ztunnel && cargo build --release'
 	cp ztunnel/out/rust/release/ztunnel bin/ztunnel-$(ARCH)
@@ -88,9 +94,21 @@ ISTIO_PILOT_IMAGE_CREATED = .istio-pilot.created-$(ARCH)
 ISTIO_PROXYV2_IMAGE_CREATED = .istio-proxyv2.created-$(ARCH)
 ISTIO_ZTUNNEL_IMAGE_CREATED = .istio-ztunnel.created-$(ARCH)
 
-# Build images for all architectures
+# Build images for all architectures.
+#
+# Sources are downloaded once via the init-sources barrier, then per-arch
+# sub-makes run in parallel; each sub-image-% sub-make also builds its four
+# istio images concurrently via the inherited jobserver.
+#
+# DOCKER_RUN in lib.Makefile is :=-expanded (so GOARCH is baked at include
+# time), which is why per-arch parallelism has to be a sub-make per arch
+# rather than a flat target matrix in a single process.
+ISTIO_PARALLEL_JOBS ?= 4
+
 .PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
+image-all:
+	$(MAKE) init-sources
+	$(MAKE) -j$(ISTIO_PARALLEL_JOBS) $(addprefix sub-image-,$(VALIDARCHES))
 
 sub-image-%:
 	$(MAKE) image ARCH=$*

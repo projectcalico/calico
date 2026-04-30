@@ -41,6 +41,7 @@ clean:
 	$(MAKE) -C cni-plugin clean
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
+	$(MAKE) -C cmd/calico clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
@@ -125,13 +126,13 @@ gen-semaphore-yaml:
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
-GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
+GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
-$(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
+$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
@@ -226,9 +227,10 @@ push-chart: bin/helm
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
-E2E_SKIP ?= ""
 E2E_PROCS ?= 4
+E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+E2E_OUTPUT_DIR ?= report
+E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
@@ -247,27 +249,29 @@ kind-migration-test:
 	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
 	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
 
-## Create a kind cluster and run all e2e tests.
+## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
-	$(MAKE) e2e-run-test
-	$(MAKE) e2e-run-cnp-test
+	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
-	$(MAKE) e2e-run-cnp-test
+	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
-## Run the general e2e tests against a pre-existing kind cluster.
-e2e-run-test:
-	mkdir -p report
-	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test
+## Run the general e2e tests against the cluster at $KUBECONFIG.
+## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
+e2e-run:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
+	mkdir -p $(E2E_OUTPUT_DIR)
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
-## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
-e2e-run-cnp-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
+e2e-run-cnp:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 

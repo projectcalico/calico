@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
@@ -41,14 +42,29 @@ import (
 
 var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
-		etcd      *containers.Container
-		c         client.Interface
-		k8sClient *fake.Clientset
-		stopCh    chan struct{}
+		etcd         *containers.Container
+		c            client.Interface
+		k8sClient    *fake.Clientset
+		stopCh       chan struct{}
+		ips          *testutils.TestBlockAllocator
+		nodeInformer cache.SharedIndexInformer
 	)
 
 	const kNodeName = "k8snodename"
 	const cNodeName = "calinodename"
+
+	// waitForK8sNodeInCache blocks until the node informer has observed the given
+	// node. The fake clientset delivers watch events to the informer asynchronously,
+	// so a Create call returns before the store is updated. If the IPAM controller
+	// runs checkAllocations before the node lands in cache, it sees the allocation's
+	// k8s node as missing and marks the IP as a confirmed leak with no grace period.
+	waitForK8sNodeInCache := func(name string) {
+		GinkgoHelper()
+		Eventually(func() bool {
+			_, exists, err := nodeInformer.GetStore().GetByKey(name)
+			return err == nil && exists
+		}, 5*time.Second, 50*time.Millisecond).Should(BeTrue(), "k8s node %q never appeared in informer cache", name)
+	}
 
 	BeforeAll(func() {
 		// Run etcd for the Calico datastore.
@@ -65,6 +81,10 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		_, err := c.IPPools().Create(context.Background(), p, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
+		// Each test gets an IP from a different /26 block to avoid races with
+		// the controller's async block GC from the previous test.
+		ips = testutils.NewTestBlockAllocator("192.168.0.0", 26)
+
 		// Create the fake K8s client and start the in-process node controller.
 		// We use a single controller for all tests (matching how the Docker-based
 		// tests share a single K8s apiserver) to avoid prometheus metric re-registration
@@ -73,7 +93,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		stopCh = make(chan struct{})
 
 		factory := informers.NewSharedInformerFactory(k8sClient, 0)
-		nodeInformer := factory.Core().V1().Nodes().Informer()
+		nodeInformer = factory.Core().V1().Nodes().Informer()
 		podInformer := factory.Core().V1().Pods().Informer()
 
 		dataFeed := utils.NewDataFeed(c, utils.Etcdv3)
@@ -147,10 +167,13 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should properly garbage collect IP addresses for mismatched node names", func() {
+		testIP := ips.NextIP()
+
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: kNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(kNodeName)
 
 		// Create a Calico node with a reference to the K8s node.
 		cn := calicoNode(cNodeName, kNodeName, map[string]string{})
@@ -161,7 +184,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		handleA := "handleA"
 		attrs := map[string]string{"node": cNodeName, "pod": "pod-a", "namespace": "default"}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: cNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: cNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -189,12 +212,14 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should never garbage collect IP addresses that do not belong to Kubernetes pods", func() {
+		testIP := ips.NextIP()
 		commonNodeName := "common-node-name"
 
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: commonNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(commonNodeName)
 
 		// Create a Calico node without a node reference. Be extra tricky, by naming the calico node the
 		// same name as the Kubernetes node. This makes sure we're really using the orchRef properly.
@@ -207,7 +232,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -250,18 +275,20 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should garbage collect IP addresses if there is no Calico node, even if there happens to be a Kubernetes node", func() {
+		testIP := ips.NextIP()
 		commonNodeName := "common-node-name"
 
 		// Create a kubernetes node.
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: commonNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(commonNodeName)
 
 		// Allocate an IP address on a node that doesn't exist in Calico.
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName, "pod": "pod-a", "namespace": "default"}
 		err = c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -279,12 +306,14 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 	})
 
 	It("should garbage collect IP addresses if there is no Calico node AND no Kubernetes node", func() {
+		testIP := ips.NextIP()
+
 		// Allocate an IP address on a node that doesn't exist.
 		commonNodeName := "common-node-name"
 		handleA := "handleA"
 		attrs := map[string]string{"node": commonNodeName, "pod": "pod-a", "namespace": "default"}
 		err := c.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
-			IP: net.MustParseIP("192.168.0.1"), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
+			IP: net.MustParseIP(testIP), HandleID: &handleA, Attrs: attrs, Hostname: commonNodeName,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

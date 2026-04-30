@@ -37,6 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -72,6 +73,7 @@ type K8sDatastoreInfra struct {
 
 	calicoClient client.Interface
 	K8sClient    *kubernetes.Clientset
+	KcnpClient   *netpolicyclient.PolicyV1alpha2Client
 
 	Endpoint    string
 	EndpointIP  string
@@ -387,6 +389,18 @@ func setupK8sDatastoreInfra(opts ...CreateOption) (kds *K8sDatastoreInfra, err e
 	}
 	log.Info("Got k8s client")
 
+	kds.KcnpClient, err = netpolicyclient.NewForConfig(&rest.Config{
+		Transport: insecureTransport,
+		Host:      "https://" + kds.containerGetIPForURL(kds.k8sApiContainer) + ":6443",
+		QPS:       100,
+		Burst:     100,
+	})
+	if err != nil {
+		log.WithError(err).Error("Failed to create k8s cluster network policy client.")
+		return nil, err
+	}
+	log.Info("Got k8s cluster network policy client")
+
 	// Allow anonymous connections to the API server.  We also use this command to wait
 	// for the API server to be up.
 	start = time.Now()
@@ -649,6 +663,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 		cleanupAllNamespaces,
 		cleanupAllPools,
 		cleanupIPAM,
+		cleanupAllK8sNetworkPolicies,
 		cleanupAllStagedKubernetesNetworkPolicies,
 		cleanupAllGlobalNetworkPolicies,
 		cleanupAllStagedGlobalNetworkPolicies,
@@ -665,6 +680,8 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 	for _, f := range cleanupFuncs {
 		f(kds.K8sClient, kds.calicoClient)
 	}
+
+	cleanupAllK8sClusterNetworkPolicies(kds.KcnpClient)
 
 	kds.needsCleanup = false
 	log.WithField("time", time.Since(startTime)).Info("Cleaned up kubernetes datastore")
@@ -1176,6 +1193,38 @@ func cleanupAllGlobalNetworkPolicies(clientset *kubernetes.Clientset, client cli
 		}
 	}
 	log.Info("Cleaned up GNPs")
+}
+
+func cleanupAllK8sNetworkPolicies(clientset *kubernetes.Clientset, _ client.Interface) {
+	log.Info("Cleaning up Kubernetes network policies")
+	ctx := context.Background()
+	knps, err := clientset.NetworkingV1().NetworkPolicies("").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list k8s network policies")
+	}
+	for _, knp := range knps.Items {
+		err = clientset.NetworkingV1().NetworkPolicies(knp.Namespace).Delete(ctx, knp.Name, metav1.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete k8s network policy %s", knp.Name)
+		}
+	}
+	log.WithField("count", len(knps.Items)).Info("Cleaned up Kubernetes network policies")
+}
+
+func cleanupAllK8sClusterNetworkPolicies(kcnpClient *netpolicyclient.PolicyV1alpha2Client) {
+	log.Info("Cleaning up Kubernetes cluster network policies")
+	ctx := context.Background()
+	kcnps, err := kcnpClient.ClusterNetworkPolicies().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		log.WithError(err).Panic("failed to list k8s cluster network policies")
+	}
+	for _, kcnp := range kcnps.Items {
+		err = kcnpClient.ClusterNetworkPolicies().Delete(ctx, kcnp.Name, metav1.DeleteOptions{})
+		if err != nil {
+			log.WithError(err).Panicf("failed to delete k8s cluster network policy %s", kcnp.Name)
+		}
+	}
+	log.WithField("count", len(kcnps.Items)).Info("Cleaned up Kubernetes cluster network policies")
 }
 
 func cleanupAllStagedKubernetesNetworkPolicies(clientset *kubernetes.Clientset, client client.Interface) {

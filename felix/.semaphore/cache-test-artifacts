@@ -22,7 +22,14 @@ set -x
 
 artifact push job bin &
 docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
-docker save -o /tmp/felixtest-typha.tar felix-test/typha:latest-amd64
+
+# The combined calico image (which provides Typha and other components used by
+# the FVs) is already published to ${GCS_WORKFLOW_DIR}/calico-image.tar.zst by
+# the "Build: calico image" prerequisite block. Server-side copy it into this
+# component's fv-artifacts directory so the test VM sees it alongside the
+# working copy and felix-test image.
+gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-image.tar.zst" "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
+
 cd ../..
 
 # Future work: Split UT and FV artifacts so we can be even more selective.
@@ -33,5 +40,5 @@ tar -czf /tmp/working-copy.tgz \
   --exclude=calico/typha/docker-image/bin \
   --exclude=artifacts \
   ${CALICO_DIR_NAME}
-gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar /tmp/felixtest-typha.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 wait

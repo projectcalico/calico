@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,6 +78,16 @@ var features = map[string]bool{
 	"KubeVirt":        true,
 }
 
+// RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
+// server (calico-apiserver) being deployed. In v3 CRD mode, Calico resources
+// are served directly by the K8s CRD controller, and GET/LIST/WATCH requests
+// bypass tier RBAC entirely because the admission webhook only covers mutating
+// operations. These tests verify read-path tier RBAC enforcement, which only
+// works when the aggregated API server is handling requests.
+func RequiresCalicoAPIServer() any {
+	return framework.WithLabel("RequiresCalicoAPIServer")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
@@ -122,14 +132,14 @@ func WithWindows() any {
 	return framework.WithLabel("RunsOnWindows")
 }
 
-// WithAzure marks tests that must run on Azure.
-func WithAzure() any {
-	return framework.WithLabel("RunsOnAzure")
+// RequiresAzure marks tests that can only run on Azure.
+func RequiresAzure() any {
+	return framework.WithLabel("RequiresAzure")
 }
 
-// WithAWS marks tests that must run on AWS.
-func WithAWS() any {
-	return framework.WithLabel("RunsOnAWS")
+// RequiresAWS marks tests that can only run on AWS.
+func RequiresAWS() any {
+	return framework.WithLabel("RequiresAWS")
 }
 
 // WithExternalNode marks tests that require an external node outside of the base cluster,
@@ -151,6 +161,14 @@ func RequiresRKE2() any {
 // RequiresRKE marks tests that require RHEL nodes.
 func RequiresRHEL() any {
 	return framework.WithLabel("RunsOnRHEL")
+}
+
+// RequiresXtables marks tests that only work on xtables-based dataplanes
+// (iptables or nftables). These tests exercise behavior that doesn't exist
+// on BPF or VPP dataplanes. Exclude on BPF clusters via the RequiresXtables
+// label in the test config.
+func RequiresXtables() any {
+	return framework.WithLabel("RequiresXtables")
 }
 
 // WithSmokeTest marks tests that are considered smoke tests.

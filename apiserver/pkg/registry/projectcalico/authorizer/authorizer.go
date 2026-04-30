@@ -54,9 +54,16 @@ func (a *authorizer) AuthorizeTierOperation(
 
 	// We need to check whether the user is authorized to perform the action on the tier.<resourcetype>
 	// resource, with a resource name of either:
-	// - <tier>.*         (this is the wildcard syntax for any Calico policy within a tier)
-	// - <tier>.<policy>  (this checks for a specific policy and tier, or fully wildcarded policy and tier)
+	// - <tier>.*           (wildcard syntax for any Calico policy within a tier; covers both name styles)
+	// - <tier>.<policy>    (old-style: tier-prefixed policy name)
+	// - <policy>           (new-style: bare policy name)
 	// *and* has GET access for the tier.
+	//
+	// The per-policy check uses attributes.GetName() verbatim — whatever the client sent in the
+	// request. Old-style (tier-prefixed) and new-style (bare) names therefore resolve to different
+	// RBAC resource names and are independently authorized: granting access to "tier.policy" does
+	// not grant access to the same object when accessed by its bare name "policy", and vice versa.
+	// The tier.* wildcard check covers both access styles without ambiguity.
 	// These requests can be performed in parallel.
 	wg := sync.WaitGroup{}
 	wg.Add(3)

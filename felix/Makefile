@@ -61,15 +61,8 @@ include ../lib.Makefile
 SRC_FILES += $(GENERATED_FILES)
 SRC_FILES += $(shell find bpf/ -name '*.[ch]')
 
-# Set the platform correctly for building docker images.
-ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
-# Required for eBPF support.
-# We need to force target arch build image to be used in a cross-compilation run.
-CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
-endif
-
 FV_ETCDIMAGE?=$(ETCD_IMAGE)
-FV_TYPHAIMAGE?=felix-test/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico/calico:latest-$(BUILDARCH)
 FV_K8SIMAGE=$(CALICO_BUILD)
 FV_FELIXIMAGE?=$(FELIX_IMAGE):latest-$(ARCH)
 
@@ -130,7 +123,14 @@ ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
 	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
-CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
+# When cross-compiling, force lld as the linker — GNU ld is single-target,
+# while lld natively links the cross-arch ELF objects produced by clang.
+# (The cross sysroot itself is already supplied via CC's --sysroot flag.)
+CROSS_CGO_LDFLAGS=
+ifneq ($(CROSS_SYSROOT),)
+	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
+endif
+CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
@@ -156,18 +156,23 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 libbpf: $(LIBBPF_A)
 clone-libbpf: $(LIBBPF_FILE_CREATED)
 
-$(LIBBPF_FILE_CREATED): | register
+$(LIBBPF_FILE_CREATED):
 	@echo Cloning libbpf
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl libbpf LIBBPF_VERSION=$(LIBBPF_VERSION)"
 
 $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -path 'bpf-gpl/libbpf/src/$(ARCH)*' -not -path 'bpf-gpl/libbpf/.git*')
 	mkdir -p bpf-gpl/libbpf/src/$(ARCH)
 	mkdir -p bpf-gpl/include/src/$(ARCH)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH)"
+	# Build the static libbpf.a with -fPIC so the objects can be linked into
+	# either a PDE or a PIE executable. The combined calico binary pulls in
+	# Go packages that cause the linker to emit -Wl,-z,nocopyreloc, which
+	# rejects libbpf's non-PIC references to glibc symbols like stderr.
+	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) $(TARGET_PLATFORM) -e CGO_ENABLED=$(CGO_ENABLED) -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
-bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
+LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
+bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
@@ -221,12 +226,12 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	mkdir -p bin/bpf
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
-$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile | register
+$(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
 	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
 	touch -c $@
 
-$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile | register
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl all ut-objs map-objs
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl ARCH=$(ARCH) all ut-objs map-objs
 	touch -c $@
 
 bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
@@ -249,11 +254,14 @@ routetable/routeclass_string.go: routetable/defs.go
 # Build the calico/felix-test docker image, which contains only Felix.
 .PHONY: $(FELIX_IMAGE) $(FELIX_IMAGE)-$(ARCH)
 
-# Whether or not to use race-detector in the produced image.
+# FV runs the combined calico binary (mounted at /usr/local/bin/calico-felix
+# in the felix-test container, dispatched via `calico component felix`). BPF
+# FV requires CGO so the non-race path uses calico-cgo-$(ARCH); the race
+# variant is also CGO and adds -race.
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-FV_BINARY=bin/calico-felix-race-$(ARCH)
+FV_BINARY=../cmd/calico/bin/calico-race-$(ARCH)
 else
-FV_BINARY=bin/calico-felix-$(ARCH)
+FV_BINARY=../cmd/calico/bin/calico-cgo-$(ARCH)
 endif
 
 # by default, build the image for the target architecture
@@ -311,18 +319,33 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-typha
+REMOTE_DEPS=build-calico-image
+ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
+REMOTE_DEPS+=build-calico-race
+else
+REMOTE_DEPS+=build-calico-cgo
+endif
 
-build-typha:
-	make -C ../typha image DEV_REGISTRIES=felix-test
+# Typha runs from the combined calico image as `component typha` (see
+# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
+# preloaded from the calico-image GCS cache.
+build-calico-image:
+	$(MAKE) -C ../cmd/calico image
 
-.PHONY: fv fv-prereqs fv-no-build
+# FV mounts the combined binary into the felix-test container. The cgo
+# variant supports BPF; the race variant adds -race for the race detector.
+build-calico-cgo:
+	$(MAKE) -C ../cmd/calico build-cgo
+
+build-calico-race:
+	$(MAKE) -C ../cmd/calico build-race
+
+.PHONY: fv fv-prereqs fv-no-build build-calico-image build-calico-cgo build-calico-race
 
 # Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
 # this target to build everything so that it can be cached and shared between downstream jobs.
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
-            $(FV_BINARY) \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
@@ -382,6 +405,7 @@ fv-no-prereqs:
 	  ARCH=$(ARCH) \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  FELIX_FV_NFTABLES="$(FELIX_FV_NFTABLES)" \
+	  FELIX_FV_NETKIT="$(FELIX_FV_NETKIT)" \
 	  FV_RACE_DETECTOR_ENABLED=$(FV_RACE_DETECTOR_ENABLED) \
 	  FV_BINARY=$(FV_BINARY) \
 	  CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -401,6 +425,9 @@ fv-bpf:
 
 fv-bpf-no-prereqs:
 	$(MAKE) fv-no-prereqs FELIX_FV_ENABLE_BPF=true
+
+fv-bpf-netkit:
+	$(MAKE) fv FELIX_FV_ENABLE_BPF=true FELIX_FV_NETKIT=Enabled
 
 fv-nft:
 	$(MAKE) fv FELIX_FV_NFTABLES=Enabled
