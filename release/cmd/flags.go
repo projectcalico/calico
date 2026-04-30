@@ -217,6 +217,10 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
+	// operatorGitFlags resolve the operator's org/repo/branch. Required on any
+	// command that calls calico.WithOperatorGit or operator.Clone.
+	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
+
 	operatorBuildCommandFlags = []cli.Flag{
 		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
 		operatorReleaseBranchPrefixFlag,
