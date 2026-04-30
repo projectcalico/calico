@@ -786,25 +786,14 @@ func (r *CalicoManager) componentImages() map[string]string {
 	return components
 }
 
-// CheckImagesPublished is the exported entry point for running the gate
-// (checkHashreleaseImagesPublished) without going through the surrounding
-// publishPrereqs validation chain. It is intended for use as a preflight
-// gate in hashrelease build, where we want to validate component image
-// existence before Phase 1's expensive build work begins. The existing
-// publishPrereqs path remains the canonical entry point at Phase 2 publish
-// time.
-func (r *CalicoManager) CheckImagesPublished() error {
-	return r.checkHashreleaseImagesPublished()
-}
-
-// checkHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
-func (r *CalicoManager) checkHashreleaseImagesPublished() error {
+// CheckHashreleaseImagesPublished checks that the images required for the hashrelease exist in the specified registries.
+func (r *CalicoManager) CheckHashreleaseImagesPublished() (bool, error) {
 	logrus.Info("Checking images required for hashrelease have already been published")
 	componentImages := r.componentImages()
 	numOfComponents := len(componentImages)
 	if numOfComponents == 0 {
 		logrus.Error("No images to check")
-		return fmt.Errorf("no images to check")
+		return false, fmt.Errorf("no images to check")
 	}
 
 	resultsCh := make(chan imageExistsResult, numOfComponents)
@@ -831,10 +820,14 @@ func (r *CalicoManager) checkHashreleaseImagesPublished() error {
 			missingImages = append(missingImages, result.image)
 		}
 	}
-	if len(missingImages) > 0 {
-		return errors.Join(fmt.Errorf("the following images required for hashrelease have not been published: %s", strings.Join(missingImages, ", ")), resultsErr)
+	if resultsErr != nil {
+		return false, resultsErr
 	}
-	return resultsErr
+	if len(missingImages) > 0 {
+		logrus.Errorf("the following images required for hashrelease have not been published: %s", strings.Join(missingImages, ", "))
+		return false, nil
+	}
+	return true, nil
 }
 
 // Check that the environment has the necessary prereqs for publishing hashrelease
@@ -848,8 +841,12 @@ func (r *CalicoManager) hashreleasePrereqs() error {
 	if r.images {
 		return r.assertImageVersions()
 	} else {
-		if err := r.checkHashreleaseImagesPublished(); err != nil {
+		published, err := r.CheckHashreleaseImagesPublished()
+		if err != nil {
 			return err
+		}
+		if !published {
+			return fmt.Errorf("required component images have not been published")
 		}
 		logrus.Info("All images required for hashrelease have been published")
 	}

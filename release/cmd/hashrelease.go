@@ -112,14 +112,14 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
 
-				// PREFLIGHT: gate per-component image existence before Phase 1 builds anything.
-				// Excludes the operator (which will be pushed by operator.Publish in Phase 2).
-				// Honors --no-validation (skip when validation disabled), and --images
-				// (skip when the user is building product images locally — registry-side
-				// probe doesn't make sense in that developer mode).
+				// If validation is enabled (and the user isn't building product images locally),
+				// check if the component images that the operator will reference have been published.
+				// If they haven't, there's no point in proceeding to build this operator or this hashrelease.
 				if c.Bool(validationFlag.Name) && !c.Bool(imagesFlagName) {
-					if err := runPreflightImageCheck(cfg, data.ProductVersion(), data.OperatorVersion(), productRegistriesFromFlag); err != nil {
-						return err
+					if published, err := componentImagesPublished(cfg, data.ProductVersion(), data.OperatorVersion(), productRegistriesFromFlag); err != nil {
+						return fmt.Errorf("failed to check if component images are published: %v", err)
+					} else if !published {
+						return fmt.Errorf("required component images have not been published; aborting hashrelease build")
 					}
 				}
 
@@ -289,7 +289,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				} else {
 					opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 				}
-				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, true /* includeOperator */)
+				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, true)
 				if err != nil {
 					return fmt.Errorf("failed to retrieve images for hashrelease: %w", err)
 				}
@@ -460,23 +460,16 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 	return nil
 }
 
-// runPreflightImageCheck verifies that all required per-component images
-// already exist in their registries, before Phase 1's expensive build work begins.
-// The operator image is intentionally excluded — it's pushed later by
-// operator.Publish() in Phase 2.
-//
-// On failure, this returns an error that the build action propagates as its exit
-// status; no Phase 1 build artifacts are produced and no operator image is pushed.
-// On success, ~12 seconds are added to the build action's runtime; on failure,
-// ~30 minutes of doomed Phase 1 build work is avoided.
-func runPreflightImageCheck(
+// componentImagesPublished verifies that the component images the operator
+// will reference have been published.
+func componentImagesPublished(
 	cfg *Config,
 	productVersion, operatorVersion string,
 	productRegistries []string,
-) error {
-	components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, false /* includeOperator */)
+) (bool, error) {
+	components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, false)
 	if err != nil {
-		return fmt.Errorf("preflight: retrieve components: %w", err)
+		return false, fmt.Errorf("retrieve components: %w", err)
 	}
 
 	opts := []calico.Option{
@@ -490,12 +483,6 @@ func runPreflightImageCheck(
 	if len(productRegistries) > 0 {
 		opts = append(opts, calico.WithImageRegistries(productRegistries))
 	}
-	pre := calico.NewManager(opts...)
-
-	logrus.Info("Running preflight image existence check")
-	if err := pre.CheckImagesPublished(); err != nil {
-		return fmt.Errorf("preflight image check failed: %w", err)
-	}
-	logrus.Info("Preflight image check passed; continuing with hashrelease build")
-	return nil
+	mgr := calico.NewManager(opts...)
+	return mgr.CheckHashreleaseImagesPublished()
 }
