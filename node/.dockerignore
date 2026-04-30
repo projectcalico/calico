@@ -8,6 +8,7 @@
 # - AlmaLinux repository file and our license
 !almalinux.repo
 !patches/svlogd_use_0644_permission_instead_of_0744.patch
+!patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 !dist/LICENSE
 # - Files used in the windows image
 !windows-packaging/CalicoWindows/libs
