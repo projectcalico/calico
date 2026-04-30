@@ -103,23 +103,43 @@ def expand(scope: Scope, db, context) -> ExpandedScope:
     port_ids = set(scope.port_ids)
     security_group_ids = set(scope.security_group_ids)
 
-    # Resync of a network includes its subnets and ports.
+    # Resync of a network includes its subnets and ports.  Track the
+    # subnets we discover here so the subnet block below can skip
+    # them: their ports were already added via the network_id port
+    # query.
+    network_subnet_ids = set()
     if network_ids:
         for subnet in db.get_subnets(
             context, filters={"network_id": list(network_ids)}
         ):
-            subnet_ids.add(subnet["id"])
+            network_subnet_ids.add(subnet["id"])
         for port in db.get_ports(context, filters={"network_id": list(network_ids)}):
             port_ids.add(port["id"])
+    subnet_ids |= network_subnet_ids
 
     # Resync of a subnet includes its ports.  Ports don't have a
-    # subnet_id field directly; we go via fixed_ips.
-    if subnet_ids:
-        for port in db.get_ports(context, filters=None):
-            for fixed_ip in port.get("fixed_ips", []) or []:
-                if fixed_ip.get("subnet_id") in subnet_ids:
-                    port_ids.add(port["id"])
-                    break
+    # subnet_id field directly; we have to go via fixed_ips.  We only
+    # need to do this for subnets that weren't already covered by the
+    # network expansion above; for those we know we already added all
+    # their ports.  Narrow the get_ports query down to the remaining
+    # subnets' networks (a port is always on exactly one network) so
+    # we don't drag in every port in OpenStack.
+    remaining_subnet_ids = subnet_ids - network_subnet_ids
+    if remaining_subnet_ids:
+        subnet_network_ids = {
+            s["network_id"]
+            for s in db.get_subnets(
+                context, filters={"id": list(remaining_subnet_ids)}
+            )
+        }
+        if subnet_network_ids:
+            for port in db.get_ports(
+                context, filters={"network_id": list(subnet_network_ids)}
+            ):
+                for fixed_ip in port.get("fixed_ips", []) or []:
+                    if fixed_ip.get("subnet_id") in remaining_subnet_ids:
+                        port_ids.add(port["id"])
+                        break
 
     if scope.include_security_groups_for_ports and port_ids:
         for port in db.get_ports(context, filters={"id": list(port_ids)}):
