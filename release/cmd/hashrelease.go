@@ -72,7 +72,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Clone the operator repository.
-				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
+				operatorDir := filepath.Join(cfg.TmpDir, operator.Repo())
 				err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir)
 				if err != nil {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
@@ -238,7 +238,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
 				o := operator.NewManager(
-					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, operator.DefaultRepoName)),
+					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, operator.Repo())),
 					operator.IsHashRelease(),
 					operator.WithImage(hashrel.Operator.Image),
 					operator.WithRegistry(hashrel.Operator.Registry),
