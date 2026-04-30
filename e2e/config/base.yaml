@@ -17,3 +17,6 @@ exclude:
 
     - label: ExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
+
+    - label: Feature:KubeVirt
+      reason: "e2e infra integration with Banzai not ready, currently run manually"
