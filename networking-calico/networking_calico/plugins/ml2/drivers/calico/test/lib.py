@@ -59,6 +59,7 @@ sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks
 sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
@@ -210,6 +211,9 @@ class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
         pass
 
+    def run(self):
+        pass
+
     def master(self):
         return True
 
@@ -344,6 +348,8 @@ class Lib(object):
 
         # Create an instance of CalicoMechanismDriver.
         self.driver = mech_calico.CalicoMechanismDriver()
+        self.driver.is_master = mock.Mock()
+        self.driver.is_master.return_value = True
 
         # Hook the (mock) Neutron database.
         self.db = mech_calico.plugin_dir.get_plugin()

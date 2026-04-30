@@ -63,8 +63,8 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, calico_driver):
         self.region_string = calico_config.get_region_string()
-        status_path = datamodel_v2.felix_status_dir(self.region_string)
-        super(StatusWatcher, self).__init__(status_path, "/round-trip-check")
+        self.status_path = datamodel_v2.felix_status_dir(self.region_string)
+        super(StatusWatcher, self).__init__(self.status_path, "/round-trip-check")
         self.calico_driver = calico_driver
 
         self.processing_snapshot = False
@@ -78,21 +78,6 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         # EtcdWatcher has to emit duplicate notifications to us, and we want to
         # deduplicate before passing on to the Neutron DB.
         self._felix_live_rev = {}
-
-        # Register for felix uptime updates.
-        self.register_path(
-            status_path + "/<hostname>/status",
-            on_set=self._on_status_set,
-            on_del=self._on_status_del,
-        )
-        # Register for per-port status updates.
-        self.register_path(
-            status_path
-            + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
-            on_set=self._on_ep_set,
-            on_del=self._on_ep_delete,
-        )
-        LOG.info("StatusWatcher created")
 
     def _pre_snapshot_hook(self):
         # Save off current endpoint status, then reset current state, so we
@@ -118,6 +103,19 @@ class StatusWatcher(etcdutils.EtcdWatcher):
                     hostname, ep_id.endpoint, None, priority="low"
                 )
         self.processing_snapshot = False
+
+
+class AgentStatusWatcher(StatusWatcher):
+
+    def __init__(self, calico_driver):
+        super().__init__(calico_driver)
+
+        # Register for felix uptime updates.
+        self.register_path(
+            self.status_path + "/<hostname>/status",
+            on_set=self._on_status_set,
+            on_del=self._on_status_del,
+        )
 
     def _on_status_set(self, response, hostname):
         """Called when a felix uptime report is inserted/updated."""
@@ -147,6 +145,19 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         # - There's no way to report the failure to neutron; neutron spots
         #   agent failures by timeout.
         LOG.error("Felix on host %s failed to check in.", hostname)
+
+
+class EndpointStatusWatcher(StatusWatcher):
+
+    def __init__(self, calico_driver):
+        super().__init__(calico_driver)
+
+        self.register_path(
+            self.status_path
+            + "/<hostname>/workload/openstack/<workload>/endpoint/<endpoint>",
+            on_set=self._on_ep_set,
+            on_del=self._on_ep_delete,
+        )
 
     def _on_ep_set(self, response, hostname, workload, endpoint):
         """Called when the status key for a particular endpoint is updated.
