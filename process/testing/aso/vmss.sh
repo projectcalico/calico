@@ -141,6 +141,13 @@ EOF
     return 1
   fi
 
+  # NICs reference subnet-aso directly; ASO does not retry NIC creation if
+  # the subnet hasn't reconciled in Azure yet, so gate on the subnet too.
+  if ! wait_for_aso_resource "virtualnetworkssubnet" "subnet-aso" "aso" "300s"; then
+    log_error "Failed to create Subnet"
+    return 1
+  fi
+
   # Step 3: Secrets
   log_info "Creating secrets..."
   ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
