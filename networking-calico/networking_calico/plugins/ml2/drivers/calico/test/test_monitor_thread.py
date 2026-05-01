@@ -37,6 +37,7 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
 
         # thread logic mocks
         self.driver.elector = mock.Mock()
+        self.driver.is_master = mock.Mock()
         self.sleep_patcher = mock.patch("eventlet.sleep")
         self.mock_sleep = self.sleep_patcher.start()
 
@@ -55,20 +56,20 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         self.sleep_patcher.stop()
         super(TestResyncMonitorThread, self).tearDown()
 
-    def simulate_epoch_progression(self, expected_sleep_time=None):
-        def increment_epoch(actual_sleep_time):
+    def stop_worker(self, expected_sleep_time=None):
+        def stop(actual_sleep_time):
             if expected_sleep_time is not None:
                 assert expected_sleep_time == actual_sleep_time
-            self.driver._epoch += 1
+            self.driver._stop_worker = True
 
-        return increment_epoch
+        return stop
 
     def test_monitor_does_nothing_when_not_master(self):
         """Test that a driver that is not master does not monitor."""
-        self.driver.elector.master.return_value = False
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
+        self.driver.is_master.return_value = False
+        self.mock_sleep.side_effect = self.stop_worker()
 
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.driver.monitor_resync()
 
         self.log_debug.assert_called_once_with("I am not master")
         self.log_error.assert_not_called()
@@ -76,12 +77,12 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
     def test_monitor_logs_error_when_over_max(self):
         """Test that an error is logged when interval surpasses maximum."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
+        self.driver.is_master.return_value = True
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
+        self.mock_sleep.side_effect = self.stop_worker()
 
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.driver.monitor_resync()
 
         self.log_error.assert_called_once()
         self.assertIn(
@@ -92,34 +93,22 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
     def test_monitor_no_error_if_interval_under_max(self):
         """If interval is below max, no error should be logged."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
+        self.driver.is_master.return_value = True
+        self.mock_sleep.side_effect = self.stop_worker()
 
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.driver.monitor_resync()
 
         self.log_error.assert_not_called()
-
-    def test_monitor_exception_stops_elector(self):
-        """On unexpected exception, elector.stop() must be called."""
-        self.driver.elector.master.return_value = True
-
-        with mock.patch.object(self.driver, "elector") as mock_elector:
-            mock_elector.master.side_effect = Exception("Test exception")
-
-            with self.assertRaises(Exception):
-                self.driver.resync_monitor_thread(INITIAL_EPOCH)
-
-            mock_elector.stop.assert_called_once()
 
     def test_resync_resets_time(self):
         """Test that resync resets current interval duration to below max."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
+        self.driver.is_master.return_value = True
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.stop_worker()
+        self.driver.monitor_resync()
 
         self.log_error.assert_called_once()
         self.assertIn(
@@ -128,32 +117,34 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
         )
 
         # Resync
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
-        self.driver.periodic_resync_thread(INITIAL_EPOCH + 1)
+        self.mock_sleep.side_effect = self.stop_worker()
+        self.driver.do_periodic_resync()
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
-        self.driver.resync_monitor_thread(INITIAL_EPOCH + 2)
+        self.mock_sleep.side_effect = self.stop_worker()
+        self.driver.monitor_resync()
 
         self.log_error.assert_called_once()
 
     def test_errors_continue_to_log(self):
         """Test that errors continue logging if resync does not occur."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
+        self.driver.is_master.return_value = True
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.stop_worker()
+        self.driver.monitor_resync()
 
         self.log_error.assert_called_once()
         self.assertIn(
             "The time since the last resync completion has surpassed",
             self.log_error.call_args[0][0],
         )
+        # Unpause the worker
+        self.driver._stop_worker = False
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression()
-        self.driver.resync_monitor_thread(INITIAL_EPOCH + 1)
+        self.mock_sleep.side_effect = self.stop_worker()
+        self.driver.monitor_resync()
 
         self.assertEqual(self.log_error.call_count, 2)
         self.assertIn(
@@ -165,28 +156,24 @@ class TestResyncMonitorThread(lib.Lib, unittest.TestCase):
     def test_sleep_time_logic_before_deadline(self, mock_datetime):
         """Test that we sleep until deadline if there is time left."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
+        self.driver.is_master.return_value = True
 
         curr_time = datetime.now()
         self.driver.last_resync_time = curr_time
         expected_sleep_time = TEST_MAX_INTERVAL
         mock_datetime.now.return_value = curr_time
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression(
-            expected_sleep_time
-        )
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.stop_worker(expected_sleep_time)
+        self.driver.monitor_resync()
 
     def test_sleep_time_logic_after_deadline(self):
         """Test that we poll if the deadline has passed."""
         lib.m_oslo_config.cfg.CONF.calico.resync_max_interval_secs = TEST_MAX_INTERVAL
-        self.driver.elector.master.return_value = True
+        self.driver.is_master.return_value = True
 
         fake_resync_time = datetime.now() - timedelta(seconds=TEST_MAX_INTERVAL + 1)
         self.driver.last_resync_time = fake_resync_time
         expected_sleep_time = TEST_MAX_INTERVAL / 5
 
-        self.mock_sleep.side_effect = self.simulate_epoch_progression(
-            expected_sleep_time
-        )
-        self.driver.resync_monitor_thread(INITIAL_EPOCH)
+        self.mock_sleep.side_effect = self.stop_worker(expected_sleep_time)
+        self.driver.monitor_resync()
