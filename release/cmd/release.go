@@ -149,7 +149,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -190,14 +190,16 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 }
 
 func releasePublicSubCommands(cfg *Config) *cli.Command {
+	flags := []cli.Flag{
+		orgFlag,
+		repoFlag,
+		repoRemoteFlag,
+	}
+	flags = append(flags, operatorGitFlags...)
 	return &cli.Command{
 		Name:  "public",
 		Usage: "Make a published release available to the public",
-		Flags: []cli.Flag{
-			orgFlag,
-			repoFlag,
-			repoRemoteFlag,
-		},
+		Flags: flags,
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("release-public.log")
 			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
