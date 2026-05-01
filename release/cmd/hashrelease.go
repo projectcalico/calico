@@ -112,6 +112,23 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 				productRegistriesFromFlag := c.StringSlice(registryFlag.Name)
 
+				// If validation is enabled (and the user isn't building product images locally),
+				// check if the component images that the operator will reference have been published.
+				// If they haven't, there's no point in proceeding to build this operator or this hashrelease.
+				if c.Bool(validationFlag.Name) && !c.Bool(imagesFlagName) {
+					published, err := componentImagesPublished(
+						cfg,
+						data.ProductVersion(), data.OperatorVersion(),
+						productRegistriesFromFlag,
+						c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name),
+					)
+					if err != nil {
+						return fmt.Errorf("failed to check if component images are published: %w", err)
+					} else if !published {
+						return fmt.Errorf("required component images have not been published; aborting hashrelease build")
+					}
+				}
+
 				// Build the operator
 				operatorOpts := []operator.Option{
 					operator.WithOperatorDirectory(operatorDir),
@@ -278,7 +295,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				} else {
 					opts = append(opts, calico.WithImageScanning(c.Bool(imageScanFlag.Name), *imageScanningAPIConfig(c)))
 				}
-				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir)
+				components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, true)
 				if err != nil {
 					return fmt.Errorf("failed to retrieve images for hashrelease: %w", err)
 				}
@@ -447,4 +464,35 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 		return errors.New("images promotions are not done, wait for all images promotions to pass before publishing the hashrelease")
 	}
 	return nil
+}
+
+// componentImagesPublished verifies that the component images the operator
+// will reference have been published.
+func componentImagesPublished(
+	cfg *Config,
+	productVersion, operatorVersion string,
+	productRegistries []string,
+	githubOrg, repoName, repoRemote string,
+) (bool, error) {
+	components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, false)
+	if err != nil {
+		return false, fmt.Errorf("retrieve components: %w", err)
+	}
+
+	opts := []calico.Option{
+		calico.WithRepoRoot(cfg.RepoRootDir),
+		calico.IsHashRelease(),
+		calico.WithVersion(productVersion),
+		calico.WithOperatorVersion(operatorVersion),
+		calico.WithTmpDir(cfg.TmpDir),
+		calico.WithComponents(components),
+		calico.WithGithubOrg(githubOrg),
+		calico.WithRepoName(repoName),
+		calico.WithRepoRemote(repoRemote),
+	}
+	if len(productRegistries) > 0 {
+		opts = append(opts, calico.WithImageRegistries(productRegistries))
+	}
+	mgr := calico.NewManager(opts...)
+	return mgr.CheckHashreleaseImagesPublished()
 }
