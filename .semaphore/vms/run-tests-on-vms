@@ -222,6 +222,17 @@ for batch in "${batches[@]}"; do
     sleep "$watchdog_seconds"
     echo
     echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
+
+    # Capture a VM-side snapshot before SIGTERM so we have evidence of what
+    # was hung (test process? docker? bpffs umount? leaked BPF objects?).
+    # Wrapped in 'timeout' so a hung VM/SSH cannot extend the kill.
+    snapshot_log="$artifacts_dir/vm-snapshot-$batch_formatted.log"
+    echo "  Capturing pre-kill VM snapshot to $snapshot_log"
+    timeout 60 env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/on-test-vm" \
+        bash "$CALICO_DIR_NAME/.semaphore/vms/vm-snapshot" \
+        > "$snapshot_log" 2>&1 \
+        || echo "  VM snapshot capture failed/timed out (rc=$?)"
+
     echo "  Killing hung batch $batch (pid $pid)"
     kill -TERM "-$pid" 2>/dev/null || true
 
