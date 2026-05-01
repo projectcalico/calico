@@ -1,0 +1,2 @@
+export CLOUDSDK_CORE_PROJECT=unique-caldron-775
+export CLOUDSDK_COMPUTE_ZONE=us-central1-b
