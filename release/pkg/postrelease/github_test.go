@@ -1,3 +1,17 @@
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package postrelease
 
 import (
@@ -58,6 +72,8 @@ func TestGitHubRelease(t *testing.T) {
 		expectedAssets := append(calicoctlBinaryList(),
 			metadataFileName,
 			"install-calico-windows.ps1",
+			fmt.Sprintf("crd.projectcalico.org.v1-%s.tgz", releaseVersion),
+			fmt.Sprintf("projectcalico.org.v3-%s.tgz", releaseVersion),
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
 			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
