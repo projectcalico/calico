@@ -319,18 +319,17 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-calico-image
+# Typha runs from the combined calico image as `component typha` (see
+# FV_TYPHAIMAGE). The marker rule lives in lib.Makefile and recurses into
+# cmd/calico to build the image; in CI the image is preloaded from the
+# calico-image GCS cache and REMOTE_DEPS is set empty to opt out so a
+# broken cache fails loudly instead of silently rebuilding.
+REMOTE_DEPS=$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
 REMOTE_DEPS+=build-calico-race
 else
 REMOTE_DEPS+=build-calico-cgo
 endif
-
-# Typha runs from the combined calico image as `component typha` (see
-# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
-# preloaded from the calico-image GCS cache.
-build-calico-image:
-	$(MAKE) -C ../cmd/calico image
 
 # FV mounts the combined binary into the felix-test container. The cgo
 # variant supports BPF; the race variant adds -race for the race detector.
@@ -340,7 +339,7 @@ build-calico-cgo:
 build-calico-race:
 	$(MAKE) -C ../cmd/calico build-race
 
-.PHONY: fv fv-prereqs fv-no-build build-calico-image build-calico-cgo build-calico-race
+.PHONY: fv fv-prereqs fv-no-build build-calico-cgo build-calico-race
 
 # Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
 # this target to build everything so that it can be cached and shared between downstream jobs.

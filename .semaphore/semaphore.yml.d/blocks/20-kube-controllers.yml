@@ -15,12 +15,12 @@
     jobs:
       - name: "kube-controllers: CI"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
+          - ../.semaphore/run-and-monitor ci.log make ci-no-prereqs
 
       # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
       - name: "kube-controllers: CI (projectcalico.org/v3)"
         commands:
-          - ../.semaphore/run-and-monitor ut.log make ut
+          - ../.semaphore/run-and-monitor ut.log make ut-no-prereqs
         env_vars:
           - name: CALICO_API_GROUP
             value: "projectcalico.org/v3"
