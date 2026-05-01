@@ -116,7 +116,13 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// check if the component images that the operator will reference have been published.
 				// If they haven't, there's no point in proceeding to build this operator or this hashrelease.
 				if c.Bool(validationFlag.Name) && !c.Bool(imagesFlagName) {
-					if published, err := componentImagesPublished(cfg, data.ProductVersion(), data.OperatorVersion(), productRegistriesFromFlag); err != nil {
+					published, err := componentImagesPublished(
+						cfg,
+						data.ProductVersion(), data.OperatorVersion(),
+						productRegistriesFromFlag,
+						c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name),
+					)
+					if err != nil {
 						return fmt.Errorf("failed to check if component images are published: %v", err)
 					} else if !published {
 						return fmt.Errorf("required component images have not been published; aborting hashrelease build")
@@ -466,6 +472,7 @@ func componentImagesPublished(
 	cfg *Config,
 	productVersion, operatorVersion string,
 	productRegistries []string,
+	githubOrg, repoName, repoRemote string,
 ) (bool, error) {
 	components, err := pinnedversion.RetrieveImageComponents(cfg.TmpDir, false)
 	if err != nil {
@@ -479,6 +486,9 @@ func componentImagesPublished(
 		calico.WithOperatorVersion(operatorVersion),
 		calico.WithTmpDir(cfg.TmpDir),
 		calico.WithComponents(components),
+		calico.WithGithubOrg(githubOrg),
+		calico.WithRepoName(repoName),
+		calico.WithRepoRemote(repoRemote),
 	}
 	if len(productRegistries) > 0 {
 		opts = append(opts, calico.WithImageRegistries(productRegistries))
