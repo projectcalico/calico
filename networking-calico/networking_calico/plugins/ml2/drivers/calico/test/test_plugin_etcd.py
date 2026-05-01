@@ -2546,7 +2546,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
         lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = "cert-file"
         lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = "key-file"
-        _watcher = status.StatusWatcher(self.driver)
+        _ = status.StatusWatcher(self.driver)
 
     @mock.patch("eventlet.spawn")
     def test_snapshot_agent(self, _m_spawn):

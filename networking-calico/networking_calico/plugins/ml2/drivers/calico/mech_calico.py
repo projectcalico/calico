@@ -386,7 +386,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             CalicoManagerWorker: self._init_and_start_calico_manager,
             CalicoResourceSyncerWorker: self._init_and_start_calico_resouce_syncer,
             CalicoAgentStatusWatcherWorker: self._init_and_start_agent_status_watcher,
-            CalicoEndpointStatusWatcherWorker: self._init_and_start_endpoint_status_watcher,
+            CalicoEndpointStatusWatcherWorker: (
+                self._init_and_start_endpoint_status_watcher,
+            ),
         }
 
         if trigger_class in worker_mapping:
