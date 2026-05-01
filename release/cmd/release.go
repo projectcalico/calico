@@ -246,23 +246,17 @@ func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, err
 }
 
 func releasePrepCommand(cfg *Config) *cli.Command {
+	flags := append(slices.Clone(productFlags), operatorGitFlags...)
+	flags = append(flags,
+		githubTokenFlag,
+		branchCheckFlag,
+		validationFlag,
+		localFlag,
+	)
 	return &cli.Command{
 		Name:  "prep",
 		Usage: "Prepare for a Calico release",
-		Flags: []cli.Flag{
-			orgFlag,
-			repoFlag,
-			repoRemoteFlag,
-			releaseBranchPrefixFlag,
-			devTagSuffixFlag,
-			operatorOrgFlag,
-			operatorRepoFlag,
-			operatorBranchFlag,
-			githubTokenFlag,
-			branchCheckFlag,
-			validationFlag,
-			localFlag,
-		},
+		Flags: flags,
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
 			// Determine the versions to use for the release.
 			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))

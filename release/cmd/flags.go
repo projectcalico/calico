@@ -221,12 +221,11 @@ var (
 	// command that calls calico.WithOperatorGit or operator.Clone.
 	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
 
-	operatorBuildCommandFlags = []cli.Flag{
-		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
+	operatorBuildCommandFlags = append(slices.Clone(operatorGitFlags),
 		operatorReleaseBranchPrefixFlag,
 		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
-	}
+	)
 
 	operatorPublishCommandFlags = []cli.Flag{
 		operatorFlag(envPublishOperator, envReleaseOperator),
@@ -697,4 +696,3 @@ func hasFlag(c *cli.Command, name string) bool {
 		return slices.Contains(f.Names(), name)
 	})
 }
-
