@@ -319,6 +319,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
         # Let's start the process of switching to use native threading :)
         from eventlet import patcher
+
         self.native_threading = patcher.original("threading")
 
         qos_driver.register(self)
@@ -371,10 +372,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.subscribe()
 
     def subscribe(self):
-        registry.subscribe(self.post_fork_initialize,
-                           resources.PROCESS,
-                           events.AFTER_INIT,
-                           cancellable=True)
+        registry.subscribe(
+            self.post_fork_initialize,
+            resources.PROCESS,
+            events.AFTER_INIT,
+            cancellable=True,
+        )
 
     def post_fork_initialize(self, resource, event, trigger, payload=None):
         trigger_class = get_method_class(trigger)
@@ -413,8 +416,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 self.db, self._txn_from_context, self.policy_syncer, keystone_client
             )
 
-            self.native_and_in_another_process_resync_thread = \
-                threading.Thread(target=self.do_periodic_resync)
+            self.native_and_in_another_process_resync_thread = threading.Thread(
+                target=self.do_periodic_resync
+            )
 
             LOG.info("Starting the resync thread")
             self.native_and_in_another_process_resync_thread.start()
