@@ -31,9 +31,12 @@ func (pr PackageRevision) URL() string {
 
 // Head fetches and returns the HTTP HEAD response for a given PackageRevision
 func (pr PackageRevision) Head() (*http.Response, error) {
+	client := http.Client{
+		Timeout: httpTimeout,
+	}
 	url := pr.URL()
 
-	response, err := http.Head(url)
+	response, err := client.Head(url)
 	if err != nil {
 		return response, fmt.Errorf("could not fetch url: %w", err)
 	}

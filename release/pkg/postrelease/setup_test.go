@@ -4,6 +4,7 @@ import (
 	"flag"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -18,6 +19,10 @@ var (
 	releaseVersion, operatorVersion, flannelVersion  string
 	githubOrg, githubRepo, githubRemote, githubToken string
 	images                                           string
+	httpTimeout                                      time.Duration
+
+	// The default timeout duration
+	httpDefaultTimeout = 10 * time.Second
 )
 
 func init() {
@@ -29,6 +34,7 @@ func init() {
 	flag.StringVar(&githubRemote, "github-repo-remote", utils.DefaultRemote, "GitHub repository remote")
 	flag.StringVar(&images, "images", "", "List of images to check")
 	flag.StringVar(&githubToken, "github-token", "", "GitHub token")
+	flag.DurationVar(&httpTimeout, "http-timeout", httpDefaultTimeout, "HTTP timeout for checking openstack packages")
 }
 
 func checkVersion(t testing.TB, version string) {

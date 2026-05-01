@@ -16,8 +16,12 @@ import (
 )
 
 var excludeImageArch = map[string][]string{
-	"envoy-proxy": {"ppc64le", "s390x"},
-	"whisker":     {"ppc64le", "s390x"},
+	"envoy-proxy":       {"ppc64le", "s390x"},
+	"whisker":           {"ppc64le", "s390x"},
+	"istio-pilot":       {"ppc64le", "s390x"},
+	"istio-ztunnel":     {"ppc64le", "s390x"},
+	"istio-proxyv2":     {"ppc64le", "s390x"},
+	"istio-install-cni": {"ppc64le", "s390x"},
 }
 
 func TestImagesPublished(t *testing.T) {
