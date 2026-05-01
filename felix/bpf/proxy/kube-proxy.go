@@ -161,6 +161,11 @@ func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMe
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
+	kp.proxy, err = New(kp.k8s, syncer, kp.hostname, kp.opts...)
+	if err != nil {
+		return errors.WithMessage(err, "new proxy")
+	}
+
 	kp.proxy.SetHostIPs(hostIPs)
 	// Don't bother invoking a resync within SetHostMetadata; we will be syncing a fresh syncer right after.
 	kp.proxy.SetHostMetadata(hostMetadata, false)
@@ -181,21 +186,6 @@ func (kp *KubeProxy) start() error {
 		withLocalNP = append(withLocalNP, podNPIPV6)
 	}
 
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
-	if err != nil {
-		return errors.WithMessage(err, "new bpf syncer")
-	}
-
-	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
-	if err != nil {
-		return errors.WithMessage(err, "new proxy")
-	}
-
-	kp.lock.Lock()
-	kp.proxy = proxy
-	kp.syncer = syncer
-	kp.lock.Unlock()
-
 	// Wait for the initial update.
 	hostIPs := <-kp.hostIPUpdates
 
@@ -206,7 +196,7 @@ func (kp *KubeProxy) start() error {
 	hostMetadataUpdates := <-kp.hostMetadataUpdates
 	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
 
-	err = kp.run(hostIPs, hostMetadata)
+	err := kp.run(hostIPs, hostMetadata)
 	if err != nil {
 		return err
 	}
