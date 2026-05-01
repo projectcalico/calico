@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -31,9 +32,16 @@ import (
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
-// makeAssignment matches a make variable assignment line. `!=` is excluded
-// on purpose — shell output has no business being a flag default.
-var makeAssignment = regexp.MustCompile(`^([A-Z_][A-Z0-9_]*)\s*(?:\?|:{1,3}|\+)?=\s*(.*)$`)
+// driverPrefix snapshots the variables defined before metadata.mk is
+// included; driverSuffix prints only those introduced by the include.
+const (
+	driverPrefix = "VARS_OLD := $(.VARIABLES)\n"
+	driverSuffix = "\n_defaults_print:\n" +
+		"\t@$(foreach v,$(filter-out $(VARS_OLD) VARS_OLD,$(.VARIABLES)),$(info $(v) = $($(v))))\n"
+)
+
+// driverLine matches a `KEY = VALUE` line emitted by the driver's $(info).
+var driverLine = regexp.MustCompile(`^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$`)
 
 const (
 	KeyOrganization         = "ORGANIZATION"
@@ -75,64 +83,39 @@ func readMetadata() map[string]string {
 	return m
 }
 
+// parseMetadata wraps data with a driver makefile and runs make on it via
+// stdin, so make resolves $(...) references and ?= precedence naturally.
+// The driver prints only the variables introduced by the included data.
 func parseMetadata(data []byte) (map[string]string, error) {
-	tmp, err := os.CreateTemp("", "metadata-*.mk")
+	var stdin bytes.Buffer
+	stdin.WriteString(driverPrefix)
+	stdin.Write(data)
+	stdin.WriteString(driverSuffix)
+
+	cmd := exec.Command("make", "--quiet", "-f", "-", "_defaults_print")
+	cmd.Stdin = &stdin
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("make: %w: %s", err, out)
 	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return nil, err
-	}
-	if _, err := tmp.Write([]byte("\n_defaults_noop:\n")); err != nil {
-		tmp.Close()
-		return nil, err
-	}
-	if err := tmp.Close(); err != nil {
-		return nil, err
-	}
-	out, err := command.Make([]string{"-f", tmp.Name(), "-pn", "_defaults_noop"}, nil)
-	if err != nil {
-		return nil, err
-	}
-	return parseMakeDatabase(out)
+	return parseDriverOutput(string(out))
 }
 
-// parseMakeDatabase reads the output of `make -pn` and returns variable
-// assignments. Make's database dump emits lines like `KEY = VALUE` for every
-// resolved variable; we only retain the keys we care about.
-func parseMakeDatabase(out string) (map[string]string, error) {
-	wanted := map[string]struct{}{
-		KeyOrganization:         {},
-		KeyGitRepo:              {},
-		KeyGitRemote:            {},
-		KeyReleaseBranchPrefix:  {},
-		KeyDevTagSuffix:         {},
-		KeyOperatorBranch:       {},
-		KeyOperatorOrganization: {},
-		KeyOperatorGitRepo:      {},
-	}
+// parseDriverOutput reads the driver's $(info) output (one `KEY = VALUE` per
+// line) and returns the assignments.
+func parseDriverOutput(out string) (map[string]string, error) {
 	m := map[string]string{}
 	scanner := bufio.NewScanner(bytes.NewBufferString(out))
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" || line[0] == '#' || line[0] == '\t' {
-			continue
-		}
-		match := makeAssignment.FindStringSubmatch(line)
+		match := driverLine.FindStringSubmatch(scanner.Text())
 		if match == nil {
 			continue
 		}
-		key := match[1]
-		if _, ok := wanted[key]; !ok {
-			continue
-		}
-		m[key] = strings.TrimSpace(match[2])
+		m[match[1]] = strings.TrimSpace(match[2])
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanning make database: %w", err)
+		return nil, fmt.Errorf("scanning driver output: %w", err)
 	}
 	return m, nil
 }

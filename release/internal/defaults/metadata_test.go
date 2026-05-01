@@ -57,6 +57,21 @@ func TestParseMetadata(t *testing.T) {
 	}
 }
 
+func TestParseMetadataIgnoresPreExistingVars(t *testing.T) {
+	m, err := parseMetadata([]byte("ORGANIZATION ?= newvalue\n"))
+	if err != nil {
+		t.Fatalf("parseMetadata: %v", err)
+	}
+	if got := m[KeyOrganization]; got != "newvalue" {
+		t.Errorf("ORGANIZATION: got %q, want %q", got, "newvalue")
+	}
+	for _, k := range []string{"VARS_OLD", "MAKEFLAGS", "SHELL", ".VARIABLES"} {
+		if _, ok := m[k]; ok {
+			t.Errorf("%s should not appear in parsed output", k)
+		}
+	}
+}
+
 func TestAccessorsWithInjectedValues(t *testing.T) {
 	t.Cleanup(resetValues)
 	setValues(map[string]string{
