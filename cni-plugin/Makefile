@@ -229,19 +229,30 @@ pkg/install/install.test: pkg/install/*.go
 			cd /go/src/$(PACKAGE_NAME) && \
 			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
-.PHONY: test-install-cni
+.PHONY: test-install-cni test-install-cni-prereqs test-install-cni-no-prereqs
 ## Test the install
 # Uses the combined calico/calico image (loaded from the calico-image prerequisite
-# job in CI, or built locally via `make -C cmd/calico image`). The test invokes
-# `calico component cni install` instead of the legacy `/opt/cni/bin/install`.
-test-install-cni: run-k8s-apiserver pkg/install/install.test
+# job in CI, or built locally via the marker rule in lib.Makefile). The test
+# invokes `calico component cni install` instead of the legacy
+# `/opt/cni/bin/install`. CI invokes the *-no-prereqs target directly so a
+# missing cached image fails loudly rather than triggering a silent rebuild.
+test-install-cni: test-install-cni-prereqs
+	$(MAKE) test-install-cni-no-prereqs
+
+test-install-cni-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+
+test-install-cni-no-prereqs: run-k8s-apiserver pkg/install/install.test
 	cd pkg/install && CONTAINER_NAME=calico/calico:latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: ci
+.PHONY: ci ci-no-prereqs
 ci: clean mod-download build static-checks ut test-install-cni
+
+# CI entry point: skips the calico image rebuild and runs the full test suite.
+# The image must be preloaded from the GCS cache.
+ci-no-prereqs: mod-download build static-checks ut test-install-cni-no-prereqs
 
 ## Build fv binary for Windows
 $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
