@@ -96,11 +96,20 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 			break
 		}
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if m.ipVersion == 4 && msg.Ipv4Addr != "" {
-			m.routesNeedUpdate(msg.Ipv4Addr)
-		} else if m.ipVersion == 6 && msg.Ipv6Addr != "" {
-			m.routesNeedUpdate(msg.Ipv6Addr)
+		var addrStr string
+		if m.ipVersion == 4 {
+			addrStr = msg.Ipv4Addr
+		} else {
+			addrStr = msg.Ipv6Addr
 		}
+		if addrStr == "" {
+			m.logCtx.WithFields(logrus.Fields{
+				"hostname":  msg.Hostname,
+				"ipVersion": m.ipVersion,
+			}).Debug("Ignoring HostMetadataV4V6Update with no address for this IP version")
+			return
+		}
+		m.routesNeedUpdate(addrStr)
 	case *proto.HostMetadataV4V6Remove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {

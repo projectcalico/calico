@@ -15,7 +15,7 @@
 package intdataplane
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/ip"
@@ -50,7 +50,7 @@ func newWireguardManager(
 	ipVersion uint8,
 ) *wireguardManager {
 	if ipVersion != 4 && ipVersion != 6 {
-		log.Panicf("Unknown IP version: %d", ipVersion)
+		logrus.Panicf("Unknown IP version: %d", ipVersion)
 	}
 	return &wireguardManager{
 		wireguardRouteTable: wireguardRouteTable,
@@ -60,16 +60,34 @@ func newWireguardManager(
 }
 
 func (m *wireguardManager) OnUpdate(protoBufMsg any) {
-	logCtx := log.WithField("ipVersion", m.ipVersion)
+	logCtx := logrus.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataV4V6Update:
 		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Update update")
+		var addrStr string
 		if m.ipVersion == 4 {
-			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromIPOrCIDRString(msg.Ipv4Addr))
+			addrStr = msg.Ipv4Addr
 		} else {
-			m.wireguardRouteTable.EndpointUpdate(msg.Hostname, ip.FromIPOrCIDRString(msg.Ipv6Addr))
+			addrStr = msg.Ipv6Addr
 		}
+		if addrStr == "" {
+			logCtx.WithFields(logrus.Fields{
+				"hostname":  msg.Hostname,
+				"ipVersion": m.ipVersion,
+			}).Debug("Ignoring HostMetadataV4V6Update with no address for this IP version")
+			return
+		}
+		addr := ip.FromIPOrCIDRString(addrStr)
+		if addr == nil || addr.Version() != m.ipVersion {
+			logCtx.WithFields(logrus.Fields{
+				"hostname":  msg.Hostname,
+				"address":   addrStr,
+				"ipVersion": m.ipVersion,
+			}).Warn("Ignoring HostMetadataV4V6Update with invalid or mismatched address for this IP version")
+			return
+		}
+		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, addr)
 	case *proto.HostMetadataV4V6Remove:
 		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Remove update")
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
