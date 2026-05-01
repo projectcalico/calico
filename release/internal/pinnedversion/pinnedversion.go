@@ -272,7 +272,7 @@ func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, lates
 }
 
 // RetrieveImageComponents retrieves the images from Calico components in the pinned version file that produce images.
-// When includeOperator is true, the Tigera operator and its init image are also added to the returned map.
+// When includeOperator is true, the Tigera operator is also added to the returned map.
 func RetrieveImageComponents(outputDir string, includeOperator bool) (map[string]registry.Component, error) {
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {

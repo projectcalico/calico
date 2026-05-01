@@ -35,13 +35,19 @@ func CheckImage(image string) (bool, error) {
 
 	_, err = remote.Head(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain))
 	if err != nil {
-		// HTTP 404 is the canonical "manifest not present at this tag" response;
-		// treat it as a clean "image not published" verdict rather than a probe failure.
-		var terr *transport.Error
-		if errors.As(err, &terr) && terr.StatusCode == http.StatusNotFound {
+		if imageNotFound(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("failed to get image descriptor for %s: %w", image, err)
 	}
 	return true, nil
+}
+
+// imageNotFound reports whether err represents an HTTP 404 from the registry —
+// the canonical "manifest not present at this tag" response in the OCI Registry
+// v2 API, which we treat as a clean "image not published" verdict rather than a
+// probe failure.
+func imageNotFound(err error) bool {
+	var terr *transport.Error
+	return errors.As(err, &terr) && terr.StatusCode == http.StatusNotFound
 }

@@ -123,7 +123,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 						c.String(orgFlag.Name), c.String(repoFlag.Name), c.String(repoRemoteFlag.Name),
 					)
 					if err != nil {
-						return fmt.Errorf("failed to check if component images are published: %v", err)
+						return fmt.Errorf("failed to check if component images are published: %w", err)
 					} else if !published {
 						return fmt.Errorf("required component images have not been published; aborting hashrelease build")
 					}
