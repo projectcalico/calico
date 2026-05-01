@@ -105,6 +105,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
+					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -147,6 +148,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
+					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
@@ -312,7 +314,9 @@ func releaseBuildFlags() []cli.Flag {
 		registryFlag,
 		githubTokenFlag,
 		branchCheckFlag,
-		validationFlag)
+		validationFlag,
+		operatorBranchFlag,
+	)
 	return f
 }
 
@@ -326,7 +330,9 @@ func releasePublishFlags() []cli.Flag {
 		awsProfileFlag,
 		s3BucketFlag,
 		branchCheckFlag,
-		validationFlag)
+		validationFlag,
+		operatorBranchFlag,
+	)
 	return f
 }
 
