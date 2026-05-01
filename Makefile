@@ -280,12 +280,12 @@ e2e-run-cnp:
 ###############################################################################
 .PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
-release/bin/release: $(shell find ./release -type f -name '*.go')
+release/bin/release: $(shell find ./release -type f -name '*.go') metadata.mk
 	$(MAKE) -C release
 
 # Prepare for a release (update version references, charts, manifests).
 release-prep: release/bin/release bin/gh
-	@OPERATOR_BRANCH=$(OPERATOR_BRANCH) release/bin/release release prep
+	@release/bin/release release prep
 
 # Install ghr for publishing to github.
 bin/ghr:
