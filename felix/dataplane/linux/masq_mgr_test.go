@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("an unrelated update shouldn't trigger work", func() {
 			natTable.UpdateCalled = false
-			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
+			masqMgr.OnUpdate(&proto.HostMetadataV4V6Update{
 				Hostname: "foo",
 				Ipv4Addr: "10.0.0.17",
 			})
