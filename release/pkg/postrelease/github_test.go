@@ -58,6 +58,8 @@ func TestGitHubRelease(t *testing.T) {
 		expectedAssets := append(calicoctlBinaryList(),
 			metadataFileName,
 			"install-calico-windows.ps1",
+			fmt.Sprintf("crd.projectcalico.org.v1-%s.tgz", releaseVersion),
+			fmt.Sprintf("projectcalico.org.v3-%s.tgz", releaseVersion),
 			fmt.Sprintf("calico-windows-%s.zip", releaseVersion),
 			fmt.Sprintf("release-%s.tgz", releaseVersion),
 			fmt.Sprintf("tigera-operator-%s.tgz", releaseVersion),
