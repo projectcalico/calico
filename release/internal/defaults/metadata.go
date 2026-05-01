@@ -14,6 +14,10 @@
 
 // Package defaults exposes flag-default values sourced from the repo's
 // build metadata. Values resolve once per process via sync.OnceValue.
+//
+// Constant names match metadata.mk variable names verbatim. Unknown keys
+// resolve to empty, so additional keys are added by adding a constant and
+// a metadata.mk entry.
 package defaults
 
 import (

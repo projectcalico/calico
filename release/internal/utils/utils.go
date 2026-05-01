@@ -75,11 +75,13 @@ const (
 	DefaultDevTagSuffix = "0.dev"
 )
 
-func Organization() string        { return FirstNonEmpty(defaults.Organization(), ProjectCalicoOrg) }
-func Repo() string                { return FirstNonEmpty(defaults.Repo(), CalicoRepoName) }
-func Remote() string              { return FirstNonEmpty(defaults.Remote(), DefaultRemote) }
-func ReleaseBranchPrefix() string { return FirstNonEmpty(defaults.ReleaseBranchPrefix(), DefaultReleaseBranchPrefix) }
-func DevTagSuffix() string        { return FirstNonEmpty(defaults.DevTagSuffix(), DefaultDevTagSuffix) }
+func Organization() string { return FirstNonEmpty(defaults.Organization(), ProjectCalicoOrg) }
+func Repo() string         { return FirstNonEmpty(defaults.Repo(), CalicoRepoName) }
+func Remote() string       { return FirstNonEmpty(defaults.Remote(), DefaultRemote) }
+func ReleaseBranchPrefix() string {
+	return FirstNonEmpty(defaults.ReleaseBranchPrefix(), DefaultReleaseBranchPrefix)
+}
+func DevTagSuffix() string { return FirstNonEmpty(defaults.DevTagSuffix(), DefaultDevTagSuffix) }
 
 // FirstNonEmpty returns the first non-empty string from values, or "".
 func FirstNonEmpty(values ...string) string {

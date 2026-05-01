@@ -28,7 +28,7 @@ func TestMKLookup(t *testing.T) {
 		wantOK  bool
 	}{
 		{KeyOrganization, "myorg", true},
-		{KeyGitRepo, "", false},   // empty value falls through
+		{KeyGitRepo, "", false},    // empty value falls through
 		{"UNKNOWN_KEY", "", false}, // missing key falls through
 	}
 	for _, tc := range cases {
