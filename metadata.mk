@@ -26,6 +26,7 @@ KIND_VERSION=v0.31.0
 # differently for a forked repo.
 ORGANIZATION  ?= projectcalico
 GIT_REPO      ?= calico
+GIT_REMOTE    ?= origin
 
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?= 0.dev
