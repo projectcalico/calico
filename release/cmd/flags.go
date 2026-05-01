@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -63,42 +64,47 @@ var (
 	}
 
 	// Git flags for interacting with the git repository
-	orgFlag = &cli.StringFlag{
-		Name:     "org",
+	orgFlagName = "org"
+	orgFlag     = &cli.StringFlag{
+		Name:     orgFlagName,
 		Category: gitCategory,
 		Usage:    "The GitHub organization to use for the release",
-		Sources:  cli.EnvVars("ORGANIZATION"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("ORGANIZATION"), defaults.MK(defaults.KeyOrganization)),
 		Value:    utils.ProjectCalicoOrg,
 	}
-	repoFlag = &cli.StringFlag{
-		Name:     "repo",
+	repoFlagName = "repo"
+	repoFlag     = &cli.StringFlag{
+		Name:     repoFlagName,
 		Category: gitCategory,
 		Usage:    "The GitHub repository to use for the release",
-		Sources:  cli.EnvVars("GIT_REPO"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REPO"), defaults.MK(defaults.KeyGitRepo)),
 		Value:    utils.CalicoRepoName,
 	}
-	repoRemoteFlag = &cli.StringFlag{
-		Name:     "remote",
+	repoRemoteFlagName = "remote"
+	repoRemoteFlag     = &cli.StringFlag{
+		Name:     repoRemoteFlagName,
 		Category: gitCategory,
 		Usage:    "The remote for the git repository",
-		Sources:  cli.EnvVars("GIT_REMOTE"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REMOTE"), defaults.MK(defaults.KeyGitRemote)),
 		Value:    utils.DefaultRemote,
 	}
 
 	// Branch/Tag flags are flags used for branch & tag management
-	releaseBranchPrefixFlag = &cli.StringFlag{
-		Name:     "release-branch-prefix",
+	releaseBranchPrefixFlagName = "release-branch-prefix"
+	releaseBranchPrefixFlag     = &cli.StringFlag{
+		Name:     releaseBranchPrefixFlagName,
 		Category: gitCategory,
 		Usage:    "The stardard prefix used to denote release branches",
-		Sources:  cli.EnvVars("RELEASE_BRANCH_PREFIX"),
-		Value:    "release",
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("RELEASE_BRANCH_PREFIX"), defaults.MK(defaults.KeyReleaseBranchPrefix)),
+		Value:    utils.DefaultReleaseBranchPrefix,
 	}
-	devTagSuffixFlag = &cli.StringFlag{
-		Name:     "dev-tag-suffix",
+	devTagSuffixFlagName = "dev-tag-suffix"
+	devTagSuffixFlag     = &cli.StringFlag{
+		Name:     devTagSuffixFlagName,
 		Category: gitCategory,
 		Usage:    "The suffix used to denote development tags",
-		Sources:  cli.EnvVars("DEV_TAG_SUFFIX"),
-		Value:    "0.dev",
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
+		Value:    utils.DefaultDevTagSuffix,
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:     "base-branch",
@@ -211,6 +217,10 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
+	// operatorGitFlags resolve the operator's org/repo/branch. Required on any
+	// command that calls calico.WithOperatorGit or operator.Clone.
+	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
+
 	operatorBuildCommandFlags = []cli.Flag{
 		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
 		operatorReleaseBranchPrefixFlag,
@@ -223,27 +233,30 @@ var (
 	}
 
 	// Operator git flags
-	operatorOrgFlag = &cli.StringFlag{
-		Name:     "operator-org",
+	operatorOrgFlagName = "operator-org"
+	operatorOrgFlag     = &cli.StringFlag{
+		Name:     operatorOrgFlagName,
 		Category: operatorCategory,
 		Usage:    "The GitHub organization to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_ORGANIZATION"),
-		Value:    operator.DefaultOrg,
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_ORGANIZATION"), defaults.MK(defaults.KeyOperatorOrganization)),
+		Value:    utils.TigeraOrg,
 	}
-	operatorRepoFlag = &cli.StringFlag{
-		Name:     "operator-repo",
+	operatorRepoFlagName = "operator-repo"
+	operatorRepoFlag     = &cli.StringFlag{
+		Name:     operatorRepoFlagName,
 		Category: operatorCategory,
 		Usage:    "The GitHub repository to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_GIT_REPO"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_GIT_REPO"), defaults.MK(defaults.KeyOperatorGitRepo)),
 		Value:    operator.DefaultRepoName,
 	}
 	// Branch/Tag management flags
-	operatorBranchFlag = &cli.StringFlag{
-		Name:     "operator-branch",
+	operatorBranchFlagName = "operator-branch"
+	operatorBranchFlag     = &cli.StringFlag{
+		Name:     operatorBranchFlagName,
 		Category: operatorCategory,
 		Usage:    "The branch to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_BRANCH"),
-		Value:    operator.DefaultBranchName,
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_BRANCH"), defaults.MK(defaults.KeyOperatorBranch)),
+		Value:    operator.DefaultBranch,
 	}
 	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
 		Name:     "operator-release-branch-prefix",
@@ -684,3 +697,4 @@ func hasFlag(c *cli.Command, name string) bool {
 		return slices.Contains(f.Names(), name)
 	})
 }
+

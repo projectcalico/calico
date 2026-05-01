@@ -24,19 +24,25 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
 	DefaultImage               = registry.TigeraOperatorImage
-	DefaultOrg                 = utils.TigeraOrg
 	DefaultRepoName            = "operator"
-	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
+	DefaultBranch              = "master"
 	DefaultDevTagSuffix        = "0.dev"
 	DefaultRegistry            = "quay.io"
 )
+
+func Organization() string {
+	return utils.FirstNonEmpty(defaults.OperatorOrganization(), utils.TigeraOrg)
+}
+func Repo() string   { return utils.FirstNonEmpty(defaults.OperatorRepo(), DefaultRepoName) }
+func Branch() string { return utils.FirstNonEmpty(defaults.OperatorBranch(), utils.DefaultBranch) }
 
 var (
 	defaultProductEnvPrefix = "CALICO"
