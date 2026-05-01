@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 // PackageRevision represents a package with all its various permutations
@@ -33,7 +32,7 @@ func (pr PackageRevision) URL() string {
 // Head fetches and returns the HTTP HEAD response for a given PackageRevision
 func (pr PackageRevision) Head() (*http.Response, error) {
 	client := http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: httpTimeout,
 	}
 	url := pr.URL()
 
