@@ -84,13 +84,13 @@ bin/gotestsum:
 # cached image fails loudly instead of triggering a silent rebuild.
 test: ut
 
-.PHONY: ut fv ut-prereqs fv-prereqs ut-no-prereqs fv-no-prereqs
+.PHONY: ut fv ut-prereqs ut-no-prereqs
 ut fv: ut-prereqs
 	$(MAKE) ut-no-prereqs
 
-ut-prereqs fv-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 
-ut-no-prereqs fv-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \

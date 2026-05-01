@@ -322,14 +322,17 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 # Typha runs from the combined calico image as `component typha` (see
 # FV_TYPHAIMAGE). The marker rule lives in lib.Makefile and recurses into
 # cmd/calico to build the image; in CI the image is preloaded from the
-# calico-image GCS cache and REMOTE_DEPS is set empty to opt out so a
-# broken cache fails loudly instead of silently rebuilding.
-REMOTE_DEPS=$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+# calico-image GCS cache and CALICO_IMAGE_DEP is cleared to opt out so a
+# broken cache fails loudly instead of silently rebuilding. Callers that
+# supply the image themselves (e.g. typha k8sfv-test) clear CALICO_IMAGE_DEP
+# but keep CALICO_BINARY_DEP so the on-disk FV binary is still produced.
+CALICO_IMAGE_DEP=$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
 ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-REMOTE_DEPS+=build-calico-race
+CALICO_BINARY_DEP=build-calico-race
 else
-REMOTE_DEPS+=build-calico-cgo
+CALICO_BINARY_DEP=build-calico-cgo
 endif
+REMOTE_DEPS=$(CALICO_IMAGE_DEP) $(CALICO_BINARY_DEP)
 
 # FV mounts the combined binary into the felix-test container. The cgo
 # variant supports BPF; the race variant adds -race for the race detector.
