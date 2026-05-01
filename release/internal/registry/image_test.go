@@ -17,8 +17,9 @@ package registry
 import (
 	"errors"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
@@ -56,14 +57,32 @@ func TestImageNotFound(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "non-transport error",
-			err:  errors.New("dial tcp: connection refused"),
+			// Mirrors the real shape remote.Head produces when the registry's
+			// WWW-Authenticate realm can't be reached (auth-dance DNS failure).
+			name: "url.Error (auth-dance network failure)",
+			err: &url.Error{
+				Op:  "Get",
+				URL: "https://invalid.example.test/?service=x",
+				Err: &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("lookup invalid.example.test: no such host")},
+			},
 			want: false,
 		},
 		{
-			name: "wrapped non-transport error",
-			err:  fmt.Errorf("probe: %w", io.ErrUnexpectedEOF),
+			// Mirrors the real shape remote.Head produces when the manifest
+			// response is missing required headers — plain fmt.Errorf with no
+			// wrapped transport.Error in the chain.
+			name: "*errors.errorString (protocol issue)",
+			err:  fmt.Errorf("HEAD http://example.test/v2/foo/manifests/v1: response did not include Content-Type header"),
 			want: false,
+		},
+		{
+			// Mirrors the real shape remote.Head produces when both an HTTPS
+			// and HTTP attempt fail (transport.multierrs is unexported, but
+			// errors.Join uses the same Unwrap() []error pattern that
+			// errors.As walks).
+			name: "joined multi-error wrapping *transport.Error{404}",
+			err:  errors.Join(errors.New("https attempt failed"), &transport.Error{StatusCode: http.StatusNotFound}),
+			want: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
