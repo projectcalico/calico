@@ -40,10 +40,10 @@ const (
 )
 
 func Organization() string {
-	return utils.FirstNonEmpty(defaults.OperatorOrganization(), utils.TigeraOrg)
+	return utils.FirstNonEmpty(defaults.OperatorOrganization(), DefaultOrg)
 }
 func Repo() string   { return utils.FirstNonEmpty(defaults.OperatorRepo(), DefaultRepoName) }
-func Branch() string { return utils.FirstNonEmpty(defaults.OperatorBranch(), utils.DefaultBranch) }
+func Branch() string { return utils.FirstNonEmpty(defaults.OperatorBranch(), DefaultBranch) }
 
 var (
 	defaultProductEnvPrefix = "CALICO"
