@@ -14,15 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# deploy_resources.sh sets up a kind cluster with Calico installed
-# and ready for testing. It loads images, installs Calico via Helm, and verifies
-# basic connectivity.
+# deploy_resources.sh installs Calico on a kind cluster via Helm and waits
+# for readiness. Images are pulled by kubelet on demand from the local
+# kind-registry (populated by `make kind-build-images`); this script does
+# not load images.
 #
 # Required environment variables:
-#   REPO_ROOT   - absolute path to the repository root
-#   KIND        - path to the kind binary
-#   KIND_NAME   - name of the kind cluster
-#   KIND_IMAGES - space-separated list of Docker images to load onto the cluster
+#   REPO_ROOT - absolute path to the repository root
+#   KIND      - path to the kind binary
+#   KIND_NAME - name of the kind cluster
 #
 # Optional environment variables:
 #   ARCH               - target architecture (default: amd64)
@@ -164,9 +164,6 @@ docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
 docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
 
 echo
-
-echo "Load docker images onto kind cluster"
-KIND=${KIND} KIND_NAME=${KIND_NAME} ${REPO_ROOT}/hack/test/kind/load_images.sh ${KIND_IMAGES}
 
 echo "Install additional permissions for BGP password"
 ${kubectl} apply -f ${INFRA_DIR}/additional-rbac.yaml
