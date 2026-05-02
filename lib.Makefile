@@ -1504,8 +1504,10 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) kind-registry-up
 		--name $(KIND_NAME) \
 		--image kindest/node:$(KINDEST_NODE_VERSION)
 
-	# Connect the registry to the kind network now that the network exists.
+	# Connect the registry to the kind network now that the network exists,
+	# and write per-node containerd config so localhost:5000 redirects to it.
 	$(REPO_ROOT)/hack/test/kind/registry.sh up
+	KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/registry.sh configure-nodes
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done

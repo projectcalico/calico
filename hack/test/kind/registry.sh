@@ -51,11 +51,30 @@ case "${1:-}" in
       fi
     fi
     ;;
+  configure-nodes)
+    # Tell containerd on each kind node to redirect localhost:5000 to the
+    # in-network registry. Containerd reads /etc/containerd/certs.d/ on
+    # demand, so no restart is required. See
+    # https://kind.sigs.k8s.io/docs/user/local-registry/.
+    : "${KIND_NAME:?KIND_NAME must be set}"
+    nodes=$(docker ps --filter "label=io.x-k8s.kind.cluster=${KIND_NAME}" --format '{{.Names}}')
+    if [ -z "${nodes}" ]; then
+      echo "No nodes found for kind cluster '${KIND_NAME}'" >&2
+      exit 1
+    fi
+    reg_dir="/etc/containerd/certs.d/localhost:5000"
+    for node in ${nodes}; do
+      docker exec "${node}" mkdir -p "${reg_dir}"
+      docker exec -i "${node}" sh -c "cat > ${reg_dir}/hosts.toml" <<EOF
+[host."http://${KIND_REGISTRY_NAME}:5000"]
+EOF
+    done
+    ;;
   down)
     docker rm -f "${KIND_REGISTRY_NAME}" >/dev/null 2>&1 || true
     ;;
   *)
-    echo "Usage: $0 up | down" >&2
+    echo "Usage: $0 up | configure-nodes | down" >&2
     exit 1
     ;;
 esac
