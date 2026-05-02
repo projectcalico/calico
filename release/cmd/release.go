@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -105,19 +106,24 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
-					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithBuildImages(c.Bool(buildImagesFlag.Name)),
-					calico.WithArchiveImages(c.Bool(archiveImagesFlag.Name)),
-				}
-				if c.Bool(skipValidationFlag.Name) {
-					opts = append(opts, calico.WithValidate(false))
-					opts = append(opts, calico.WithReleaseBranchValidation(false))
+					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
+					calico.WithManifests(c.Bool(manifestsFlag.Name)),
+					calico.WithBinaries(c.Bool(binariesFlag.Name)),
+					calico.WithOCPBundle(c.Bool(ocpBundleFlag.Name)),
+					calico.WithTarball(c.Bool(tarballFlag.Name)),
+					calico.WithWindowsArchive(c.Bool(windowsArchiveFlagName)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithValidation(c.Bool(validationFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -143,17 +149,20 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					calico.WithPublishImages(c.Bool(publishImagesFlag.Name)),
-					calico.WithPublishGitRef(c.Bool(publishGitTagFlag.Name)),
-					calico.WithPublishGithubRelease(c.Bool(publishGitHubReleaseFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
-					calico.WithPublishCharts(c.Bool(publishChartsFlag.Name)),
+					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
+					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
+					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
+					calico.WithValidation(c.Bool(validationFlag.Name)),
+					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts, calico.WithImageRegistries(reg))
@@ -181,14 +190,16 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 }
 
 func releasePublicSubCommands(cfg *Config) *cli.Command {
+	flags := []cli.Flag{
+		orgFlag,
+		repoFlag,
+		repoRemoteFlag,
+	}
+	flags = append(flags, operatorGitFlags...)
 	return &cli.Command{
 		Name:  "public",
 		Usage: "Make a published release available to the public",
-		Flags: []cli.Flag{
-			orgFlag,
-			repoFlag,
-			repoRemoteFlag,
-		},
+		Flags: flags,
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("release-public.log")
 			ver, operatorVer, err := version.VersionsFromManifests(cfg.RepoRootDir)
@@ -199,9 +210,10 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
-				calico.WithRepoRemote(repoRemoteFlag.Name),
+				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 			}
 			m := calico.NewManager(opts...)
 			if err := m.ReleasePublic(); err != nil {
@@ -219,7 +231,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 
 func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
 	// Clone the operator repository to determine the operator version.
-	operatorDir := filepath.Join(tmpDir, operator.DefaultRepoName)
+	operatorDir := filepath.Join(tmpDir, c.String(operatorRepoFlag.Name))
 	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
 		return "", fmt.Errorf("clone operator repository: %w", err)
 	}
@@ -236,23 +248,17 @@ func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, err
 }
 
 func releasePrepCommand(cfg *Config) *cli.Command {
+	flags := append(slices.Clone(productFlags), operatorGitFlags...)
+	flags = append(flags,
+		githubTokenFlag,
+		branchCheckFlag,
+		validationFlag,
+		localFlag,
+	)
 	return &cli.Command{
 		Name:  "prep",
 		Usage: "Prepare for a Calico release",
-		Flags: []cli.Flag{
-			orgFlag,
-			repoFlag,
-			repoRemoteFlag,
-			releaseBranchPrefixFlag,
-			devTagSuffixFlag,
-			operatorOrgFlag,
-			operatorRepoFlag,
-			operatorBranchFlag,
-			githubTokenFlag,
-			skipBranchCheckFlag,
-			skipValidationFlag,
-			localFlag,
-		},
+		Flags: flags,
 		Action: withLogging(withSummary(cfg, "release-prep", func(_ context.Context, c *cli.Command) (string, map[string]any, error) {
 			// Determine the versions to use for the release.
 			ver, err := version.DetermineReleaseVersion(version.GitVersion(), c.String(devTagSuffixFlag.Name))
@@ -279,13 +285,14 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 				calico.WithTmpDir(cfg.TmpDir),
-				calico.WithValidate(!c.Bool(skipValidationFlag.Name)),
-				calico.WithReleaseBranchValidation(!c.Bool(skipBranchCheckFlag.Name)),
-				calico.WithPublishGitRef(!c.Bool(localFlag.Name)),
+				calico.WithValidation(c.Bool(validationFlag.Name)),
+				calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+				calico.WithGitRef(!c.Bool(localFlag.Name)),
 			}
 			r := calico.NewManager(opts...)
 			branch, err := r.PrepareRelease()
@@ -300,31 +307,31 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 
 // releaseBuildFlags returns the flags for release build command.
 func releaseBuildFlags() []cli.Flag {
-	f := append(productFlags,
-		archFlag,
+	f := append(slices.Clone(productFlags), buildStepFlags(false)...)
+	f = append(f,
 		registryFlag,
-		buildImagesFlag,
-		archiveImagesFlag,
-		githubTokenFlag,
-		skipValidationFlag,
-		operatorBranchFlag)
+		archFlag)
+	f = append(f, operatorGitFlags...)
+	f = append(f,
+		branchCheckFlag,
+		validationFlag,
+		githubTokenFlag)
 	return f
 }
 
 // releasePublishFlags returns the flags for release publish command.
 func releasePublishFlags() []cli.Flag {
-	f := append(productFlags,
+	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
+	f = append(f,
 		registryFlag,
 		helmRegistryFlag,
-		publishImagesFlag,
-		publishGitTagFlag,
-		publishGitHubReleaseFlag,
 		githubTokenFlag,
-		publishChartsFlag,
 		awsProfileFlag,
 		s3BucketFlag,
-		skipValidationFlag,
-		operatorBranchFlag)
+		branchCheckFlag,
+		validationFlag,
+	)
+	f = append(f, operatorGitFlags...)
 	return f
 }
 

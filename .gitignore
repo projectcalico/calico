@@ -42,3 +42,6 @@ pod2daemon/node-driver-registrar/
 
 /* Created by libcalico-go UTs */
 ut-tmp-dir
+
+# Build-time copy of metadata.mk for the release CLI's embedded defaults.
+release/internal/defaults/metadata.mk
