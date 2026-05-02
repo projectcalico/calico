@@ -389,6 +389,20 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# Cross-compile env for cc-rs / bindgen when building Rust for arm64.
+# cargo's per-target linker config lives in the rust-build image's
+# $CARGO_HOME/config.toml; these vars cover the C-compilation side that
+# cc-rs reads at build time.
+ifeq ($(ARCH),arm64)
+RUST_CROSS_ENV := \
+	-e CC_aarch64_unknown_linux_gnu=clang \
+	-e CXX_aarch64_unknown_linux_gnu=clang++ \
+	-e AR_aarch64_unknown_linux_gnu=aarch64-unknown-linux-gnu-ar \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu/sys-root" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu/sys-root" \
+	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu/sys-root -I/usr/aarch64-linux-gnu/sys-root/usr/include"
+endif
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
@@ -396,6 +410,7 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 		$(EXTRA_DOCKER_ARGS) \
 		--platform linux/amd64 \
 		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
+		$(RUST_CROSS_ENV) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
