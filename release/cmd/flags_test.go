@@ -98,7 +98,7 @@ func TestHelmChartsFlagAction(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			flags := []cli.Flag{
-				helmChartsFlag(true, "TEST_BUILD_CHARTS"),
+				helmChartsFlag("TEST_BUILD_CHARTS"),
 				helmIndexFlag("TEST_BUILD_HELM_INDEX"),
 			}
 			assertRun(t, flags, tc.args, tc.wantErr)

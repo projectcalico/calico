@@ -519,10 +519,10 @@ var (
 			imagesFlag(!hashrelease, envBuildImages, envReleaseImages),
 			archiveImagesFlag(!hashrelease, envArchiveImages, envBuildArchiveImages, envReleaseArchiveImages),
 			binariesFlag,
-			helmChartsFlag(true, envBuildCharts, envReleaseCharts),
+			helmChartsFlag(envBuildCharts, envReleaseCharts),
 			helmIndexFlag(envHelmIndexLegacy, envBuildHelmIndex, envReleaseHelmIndex),
 			tarballFlag,
-			windowsArchiveFlag(true, envBuildWindowsArchive, envReleaseWindowsArchive),
+			windowsArchiveFlag(envBuildWindowsArchive, envReleaseWindowsArchive),
 		}
 		if hashrelease {
 			f = append(f, e2eBinariesFlag, releaseNotesFlag)
@@ -532,7 +532,7 @@ var (
 	publishStepFlags = func(hashrelease bool) []cli.Flag {
 		f := []cli.Flag{
 			imagesFlag(!hashrelease, envPublishImages, envReleaseImages),
-			helmChartsFlag(true, envPublishCharts, envReleaseCharts),
+			helmChartsFlag(envPublishCharts, envReleaseCharts),
 		}
 		if hashrelease {
 			return f
@@ -581,13 +581,13 @@ var (
 			},
 		}
 	}
-	helmChartsFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+	helmChartsFlag = func(envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
 			Name:     helmChartsFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Helm charts in the release step",
 			Sources:  cli.EnvVars(envVars...),
-			Value:    value,
+			Value:    true,
 			Action: func(_ context.Context, c *cli.Command, b bool) error {
 				if b {
 					return nil
@@ -629,29 +629,27 @@ var (
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
 	}
-	manifestsFlagName = "manifests"
-	manifestsFlag     = &cli.BoolWithInverseFlag{
-		Name:     manifestsFlagName,
+	manifestsFlag = &cli.BoolWithInverseFlag{
+		Name:     "manifests",
 		Category: stepControlCategory,
 		Usage:    "Include manifests in the release step",
 		Sources:  cli.EnvVars(envBuildManifests, envReleaseManifests),
 		Value:    true,
 	}
-	ocpBundleFlagName = "ocp-bundle"
-	ocpBundleFlag     = &cli.BoolWithInverseFlag{
-		Name:     ocpBundleFlagName,
+	ocpBundleFlag = &cli.BoolWithInverseFlag{
+		Name:     "ocp-bundle",
 		Category: stepControlCategory,
 		Usage:    "Include OCP bundle in the release step",
 		Sources:  cli.EnvVars(envBuildOCPBundle, envReleaseOCPBundle),
 		Value:    true,
 	}
-	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+	windowsArchiveFlag = func(envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
 			Name:     windowsArchiveFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Windows archive in the release step",
 			Sources:  cli.EnvVars(envVars...),
-			Value:    value,
+			Value:    true,
 		}
 	}
 	tarballFlag = &cli.BoolWithInverseFlag{
