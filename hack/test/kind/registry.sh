@@ -26,7 +26,7 @@
 # create/destroy so its layer cache survives reprovisioning.
 
 KIND_REGISTRY_NAME=${KIND_REGISTRY_NAME:-kind-registry}
-KIND_REGISTRY_PORT=${KIND_REGISTRY_PORT:-5001}
+KIND_REGISTRY_PORT=${KIND_REGISTRY_PORT:-5000}
 KIND_REGISTRY_IMAGE=${KIND_REGISTRY_IMAGE:-registry:2}
 
 case "${1:-}" in
