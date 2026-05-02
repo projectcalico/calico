@@ -76,16 +76,23 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	}
 	cmd.Dir = dir
 
-	// Stream raw bytes to the parent's stdout/stderr so progress is visible in
-	// real time, and capture into a buffer for callers that need the full output.
+	// Capture into a buffer for the return value, and (when given) tee to a
+	// log file so callers always have a persistent copy. Streaming to the
+	// parent's stdout/stderr is gated on debug to preserve the previous
+	// quiet default for non-debug runs.
+	//
 	// We deliberately don't pipe through logrus.WriterLevel: it sits on a
 	// synchronous io.Pipe whose scanner goroutine bails out on any line longer
 	// than bufio.MaxScanTokenSize, and after that the pipe has no reader and
 	// the next write from the child deadlocks. docker buildx progress output
 	// is exactly the kind of input that trips this.
 	var outb, errb bytes.Buffer
-	stdoutWriters := []io.Writer{&outb, os.Stdout}
-	stderrWriters := []io.Writer{&errb, os.Stderr}
+	stdoutWriters := []io.Writer{&outb}
+	stderrWriters := []io.Writer{&errb}
+	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+		stdoutWriters = append(stdoutWriters, os.Stdout)
+		stderrWriters = append(stderrWriters, os.Stderr)
+	}
 	if extraOut != nil {
 		stdoutWriters = append(stdoutWriters, extraOut)
 	}

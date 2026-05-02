@@ -102,11 +102,9 @@ func NewManager(opts ...Option) *CalicoManager {
 		logrus.Fatal("No repo root specified")
 	}
 	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
-
-	if b.logsDir == "" {
-		b.logsDir = filepath.Join(b.repoRoot, "release", "_logs")
+	if b.logsDir != "" {
+		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
 	}
-	logrus.WithField("logsDir", b.logsDir).Info("Using logs directory")
 	if b.githubOrg == "" {
 		logrus.Fatal("GitHub organization not specified")
 	}
@@ -1527,15 +1525,29 @@ func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...s
 }
 
 // makeInDirectoryToFile is like makeInDirectoryWithOutput, but additionally writes
-// a copy of the make output to <logsDir>/<phase>/<component>.log. The component
-// name is derived from dir's path relative to repoRoot, with separators flattened
-// (e.g. "third_party/envoy-gateway" -> "third_party-envoy-gateway").
+// a copy of the make output to <logsDir>/<phase>/<component>.log when logsDir is
+// configured. The component name is derived from dir's path relative to repoRoot,
+// with separators flattened (e.g. "third_party/envoy-gateway" -> "third_party-envoy-gateway").
+// When logsDir is empty, no file is written and this falls back to the in-memory
+// capture behaviour of makeInDirectoryWithOutput.
 func (r *CalicoManager) makeInDirectoryToFile(dir, target, phase string, env ...string) (string, error) {
 	targets := strings.Split(target, " ")
 	args := []string{"-C", dir}
 	args = append(args, targets...)
-	logPath := filepath.Join(r.logsDir, phase, r.componentSlug(dir)+".log")
-	return r.runner.RunInDirToFile("", "make", args, env, logPath)
+	var out string
+	var err error
+	if r.logsDir == "" {
+		out, err = r.runner.RunInDir("", "make", args, env)
+	} else {
+		logPath := filepath.Join(r.logsDir, phase, r.componentSlug(dir)+".log")
+		out, err = r.runner.RunInDirToFile("", "make", args, env, logPath)
+	}
+	if err != nil {
+		// On failure, surface the captured output so the cause is visible
+		// even when we weren't streaming to stdout in real time.
+		logrus.Error(out)
+	}
+	return out, err
 }
 
 func (r *CalicoManager) componentSlug(dir string) string {
