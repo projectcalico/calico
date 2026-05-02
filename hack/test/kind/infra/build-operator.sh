@@ -8,7 +8,7 @@
 #
 # Required env: DEV_IMAGE_REGISTRY, DEV_IMAGE_PATH, DEV_IMAGE_TAG. The
 # operator resolves images as <DEV_IMAGE_REGISTRY>/<DEV_IMAGE_PATH>/<image>:<DEV_IMAGE_TAG>
-# (e.g., kind-registry:5000/calico/node:test-build for kind, or
+# (e.g., localhost:5000/calico/node:test-build for kind, or
 # docker.io/myuser/node:my-feature for personal dev).
 
 set -e

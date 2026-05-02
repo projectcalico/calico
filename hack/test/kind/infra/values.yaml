@@ -157,7 +157,7 @@ zapDevel: true
 tigeraOperator:
   image: calico/operator
   version: test-build
-  registry: kind-registry:5000
+  registry: localhost:5000
   imagePullPolicy: Always
 
 resources:

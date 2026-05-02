@@ -1586,7 +1586,7 @@ KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
 KIND_TEST_BUILD_TAG = test-build
 
 # Locally-built Calico images. dev-build.sh re-tags each as
-# kind-registry:5000/calico/<name>:test-build for the kind cluster.
+# localhost:5000/calico/<name>:test-build for the kind cluster.
 # Most components are provided by the combined calico/calico image, which
 # uses "calico <subcommand>" as the container command. Only node and
 # whisker (TypeScript/nginx, not a Go binary) remain as separate images.
@@ -1637,12 +1637,14 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): $(call local-deps-go-f
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
 # kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
-# kind-registry:5000/calico/<name>:test-build. dev-build.sh handles tag,
-# operator-build (via build-operator.sh dev-mode), and push.
+# localhost:5000/calico/<name>:test-build. dev-build.sh handles tag,
+# operator-build (via build-operator.sh dev-mode), and push. The host pushes
+# via the 127.0.0.1:5000 port mapping on the registry container; containerd
+# inside the kind nodes mirrors localhost:5000 to http://kind-registry:5000.
 .PHONY: kind-build-images
 kind-build-images: kind-registry-up
 	$(MAKE) -C $(REPO_ROOT) push \
-	    DEV_IMAGE_REGISTRY=kind-registry:5000 \
+	    DEV_IMAGE_REGISTRY=localhost:5000 \
 	    DEV_IMAGE_PATH=calico \
 	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
 
