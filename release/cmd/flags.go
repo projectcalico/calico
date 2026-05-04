@@ -227,9 +227,9 @@ var (
 		operatorFlag(envBuildOperator, envReleaseOperator),
 	)
 
-	operatorPublishCommandFlags = []cli.Flag{
+	operatorPublishCommandFlags = append(slices.Clone(operatorGitFlags),
 		operatorFlag(envPublishOperator, envReleaseOperator),
-	}
+	)
 
 	// Operator git flags
 	operatorOrgFlagName = "operator-org"
