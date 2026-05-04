@@ -46,12 +46,10 @@ func Execute() {
 }
 
 func init() {
-	// Scope initConfig/setLogLevel to this rootCmd rather than registering
-	// them globally via cobra.OnInitialize. Under the consolidated calico
-	// binary (cmd/calico/main.go) every cobra dispatch shares one global
-	// initializer chain, so a global hook here would also fire for unrelated
-	// subcommands (felix, flexvol, csi, …) and hard-exit them when $HOME is
-	// unset — which is the case when kubelet exec's flex/CSI drivers.
+	// Scope to rootCmd instead of cobra.OnInitialize: the latter is global,
+	// so registering it here would fire initConfig (which exits 1 when
+	// HOME is unset) for every cobra dispatch in the consolidated calico
+	// binary, not just calico-bpf.
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		initConfig()
 		setLogLevel()

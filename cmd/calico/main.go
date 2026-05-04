@@ -71,10 +71,8 @@ const (
 //     panic traces, log prefixes, and kubectl-plugin detection still see the
 //     original invocation name.
 //   - argv[0] basename of "uds" → Cobra, with "component flexvol" inserted
-//     between argv[0] and the rest of the args. Kubelet invokes the flex
-//     volume driver as "<plugin-dir>/uds <init|mount|unmount> ..."; we
-//     install a copy of the calico binary at that path and rely on this
-//     dispatch to route into the flexvol subcommand.
+//     so kubelet's "<plugin-dir>/uds <init|mount|unmount>" calls route
+//     into the flexvol subcommand.
 //   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
 //     only when no subcommand args were passed. This guards against a stray
 //     CNI_COMMAND in a shell environment silently hijacking "calicoctl get

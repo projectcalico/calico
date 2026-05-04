@@ -198,13 +198,11 @@ func NewCommand() *cobra.Command {
 	installCmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install the flex volume driver onto the host filesystem.",
-		Long: "Install copies the running calico binary to the target path " +
-			"with mode 0550 so kubelet can invoke it as a flex volume driver. " +
-			"The target file is typically '<plugin-dir>/nodeagent~uds/uds'.",
+		Long: "Install copies the running binary to --target with mode 0550. " +
+			"The basename must be 'uds' since kubelet calls the driver as " +
+			"<plugin-dir>/uds and the argv[0] dispatch only matches that name. " +
+			"Must run as root - the target dir is typically owned by root.",
 		RunE: func(c *cobra.Command, args []string) error {
-			if installTarget == "" {
-				return fmt.Errorf("--target is required")
-			}
 			return installDriver(installTarget)
 		},
 	}
@@ -219,17 +217,16 @@ func NewCommand() *cobra.Command {
 	return rootCmd
 }
 
-// installDriver copies the currently-running binary to target with mode 0550,
-// using a write-tmp-then-rename pattern so a kubelet that's mid-invocation
-// never sees a partially-written file. The source is os.Executable() — which
-// in the consolidated calico image is /usr/bin/calico — and the destination
-// is whatever hostPath the operator mounted (typically
-// /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds).
-// The argv[0] dispatch in cmd/calico/main.go re-routes "uds <args>" calls
-// from kubelet back into this package.
+// installDriver copies the running binary to target with mode 0550. Uses
+// write-tmp-then-rename so a kubelet mid-invocation never sees a partial
+// file. Target basename must be "uds" - the argv[0] dispatch in
+// cmd/calico/main.go only routes that name back into this package.
 func installDriver(target string) error {
 	if target == "" {
 		return fmt.Errorf("target is required")
+	}
+	if base := filepath.Base(target); base != "uds" {
+		return fmt.Errorf("target basename must be \"uds\", got %q", base)
 	}
 	src, err := os.Executable()
 	if err != nil {

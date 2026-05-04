@@ -28,10 +28,8 @@ func TestInstallDriverCopiesRunningBinary(t *testing.T) {
 		t.Fatalf("installDriver: %v", err)
 	}
 
-	// Source is whatever runs the test (the test binary). We assert the
-	// destination is byte-identical so the symlink-by-argv[0] dispatch in
-	// cmd/calico/main.go gets the same binary kubelet would have called
-	// directly.
+	// Destination must be byte-identical to the source so argv[0]
+	// dispatch routes kubelet's "uds <args>" into the same binary.
 	src, err := os.Executable()
 	if err != nil {
 		t.Fatalf("os.Executable: %v", err)
@@ -60,6 +58,13 @@ func TestInstallDriverCopiesRunningBinary(t *testing.T) {
 func TestInstallDriverRequiresTarget(t *testing.T) {
 	if err := installDriver(""); err == nil {
 		t.Fatal("expected error when target is empty")
+	}
+}
+
+func TestInstallDriverRejectsNonUdsBasename(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "policysync")
+	if err := installDriver(dst); err == nil {
+		t.Fatal("expected error when target basename is not \"uds\"")
 	}
 }
 
