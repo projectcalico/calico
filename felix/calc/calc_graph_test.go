@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,7 +143,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&testIP,
 		&proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		},
 		&proto.HostMetadataRemove{
 			Hostname: "foo",
@@ -265,7 +265,7 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		Expect(messagesReceived).To(HaveLen(1))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 	It("should pass on genuine changes", func() {
@@ -288,11 +288,11 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		Expect(messagesReceived).To(HaveLen(2))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.2",
+			Ipv4Addr: "10.0.0.2/32",
 		})).To(BeTrue())
 	})
 	It("should pass on delete and recreate", func() {
@@ -322,14 +322,14 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		Expect(messagesReceived).To(HaveLen(3))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
 			Hostname: "foo",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 })
