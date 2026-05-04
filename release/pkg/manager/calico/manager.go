@@ -102,6 +102,9 @@ func NewManager(opts ...Option) *CalicoManager {
 		logrus.Fatal("No repo root specified")
 	}
 	logrus.WithField("repoRoot", b.repoRoot).Info("Using repo root")
+	if b.logsDir != "" {
+		logrus.WithField("logsDir", b.logsDir).Info("Per-step logs enabled")
+	}
 	if b.githubOrg == "" {
 		logrus.Fatal("GitHub organization not specified")
 	}
@@ -159,6 +162,12 @@ type CalicoManager struct {
 
 	// tmpDir is the directory to which we should write temporary files.
 	tmpDir string
+
+	// logsDir is where per-step build/publish logs are written. Each long-running
+	// make invocation gets its own file under <logsDir>/<phase>/<component>.log so
+	// that timing and failures for an individual component are easy to dig into
+	// after a run, and the directory can be uploaded as a CI artifact.
+	logsDir string
 
 	gitRef        bool
 	githubRelease bool
@@ -1246,21 +1255,17 @@ func (r *CalicoManager) buildContainerImages() error {
 	}
 
 	for _, dir := range releaseDirs {
-		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-build", env...)
-		if err != nil {
-			logrus.Error(out)
+		fullDir := filepath.Join(r.repoRoot, dir)
+		if _, err := r.makeInDirectoryToFile(fullDir, "release-build", "build", env...); err != nil {
 			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
-		logrus.Info(out)
 	}
 
 	for _, dir := range windowsReleaseDirs {
-		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
-		if err != nil {
-			logrus.Error(out)
+		fullDir := filepath.Join(r.repoRoot, dir)
+		if _, err := r.makeInDirectoryToFile(fullDir, "image-windows", "build-windows", env...); err != nil {
 			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
 		}
-		logrus.Info(out)
 	}
 	return nil
 }
@@ -1350,30 +1355,29 @@ func (r *CalicoManager) publishContainerImages() error {
 	// We allow for a certain number of retries when publishing each directory, since
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
-	publish := func(dir, target string) error {
+	publish := func(dir, target, phase string) error {
+		fullDir := filepath.Join(r.repoRoot, dir)
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
+			_, err := r.makeInDirectoryToFile(fullDir, target, phase, env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
 					attempt++
 					continue
 				}
-				logrus.Error(out)
 				return fmt.Errorf("failed to publish %s (%s): %s", dir, target, err)
 			}
-			logrus.Info(out)
 			return nil
 		}
 	}
 	for _, dir := range imageReleaseDirs {
-		if err := publish(dir, "release-publish"); err != nil {
+		if err := publish(dir, "release-publish", "publish"); err != nil {
 			return err
 		}
 	}
 	for _, dir := range windowsReleaseDirs {
-		if err := publish(dir, "release-windows"); err != nil {
+		if err := publish(dir, "release-windows", "publish-windows"); err != nil {
 			return err
 		}
 	}
@@ -1405,19 +1409,15 @@ func (r *CalicoManager) publishHelmChart(chart, registry string) error {
 		args = append(args, "--debug")
 	}
 	for {
-		out, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil)
+		_, err := r.runner.RunInDir(r.repoRoot, "./bin/helm", args, nil)
 		if err != nil {
 			if attempt < maxRetries {
 				logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
 				attempt++
 				continue
 			}
-			logrus.Error(out)
 			return fmt.Errorf("publish %s to %s: %s", chart, registry, err)
 		}
-
-		// Success - move on to the next.
-		logrus.Info(out)
 		break
 	}
 	return nil
@@ -1527,6 +1527,40 @@ func (r *CalicoManager) makeInDirectoryWithOutput(dir, target string, env ...str
 func (r *CalicoManager) makeInDirectoryIgnoreOutput(dir, target string, env ...string) error {
 	_, err := r.makeInDirectoryWithOutput(dir, target, env...)
 	return err
+}
+
+// makeInDirectoryToFile is like makeInDirectoryWithOutput, but additionally writes
+// a copy of the make output to <logsDir>/<phase>/<component>.log when logsDir is
+// configured. The component name is derived from dir's path relative to repoRoot,
+// with separators flattened (e.g. "third_party/envoy-gateway" -> "third_party-envoy-gateway").
+// When logsDir is empty, no file is written and this falls back to the in-memory
+// capture behaviour of makeInDirectoryWithOutput.
+func (r *CalicoManager) makeInDirectoryToFile(dir, target, phase string, env ...string) (string, error) {
+	targets := strings.Split(target, " ")
+	args := []string{"-C", dir}
+	args = append(args, targets...)
+	var out string
+	var err error
+	if r.logsDir == "" {
+		out, err = r.runner.RunInDir("", "make", args, env)
+	} else {
+		logPath := filepath.Join(r.logsDir, phase, r.componentSlug(dir)+".log")
+		out, err = r.runner.RunInDirToFile("", "make", args, env, logPath)
+	}
+	if err != nil {
+		// On failure, surface the captured output so the cause is visible
+		// even when we weren't streaming to stdout in real time.
+		logrus.Error(out)
+	}
+	return out, err
+}
+
+func (r *CalicoManager) componentSlug(dir string) string {
+	rel, err := filepath.Rel(r.repoRoot, dir)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		rel = filepath.Base(dir)
+	}
+	return strings.ReplaceAll(filepath.Clean(rel), string(filepath.Separator), "-")
 }
 
 func (r *CalicoManager) s3Cp(src, dest string, additionalFlags ...string) error {

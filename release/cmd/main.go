@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,13 @@ type Config struct {
 
 	// TmpDir is the directory for temporary files
 	TmpDir string
+
+	// LogsDir is the base directory under which per-step build/publish logs
+	// are written. The release tool appends a per-version subdirectory when
+	// passing it down to the manager, so logs from concurrent or sequential
+	// runs don't clobber each other. CI may override the default by setting
+	// the LOGS_DIR environment variable.
+	LogsDir string
 }
 
 // loadConfig loads the configuration for the release tool.
@@ -47,10 +54,16 @@ func loadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to get repo root dir: %w", err)
 	}
 
+	logsDir := os.Getenv("LOGS_DIR")
+	if logsDir == "" {
+		logsDir = filepath.Join(repoRoot, utils.ReleaseFolderName, "_logs")
+	}
+
 	config := &Config{
 		RepoRootDir: repoRoot,
 		OutputDir:   filepath.Join(repoRoot, utils.ReleaseFolderName, "_output"),
 		TmpDir:      filepath.Join(repoRoot, utils.ReleaseFolderName, "tmp"),
+		LogsDir:     logsDir,
 	}
 	return config, nil
 }

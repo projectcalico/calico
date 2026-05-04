@@ -1112,14 +1112,25 @@ endif
 MANIFEST_RETRIES ?= 5
 MANIFEST_RETRY_DELAY ?= 5
 
+# log_step prints a grep-able timing record. Bracket a long-running shell
+# step with start/end calls so per-step durations can be computed from the
+# CI log without per-line instrumentation.
+# Usage: $(call log_step,start,<label>)  ...  $(call log_step,end,<label>)
+define log_step
+	echo "==> step=$(1) label=\"$(2)\" epoch=$$(date +%s) at=$$(date -u +%FT%TZ)"
+endef
+
 # push-image-arch-to-registry-% pushes the build / arch image specified by $* and BUILD_IMAGE to the registry
 # specified by REGISTRY.
 push-image-arch-to-registry-%:
 # If the registry we want to push to doesn't not support manifests don't push the ARCH image.
+	@$(call log_step,start,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
 	$(call retry_docker_cmd,docker push with quiet flag,$(DOCKER) push --quiet $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*,$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	@$(call log_step,end,push $(call filter-registry,$(REGISTRY))$(BUILD_IMAGE):$(IMAGETAG)-$*)
 	$(if $(filter $*,amd64),\
-		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))\
-		$(NOECHO) $(NOOP)\
+		$(call log_step,start,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)); \
+		$(call retry_docker_cmd,docker push,$(DOCKER) push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY)); \
+		$(call log_step,end,push $(REGISTRY)/$(BUILD_IMAGE):$(IMAGETAG)) \
 	)
 
 # push multi-arch manifest where supported.
@@ -1129,8 +1140,12 @@ sub-manifest-%:
 		echo "ERROR: MANIFEST_RETRIES must be a positive integer, got '$(MANIFEST_RETRIES)'"; \
 		exit 1; \
 	fi
+	@$(call log_step,start,manifest-create $(call unescapefs,$*):$(IMAGETAG))
 	$(call retry_docker_cmd,docker manifest create,$(DOCKER) manifest create $(call unescapefs,$*):$(IMAGETAG) $(addprefix --amend ,$(addprefix $(call unescapefs,$*):$(IMAGETAG)-,$(VALIDARCHES))),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	@$(call log_step,end,manifest-create $(call unescapefs,$*):$(IMAGETAG))
+	@$(call log_step,start,manifest-push $(call unescapefs,$*):$(IMAGETAG))
 	$(call retry_docker_cmd,docker manifest push,$(DOCKER) manifest push --purge $(call unescapefs,$*):$(IMAGETAG),$(MANIFEST_RETRIES),$(MANIFEST_RETRY_DELAY))
+	@$(call log_step,end,manifest-push $(call unescapefs,$*):$(IMAGETAG))
 
 push-manifests-with-tag: var-require-one-of-CONFIRM-DRYRUN var-require-all-BRANCH_NAME
 	$(MAKE) push-manifests IMAGETAG=$(if $(IMAGETAG_PREFIX),$(IMAGETAG_PREFIX)-)$(BRANCH_NAME) VALIDARCHES="$(VALIDARCHES)"
