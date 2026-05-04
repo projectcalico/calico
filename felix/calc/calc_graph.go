@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -72,11 +71,7 @@ type encapCallbacks interface {
 }
 
 type passthruCallbacks interface {
-	OnHostIPUpdate(hostname string, ip *net.IP)
-	OnHostIPRemove(hostname string)
-	OnHostIPv6Update(hostname string, ip *net.IP)
-	OnHostIPv6Remove(hostname string)
-	OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string)
+	OnHostMetadataUpdate(hostname string, info *HostInfo)
 	OnHostMetadataRemove(hostname string)
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)
