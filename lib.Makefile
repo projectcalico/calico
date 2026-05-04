@@ -52,14 +52,18 @@ ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
 
-# detect the local outbound ip address
+# detect the local outbound ip address (only used by FV/etcd targets that don't run on Windows)
+ifneq ($(OS),Windows_NT)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+endif
 
 LATEST_IMAGE_TAG?=latest
 
 # these macros create a list of valid architectures for pushing manifests
 comma := ,
+ifneq ($(OS),Windows_NT)
 double_quote := $(shell echo '"')
+endif
 
 ## Targets used when cross building.
 .PHONY: native register
@@ -233,6 +237,12 @@ endif
 # Get version from git. We allow setting this manually for the hashrelease process.
 # By default, includes commit count and hash (--long). During releases (RELEASE=true),
 # only the tag is used without the commit count suffix.
+#
+# Skip on Windows: these LDFLAGS-related vars use bash `||` fallbacks that PowerShell
+# can't parse, and Windows builds (e.g. fluentd-base) don't link Go binaries that
+# embed buildinfo. Each $(shell git ...) call would otherwise spawn PowerShell on
+# every sub-make recursion, multiplying parse time noticeably.
+ifneq ($(OS),Windows_NT)
 GIT_VERSION ?= $(shell git describe --tags --dirty --always --abbrev=12 --long)
 ifeq ($(RELEASE),true)
 	GIT_VERSION := $(shell git describe --tags --dirty --always --abbrev=12)
@@ -247,6 +257,7 @@ BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
 # git tag at the time we build the binary.
 # Variables elsewhere that depend on this (such as LDFLAGS) must also be lazy.
 GIT_DESCRIPTION=$(shell git describe --tags --dirty --always --abbrev=12 || echo '<unknown>')
+endif
 
 # Calculate a timestamp for any build artifacts.
 ifneq ($(OS),Windows_NT)
@@ -313,6 +324,11 @@ CERTS_PATH := $(REPO_ROOT)/hack/test/certs
 # <main-repo>/.git/worktrees/<name>.  When Docker containers need git access,
 # the main .git directory must also be mounted, and GIT_DIR / GIT_WORK_TREE
 # must be set so that git can find objects and the correct working tree.
+#
+# Skip on Windows: this only configures Linux Docker mounts, and the bash `2>/dev/null`
+# redirection PowerShell tries to interpret as `2 > /dev/null` (writing to a file at
+# C:\dev\null), which fails noisily on every parse.
+ifneq ($(OS),Windows_NT)
 _GIT_DIR := $(shell git rev-parse --absolute-git-dir 2>/dev/null)
 _GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
 ifneq ($(_GIT_DIR),$(_GIT_COMMON_DIR))
@@ -327,6 +343,7 @@ DOCKER_GIT_WORKTREE_ARGS := \
 	-e GIT_WORK_TREE=$(DOCKER_GIT_WORK_TREE)
 else
 DOCKER_GIT_WORKTREE_ARGS :=
+endif
 endif
 
 # Configure the Calico API group to use. Projects importing this Makefile can override this variable
@@ -404,16 +421,25 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 # IMAGE_DEPS lists non-Go files that the Docker image depends on (Dockerfiles,
 # config templates, scripts, etc.). Components should override or append to
 # this variable and include $(IMAGE_DEPS) in their .image.created prereqs.
+#
+# Skip on Windows: this is dependency tracking for Linux Go-based image stamps;
+# Windows components (e.g. third_party/fluentd-base) build pure Docker images.
+# Each $(shell find ... grep ... cut ...) call would otherwise spawn PowerShell
+# (no find/grep/cut available) on every sub-make recursion. With ~20 components
+# referenced from .image.created-* prerequisites below, this was the dominant
+# contributor to the Windows publish job hitting Semaphore's 3h timeout.
 ###############################################################################
+IMAGE_DEPS ?= Dockerfile
+
+ifneq ($(OS),Windows_NT)
 ifneq ($(wildcard deps.txt),)
 SRC_FILES := $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
 endif
 
-IMAGE_DEPS ?= Dockerfile
-
 # Expand a component's deps.txt local entries to the list of .go files.
 # Usage: $(call local-deps-go-files,<component-dir>)
 local-deps-go-files = $(shell find $(addprefix $(REPO_ROOT)/,$(shell grep '^local:' $(REPO_ROOT)/$(1)/deps.txt | cut -d: -f2-)) -name '*.go' 2>/dev/null)
+endif
 
 # A target that does nothing but it always stale, used to force a rebuild on certain targets based on some non-file criteria.
 .PHONY: force-rebuild
@@ -758,7 +784,7 @@ LINT_ARGS ?= --max-issues-per-linter 0 --max-same-issues 0 --timeout 8m
 golangci-lint: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) golangci-lint run $(LINT_ARGS)'
 
-REPO_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
+REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else echo '..'; fi )
 
 .PHONY: fix-changed go-fmt-changed goimports-changed
 # Format changed files only.
@@ -766,15 +792,15 @@ fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$(shell $(REPO_DIR)/hack/find-parent-release-branch.sh) \
-	                $(CALICO_BUILD) $(REPO_DIR)/hack/format-changed-files.sh; \
+	                -e parent_branch=$(shell $(REPO_REL_DIR)/hack/find-parent-release-branch.sh) \
+	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
 .PHONY: fix-all go-fmt-all goimports-all
 fix-all go-fmt-all goimports-all:
-	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_DIR)/hack/format-all-files.sh
+	$(DOCKER_RUN) $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-all-files.sh
 
-GOMODDER=$(REPO_DIR)/hack/cmd/gomodder/main.go
+GOMODDER=$(REPO_REL_DIR)/hack/cmd/gomodder/main.go
 
 .PHONY: verify-go-mods
 verify-go-mods:
@@ -1062,6 +1088,14 @@ endif
 
 # retry_docker_cmd retries a docker command up to a specified number of times.
 # Usage: $(call retry_docker_cmd,<description>,<docker command>,<max retries>,<retry delay>)
+#
+# Windows agents (Semaphore) execute recipe lines under PowerShell, which can't parse
+# the bash retry loop used elsewhere; emit a single-line PowerShell loop instead.
+ifeq ($(OS),Windows_NT)
+define retry_docker_cmd
+	for ($$i=1; $$i -le $(3); $$i++) { $(2); if ($$LASTEXITCODE -eq 0) { break }; Write-Host ('WARNING: $(1) failed (attempt {0}/$(3)), retrying in $(4)s...' -f $$i); if ($$i -eq $(3)) { exit 1 }; Start-Sleep -Seconds $(4) }
+endef
+else
 define retry_docker_cmd
 	i=1; \
 	while [ $$i -le $(3) ]; do \
@@ -1072,6 +1106,7 @@ define retry_docker_cmd
 		i=$$((i + 1)); \
 	done
 endef
+endif
 
 # Configuration options for retrying docker commands
 MANIFEST_RETRIES ?= 5
@@ -1705,7 +1740,10 @@ ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
 ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
 # Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
 # Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+# Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
+ifneq ($(OS),Windows_NT)
 ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
+endif
 ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
 
 ## Download envtest binaries (kube-apiserver, etcd) for use by tests that use controller-runtime envtest.
@@ -1722,9 +1760,11 @@ $(ENVTEST_ASSETS_MARKER):
 
 # Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
 MIN_K8S_VERSION ?= v1.31.0
+ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
 ENVTEST_MIN_K8S_MINOR := $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2)
+endif
 ENVTEST_MIN_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-min-$(ENVTEST_MIN_K8S_VERSION)
 
 ## Download envtest binaries for the minimum supported Kubernetes version.
