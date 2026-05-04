@@ -1533,8 +1533,21 @@ KIND_CONFIG ?= $(KIND_DIR)/kind.config
 KIND_NAME = $(basename $(notdir $(KIND_CONFIG)))
 KIND_KUBECONFIG?=$(KIND_DIR)/$(KIND_NAME)-kubeconfig.yaml
 
+.PHONY: kind-registry-up kind-registry-destroy
+## Start the local kind image registry (idempotent). Persists across cluster recreates.
+kind-registry-up:
+	$(REPO_ROOT)/hack/test/kind/registry.sh up
+
+## Remove the local kind image registry. Forces a full re-push on next kind-up.
+# `make push` skips work based on `.dev-stamps/*pushed-id` (keyed on local
+# image IDs), so dropping the registry alone would leave it empty after the
+# next kind-build-images. Clear the push stamps so the next build re-pushes.
+kind-registry-destroy:
+	$(REPO_ROOT)/hack/test/kind/registry.sh down
+	rm -f $(REPO_ROOT)/.dev-stamps/*pushed-id 2>/dev/null || true
+
 kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
-$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
+$(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) kind-registry-up
 	# First make sure any previous cluster is deleted
 	$(MAKE) kind-cluster-destroy
 
@@ -1544,6 +1557,11 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND)
 		--kubeconfig $(KIND_KUBECONFIG) \
 		--name $(KIND_NAME) \
 		--image kindest/node:$(KINDEST_NODE_VERSION)
+
+	# Connect the registry to the kind network now that the network exists,
+	# and write per-node containerd config so localhost:5000 redirects to it.
+	$(REPO_ROOT)/hack/test/kind/registry.sh up
+	KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/registry.sh configure-nodes
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
@@ -1623,8 +1641,8 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 KIND_INFRA_DIR := $(REPO_ROOT)/hack/test/kind/infra
 KIND_TEST_BUILD_TAG = test-build
 
-# Calico images built locally with latest-$(ARCH) tags. kind-build-images
-# re-tags each as :test-build for the kind cluster.
+# Locally-built Calico images. dev-build.sh re-tags each as
+# localhost:5000/calico/<name>:test-build for the kind cluster.
 # Most components are provided by the combined calico/calico image, which
 # uses "calico <subcommand>" as the container command. Only node and
 # whisker (TypeScript/nginx, not a Go binary) remain as separate images.
@@ -1632,13 +1650,6 @@ KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/calico:$(KIND_TEST_BUILD_TAG)
-
-# Operator is built separately (build-operator.sh tags it directly as
-# :test-build), so it's not in KIND_CALICO_IMAGES.
-KIND_OPERATOR_IMAGE = docker.io/tigera/operator:$(KIND_TEST_BUILD_TAG)
-
-# All images loaded onto the kind cluster.
-KIND_IMAGES = $(KIND_OPERATOR_IMAGE) $(KIND_CALICO_IMAGES)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1679,38 +1690,19 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): $(call local-deps-go-f
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	touch $@
 
-# Operator is built from a separate repo/branch. It only needs
-# calico_versions.yml (a static file with version strings), not the
-# actual built images, so it can run in parallel with component builds.
-# Track the operator source selection in a generated inputs file so
-# changes to repo/branch invalidate the operator stamp.
-.PHONY: FORCE
-FORCE:
-
-$(REPO_ROOT)/.stamp.operator.inputs: FORCE
-	@printf '%s\n' \
-	  'OPERATOR_ORGANIZATION=$(OPERATOR_ORGANIZATION)' \
-	  'OPERATOR_GIT_REPO=$(OPERATOR_GIT_REPO)' \
-	  'OPERATOR_BRANCH=$(OPERATOR_BRANCH)' > $@.tmp
-	@if test -f $@ && cmp -s $@.tmp $@; then \
-	  rm -f $@.tmp; \
-	else \
-	  mv -f $@.tmp $@; \
-	fi
-
-$(REPO_ROOT)/.stamp.operator: $(KIND_INFRA_DIR)/calico_versions.yml $(REPO_ROOT)/.stamp.operator.inputs
-	cd $(KIND_INFRA_DIR) && \
-	  REPO=$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) \
-	  BRANCH=$(OPERATOR_BRANCH) ./build-operator.sh
-	touch $@
-
-## Build all component images needed for kind cluster testing, then tag them.
+## Build all component images and push them to the local kind registry.
+# This invokes the same `make push` pipeline used by the release flow, with
+# kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
+# localhost:5000/calico/<name>:test-build. dev-build.sh handles tag,
+# operator-build (via build-operator.sh dev-mode), and push. The host pushes
+# via the 127.0.0.1:5000 port mapping on the registry container; containerd
+# inside the kind nodes mirrors localhost:5000 to http://kind-registry:5000.
 .PHONY: kind-build-images
-kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
-	@for img in $(KIND_CALICO_IMAGES); do \
-	  base=$${img%%:*}; \
-	  docker tag $$base:latest-$(ARCH) $$img; \
-	done
+kind-build-images: kind-registry-up
+	$(MAKE) -C $(REPO_ROOT) push \
+	    DEV_IMAGE_REGISTRY=localhost:5000 \
+	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
@@ -1718,8 +1710,9 @@ kind-build-images: $(KIND_IMAGE_MARKERS) $(REPO_ROOT)/.stamp.operator
 # Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
 KIND_CALICO_API_GROUP ?= projectcalico.org/v3
 
-# Load images, install Calico via Helm, and wait for readiness on an existing
-# kind cluster. Use kind-up for end-to-end bringup (images + cluster + deploy).
+# Install Calico via Helm and wait for readiness on an existing kind cluster.
+# Images are pulled from the local kind-registry on demand, so no image
+# loading happens here. Use kind-up for end-to-end bringup.
 .PHONY: kind-deploy
 kind-deploy:
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
@@ -1730,17 +1723,15 @@ kind-deploy:
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
-	KIND_IMAGES="$(KIND_IMAGES)" \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
-# Rebuild any images whose source files have changed, load onto the kind
-# cluster, upgrade the Helm release, and restart pods. The chart rebuild
-# and helm upgrade are both fast no-ops when nothing has changed.
+# Rebuild any images whose source files have changed, push changed layers to
+# the local registry, upgrade the Helm release, and restart pods so kubelet
+# re-pulls the new digests under the test-build tag (PullAlways).
 .PHONY: kind-reload
 kind-reload:
 	$(MAKE) -j$$(nproc) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
-	KIND=$(KIND) KIND_NAME=$(KIND_NAME) $(REPO_ROOT)/hack/test/kind/load_images.sh $(KIND_IMAGES)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 		--reuse-values \

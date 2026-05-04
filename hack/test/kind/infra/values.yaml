@@ -1,7 +1,6 @@
 # Default values.yaml for Calico installation on kind clusters.
 installation:
   enabled: true
-  registry: docker.io
 
   # Disable HA control plane.
   controlPlaneReplicas: 1
@@ -152,11 +151,14 @@ manageCRDs: false
 # operator logs and stacktraces on warnings.
 zapDevel: true
 
-# Configuration for the tigera operator
+# Operator image lives in the local kind registry alongside everything else.
+# imagePullPolicy: Always so kubelet repulls when the test-build digest
+# changes under a stable tag on `make kind-reload`.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   version: test-build
-  registry: docker.io
+  registry: localhost:5000
+  imagePullPolicy: Always
 
 resources:
   requests:
