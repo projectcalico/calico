@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package calc
 
 import (
 	"strings"
+	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -74,11 +75,7 @@ type EventSequencer struct {
 	pendingEncapUpdate           *config.Encapsulation
 	pendingEndpointUpdates       map[model.Key]endpointUpdate
 	pendingEndpointDeletes       set.Set[model.Key]
-	pendingHostIPUpdates         map[string]*net.IP
-	pendingHostIPDeletes         set.Set[string]
-	pendingHostIPv6Updates       map[string]*net.IP
-	pendingHostIPv6Deletes       set.Set[string]
-	pendingHostMetadataUpdates   map[string]*hostInfo
+	pendingHostMetadataUpdates   map[string]*HostInfo
 	pendingHostMetadataDeletes   set.Set[string]
 	pendingIPPoolUpdates         map[ip.CIDR]*model.IPPool
 	pendingIPPoolDeletes         set.Set[ip.CIDR]
@@ -120,27 +117,24 @@ type EventSequencer struct {
 	Callback EventHandler
 }
 
-type hostInfo struct {
-	ip4Addr  *net.IPNet
-	ip6Addr  *net.IPNet
+type HostInfo struct {
+	ip4Addr  string
+	ip6Addr  string
 	labels   map[string]string
 	asnumber string
+}
+
+func (h *HostInfo) equals(a *HostInfo) bool {
+	return h.ip4Addr == a.ip4Addr &&
+		h.ip6Addr == a.ip6Addr &&
+		h.asnumber == a.asnumber &&
+		maps.Equal(h.labels, a.labels)
 }
 
 type serviceID struct {
 	Name      string
 	Namespace string
 }
-
-// func (buf *EventSequencer) HasPendingUpdates() {
-//	return buf.pendingAddedIPSets.Len() > 0 ||
-//		buf.pendingRemovedIPSets.Len() > 0 ||
-//		buf.pendingAddedIPSetMembers.Len() > 0 ||
-//		buf.pendingRemovedIPSetMembers.Len() > 0 ||
-//		len(buf.pendingPolicyUpdates) > 0 ||
-//		buf.pendingPolicyDeletes.Len() > 0 ||
-//
-// }
 
 func NewEventSequencer(conf configInterface) *EventSequencer {
 	buf := &EventSequencer{
@@ -156,11 +150,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingProfileDeletes:        set.New[model.ProfileRulesKey](),
 		pendingEndpointUpdates:       map[model.Key]endpointUpdate{},
 		pendingEndpointDeletes:       set.New[model.Key](),
-		pendingHostIPUpdates:         map[string]*net.IP{},
-		pendingHostIPDeletes:         set.New[string](),
-		pendingHostIPv6Updates:       map[string]*net.IP{},
-		pendingHostIPv6Deletes:       set.New[string](),
-		pendingHostMetadataUpdates:   map[string]*hostInfo{},
+		pendingHostMetadataUpdates:   map[string]*HostInfo{},
 		pendingHostMetadataDeletes:   set.New[string](),
 		pendingIPPoolUpdates:         map[ip.CIDR]*model.IPPool{},
 		pendingIPPoolDeletes:         set.New[ip.CIDR](),
@@ -621,115 +611,21 @@ func (buf *EventSequencer) flushEncapUpdate() {
 	}
 }
 
-func (buf *EventSequencer) OnHostIPUpdate(hostname string, ip *net.IP) {
+func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, info *HostInfo) {
 	log.WithFields(log.Fields{
 		"hostname": hostname,
-		"ip":       ip,
-	}).Debug("HostIP update")
-	buf.pendingHostIPDeletes.Discard(hostname)
-	buf.pendingHostIPUpdates[hostname] = ip
-}
-
-func (buf *EventSequencer) flushHostIPUpdates() {
-	for hostname, hostIP := range buf.pendingHostIPUpdates {
-		hostAddr := ""
-		if hostIP != nil {
-			hostAddr = hostIP.String()
-		}
-		buf.Callback(&proto.HostMetadataUpdate{
-			Hostname: hostname,
-			Ipv4Addr: hostAddr,
-		})
-		buf.sentHostIPs.Add(hostname)
-		delete(buf.pendingHostIPUpdates, hostname)
-	}
-}
-
-func (buf *EventSequencer) OnHostIPRemove(hostname string) {
-	log.WithField("hostname", hostname).Debug("HostIP removed")
-	delete(buf.pendingHostIPUpdates, hostname)
-	if buf.sentHostIPs.Contains(hostname) {
-		buf.pendingHostIPDeletes.Add(hostname)
-	}
-}
-
-func (buf *EventSequencer) flushHostIPDeletes() {
-	for item := range buf.pendingHostIPDeletes.All() {
-		buf.Callback(&proto.HostMetadataRemove{
-			Hostname: item,
-		})
-		buf.sentHostIPs.Discard(item)
-		buf.pendingHostIPDeletes.Discard(item)
-	}
-}
-
-func (buf *EventSequencer) OnHostIPv6Update(hostname string, ip *net.IP) {
-	log.WithFields(log.Fields{
-		"hostname": hostname,
-		"ip":       ip,
-	}).Debug("Host IPv6 update")
-	buf.pendingHostIPv6Deletes.Discard(hostname)
-	buf.pendingHostIPv6Updates[hostname] = ip
-}
-
-func (buf *EventSequencer) flushHostIPv6Updates() {
-	for hostname, hostIP := range buf.pendingHostIPv6Updates {
-		hostIPv6Addr := ""
-		if hostIP != nil {
-			hostIPv6Addr = hostIP.String()
-		}
-		buf.Callback(&proto.HostMetadataV6Update{
-			Hostname: hostname,
-			Ipv6Addr: hostIPv6Addr,
-		})
-		buf.sentHostIPv6s.Add(hostname)
-		delete(buf.pendingHostIPv6Updates, hostname)
-	}
-}
-
-func (buf *EventSequencer) OnHostIPv6Remove(hostname string) {
-	log.WithField("hostname", hostname).Debug("Host IPv6 removed")
-	delete(buf.pendingHostIPv6Updates, hostname)
-	if buf.sentHostIPv6s.Contains(hostname) {
-		buf.pendingHostIPv6Deletes.Add(hostname)
-	}
-}
-
-func (buf *EventSequencer) flushHostIPv6Deletes() {
-	for item := range buf.pendingHostIPv6Deletes.All() {
-		buf.Callback(&proto.HostMetadataV6Remove{
-			Hostname: item,
-		})
-		buf.sentHostIPv6s.Discard(item)
-		buf.pendingHostIPv6Deletes.Discard(item)
-	}
-}
-
-func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
-	log.WithFields(log.Fields{
-		"hostname": hostname,
-		"ip4":      ip4,
-		"ip6":      ip6,
-		"labels":   labels,
-		"asnumber": asnumber,
+		"update":   info,
 	}).Debug("Host update")
 	buf.pendingHostMetadataDeletes.Discard(hostname)
-	buf.pendingHostMetadataUpdates[hostname] = &hostInfo{ip4Addr: ip4, ip6Addr: ip6, labels: labels, asnumber: asnumber}
+	buf.pendingHostMetadataUpdates[hostname] = info
 }
 
 func (buf *EventSequencer) flushHostUpdates() {
 	for hostname, hostInfo := range buf.pendingHostMetadataUpdates {
-		var ip4str, ip6str string
-		if hostInfo.ip4Addr.IP != nil {
-			ip4str = hostInfo.ip4Addr.String()
-		}
-		if hostInfo.ip6Addr.IP != nil {
-			ip6str = hostInfo.ip6Addr.String()
-		}
 		buf.Callback(&proto.HostMetadataV4V6Update{
 			Hostname: hostname,
-			Ipv4Addr: ip4str,
-			Ipv6Addr: ip6str,
+			Ipv4Addr: hostInfo.ip4Addr,
+			Ipv6Addr: hostInfo.ip6Addr,
 			Asnumber: hostInfo.asnumber,
 			Labels:   hostInfo.labels,
 		})
@@ -926,10 +822,6 @@ func (buf *EventSequencer) Flush() {
 	// as well do deletions first to minimise occupancy.
 	buf.flushHostWireguardDeletes()
 	buf.flushHostWireguardUpdates()
-	buf.flushHostIPDeletes()
-	buf.flushHostIPUpdates()
-	buf.flushHostIPv6Deletes()
-	buf.flushHostIPv6Updates()
 	buf.flushHostDeletes()
 	buf.flushHostUpdates()
 	buf.flushIPPoolDeletes()
