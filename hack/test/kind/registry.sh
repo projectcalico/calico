@@ -31,15 +31,24 @@ KIND_REGISTRY_IMAGE=${KIND_REGISTRY_IMAGE:-registry:2}
 
 case "${1:-}" in
   up)
-    # Start the registry if it isn't already running.
-    running=$(docker inspect -f '{{.State.Running}}' "${KIND_REGISTRY_NAME}" 2>/dev/null || echo "false")
-    if [ "${running}" != "true" ]; then
-      echo "Starting ${KIND_REGISTRY_NAME} on 127.0.0.1:${KIND_REGISTRY_PORT}"
-      docker run -d --restart=always \
-        -p "127.0.0.1:${KIND_REGISTRY_PORT}:5000" \
-        --name "${KIND_REGISTRY_NAME}" \
-        "${KIND_REGISTRY_IMAGE}" >/dev/null
-    fi
+    # Start the registry if it isn't already running. Three cases:
+    # running -> nothing to do; stopped -> docker start; missing -> docker run.
+    state=$(docker inspect -f '{{.State.Status}}' "${KIND_REGISTRY_NAME}" 2>/dev/null || echo "missing")
+    case "${state}" in
+      running)
+        ;;
+      missing)
+        echo "Starting ${KIND_REGISTRY_NAME} on 127.0.0.1:${KIND_REGISTRY_PORT}"
+        docker run -d --restart=always \
+          -p "127.0.0.1:${KIND_REGISTRY_PORT}:5000" \
+          --name "${KIND_REGISTRY_NAME}" \
+          "${KIND_REGISTRY_IMAGE}" >/dev/null
+        ;;
+      *)
+        echo "Restarting existing ${KIND_REGISTRY_NAME} (was ${state})"
+        docker start "${KIND_REGISTRY_NAME}" >/dev/null
+        ;;
+    esac
 
     # Connect the registry to the kind network if not already. The kind
     # network is created on first `kind create cluster`, so this may need to

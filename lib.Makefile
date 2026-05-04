@@ -1489,8 +1489,12 @@ kind-registry-up:
 	$(REPO_ROOT)/hack/test/kind/registry.sh up
 
 ## Remove the local kind image registry. Forces a full re-push on next kind-up.
+# `make push` skips work based on `.dev-stamps/*pushed-id` (keyed on local
+# image IDs), so dropping the registry alone would leave it empty after the
+# next kind-build-images. Clear the push stamps so the next build re-pushes.
 kind-registry-destroy:
 	$(REPO_ROOT)/hack/test/kind/registry.sh down
+	rm -f $(REPO_ROOT)/.dev-stamps/*pushed-id 2>/dev/null || true
 
 kind-cluster-create: $(REPO_ROOT)/.$(KIND_NAME).created
 $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) kind-registry-up
