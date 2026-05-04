@@ -70,6 +70,9 @@ const (
 //     argv[0] and the rest of the args. argv[0] itself is preserved so that
 //     panic traces, log prefixes, and kubectl-plugin detection still see the
 //     original invocation name.
+//   - argv[0] basename of "uds" → Cobra, with "component flexvol" inserted
+//     so kubelet's "<plugin-dir>/uds <init|mount|unmount>" calls route
+//     into the flexvol subcommand.
 //   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
 //     only when no subcommand args were passed. This guards against a stray
 //     CNI_COMMAND in a shell environment silently hijacking "calicoctl get
@@ -82,6 +85,9 @@ func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
 		return modeCNIIPAM, args
 	case "calicoctl":
 		rewritten := append([]string{args[0], "ctl"}, args[1:]...)
+		return modeCobra, rewritten
+	case "uds":
+		rewritten := append([]string{args[0], "component", "flexvol"}, args[1:]...)
 		return modeCobra, rewritten
 	default:
 		if len(args) == 1 && cniCommand != "" {
