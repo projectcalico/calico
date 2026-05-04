@@ -237,7 +237,7 @@ func installDriver(target string) error {
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", src, err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, ".uds.*")
@@ -251,11 +251,11 @@ func installDriver(target string) error {
 	}()
 
 	if _, err := io.Copy(tmp, in); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("copying binary: %w", err)
 	}
 	if err := tmp.Chmod(0o550); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
