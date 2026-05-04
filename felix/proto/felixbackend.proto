@@ -85,9 +85,9 @@ message ToDataplane {
     ConfigUpdate config_update = 13;
 
     // HostMetadataV4V6Update is sent when a host is added or updated.
-    HostMetadataV4V6Update host_metadata_v4v6_update = 14;
+    HostMetadataV4V6Update host_metadata_v4v6_update = 37;
     // HostIPRemove is sent when a host is removed.
-    HostMetadataV4V6Remove host_metadata_v4v6_remove = 18;
+    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -160,6 +160,10 @@ message FromDataplane {
 
     DataplaneInSync dataplane_in_sync = 10;
   }
+
+  // Deprecated fields related to host information. Removed in favor of HostMetadataV4V6* messages.
+  reserved "HostMetadataUpdate", "HostMetadataRemove", "HostMetadataV6Update", "HostMetadataV6Remove";
+  reserved 14, 18, 35, 36;
 }
 
 message ConfigUpdate {

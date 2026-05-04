@@ -1027,12 +1027,12 @@ type ToDataplane_ConfigUpdate struct {
 
 type ToDataplane_HostMetadataV4V6Update struct {
 	// HostMetadataV4V6Update is sent when a host is added or updated.
-	HostMetadataV4V6Update *HostMetadataV4V6Update `protobuf:"bytes,14,opt,name=host_metadata_v4v6_update,json=hostMetadataV4v6Update,proto3,oneof"`
+	HostMetadataV4V6Update *HostMetadataV4V6Update `protobuf:"bytes,37,opt,name=host_metadata_v4v6_update,json=hostMetadataV4v6Update,proto3,oneof"`
 }
 
 type ToDataplane_HostMetadataV4V6Remove struct {
 	// HostIPRemove is sent when a host is removed.
-	HostMetadataV4V6Remove *HostMetadataV4V6Remove `protobuf:"bytes,18,opt,name=host_metadata_v4v6_remove,json=hostMetadataV4v6Remove,proto3,oneof"`
+	HostMetadataV4V6Remove *HostMetadataV4V6Remove `protobuf:"bytes,38,opt,name=host_metadata_v4v6_remove,json=hostMetadataV4v6Remove,proto3,oneof"`
 }
 
 type ToDataplane_IpamPoolUpdate struct {
@@ -6243,8 +6243,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x18workload_endpoint_update\x18\v \x01(\v2\x1d.felix.WorkloadEndpointUpdateH\x00R\x16workloadEndpointUpdate\x12Y\n" +
 	"\x18workload_endpoint_remove\x18\f \x01(\v2\x1d.felix.WorkloadEndpointRemoveH\x00R\x16workloadEndpointRemove\x12:\n" +
 	"\rconfig_update\x18\r \x01(\v2\x13.felix.ConfigUpdateH\x00R\fconfigUpdate\x12Z\n" +
-	"\x19host_metadata_v4v6_update\x18\x0e \x01(\v2\x1d.felix.HostMetadataV4V6UpdateH\x00R\x16hostMetadataV4v6Update\x12Z\n" +
-	"\x19host_metadata_v4v6_remove\x18\x12 \x01(\v2\x1d.felix.HostMetadataV4V6RemoveH\x00R\x16hostMetadataV4v6Remove\x12A\n" +
+	"\x19host_metadata_v4v6_update\x18% \x01(\v2\x1d.felix.HostMetadataV4V6UpdateH\x00R\x16hostMetadataV4v6Update\x12Z\n" +
+	"\x19host_metadata_v4v6_remove\x18& \x01(\v2\x1d.felix.HostMetadataV4V6RemoveH\x00R\x16hostMetadataV4v6Remove\x12A\n" +
 	"\x10ipam_pool_update\x18\x10 \x01(\v2\x15.felix.IPAMPoolUpdateH\x00R\x0eipamPoolUpdate\x12A\n" +
 	"\x10ipam_pool_remove\x18\x11 \x01(\v2\x15.felix.IPAMPoolRemoveH\x00R\x0eipamPoolRemove\x12S\n" +
 	"\x16service_account_update\x18\x13 \x01(\v2\x1b.felix.ServiceAccountUpdateH\x00R\x14serviceAccountUpdate\x12S\n" +
@@ -6265,7 +6265,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0eservice_remove\x18  \x01(\v2\x14.felix.ServiceRemoveH\x00R\rserviceRemove\x12c\n" +
 	"\x1cwireguard_endpoint_v6_update\x18! \x01(\v2 .felix.WireguardEndpointV6UpdateH\x00R\x19wireguardEndpointV6Update\x12c\n" +
 	"\x1cwireguard_endpoint_v6_remove\x18\" \x01(\v2 .felix.WireguardEndpointV6RemoveH\x00R\x19wireguardEndpointV6RemoveB\t\n" +
-	"\apayload\"\xd3\x05\n" +
+	"\apayload\"\xbf\x06\n" +
 	"\rFromDataplane\x12'\n" +
 	"\x0fsequence_number\x18\b \x01(\x04R\x0esequenceNumber\x12P\n" +
 	"\x15process_status_update\x18\x03 \x01(\v2\x1a.felix.ProcessStatusUpdateH\x00R\x13processStatusUpdate\x12`\n" +
@@ -6276,7 +6276,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x17wireguard_status_update\x18\t \x01(\v2\x1c.felix.WireguardStatusUpdateH\x00R\x15wireguardStatusUpdate\x12D\n" +
 	"\x11dataplane_in_sync\x18\n" +
 	" \x01(\v2\x16.felix.DataplaneInSyncH\x00R\x0fdataplaneInSyncB\t\n" +
-	"\apayload\"\xd1\x02\n" +
+	"\apayloadJ\x04\b\x0e\x10\x0fJ\x04\b\x12\x10\x13J\x04\b#\x10$J\x04\b$\x10%R\x12HostMetadataUpdateR\x12HostMetadataRemoveR\x14HostMetadataV6UpdateR\x14HostMetadataV6Remove\"\xd1\x02\n" +
 	"\fConfigUpdate\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x127\n" +
 	"\x06config\x18\x01 \x03(\v2\x1f.felix.ConfigUpdate.ConfigEntryR\x06config\x12[\n" +
