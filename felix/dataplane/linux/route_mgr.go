@@ -436,9 +436,9 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 
 	// Keep only the address, and remove subnet mask part if there is any.
 	parts := strings.Split(parentAddr, "/")
-	normaliasedAddr := parts[0]
+	normalisedAddr := parts[0]
 
-	m.logCtx.WithField("address", normaliasedAddr).Debug("Getting parent interface")
+	m.logCtx.WithField("address", normalisedAddr).Debug("Getting parent interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -456,13 +456,13 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		}
 		for _, addr := range addrs {
 			// Match address with or without subnet mask
-			if addr.IP.String() == normaliasedAddr {
+			if addr.IP.String() == normalisedAddr {
 				m.logCtx.Debugf("Found parent interface: %+v", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("unable to find parent interface with address %s", normaliasedAddr)
+	return nil, fmt.Errorf("unable to find parent interface with address %s", normalisedAddr)
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
