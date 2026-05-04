@@ -24,9 +24,11 @@ package flexvol
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/syslog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -126,7 +128,7 @@ var (
 // NewCommand returns the root cobra command for the flexvol driver.
 func NewCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:           "flexvoldrv",
+		Use:           "flexvol",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -192,12 +194,81 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
+	var installTarget string
+	installCmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install the flex volume driver onto the host filesystem.",
+		Long: "Install copies the running calico binary to the target path " +
+			"with mode 0550 so kubelet can invoke it as a flex volume driver. " +
+			"The target file is typically '<plugin-dir>/nodeagent~uds/uds'.",
+		RunE: func(c *cobra.Command, args []string) error {
+			if installTarget == "" {
+				return fmt.Errorf("--target is required")
+			}
+			return installDriver(installTarget)
+		},
+	}
+	installCmd.Flags().StringVar(&installTarget, "target", "", "Path on the host where the driver binary is installed (e.g. /host/driver/uds).")
+
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(unmountCmd)
+	rootCmd.AddCommand(installCmd)
 
 	return rootCmd
+}
+
+// installDriver copies the currently-running binary to target with mode 0550,
+// using a write-tmp-then-rename pattern so a kubelet that's mid-invocation
+// never sees a partially-written file. The source is os.Executable() — which
+// in the consolidated calico image is /usr/bin/calico — and the destination
+// is whatever hostPath the operator mounted (typically
+// /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds).
+// The argv[0] dispatch in cmd/calico/main.go re-routes "uds <args>" calls
+// from kubelet back into this package.
+func installDriver(target string) error {
+	if target == "" {
+		return fmt.Errorf("target is required")
+	}
+	src, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolving running binary: %w", err)
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", src, err)
+	}
+	defer in.Close()
+
+	dir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(dir, ".uds.*")
+	if err != nil {
+		return fmt.Errorf("creating temp file in %s: %w", dir, err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		// Best-effort cleanup if rename never happens.
+		_ = os.Remove(tmpPath)
+	}()
+
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		return fmt.Errorf("copying binary: %w", err)
+	}
+	if err := tmp.Chmod(0o550); err != nil {
+		tmp.Close()
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, target); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", tmpPath, target, err)
+	}
+	return nil
 }
 
 // initCommand handles the init command for the driver.
