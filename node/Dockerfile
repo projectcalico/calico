@@ -22,16 +22,20 @@ ARG RUNIT_VER=2.1.2
 # validating rulesets that contain "udata"-bearing sets created by newer nft
 # (1.1.2+) in the same network namespace (see projectcalico/calico#11750).
 #
-# We build nftables 1.1.1 from source and apply upstream commit be737a1
-# ("src: netlink: fix crash when ops doesn't support udata"). 1.1.1 is the
-# last nft release whose set-creation udata is parseable by the older nft
-# binaries that ship in BaseOS images and on host operating systems, so a
-# patched 1.1.1 is the only build that is safe in both directions:
+# We build patched nftables and libnftnl RPMs from upstream tarballs (specs
+# under rpm/) and install them in the runtime image. Our nftables RPM is
+# 1.1.1 with a backport of upstream commit be737a1 ("src: netlink: fix crash
+# when ops doesn't support udata"). 1.1.1 is the last release whose
+# set-creation udata is parseable by older nft binaries elsewhere on the
+# host, so a patched 1.1.1 is the only build that is safe in both
+# directions: reads of newer rulesets do not crash, and writes do not
+# poison the kernel for older nft elsewhere on the host.
 #
-#   - reads of newer rulesets do not crash, thanks to the upstream patch;
-#   - writes do not poison the kernel for older nft elsewhere on the host.
-#
-# Do not bump past 1.1.1 — see issue #11750 for context.
+# The RPMs Provide/Obsolete the BaseOS nftables and libnftnl packages, so
+# the runtime image's rpm db owns the resulting binaries directly. Bumping
+# either version requires updating both the ARG (curl URL + sha256) and
+# the matching `Version:` in rpm/<name>.spec; rpmbuild will fail loudly if
+# they drift. Do not bump nftables past 1.1.1 — see issue #11750.
 ARG LIBNFTNL_VER=1.2.8
 ARG LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 ARG NFTABLES_VER=1.1.1
@@ -42,7 +46,7 @@ FROM ${BPFTOOL_IMAGE} AS bpftool
 FROM ${BIRD_IMAGE} AS bird
 
 # Use this build stage to install iptables-legacy, build runit binaries, and
-# build a patched nftables (with libnftnl) from source.
+# build patched nftables and libnftnl RPMs from source.
 FROM almalinux:9 AS almalinux
 
 ARG RUNIT_VER
@@ -60,7 +64,7 @@ RUN dnf --enablerepo=crb install -y \
     glibc-static \
     make \
     patch \
-    # Build deps for nftables / libnftnl source builds
+    # Build deps for the nftables / libnftnl RPM builds
     autoconf \
     automake \
     bison \
@@ -70,15 +74,12 @@ RUN dnf --enablerepo=crb install -y \
     libmnl-devel \
     libtool \
     pkgconfig \
+    rpm-build \
     xz
 
 # Copy the patch that adjusts svlogd log file permissions from 0744 to 0644.
 # This file is used in the next step to apply the patch during the build process.
 COPY patches/svlogd_use_0644_permission_instead_of_0744.patch /svlogd_use_0644_permission_instead_of_0744.patch
-
-# Backport of upstream nftables commit be737a1 ("src: netlink: fix crash when
-# ops doesn't support udata"), used in the nftables build below.
-COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 
 # runit is not available in ubi or AlmaLinux repos so build it.
 # get it from the debian repos as the official website doesn't support https
@@ -88,43 +89,35 @@ RUN curl -sSfL --retry 5 -o /tmp/runit.tar.gz https://ftp.debian.org/debian/pool
     patch -p1 < /svlogd_use_0644_permission_instead_of_0744.patch && \
     package/compile
 
-# Build libnftnl from source so the nftables build below can link against it.
-RUN curl -sSfL --retry 5 -o /tmp/libnftnl.tar.xz \
-        https://netfilter.org/projects/libnftnl/files/libnftnl-${LIBNFTNL_VER}.tar.xz && \
-    echo "${LIBNFTNL_SHA256}  /tmp/libnftnl.tar.xz" | sha256sum -c - && \
-    tar xJ -C /root -f /tmp/libnftnl.tar.xz && rm -f /tmp/libnftnl.tar.xz && \
-    cd /root/libnftnl-${LIBNFTNL_VER} && \
-    ./configure --prefix=/usr --libdir=/usr/lib64 && \
-    make -j"$(nproc)" && \
-    make install
+# Build patched libnftnl and nftables as RPMs. Building proper RPMs (rather
+# than overlaying configure/make-installed files onto the BaseOS packages)
+# means the runtime image's rpm db owns /usr/sbin/nft and the libnftables /
+# libnftnl shared libs, transitive runtime deps come from the spec's
+# Requires:, and future backports are one extra Patch line in the spec.
+COPY rpm/libnftnl.spec /root/rpmbuild/SPECS/libnftnl.spec
+COPY rpm/nftables.spec /root/rpmbuild/SPECS/nftables.spec
+COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch \
+     /root/rpmbuild/SOURCES/nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 
-# Build patched nftables from source. Install into a clean DESTDIR so the
-# runtime image only picks up the bits we actually want to overlay onto the
-# BaseOS install (the BaseOS nftables package is still installed in the
-# runtime stage so its transitive runtime deps stay satisfied).
-RUN curl -sSfL --retry 5 -o /tmp/nftables.tar.xz \
+RUN curl -sSfL --retry 5 -o /root/rpmbuild/SOURCES/libnftnl-${LIBNFTNL_VER}.tar.xz \
+        https://netfilter.org/projects/libnftnl/files/libnftnl-${LIBNFTNL_VER}.tar.xz && \
+    echo "${LIBNFTNL_SHA256}  /root/rpmbuild/SOURCES/libnftnl-${LIBNFTNL_VER}.tar.xz" | sha256sum -c - && \
+    curl -sSfL --retry 5 -o /root/rpmbuild/SOURCES/nftables-${NFTABLES_VER}.tar.xz \
         https://netfilter.org/projects/nftables/files/nftables-${NFTABLES_VER}.tar.xz && \
-    echo "${NFTABLES_SHA256}  /tmp/nftables.tar.xz" | sha256sum -c - && \
-    tar xJ -C /root -f /tmp/nftables.tar.xz && rm -f /tmp/nftables.tar.xz && \
-    cd /root/nftables-${NFTABLES_VER} && \
-    patch -p1 < /nftables-set_make_key-tolerate-unknown-typeof-udata.patch && \
-    # --with-json: knftables (used by Felix) parses nft JSON output;
-    # --without-cli: we never invoke the interactive shell (`nft -i`) and
-    #                 dropping it removes the editline build dep.
-    ./configure --prefix=/usr --libdir=/usr/lib64 --sbindir=/usr/sbin \
-                --disable-man-doc --with-json --without-cli && \
-    make -j"$(nproc)" && \
-    make install DESTDIR=/nft-install && \
-    # Strip headers, pkg-config, static archives, and libtool .la files; we
-    # only want the runtime binary and shared libraries in the final image.
-    rm -rf /nft-install/usr/include \
-           /nft-install/usr/lib64/pkgconfig \
-           /nft-install/usr/lib64/*.la \
-           /nft-install/usr/lib64/*.a \
-           /nft-install/usr/share && \
-    # Stage libnftnl runtime libs alongside the nftables artifacts so a single
-    # COPY in the runtime image overlays both.
-    cp -a /usr/lib64/libnftnl.so* /nft-install/usr/lib64/
+    echo "${NFTABLES_SHA256}  /root/rpmbuild/SOURCES/nftables-${NFTABLES_VER}.tar.xz" | sha256sum -c -
+
+# Build libnftnl first, install the resulting RPMs (runtime + devel) into the
+# build stage so the nftables RPM build can link against the patched libnftnl,
+# then build nftables. Stage the runtime RPMs we want to ship under /rpms so
+# the runtime stage installs both with one COPY.
+RUN rpmbuild -ba /root/rpmbuild/SPECS/libnftnl.spec && \
+    rpm -Uvh --force \
+        /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-${LIBNFTNL_VER}-*.rpm \
+        /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-devel-${LIBNFTNL_VER}-*.rpm && \
+    rpmbuild -ba /root/rpmbuild/SPECS/nftables.spec && \
+    mkdir -p /rpms && \
+    cp /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-${LIBNFTNL_VER}-*.rpm /rpms/ && \
+    cp /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/nftables-${NFTABLES_VER}-*.rpm /rpms/
 
 RUN dnf clean all
 
@@ -144,7 +137,7 @@ RUN microdnf install -y \
     libpcap libmnl libnfnetlink libnetfilter_conntrack \
     ipset \
     iputils \
-    nftables \
+    # nftables and libnftnl are installed below from our patched RPMs.
     # Need arp
     net-tools \
     # Need kmod to ensure ip6tables-save works correctly
@@ -168,7 +161,20 @@ RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools \
     # From baseos
-    iproute-tc iptables-nft
+    iproute-tc iptables-nft \
+    # Runtime deps of our patched nftables RPM (libnftnl is pulled in
+    # transitively by iptables-nft).
+    gmp jansson
+
+# Install our patched libnftnl and nftables RPMs. Their Provides/Obsoletes
+# clauses cleanly upgrade the BaseOS libnftnl pulled in above by iptables-nft
+# and add nftables, leaving the runtime image's rpm db as the owner of
+# /usr/sbin/nft, /usr/lib64/libnftables.so.*, and /usr/lib64/libnftnl.so.*.
+# `rpm -Uvh` is used here because UBI's microdnf does not accept local rpm
+# files as install arguments.
+COPY --from=almalinux /rpms/ /tmp/rpms/
+RUN rpm -Uvh /tmp/rpms/libnftnl-*.rpm /tmp/rpms/nftables-*.rpm && \
+    rm -rf /tmp/rpms
 
 RUN microdnf clean all
 
@@ -179,13 +185,6 @@ COPY --from=almalinux /root/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
 COPY --from=almalinux /usr/sbin/xtables-legacy-multi /usr/sbin/xtables-legacy-multi
 COPY --from=almalinux /lib64/libip4tc.so.2 /lib64/libip4tc.so.2
 COPY --from=almalinux /lib64/libip6tc.so.2 /lib64/libip6tc.so.2
-
-# Overlay our patched nftables (and matching libnftnl) on top of the BaseOS
-# nftables package. The BaseOS package is left installed so its transitive
-# runtime deps (jansson, gmp, libmnl, ...) stay satisfied; we only replace
-# the nft binary and the libnftables / libnftnl shared libraries. See the
-# almalinux build stage above for the rationale.
-COPY --from=almalinux /nft-install/ /
 
 # Set symbolic links for iptables-legacy binaries
 RUN set -eux; \

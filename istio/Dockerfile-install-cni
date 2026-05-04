@@ -18,16 +18,19 @@ ARG CALICO_BASE
 # rulesets that contain "udata"-bearing sets created by newer nft (1.1.2+) in
 # the same network namespace (see projectcalico/calico#11750).
 #
-# We build nftables 1.1.1 from source and apply upstream commit be737a1
-# ("src: netlink: fix crash when ops doesn't support udata"). 1.1.1 is the
-# last nft release whose set-creation udata is parseable by the older nft
-# binaries that ship in BaseOS images and on host operating systems, so a
-# patched 1.1.1 is the only build that is safe in both directions:
+# We build patched nftables and libnftnl RPMs from upstream tarballs (specs
+# under rpm/) and install them in the AlmaLinux build stage so the binaries
+# the scratch source stage copies out are the patched ones. The nftables RPM
+# is 1.1.1 with a backport of upstream commit be737a1 ("src: netlink: fix
+# crash when ops doesn't support udata"). 1.1.1 is the last release whose
+# set-creation udata is parseable by older nft binaries elsewhere on the
+# host, so a patched 1.1.1 is the only build that is safe in both
+# directions: reads of newer rulesets do not crash, and writes do not
+# poison the kernel for older nft elsewhere on the host.
 #
-#   - reads of newer rulesets do not crash, thanks to the upstream patch;
-#   - writes do not poison the kernel for older nft elsewhere on the host.
-#
-# Do not bump past 1.1.1 — see issue #11750 for context.
+# Bumping either version requires updating both the ARG (curl URL + sha256)
+# and the matching `Version:` in rpm/<name>.spec; rpmbuild will fail loudly
+# if they drift. Do not bump nftables past 1.1.1 — see issue #11750.
 ARG LIBNFTNL_VER=1.2.8
 ARG LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 ARG NFTABLES_VER=1.1.1
@@ -48,7 +51,7 @@ RUN dnf --enablerepo=crb install -y \
   iptables-legacy \
   iptables-nft \
   nftables \
-  # Build deps for nftables / libnftnl source builds. curl-minimal is
+  # Build deps for the nftables / libnftnl RPM builds. curl-minimal is
   # preinstalled in the AlmaLinux 9 base image, so don't pull in `curl`
   # here — it conflicts with curl-minimal.
   gcc \
@@ -63,40 +66,32 @@ RUN dnf --enablerepo=crb install -y \
   libtool \
   patch \
   pkgconfig \
+  rpm-build \
   xz
 
-# Backport of upstream nftables commit be737a1 ("src: netlink: fix crash when
-# ops doesn't support udata"), used in the nftables build below.
-COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch /nftables-set_make_key-tolerate-unknown-typeof-udata.patch
+# Build patched libnftnl and nftables as RPMs, then install them so the
+# scratch source stage below copies out the patched /usr/sbin/nft and the
+# matching libnftables / libnftnl shared libs. The RPMs Provide/Obsolete
+# the BaseOS nftables and libnftnl, so dnf cleanly upgrades them in place.
+COPY rpm/libnftnl.spec /root/rpmbuild/SPECS/libnftnl.spec
+COPY rpm/nftables.spec /root/rpmbuild/SPECS/nftables.spec
+COPY patches/nftables-set_make_key-tolerate-unknown-typeof-udata.patch \
+     /root/rpmbuild/SOURCES/nftables-set_make_key-tolerate-unknown-typeof-udata.patch
 
-# Build libnftnl from source so the nftables build below can link against it.
-# Install over the BaseOS libnftnl so the runtime image picks up our build via
-# the existing /lib64/libnftnl.so.* COPY lines.
-RUN curl -sSfL --retry 5 -o /tmp/libnftnl.tar.xz \
+RUN curl -sSfL --retry 5 -o /root/rpmbuild/SOURCES/libnftnl-${LIBNFTNL_VER}.tar.xz \
         https://netfilter.org/projects/libnftnl/files/libnftnl-${LIBNFTNL_VER}.tar.xz && \
-    echo "${LIBNFTNL_SHA256}  /tmp/libnftnl.tar.xz" | sha256sum -c - && \
-    tar xJ -C /root -f /tmp/libnftnl.tar.xz && rm -f /tmp/libnftnl.tar.xz && \
-    cd /root/libnftnl-${LIBNFTNL_VER} && \
-    ./configure --prefix=/usr --libdir=/usr/lib64 && \
-    make -j"$(nproc)" && \
-    make install
-
-# Build patched nftables from source. Install over the BaseOS nft binary and
-# libnftables so the runtime image picks up our build via the existing
-# /usr/sbin/nft and /lib64/libnftables.so.* COPY lines.
-RUN curl -sSfL --retry 5 -o /tmp/nftables.tar.xz \
+    echo "${LIBNFTNL_SHA256}  /root/rpmbuild/SOURCES/libnftnl-${LIBNFTNL_VER}.tar.xz" | sha256sum -c - && \
+    curl -sSfL --retry 5 -o /root/rpmbuild/SOURCES/nftables-${NFTABLES_VER}.tar.xz \
         https://netfilter.org/projects/nftables/files/nftables-${NFTABLES_VER}.tar.xz && \
-    echo "${NFTABLES_SHA256}  /tmp/nftables.tar.xz" | sha256sum -c - && \
-    tar xJ -C /root -f /tmp/nftables.tar.xz && rm -f /tmp/nftables.tar.xz && \
-    cd /root/nftables-${NFTABLES_VER} && \
-    patch -p1 < /nftables-set_make_key-tolerate-unknown-typeof-udata.patch && \
-    # --with-json: knftables (used by Felix) parses nft JSON output;
-    # --without-cli: we never invoke the interactive shell (`nft -i`) and
-    #                 dropping it removes the editline build dep.
-    ./configure --prefix=/usr --libdir=/usr/lib64 --sbindir=/usr/sbin \
-                --disable-man-doc --with-json --without-cli && \
-    make -j"$(nproc)" && \
-    make install
+    echo "${NFTABLES_SHA256}  /root/rpmbuild/SOURCES/nftables-${NFTABLES_VER}.tar.xz" | sha256sum -c -
+
+RUN rpmbuild -ba /root/rpmbuild/SPECS/libnftnl.spec && \
+    dnf install -y --allowerasing \
+        /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-${LIBNFTNL_VER}-*.rpm \
+        /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-devel-${LIBNFTNL_VER}-*.rpm && \
+    rpmbuild -ba /root/rpmbuild/SPECS/nftables.spec && \
+    dnf install -y --allowerasing \
+        /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/nftables-${NFTABLES_VER}-*.rpm
 
 # Create symlinks to xtables-legacy-multi
 RUN set -eux; \
