@@ -15,8 +15,6 @@
 package calc
 
 import (
-	"maps"
-
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
@@ -121,6 +119,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
 	hostname := key.Hostname
 	before := h.merge(hostname)
+
 	if update.Value == nil {
 		logrus.WithField("update", update).Debug("Passing-through HostIP deletion")
 		delete(h.hostIPv4, hostname)
@@ -163,14 +162,14 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		// CRD validation (`cidrv4`/`cidrv6` tags). Bare IPs are dropped silently
 		// here so the dataplane never sees an ambiguous address.
 		if addr := bgpSpec.IPv4Address; addr != "" {
-			if s, ok := parseBGPCIDR(addr); ok {
+			if s, ok := parseCIDR(addr); ok {
 				info.ip4Addr = s
 			} else {
 				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
 			}
 		}
 		if addr := bgpSpec.IPv6Address; addr != "" {
-			if s, ok := parseBGPCIDR(addr); ok {
+			if s, ok := parseCIDR(addr); ok {
 				info.ip6Addr = s
 			} else {
 				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv6Address: not a CIDR")
@@ -179,7 +178,8 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		if node.Spec.BGP.ASNumber != nil {
 			info.asnumber = node.Spec.BGP.ASNumber.String()
 		}
-	} else { // node.Spec.BGP is nil
+	} else {
+		// node.Spec.BGP is nil
 		if h.ipv6Support {
 			// BGP is turned off; fall back to the Node's address list for IPv6.
 			// Mirrors how HostIPKey is generated for IPv4 in
@@ -206,13 +206,15 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 // states.
 func (h *DataplanePassthru) emitTransition(hostname string, before *HostInfo) {
 	after := h.merge(hostname)
+
 	if after == nil {
 		if before != nil {
 			h.callbacks.OnHostMetadataRemove(hostname)
 		}
 		return
 	}
-	if before != nil && hostInfoEqual(before, after) {
+
+	if before != nil && before.equals(after) {
 		return
 	}
 	h.callbacks.OnHostMetadataUpdate(hostname, after)
@@ -223,14 +225,14 @@ func (h *DataplanePassthru) emitTransition(hostname string, before *HostInfo) {
 // are present; the HostIPKey-derived /32 only fills in IPv4 when there is no
 // Node-derived value for it.
 func (h *DataplanePassthru) merge(hostname string) *HostInfo {
-	node, hasNode := h.nodeInfo[hostname]
+	node := h.nodeInfo[hostname]
 	hostIP, hasHostIP := h.hostIPv4[hostname]
 
-	if !hasNode && !hasHostIP {
+	if node == nil && !hasHostIP {
 		return nil
 	}
 
-	if hasNode {
+	if node != nil {
 		merged := *node
 		if merged.ip4Addr == "" && hasHostIP {
 			merged.ip4Addr = hostIP
@@ -240,17 +242,10 @@ func (h *DataplanePassthru) merge(hostname string) *HostInfo {
 	return &HostInfo{ip4Addr: hostIP}
 }
 
-func hostInfoEqual(a, b *HostInfo) bool {
-	return a.ip4Addr == b.ip4Addr &&
-		a.ip6Addr == b.ip6Addr &&
-		a.asnumber == b.asnumber &&
-		maps.Equal(a.labels, b.labels)
-}
-
-// parseBGPCIDR strictly parses a CIDR string and returns it normalized to "host
+// parseCIDR strictly parses a CIDR string and returns it normalized to "host
 // IP / mask" form (e.g. "192.168.0.2/24" rather than "192.168.0.0/24"). Returns
 // false if the string is not a valid CIDR — bare IPs are rejected.
-func parseBGPCIDR(s string) (string, bool) {
+func parseCIDR(s string) (string, bool) {
 	ip, ipnet, err := net.ParseCIDR(s)
 	if err != nil || ipnet == nil {
 		return "", false

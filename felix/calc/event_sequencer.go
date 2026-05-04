@@ -16,6 +16,7 @@ package calc
 
 import (
 	"strings"
+	"maps"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -121,6 +122,13 @@ type HostInfo struct {
 	ip6Addr  string
 	labels   map[string]string
 	asnumber string
+}
+
+func (h *HostInfo) equals(a *HostInfo) bool {
+	return h.ip4Addr == a.ip4Addr &&
+		h.ip6Addr == a.ip6Addr &&
+		h.asnumber == a.asnumber &&
+		maps.Equal(h.labels, a.labels)
 }
 
 type serviceID struct {
