@@ -1,6 +1,6 @@
 # Calico build of libnftnl. The custom Release tag (.tigera) and the
 # Obsoletes/Provides below let this RPM cleanly supersede the BaseOS
-# libnftnl in the calico/node image without leaving the BaseOS package
+# libnftnl in the consuming image without leaving the BaseOS package
 # half-installed.
 
 Name:           libnftnl
@@ -20,8 +20,8 @@ Obsoletes:      libnftnl < %{version}-%{release}
 %description
 libnftnl is a userspace library providing a low-level netlink programming
 interface to the in-kernel nf_tables subsystem. This is the Calico build,
-included so the patched nftables shipped in calico/node has a matching
-libnftnl with consistent rpm-db ownership.
+shipped alongside the patched nftables RPM so the consuming image has a
+matching libnftnl with consistent rpm-db ownership.
 
 %package devel
 Summary:        Development headers for libnftnl
