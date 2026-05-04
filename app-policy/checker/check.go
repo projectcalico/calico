@@ -61,8 +61,16 @@ const (
 	unknownIndex = -2
 )
 
+// PolicyEndpoint is an interface for endpoint types that can be evaluated against
+// tiered policies and profiles. Both *proto.WorkloadEndpoint and *proto.HostEndpoint
+// satisfy this interface via protobuf-generated getter methods.
+type PolicyEndpoint interface {
+	GetTiers() []*proto.TierInfo
+	GetProfileIds() []string
+}
+
 // Evaluate evaluates the flow against the policy store and returns the trace of rules.
-func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
+func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep PolicyEndpoint, flow Flow) []*calc.RuleID {
 	_, trace := checkTiers(store, ep, dir, flow)
 	return trace
 }
@@ -99,7 +107,7 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
-func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
+func checkStore(store *policystore.PolicyStore, ep PolicyEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
 	// Check using the configured policy
 	s, _ = checkTiers(store, ep, dir, req)
 	return
@@ -108,7 +116,7 @@ func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(store *policystore.PolicyStore, ep PolicyEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	if ep == nil {
 		return
@@ -117,7 +125,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	request := NewRequestCache(store, flow)
 	defer handlePanic(&s)
 
-	for _, tier := range ep.Tiers {
+	for _, tier := range ep.GetTiers() {
 		log.Debugf("Checking tier %s", tier.GetName())
 		policies := getPoliciesByDirection(dir, tier)
 		if len(policies) == 0 {
@@ -174,8 +182,8 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	}
 
 	// If we reach here, there were either no tiers, or a policy PASSed the request.
-	if len(ep.ProfileIds) > 0 {
-		for i, name := range ep.ProfileIds {
+	if len(ep.GetProfileIds()) > 0 {
+		for i, name := range ep.GetProfileIds() {
 			pID := proto.ProfileID{Name: name}
 			profile := store.ProfileByID[ftypes.ProtoToProfileID(&pID)]
 			action, ruleIndex := checkProfile(profile, dir, request)
