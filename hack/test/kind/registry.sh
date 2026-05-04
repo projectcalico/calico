@@ -51,9 +51,10 @@ case "${1:-}" in
     esac
 
     # Connect the registry to the kind network if not already. The kind
-    # network is created on first `kind create cluster`, so this may need to
-    # run after cluster creation; calling it pre-create works once the
-    # network exists from a previous cluster, otherwise it's retried below.
+    # network is created on first `kind create cluster`, so on a first-ever
+    # run this `up` is a no-op for the network connect step. The Makefile
+    # invokes `registry.sh up` again right after cluster-create to do the
+    # actual connect once the network exists.
     if docker network inspect kind >/dev/null 2>&1; then
       if ! docker network inspect kind -f '{{range .Containers}}{{.Name}} {{end}}' | grep -qw "${KIND_REGISTRY_NAME}"; then
         docker network connect kind "${KIND_REGISTRY_NAME}"
