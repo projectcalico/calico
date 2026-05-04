@@ -338,9 +338,9 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	}
 
 	// Hashrelease regenerates manifests before building the OCP bundle.
-	if c.Bool(ocpBundleFlagName) && !c.Bool(manifestsFlagName) {
+	if c.Bool(ocpBundleFlag.Name) && !c.Bool(manifestsFlag.Name) {
 		return fmt.Errorf("--%s requires --%s on hashrelease builds; either drop --%s or also set --%s",
-			ocpBundleFlagName, manifestsFlagName, inverseFlagName(manifestsFlagName), inverseFlagName(ocpBundleFlagName))
+			ocpBundleFlag.Name, manifestsFlag.Name, inverseFlagName(manifestsFlag.Name), inverseFlagName(ocpBundleFlag.Name))
 	}
 
 	// CI conditional checks.
