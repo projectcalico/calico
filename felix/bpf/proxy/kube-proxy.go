@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ type KubeProxy struct {
 	proxy  ProxyFrontend
 	syncer DPSyncer
 
-	// pendingHostMetadataUpdates contains HostMetadataUpdate and HostMetadataRemoves
+	// pendingHostMetadataUpdates contains HostMetadataUpdate and HostMetadataRemove messages
 	// that we're batching up to send. Only accessed from the int-dataplane goroutine.
 	// Keyed by hostname (node name).
 	pendingHostMetadataUpdates map[string]any

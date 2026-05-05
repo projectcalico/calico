@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -518,7 +518,7 @@ func (d *MockDataplane) OnEvent(event any) {
 	case *proto.HostMetadataUpdate:
 		d.activeHostMetadata[event.Hostname] = event
 	case *proto.HostMetadataRemove:
-		Expect(d.activeHostMetadata).To(HaveKey(event.Hostname), "delete for unknown Hostmetadata")
+		Expect(d.activeHostMetadata).To(HaveKey(event.Hostname), "delete for unknown HostMetadata")
 		delete(d.activeHostMetadata, event.Hostname)
 	}
 }

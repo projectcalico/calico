@@ -86,7 +86,7 @@ message ToDataplane {
 
     // HostMetadataUpdate is sent when a host is added or updated.
     HostMetadataUpdate host_metadata_update = 14;
-    // HostIPRemove is sent when a host is removed.
+    // HostMetadataRemove is sent when a host is removed.
     HostMetadataRemove host_metadata_remove = 18;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
