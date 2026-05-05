@@ -719,7 +719,6 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.FelixHostname = localHostname
 					conf.BPFEnabled = true
 					conf.IstioAmbientMode = "Enabled"
-					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					conf.RouteSource = test.RouteSource()
 					outputChan := make(chan any)
 					conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
@@ -881,7 +880,6 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.FelixHostname = localHostname
 		conf.BPFEnabled = true
 		conf.IstioAmbientMode = "Enabled"
-		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		conf.RouteSource = expandedTest.RouteSource()
 		mockDataplane = mock.NewMockDataplane()
 		lookupsCache = NewLookupsCache()

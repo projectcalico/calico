@@ -29,17 +29,25 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var testIP = mustParseIP("10.0.0.1")
-var testIP2 = mustParseIP("10.0.0.2")
-var testIPAs6 = net.IP{IP: testIP.To16()}
-var testIPAs4 = net.IP{IP: testIP.To4()}
 var udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
 var tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
+
+func nodeWithBGPv4(name, cidr string) *internalapi.Node {
+	n := internalapi.NewNode()
+	n.Name = name
+	n.Spec.BGP = &internalapi.NodeBGPSpec{IPv4Address: cidr}
+	return n
+}
+
+func nodeKey(name string) model.ResourceKey {
+	return model.ResourceKey{Kind: internalapi.KindNode, Name: name}
+}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input any, expUpdate any, expRemove any) {
@@ -138,9 +146,9 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&proto.IPAMPoolRemove{
 			Id: "10.0.0.0-16",
 		}),
-	Entry("HostIP",
-		model.HostIPKey{Hostname: "foo"},
-		&testIP,
+	Entry("Node",
+		nodeKey("foo"),
+		nodeWithBGPv4("foo", "10.0.0.1/32"),
 		&proto.HostMetadataV4V6Update{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
@@ -249,16 +257,16 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs4,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
@@ -272,16 +280,16 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIP2,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.2/32"),
 			},
 		})
 		eb.Flush()
@@ -299,23 +307,23 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVDeleted,
+			KVPair: model.KVPair{
+				Key: nodeKey("foo"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key: model.HostIPKey{Hostname: "foo"},
-			},
-		})
-		eb.Flush()
-		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
-			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()

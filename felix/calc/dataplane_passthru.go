@@ -32,23 +32,15 @@ import (
 // duplicates along the way.  It maps OnUpdate() calls to dedicated method calls for consistency
 // with the rest of the dataplane API.
 //
-// HostMetadataUpdate is sourced from two streams that may both be live for the
-// same host:
-//   - HostIPKey (IPv4 only, derived from Node BGP by the syncer): provides a /32 fallback.
-//   - Node resource (BGP IPv4/IPv6 + labels + ASN): authoritative when present.
-//
-// We track each source separately so a delete on one side doesn't clobber data
-// from the other side, then recompute and emit the merged view.
+// HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6 plus labels and ASN.
+// When BGP is not configured we fall back to the Node's address list for IPv4 and (when
+// IPv6 support is enabled) IPv6.
 type DataplanePassthru struct {
 	ipv6Support bool
 	callbacks   passthruCallbacks
 
-	// hostIPv4 is the /32 derived from a HostIPKey update, keyed by hostname.
-	hostIPv4 map[string]string
-
 	// nodeInfo is the per-host info derived from a Node resource. A non-nil entry
-	// means the Node resource currently exists for that host; nil/missing means it
-	// has been deleted (or was treated as deleted because its BGP spec was empty).
+	// means the Node resource currently exists for that host.
 	nodeInfo map[string]*HostInfo
 }
 
@@ -56,13 +48,11 @@ func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *Datapl
 	return &DataplanePassthru{
 		ipv6Support: ipv6Support,
 		callbacks:   callbacks,
-		hostIPv4:    map[string]string{},
 		nodeInfo:    map[string]*HostInfo{},
 	}
 }
 
 func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
-	dispatcher.Register(model.HostIPKey{}, h.OnUpdate)
 	dispatcher.Register(model.IPPoolKey{}, h.OnUpdate)
 	dispatcher.Register(model.WireguardKey{}, h.OnUpdate)
 	dispatcher.Register(model.ResourceKey{}, h.OnUpdate)
@@ -70,8 +60,6 @@ func (h *DataplanePassthru) RegisterWith(dispatcher *dispatcher.Dispatcher) {
 
 func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
-	case model.HostIPKey:
-		h.processModelHostIP(key, update)
 	case model.IPPoolKey:
 		if update.Value == nil {
 			logrus.WithField("update", update).Debug("Passing-through IPPool deletion")
@@ -114,31 +102,16 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	return
 }
 
-// processModelHostIP handles HostIPKey updates. The value is a bare IPv4 address;
-// store it as a host CIDR (/32) so the format matches the Node-resource path.
-func (h *DataplanePassthru) processModelHostIP(key model.HostIPKey, update api.Update) {
-	hostname := key.Hostname
-	before := h.merge(hostname)
-
-	if update.Value == nil {
-		logrus.WithField("update", update).Debug("Passing-through HostIP deletion")
-		delete(h.hostIPv4, hostname)
-	} else {
-		ip := update.Value.(*net.IP)
-		logrus.WithField("update", update).Debug("Passing-through HostIP update")
-		h.hostIPv4[hostname] = ip.String() + "/32"
-	}
-	h.emitTransition(hostname, before)
-}
-
 func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Update) {
 	hostname := key.Name
-	before := h.merge(hostname)
+	before := h.nodeInfo[hostname]
 
 	if update.Value == nil {
 		logrus.WithField("update", update).Debug("Passing-through Node remove")
 		delete(h.nodeInfo, hostname)
-		h.emitTransition(hostname, before)
+		if before != nil {
+			h.callbacks.OnHostMetadataRemove(hostname)
+		}
 		return
 	}
 
@@ -146,13 +119,15 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	logrus.WithField("update", update).Debug("Passing-through Node update")
 
 	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
-	// Node had been deleted from this stream — there is no useful metadata to
-	// pass through. A nil BGP, by contrast, leaves the Node entry alive (with
-	// empty IPs) since other Node info such as labels may still be relevant.
+	// Node had been deleted — there is no useful metadata to pass through. A nil
+	// BGP, by contrast, leaves the Node entry alive (with empty IPs) since other
+	// Node info such as labels may still be relevant.
 	bgpSpec := node.Spec.BGP
 	if bgpSpec != nil && bgpSpec.IPv4Address == "" && bgpSpec.IPv6Address == "" && bgpSpec.ASNumber == nil {
 		delete(h.nodeInfo, hostname)
-		h.emitTransition(hostname, before)
+		if before != nil {
+			h.callbacks.OnHostMetadataRemove(hostname)
+		}
 		return
 	}
 
@@ -179,11 +154,16 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 			info.asnumber = node.Spec.BGP.ASNumber.String()
 		}
 	} else {
-		// node.Spec.BGP is nil
+		// BGP is turned off; fall back to the Node's address list.
+		ipv4, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 4)
+		if ipnet == nil {
+			ipv4, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 4)
+		}
+		if ipnet != nil {
+			ipnet.IP = ipv4.IP
+			info.ip4Addr = ipnet.String()
+		}
 		if h.ipv6Support {
-			// BGP is turned off; fall back to the Node's address list for IPv6.
-			// Mirrors how HostIPKey is generated for IPv4 in
-			// libcalico-go/lib/backend/syncersv1/updateprocessors/felixnodeprocessor.go.
 			ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
 			if ipnet == nil {
 				ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
@@ -196,50 +176,10 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	}
 
 	h.nodeInfo[hostname] = info
-	h.emitTransition(hostname, before)
-}
-
-// emitTransition emits an Update or Remove based on how the merged view changed
-// for hostname. before is the merged HostInfo computed before the source maps
-// were mutated; the post-mutation view is recomputed here. Caller must invoke
-// this after every change so consecutive calls see consistent before/after
-// states.
-func (h *DataplanePassthru) emitTransition(hostname string, before *HostInfo) {
-	after := h.merge(hostname)
-
-	if after == nil {
-		if before != nil {
-			h.callbacks.OnHostMetadataRemove(hostname)
-		}
+	if before != nil && before.equals(info) {
 		return
 	}
-
-	if before != nil && before.equals(after) {
-		return
-	}
-	h.callbacks.OnHostMetadataUpdate(hostname, after)
-}
-
-// merge returns the HostInfo to publish for hostname, or nil if neither source
-// has live data for it. Node data wins over the HostIPKey fallback when both
-// are present; the HostIPKey-derived /32 only fills in IPv4 when there is no
-// Node-derived value for it.
-func (h *DataplanePassthru) merge(hostname string) *HostInfo {
-	node := h.nodeInfo[hostname]
-	hostIP, hasHostIP := h.hostIPv4[hostname]
-
-	if node == nil && !hasHostIP {
-		return nil
-	}
-
-	if node != nil {
-		merged := *node
-		if merged.ip4Addr == "" && hasHostIP {
-			merged.ip4Addr = hostIP
-		}
-		return &merged
-	}
-	return &HostInfo{ip4Addr: hostIP}
+	h.callbacks.OnHostMetadataUpdate(hostname, info)
 }
 
 // parseCIDR strictly parses a CIDR string and returns it normalized to "host
