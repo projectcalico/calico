@@ -626,6 +626,7 @@ var baseTests = []StateList{
 		istioWithAmbientPod,
 		istioWithMixedPods,
 		istioSelectorEdgeCases,
+		istioWithAmbientNetworkSet,
 	},
 }
 
