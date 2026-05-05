@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -106,6 +107,13 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := rbacv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	// KubeVirt VirtualMachine / VirtualMachineInstance / VirtualMachineInstanceMigration.
+	// Registered here so KubeVirt e2e tests can use the shared controller-runtime
+	// client instead of standing up a parallel typed clientset.
+	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

@@ -73,6 +73,16 @@ const (
 	//   - UDP: echoes received datagrams (socat-backed, 10KB buffer).
 	// Source: tigera/k8s-e2e/images/flask.
 	PacketSizeServer = "calico/k8s-e2e-dataplane-server:stable"
+
+	// KubeVirtUbuntu is a containerDisk image with Ubuntu 20.04 used as the
+	// guest OS for KubeVirt VM-based e2e tests. Pinned by digest so test runs
+	// don't drift if the upstream :latest tag is repushed; bump deliberately.
+	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
+
+	// CalicoBIRD is the Calico BIRD 1.x build used as the BGP daemon on the
+	// external TOR node in the KubeVirt eBGP live-migration test. Pinned to a
+	// known-good Calico build; bump deliberately if BIRD behaviour changes.
+	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
 )
 
 // Get client image and powershell command based on windows OS version
