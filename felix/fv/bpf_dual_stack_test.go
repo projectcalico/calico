@@ -298,7 +298,14 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 
 				tc.TriggerDelayedStart()
 
-				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready, ifstate.FlgHEP, nil)
+				// Felix[0] has no IPv6 host IP, but BPF programs still
+				// attach for both IP versions (with HOST_IP=0 for v6).
+				// IPv6 connectivity to w[0][0] still fails because
+				// Felix[1] has no tunnel route to Felix[0]'s v6 (no
+				// HostMetadataV6Update with a real IPv6 address) and
+				// Felix[0]'s own v6 routes for workloads aren't set up
+				// without a host IP.
+				ensureRightIFStateFlags(tc.Felixes[0], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				ensureRightIFStateFlags(tc.Felixes[1], ifstate.FlgIPv4Ready|ifstate.FlgIPv6Ready, ifstate.FlgHEP, nil)
 				cc.ResetExpectations()
 				cc.ExpectSome(w[0][1], w[0][0])
@@ -394,8 +401,10 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			})
 
 			It("should be ready and have connectivity to w[0][0] from all other workloads with IPv6 only", func() {
+				// BPF programs attach for both IP families even with the
+				// IPv4 host IP missing; IPv4 globals just hold HOST_IP=0.
 				for _, f := range tc.Felixes {
-					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, false, true, "eth0")
+					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, true, true, "eth0")
 				}
 
 				for _, f := range tc.Felixes {
@@ -430,8 +439,10 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			})
 
 			It("should be ready and have connectivity to w[0][0] from all other workloads with IPv4 only", func() {
+				// BPF programs attach for both IP families even with the
+				// IPv6 host IP missing; IPv6 globals just hold HOST_IP=0.
 				for _, f := range tc.Felixes {
-					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, true, false, "eth0")
+					ensureBPFProgramsAttachedOffsetWithIPVersion(1, f, true, true, "eth0")
 				}
 
 				for _, f := range tc.Felixes {
