@@ -410,6 +410,41 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 		$(CALICO_RUST_BUILD)
 
 ###############################################################################
+# Calico CRD generation — vanilla controller-gen + the calico-crd-transform
+# post-processor at //hack/cmd/calico-crd-transform.  See its README header
+# for the rule format.
+#
+# The post-processor needs to run in main-calico-module context (where its
+# go.mod is).  Sub-Makefiles in the main module call it directly via go run;
+# api/ (its own module) bounces through $(MAKE) -C $(REPO_ROOT).
+#
+# Usage:
+#   $(call gen-calico-crds,./pkg/apis/...,config/crd/)
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
+
+# gen-calico-crds runs controller-gen with the same flag set used on master,
+# then calico-crd-transform.
+#   $(1) = Go package path glob (e.g. ./pkg/apis/...)
+#   $(2) = output dir relative to caller
+define gen-calico-crds
+$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+    go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION) \
+        crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false \
+        paths=$(1) output:crd:dir=$(2)' && \
+$(MAKE) -C $(REPO_ROOT) crd-transform CRD_DIR=$(patsubst $(REPO_ROOT)/%,%,$(abspath $(2)))
+endef
+
+# crd-transform runs //hack/cmd/calico-crd-transform against $(CRD_DIR), a
+# path relative to the main calico module root.  Always runs in main-module
+# context so sub-Makefiles with their own go.mod can still drive it.
+.PHONY: crd-transform
+crd-transform:
+	$(DOCKER_GO_BUILD) sh -c \
+		'go run ./hack/cmd/calico-crd-transform \
+		    --config ./hack/cmd/calico-crd-transform/transforms.yaml \
+		    --dir $(CRD_DIR)'
+
+###############################################################################
 # Source file dependency tracking via deps.txt
 #
 # Each component's deps.txt contains both external module dependencies and
