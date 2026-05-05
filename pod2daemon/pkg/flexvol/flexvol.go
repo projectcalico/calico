@@ -237,7 +237,11 @@ func installDriver(target string) error {
 	if err != nil {
 		return fmt.Errorf("opening %s: %w", src, err)
 	}
-	defer func() { _ = in.Close() }()
+	defer func() {
+		if err := in.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close source file %s: %s\n", src, err.Error()), syslogOnlyTrue)
+		}
+	}()
 
 	dir := filepath.Dir(target)
 	tmp, err := os.CreateTemp(dir, ".uds.*")
@@ -246,16 +250,21 @@ func installDriver(target string) error {
 	}
 	tmpPath := tmp.Name()
 	defer func() {
-		// Best-effort cleanup if rename never happens.
-		_ = os.Remove(tmpPath)
+		if err := os.Remove(tmpPath); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to remove temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
 	}()
 
 	if _, err := io.Copy(tmp, in); err != nil {
-		_ = tmp.Close()
+		if err := tmp.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
 		return fmt.Errorf("copying binary: %w", err)
 	}
 	if err := tmp.Chmod(0o550); err != nil {
-		_ = tmp.Close()
+		if err := tmp.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -305,7 +314,7 @@ func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
 func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath string) error {
 	inp := strings.Join([]string{destinationDir, workloadPath}, "|")
 	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
-	err := os.MkdirAll(newDir, 0777)
+	err := os.MkdirAll(newDir, 0o777)
 	if err != nil {
 		logError("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir), syslogOnlyTrue)
 		return err
@@ -321,7 +330,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	}
 
 	newDestinationDir := destinationDir + "/nodeagent"
-	err = os.MkdirAll(newDestinationDir, 0777)
+	err = os.MkdirAll(newDestinationDir, 0o777)
 	if err != nil {
 		cmd := exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
@@ -479,8 +488,8 @@ func logToSys(caller, inp, opts string) {
 
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
 func addCredentialFile(ninputs *creds.Credentials) error {
-	//Make the directory and then write the ninputs as json to it.
-	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
+	// Make the directory and then write the ninputs as json to it.
+	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0o755)
 	if err != nil {
 		return err
 	}
@@ -492,7 +501,7 @@ func addCredentialFile(ninputs *creds.Credentials) error {
 	}
 
 	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
-	_ = os.WriteFile(credsFileTmp, attrs, 0644)
+	_ = os.WriteFile(credsFileTmp, attrs, 0o644)
 
 	// Move it to the right location now.
 	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
@@ -528,7 +537,7 @@ func initConfiguration() {
 		return
 	}
 
-	//fill in if missing configurations
+	// fill in if missing configurations
 	if len(config.NodeAgentManagementHomeDir) == 0 {
 		config.NodeAgentManagementHomeDir = NODEAGENT_HOME
 	}
