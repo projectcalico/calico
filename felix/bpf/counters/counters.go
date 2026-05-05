@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	MaxCounterNumber    int = 26
+	MaxCounterNumber    int = 27
 	counterMapKeySize   int = 8
 	counterMapValueSize int = 8
 )
@@ -85,6 +85,7 @@ const (
 	DroppedQoS
 	Reserved1
 	DroppedMaglevNoBackend
+	DroppedNoHostIP
 )
 
 type Description struct {
@@ -210,6 +211,10 @@ var descriptions DescList = DescList{
 	{
 		Counter:  DroppedMaglevNoBackend,
 		Category: "Dropped", Caption: "Maglev lookup found no backends for service IP",
+	},
+	{
+		Counter:  DroppedNoHostIP,
+		Category: "Dropped", Caption: "VXLAN encap when host IP unknown",
 	},
 }
 
