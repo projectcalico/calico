@@ -1031,7 +1031,7 @@ type ToDataplane_HostMetadataUpdate struct {
 }
 
 type ToDataplane_HostMetadataRemove struct {
-	// HostIPRemove is sent when a host is removed.
+	// HostMetadataRemove is sent when a host is removed.
 	HostMetadataRemove *HostMetadataRemove `protobuf:"bytes,18,opt,name=host_metadata_remove,json=hostMetadataRemove,proto3,oneof"`
 }
 
