@@ -73,7 +73,7 @@ instructions. Key calculation nodes:
 | `L3RouteResolver` | Computes routes from IP pools, workload endpoints, and host IPs |
 | `VXLANResolver` | Computes VTEP (VXLAN tunnel endpoint) entries |
 | `EncapsulationResolver` | Determines encapsulation mode from IP-pool config |
-| `IstioCalculator` | Marks WEPs in the Istio ambient mesh (see [bpf-dataplane §21](./design/bpf-dataplane.md)) |
+| `IstioCalculator` | Marks WEPs in the Istio ambient mesh (see [bpf-observability "Istio ambient mode integration"](./design/bpf-observability.md#istio-ambient-mode-integration)) |
 
 `PipelineCallbacks` (`calc/calc_graph.go`) is the composite
 interface the graph emits through. `EventSequencer`
@@ -138,8 +138,9 @@ Felix runs against one dataplane at a time (selected by
 `BPFEnabled` and `NFTablesMode` config):
 
 - **BPF** — eBPF programs on TC and cgroup hooks, BPF maps for
-  NAT / conntrack / policy. See
-  [`design/bpf-dataplane.md`](./design/bpf-dataplane.md).
+  NAT / conntrack / policy. See the `bpf-*` sub-designs under
+  [`design/`](./design/), starting with
+  [`bpf-overview.md`](./design/bpf-overview.md).
 - **iptables** — legacy netfilter via `iptables-restore`. Code
   in `felix/iptables/`.
 - **nftables** — modern netfilter via the nftables API. Code in
@@ -197,9 +198,8 @@ sub-design even if the immediate edit site doesn't match its glob
 narrowly, and conversely a PR description that says "this fixes
 the conntrack scanner" should pull `bpf-conntrack-flowstate.md`
 even if the edit happens to land in code paths the glob doesn't
-list. This is the worked example of the multi-file split pattern;
-complex sub-designs in other areas (when they exist) should follow
-the same shape if they grow large.
+list. Other sub-designs should split the same way once they grow
+large enough to bloat AI-tool context.
 
 | Topic | Applies to | Status |
 |---|---|---|
@@ -258,10 +258,10 @@ absence as "read the code and ask"; do not assume anything goes.
 When a topic above graduates from *not yet written* to a real
 doc:
 
-1. Create `felix/design/<topic>.md`. Follow the shape of any
-   existing sub-design (the BPF family is the worked example):
-   narrative prose, architecture, per-section review notes at
-   the end of each section, and a "keep this in sync" tail.
+1. Create `felix/design/<topic>.md`. Follow the shape of an
+   existing sub-design (e.g. the BPF family): narrative prose,
+   architecture, per-section review notes at the end of each
+   section, and a "keep this in sync" tail.
 2. Update the sub-design index above: replace *not yet written*
    with a link to the new file and the ✅ exists marker.
 3. Move any orientation content that belongs to the new

@@ -2,7 +2,7 @@
 
 ## Repository Overview
 
-This is the main **Project Calico** repository - an open-source container networking and security solution. Calico provides data plane choice (eBPF, standard Linux, Windows, VPP), advanced security features, and scales to power 8M+ nodes daily. The repository is a large monorepo (~2000 Go files, 33 Dockerfiles) containing multiple interconnected components.
+This is the main **Project Calico** repository - an open-source container networking and security solution. Calico provides data plane choice (eBPF, standard Linux, Windows, VPP), advanced security features, and scales to power 8M+ nodes daily. The repository is a large monorepo (~2000 Go files) containing multiple interconnected components.
 
 **Key Stats:**
 - Type: Kubernetes networking and security platform
@@ -274,11 +274,11 @@ for architecture in `CLAUDE.md`.
 
 ## eBPF Dataplane Review
 
-Changes that touch the eBPF dataplane have their own design and review guide: [`felix/design/bpf-dataplane.md`](../felix/design/bpf-dataplane.md). It describes the packet path, TC program layout, service NAT, Maglev, CTLB, the bpfnat workaround, VXLAN flow-mode device, RPF, conntrack cleanup, IP fragmentation, ICMP error generation, `*tables`→BPF migration, third-party DNAT interop, log filters, flow logs, QoS, fast-path cost discipline, and cross-cutting review rules. Each section has a **Review notes** block listing the invariants a PR in that area must respect — cross-check it when reviewing BPF changes.
+The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/design/`](../felix/design/), with [`bpf-overview.md`](../felix/design/bpf-overview.md) as the always-pulled umbrella (packet-path mental model, fast-path cost rule, cross-cutting review rules) and topic-specific sub-designs covering each area of the dataplane. See [`felix/DESIGN.md`](../felix/DESIGN.md) for the authoritative table mapping code paths to sub-design files.
 
-Path-specific reviewer rules for BPF files live in [`.github/instructions/ebpf-dataplane.instructions.md`](instructions/ebpf-dataplane.instructions.md) and apply automatically to files under `felix/bpf-gpl/`, `felix/bpf/`, `felix/dataplane/linux/bpf_*.go`, and `felix/dataplane/linux/vxlan_mgr.go`.
+Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion.
 
-**Update rule.** A BPF dataplane PR that changes how the dataplane works (new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision) must update `felix/design/bpf-dataplane.md` in the same PR. Exemptions: (a) a bug fix that restores behaviour `DESIGN.md` already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
+**Update rule.** A BPF dataplane PR that changes how the dataplane works in a given area (new sub-program, new CT flag, new mark bit, new map or map field, new config knob affecting any of those, or any change to the packet path or forwarding decision) must update the relevant sub-design file in the same PR — and `bpf-overview.md` if cross-cutting content is affected. Exemptions: (a) a bug fix that restores behaviour the doc already describes, (b) a mechanical refactor with no observable change, (c) comment / log-message edits, (d) dependency bumps. If in doubt, update the doc.
 
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.

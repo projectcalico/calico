@@ -291,8 +291,8 @@ in doubt, update the doc.
 
 This rule is mirrored in `felix/CLAUDE.md` (for Claude's `/review`
 skill) and in `.github/copilot-instructions.md` plus the
-path-scoped `.github/instructions/bpf-*.instructions.md` files
-(for GitHub Copilot's automated review). Those files are short
+path-scoped `.github/instructions/bpf.instructions.md` (for
+GitHub Copilot's automated review). Those files are short
 pointers; this document and its sibling sub-designs under
 [`felix/design/`](.) are the source of truth.
 
