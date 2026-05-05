@@ -370,6 +370,10 @@ blocks:
               value: "NA"
             - name: NUM_ADDON_PODS
               value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
+            # Maglev deploys 20 backend pods which can exceed the per-node pod
+            # capacity on EKS with the AWS CNI (limited by ENI IP allocation).
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
 
         - name: EKS w/ calico CNI
           execution_time_limit:
@@ -696,6 +700,41 @@ blocks:
               value: "US"
       secrets:
         - name: dynamo-read-creds
+
+  - name: BPF load balancer tests
+    dependencies: []
+    task:
+      jobs:
+        - name: aws-kubeadm + bpf + external node + single-subnet + dual IP stack
+          execution_time_limit:
+            hours: 1
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable"
+            - name: PROVISIONER
+              value: aws-kubeadm
+            - name: ENABLE_EXTERNAL_NODE
+              value: "true"
+            - name: VPC_CIDR
+              value: "172.16.0.0/16"
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]'
+            - name: ENABLE_BPF_DSR
+              value: "true"
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: BGP_STATUS
+              value: Enabled
+            - name: IP_FAMILY
+              value: "dual"
+            - name: ENABLE_DUAL_STACK
+              value: "true"
+            - name: E2E_TEST_CONFIG
+              # Test selection is driven by the config file; see load-balancer.yaml for the
+              # include/exclude rationale.
+              value: "e2e/config/load-balancer.yaml"
 
 promotions:
   - name: Cleanup jobs
