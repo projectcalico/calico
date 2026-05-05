@@ -174,8 +174,8 @@ func TestTokenRefresher_FallsBackWhenWatcherSetupFails(t *testing.T) {
 // rather than spinning on the closed channel.
 //
 // Flakiness notes:
-//   - The watcher factory is injected and returns an already-closed channel,
-//     so the close signal is delivered deterministically on the very first
+//   - The injected notifier returns an already-closed channel, so the
+//     close signal is delivered deterministically on the very first
 //     select iteration after the first token is delivered.
 //   - Uses a short minTokenRetryDuration so subsequent refreshes happen
 //     within the test timeout.
@@ -199,13 +199,11 @@ func TestTokenRefresher_DegradesGracefullyWhenWatcherChannelCloses(t *testing.T)
 	})
 
 	tr := NewTokenRefresherWithCustomTiming(fakeClient, "kube-system", "calico-cni-plugin", 600, 50*time.Millisecond, 4)
-	// Return a pre-closed channel: the first select iteration will see !ok
-	// on tokenRotated and must not latch into a hot loop.
-	closedEvents := make(chan fsnotify.Event)
-	close(closedEvents)
-	tr.watcherFactory = func() (<-chan fsnotify.Event, func()) {
-		return closedEvents, func() {}
-	}
+	// Inject a notifier whose Events channel is already closed: the first
+	// select iteration will see !ok and must not latch into a hot loop.
+	closed := make(chan struct{})
+	close(closed)
+	tr.notifier = &fakeFileNotifier{events: closed}
 
 	stopDrain := make(chan struct{})
 	var wg sync.WaitGroup
@@ -298,15 +296,11 @@ func TestTokenRefresher_RecoversAfterTransientUpdateTokenError(t *testing.T) {
 	}
 }
 
-// skipIfNotKubeletPosix skips tests that depend on the Linux/POSIX branch of
-// kubelet's atomic-writer: os.Rename over an existing symlink and unprivileged
-// os.Symlink. On Windows kubelet takes a different code path
-// (atomic_writer.go:224-231 — Remove + Symlink + Remove instead of Rename),
-// and os.Symlink itself requires Administrator privileges or Developer Mode.
-// On macOS the helpers work but kubelet's projected-volume layout differs in
-// ways we don't care to model. Calico-node's production fast path on Windows
-// would also fall back to timer-only because the projected SA token mount
-// path differs there, so the kubelet-style test wouldn't be meaningful.
+// skipIfNotKubeletPosix skips tests that depend on the Linux/POSIX branch
+// of kubelet's atomic-writer (os.Rename over an existing symlink, plus
+// unprivileged os.Symlink). On Windows kubelet uses a Remove+Symlink+Remove
+// sequence instead of Rename, and os.Symlink needs Administrator there.
+// macOS works mechanically but its projected-volume layout differs.
 func skipIfNotKubeletPosix(t *testing.T) {
 	t.Helper()
 	if goruntime.GOOS != "linux" {
@@ -315,10 +309,8 @@ func skipIfNotKubeletPosix(t *testing.T) {
 }
 
 // skipIfFsnotifyFastPathDisabled mirrors the production guard in
-// startTokenFileWatcher, which short-circuits to a no-op watcher on Windows
-// (see token_watch.go). Tests that assert the fast-path wake-up behavior
-// cannot meaningfully run there: the watcher is intentionally absent and the
-// refresh loop falls back to the timer.
+// NewFsnotifyFileNotifier, which returns a no-op notifier on Windows.
+// Tests that assert the fast-path wake-up cannot meaningfully run there.
 func skipIfFsnotifyFastPathDisabled(t *testing.T) {
 	t.Helper()
 	if goruntime.GOOS == "windows" {
@@ -410,15 +402,12 @@ func kubeletAtomicRotate(t *testing.T, dir, oldTsDir string, files map[string]st
 	return newTsDir
 }
 
-// TestFsnotifyDetectsKubeletAtomicWriterRotation answers a specific concern
-// about the fsnotify-based fast path: when kubelet rotates the projected
-// service account token, it does so via the "atomic-writer" pattern (see
-// kubernetes pkg/volume/util/atomic_writer.go) — it writes a new timestamped
-// data directory and renames the `..data` symlink to point at it; the
-// user-visible files (token, ca.crt, namespace) themselves are never modified.
-// The question this test answers is whether fsnotify on the parent directory
-// actually delivers events for that specific sequence on Linux, or whether
-// the rename of an internal symlink is silently swallowed.
+// TestFsnotifyDetectsKubeletAtomicWriterRotation verifies that fsnotify on
+// the parent directory actually delivers events for kubelet's atomic-writer
+// rotation sequence (new timestamped dir, symlink rename of `..data`, old
+// dir removal). Without those events the fast path would never fire on a
+// real rotation since the user-visible files (token, ca.crt, namespace)
+// are themselves never modified.
 func TestFsnotifyDetectsKubeletAtomicWriterRotation(t *testing.T) {
 	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
@@ -454,9 +443,8 @@ func TestFsnotifyDetectsKubeletAtomicWriterRotation(t *testing.T) {
 	}
 	kubeletAtomicRotate(t, dir, oldDataDir, rotated)
 
-	// Collect every event for a short window so we can log what the kernel
-	// actually delivered for this sequence — useful diagnostic if this test
-	// ever starts failing.
+	// Collect every event for a short window and log what the kernel
+	// actually delivered, so failures here come with actionable diagnostics.
 	deadline := time.After(2 * time.Second)
 	var got []fsnotify.Event
 collect:
@@ -475,9 +463,8 @@ collect:
 	}
 
 	if len(got) == 0 {
-		t.Fatalf("fsnotify on the parent directory delivered NO events for kubelet's atomic-writer rotation. " +
-			"This means the fsnotify-based fast path in TokenRefresher.Run() will not actually fire on real " +
-			"kubelet token rotations and the fix is dead.")
+		t.Fatalf("fsnotify on the parent directory delivered no events for kubelet's atomic-writer rotation; " +
+			"the fast path in TokenRefresher.Run will not fire on real token rotations.")
 	}
 	t.Logf("fsnotify delivered %d events for the kubelet atomic-writer rotation:", len(got))
 	for _, ev := range got {
@@ -485,11 +472,10 @@ collect:
 	}
 }
 
-// TestTokenRefresher_WakesUpOnAtomicWriterRotation is the end-to-end version
-// of the test above: instead of inspecting raw fsnotify events, we run
-// TokenRefresher.Run() against a directory updated with the kubelet
+// TestTokenRefresher_WakesUpOnAtomicWriterRotation is the end-to-end
+// counterpart: drive Run against a directory updated with the kubelet
 // atomic-writer pattern and assert that UpdateToken fires soon after the
-// rotation — which is the actual behaviour the fix promises.
+// rotation, which is the user-visible behaviour we promise.
 func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
 	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
@@ -555,25 +541,21 @@ func TestTokenRefresher_WakesUpOnAtomicWriterRotation(t *testing.T) {
 	kubeletAtomicRotate(t, dir, oldDataDir, rotated)
 
 	if err := waitForCalls(&callCount, 2, 3*time.Second); err != nil {
-		t.Fatalf("kubelet atomic-writer rotation did not wake up the refresh loop: %v. "+
-			"This means the fsnotify fast path is not effective in production — "+
-			"see TestFsnotifyDetectsKubeletAtomicWriterRotation for a lower-level "+
-			"diagnostic of what events the kernel delivered.", err)
+		t.Fatalf("kubelet atomic-writer rotation did not wake up the refresh loop: %v "+
+			"(see TestFsnotifyDetectsKubeletAtomicWriterRotation for the lower-level "+
+			"diagnostic of what events the kernel delivered).", err)
 	}
 }
 
 // TestTokenRefresher_HandlesBurstRotations covers the apiserver-burst
 // concern: kubelet's atomic-writer produces ~5 fsnotify events per rotation
 // (CREATE new ts dir, CREATE ..data_tmp, RENAME, CREATE ..data, REMOVE old
-// ts dir). On signing-key rotation the kubelet on every node rotates near-
-// simultaneously, so without coalescing each event would translate to a
-// CreateToken API call — multiplying the burst at kube-apiserver by ~5N.
-//
-// Run() now uses coalesceRotationBurst, which waits for `coalesceWindow` of
-// silence on the watcher channel before issuing UpdateToken. A tight burst
-// of N rotations should therefore collapse into a single wake-up. We allow
-// a small slack for the rare case where the loop completes UpdateToken and
-// re-enters select between two rotations.
+// ts dir). Without coalescing, each event would map to its own CreateToken
+// call, multiplying the burst at kube-apiserver by ~5N when many nodes
+// rotate at once (e.g. signing-key rotation). The notifier coalesces a
+// burst into a single wake-up, so a tight sequence of N rotations should
+// produce one extra UpdateToken, plus a small slack for the rare case
+// where the loop re-enters select between two rotations.
 func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
 	skipIfNotKubeletPosix(t)
 	dir := t.TempDir()
@@ -639,16 +621,14 @@ func TestTokenRefresher_HandlesBurstRotations(t *testing.T) {
 	}
 	// Upper bound: 1 initial + a small number of coalesced wake-ups. With
 	// the rotations happening in a tight Go loop they should all fall inside
-	// one coalesce window. Allow a couple of extra wake-ups to absorb
-	// scheduler jitter, but keep the bound far below the un-coalesced
-	// worst case (1 + numRotations × ~5 ≈ 26) so that a regression in the
-	// coalesce path actually fails this test.
+	// one coalesce window. The bound is well below the un-coalesced worst
+	// case (1 + numRotations * ~5, around 26), so a regression in the
+	// coalesce path will fail this test rather than slip through.
 	const maxWakeups = 3
 	upperBound := int32(1 + maxWakeups)
 	if final > upperBound {
-		t.Fatalf("UpdateToken called more than coalesced expectation: got %d, cap %d. "+
-			"This usually means the coalesce window is no longer absorbing the "+
-			"kubelet rotation burst — investigate before relaxing the bound.",
+		t.Fatalf("UpdateToken called more than coalesced expectation: got %d, cap %d "+
+			"(coalesce window may no longer be absorbing the kubelet rotation burst).",
 			final, upperBound)
 	}
 	t.Logf("burst of %d rotations triggered %d UpdateToken calls (initial+wake-ups)", numRotations, final)
@@ -727,11 +707,10 @@ func TestTokenRefresher_NoGoroutineLeakOnRunStopCycle(t *testing.T) {
 	}
 }
 
-// TestTokenRefresher_StopIsIdempotent guards against a regression where
-// Stop() did `close(t.stopChan)` directly. A second call would have panicked
-// with "close of closed channel". Calling Stop more than once is plausible:
-// e.g. one goroutine calls it on ctx.Done() while another defers it during
-// teardown.
+// TestTokenRefresher_StopIsIdempotent confirms repeated Stop calls are safe.
+// Calling Stop more than once is plausible (e.g. one goroutine on ctx.Done
+// and another via defer during teardown), and a naive close(stopChan) would
+// panic with "close of closed channel".
 func TestTokenRefresher_StopIsIdempotent(t *testing.T) {
 	tr := NewTokenRefresher(fake.NewSimpleClientset(), "kube-system", "calico-cni-plugin")
 	tr.Stop()
@@ -750,6 +729,16 @@ func waitForCalls(counter *int32, want int32, timeout time.Duration) error {
 	return fmt.Errorf("timed out waiting for calls: want=%d got=%d", want, atomic.LoadInt32(counter))
 }
 
+// fakeFileNotifier is a test double for FileNotifier. The events field is
+// returned verbatim from Events(), so tests can pass nil (inert), an
+// already-closed channel (immediate degrade), or a sender they control.
+type fakeFileNotifier struct {
+	events chan struct{}
+}
+
+func (f *fakeFileNotifier) Events() <-chan struct{} { return f.events }
+func (f *fakeFileNotifier) Close()                  {}
+
 // makeTestJWT builds a JWT-shaped string with the given claims JSON. JWT
 // segments use base64url *without* padding, matching what real Kubernetes
 // service-account tokens look like and what parseTokenUpdate expects.
@@ -761,9 +750,9 @@ func makeTestJWT(claimsJSON string) []byte {
 }
 
 // TestParseTokenUpdate_RejectsMalformedExp verifies that a token whose "exp"
-// claim is not a number returns an error rather than panicking. Before the
-// fix, the unchecked type assertion `claimMap["exp"].(float64)` would panic
-// and tear down the entire calico-node process on any malformed token.
+// claim is not a number returns an error rather than panicking. A panic in
+// this path would tear down the entire calico-node process on any malformed
+// token, which is unacceptable for a node-agent that runs everywhere.
 func TestParseTokenUpdate_RejectsMalformedExp(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -784,8 +773,8 @@ func TestParseTokenUpdate_RejectsMalformedExp(t *testing.T) {
 	}
 }
 
-// TestParseTokenUpdate_RejectsMissingExp covers the second half of the same
-// fix: a token with no "exp" claim at all must return an error, not panic.
+// TestParseTokenUpdate_RejectsMissingExp confirms that a token with no
+// "exp" claim at all also returns an error rather than panicking.
 func TestParseTokenUpdate_RejectsMissingExp(t *testing.T) {
 	_, err := parseTokenUpdate(makeTestJWT(`{"sub":"system:serviceaccount:kube-system:calico-cni-plugin"}`))
 	if err == nil {
@@ -793,8 +782,8 @@ func TestParseTokenUpdate_RejectsMissingExp(t *testing.T) {
 	}
 }
 
-// TestParseTokenUpdate_AcceptsWellFormedExp is the happy-path counterpart:
-// confirms the safer parsing still produces a usable TokenUpdate.
+// TestParseTokenUpdate_AcceptsWellFormedExp is the happy-path counterpart
+// to the rejection tests: a numeric "exp" claim yields a usable TokenUpdate.
 func TestParseTokenUpdate_AcceptsWellFormedExp(t *testing.T) {
 	const want int64 = 4102444800 // 2100-01-01T00:00:00Z
 	tu, err := parseTokenUpdate(makeTestJWT(fmt.Sprintf(`{"exp":%d}`, want)))
