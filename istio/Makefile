@@ -81,10 +81,10 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
-bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED) | register
+bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
 		sh -c 'cd ztunnel && cargo build --release'
-	cp ztunnel/out/rust/release/ztunnel bin/ztunnel-$(ARCH)
+	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################
 # Image

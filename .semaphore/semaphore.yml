@@ -3365,7 +3365,6 @@ blocks:
       jobs:
         - name: "Istio: CI"
           commands:
-            # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
           matrix:
@@ -3373,43 +3372,10 @@ blocks:
               values:
                 - arm64
           commands:
-            # Skip istio ztunnel in this arm64 cross-build job.
-            # ztunnel is built separately in the native arm64 runner block below.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: >-
-        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
-        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
-        '/.semaphore/semaphore.yml.d/03-promotions.yml',
-        '/.semaphore/semaphore.yml.d/09-blocks.yml',
-        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
-        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
-        '/hack/test/certs/',
-        '/istio/**',
-        '/lib.Makefile',
-        '/metadata.mk'],
-        {pipeline_file: 'ignore', exclude: ['/**/*.md',
-        '/**/.gitignore',
-        '/**/AUTHORS*',
-        '/**/CONTRIBUTING*',
-        '/**/DEVELOPER_GUIDE*',
-        '/**/LICENSE*',
-        '/**/README*',
-        '/**/SECURITY.md']})
-    dependencies:
-      - Istio
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd istio
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
+            # Cross-builds all istio components including ztunnel.
+            # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+            # toolchain (clang + sysroot), no native arm64 runner needed.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: >-
