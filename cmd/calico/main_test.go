@@ -49,6 +49,27 @@ func TestDispatch(t *testing.T) {
 			wantArgs:   []string{"/usr/bin/calicoctl", "ctl"},
 		},
 		{
+			name:       "uds basename inserts component flexvol and preserves argv[0]",
+			args:       []string{"/usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds", "mount", "/dest", "{}"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds", "component", "flexvol", "mount", "/dest", "{}"},
+		},
+		{
+			name:       "uds basename with no args still rewrites (help path)",
+			args:       []string{"/host/driver/uds"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/host/driver/uds", "component", "flexvol"},
+		},
+		{
+			name:       "uds basename ignores CNI_COMMAND in the env",
+			args:       []string{"/host/driver/uds", "init"},
+			cniCommand: "ADD",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/host/driver/uds", "component", "flexvol", "init"},
+		},
+		{
 			name:       "calico-ipam basename dispatches to IPAM plugin",
 			args:       []string{"/opt/cni/bin/calico-ipam"},
 			cniCommand: "ADD",
