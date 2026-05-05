@@ -6226,7 +6226,7 @@ var File_felixbackend_proto protoreflect.FileDescriptor
 const file_felixbackend_proto_rawDesc = "" +
 	"\n" +
 	"\x12felixbackend.proto\x12\x05felix\"\r\n" +
-	"\vSyncRequest\"\x81\x14\n" +
+	"\vSyncRequest\"\xed\x14\n" +
 	"\vToDataplane\x12'\n" +
 	"\x0fsequence_number\x18\x0f \x01(\x04R\x0esequenceNumber\x12(\n" +
 	"\ain_sync\x18\x01 \x01(\v2\r.felix.InSyncH\x00R\x06inSync\x127\n" +
@@ -6265,7 +6265,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0eservice_remove\x18  \x01(\v2\x14.felix.ServiceRemoveH\x00R\rserviceRemove\x12c\n" +
 	"\x1cwireguard_endpoint_v6_update\x18! \x01(\v2 .felix.WireguardEndpointV6UpdateH\x00R\x19wireguardEndpointV6Update\x12c\n" +
 	"\x1cwireguard_endpoint_v6_remove\x18\" \x01(\v2 .felix.WireguardEndpointV6RemoveH\x00R\x19wireguardEndpointV6RemoveB\t\n" +
-	"\apayload\"\xbf\x06\n" +
+	"\apayloadJ\x04\b\x0e\x10\x0fJ\x04\b\x12\x10\x13J\x04\b#\x10$J\x04\b$\x10%R\x12HostMetadataUpdateR\x12HostMetadataRemoveR\x14HostMetadataV6UpdateR\x14HostMetadataV6Remove\"\xd3\x05\n" +
 	"\rFromDataplane\x12'\n" +
 	"\x0fsequence_number\x18\b \x01(\x04R\x0esequenceNumber\x12P\n" +
 	"\x15process_status_update\x18\x03 \x01(\v2\x1a.felix.ProcessStatusUpdateH\x00R\x13processStatusUpdate\x12`\n" +
@@ -6276,7 +6276,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x17wireguard_status_update\x18\t \x01(\v2\x1c.felix.WireguardStatusUpdateH\x00R\x15wireguardStatusUpdate\x12D\n" +
 	"\x11dataplane_in_sync\x18\n" +
 	" \x01(\v2\x16.felix.DataplaneInSyncH\x00R\x0fdataplaneInSyncB\t\n" +
-	"\apayloadJ\x04\b\x0e\x10\x0fJ\x04\b\x12\x10\x13J\x04\b#\x10$J\x04\b$\x10%R\x12HostMetadataUpdateR\x12HostMetadataRemoveR\x14HostMetadataV6UpdateR\x14HostMetadataV6Remove\"\xd1\x02\n" +
+	"\apayload\"\xd1\x02\n" +
 	"\fConfigUpdate\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x127\n" +
 	"\x06config\x18\x01 \x03(\v2\x1f.felix.ConfigUpdate.ConfigEntryR\x06config\x12[\n" +
