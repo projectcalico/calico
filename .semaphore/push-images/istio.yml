@@ -24,7 +24,7 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish istio images
+  - name: Publish istio images and multi-arch manifests
     dependencies: []
     skip:
       when: "branch !~ '.+'"
@@ -32,16 +32,6 @@ blocks:
       # ztunnel cross-compiles for arm64 via calico/rust-build's aarch64
       # toolchain, so both arches publish from the same amd64 runner.
       jobs:
-        - name: Linux amd64 + arm64
+        - name: Linux multi-arch
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd ARCHES="amd64 arm64" CONFIRM=true; fi
-  - name: Publish istio multi-arch manifests
-    dependencies:
-      - Publish istio images
-    skip:
-      when: "branch !~ '.+'"
-    task:
-      jobs:
-        - name: Linux multi-arch manifests
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio push-manifests-with-tag CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C istio cd push-manifests-with-tag ARCHES="amd64 arm64" CONFIRM=true; fi
