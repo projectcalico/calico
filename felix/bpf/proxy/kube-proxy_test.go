@@ -251,7 +251,7 @@ var _ = Describe("BPF kube-proxy bootstrap window — regression #12192", func()
 		// In the bootstrap window with the buggy code, the proxy is
 		// already constructed and informers are syncing — they'll
 		// trigger an Apply on the stub Syncer that erases the marker.
-		p.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "test-node"})
+		p.OnUpdate(&proto.HostMetadataUpdate{Hostname: "test-node"})
 		Expect(p.CompleteDeferredWork()).To(Succeed())
 
 		// The marker must survive the bootstrap window. With
