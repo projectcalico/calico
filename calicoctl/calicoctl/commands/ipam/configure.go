@@ -35,6 +35,7 @@ func updateIPAMConfig(
 	strictAffinity *bool,
 	maxBlocks *int,
 	persistence *ipam.VMAddressPersistence,
+	minIPReclaimAgeSeconds *int,
 ) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
@@ -56,6 +57,11 @@ func updateIPAMConfig(
 		ipamConfig.KubeVirtVMAddressPersistence = persistence
 	}
 
+	// Update MinIPReclaimAgeSeconds if specified.
+	if minIPReclaimAgeSeconds != nil {
+		ipamConfig.MinIPReclaimAgeSeconds = *minIPReclaimAgeSeconds
+	}
+
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
@@ -69,6 +75,9 @@ func updateIPAMConfig(
 	}
 	if persistence != nil {
 		fmt.Println("Successfully set KubeVirtVMAddressPersistence to:", *persistence)
+	}
+	if minIPReclaimAgeSeconds != nil {
+		fmt.Println("Successfully set MinIPReclaimAgeSeconds to:", *minIPReclaimAgeSeconds)
 	}
 
 	return nil
@@ -89,7 +98,7 @@ func parsePersistence(val string) (*ipam.VMAddressPersistence, error) {
 }
 
 // ConfigureIPAM updates IPAM configuration from pre-parsed flag values.
-func ConfigureIPAM(ctx context.Context, config, strictAffinityStr, maxBlocksStr, persistenceStr string) error {
+func ConfigureIPAM(ctx context.Context, config, strictAffinityStr, maxBlocksStr, persistenceStr string, minIPReclaimAgeSecondsInt int) error {
 	client, err := clientmgr.NewClient(config)
 	if err != nil {
 		return err
@@ -123,11 +132,16 @@ func ConfigureIPAM(ctx context.Context, config, strictAffinityStr, maxBlocksStr,
 		}
 	}
 
-	if strictAffinity == nil && maxBlocks == nil && persistence == nil {
+	var minIPReclaimAgeSeconds *int
+	if minIPReclaimAgeSecondsInt >= 0 {
+		minIPReclaimAgeSeconds = &minIPReclaimAgeSecondsInt
+	}
+
+	if strictAffinity == nil && maxBlocks == nil && persistence == nil && minIPReclaimAgeSeconds == nil {
 		return fmt.Errorf("at least one configuration option must be specified")
 	}
 
-	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence, minIPReclaimAgeSeconds)
 }
 
 // Configure IPAM.
@@ -147,6 +161,9 @@ Options:
      --kubevirt-ip-persistence=<Enabled|Disabled>
                                     Control whether KubeVirt VMs retain persistent IP addresses
                                     across lifecycle events.
+     --min-ip-reclaim-age-seconds=<number>
+                                    Set the maximum time between release and re-allocation of an IP
+                                    address.
   -c --config=<CONFIG>              Path to the file containing connection configuration in
                                     YAML or JSON format.
                                     [default: ` + constants.DefaultConfigPath + `]
@@ -212,9 +229,19 @@ Description:
 		}
 	}
 
+	// Parse MinIPReclaimAgeSeconds (optional).
+	var minIPReclaimAgeSeconds *int
+	if val, ok := parsedArgs["--min-ip-reclaim-age-seconds"].(string); ok && val != "" {
+		minIPReclaimAgeSecondsVal, err := strconv.Atoi(val)
+		if err != nil {
+			return err
+		}
+		minIPReclaimAgeSeconds = &minIPReclaimAgeSecondsVal
+	}
+
 	if strictAffinity == nil && maxBlocks == nil && persistence == nil {
 		return fmt.Errorf("at least one configuration option must be specified")
 	}
 
-	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence, minIPReclaimAgeSeconds)
 }
