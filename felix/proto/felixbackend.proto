@@ -85,9 +85,9 @@ message ToDataplane {
     ConfigUpdate config_update = 13;
 
     // HostMetadataUpdate is sent when a host is added or updated.
-    HostMetadataUpdate host_metadata_update = 37;
+    HostMetadataUpdate host_metadata_update = 14;
     // HostIPRemove is sent when a host is removed.
-    HostMetadataRemove host_metadata_remove = 38;
+    HostMetadataRemove host_metadata_remove = 18;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -132,9 +132,9 @@ message ToDataplane {
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
   }
-  // Deprecated fields related to host information. Replaced by host_metadata_update and host_metadata_remove.
-  reserved "HostMetadataV6Update", "HostMetadataV6Remove";
-  reserved 14, 18, 35, 36;
+  // Deprecated fields related to host information. Replaced by HostMetadataUpdate and HostMetadataRemove.
+  reserved "HostMetadataV6Update", "HostMetadataV6Remove", "HostMetadataV4V6Update", "HostMetadataV4V6Remove";
+  reserved 35, 36, 37, 38;
 }
 
 message FromDataplane {
