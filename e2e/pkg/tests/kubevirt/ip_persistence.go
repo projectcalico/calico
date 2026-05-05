@@ -28,10 +28,11 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
 
@@ -51,15 +52,15 @@ var _ = describe.CalicoDescribe(
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-ip")
 
-		var kvClient kubevirtcorev1.KubevirtV1Interface
+		var cli ctrlclient.Client
 
 		BeforeEach(func() {
 			// Live migration needs at least 2 nodes to migrate between.
 			utils.RequireNodeCount(f, 2)
 
 			var err error
-			kvClient, err = kubevirtcorev1.NewForConfig(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred(), "failed to create KubeVirt client")
+			cli, err = e2eclient.NewAPIClient(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
 		// Test 1: Core live migration with IP preservation and connectivity.
@@ -72,29 +73,30 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-migration-test"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			pingPod := setupPingPod(ctx, f, ns)
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
+			pingPod := setupPingPod(f)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
 
-			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("VM %s running on node %s with IP %s", vmName, sourceNode, originalIP)
 
 			By("Verifying connectivity to VM before migration")
 			expectPingSuccess(ns, pingPod.Name, originalIP)
 
-			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			migration.Create(ctx)
-			DeferCleanup(migration.Delete)
-			migration.WaitForSuccess(ctx)
+			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
+			err := cli.Create(ctx, vmim)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
+			waitForMigrationSuccess(ctx, cli, vmim)
 
 			By("Verifying VMI IP is preserved after migration")
 			// Use Eventually to avoid reading stale VMI status after migration.
 			var postMigrationIP, postMigrationNode string
 			Eventually(func() error {
-				vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-				if err != nil {
+				vmi := &kubevirtv1.VirtualMachineInstance{}
+				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
 					return err
 				}
 				if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
@@ -126,11 +128,11 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-pod-recreate"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-			originalIP, _ := vm.WaitForRunningWithIP(ctx)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			originalIP, _ := vm.WaitForRunningWithIP(ctx, cli)
 
 			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
 			Expect(err).NotTo(HaveOccurred())
@@ -174,35 +176,43 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-vmi-recreate"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-			originalIP, _ := vm.WaitForRunningWithIP(ctx)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			originalIP, _ := vm.WaitForRunningWithIP(ctx, cli)
 
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
+			vmi := &kubevirtv1.VirtualMachineInstance{}
+			err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi)
 			Expect(err).NotTo(HaveOccurred())
 			originalVMIUID := vmi.UID
 			logrus.Infof("Original VMI UID: %s, IP: %s", originalVMIUID, originalIP)
 
 			By("Stopping the VM")
-			vm.Stop(ctx)
+			vm.Stop(ctx, cli)
 
+			// Return an error with diagnostic context so a timeout failure
+			// reports what was actually being checked, not just "false".
 			By("Waiting for VMI to be deleted")
-			// Check for specific NotFound error, not any error.
-			Eventually(func() bool {
-				_, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-				return kerrors.IsNotFound(err)
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+			Eventually(func() error {
+				err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, &kubevirtv1.VirtualMachineInstance{})
+				if err == nil {
+					return fmt.Errorf("VMI %s/%s still exists", ns, vmName)
+				}
+				if !kerrors.IsNotFound(err) {
+					return fmt.Errorf("unexpected error reading VMI %s/%s: %w", ns, vmName, err)
+				}
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("Starting the VM again")
-			vm.Start(ctx)
+			vm.Start(ctx, cli)
 
 			By("Waiting for new VMI with the same IP")
 			var newIP string
 			Eventually(func() error {
-				vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, vmName, metav1.GetOptions{})
-				if err != nil {
+				vmi := &kubevirtv1.VirtualMachineInstance{}
+				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
 					return err
 				}
 				if vmi.UID == originalVMIUID {
@@ -232,10 +242,11 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-handle-release"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			vm.Create(ctx)
-			originalIP, _ := vm.WaitForRunningWithIP(ctx)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			originalIP, _ := vm.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("VM %s running with IP %s", vmName, originalIP)
 
 			By("Verifying IPAM handle exists before deletion")
@@ -247,28 +258,34 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Handle %s has %d IPs before deletion", handleID, len(ips))
 
 			By("Deleting the VM")
-			vm.Delete()
+			vm.Delete(cli)
 
 			By("Waiting for virt-launcher pod to be gone")
-			Eventually(func() bool {
+			Eventually(func() error {
 				pods, listErr := f.ClientSet.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{
 					LabelSelector: fmt.Sprintf("kubevirt.io/vm=%s", vmName),
 				})
 				if listErr != nil {
-					return false
+					return fmt.Errorf("list virt-launcher pods: %w", listErr)
 				}
-				return len(pods.Items) == 0
-			}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "virt-launcher pod should be deleted")
+				if len(pods.Items) > 0 {
+					return fmt.Errorf("%d virt-launcher pod(s) still present for VM %s", len(pods.Items), vmName)
+				}
+				return nil
+			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "virt-launcher pod should be deleted")
 
 			By("Verifying IPAM handle is released")
-			Eventually(func() bool {
+			Eventually(func() error {
 				ips, err := lcgc.IPAM().IPsByHandle(ctx, handleID)
 				if err != nil {
-					// Handle not found means it was released.
-					return true
+					// Handle not found means it was released — success.
+					return nil
 				}
-				return len(ips) == 0
-			}, 1*time.Minute, 5*time.Second).Should(BeTrue(),
+				if len(ips) > 0 {
+					return fmt.Errorf("handle %s still has %d IP(s) allocated", handleID, len(ips))
+				}
+				return nil
+			}, 1*time.Minute, 5*time.Second).Should(Succeed(),
 				"Handle %s should be released after VM deletion", handleID)
 			logrus.Infof("Handle %s released after VM deletion", handleID)
 		})

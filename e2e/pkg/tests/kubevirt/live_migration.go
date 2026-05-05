@@ -30,12 +30,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
-	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -67,7 +70,7 @@ var _ = describe.CalicoDescribe(
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt")
 
-		var kvClient kubevirtcorev1.KubevirtV1Interface
+		var cli ctrlclient.Client
 
 		BeforeEach(func() {
 			// Live migration needs at least 2 nodes to migrate between.
@@ -82,8 +85,8 @@ var _ = describe.CalicoDescribe(
 			requireTyphaWatchingLiveMigrations(ctx, f)
 
 			var err error
-			kvClient, err = kubevirtcorev1.NewForConfig(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred(), "failed to create KubeVirt client")
+			cli, err = e2eclient.NewAPIClient(f.ClientConfig())
+			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
 		// Test 1: Target pod is promoted to active IPAM owner after migration.
@@ -100,11 +103,11 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-attr-promote"
-			vm := &testVM{name: vmName, namespace: ns, kvClient: kvClient}
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
 
 			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
 			Expect(err).NotTo(HaveOccurred())
@@ -132,17 +135,18 @@ var _ = describe.CalicoDescribe(
 				return nil
 			}, 30*time.Second, 2*time.Second).Should(Succeed())
 
-			By("Triggering live migration")
-			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			migration.Create(ctx)
-			DeferCleanup(migration.Delete)
-			migration.WaitForSuccess(ctx)
+			By("Migrating the VM")
+			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
+			err = cli.Create(ctx, vmim)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli,vmim) })
+			waitForMigrationSuccess(ctx, cli, vmim)
 
 			// Read the target pod and node directly from the VMI's MigrationState,
 			// which KubeVirt populates with the source/target identifiers as part of
 			// the migration. waitForMigrationStatePopulated polls until virt-handler
 			// finishes writing the state (it can lag the VMIM Succeeded phase).
-			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
+			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
 			targetPodName := vmi.Status.MigrationState.TargetPod
 			targetNode := vmi.Status.MigrationState.TargetNode
 			Expect(targetPodName).NotTo(Equal(sourcePod.Name), "target pod should be a new pod")
@@ -191,18 +195,18 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 			serverVMName := "e2e-tcp-double-srv"
-			serverVM := &testVM{name: serverVMName, namespace: ns, cloudInit: tcpServerCloudInit, kvClient: kvClient}
+			serverVM := &kubeVirtVM{name: serverVMName, namespace: ns, cloudInit: tcpServerCloudInit}
 
 			By("Creating server VM with TCP server")
-			serverVM.Create(ctx)
-			DeferCleanup(serverVM.Delete)
+			serverVM.Create(ctx, cli)
+			DeferCleanup(func() { serverVM.Delete(cli) })
 
-			serverIP, node1 := serverVM.WaitForRunningWithIP(ctx)
+			serverIP, node1 := serverVM.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("Server VM: %s on %s", serverIP, node1)
 
 			By("Creating client pod on a different node than server VM")
-			clientPod := setupAntiAffinityPod(ctx, f, ns, node1)
-			checkConnectionToTCPServer(ns, clientPod.Name, serverIP)
+			clientPod := setupAntiAffinityPod(ctx, f, node1)
+			expectConnectionToTCPServer(ns, clientPod.Name, serverIP)
 
 			// Use nohup to prevent SIGHUP when kubectl exec session closes. The Exec()
 			// return is intentionally ignored: `nohup ... &` backgrounds immediately and
@@ -239,16 +243,16 @@ var _ = describe.CalicoDescribe(
 				"TCP data should be flowing")
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
-			By("First migration")
-			migration1 := &testVMIM{name: serverVMName + "-migration1", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
-			migration1.Create(ctx)
-			DeferCleanup(migration1.Delete)
-			migration1.WaitForSuccess(ctx)
-			vmi, err := kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
+			By("Migrating the VM")
+			vmim1 := newVMIMigration(serverVMName+"-migration1", ns, serverVMName)
+			err := cli.Create(ctx, vmim1)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
+			waitForMigrationSuccess(ctx, cli, vmim1)
+			vmi := &kubevirtv1.VirtualMachineInstance{}
+			Expect(cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)).To(Succeed())
 			node2 := vmi.Status.NodeName
-			Expect(node2).NotTo(Equal(node1))
-			logrus.Infof("First migration: %s -> %s", node1, node2)
+			Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
 
 			By("Verifying TCP stream survived first migration")
 			var midLines int
@@ -260,24 +264,24 @@ var _ = describe.CalicoDescribe(
 				"TCP data should have grown after first migration")
 			logrus.Infof("After first migration: %d lines", midLines)
 
-			By("Second migration")
-			migration2 := &testVMIM{name: serverVMName + "-migration2", namespace: ns, vmiName: serverVMName, kvClient: kvClient}
-			migration2.Create(ctx)
-			DeferCleanup(migration2.Delete)
-			migration2.WaitForSuccess(ctx)
-			vmi, err = kvClient.VirtualMachineInstances(ns).Get(ctx, serverVMName, metav1.GetOptions{})
+			By("Migrating the VM a second time")
+			vmim2 := newVMIMigration(serverVMName+"-migration2", ns, serverVMName)
+			err = cli.Create(ctx, vmim2)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli,vmim2) })
+			waitForMigrationSuccess(ctx, cli, vmim2)
+			err = cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)
 			Expect(err).NotTo(HaveOccurred())
 			node3 := vmi.Status.NodeName
 			// With 3 worker nodes, second migration moves away from node2.
 			// It could return to node1 — that's fine, we only require it left node2.
-			Expect(node3).NotTo(Equal(node2))
+			Expect(node3).NotTo(Equal(node2), "VM didn't migrate off node 2")
 			// Also require the server lands on a different node than the
 			// client pod. Otherwise the post-migration "iBGP cross-node"
 			// claim degrades to a same-node loopback path, which would
 			// trivially have zero seq gaps regardless of routing behaviour.
 			Expect(node3).NotTo(Equal(clientPod.Spec.NodeName),
-				"server must end up on a different node from the client to actually exercise the iBGP path")
-			logrus.Infof("Second migration: %s -> %s (client on %s)", node2, node3, clientPod.Spec.NodeName)
+				"server was scheduled to the same node as the client")
 
 			By("Waiting for TCP data to grow after second migration")
 			Eventually(func() (int, error) {
@@ -309,372 +313,353 @@ var _ = describe.CalicoDescribe(
 		// verify the route priority reverts correctly after the TimeWait period and can be
 		// re-elevated for the second migration.
 		// Requires EXT_IP, EXT_KEY, EXT_USER env vars pointing to the TOR/external node.
-		It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
-			tor := externalnode.NewClient()
-			if tor == nil {
-				Skip("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
-			}
-
-			By("Setting up eBGP peering between TOR and cluster nodes")
-			setupEBGPPeering(f, tor)
-
-			// Disable natOutgoing via the Installation resource (not the IPPool directly,
-			// because the tigera-operator reconciles the IPPool from Installation and
-			// would revert any direct IPPool patch). Look up the pool index by name and
-			// retry on transient apiserver / operator-reconcile errors so this never
-			// leaves the cluster with natOutgoing in the wrong state.
-			//
-			// Register the re-enable DeferCleanup BEFORE the disable patch so a panic
-			// in the propagation wait below cannot leave the cluster with natOutgoing
-			// permanently disabled. DeferCleanups run in LIFO after the test body, so
-			// the re-enable still runs after every test action.
-			const vmIPPoolName = "default-ipv4-ippool"
-			DeferCleanup(func() {
-				By("Re-enabling natOutgoing via Installation")
-				patchInstallationPoolNATOutgoing(vmIPPoolName, "Enabled")
-			})
-			By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
-			patchInstallationPoolNATOutgoing(vmIPPoolName, "Disabled")
-			// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
-			// When natOutgoing is disabled, the field is omitted from the IPPool spec
-			// (jsonpath returns empty string rather than "false").
-			logrus.Info("Waiting for natOutgoing=Disabled to propagate...")
-			Eventually(func() string {
-				out, _ := kubectl.NewKubectlCommand("", "get", "ippool", vmIPPoolName,
-					"-o", "jsonpath={.spec.natOutgoing}").Exec()
-				return strings.TrimSpace(out)
-			}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
-				"natOutgoing should not be true on IPPool after Installation patch")
-			logrus.Info("natOutgoing disabled confirmed on IPPool")
-
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-			defer cancel()
-			ns := f.Namespace.Name
-
-			timeline := newRouteTimeline()
-			DeferCleanup(func() { timeline.writeToTOR(tor) })
-
-			vmName := "e2e-ebgp-tcp"
-			vm := &testVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit, kvClient: kvClient}
-
-			By("Creating a VM with TCP server")
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-
-			vmIP, node1 := vm.WaitForRunningWithIP(ctx)
-			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
-
-			By("Verifying TOR can reach the VM (eBGP routing is up)")
-			Eventually(func() error {
-				out, err := runOnTORE(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
-				if err != nil {
-					routes := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
-					logrus.Infof("TOR BIRD routes:\n%s", routes)
-					kernRoutes := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1 || true", vmIP))
-					logrus.Infof("TOR kernel route to %s: %s", vmIP, kernRoutes)
-					return fmt.Errorf("ping %s failed: %v (output=%s)", vmIP, err, out)
+		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
+			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
+				tor := externalnode.NewClient()
+				if tor == nil {
+					// The RequiresExternalNode label gates whether this test runs at
+					// all; once selected, missing credentials are a real failure
+					// rather than a self-skip.
+					Fail("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
 				}
-				return nil
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-				"TOR cannot reach VM — eBGP routing may not be configured")
 
-			By("Starting route monitor on TOR")
-			stopMonitor := startRouteMonitor(tor, vmIP)
-			defer stopMonitor()
+				// Only this spec patches the Installation CR (natOutgoing) —
+				// that path only exists on operator-managed clusters. Fail fast
+				// rather than after the first patch attempt 404s.
+				preCtx, preCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				requireOperatorManagedCluster(preCtx, f)
+				preCancel()
 
-			By("Waiting for TCP server on VM to be reachable from TOR")
-			const ncClientContainer = "tor-nc-client"
-			Eventually(func() error {
-				out := runOnTOR(tor, fmt.Sprintf(
-					"sudo docker run --rm --network host alpine sh -c 'sleep 999 | timeout 5 nc %s 9999' 2>&1 || true", vmIP))
-				if !strings.Contains(out, "seq=") {
-					return fmt.Errorf("TCP server not sending data from TOR (output=%q)", out)
-				}
-				return nil
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-				"TCP server not reachable from TOR")
-			logrus.Infof("TCP server on %s:9999 is reachable and sending data from TOR", vmIP)
+				By("Setting up eBGP peering between TOR and cluster nodes")
+				setupEBGPPeering(f, tor)
 
-			By("Starting TCP client container on TOR connecting to VM")
-			runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null || true", ncClientContainer))
-			runOnTOR(tor, fmt.Sprintf(
-				"sudo docker run -d --name %s --network host alpine sh -c 'sleep 999999 | nc %s 9999'",
-				ncClientContainer, vmIP))
-			DeferCleanup(func() {
-				By("Removing TCP client container from TOR")
-				runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null || true", ncClientContainer))
-			})
-
-			By("Verifying nc client container is running on TOR")
-			Eventually(func() error {
-				out := runOnTOR(tor, fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %s 2>&1 || true", ncClientContainer))
-				if strings.TrimSpace(out) != "true" {
-					return fmt.Errorf("container %s not running (state=%q)", ncClientContainer, out)
-				}
-				return nil
-			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client container did not start on TOR")
-
-			// Start a goroutine that logs seq count every 2 seconds throughout
-			// the test.  We record but do NOT assert — the goal is to collect
-			// a timeline we can analyse after the test finishes.
-			//
-			// We wait for the goroutine to exit before returning from the It,
-			// so timeline.writeToTOR (registered as DeferCleanup) does not race
-			// the monitor's last SSH session on the shared TOR client.
-			seqStopCh := make(chan struct{})
-			seqDoneCh := make(chan struct{})
-			defer func() {
-				close(seqStopCh)
-				<-seqDoneCh
-			}()
-			go func() {
-				defer close(seqDoneCh)
-				ticker := time.NewTicker(2 * time.Second)
-				defer ticker.Stop()
-				for {
-					n, err := torContainerLineCount(tor, ncClientContainer)
-					if err != nil {
-						logrus.Warnf("[seq-monitor] error: %v", err)
-					} else {
-						logrus.Infof("[seq-monitor] lines=%d", n)
-					}
-					// Honor stopCh during the wait so the goroutine doesn't do
-					// one extra SSH after the test body returns.
-					select {
-					case <-seqStopCh:
-						return
-					case <-ticker.C:
-					}
-				}
-			}()
-
-			By("Waiting for TCP data to flow before migration")
-			var preLines int
-			Eventually(func() (int, error) {
-				var err error
-				preLines, err = torContainerLineCount(tor, ncClientContainer)
-				return preLines, err
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
-				"TCP data should be flowing from TOR")
-			logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
-
-			preTime := time.Now()
-			timeline.record(routeTimelineEntry{
-				Phase:    "pre-migration",
-				VMNode:   node1,
-				TOR:      queryTORSnapshot(tor, vmIP),
-				TCPLines: preLines,
-			})
-
-			// ---- First migration ----
-			By("First migration")
-			logrus.Infof("TIMELINE: starting first migration")
-			migration1 := &testVMIM{name: vmName + "-migration1", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			migration1.Create(ctx)
-			DeferCleanup(migration1.Delete)
-			migration1.WaitForSuccess(ctx)
-			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
-			node2 := vmi.Status.MigrationState.TargetNode
-			Expect(node2).NotTo(Equal(node1))
-			ms1 := vmi.Status.MigrationState
-			logrus.Infof("TIMELINE: first migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
-				node1, node2, ms1.StartTimestamp, ms1.EndTimestamp)
-
-			// migration.WaitForSuccess returns the moment the VMIM phase is
-			// Succeeded, but Felix programs krt_metric=512 asynchronously and
-			// later reverts it after LiveMigrationRouteConvergenceTime (~30s).
-			// Poll for the elevated state with a budget shorter than the
-			// revert window so we observe it deterministically.
-			By("Verifying elevated route priority on worker and TOR after first migration")
-			Eventually(func(g Gomega) {
-				g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
-					"worker kernel metric should be elevated (512) after migration")
-				st := queryTORRoute(tor, vmIP)
-				g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
-				g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
-				g.Expect(st.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
-				g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
-			}, 20*time.Second, 1*time.Second).Should(Succeed())
-
-			firstMigLines, _ := torContainerLineCount(tor, ncClientContainer)
-			timeline.record(routeTimelineEntry{
-				Phase:    "first-migration-complete",
-				VMNode:   node2,
-				TOR:      queryTORSnapshot(tor, vmIP),
-				TCPLines: firstMigLines,
-			})
-
-			// Wait for the elevated /32 route to revert to normal local_pref
-			// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
-			By("Waiting for TOR /32 local_pref to revert to normal after convergence")
-			Eventually(func() int {
-				snap := queryTORSnapshot(tor, vmIP)
-				pollLines, _ := torContainerLineCount(tor, ncClientContainer)
-				timeline.record(routeTimelineEntry{
-					Phase:    "convergence-poll",
-					VMNode:   node2,
-					TOR:      snap,
-					TCPLines: pollLines,
+				// Disable natOutgoing on the IPPool that backs VM workloads. natOutgoing
+				// rewrites the VM's source IP to the node's IP at the egress NAT, which
+				// breaks the TOR's reverse-path matching after migration (the next-hop
+				// changes mid-flow). Doing this through Installation rather than IPPool
+				// directly because the operator reconciles the IPPool from Installation
+				// and would revert any direct IPPool patch.
+				const vmIPPoolName = "default-ipv4-ippool"
+				DeferCleanup(func() {
+					By("Re-enabling natOutgoing via Installation")
+					patchInstallationPoolNATOutgoing(f, vmIPPoolName, "Enabled")
 				})
-				if len(snap.Host32.Routes) > 0 {
-					return snap.Host32.Routes[0].LocalPref
-				}
-				return -1
-			}, 45*time.Second, 2*time.Second).Should(Equal(100),
-				"TOR /32 local_pref should revert to 100 after convergence")
 
-			convergenceLines, _ := torContainerLineCount(tor, ncClientContainer)
-			timeline.record(routeTimelineEntry{
-				Phase:    "convergence-done",
-				VMNode:   node2,
-				TOR:      queryTORSnapshot(tor, vmIP),
-				TCPLines: convergenceLines,
-			})
+				By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
+				patchInstallationPoolNATOutgoing(f, vmIPPoolName, "Disabled")
 
-			midLines, _ := torContainerLineCount(tor, ncClientContainer)
-			logrus.Infof("TIMELINE: after first migration wait lines=%d (pre=%d, delta=%d)", midLines, preLines, midLines-preLines)
-			Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
-			// Cordon node1 (the original node) so the second migration cannot
-			// go back there — we want the VM to land on a third node so that a
-			// new /32 route is needed.
-			By(fmt.Sprintf("Cordoning original node %s to prevent migrate-back", node1))
-			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				n, err := f.ClientSet.CoreV1().Nodes().Get(ctx, node1, metav1.GetOptions{})
-				if err != nil {
-					return err
-				}
-				n.Spec.Unschedulable = true
-				_, err = f.ClientSet.CoreV1().Nodes().Update(ctx, n, metav1.UpdateOptions{})
-				return err
-			})).To(Succeed(), "cordoning %s", node1)
-			logrus.Infof("TIMELINE: cordoned %s", node1)
-			DeferCleanup(func() {
-				By(fmt.Sprintf("Uncordoning node %s", node1))
-				// Wrap in RetryOnConflict so a transient apiserver hiccup or
-				// concurrent Node update from another controller does not leave
-				// the node cordoned for the rest of the suite.
-				if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-					n, err := f.ClientSet.CoreV1().Nodes().Get(context.Background(), node1, metav1.GetOptions{})
+				// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
+				// When natOutgoing is disabled, the field is omitted from the IPPool spec
+				// (jsonpath returns empty string rather than "false").
+				logrus.Info("Waiting for natOutgoing=Disabled to propagate...")
+				Eventually(func() string {
+					out, _ := kubectl.NewKubectlCommand("", "get", "ippool", vmIPPoolName,
+						"-o", "jsonpath={.spec.natOutgoing}").Exec()
+					return strings.TrimSpace(out)
+				}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
+					"natOutgoing should not be true on IPPool after Installation patch")
+				logrus.Info("natOutgoing disabled confirmed on IPPool")
+
+				ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+				defer cancel()
+				ns := f.Namespace.Name
+
+				timeline := newRouteTimeline()
+				DeferCleanup(func() { timeline.writeToTOR(tor) })
+
+				vmName := "e2e-ebgp-tcp"
+				vm := &kubeVirtVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit}
+
+				By("Creating a VM with TCP server")
+				vm.Create(ctx, cli)
+				DeferCleanup(func() { vm.Delete(cli) })
+
+				vmIP, node1 := vm.WaitForRunningWithIP(ctx, cli)
+				logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
+
+				By("Verifying TOR can reach the VM (eBGP routing is up)")
+				Eventually(func() error {
+					out, err := runOnTOR(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
+					if err != nil {
+						routes, _ := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
+						logrus.Infof("TOR BIRD routes:\n%s", routes)
+						kernRoutes, _ := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1", vmIP))
+						logrus.Infof("TOR kernel route to %s: %s", vmIP, kernRoutes)
+						return fmt.Errorf("ping %s failed: %v (output=%s)", vmIP, err, out)
+					}
+					return nil
+				}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+					"TOR cannot reach VM — eBGP routing may not be configured")
+
+				By("Starting route monitor on TOR")
+				stopMonitor := startRouteMonitor(tor, vmIP)
+				defer stopMonitor()
+
+				By("Waiting for TCP server on VM to be reachable from TOR")
+				const ncClientContainer = "tor-nc-client"
+				Eventually(func() error {
+					out, _ := runOnTOR(tor, fmt.Sprintf(
+						"sudo docker run --rm --network host alpine sh -c 'sleep 999 | timeout 5 nc %s 9999' 2>&1", vmIP))
+					if !strings.Contains(out, "seq=") {
+						return fmt.Errorf("TCP server not sending data from TOR (output=%q)", out)
+					}
+					return nil
+				}, 2*time.Minute, 5*time.Second).Should(Succeed(),
+					"TCP server not reachable from TOR")
+				logrus.Infof("TCP server on %s:9999 is reachable and sending data from TOR", vmIP)
+
+				startTCPClientOnTOR(tor, ncClientContainer, vmIP)
+
+				// Start a goroutine that logs seq count every 2 seconds throughout
+				// the test. We record but do NOT assert — the goal is to collect
+				// a timeline we can analyse after the test finishes.
+				//
+				// We wait for the goroutine to exit before returning from the It,
+				// so timeline.writeToTOR (registered as DeferCleanup) does not race
+				// the monitor's last SSH session on the shared TOR client.
+				seqStopCh := make(chan struct{})
+				seqDoneCh := make(chan struct{})
+				defer func() {
+					close(seqStopCh)
+					<-seqDoneCh
+				}()
+				go func() {
+					defer close(seqDoneCh)
+					ticker := time.NewTicker(2 * time.Second)
+					defer ticker.Stop()
+					for {
+						n, err := torContainerLineCount(tor, ncClientContainer)
+						if err != nil {
+							logrus.Warnf("[seq-monitor] error: %v", err)
+						} else {
+							logrus.Infof("[seq-monitor] lines=%d", n)
+						}
+						// Honor stopCh during the wait so the goroutine doesn't do
+						// one extra SSH after the test body returns.
+						select {
+						case <-seqStopCh:
+							return
+						case <-ticker.C:
+						}
+					}
+				}()
+
+				By("Waiting for TCP data to flow before migration")
+				var preLines int
+				Eventually(func() (int, error) {
+					var err error
+					preLines, err = torContainerLineCount(tor, ncClientContainer)
+					return preLines, err
+				}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
+					"TCP data should be flowing from TOR")
+				logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
+
+				preTime := time.Now()
+				timeline.record(routeTimelineEntry{
+					Phase:    "pre-migration",
+					VMNode:   node1,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: preLines,
+				})
+
+				// ---- First migration ----
+				By("Migrating the VM")
+				vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
+				Expect(cli.Create(ctx, vmim1)).To(Succeed())
+				DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
+				waitForMigrationSuccess(ctx, cli, vmim1)
+				vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+				node2 := vmi.Status.MigrationState.TargetNode
+				Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
+
+				// migration.WaitForSuccess returns the moment the VMIM phase is
+				// Succeeded, but Felix programs krt_metric=512 asynchronously and
+				// later reverts it after LiveMigrationRouteConvergenceTime (~30s).
+				// Poll for the elevated state with a budget shorter than the
+				// revert window so we observe it deterministically.
+				By("Verifying elevated route priority on worker and TOR after first migration")
+				Eventually(func(g Gomega) {
+					g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
+						"worker kernel metric should be elevated (512) after migration")
+					st := queryTORRoute(tor, vmIP)
+					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
+					g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
+					g.Expect(st.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
+					g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
+				}, 20*time.Second, 1*time.Second).Should(Succeed())
+
+				firstMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+				timeline.record(routeTimelineEntry{
+					Phase:    "first-migration-complete",
+					VMNode:   node2,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: firstMigLines,
+				})
+
+				// Wait for the elevated /32 route to revert to normal local_pref
+				// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
+				By("Waiting for TOR /32 local_pref to revert to normal after convergence")
+				Eventually(func() int {
+					snap := queryTORSnapshot(tor, vmIP)
+					pollLines, _ := torContainerLineCount(tor, ncClientContainer)
+					timeline.record(routeTimelineEntry{
+						Phase:    "convergence-poll",
+						VMNode:   node2,
+						TOR:      snap,
+						TCPLines: pollLines,
+					})
+					if len(snap.Host32.Routes) > 0 {
+						return snap.Host32.Routes[0].LocalPref
+					}
+					return -1
+				}, 45*time.Second, 2*time.Second).Should(Equal(100),
+					"TOR /32 local_pref should revert to 100 after convergence")
+
+				convergenceLines, _ := torContainerLineCount(tor, ncClientContainer)
+				timeline.record(routeTimelineEntry{
+					Phase:    "convergence-done",
+					VMNode:   node2,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: convergenceLines,
+				})
+
+				midLines, _ := torContainerLineCount(tor, ncClientContainer)
+				Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
+
+				// Cordon node1 (the original node) so the second migration cannot
+				// go back there — we want the VM to land on a third node so that a
+				// new /32 route is needed.
+				By(fmt.Sprintf("Cordoning original node %s to prevent migrate-back", node1))
+				Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+					n, err := f.ClientSet.CoreV1().Nodes().Get(ctx, node1, metav1.GetOptions{})
 					if err != nil {
 						return err
 					}
-					n.Spec.Unschedulable = false
-					_, err = f.ClientSet.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
+					n.Spec.Unschedulable = true
+					_, err = f.ClientSet.CoreV1().Nodes().Update(ctx, n, metav1.UpdateOptions{})
 					return err
-				}); err != nil {
-					// Last-resort log; the test has already passed and we don't
-					// want to fail cleanup, but flag loudly so a stuck cordon is
-					// visible in CI artifacts.
-					logrus.WithError(err).Errorf("Failed to uncordon node %s after retries — manual cleanup required", node1)
-				}
-			})
-
-			// ---- Second migration ----
-			By("Second migration")
-			logrus.Infof("TIMELINE: starting second migration")
-			migration2 := &testVMIM{name: vmName + "-migration2", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			migration2.Create(ctx)
-			DeferCleanup(migration2.Delete)
-			migration2.WaitForSuccess(ctx)
-			vmi = waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
-			node3 := vmi.Status.MigrationState.TargetNode
-			Expect(node3).NotTo(Equal(node2))
-			ms2 := vmi.Status.MigrationState
-			logrus.Infof("TIMELINE: second migration complete %s -> %s (StartTimestamp=%v EndTimestamp=%v)",
-				node2, node3, ms2.StartTimestamp, ms2.EndTimestamp)
-
-			// Same race as after the first migration: Felix programs the
-			// elevated metric asynchronously and reverts it after the
-			// convergence window. Poll for the elevated state.
-			By("Verifying TOR route state after second migration")
-			Eventually(func(g Gomega) {
-				st := queryTORRoute(tor, vmIP)
-				g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after second migration")
-				// Find best route — it must have elevated local_pref (no ECMP).
-				var b, nb *torBIRDRoute
-				for i := range st.Routes {
-					if st.Routes[i].Best {
-						b = &st.Routes[i]
-					} else {
-						nb = &st.Routes[i]
+				})).To(Succeed(), "cordoning %s", node1)
+				DeferCleanup(func() {
+					By(fmt.Sprintf("Uncordoning node %s", node1))
+					// Wrap in RetryOnConflict so a transient apiserver hiccup or
+					// concurrent Node update from another controller does not leave
+					// the node cordoned for the rest of the suite.
+					if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+						n, err := f.ClientSet.CoreV1().Nodes().Get(context.Background(), node1, metav1.GetOptions{})
+						if err != nil {
+							return err
+						}
+						n.Spec.Unschedulable = false
+						_, err = f.ClientSet.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
+						return err
+					}); err != nil {
+						// Last-resort log; the test has already passed and we don't
+						// want to fail cleanup, but flag loudly so a stuck cordon is
+						// visible in CI artifacts.
+						logrus.WithError(err).Errorf("Failed to uncordon node %s after retries — manual cleanup required", node1)
 					}
-				}
-				g.Expect(b).NotTo(BeNil(), "TOR should have a best /32 route")
-				g.Expect(b.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
-				g.Expect(b.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
-				// After the second migration, two /32 routes must exist: the new
-				// node's elevated route and the old node's normal route. They
-				// must have different local_pref to avoid ECMP.
-				g.Expect(nb).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
-				g.Expect(nb.LocalPref).NotTo(Equal(b.LocalPref),
-					"two /32 routes must have different local_pref to avoid ECMP")
-			}, 20*time.Second, 1*time.Second).Should(Succeed())
-
-			secondMigLines, _ := torContainerLineCount(tor, ncClientContainer)
-			timeline.record(routeTimelineEntry{
-				Phase:    "second-migration-complete",
-				VMNode:   node3,
-				TOR:      queryTORSnapshot(tor, vmIP),
-				TCPLines: secondMigLines,
-			})
-
-			// Wait for the second migration's /32 route to revert to normal
-			// local_pref, same as after the first migration.
-			By("Waiting for TOR /32 local_pref to revert after second migration")
-			Eventually(func() int {
-				snap := queryTORSnapshot(tor, vmIP)
-				pollLines, _ := torContainerLineCount(tor, ncClientContainer)
-				timeline.record(routeTimelineEntry{
-					Phase:    "second-convergence-poll",
-					VMNode:   node3,
-					TOR:      snap,
-					TCPLines: pollLines,
 				})
-				if len(snap.Host32.Routes) > 0 {
-					return snap.Host32.Routes[0].LocalPref
+
+				// ---- Second migration ----
+				By("Migrating the VM a second time")
+				vmim2 := newVMIMigration(vmName+"-migration2", ns, vmName)
+				Expect(cli.Create(ctx, vmim2)).To(Succeed())
+				DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
+				waitForMigrationSuccess(ctx, cli, vmim2)
+				vmi = waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+				node3 := vmi.Status.MigrationState.TargetNode
+				Expect(node3).NotTo(Equal(node2), "VM didn't migrate off node 2")
+
+				// Same race as after the first migration: Felix programs the
+				// elevated metric asynchronously and reverts it after the
+				// convergence window. Poll for the elevated state.
+				By("Verifying TOR route state after second migration")
+				Eventually(func(g Gomega) {
+					st := queryTORRoute(tor, vmIP)
+					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after second migration")
+					// Find best route — it must have elevated local_pref (no ECMP).
+					var b, nb *torBIRDRoute
+					for i := range st.Routes {
+						if st.Routes[i].Best {
+							b = &st.Routes[i]
+						} else {
+							nb = &st.Routes[i]
+						}
+					}
+					g.Expect(b).NotTo(BeNil(), "TOR should have a best /32 route")
+					g.Expect(b.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
+					g.Expect(b.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
+					// After the second migration, two /32 routes must exist: the new
+					// node's elevated route and the old node's normal route. They
+					// must have different local_pref to avoid ECMP.
+					g.Expect(nb).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
+					g.Expect(nb.LocalPref).NotTo(Equal(b.LocalPref),
+						"two /32 routes must have different local_pref to avoid ECMP")
+				}, 20*time.Second, 1*time.Second).Should(Succeed())
+
+				secondMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+				timeline.record(routeTimelineEntry{
+					Phase:    "second-migration-complete",
+					VMNode:   node3,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: secondMigLines,
+				})
+
+				// Wait for the second migration's /32 route to revert to normal
+				// local_pref, same as after the first migration.
+				By("Waiting for TOR /32 local_pref to revert after second migration")
+				Eventually(func() int {
+					snap := queryTORSnapshot(tor, vmIP)
+					pollLines, _ := torContainerLineCount(tor, ncClientContainer)
+					timeline.record(routeTimelineEntry{
+						Phase:    "second-convergence-poll",
+						VMNode:   node3,
+						TOR:      snap,
+						TCPLines: pollLines,
+					})
+					if len(snap.Host32.Routes) > 0 {
+						return snap.Host32.Routes[0].LocalPref
+					}
+					return -1
+				}, 45*time.Second, 2*time.Second).Should(Equal(100),
+					"TOR /32 local_pref should revert to 100 after second migration convergence")
+
+				finalLines, _ := torContainerLineCount(tor, ncClientContainer)
+				Expect(finalLines).To(BeNumerically(">", midLines),
+					"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
+
+				// Dump full seq log and assert on sequence integrity.
+				By("Verifying TCP stream integrity")
+				streamAll, err := runOnTOR(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null", ncClientContainer))
+				Expect(err).NotTo(HaveOccurred(), "failed to retrieve TCP stream from TOR")
+				lines := strings.Split(strings.TrimSpace(streamAll), "\n")
+				logrus.Infof("TIMELINE: total lines=%d, first=%s, last=%s", len(lines), lines[0], lines[len(lines)-1])
+				// Show the last 30 lines for quick inspection.
+				start := 0
+				if len(lines) > 30 {
+					start = len(lines) - 30
 				}
-				return -1
-			}, 45*time.Second, 2*time.Second).Should(Equal(100),
-				"TOR /32 local_pref should revert to 100 after second migration convergence")
+				logrus.Infof("TIMELINE: tail of stream:\n%s", strings.Join(lines[start:], "\n"))
 
-			finalLines, _ := torContainerLineCount(tor, ncClientContainer)
-			logrus.Infof("TIMELINE: after second migration convergence lines=%d (mid=%d, delta=%d)", finalLines, midLines, finalLines-midLines)
-			Expect(finalLines).To(BeNumerically(">", midLines),
-				"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
+				seqGaps, lastSeq := countSequenceGaps(lines)
+				elapsed := time.Since(preTime).Seconds()
+				logrus.Infof("Sequence: %d gaps, last seq=%d, elapsed=%.0fs across 2 eBGP migrations",
+					seqGaps, lastSeq, elapsed)
+				Expect(seqGaps).To(BeNumerically("==", 0),
+					"eBGP live migration must not drop any TCP segments")
+				// The server sends seq=N once per second. The actual count should be
+				// within 80% of the elapsed wall-clock time — allowing for connection
+				// setup delay and scheduling jitter but catching major data loss.
+				Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
+					fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
 
-			// Dump full seq log and assert on sequence integrity.
-			By("Verifying TCP stream integrity")
-			streamAll, err := runOnTORE(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null", ncClientContainer))
-			Expect(err).NotTo(HaveOccurred(), "failed to retrieve TCP stream from TOR")
-			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
-			logrus.Infof("TIMELINE: total lines=%d, first=%s, last=%s", len(lines), lines[0], lines[len(lines)-1])
-			// Show the last 30 lines for quick inspection.
-			start := 0
-			if len(lines) > 30 {
-				start = len(lines) - 30
-			}
-			logrus.Infof("TIMELINE: tail of stream:\n%s", strings.Join(lines[start:], "\n"))
-
-			seqGaps, lastSeq := countSequenceGaps(lines)
-			elapsed := time.Since(preTime).Seconds()
-			logrus.Infof("Sequence: %d gaps, last seq=%d, elapsed=%.0fs across 2 eBGP migrations",
-				seqGaps, lastSeq, elapsed)
-			Expect(seqGaps).To(BeNumerically("==", 0),
-				"eBGP live migration must not drop any TCP segments")
-			// The server sends seq=N once per second. The actual count should be
-			// within 80% of the elapsed wall-clock time — allowing for connection
-			// setup delay and scheduling jitter but catching major data loss.
-			Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
-				fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
-
-			timeline.record(routeTimelineEntry{
-				Phase:    "test-complete",
-				VMNode:   node3,
-				TOR:      queryTORSnapshot(tor, vmIP),
-				TCPLines: finalLines,
+				timeline.record(routeTimelineEntry{
+					Phase:    "test-complete",
+					VMNode:   node3,
+					TOR:      queryTORSnapshot(tor, vmIP),
+					TCPLines: finalLines,
+				})
 			})
-
-			logrus.Infof("TIMELINE: test complete — analyse route-monitor and seq-monitor logs above")
 		})
 
 		// Test 4: Kubernetes NetworkPolicy enforcement survives live migration.
@@ -688,18 +673,17 @@ var _ = describe.CalicoDescribe(
 			ns := f.Namespace.Name
 
 			vmName := "e2e-netpol-vm"
-			vm := &testVM{
+			vm := &kubeVirtVM{
 				name:      vmName,
 				namespace: ns,
 				cloudInit: tcpServerCloudInit,
 				labels:    map[string]string{"app": "vm"},
-				kvClient:  kvClient,
 			}
 
 			By("Creating VM with TCP server and app=vm label")
-			vm.Create(ctx)
-			DeferCleanup(vm.Delete)
-			vmIP, node1 := vm.WaitForRunningWithIP(ctx)
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			vmIP, node1 := vm.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
 
 			By("Creating allowed client pod (role=allowed)")
@@ -743,8 +727,8 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "client-denied pod not Running")
 
 			By("Verifying both clients can reach VM before policy is applied")
-			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			checkConnectionToTCPServer(ns, client2Pod.Name, vmIP)
+			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			expectConnectionToTCPServer(ns, client2Pod.Name, vmIP)
 
 			By("Creating NetworkPolicy to allow only role=allowed on TCP/9999")
 			protocol := corev1.ProtocolTCP
@@ -775,16 +759,17 @@ var _ = describe.CalicoDescribe(
 			})
 
 			By("Verifying policy is enforced: client1 allowed, client2 denied")
-			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			checkTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			expectTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
 
 			By("Triggering live migration")
-			migration := &testVMIM{name: vmName + "-migration", namespace: ns, vmiName: vmName, kvClient: kvClient}
-			migration.Create(ctx)
-			DeferCleanup(migration.Delete)
-			migration.WaitForSuccess(ctx)
+			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
+			err = cli.Create(ctx, vmim)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli,vmim) })
+			waitForMigrationSuccess(ctx, cli, vmim)
 
-			vmi := waitForMigrationStatePopulated(ctx, kvClient, ns, vmName)
+			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("VM migrated: %s -> %s", node1, node2)
@@ -799,18 +784,18 @@ var _ = describe.CalicoDescribe(
 			By("Waiting for policy to apply on the migrated pod")
 			Eventually(func(g Gomega) {
 				out1, _ := kubectl.NewKubectlCommand(ns, "exec", client1Pod.Name, "--",
-					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1 || true", vmIP)).Exec()
+					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
 				g.Expect(out1).To(ContainSubstring("seq="),
 					"client1 (allowed) should reach migrated pod before Consistently asserts")
 				out2, _ := kubectl.NewKubectlCommand(ns, "exec", client2Pod.Name, "--",
-					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1 || true", vmIP)).Exec()
+					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
 				g.Expect(out2).NotTo(ContainSubstring("seq="),
 					"client2 (denied) should be blocked from migrated pod before Consistently asserts")
 			}, 30*time.Second, 2*time.Second).Should(Succeed())
 
 			By("Verifying policy survives migration: client1 still allowed, client2 still denied")
-			checkConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			checkTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
+			expectTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
 			logrus.Info("NetworkPolicy enforcement confirmed after live migration")
 		})
 	},
