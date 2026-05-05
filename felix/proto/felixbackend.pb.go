@@ -581,8 +581,8 @@ type ToDataplane struct {
 	//	*ToDataplane_WorkloadEndpointUpdate
 	//	*ToDataplane_WorkloadEndpointRemove
 	//	*ToDataplane_ConfigUpdate
-	//	*ToDataplane_HostMetadataV4V6Update
-	//	*ToDataplane_HostMetadataV4V6Remove
+	//	*ToDataplane_HostMetadataUpdate
+	//	*ToDataplane_HostMetadataRemove
 	//	*ToDataplane_IpamPoolUpdate
 	//	*ToDataplane_IpamPoolRemove
 	//	*ToDataplane_ServiceAccountUpdate
@@ -767,19 +767,19 @@ func (x *ToDataplane) GetConfigUpdate() *ConfigUpdate {
 	return nil
 }
 
-func (x *ToDataplane) GetHostMetadataV4V6Update() *HostMetadataV4V6Update {
+func (x *ToDataplane) GetHostMetadataUpdate() *HostMetadataUpdate {
 	if x != nil {
-		if x, ok := x.Payload.(*ToDataplane_HostMetadataV4V6Update); ok {
-			return x.HostMetadataV4V6Update
+		if x, ok := x.Payload.(*ToDataplane_HostMetadataUpdate); ok {
+			return x.HostMetadataUpdate
 		}
 	}
 	return nil
 }
 
-func (x *ToDataplane) GetHostMetadataV4V6Remove() *HostMetadataV4V6Remove {
+func (x *ToDataplane) GetHostMetadataRemove() *HostMetadataRemove {
 	if x != nil {
-		if x, ok := x.Payload.(*ToDataplane_HostMetadataV4V6Remove); ok {
-			return x.HostMetadataV4V6Remove
+		if x, ok := x.Payload.(*ToDataplane_HostMetadataRemove); ok {
+			return x.HostMetadataRemove
 		}
 	}
 	return nil
@@ -1025,14 +1025,14 @@ type ToDataplane_ConfigUpdate struct {
 	ConfigUpdate *ConfigUpdate `protobuf:"bytes,13,opt,name=config_update,json=configUpdate,proto3,oneof"`
 }
 
-type ToDataplane_HostMetadataV4V6Update struct {
-	// HostMetadataV4V6Update is sent when a host is added or updated.
-	HostMetadataV4V6Update *HostMetadataV4V6Update `protobuf:"bytes,37,opt,name=host_metadata_v4v6_update,json=hostMetadataV4v6Update,proto3,oneof"`
+type ToDataplane_HostMetadataUpdate struct {
+	// HostMetadataUpdate is sent when a host is added or updated.
+	HostMetadataUpdate *HostMetadataUpdate `protobuf:"bytes,14,opt,name=host_metadata_update,json=hostMetadataUpdate,proto3,oneof"`
 }
 
-type ToDataplane_HostMetadataV4V6Remove struct {
-	// HostIPRemove is sent when a host is removed.
-	HostMetadataV4V6Remove *HostMetadataV4V6Remove `protobuf:"bytes,38,opt,name=host_metadata_v4v6_remove,json=hostMetadataV4v6Remove,proto3,oneof"`
+type ToDataplane_HostMetadataRemove struct {
+	// HostMetadataRemove is sent when a host is removed.
+	HostMetadataRemove *HostMetadataRemove `protobuf:"bytes,18,opt,name=host_metadata_remove,json=hostMetadataRemove,proto3,oneof"`
 }
 
 type ToDataplane_IpamPoolUpdate struct {
@@ -1148,9 +1148,9 @@ func (*ToDataplane_WorkloadEndpointRemove) isToDataplane_Payload() {}
 
 func (*ToDataplane_ConfigUpdate) isToDataplane_Payload() {}
 
-func (*ToDataplane_HostMetadataV4V6Update) isToDataplane_Payload() {}
+func (*ToDataplane_HostMetadataUpdate) isToDataplane_Payload() {}
 
-func (*ToDataplane_HostMetadataV4V6Remove) isToDataplane_Payload() {}
+func (*ToDataplane_HostMetadataRemove) isToDataplane_Payload() {}
 
 func (*ToDataplane_IpamPoolUpdate) isToDataplane_Payload() {}
 
@@ -4290,7 +4290,7 @@ func (*DataplaneInSync) Descriptor() ([]byte, []int) {
 	return file_felixbackend_proto_rawDescGZIP(), []int{45}
 }
 
-type HostMetadataV4V6Update struct {
+type HostMetadataUpdate struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	Ipv4Addr      string                 `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
@@ -4301,20 +4301,20 @@ type HostMetadataV4V6Update struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *HostMetadataV4V6Update) Reset() {
-	*x = HostMetadataV4V6Update{}
+func (x *HostMetadataUpdate) Reset() {
+	*x = HostMetadataUpdate{}
 	mi := &file_felixbackend_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *HostMetadataV4V6Update) String() string {
+func (x *HostMetadataUpdate) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*HostMetadataV4V6Update) ProtoMessage() {}
+func (*HostMetadataUpdate) ProtoMessage() {}
 
-func (x *HostMetadataV4V6Update) ProtoReflect() protoreflect.Message {
+func (x *HostMetadataUpdate) ProtoReflect() protoreflect.Message {
 	mi := &file_felixbackend_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4326,47 +4326,47 @@ func (x *HostMetadataV4V6Update) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use HostMetadataV4V6Update.ProtoReflect.Descriptor instead.
-func (*HostMetadataV4V6Update) Descriptor() ([]byte, []int) {
+// Deprecated: Use HostMetadataUpdate.ProtoReflect.Descriptor instead.
+func (*HostMetadataUpdate) Descriptor() ([]byte, []int) {
 	return file_felixbackend_proto_rawDescGZIP(), []int{46}
 }
 
-func (x *HostMetadataV4V6Update) GetHostname() string {
+func (x *HostMetadataUpdate) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *HostMetadataV4V6Update) GetIpv4Addr() string {
+func (x *HostMetadataUpdate) GetIpv4Addr() string {
 	if x != nil {
 		return x.Ipv4Addr
 	}
 	return ""
 }
 
-func (x *HostMetadataV4V6Update) GetIpv6Addr() string {
+func (x *HostMetadataUpdate) GetIpv6Addr() string {
 	if x != nil {
 		return x.Ipv6Addr
 	}
 	return ""
 }
 
-func (x *HostMetadataV4V6Update) GetAsnumber() string {
+func (x *HostMetadataUpdate) GetAsnumber() string {
 	if x != nil {
 		return x.Asnumber
 	}
 	return ""
 }
 
-func (x *HostMetadataV4V6Update) GetLabels() map[string]string {
+func (x *HostMetadataUpdate) GetLabels() map[string]string {
 	if x != nil {
 		return x.Labels
 	}
 	return nil
 }
 
-type HostMetadataV4V6Remove struct {
+type HostMetadataRemove struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	Ipv4Addr      string                 `protobuf:"bytes,2,opt,name=ipv4_addr,json=ipv4Addr,proto3" json:"ipv4_addr,omitempty"`
@@ -4374,20 +4374,20 @@ type HostMetadataV4V6Remove struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *HostMetadataV4V6Remove) Reset() {
-	*x = HostMetadataV4V6Remove{}
+func (x *HostMetadataRemove) Reset() {
+	*x = HostMetadataRemove{}
 	mi := &file_felixbackend_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *HostMetadataV4V6Remove) String() string {
+func (x *HostMetadataRemove) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*HostMetadataV4V6Remove) ProtoMessage() {}
+func (*HostMetadataRemove) ProtoMessage() {}
 
-func (x *HostMetadataV4V6Remove) ProtoReflect() protoreflect.Message {
+func (x *HostMetadataRemove) ProtoReflect() protoreflect.Message {
 	mi := &file_felixbackend_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4399,19 +4399,19 @@ func (x *HostMetadataV4V6Remove) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use HostMetadataV4V6Remove.ProtoReflect.Descriptor instead.
-func (*HostMetadataV4V6Remove) Descriptor() ([]byte, []int) {
+// Deprecated: Use HostMetadataRemove.ProtoReflect.Descriptor instead.
+func (*HostMetadataRemove) Descriptor() ([]byte, []int) {
 	return file_felixbackend_proto_rawDescGZIP(), []int{47}
 }
 
-func (x *HostMetadataV4V6Remove) GetHostname() string {
+func (x *HostMetadataRemove) GetHostname() string {
 	if x != nil {
 		return x.Hostname
 	}
 	return ""
 }
 
-func (x *HostMetadataV4V6Remove) GetIpv4Addr() string {
+func (x *HostMetadataRemove) GetIpv4Addr() string {
 	if x != nil {
 		return x.Ipv4Addr
 	}
@@ -6226,7 +6226,7 @@ var File_felixbackend_proto protoreflect.FileDescriptor
 const file_felixbackend_proto_rawDesc = "" +
 	"\n" +
 	"\x12felixbackend.proto\x12\x05felix\"\r\n" +
-	"\vSyncRequest\"\xed\x14\n" +
+	"\vSyncRequest\"\xdb\x14\n" +
 	"\vToDataplane\x12'\n" +
 	"\x0fsequence_number\x18\x0f \x01(\x04R\x0esequenceNumber\x12(\n" +
 	"\ain_sync\x18\x01 \x01(\v2\r.felix.InSyncH\x00R\x06inSync\x127\n" +
@@ -6242,9 +6242,9 @@ const file_felixbackend_proto_rawDesc = "" +
 	" \x01(\v2\x19.felix.HostEndpointRemoveH\x00R\x12hostEndpointRemove\x12Y\n" +
 	"\x18workload_endpoint_update\x18\v \x01(\v2\x1d.felix.WorkloadEndpointUpdateH\x00R\x16workloadEndpointUpdate\x12Y\n" +
 	"\x18workload_endpoint_remove\x18\f \x01(\v2\x1d.felix.WorkloadEndpointRemoveH\x00R\x16workloadEndpointRemove\x12:\n" +
-	"\rconfig_update\x18\r \x01(\v2\x13.felix.ConfigUpdateH\x00R\fconfigUpdate\x12Z\n" +
-	"\x19host_metadata_v4v6_update\x18% \x01(\v2\x1d.felix.HostMetadataV4V6UpdateH\x00R\x16hostMetadataV4v6Update\x12Z\n" +
-	"\x19host_metadata_v4v6_remove\x18& \x01(\v2\x1d.felix.HostMetadataV4V6RemoveH\x00R\x16hostMetadataV4v6Remove\x12A\n" +
+	"\rconfig_update\x18\r \x01(\v2\x13.felix.ConfigUpdateH\x00R\fconfigUpdate\x12M\n" +
+	"\x14host_metadata_update\x18\x0e \x01(\v2\x19.felix.HostMetadataUpdateH\x00R\x12hostMetadataUpdate\x12M\n" +
+	"\x14host_metadata_remove\x18\x12 \x01(\v2\x19.felix.HostMetadataRemoveH\x00R\x12hostMetadataRemove\x12A\n" +
 	"\x10ipam_pool_update\x18\x10 \x01(\v2\x15.felix.IPAMPoolUpdateH\x00R\x0eipamPoolUpdate\x12A\n" +
 	"\x10ipam_pool_remove\x18\x11 \x01(\v2\x15.felix.IPAMPoolRemoveH\x00R\x0eipamPoolRemove\x12S\n" +
 	"\x16service_account_update\x18\x13 \x01(\v2\x1b.felix.ServiceAccountUpdateH\x00R\x14serviceAccountUpdate\x12S\n" +
@@ -6265,7 +6265,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0eservice_remove\x18  \x01(\v2\x14.felix.ServiceRemoveH\x00R\rserviceRemove\x12c\n" +
 	"\x1cwireguard_endpoint_v6_update\x18! \x01(\v2 .felix.WireguardEndpointV6UpdateH\x00R\x19wireguardEndpointV6Update\x12c\n" +
 	"\x1cwireguard_endpoint_v6_remove\x18\" \x01(\v2 .felix.WireguardEndpointV6RemoveH\x00R\x19wireguardEndpointV6RemoveB\t\n" +
-	"\apayloadJ\x04\b\x0e\x10\x0fJ\x04\b\x12\x10\x13J\x04\b#\x10$J\x04\b$\x10%R\x12HostMetadataUpdateR\x12HostMetadataRemoveR\x14HostMetadataV6UpdateR\x14HostMetadataV6Remove\"\xd3\x05\n" +
+	"\apayloadJ\x04\b#\x10$J\x04\b$\x10%J\x04\b%\x10&J\x04\b&\x10'R\x14HostMetadataV6UpdateR\x14HostMetadataV6RemoveR\x16HostMetadataV4V6UpdateR\x16HostMetadataV4V6Remove\"\xd3\x05\n" +
 	"\rFromDataplane\x12'\n" +
 	"\x0fsequence_number\x18\b \x01(\x04R\x0esequenceNumber\x12P\n" +
 	"\x15process_status_update\x18\x03 \x01(\v2\x1a.felix.ProcessStatusUpdateH\x00R\x13processStatusUpdate\x12`\n" +
@@ -6520,17 +6520,17 @@ const file_felixbackend_proto_rawDesc = "" +
 	"public_key\x18\x01 \x01(\tR\tpublicKey\x12/\n" +
 	"\n" +
 	"ip_version\x18\x02 \x01(\x0e2\x10.felix.IPVersionR\tipVersion\"\x11\n" +
-	"\x0fDataplaneInSync\"\x88\x02\n" +
-	"\x16HostMetadataV4V6Update\x12\x1a\n" +
+	"\x0fDataplaneInSync\"\x80\x02\n" +
+	"\x12HostMetadataUpdate\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1b\n" +
 	"\tipv4_addr\x18\x02 \x01(\tR\bipv4Addr\x12\x1b\n" +
 	"\tipv6_addr\x18\x03 \x01(\tR\bipv6Addr\x12\x1a\n" +
-	"\basnumber\x18\x04 \x01(\tR\basnumber\x12A\n" +
-	"\x06labels\x18\x05 \x03(\v2).felix.HostMetadataV4V6Update.LabelsEntryR\x06labels\x1a9\n" +
+	"\basnumber\x18\x04 \x01(\tR\basnumber\x12=\n" +
+	"\x06labels\x18\x05 \x03(\v2%.felix.HostMetadataUpdate.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"Q\n" +
-	"\x16HostMetadataV4V6Remove\x12\x1a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
+	"\x12HostMetadataRemove\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1b\n" +
 	"\tipv4_addr\x18\x02 \x01(\tR\bipv4Addr\"E\n" +
 	"\x0eIPAMPoolUpdate\x12\x0e\n" +
@@ -6784,8 +6784,8 @@ var file_felixbackend_proto_goTypes = []any{
 	(*WorkloadEndpointStatusRemove)(nil), // 53: felix.WorkloadEndpointStatusRemove
 	(*WireguardStatusUpdate)(nil),        // 54: felix.WireguardStatusUpdate
 	(*DataplaneInSync)(nil),              // 55: felix.DataplaneInSync
-	(*HostMetadataV4V6Update)(nil),       // 56: felix.HostMetadataV4V6Update
-	(*HostMetadataV4V6Remove)(nil),       // 57: felix.HostMetadataV4V6Remove
+	(*HostMetadataUpdate)(nil),           // 56: felix.HostMetadataUpdate
+	(*HostMetadataRemove)(nil),           // 57: felix.HostMetadataRemove
 	(*IPAMPoolUpdate)(nil),               // 58: felix.IPAMPoolUpdate
 	(*IPAMPoolRemove)(nil),               // 59: felix.IPAMPoolRemove
 	(*IPAMPool)(nil),                     // 60: felix.IPAMPool
@@ -6819,7 +6819,7 @@ var file_felixbackend_proto_goTypes = []any{
 	(*HTTPMatch_PathMatch)(nil),          // 88: felix.HTTPMatch.PathMatch
 	nil,                                  // 89: felix.RuleMetadata.AnnotationsEntry
 	nil,                                  // 90: felix.WorkloadEndpoint.AnnotationsEntry
-	nil,                                  // 91: felix.HostMetadataV4V6Update.LabelsEntry
+	nil,                                  // 91: felix.HostMetadataUpdate.LabelsEntry
 	nil,                                  // 92: felix.ServiceAccountUpdate.LabelsEntry
 	nil,                                  // 93: felix.NamespaceUpdate.LabelsEntry
 }
@@ -6837,8 +6837,8 @@ var file_felixbackend_proto_depIdxs = []int32{
 	35,  // 10: felix.ToDataplane.workload_endpoint_update:type_name -> felix.WorkloadEndpointUpdate
 	41,  // 11: felix.ToDataplane.workload_endpoint_remove:type_name -> felix.WorkloadEndpointRemove
 	13,  // 12: felix.ToDataplane.config_update:type_name -> felix.ConfigUpdate
-	56,  // 13: felix.ToDataplane.host_metadata_v4v6_update:type_name -> felix.HostMetadataV4V6Update
-	57,  // 14: felix.ToDataplane.host_metadata_v4v6_remove:type_name -> felix.HostMetadataV4V6Remove
+	56,  // 13: felix.ToDataplane.host_metadata_update:type_name -> felix.HostMetadataUpdate
+	57,  // 14: felix.ToDataplane.host_metadata_remove:type_name -> felix.HostMetadataRemove
 	58,  // 15: felix.ToDataplane.ipam_pool_update:type_name -> felix.IPAMPoolUpdate
 	59,  // 16: felix.ToDataplane.ipam_pool_remove:type_name -> felix.IPAMPoolRemove
 	62,  // 17: felix.ToDataplane.service_account_update:type_name -> felix.ServiceAccountUpdate
@@ -6923,7 +6923,7 @@ var file_felixbackend_proto_depIdxs = []int32{
 	37,  // 96: felix.WorkloadEndpointStatusUpdate.endpoint:type_name -> felix.WorkloadEndpoint
 	34,  // 97: felix.WorkloadEndpointStatusRemove.id:type_name -> felix.WorkloadEndpointID
 	0,   // 98: felix.WireguardStatusUpdate.ip_version:type_name -> felix.IPVersion
-	91,  // 99: felix.HostMetadataV4V6Update.labels:type_name -> felix.HostMetadataV4V6Update.LabelsEntry
+	91,  // 99: felix.HostMetadataUpdate.labels:type_name -> felix.HostMetadataUpdate.LabelsEntry
 	60,  // 100: felix.IPAMPoolUpdate.pool:type_name -> felix.IPAMPool
 	64,  // 101: felix.ServiceAccountUpdate.id:type_name -> felix.ServiceAccountID
 	92,  // 102: felix.ServiceAccountUpdate.labels:type_name -> felix.ServiceAccountUpdate.LabelsEntry
@@ -6977,8 +6977,8 @@ func file_felixbackend_proto_init() {
 		(*ToDataplane_WorkloadEndpointUpdate)(nil),
 		(*ToDataplane_WorkloadEndpointRemove)(nil),
 		(*ToDataplane_ConfigUpdate)(nil),
-		(*ToDataplane_HostMetadataV4V6Update)(nil),
-		(*ToDataplane_HostMetadataV4V6Remove)(nil),
+		(*ToDataplane_HostMetadataUpdate)(nil),
+		(*ToDataplane_HostMetadataRemove)(nil),
 		(*ToDataplane_IpamPoolUpdate)(nil),
 		(*ToDataplane_IpamPoolRemove)(nil),
 		(*ToDataplane_ServiceAccountUpdate)(nil),

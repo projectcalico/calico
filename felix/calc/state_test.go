@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ type State struct {
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
-	ExpectedHostMetadataV4V6             map[string]*proto.HostMetadataV4V6Update
+	ExpectedHostMetadata                 map[string]*proto.HostMetadataUpdate
 	ExpectedEndpointComputedData         map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData
 	ExpectedLiveMigrationRoles           map[string]proto.LiveMigrationRole
 	ExpectedNumberOfALPPolicies          int
@@ -81,7 +81,7 @@ func NewState() State {
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
-		ExpectedHostMetadataV4V6:             make(map[string]*proto.HostMetadataV4V6Update),
+		ExpectedHostMetadata:                 make(map[string]*proto.HostMetadataUpdate),
 		ExpectedEndpointComputedData:         make(map[string]map[calc.EndpointComputedDataKind]calc.EndpointComputedData),
 		ExpectedLiveMigrationRoles:           make(map[string]proto.LiveMigrationRole),
 		ExpectedNumberOfPolicies:             -1,
@@ -100,7 +100,7 @@ func (s State) Copy() State {
 	maps.Copy(cpy.ExpectedEndpointPolicyOrder, s.ExpectedEndpointPolicyOrder)
 	maps.Copy(cpy.ExpectedUntrackedEndpointPolicyOrder, s.ExpectedUntrackedEndpointPolicyOrder)
 	maps.Copy(cpy.ExpectedPreDNATEndpointPolicyOrder, s.ExpectedPreDNATEndpointPolicyOrder)
-	maps.Copy(cpy.ExpectedHostMetadataV4V6, s.ExpectedHostMetadataV4V6)
+	maps.Copy(cpy.ExpectedHostMetadata, s.ExpectedHostMetadata)
 	maps.Copy(cpy.ExpectedEndpointComputedData, s.ExpectedEndpointComputedData)
 	maps.Copy(cpy.ExpectedLiveMigrationRoles, s.ExpectedLiveMigrationRoles)
 
@@ -258,11 +258,11 @@ func (s State) withRoutes(routes ...types.RouteUpdate) (newState State) {
 	return newState
 }
 
-func (s State) withHostMetadataV4V6(hostMetas ...*proto.HostMetadataV4V6Update) (newState State) {
+func (s State) withHostMetadata(hostMetas ...*proto.HostMetadataUpdate) (newState State) {
 	newState = s.Copy()
-	newState.ExpectedHostMetadataV4V6 = make(map[string]*proto.HostMetadataV4V6Update)
+	newState.ExpectedHostMetadata = make(map[string]*proto.HostMetadataUpdate)
 	for _, v := range hostMetas {
-		newState.ExpectedHostMetadataV4V6[v.Hostname] = v
+		newState.ExpectedHostMetadata[v.Hostname] = v
 	}
 	return newState
 }
