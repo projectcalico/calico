@@ -202,10 +202,10 @@ func WrapPayloadWithEnvelope(msg any, seqNo uint64) (*proto.ToDataplane, error) 
 		envelope.Payload = &proto.ToDataplane_WorkloadEndpointUpdate{WorkloadEndpointUpdate: msg}
 	case *proto.WorkloadEndpointRemove:
 		envelope.Payload = &proto.ToDataplane_WorkloadEndpointRemove{WorkloadEndpointRemove: msg}
-	case *proto.HostMetadataV4V6Update:
-		envelope.Payload = &proto.ToDataplane_HostMetadataV4V6Update{HostMetadataV4V6Update: msg}
-	case *proto.HostMetadataV4V6Remove:
-		envelope.Payload = &proto.ToDataplane_HostMetadataV4V6Remove{HostMetadataV4V6Remove: msg}
+	case *proto.HostMetadataUpdate:
+		envelope.Payload = &proto.ToDataplane_HostMetadataUpdate{HostMetadataUpdate: msg}
+	case *proto.HostMetadataRemove:
+		envelope.Payload = &proto.ToDataplane_HostMetadataRemove{HostMetadataRemove: msg}
 	case *proto.IPAMPoolUpdate:
 		envelope.Payload = &proto.ToDataplane_IpamPoolUpdate{IpamPoolUpdate: msg}
 	case *proto.IPAMPoolRemove:
