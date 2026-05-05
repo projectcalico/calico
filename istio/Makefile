@@ -53,11 +53,8 @@ $(ZTUNNEL_DOWNLOADED):
 ###############################################################################
 # Build
 ###############################################################################
-.PHONY: build build-istio build-ztunnel
-build: build-istio build-ztunnel
-
-build-istio: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH)
-build-ztunnel: bin/ztunnel-$(ARCH)
+.PHONY: build
+build: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH) bin/ztunnel-$(ARCH)
 
 bin/install-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
 bin/istio-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace

@@ -389,12 +389,15 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
-# Cross-compile env for cc-rs / bindgen when building Rust for arm64.
-# cargo's per-target linker config lives in the rust-build image's
-# $CARGO_HOME/config.toml; these vars cover the C-compilation side that
-# cc-rs reads at build time.
+# Cross-compile env for Rust + cc-rs / bindgen when building for arm64.
+# The CARGO_TARGET_* vars replace cargo's [target.aarch64-unknown-linux-gnu]
+# config table (linker + rustflags); the *_aarch64_unknown_linux_gnu vars
+# cover the C-compilation side that cc-rs / bindgen read at build time.
+# All arch-specific config lives here so the rust-build image stays neutral.
 ifeq ($(ARCH),arm64)
 RUST_CROSS_ENV := \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--target=aarch64-linux-gnu -C link-arg=--sysroot=/usr/aarch64-linux-gnu/sys-root -C link-arg=-fuse-ld=lld" \
 	-e CC_aarch64_unknown_linux_gnu=clang \
 	-e CXX_aarch64_unknown_linux_gnu=clang++ \
 	-e AR_aarch64_unknown_linux_gnu=aarch64-unknown-linux-gnu-ar \
