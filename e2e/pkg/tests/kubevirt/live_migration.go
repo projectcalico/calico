@@ -139,7 +139,7 @@ var _ = describe.CalicoDescribe(
 			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli,vmim) })
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 			waitForMigrationSuccess(ctx, cli, vmim)
 
 			// Read the target pod and node directly from the VMI's MigrationState,
@@ -268,7 +268,7 @@ var _ = describe.CalicoDescribe(
 			vmim2 := newVMIMigration(serverVMName+"-migration2", ns, serverVMName)
 			err = cli.Create(ctx, vmim2)
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli,vmim2) })
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
 			waitForMigrationSuccess(ctx, cli, vmim2)
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)
 			Expect(err).NotTo(HaveOccurred())
@@ -766,7 +766,7 @@ var _ = describe.CalicoDescribe(
 			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli,vmim) })
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 			waitForMigrationSuccess(ctx, cli, vmim)
 
 			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
