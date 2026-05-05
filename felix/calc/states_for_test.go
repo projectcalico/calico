@@ -3589,8 +3589,9 @@ var istioSelectorEdgeCases = istioBaseState.withKVUpdates(
 			mustParseNet("10.10.9.1/32"),
 		},
 		Labels: uniquelabels.Make(map[string]string{
-			"projectcalico.org/namespace": "istio-ambient",
-			v3.LabelIstioDataplaneMode:    v3.LabelIstioDataplaneModeNone, // Explicit none on pod
+			"projectcalico.org/namespace":    "istio-ambient",
+			"projectcalico.org/orchestrator": "k8s",
+			v3.LabelIstioDataplaneMode:       v3.LabelIstioDataplaneModeNone, // Explicit none on pod
 		}),
 		ProfileIDs: []string{"istio-ambient"},
 	}},
@@ -3609,6 +3610,46 @@ var istioSelectorEdgeCases = istioBaseState.withKVUpdates(
 ).withIPSet("all-istio-weps", []string{
 	// Should be EMPTY - this pod should be excluded by both selectors
 }).withName("istio selector edge cases")
+
+// Regression: NetworkSets in an ambient namespace inherit pcns.* labels via
+// their kns.<ns> profile. Without scoping the istio selector to pod WEPs,
+// a NetworkSet's CIDR (e.g. an apiserver IP) leaks into all-istio-weps.
+// The IPSet should contain only the ambient WEP, not the NetworkSet CIDR.
+var istioWithAmbientNetworkSet = istioBaseState.withKVUpdates(
+	KVPair{Key: ResourceKey{Name: "istio-ambient", Kind: v3.KindProfile}, Value: namespaceToProfile(&istioNamespaceAmbient)},
+	KVPair{Key: istioWepAmbientKey, Value: &istioWepAmbient},
+	KVPair{Key: NetworkSetKey{Name: "istio-ambient/apiserver-netset"}, Value: &NetworkSet{
+		Nets: []calinet.IPNet{
+			mustParseNet("192.168.99.99/32"),
+		},
+		Labels: uniquelabels.Make(map[string]string{
+			"projectcalico.org/namespace": "istio-ambient",
+		}),
+		ProfileIDs: []string{"istio-ambient"},
+	}},
+).withEndpoint(
+	"orch/istio-wep-ambient/ep1",
+	[]mock.TierInfo{},
+).withActiveProfiles(
+	types.ProfileID{Name: "istio-ambient"},
+).withRoutes(
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "10.10.1.1/32",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+	types.RouteUpdate{
+		Types:         proto.RouteType_LOCAL_WORKLOAD,
+		Dst:           "fc00:fe10::1/128",
+		DstNodeName:   localHostname,
+		LocalWorkload: true,
+	},
+).withIPSet("all-istio-weps", []string{
+	// 192.168.99.99/32 (NetworkSet) must NOT appear here.
+	"10.10.1.1/32",
+	"fc00:fe10::1/128",
+}).withName("istio with ambient namespace networkset")
 
 type StateList []State
 
