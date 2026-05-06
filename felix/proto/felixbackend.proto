@@ -132,6 +132,9 @@ message ToDataplane {
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
   }
+  // Deprecated fields related to host information. Removed in favor of HostMetadataV4V6* messages.
+  reserved "HostMetadataUpdate", "HostMetadataRemove", "HostMetadataV6Update", "HostMetadataV6Remove";
+  reserved 14, 18, 35, 36;
 }
 
 message FromDataplane {
@@ -160,10 +163,6 @@ message FromDataplane {
 
     DataplaneInSync dataplane_in_sync = 10;
   }
-
-  // Deprecated fields related to host information. Removed in favor of HostMetadataV4V6* messages.
-  reserved "HostMetadataUpdate", "HostMetadataRemove", "HostMetadataV6Update", "HostMetadataV6Remove";
-  reserved 14, 18, 35, 36;
 }
 
 message ConfigUpdate {
