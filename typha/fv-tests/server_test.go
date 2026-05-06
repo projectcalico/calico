@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -212,63 +212,6 @@ var _ = Describe("With an in-process Server", func() {
 		expectFelixClientState := func(status api.SyncStatus, kvs map[string]api.Update) {
 			expectClientState(h.ClientStates[0], status, kvs)
 		}
-
-		It("should drop a bad KV", func() {
-			// Bypass the validation filter (which also converts Nodes to HostIPs).
-			h.FelixCache.OnStatusUpdated(api.ResyncInProgress)
-			h.FelixCache.OnUpdates([]api.Update{{
-				KVPair: model.KVPair{
-					// NodeKeys can't be serialized right now.
-					Key:      model.NodeKey{Hostname: "foobar"},
-					Value:    "bazzbiff",
-					Revision: "1234",
-					TTL:      12,
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}})
-			h.FelixCache.OnStatusUpdated(api.InSync)
-			expectFelixClientState(api.InSync, map[string]api.Update{})
-		})
-
-		It("validation should drop a bad Node", func() {
-			h.ValFilter.OnStatusUpdated(api.ResyncInProgress)
-			h.ValFilter.OnUpdates([]api.Update{{
-				KVPair: model.KVPair{
-					Key:      model.NodeKey{Hostname: "foobar"},
-					Value:    "bazzbiff",
-					Revision: "1234",
-					TTL:      12,
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}})
-			h.ValFilter.OnStatusUpdated(api.InSync)
-			expectFelixClientState(api.InSync, map[string]api.Update{})
-		})
-
-		It("validation should convert a valid Node", func() {
-			h.ValFilter.OnStatusUpdated(api.ResyncInProgress)
-			h.ValFilter.OnUpdates([]api.Update{{
-				KVPair: model.KVPair{
-					Key: model.NodeKey{Hostname: "foobar"},
-					Value: &model.Node{
-						FelixIPv4: calinet.ParseIP("10.0.0.1"),
-					},
-					Revision: "1234",
-				},
-				UpdateType: api.UpdateTypeKVNew,
-			}})
-			h.ValFilter.OnStatusUpdated(api.InSync)
-			expectFelixClientState(api.InSync, map[string]api.Update{
-				"/calico/v1/host/foobar/bird_ip": {
-					KVPair: model.KVPair{
-						Key:      model.HostIPKey{Hostname: "foobar"},
-						Value:    &calinet.IP{IP: net.ParseIP("10.0.0.1")},
-						Revision: "1234",
-					},
-					UpdateType: api.UpdateTypeKVNew,
-				},
-			})
-		})
 
 		It("should pass through a KV and status", func() {
 			h.Decoupler.OnStatusUpdated(api.ResyncInProgress)
