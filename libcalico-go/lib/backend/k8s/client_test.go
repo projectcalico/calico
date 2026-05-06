@@ -2995,9 +2995,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 		})
 
-		By("Syncing HostIPs over the Syncer", func() {
+		By("Syncing the Node over the Syncer", func() {
 			expectExist := []api.Update{
-				{KVPair: model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, UpdateType: api.UpdateTypeKVUpdated},
+				{KVPair: model.KVPair{Key: model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}}, UpdateType: api.UpdateTypeKVUpdated},
 			}
 
 			// Expect the snapshot to include the right keys.
@@ -3014,7 +3014,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			snapshotSyncer.Start()
 
 			expectNotExist := []model.KVPair{
-				{Key: model.HostIPKey{Hostname: nodeHostname}},
+				{Key: model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}},
 			}
 
 			// Expect the snapshot to have not received the update.

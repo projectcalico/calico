@@ -34,7 +34,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Kind: internalapi.KindNode,
 		Name: "mynode",
 	}
-	numFelixConfigs := 8
+	numFelixConfigs := 7
 	up := updateprocessors.NewFelixNodeUpdateProcessor(false)
 
 	BeforeEach(func() {
@@ -43,14 +43,12 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 
 	// The Node contains a bunch of v1 per-node Felix configuration - so we can simply use the
 	// checkExpectedConfigs() function defined in the configurationprocessor_test to perform
-	// our validation [with a minor hack to treat HostIP as a HostConfig type].  Note that it
-	// expects a node name of mynode.
+	// our validation. Note that it expects a node name of mynode.
 	It("should handle conversion of valid Nodes", func() {
 		By("converting a zero-ed Node")
 		res := internalapi.NewNode()
 		res.Name = "mynode"
 		expected := map[string]any{
-			hostIPMarker:       nil,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 			wireguardMarker:    nil,
@@ -110,9 +108,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.BGP = &internalapi.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		}
-		ip := net.MustParseIP("1.2.3.4")
 		expected = map[string]any{
-			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
@@ -134,6 +130,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4",
 		}
+		ip := net.MustParseIP("1.2.3.4")
 		expected = map[string]any{
 			nodeMarker: res,
 			wireguardMarker: &model.Wireguard{
@@ -212,9 +209,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv4Address: "100.200.100.200/24",
 			IPv6Address: "aa:bb::cc/120",
 		}
-		ip = net.MustParseIP("100.200.100.200")
 		expected = map[string]any{
-			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
@@ -238,7 +233,6 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			IPv4IPIPTunnelAddr: "192.100.100.100",
 		}
 		expected = map[string]any{
-			hostIPMarker:       nil,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": "192.100.100.100",
 		}
@@ -262,9 +256,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		}
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200"
 		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
-		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]any{
-			hostIPMarker:          &ip,
 			nodeMarker:            res,
 			"IPv4VXLANTunnelAddr": "192.200.200.200",
 			"VXLANTunnelMACAddr":  "00:11:22:33:44:55",
@@ -290,7 +282,6 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
 		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
 		expected = map[string]any{
-			hostIPMarker:           nil,
 			nodeMarker:             res,
 			"IPv6VXLANTunnelAddr":  "fd10:11::11",
 			"VXLANTunnelMACAddrV6": "55:44:33:22:11:00",
@@ -318,9 +309,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.VXLANTunnelMACAddr = "00:11:22:33:44:55"
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11"
 		res.Spec.VXLANTunnelMACAddrV6 = "55:44:33:22:11:00"
-		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]any{
-			hostIPMarker:           &ip,
 			nodeMarker:             res,
 			"IPv4VXLANTunnelAddr":  "192.200.200.200",
 			"VXLANTunnelMACAddr":   "00:11:22:33:44:55",
@@ -362,12 +351,11 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		})
 		Expect(err).To(HaveOccurred())
 
-		By("trying to convert with an invalid IPv4 address - expect delete for that key")
+		By("trying to convert with an invalid Wireguard interface IPv4 address - expect delete for that key")
 		res = internalapi.NewNode()
 		res.Name = "mynode"
-		res.Spec.BGP = &internalapi.NodeBGPSpec{
-			IPv4Address:        "1.2.3.4/240",
-			IPv4IPIPTunnelAddr: "192.100.100.100",
+		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
+			InterfaceIPv4Address: "1.2.3.4/240",
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -375,29 +363,6 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		})
 		Expect(err).To(HaveOccurred())
 		expected := map[string]any{
-			hostIPMarker:       nil,
-			nodeMarker:         res,
-			"IpInIpTunnelAddr": "192.100.100.100",
-		}
-		checkExpectedConfigs(
-			kvps,
-			isNodeFelixConfig,
-			numFelixConfigs,
-			expected,
-		)
-
-		By("trying to convert with an invalid Wireguard interface IPv4 address - expect delete for that key")
-		res = internalapi.NewNode()
-		res.Name = "mynode"
-		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
-			InterfaceIPv4Address: "1.2.3.4/240",
-		}
-		kvps, err = up.Process(&model.KVPair{
-			Key:   v3NodeKey1,
-			Value: res,
-		})
-		Expect(err).To(HaveOccurred())
-		expected = map[string]any{
 			nodeMarker:      res,
 			wireguardMarker: nil,
 		}
@@ -420,9 +385,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			Value: res,
 		})
 		Expect(err).To(HaveOccurred())
-		ip := net.MustParseIP("1.2.3.4")
 		expected = map[string]any{
-			hostIPMarker:       &ip,
 			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
@@ -441,9 +404,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		}
 		res.Spec.IPv4VXLANTunnelAddr = "192.200.200.200/32"
 		res.Spec.VXLANTunnelMACAddr = ""
-		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]any{
-			hostIPMarker:          &ip,
 			nodeMarker:            res,
 			"IPv4VXLANTunnelAddr": nil,
 			"VXLANTunnelMACAddr":  nil,
@@ -469,7 +430,6 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/122"
 		res.Spec.VXLANTunnelMACAddrV6 = ""
 		expected = map[string]any{
-			hostIPMarker:           nil,
 			nodeMarker:             res,
 			"IPv6VXLANTunnelAddr":  nil,
 			"VXLANTunnelMACAddrV6": nil,
@@ -497,9 +457,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Spec.VXLANTunnelMACAddr = ""
 		res.Spec.IPv6VXLANTunnelAddr = "fd10:11::11/112"
 		res.Spec.VXLANTunnelMACAddrV6 = ""
-		ip = net.MustParseIP("192.100.100.100")
 		expected = map[string]any{
-			hostIPMarker:           &ip,
 			nodeMarker:             res,
 			"IPv4VXLANTunnelAddr":  nil,
 			"VXLANTunnelMACAddr":   nil,
