@@ -48,7 +48,7 @@ gen-files: gen-crds
 gen-crds:
 	rm -rf config/crd
 	# Generate CRDs
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0 crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.

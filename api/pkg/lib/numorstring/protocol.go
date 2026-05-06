@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ var (
 	}
 )
 
+// +kubebuilder:validation:Type=integer
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:Pattern=`^.*`
 type Protocol Uint8OrString
 
 // ProtocolFromInt creates a Protocol struct from an integer value.

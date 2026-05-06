@@ -63,7 +63,7 @@ build: gen-files examples
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) go run sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0 crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
