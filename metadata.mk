@@ -66,6 +66,14 @@ LIBBPF_VERSION=v1.6.2
 # The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
 
+# Patched nftables + libnftnl shipped in calico/node and the istio CNI install
+# image. Built by hack/rpms/nftables/ and consumed via calico/nftables-rpms:<sha>-<arch>.
+# Do not bump NFTABLES_VER past 1.1.1 - see projectcalico/calico#11750.
+NFTABLES_VER=1.1.1
+NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
+LIBNFTNL_VER=1.2.8
+LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
+
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH ?= master
 OPERATOR_ORGANIZATION ?= tigera
