@@ -24,7 +24,6 @@ The following illustrates the directory structure calico uses in etcd.
        |  |     |--config       # Host level config
        |  |     |  |--...
        |  |     |  `--marker 
-       |  |     |--bird_ip      # the host IP (IPv4) [to be retired]
        |  |     |--workload
        |  |     |  `--<orchestrator-id>  # E.g. docker, openstack, k8s
        |  |     |     `--<container-id>  # one for each container on the Docker Host

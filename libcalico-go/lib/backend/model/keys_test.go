@@ -45,7 +45,6 @@ var interestingPaths = []string{
 	"/calico/v1/host/foobar/metadata",
 	"/calico/v1/host/foobar/wireguard",
 	"/calico/v1/host/foobar/config/biff/bopp",
-	"/calico/v1/host/foobar/bird_ip",
 	"/calico/v1/host/foobar",
 	"/calico/v1/netset",
 	"/calico/v1/netset/foo",
@@ -279,12 +278,6 @@ var _ = DescribeTable(
 			Hostname:   "foobar",
 			EndpointID: "end/point",
 		},
-		false,
-	),
-	Entry(
-		"host IP",
-		"/calico/v1/host/foobar/bird_ip",
-		HostIPKey{Hostname: "foobar"},
 		false,
 	),
 	Entry(

@@ -433,7 +433,7 @@ func NewCalculationGraph(
 		//         |
 		//      <dataplane>
 		//
-		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates(), conf.RouteSource)
+		l3RR := NewL3RouteResolver(hostname, callbacks, conf.RouteSource)
 		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 		l3RR.OnAlive = liveCallback
 		cg.l3RouteResolver = l3RR
@@ -452,7 +452,7 @@ func NewCalculationGraph(
 	//      <dataplane>
 	//
 	if conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 {
-		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
+		vxlanResolver := NewVXLANResolver(hostname, callbacks)
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 		cg.vxlanResolver = vxlanResolver
 	}
