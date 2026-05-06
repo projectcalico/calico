@@ -374,7 +374,6 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 			expected,
 		)
 
-
 		By("trying to convert with an invalid Wireguard interface IPv4 address - expect delete for that key")
 		res = internalapi.NewNode()
 		res.Name = "mynode"
