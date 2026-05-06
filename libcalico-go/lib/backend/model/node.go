@@ -15,12 +15,10 @@
 package model
 
 import (
-	goerrors "errors"
 	"fmt"
 	"reflect"
 	"regexp"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -28,31 +26,12 @@ import (
 )
 
 var (
-	typeNode          = reflect.TypeFor[Node]()
 	typeHostMetadata  = reflect.TypeFor[HostMetadata]()
 	typeOrchRefs      = reflect.TypeFor[[]OrchRef]()
-	typeHostIp        = rawIPType
 	typeWireguard     = reflect.TypeFor[Wireguard]()
 	matchHostMetadata = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/metadata$`)
-	matchHostIp       = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip$`)
 	matchWireguard    = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/wireguard$`)
 )
-
-type Node struct {
-	// Felix specific configuration
-	FelixIPv4 *net.IP
-
-	// Node specific labels
-	Labels map[string]string `json:"labels,omitempty"`
-
-	// BGP specific configuration
-	BGPIPv4Addr *net.IP
-	BGPIPv6Addr *net.IP
-	BGPIPv4Net  *net.IPNet
-	BGPIPv6Net  *net.IPNet
-	BGPASNumber *numorstring.ASNumber
-	OrchRefs    []OrchRef `json:"orchRefs,omitempty"`
-}
 
 type OrchRef struct {
 	Orchestrator string `json:"orchestrator,omitempty"`
@@ -66,54 +45,10 @@ type Wireguard struct {
 	PublicKeyV6       string  `json:"publicKeyV6,omitempty"`
 }
 
-type NodeKey struct {
-	Hostname string
-}
-
-func (key NodeKey) defaultPath() (string, error) {
-	return "", goerrors.New("Node is a composite type, so not handled with a single path")
-}
-
-func (key NodeKey) defaultDeletePath() (string, error) {
-	return "", goerrors.New("Node is a composite type, so not handled with a single path")
-}
-
-func (key NodeKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, goerrors.New("Node is composite type, so not handled with a single path")
-}
-
-func (key NodeKey) valueType() (reflect.Type, error) {
-	return typeNode, nil
-}
-
-func (key NodeKey) parseValue(rawData []byte) (any, error) {
-	return parseJSONPointer[Node](key, rawData)
-}
-
-func (key NodeKey) String() string {
-	return fmt.Sprintf("Node(name=%s)", key.Hostname)
-}
-
-type NodeListOptions struct {
-	Hostname string
-}
-
-func (options NodeListOptions) defaultPathRoot() string {
-	return ""
-}
-
-func (options NodeListOptions) KeyFromDefaultPath(path string) Key {
-	return nil
-}
-
-// The node is a composite of the following subcomponents:
-// -  The host metadata.  This is the primary subcomponent and is used to enumerate
-//    hosts.  However, for backwards compatibility, the etcd driver needs to handle
-//    that this may not exist, and instead need to enumerate based on directory.
-// -  The host IPv4 address used by Calico to lock down IPIP traffic.
-// -  The BGP IPv4 and IPv6 addresses
-// -  The BGP ASN.
-
+// HostMetadata is the primary v1 host enumeration entry — its presence in the
+// datastore signals "this host exists". Tunnel addresses, BGP config, etc. are
+// derived from the v3 Node resource and projected onto separate v1 keys by the
+// felix node update processor.
 type HostMetadata struct {
 }
 
@@ -171,36 +106,6 @@ func (options HostMetadataListOptions) KeyFromDefaultPath(path string) Key {
 		log.Debugf("%s didn't match regex", path)
 		return nil
 	}
-}
-
-// The Felix Host IP Key.
-type HostIPKey struct {
-	Hostname string
-}
-
-func (key HostIPKey) defaultPath() (string, error) {
-	return fmt.Sprintf("/calico/v1/host/%s/bird_ip",
-		key.Hostname), nil
-}
-
-func (key HostIPKey) defaultDeletePath() (string, error) {
-	return key.defaultPath()
-}
-
-func (key HostIPKey) defaultDeleteParentPaths() ([]string, error) {
-	return nil, nil
-}
-
-func (key HostIPKey) valueType() (reflect.Type, error) {
-	return typeHostIp, nil
-}
-
-func (key HostIPKey) parseValue(rawData []byte) (any, error) {
-	return parseRawIP(rawData), nil
-}
-
-func (key HostIPKey) String() string {
-	return fmt.Sprintf("Node(name=%s)", key.Hostname)
 }
 
 type OrchRefKey struct {
