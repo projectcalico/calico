@@ -1043,6 +1043,9 @@ func (i *fakeIPAM) EnsureBlock(ctx context.Context, args ipam.BlockArgs) (*cnet.
 	return nil, nil, nil
 }
 func (i *fakeIPAM) UpgradeHost(ctx context.Context, nodeName string) error { return nil }
+func (i *fakeIPAM) GarbageCollectBlock(_ context.Context, _ *ipam.IPAMConfig, _ *model.KVPair) error {
+	return nil
+}
 func (i *fakeIPAM) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID string, updates *ipam.OwnerAttributeUpdates, preconditions *ipam.OwnerAttributePreconditions) error {
 	return nil
 }

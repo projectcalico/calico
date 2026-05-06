@@ -1173,6 +1173,11 @@ func validateIPAMConfigSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ics.MaxBlocksPerHost), "MaxBlocksPerHost", "",
 			reason("must be greater than or equal to 0"), "")
 	}
+
+	if ics.MinIPReclaimAgeSeconds < 0 {
+		structLevel.ReportError(reflect.ValueOf(ics.MinIPReclaimAgeSeconds), "MinIPReclaimAgeSeconds", "",
+			reason("must be greater than or equal to 0"), "")
+	}
 }
 
 func validateNodeSpec(structLevel validator.StructLevel) {

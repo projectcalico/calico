@@ -91,6 +91,11 @@ type IPAMConfigurationSpec struct {
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional
 	KubeVirtVMAddressPersistence *VMAddressPersistence `json:"kubeVirtVMAddressPersistence,omitempty"`
+
+	// MinIPReclaimAgeSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	MinIPReclaimAgeSeconds int32 `json:"minIPReclaimAgeSeconds,omitempty"`
 }
 
 // NewIPAMConfiguration creates a new (zeroed) IPAMConfiguration struct with the TypeMetadata initialised to the current

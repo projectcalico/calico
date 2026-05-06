@@ -263,17 +263,19 @@ func newIPAMConfigureCommand() *cobra.Command {
 			maxBlocksStr, _ := cmd.Flags().GetString("max-blocks-per-host")
 			persistenceStr, _ := cmd.Flags().GetString("kubevirt-ip-persistence")
 			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
+			minIPReclaimAgeSeconds, _ := cmd.Flags().GetInt("min-ip-reclaim-age-seconds")
 
 			if err := common.CheckVersionMismatch(config, allowMismatch); err != nil {
 				return err
 			}
 
-			return ipam.ConfigureIPAM(context.Background(), config, strictAffinity, maxBlocksStr, persistenceStr)
+			return ipam.ConfigureIPAM(context.Background(), config, strictAffinity, maxBlocksStr, persistenceStr, minIPReclaimAgeSeconds)
 		},
 	}
 	addConfigFlag(cmd)
 	cmd.Flags().String("strictaffinity", "", "Set StrictAffinity to true/false.")
 	cmd.Flags().String("max-blocks-per-host", "", "Set the maximum number of blocks that can be affine to a host.")
 	cmd.Flags().String("kubevirt-ip-persistence", "", "Control whether KubeVirt VMs retain persistent IP addresses (Enabled|Disabled).")
+	cmd.Flags().Int("min-ip-reclaim-age-seconds", -1, "Set the maximum time between release and re-allocation of an IP address.")
 	return cmd
 }

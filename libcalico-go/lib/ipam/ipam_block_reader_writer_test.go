@@ -620,7 +620,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("attempting to release the block", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -966,7 +967,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						if err != nil {
 							return nil, err
 						}
-						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
+						config := IPAMConfig{}
+						b1 := blockFromBackend(&config, kvpb.Value.(*model.AllocationBlock))
 						affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 						b1.autoAssign(1, nil, affinityCfg, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
@@ -1126,13 +1128,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("releasing the virtual affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1162,7 +1166,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
@@ -1170,7 +1175,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the virtual affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())

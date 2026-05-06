@@ -145,6 +145,11 @@ type IPAMConfig struct {
 	// when this is set to VMAddressPersistenceDisabled and will result in an error.
 	// If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
 	KubeVirtVMAddressPersistence *VMAddressPersistence
+
+	// MinIPReclaimAgeSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immeduately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	MinIPReclaimAgeSeconds int `json:"minIPReclaimAgeSeconds,omitempty"`
 }
 
 // GetUtilizationArgs defines the set of arguments for requesting IP utilization.
