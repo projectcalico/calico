@@ -82,7 +82,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 ignoredInterfaces:
                   description:
                     IgnoredInterfaces indicates the network interfaces that
@@ -204,7 +204,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
@@ -230,7 +230,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceExternalIPs:
                   description: |-
                     ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
@@ -246,7 +246,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceLoadBalancerAggregation:
                   default: Enabled
                   description: |-
@@ -273,7 +273,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
               type: object
               x-kubernetes-validations:
                 - message:
