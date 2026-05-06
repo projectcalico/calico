@@ -163,7 +163,11 @@
               echo "Cache miss for $NFT_RPMS_IMAGE, building"
               docker run --privileged --rm tonistiigi/binfmt --install all
               make -C hack/rpms/nftables image ARCH="$ARCH"
-              if [[ "$SEMAPHORE_GIT_BRANCH" == "master" || "$SEMAPHORE_GIT_BRANCH" == release-* ]]; then
+              # SEMAPHORE_GIT_BRANCH is the PR target branch on PR builds (so it
+              # equals "master" for every PR landing on master), not the source
+              # branch — gate on SEMAPHORE_GIT_PR_NUMBER being empty to detect
+              # an actual branch build before pushing.
+              if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && ( "$SEMAPHORE_GIT_BRANCH" == "master" || "$SEMAPHORE_GIT_BRANCH" == release-* ) ]]; then
                 docker push "$NFT_RPMS_IMAGE"
               fi
             fi
