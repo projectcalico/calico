@@ -1625,7 +1625,7 @@ var routeUpdateRemoteHostV6 = types.RouteUpdate{
 var vxlanWithWEPIPs = empty.withKVUpdates(
 	KVPair{Key: GlobalConfigKey{Name: "RouteSource"}, Value: &workloadIPs},
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteNode2ResKey, Value: nodeBGPv4Res(remoteHostname2, remoteHost2IP)},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN using WorkloadIPs").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1666,7 +1666,7 @@ var vxlanWithWEPIPsAndWEP = vxlanWithWEPIPs.withKVUpdates(
 // Since this new host sorts lower than the original, its should mask the route of the
 // WEP on the other node.
 var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 	KVPair{Key: remoteWlEpKey1, Value: &remoteWlEp1},
 ).withName("VXLAN using WorkloadIPs and overlapping WEPs").withVTEPs(
@@ -1709,7 +1709,7 @@ var vxlanWithWEPIPsAndWEPDuplicate = vxlanWithWEPIPsAndWEP.withKVUpdates(
 var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN").withVTEPs(
 	// VTEP for the remote node.
@@ -1743,13 +1743,25 @@ var vxlanWithBlockRoutes = []types.RouteUpdate{
 }
 
 var (
-	remoteNodeResKey = ResourceKey{Name: remoteHostname, Kind: internalapi.KindNode}
-	localNodeResKey  = ResourceKey{Name: localHostname, Kind: internalapi.KindNode}
+	remoteNodeResKey  = ResourceKey{Name: remoteHostname, Kind: internalapi.KindNode}
+	remoteNode2ResKey = ResourceKey{Name: remoteHostname2, Kind: internalapi.KindNode}
+	localNodeResKey   = ResourceKey{Name: localHostname, Kind: internalapi.KindNode}
 )
+
+// nodeBGPv4Res builds an internalapi.Node resource carrying just an IPv4 BGP
+// address — the v3 replacement for the old HostIPKey value.
+func nodeBGPv4Res(name string, ip calinet.IP) *internalapi.Node {
+	return &internalapi.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: internalapi.NodeSpec{
+			BGP: &internalapi.NodeBGPSpec{IPv4Address: ip.String() + "/32"},
+		},
+	}
+}
 
 // As vxlanWithBlock but with a host sharing the same IP.  No route update because we tie-break on host name.
 var vxlanWithBlockDupNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNode2ResKey, Value: nodeBGPv4Res(remoteHostname2, remoteHostIP)},
 ).withName("VXLAN with dup node IP").withHostMetadataV4V6(
 	&proto.HostMetadataV4V6Update{
 		Hostname: remoteHostname,
@@ -1762,7 +1774,7 @@ var vxlanWithBlockDupNodeIP = vxlanWithBlock.withKVUpdates(
 )
 
 var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: nil},
+	KVPair{Key: remoteNodeResKey, Value: nil},
 ).withName("VXLAN with dup node IP removed").withHostMetadataV4V6(
 	&proto.HostMetadataV4V6Update{
 		Hostname: remoteHostname2,
@@ -1789,12 +1801,12 @@ var vxlanWithDupNodeIPRemoved = vxlanWithBlockDupNodeIP.withKVUpdates(
 	},
 )
 
-// As vxlanWithBlock but with node resources instead of host IPs.
+// As vxlanWithBlock but with the remote node resource carrying the host IP in
+// /24 form rather than the default /32 (the latter is what nodeBGPv4Res emits).
 var vxlanWithBlockNodeRes = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: nil},
 	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: localHostname,
+			Name: remoteHostname,
 		},
 		Spec: internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{
 			IPv4Address: remoteHostIP.String() + "/24",
@@ -1805,7 +1817,7 @@ var vxlanWithBlockNodeRes = vxlanWithBlock.withKVUpdates(
 		Hostname: remoteHostname,
 		Ipv4Addr: remoteHostIP.String() + "/24",
 	},
-).withName("VXLAN with node resource (node resources)")
+).withName("VXLAN with node resource (/24 BGP address)")
 
 // As vxlanWithBlock but with some superfluous IPv6 resources (VXLAN is IPv4 only).
 var vxlanWithIPv6Resources = vxlanWithBlock.withKVUpdates(
@@ -1845,7 +1857,7 @@ var vxlanWithMAC = vxlanWithBlock.withKVUpdates(
 // other node.
 var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrows},
-	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteNode2ResKey, Value: nodeBGPv4Res(remoteHostname2, remoteHost2IP)},
 	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
 ).withName("VXLAN borrow").withVTEPs(
 	types.VXLANTunnelEndpointUpdate{
@@ -1908,7 +1920,7 @@ var vxlanWithBlockAndDifferentTunnelIP = vxlanWithBlock.withKVUpdates(
 
 // vxlanWithBlock but with a different node IP.
 var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHost2IP)},
 ).withName("VXLAN different node IP").withVTEPs(
 	// VTEP for the remote node.
 	types.VXLANTunnelEndpointUpdate{
@@ -1973,10 +1985,10 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 
-	KVPair{Key: localHostIPKey, Value: &localHostIP},
+	KVPair{Key: localNodeResKey, Value: nodeBGPv4Res(localHostname, localHostIP)},
 	KVPair{Key: localHostVXLANTunnelConfigKey, Value: localHostVXLANTunnelIP},
 
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 
 	KVPair{Key: localIPAMBlockKey, Value: &localIPAMBlockWithBorrows},
@@ -2096,8 +2108,8 @@ var vxlanLocalBlockWithBorrowsLocalWEP = vxlanLocalBlockWithBorrows.withKVUpdate
 
 // As vxlanLocalBlockWithBorrows but using Node resources instead of host IPs.
 var vxlanLocalBlockWithBorrowsNodeRes = vxlanLocalBlockWithBorrows.withKVUpdates(
-	KVPair{Key: localHostIPKey, Value: nil},
-	KVPair{Key: remoteHostIPKey, Value: nil},
+	KVPair{Key: localNodeResKey, Value: nil},
+	KVPair{Key: remoteNodeResKey, Value: nil},
 	KVPair{Key: remoteNodeResKey, Value: &internalapi.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: remoteHostname,
@@ -2222,7 +2234,7 @@ var vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes = vxlanLocalBlockWithBorrow
 
 // vxlanWithBlockAndBorrows but missing the VTEP information for the first host.
 var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: nil},
+	KVPair{Key: remoteNodeResKey, Value: nil},
 ).withName("VXLAN borrow missing VTEP").withHostMetadataV4V6(
 	&proto.HostMetadataV4V6Update{
 		Hostname: remoteHostname2,
@@ -2292,7 +2304,7 @@ var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
 )
 
 var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
-	KVPair{Key: remoteHostIPKey, Value: nil},
+	KVPair{Key: remoteNodeResKey, Value: nil},
 ).withName("VXLAN host IP removed").withHostMetadataV4V6().withRoutes(
 	routeUpdateIPPoolVXLAN,
 	// Host removed but keep the route without the node IP.
@@ -2314,7 +2326,7 @@ var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
 var vxlanSlash32 = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32").withVTEPs(
 	// VTEP for the remote node.
@@ -2347,7 +2359,7 @@ var vxlanSlash32 = empty.withKVUpdates(
 
 var vxlanSlash32NoBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLANSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no block").withVTEPs(
 	// VTEP for the remote node.
@@ -2371,7 +2383,7 @@ var vxlanSlash32NoBlock = empty.withKVUpdates(
 
 var vxlanSlash32NoPool = empty.withKVUpdates(
 	KVPair{Key: remoteIPAMSlash32BlockKey, Value: &remoteIPAMBlockSlash32},
-	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteNodeResKey, Value: nodeBGPv4Res(remoteHostname, remoteHostIP)},
 	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
 ).withName("VXLAN /32 no pool").withVTEPs(
 	// VTEP for the remote node.
@@ -3659,19 +3671,6 @@ func (l StateList) String() string {
 		names = append(names, state.String())
 	}
 	return "[" + strings.Join(names, ", ") + "]"
-}
-
-// UsesNodeResources returns true if any of the KVs in this state are internalapi.Node resources.
-// Some calculation graph nodes support either the v3 Node or the old model.HostIP object.
-func (l StateList) UsesNodeResources() bool {
-	for _, s := range l {
-		for _, kv := range s.DatastoreState {
-			if resourceKey, ok := kv.Key.(ResourceKey); ok && resourceKey.Kind == internalapi.KindNode {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // RouteSource returns the route source to use for the test, based on the states in the test.
