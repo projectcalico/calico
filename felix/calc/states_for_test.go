@@ -3632,19 +3632,6 @@ func (l StateList) String() string {
 	return "[" + strings.Join(names, ", ") + "]"
 }
 
-// UsesNodeResources returns true if any of the KVs in this state are internalapi.Node resources.
-// Some calculation graph nodes support either the v3 Node or the old model.HostIP object.
-func (l StateList) UsesNodeResources() bool {
-	for _, s := range l {
-		for _, kv := range s.DatastoreState {
-			if resourceKey, ok := kv.Key.(ResourceKey); ok && resourceKey.Kind == internalapi.KindNode {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // RouteSource returns the route source to use for the test, based on the states in the test.
 // If the states include a Felix configuration update to set the route source, then it is used.
 // Otherwise, default to CalicoIPAM

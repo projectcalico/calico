@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -351,18 +351,42 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		})
 		Expect(err).To(HaveOccurred())
 
+		By("trying to convert with an invalid IPv4 address - expect delete for that key")
+		res = internalapi.NewNode()
+		res.Name = "mynode"
+		res.Spec.BGP = &internalapi.NodeBGPSpec{
+			IPv4Address:        "1.2.3.4/240",
+			IPv4IPIPTunnelAddr: "192.100.100.100",
+		}
+		kvps, err := up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		expected := map[string]any{
+			nodeMarker:         res,
+			"IpInIpTunnelAddr": "192.100.100.100",
+		}
+		checkExpectedConfigs(
+			kvps,
+			isNodeFelixConfig,
+			numFelixConfigs,
+			expected,
+		)
+
+
 		By("trying to convert with an invalid Wireguard interface IPv4 address - expect delete for that key")
 		res = internalapi.NewNode()
 		res.Name = "mynode"
 		res.Spec.Wireguard = &internalapi.NodeWireguardSpec{
 			InterfaceIPv4Address: "1.2.3.4/240",
 		}
-		kvps, err := up.Process(&model.KVPair{
+		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
 			Value: res,
 		})
 		Expect(err).To(HaveOccurred())
-		expected := map[string]any{
+		expected = map[string]any{
 			nodeMarker:      res,
 			wireguardMarker: nil,
 		}
