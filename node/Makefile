@@ -68,7 +68,7 @@ BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 # Producer image carrying the patched nftables + libnftnl RPMs we install in
 # the runtime stage. The tag is content-addressed so any change to specs,
 # patches, or version pins yields a new tag (see hack/rpms/nftables/Makefile).
-NFT_RPMS_IMAGE ?= $(shell $(MAKE) --no-print-directory -C ../hack/rpms/nftables print-image ARCH=$(ARCH))
+include ../hack/rpms/nftables/image.mk
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 

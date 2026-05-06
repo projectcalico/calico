@@ -10,15 +10,7 @@ include ../../../metadata.mk
 DEV_REGISTRIES ?= calico
 ARCH          ?= $(shell go env GOARCH 2>/dev/null || echo amd64)
 
-# Content-addressed tag. Hashes the spec files, patches, and the four
-# nftables/libnftnl version pins from metadata.mk. Take the first 12 hex chars
-# so the tag stays human-scannable.
-NFT_RPMS_TAG := $(shell ( \
-		cat libnftnl.spec nftables.spec patches/*.patch && \
-		echo $(NFTABLES_VER) $(NFTABLES_SHA256) $(LIBNFTNL_VER) $(LIBNFTNL_SHA256) \
-	) | sha256sum | cut -c1-12)
-
-NFT_RPMS_IMAGE := $(firstword $(DEV_REGISTRIES))/nftables-rpms:$(NFT_RPMS_TAG)-$(ARCH)
+include image.mk
 
 .PHONY: image print-tag print-image
 

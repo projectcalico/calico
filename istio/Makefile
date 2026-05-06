@@ -119,7 +119,7 @@ image: $(BUILD_IMAGES)
 # Producer image carrying the patched nftables + libnftnl RPMs that the
 # install-cni image installs in its almalinux build stage. Tag is
 # content-addressed; see hack/rpms/nftables/Makefile.
-NFT_RPMS_IMAGE ?= $(shell $(MAKE) --no-print-directory -C ../hack/rpms/nftables print-image ARCH=$(ARCH))
+include ../hack/rpms/nftables/image.mk
 
 .PHONY: nft-rpms-image
 nft-rpms-image:
