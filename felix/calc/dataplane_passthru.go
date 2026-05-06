@@ -33,8 +33,9 @@ import (
 // with the rest of the dataplane API.
 //
 // HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6 plus labels and ASN.
-// When BGP is not configured we fall back to the Node's address list for IPv4 and (when
-// IPv6 support is enabled) IPv6.
+// IPv4 falls back to the Node's address list (Internal preferred, External as backup) whenever
+// BGP doesn't supply one — mirroring the old felixnodeprocessor logic that previously fed the
+// retired HostIPKey channel. IPv6 falls back to the address list only when BGP is absent.
 type DataplanePassthru struct {
 	ipv6Support bool
 	callbacks   passthruCallbacks
@@ -153,8 +154,12 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		if node.Spec.BGP.ASNumber != nil {
 			info.asnumber = node.Spec.BGP.ASNumber.String()
 		}
-	} else {
-		// BGP is turned off; fall back to the Node's address list.
+	}
+	// If BGP didn't supply an IPv4 address, fall back to the Node's address
+	// list. This applies whether BGP is nil or BGP is set without an
+	// IPv4Address — matching the legacy felixnodeprocessor behaviour that fed
+	// the retired HostIPKey channel.
+	if info.ip4Addr == "" {
 		ipv4, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 4)
 		if ipnet == nil {
 			ipv4, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 4)
@@ -163,15 +168,18 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 			ipnet.IP = ipv4.IP
 			info.ip4Addr = ipnet.String()
 		}
-		if h.ipv6Support {
-			ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
-			if ipnet == nil {
-				ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
-			}
-			if ipnet != nil {
-				ipnet.IP = ipv6.IP
-				info.ip6Addr = ipnet.String()
-			}
+	}
+	// IPv6 fallback only fires when BGP is absent, preserving the historical
+	// asymmetry: IPv4 had a backup channel (HostIPKey) but IPv6 did not, so
+	// the Address list was only consulted for IPv6 when BGP itself was nil.
+	if bgpSpec == nil && h.ipv6Support {
+		ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
+		if ipnet == nil {
+			ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
+		}
+		if ipnet != nil {
+			ipnet.IP = ipv6.IP
+			info.ip6Addr = ipnet.String()
 		}
 	}
 
