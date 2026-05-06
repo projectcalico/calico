@@ -89,10 +89,8 @@ spec:
                         minimum: 1
                         type: integer
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                     required:
                       - name

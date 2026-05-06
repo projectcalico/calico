@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@ import (
 // JSON or YAML marshalling and unmarshalling, it produces or consumes the
 // inner type.  This allows you to have, for example, a JSON field that can
 // accept a name or number.
+//
+// +kubebuilder:validation:Type=integer
+// +kubebuilder:validation:XIntOrString
+// +kubebuilder:validation:Pattern=`^.*`
 type Uint8OrString struct {
 	Type   NumOrStringType `json:"type"`
 	NumVal uint8           `json:"numVal"`

@@ -129,10 +129,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -152,10 +150,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -371,18 +367,13 @@ spec:
                             reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         description:
                           NotProtocol is the negated version of the Protocol
                           field.
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         description: |-
                           Protocol is an optional field that restricts the rule to only apply to traffic of
                           a specific IP protocol. Required if any of the EntityRules contain Ports
@@ -391,6 +382,7 @@ spec:
                           Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
                           or an integer in the range 1-255.
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         description:
@@ -438,10 +430,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -461,10 +451,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -685,10 +673,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -708,10 +694,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -927,18 +911,13 @@ spec:
                             reason: FieldValueInvalid
                             rule: "!has(self.code) || has(self.type)"
                       notProtocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         description:
                           NotProtocol is the negated version of the Protocol
                           field.
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       protocol:
-                        anyOf:
-                          - type: integer
-                          - type: string
                         description: |-
                           Protocol is an optional field that restricts the rule to only apply to traffic of
                           a specific IP protocol. Required if any of the EntityRules contain Ports
@@ -947,6 +926,7 @@ spec:
                           Must be one of these string values: "TCP", "UDP", "ICMP", "ICMPv6", "SCTP", "UDPLite"
                           or an integer in the range 1-255.
                         pattern: ^.*
+                        type: integer
                         x-kubernetes-int-or-string: true
                       source:
                         description:
@@ -994,10 +974,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
@@ -1017,10 +995,8 @@ spec:
                               Since only some protocols have ports, if any ports are specified it requires the
                               Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
                             items:
-                              anyOf:
-                                - type: integer
-                                - type: string
                               pattern: ^.*
+                              type: string
                               x-kubernetes-int-or-string: true
                             maxItems: 50
                             type: array
