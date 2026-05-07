@@ -13,13 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Common security-group -> NetworkPolicy code.
+
+Free functions and helpers shared between the driver's dynamic update path
+(``mech_calico.security_groups_rule_updated`` and the SG bindings written alongside an
+endpoint by ``WorkloadEndpointSyncer.write_endpoint``) and the resync path
+(:class:`networking_calico.resync.policy_syncer.PolicySyncer`).
+"""
+
 from neutron_lib.constants import IP_PROTOCOL_MAP
 
 from oslo_log import log
 
 from networking_calico import datamodel_v3
 from networking_calico.common import config as calico_config
-from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
 LOG = log.getLogger(__name__)
 
@@ -38,63 +45,23 @@ SG_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH - len(SG_NAME_LABEL_
 SG_NAME_PREFIX = "ossg.default."
 
 
-class PolicySyncer(ResourceSyncer):
+def write_sgs_to_etcd(sgids, db, context):
+    """Write the NetworkPolicy for each given security group to etcd.
 
-    def __init__(self, db, txn_from_context):
-        super(PolicySyncer, self).__init__(db, txn_from_context, "NetworkPolicy")
-        self.region_string = calico_config.get_region_string()
-        self.namespace = datamodel_v3.get_namespace(self.region_string)
-
-    def delete_legacy_etcd_data(self):
-        if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
-            datamodel_v3.delete_legacy(self.resource_kind, SG_NAME_PREFIX)
-
-    def get_all_from_etcd(self):
-        results = []
-        for r in datamodel_v3.get_all(self.resource_kind, self.namespace):
-            name, _, _ = r
-            if name.startswith(SG_NAME_PREFIX):
-                results.append(r)
-        return results
-
-    def create_in_etcd(self, name, spec):
-        return datamodel_v3.put(
-            self.resource_kind, self.namespace, name, spec, mod_revision=0
+    Reads all rules for the given SG IDs in one DB query, then writes one NetworkPolicy
+    per SG.  Used both from the driver's dynamic update path and from the resync
+    narrow-scope path.
+    """
+    region_string = calico_config.get_region_string()
+    namespace = datamodel_v3.get_namespace(region_string)
+    rules = db.get_security_group_rules(context, filters={"security_group_id": sgids})
+    for sgid in sgids:
+        datamodel_v3.put(
+            "NetworkPolicy",
+            namespace,
+            SG_NAME_PREFIX + sgid,
+            policy_spec(sgid, rules),
         )
-
-    def update_in_etcd(self, name, spec, mod_revision=None):
-        return datamodel_v3.put(
-            self.resource_kind, self.namespace, name, spec, mod_revision=mod_revision
-        )
-
-    def delete_from_etcd(self, name, mod_revision):
-        return datamodel_v3.delete(
-            self.resource_kind, self.namespace, name, mod_revision=mod_revision
-        )
-
-    def get_all_from_neutron(self, context):
-        return dict(
-            (SG_NAME_PREFIX + sg["id"], sg)
-            for sg in self.db.get_security_groups(context)
-        )
-
-    def neutron_to_etcd_write_data(self, sg, context, reread=False):
-        if reread:
-            # We don't need to reread the SG row itself here, because we don't
-            # use any information from it, apart from its ID as a key for the
-            # following rules.
-            pass
-        rules = self.db.get_security_group_rules(
-            context, filters={"security_group_id": [sg["id"]]}
-        )
-        return policy_spec(sg["id"], rules)
-
-    def write_sgs_to_etcd(self, sgids, context):
-        rules = self.db.get_security_group_rules(
-            context, filters={"security_group_id": sgids}
-        )
-        for sgid in sgids:
-            self.update_in_etcd(SG_NAME_PREFIX + sgid, policy_spec(sgid, rules))
 
 
 def policy_spec(sgid, rules):

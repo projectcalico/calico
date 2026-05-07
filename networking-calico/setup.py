@@ -23,6 +23,7 @@ setup(
     entry_points={
         "console_scripts": [
             "calico-dhcp-agent = networking_calico.agent.dhcp_agent:main",
+            "calico-resync = networking_calico.resync.cli:main",
         ],
         "neutron.ml2.mechanism_drivers": [
             (
