@@ -1,0 +1,15 @@
+defaultBaseImage: calico/base:ubi9-1777576815
+defaultPlatforms:
+  - linux/amd64
+  - linux/arm64
+
+builds:
+  - id: csi-node-driver-registrar
+    main: ./cmd/csi-node-driver-registrar
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s -w"
+    flags:
+      - -trimpath
+      - -buildvcs=false
