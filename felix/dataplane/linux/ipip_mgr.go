@@ -123,8 +123,10 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname && msg.Ipv4Addr != "" {
-			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+		if msg.Hostname == m.hostname {
+			if msg.Ipv4Addr != "" {
+				m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+			}
 			return
 		}
 		// An empty Ipv4Addr means the host has no v4 BGP/host IP (e.g. its BGP
