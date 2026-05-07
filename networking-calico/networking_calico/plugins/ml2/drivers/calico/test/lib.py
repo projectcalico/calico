@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -233,6 +234,7 @@ from networking_calico.plugins.ml2.drivers.calico import policy
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.plugins.ml2.drivers.calico import subnets
 from networking_calico.plugins.ml2.drivers.calico import syncer
+from networking_calico.resync import scope
 
 # Replace the elector.
 mech_calico.Elector = GrandDukeOfSalzburg
@@ -249,8 +251,7 @@ def mock_projects_list():
 
 keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
-mech_calico.KeystoneClient = mock.Mock()
-mech_calico.KeystoneClient.return_value = keystone_client
+endpoints.make_keystone_client = mock.Mock(return_value=keystone_client)
 mech_calico.TrackTask = mock.Mock()
 mech_calico.TrackTask.return_value = None
 
@@ -556,6 +557,7 @@ class Lib(object):
             policy,
             status,
             subnets,
+            scope,
             syncer,
             datamodel_v3,
             etcdutils,
@@ -655,10 +657,13 @@ class Lib(object):
         if filters is None:
             return self.osdb_ports
 
-        assert list(filters.keys()) == ["id"]
-        allowed_ids = set(filters["id"])
-
-        return [p for p in self.osdb_ports if p["id"] in allowed_ids]
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [p for p in self.osdb_ports if p["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [p for p in self.osdb_ports if p["network_id"] in allowed]
+        raise AssertionError("unsupported get_ports filter: %s" % filters)
 
     def get_subnet(self, context, id):
         matches = [s for s in self.osdb_subnets if s["id"] == id]
@@ -670,12 +675,15 @@ class Lib(object):
             return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
-        if filters:
-            self.assertTrue("id" in filters)
-            matches = [s for s in self.osdb_subnets if s["id"] in filters["id"]]
-        else:
-            matches = [s for s in self.osdb_subnets]
-        return matches
+        if not filters:
+            return list(self.osdb_subnets)
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [s for s in self.osdb_subnets if s["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [s for s in self.osdb_subnets if s["network_id"] in allowed]
+        raise AssertionError("unsupported get_subnets filter: %s" % filters)
 
     def get_network(self, context, id):
         return self.get_networks(context, filters={"id": [id]})[0]
