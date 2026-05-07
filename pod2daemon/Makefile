@@ -93,6 +93,31 @@ endif
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)
+	rm -f .registrar.created-*
+
+###############################################################################
+# Build the csi-node-driver-registrar OCI image directly with ko.
+#
+# We build from the upstream clone (it has its own go.mod) to dodge the
+# diamond dependency conflicts that show up when adding csi-node-driver-
+# registrar to the calico monorepo's go.mod via a `tool` directive. The
+# .ko.yaml lives in our source tree (registrar.ko.yaml) and is copied into
+# the clone at build time so `make clean-registrar` doesn't lose it.
+###############################################################################
+REGISTRAR_CREATED=.registrar.created-$(ARCH)
+
+.PHONY: registrar-image
+registrar-image: $(REGISTRAR_CREATED)
+
+$(REGISTRAR_CREATED): clone-registrar-upstream
+	cp registrar.ko.yaml $(REGISTRAR_IMAGE)/.ko.yaml
+	cd $(REGISTRAR_IMAGE) && \
+		KO_DOCKER_REPO=$(REGISTRAR_IMAGE) ko build \
+		    --local --bare \
+		    --platform=linux/$(ARCH) \
+		    --tags=latest-$(ARCH) \
+		    ./cmd/csi-node-driver-registrar
+	touch $@
 
 ###############################################################################
 # UTs

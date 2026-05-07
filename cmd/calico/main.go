@@ -41,6 +41,7 @@ func newRootCommand() *cobra.Command {
 	cmd.AddCommand(
 		newCtlCommand(),
 		newHealthCommand(),
+		newIPAMUpgradeCommand(),
 		newVersionCommand(),
 	)
 
