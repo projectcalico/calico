@@ -31,7 +31,7 @@ import (
 // VXLANResolver is responsible for resolving node IPs and node config to calculate the
 // VTEP for each host.  It registers for:
 //
-//   - model.HostIPKey
+//   - model.ResourceKey (for v3 Node resources)
 //   - model.HostConfigKey
 //
 // VXLAN routes are calculated by the L3RouteResolver, and to be valid for the dataplane
@@ -62,10 +62,9 @@ type VXLANResolver struct {
 	nodeNameToVXLANMacV6        map[string]string
 	nodeNameToSentVTEP          map[string]*proto.VXLANTunnelEndpointUpdate
 	vxlanPools                  map[string]model.IPPool
-	useNodeResourceUpdates      bool
 }
 
-func NewVXLANResolver(hostname string, callbacks vxlanCallbacks, useNodeResourceUpdates bool) *VXLANResolver {
+func NewVXLANResolver(hostname string, callbacks vxlanCallbacks) *VXLANResolver {
 	return &VXLANResolver{
 		hostname:                    hostname,
 		callbacks:                   callbacks,
@@ -78,17 +77,11 @@ func NewVXLANResolver(hostname string, callbacks vxlanCallbacks, useNodeResource
 		nodeNameToVXLANMacV6:        map[string]string{},
 		nodeNameToSentVTEP:          map[string]*proto.VXLANTunnelEndpointUpdate{},
 		vxlanPools:                  map[string]model.IPPool{},
-		useNodeResourceUpdates:      useNodeResourceUpdates,
 	}
 }
 
 func (c *VXLANResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	if c.useNodeResourceUpdates {
-		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
-	} else {
-		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
-	}
-
+	allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
 	allUpdDispatcher.Register(model.HostConfigKey{}, c.OnHostConfigUpdate)
 }
 
@@ -124,23 +117,6 @@ func (c *VXLANResolver) OnResourceUpdate(update api.Update) (_ bool) {
 		c.sendVTEPUpdateOrRemove(nodeName)
 	}
 
-	return
-}
-
-// OnHostIPUpdate gets called whenever a node IP address changes. On an add/update,
-// we need to check if there is a VTEP which is now valid, and trigger programming
-// of them to the data plane. On a delete, we need to withdraw the VTEP associated
-// with the node.
-func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
-	nodeName := update.Key.(model.HostIPKey).Hostname
-	logrus.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
-
-	if update.Value != nil {
-		c.onNodeIPUpdate(nodeName, update.Value.(*cnet.IP).String(), "")
-	} else {
-		delete(c.nodeNameToIPv4Addr, nodeName)
-		c.sendVTEPUpdateOrRemove(nodeName)
-	}
 	return
 }
 
