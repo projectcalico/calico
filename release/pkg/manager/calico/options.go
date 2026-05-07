@@ -38,7 +38,7 @@ func IsHashRelease() Option {
 	}
 }
 
-func WithValidate(validate bool) Option {
+func WithValidation(validate bool) Option {
 	return func(r *CalicoManager) error {
 		r.validate = validate
 		return nil
@@ -111,30 +111,44 @@ func WithS3Bucket(bucket string) Option {
 	}
 }
 
-func WithPublishImages(publish bool) Option {
+func WithHelmIndex(enabled bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishImages = publish
+		r.helmIndex = enabled
 		return nil
 	}
 }
 
-func WithPublishCharts(publish bool) Option {
+func WithHelmCharts(enabled bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishCharts = publish
+		r.helmCharts = enabled
 		return nil
 	}
 }
 
-func WithPublishGitRef(publish bool) Option {
+func WithGitRef(enabled bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishGitRef = publish
+		r.gitRef = enabled
 		return nil
 	}
 }
 
-func WithPublishGithubRelease(publish bool) Option {
+func WithGithubRelease(enabled bool) Option {
 	return func(r *CalicoManager) error {
-		r.publishGithub = publish
+		r.githubRelease = enabled
+		return nil
+	}
+}
+
+func WithWindowsArchive(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.windowsArchive = enabled
+		return nil
+	}
+}
+
+func WithE2EBinaries(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.e2eBinaries = enabled
 		return nil
 	}
 }
@@ -146,9 +160,9 @@ func WithPublishHashrelease(publish bool) Option {
 	}
 }
 
-func WithBuildImages(buildImages bool) Option {
+func WithImages(enabled bool) Option {
 	return func(r *CalicoManager) error {
-		r.buildImages = buildImages
+		r.images = enabled
 		return nil
 	}
 }
@@ -256,6 +270,34 @@ func WithArchiveImages(archive bool) Option {
 func WithOperatorBranch(branch string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorBranch = branch
+		return nil
+	}
+}
+
+func WithManifests(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.manifests = enabled
+		return nil
+	}
+}
+
+func WithBinaries(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.binaries = enabled
+		return nil
+	}
+}
+
+func WithOCPBundle(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.ocpBundle = enabled
+		return nil
+	}
+}
+
+func WithTarball(enabled bool) Option {
+	return func(r *CalicoManager) error {
+		r.tarball = enabled
 		return nil
 	}
 }
