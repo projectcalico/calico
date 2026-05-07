@@ -111,7 +111,7 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("an unrelated update shouldn't trigger work", func() {
 			natTable.UpdateCalled = false
-			masqMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
 				Hostname: "foo",
 				Ipv4Addr: "10.0.0.17",
 			})

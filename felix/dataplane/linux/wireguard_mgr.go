@@ -63,8 +63,8 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 	logCtx := logrus.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
-		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Update update")
+	case *proto.HostMetadataUpdate:
+		logCtx.WithField("msg", msg).Debug("HostMetadataUpdate update")
 		var addrStr string
 		if m.ipVersion == 4 {
 			addrStr = msg.Ipv4Addr
@@ -75,7 +75,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 			logCtx.WithFields(logrus.Fields{
 				"hostname":  msg.Hostname,
 				"ipVersion": m.ipVersion,
-			}).Debug("Ignoring HostMetadataV4V6Update with no address for this IP version")
+			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
 			return
 		}
 		addr := ip.FromIPOrCIDRString(addrStr)
@@ -84,12 +84,12 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 				"hostname":  msg.Hostname,
 				"address":   addrStr,
 				"ipVersion": m.ipVersion,
-			}).Warn("Ignoring HostMetadataV4V6Update with invalid or mismatched address for this IP version")
+			}).Warn("Ignoring HostMetadataUpdate with invalid or mismatched address for this IP version")
 			return
 		}
 		m.wireguardRouteTable.EndpointUpdate(msg.Hostname, addr)
-	case *proto.HostMetadataV4V6Remove:
-		logCtx.WithField("msg", msg).Debug("HostMetadataV4V6Remove update")
+	case *proto.HostMetadataRemove:
+		logCtx.WithField("msg", msg).Debug("HostMetadataRemove update")
 		m.wireguardRouteTable.EndpointRemove(msg.Hostname)
 	case *proto.RouteUpdate:
 		logCtx.WithField("msg", msg).Debug("RouteUpdate update")

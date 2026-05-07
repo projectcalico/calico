@@ -622,7 +622,7 @@ func (buf *EventSequencer) OnHostMetadataUpdate(hostname string, info *HostInfo)
 
 func (buf *EventSequencer) flushHostUpdates() {
 	for hostname, hostInfo := range buf.pendingHostMetadataUpdates {
-		buf.Callback(&proto.HostMetadataV4V6Update{
+		buf.Callback(&proto.HostMetadataUpdate{
 			Hostname: hostname,
 			Ipv4Addr: hostInfo.ip4Addr,
 			Ipv6Addr: hostInfo.ip6Addr,
@@ -644,7 +644,7 @@ func (buf *EventSequencer) OnHostMetadataRemove(hostname string) {
 
 func (buf *EventSequencer) flushHostDeletes() {
 	for item := range buf.pendingHostMetadataDeletes.All() {
-		buf.Callback(&proto.HostMetadataV4V6Remove{
+		buf.Callback(&proto.HostMetadataRemove{
 			Hostname: item,
 		})
 		buf.sentHosts.Discard(item)
