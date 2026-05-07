@@ -40,7 +40,7 @@
         "react-router-dom": "6.30.3",
         "react-table": "^7.7.0",
         "react-window": "^1.8.6",
-        "uuid": "^11.1.0"
+        "uuid": "^14.0.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.31.0",
