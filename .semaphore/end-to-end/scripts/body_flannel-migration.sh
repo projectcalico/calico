@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
+# body_flannel-migration.sh - flannel-to-Calico migration test flow.
+#
+# Provisions a cluster, installs flannel + a CNI plugin helper, runs a basic
+# connectivity smoke test, applies Calico + the flannel-migration job, waits
+# for the migration to complete, then runs the full e2e suite on Calico.
+#
+# Uses the legacy `./bz.sh tests:run` test runner (not the in-repo binary).
+# When the in-repo binary reaches parity, this script can migrate to
+# `make e2e-run` like body_standard.sh's run_tests_local.sh phase.
 set -exo pipefail
+
+PHASES="$(dirname "$0")/phases"
+
 echo "[INFO] starting job..."
 
 export CNI_VERSION=${CNI_VERSION:-"v1.1.1"}
@@ -9,7 +21,7 @@ export CALICO_MANIFEST=${CALICO_MANIFEST:-"manifests/flannel-migration/calico.ya
 export MIGRATION_MANIFEST=${MIGRATION_MANIFEST:-"manifests/flannel-migration/migration-job.yaml"}
 
 if [ "${USE_HASH_RELEASE}" == "true" ]; then
- echo "[INFO] Using hash release for flannel migration"
+  echo "[INFO] Using hash release for flannel migration"
   LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
   DOCS_URL=$(curl --retry 9 --retry-all-errors -sS ${LATEST_HASHREL})
@@ -28,16 +40,15 @@ export BZ_LOCAL=${BZ_HOME}/.local
 export KUBECONFIG=$BZ_LOCAL/kubeconfig
 export PATH=$PATH:$BZ_LOCAL/bin
 
-# Seems like modern OSes no longer include br_netfilter by default which breaks flannel. Install it in case we need it.
+# Modern OSes no longer include br_netfilter by default, which breaks flannel.
 echo "[INFO] installing br_netfilter..."
 sudo modprobe br_netfilter
 
 mkdir -p "$BZ_LOGS_DIR"
 cd "${BZ_HOME}"
-bz provision |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/provision.log.gz")
-cache store "$SEMAPHORE_JOB_ID" ../bz
+source "${PHASES}/provision.sh"
 
-# Install bridge CNI plugin (needed by kube-flannel manifest)
+# Install bridge CNI plugin (needed by kube-flannel manifest).
 kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: DaemonSet
@@ -96,19 +107,23 @@ spec:
         hostPath:
           path: /opt/cni/bin
 EOF
-# Update flannel.yaml to use the podCIDR that CRC sets up
+
+# Update flannel.yaml to use the podCIDR that CRC sets up.
 wget -O flannel.yaml "$DOWNLEVEL_MANIFEST"
 sed -i "s?10.244.0.0/16?192.168.0.0/16?g" ./flannel.yaml
 kubectl apply -f - < ./flannel.yaml
 sleep 30 # wait for flannel to come up
 kubectl get po -A -owide
-# Run a basic services test to check that flannel networking is working
-K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' ./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests-pre.log")
+
+# Run a basic services test to check that flannel networking is working.
+K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' \
+  ./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests-pre.log")
+
 kubectl delete -n kube-system ds cni-installer || true  # remove the CNI installer daemonset
 kubectl apply -f "$DOCS_URL/$CALICO_MANIFEST"
 wget -O calico-migration.yaml "$DOCS_URL/$MIGRATION_MANIFEST"
 kubectl apply -f - < ./calico-migration.yaml
-sleep 5  # to make sure the job has started before we check its status
+sleep 5  # make sure the job has started before we check its status
 kubectl -n kube-system get jobs flannel-migration
 kubectl -n kube-system describe jobs flannel-migration
 kubectl get po -A -owide
@@ -117,9 +132,11 @@ kubectl -n kube-system get jobs flannel-migration
 kubectl -n kube-system describe jobs flannel-migration
 kubectl -n kube-system logs -l k8s-app=flannel-migration-controller
 kubectl get po -A -owide
-# delete the migration job because the presence of a non-Running pod in kube-system upsets the e2es.
+
+# Delete the migration job because the presence of a non-Running pod in
+# kube-system upsets the e2es.
 kubectl -n kube-system delete job/flannel-migration || true
 kubectl -n kube-system delete po -l k8s-app=flannel-migration-controller || true
 
-# Run e2e on uplevel calico
+# Run e2e on uplevel calico.
 ./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests.log")

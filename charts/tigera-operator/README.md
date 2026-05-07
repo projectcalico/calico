@@ -168,7 +168,7 @@ tigeraOperator:
   image: tigera/operator
   registry: quay.io
 calicoctl:
-  image: quay.io/calico/ctl
+  image: quay.io/calico/calico
 
 # Optionally configure the host and port used to access the Kubernetes API server.
 kubernetesServiceEndpoint:

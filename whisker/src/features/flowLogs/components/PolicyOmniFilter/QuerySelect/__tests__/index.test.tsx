@@ -27,6 +27,7 @@ describe('<QuerySelect />', () => {
                 value={value}
                 onChange={onChange}
                 showSearch={false}
+                placeholder='Select a kind...'
             />,
         );
 

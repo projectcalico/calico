@@ -135,7 +135,7 @@ Description:
 
 	// Build the checker.
 	checker := NewIPAMChecker(kubeClient, client, bc, showAllIPs, showProblemIPs, outFile, version)
-	return checker.checkIPAM(ctx)
+	return checker.CheckIPAM(ctx)
 }
 
 func NewIPAMChecker(k8sClient kubernetes.Interface,
@@ -190,7 +190,7 @@ type IPAMChecker struct {
 	outFile string
 }
 
-func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
+func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	fmt.Println("Checking IPAM for inconsistencies...")
 	fmt.Println()
 

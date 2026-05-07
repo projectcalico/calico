@@ -60,13 +60,12 @@ type L3RouteResolver struct {
 
 	// Store node metadata indexed by node name, and routes by the
 	// block that contributed them.
-	nodeNameToNodeInfo     map[string]l3rrNodeInfo
-	blockToRoutes          map[string]set.Set[nodenameRoute]
-	nodeRoutes             nodeRoutes
-	allPools               map[string]l3rrPoolInfo
-	workloadIDToCIDRs      map[model.WorkloadEndpointKey][]cnet.IPNet
-	useNodeResourceUpdates bool
-	routeSource            string
+	nodeNameToNodeInfo map[string]l3rrNodeInfo
+	blockToRoutes      map[string]set.Set[nodenameRoute]
+	nodeRoutes         nodeRoutes
+	allPools           map[string]l3rrPoolInfo
+	workloadIDToCIDRs  map[model.WorkloadEndpointKey][]cnet.IPNet
+	routeSource        string
 
 	OnAlive        func()
 	lastLiveReport time.Time
@@ -170,7 +169,7 @@ func (i l3rrNodeInfo) AddressesAsCIDRs() []ip.CIDR {
 	return cidrs
 }
 
-func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResourceUpdates bool, routeSource string) *L3RouteResolver {
+func NewL3RouteResolver(hostname string, callbacks routeCallbacks, routeSource string) *L3RouteResolver {
 	logrus.Info("Creating L3 route resolver")
 	l3rr := &L3RouteResolver{
 		myNodeName: hostname,
@@ -178,27 +177,19 @@ func NewL3RouteResolver(hostname string, callbacks routeCallbacks, useNodeResour
 
 		trie: NewRouteTrie(),
 
-		nodeNameToNodeInfo:     map[string]l3rrNodeInfo{},
-		blockToRoutes:          map[string]set.Set[nodenameRoute]{},
-		allPools:               map[string]l3rrPoolInfo{},
-		workloadIDToCIDRs:      map[model.WorkloadEndpointKey][]cnet.IPNet{},
-		useNodeResourceUpdates: useNodeResourceUpdates,
-		routeSource:            routeSource,
-		nodeRoutes:             newNodeRoutes(),
+		nodeNameToNodeInfo: map[string]l3rrNodeInfo{},
+		blockToRoutes:      map[string]set.Set[nodenameRoute]{},
+		allPools:           map[string]l3rrPoolInfo{},
+		workloadIDToCIDRs:  map[model.WorkloadEndpointKey][]cnet.IPNet{},
+		routeSource:        routeSource,
+		nodeRoutes:         newNodeRoutes(),
 	}
 	l3rr.trie.OnAlive = l3rr.maybeReportLive
 	return l3rr
 }
 
 func (c *L3RouteResolver) RegisterWith(allUpdDispatcher, localDispatcher *dispatcher.Dispatcher) {
-	if c.useNodeResourceUpdates {
-		logrus.Info("Registering L3 route resolver (node resources on)")
-		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
-	} else {
-		logrus.Info("Registering L3 route resolver (node resources off)")
-		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
-	}
-
+	allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
 	allUpdDispatcher.Register(model.IPPoolKey{}, c.OnPoolUpdate)
 
 	// Depending on if we're using workload endpoints for routing information, we may
@@ -437,30 +428,6 @@ func (c *L3RouteResolver) OnResourceUpdate(update api.Update) (_ bool) {
 	}
 
 	c.onNodeUpdate(nodeName, nodeInfo)
-
-	return
-}
-
-// OnHostIPUpdate gets called whenever a node IP address changes.
-func (c *L3RouteResolver) OnHostIPUpdate(update api.Update) (_ bool) {
-	// Queue up a flush.
-	defer c.flush()
-
-	nodeName := update.Key.(model.HostIPKey).Hostname
-	logrus.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
-
-	var newNodeInfo *l3rrNodeInfo
-	if update.Value != nil {
-		newCaliIP := update.Value.(*cnet.IP)
-		v4Addr, ok := ip.FromCalicoIP(*newCaliIP).(ip.V4Addr)
-		if ok { // Defensive; we only expect an IPv4.
-			newNodeInfo = &l3rrNodeInfo{
-				V4Addr: v4Addr,
-				V4CIDR: v4Addr.AsCIDR().(ip.V4CIDR), // Don't know the CIDR so use the /32.
-			}
-		}
-	}
-	c.onNodeUpdate(nodeName, newNodeInfo)
 
 	return
 }

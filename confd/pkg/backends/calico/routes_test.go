@@ -13,8 +13,6 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 const (
@@ -158,6 +156,7 @@ var _ = Describe("RouteGenerator", func() {
 				ExternalIPRouteIndex:     NewRouteIndex(),
 				ClusterIPRouteIndex:      NewRouteIndex(),
 				LoadBalancerIPRouteIndex: NewRouteIndex(),
+				nodeLabelManager:         newNodeLabelManager(),
 
 				externalIPs: []string{
 					ipNet1.String(),
@@ -825,24 +824,6 @@ var _ = Describe("RouteGenerator", func() {
 	})
 })
 
-var _ = Describe("Update BGP Config Cache", func() {
-	c := &client{cache: make(map[string]string)}
-
-	It("should update cache value when IgnoredInterfaces is set in BGPConfiguration", func() {
-		By("No value cached")
-		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(BeEmpty())
-
-		By("After updating")
-		res := &apiv3.BGPConfiguration{
-			Spec: apiv3.BGPConfigurationSpec{
-				IgnoredInterfaces: []string{"iface-1", "iface-2"},
-			},
-		}
-		c.getIgnoredInterfacesKVPair(res, model.GlobalBGPConfigKey{})
-		Expect(c.cache["/calico/bgp/v1/global/ignored_interfaces"]).To(Equal("iface-1,iface-2"))
-	})
-})
-
 var _ = Describe("Service Load Balancer Aggregation", func() {
 	var rg *routeGenerator
 
@@ -862,6 +843,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 				ExternalIPRouteIndex:     NewRouteIndex(),
 				ClusterIPRouteIndex:      NewRouteIndex(),
 				LoadBalancerIPRouteIndex: NewRouteIndex(),
+				nodeLabelManager:         newNodeLabelManager(),
 			}
 			rg.client = mockClient
 			rg.nodeName = "test-node"
@@ -1161,5 +1143,4 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 			})
 		})
 	})
-
 })

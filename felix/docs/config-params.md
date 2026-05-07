@@ -1949,6 +1949,23 @@ seconds).
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `0s` |
 
+### `BPFIPFragmentReassemblyEnabled` (config file) / `bpfIPFragmentReassemblyEnabled` (YAML)
+
+Controls whether Felix loads the BPF program that
+reassembles out-of-order IP fragments from external networks. This program requires
+a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+Felix reports not-ready until the user sets this to false. When false, fragmented
+packets from external sources are dropped.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFIPFragmentReassemblyEnabled` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `true` |
+| `FelixConfiguration` field | `bpfIPFragmentReassemblyEnabled` (YAML) `BPFIPFragmentReassemblyEnabled` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `true` |
+
 ### `BPFJITHardening` (config file) / `bpfJITHardening` (YAML)
 
 Controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1

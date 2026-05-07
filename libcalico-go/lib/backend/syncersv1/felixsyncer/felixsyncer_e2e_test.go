@@ -78,19 +78,6 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 			cnodekv, err := resources2.K8sNodeToCalico(&node, false)
 			Expect(err).NotTo(HaveOccurred())
 			expected = append(expected, *cnodekv)
-
-			if node.Name == controlPlaneNodeName {
-				for _, ip := range cnodekv.Value.(*internalapi.Node).Spec.Addresses {
-					if ip.Type == internalapi.InternalIP {
-						expected = append(expected, model.KVPair{
-							Key: model.HostIPKey{
-								Hostname: node.Name,
-							},
-							Value: net.ParseIP(ip.Address),
-						})
-					}
-				}
-			}
 		}
 
 		// Add endpoint slices.
@@ -440,13 +427,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				expectedCacheSize += 8
 			}
 
-			// The HostIP will be added for the IPv4 address
-			expectedCacheSize += 1
-			ip := net.MustParseIP("1.2.3.4")
-			syncTester.ExpectData(model.KVPair{
-				Key:   model.HostIPKey{Hostname: "127.0.0.1"},
-				Value: &ip,
-			})
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
 			By("Creating an IPPool")

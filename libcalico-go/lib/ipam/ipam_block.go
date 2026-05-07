@@ -230,7 +230,16 @@ func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {
 // empty returns true if the block has released all of its assignable addresses,
 // and returns false if any assignable addresses are in use.
 func (b allocationBlock) empty() bool {
-	return b.containsOnlyReservedIPs()
+	for _, attrIdx := range b.Allocations {
+		if attrIdx == nil {
+			continue
+		}
+		attrs := b.Attributes[*attrIdx]
+		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
+			return false
+		}
+	}
+	return true
 }
 
 // inUseIPs returns a list of IPs currently allocated in this block in string format.
@@ -246,21 +255,9 @@ func (b allocationBlock) inUseIPs() []string {
 	return ips
 }
 
-// containsOnlyReservedIPs returns true if the block is empty excepted for
-// expected "reserved" IP addresses.
-func (b *allocationBlock) containsOnlyReservedIPs() bool {
-	for _, attrIdx := range b.Allocations {
-		if attrIdx == nil {
-			continue
-		}
-		attrs := b.Attributes[*attrIdx]
-		if attrs.HandleID == nil || strings.ToLower(*attrs.HandleID) != WindowsReservedHandle {
-			return false
-		}
-	}
-	return true
-}
-
+// release tries to release addresses matching the release options, on success,
+// returns slice of IPs that were *skipped* due to not being allocated and a
+// map from handle ID to count of IPs released for that handle.
 func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
 	unallocated := []cnet.IP{}
@@ -346,14 +343,7 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		// exists.
 		log.Debugf("Looking up attribute with index %d", *attrIdx)
 		if handleID != "" {
-			log.Debugf("HandleID is %s", handleID)
-			handleCount := 0
-			if count, ok := countByHandle[handleID]; !ok {
-				handleCount = count
-			}
-			log.Debugf("Handle ref count is %d, incrementing", handleCount)
-			handleCount += 1
-			countByHandle[handleID] = handleCount
+			countByHandle[handleID] = countByHandle[handleID] + 1
 			log.Debugf("countByHandle %v", countByHandle)
 		}
 	}
@@ -448,6 +438,10 @@ func sanitizeHandle(handleID string) string {
 	return strings.Split(handleID, "\r")[0]
 }
 
+// Release all allocations with the handle in opts.
+//
+// If opts.SequenceNumber is set, and any affected allocations' sequence numbers
+// do not match, those allocations are not released.
 func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 	handleID := opts.Handle
 	attrIndexes := b.attributeIndexesByHandle(handleID)
@@ -460,23 +454,33 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 
 	// There are addresses to release.
 	ordinals := []int{}
+	keepAttrs := make([]bool, len(b.Attributes))
 	var o int
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
-		if b.Allocations[o] != nil && intInSlice(*b.Allocations[o], attrIndexes) {
-			if opts.SequenceNumber != nil && *opts.SequenceNumber != b.GetSequenceNumberForOrdinal(o) {
-				f := log.Fields{"opts": opts, "ip": b.OrdinalToIP(o).String()}
-				log.WithFields(f).Warnf("Skipping release of IP with mismatched sequence number")
+		if b.Allocations[o] == nil {
+			continue
+		}
+
+		attrIndex := *b.Allocations[o]
+		if intInSlice(attrIndex, attrIndexes) {
+			if opts.SequenceNumber == nil || *opts.SequenceNumber == b.GetSequenceNumberForOrdinal(o) {
+				// Release this ordinal.
+				ordinals = append(ordinals, o)
 				continue
 			}
-
-			// Release this ordinal.
-			ordinals = append(ordinals, o)
 		}
+		keepAttrs[attrIndex] = true
 	}
 
-	// Clean and reorder attributes.
-	b.deleteAttributes(attrIndexes)
+	// Clean and reorder now-unused attributes.
+	deleteIndexes := make([]int, 0, len(attrIndexes))
+	for _, attrIndex := range attrIndexes {
+		if !keepAttrs[attrIndex] {
+			deleteIndexes = append(deleteIndexes, attrIndex)
+		}
+	}
+	b.deleteAttributes(deleteIndexes)
 
 	// Release the addresses.
 	for _, o := range ordinals {
@@ -497,22 +501,6 @@ func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
 		}
 	}
 	return ips
-}
-
-func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) {
-	// Convert to an ordinal.
-	ordinal, err := b.IPToOrdinal(ip)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if allocated.
-	attrIndex := b.Allocations[ordinal]
-	if attrIndex == nil {
-		log.Debugf("IP %s is not currently assigned in block", ip)
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
-	}
-	return b.Attributes[*attrIndex].ActiveOwnerAttrs, nil
 }
 
 // allocationAttributesForIP returns the full AllocationAttribute for the given IP,

@@ -38,38 +38,38 @@ func TestReleaseDirsImages(t *testing.T) {
 	}{
 		{
 			name:     "no release dirs",
-			repoRoot: filepath.Join(repoRoot, "apiserver"),
+			repoRoot: filepath.Join(repoRoot, "cmd/calico"),
 			wantErr:  false,
 			expectedImages: []string{
-				"apiserver",
+				"calico",
 			},
 		},
 		{
 			name: "single release dir",
 			releaseDirs: []string{
-				"apiserver",
+				"cmd/calico",
 			},
 			expectedImages: []string{
-				"apiserver",
+				"calico",
 			},
 		},
 		{
 			name: "release dir with windows image",
 			releaseDirs: []string{
-				"cni-plugin",
+				"node",
 			},
 			expectedImages: []string{
-				"cni",
-				"cni-windows",
+				"node",
+				"node-windows",
 			},
 		},
 		{
 			name: "release dir with no windows image",
 			releaseDirs: []string{
-				"apiserver",
+				"whisker",
 			},
 			expectedImages: []string{
-				"apiserver",
+				"whisker",
 			},
 		},
 		{

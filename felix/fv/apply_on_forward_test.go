@@ -203,3 +203,162 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ apply on forward tests; wit
 		})
 	})
 })
+
+// These tests exercise HostEndpoint policy with applyOnForward=true on
+// forwarded pod-to-pod traffic that traverses a tunnel. The tunnel is
+// decapsulated on the receiving node and the inner packet arrives on the
+// tunnel interface (vxlan.calico, tunl0, or wireguard.cali) as forwarded
+// traffic to a local workload.
+//
+// Per Calico docs
+// (https://docs.tigera.io/calico/latest/reference/host-endpoints/forwarded),
+// a wildcard HEP with an applyOnForward=true deny-ingress policy must block
+// this traffic; without applyOnForward=true, forwarded traffic through a HEP
+// is allowed by default and is covered by the tests above.
+//
+// These tests guard against encap-specific regressions where HEP policy
+// enforcement breaks on tunnel-decapped traffic. Runs in both iptables and
+// BPF modes (_BPF-SAFE_).
+var _ = infrastructure.DatastoreDescribe(
+	"_BPF-SAFE_ apply on forward tests; with tunnel encap",
+	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
+	func(getInfra infrastructure.InfraFactory) {
+		for _, tunnel := range []string{"vxlan", "ipip", "wireguard"} {
+			tunnel := tunnel
+
+			Context(fmt.Sprintf("with %s tunnel", tunnel), func() {
+				var (
+					infra   infrastructure.DatastoreInfra
+					tc      infrastructure.TopologyContainers
+					cClient client.Interface
+					w       [2]*workload.Workload
+					cc      *connectivity.Checker
+				)
+
+				BeforeEach(func() {
+					// Skip the wireguard case when the kernel module isn't
+					// available on the FV host, matching wireguard_test.go.
+					if tunnel == "wireguard" && os.Getenv("FELIX_FV_WIREGUARD_AVAILABLE") != "true" {
+						Skip("Wireguard not available; skipping wireguard tunnel test.")
+					}
+
+					infra = getInfra()
+
+					opts := infrastructure.DefaultTopologyOptions()
+					switch tunnel {
+					case "vxlan":
+						opts.IPIPMode = api.IPIPModeNever
+						opts.VXLANMode = api.VXLANModeAlways
+						opts.VXLANStrategy = infrastructure.NewDefaultTunnelStrategy(
+							opts.IPPoolCIDR, opts.IPv6PoolCIDR)
+					case "ipip":
+						opts.IPIPMode = api.IPIPModeAlways
+						opts.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(
+							opts.IPPoolCIDR, opts.IPv6PoolCIDR)
+					case "wireguard":
+						opts.IPIPMode = api.IPIPModeNever
+						opts.WireguardEnabled = true
+						opts.ExtraEnvVars["FELIX_WIREGUARDENABLED"] = "true"
+					}
+
+					// Delay Felix start until node resources exist with tunnel
+					// addresses, matching the pattern used by BPF tunnel tests
+					// in bpf_test.go. Without this, Felix races the node
+					// annotations and can take more than a minute to converge
+					// the tunnel interface, flaking the test.
+					opts.DelayFelixStart = true
+					opts.TriggerDelayedFelixStart = true
+
+					tc, cClient = infrastructure.StartNNodeTopology(2, opts, infra)
+
+					// default-allow profile on WEPs: any block here must come
+					// from the HEP+AoF policy, not from WEP policy absence.
+					infra.AddDefaultAllow()
+
+					for i := range w {
+						wIP := fmt.Sprintf("10.65.%d.2", i)
+						wName := fmt.Sprintf("w%d", i)
+						infrastructure.AssignIP(wName, wIP, tc.Felixes[i].Hostname, cClient)
+						w[i] = workload.Run(tc.Felixes[i], wName, "default", wIP, "8055", "tcp")
+						w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
+						w[i].ConfigureInInfra(infra)
+					}
+
+					if BPFMode() {
+						ensureAllNodesBPFProgramsAttached(tc.Felixes)
+					}
+					if tunnel != "wireguard" {
+						// ensureRoutesProgrammed looks for the VXLAN iface
+						// name or the Felix/Bird default route proto, neither
+						// of which is present on the WG routing path. The
+						// baseline connectivity check below handles WG
+						// handshake convergence via its retry window.
+						ensureRoutesProgrammed(tc.Felixes)
+					}
+
+					cc = &connectivity.Checker{}
+					if tunnel == "wireguard" {
+						// Avoid WireGuard handshake races when initial packets
+						// in opposite directions are sent simultaneously.
+						cc.StaggerStartBy = 100 * time.Millisecond
+					}
+				})
+
+				AfterEach(func() {
+					tc.Stop()
+					infra.Stop()
+				})
+
+				It("should block pod-to-pod traffic when wildcard HEPs carry an AoF deny-ingress policy", func() {
+					// AoF deny-ingress allow-egress: denies ingress into either
+					// HEP (including the tunnel iface on the receiving node);
+					// allow-egress lets the outgoing encapsulated frame leave
+					// the sender. Without ApplyOnForward=true the policy would
+					// only apply to host-local traffic and forwarded pod-to-pod
+					// via the tunnel would flow.
+					//
+					// Create the GlobalNetworkPolicy *before* the HostEndpoints
+					// so that once a HEP appears and Felix starts enforcing on
+					// it, the allow-egress rule is already in place. Creating
+					// HEPs first opens a window where a HEP with no matching
+					// policy defaults to deny — which would disrupt Felix's
+					// own datastore connectivity.
+					denyIngress := api.NewGlobalNetworkPolicy()
+					denyIngress.Name = "hep-deny-ingress-allow-egress"
+					denyIngress.Spec.Ingress = []api.Rule{{Action: api.Deny}}
+					denyIngress.Spec.Egress = []api.Rule{{Action: api.Allow}}
+					denyIngress.Spec.Selector = `has(host-endpoint)`
+					denyIngress.Spec.ApplyOnForward = true
+					_, err := cClient.GlobalNetworkPolicies().Create(utils.Ctx, denyIngress, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Baseline: traffic flows before the HEP+AoF is added.
+					cc.ExpectSome(w[0], w[1])
+					cc.ExpectSome(w[1], w[0])
+					cc.CheckConnectivity()
+					cc.ResetExpectations()
+
+					// Wildcard HEP on both nodes.
+					for _, f := range tc.Felixes {
+						hep := api.NewHostEndpoint()
+						hep.Name = "hep-" + f.Name
+						hep.Labels = map[string]string{
+							"host-endpoint": "true",
+						}
+						hep.Spec.Node = f.Hostname
+						hep.Spec.ExpectedIPs = []string{f.IP}
+						hep.Spec.InterfaceName = "*"
+						_, err := cClient.HostEndpoints().Create(utils.Ctx, hep, options.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+					}
+
+					cc.ExpectNone(w[0], w[1])
+					cc.ExpectNone(w[1], w[0])
+					// 30s window gives Felix time to propagate the HEP+policy
+					// rules on both dataplanes before the first probe.
+					cc.CheckConnectivityWithTimeout(30 * time.Second)
+				})
+			})
+		}
+	},
+)

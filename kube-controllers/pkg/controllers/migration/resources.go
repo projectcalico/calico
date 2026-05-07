@@ -19,6 +19,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
@@ -51,7 +52,9 @@ const (
 // handling.
 func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator {
 	return []migrators.ResourceMigrator{
-		migrators.New[apiv3.Tier, apiv3.TierList](apiv3.KindTier, OrderTiers, bc, rt),
+		migrators.New[apiv3.Tier, apiv3.TierList](apiv3.KindTier, OrderTiers, bc, rt,
+			migrators.WithConvert(convertTier),
+		),
 		migrators.New[apiv3.FelixConfiguration, apiv3.FelixConfigurationList](apiv3.KindFelixConfiguration, OrderConfigSingletons, bc, rt),
 		migrators.New[apiv3.BGPConfiguration, apiv3.BGPConfigurationList](apiv3.KindBGPConfiguration, OrderConfigSingletons, bc, rt),
 		migrators.New[apiv3.KubeControllersConfiguration, apiv3.KubeControllersConfigurationList](apiv3.KindKubeControllersConfiguration, OrderConfigSingletons, bc, rt),
@@ -81,6 +84,21 @@ func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator 
 		),
 		migrators.New[apiv3.CalicoNodeStatus, apiv3.CalicoNodeStatusList](apiv3.KindCalicoNodeStatus, OrderCalicoNodeStatus, bc, rt),
 	}
+}
+
+// convertTier converts a v1 Tier KVPair to a v3 Tier. It performs the standard
+// deep-copy and metadata cleanup, then normalises the default tier's Order to
+// apiv3.DefaultTierOrder. The v3 API server enforces this value for the default
+// tier, but v1 representations may carry a different order.
+func convertTier(kvp *model.KVPair) (*apiv3.Tier, error) {
+	tier, err := migrators.DefaultConvert[apiv3.Tier](kvp)
+	if err != nil {
+		return nil, err
+	}
+	if tier.Name == names.DefaultTierName {
+		tier.Spec.Order = ptr.To(apiv3.DefaultTierOrder)
+	}
+	return tier, nil
 }
 
 // convertIPAMBlock converts a model.AllocationBlock KVPair to a v3 IPAMBlock.

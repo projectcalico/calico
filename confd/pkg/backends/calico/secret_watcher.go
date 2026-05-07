@@ -37,6 +37,12 @@ type secretWatchData struct {
 	secret *v1.Secret
 }
 
+type secretWatcherInterface interface {
+	GetSecret(name, key string) (string, error)
+	MarkStale()
+	SweepStale()
+}
+
 type secretWatcher struct {
 	client       *client
 	namespace    string
