@@ -63,7 +63,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   else
     GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"
-    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime >/dev/null"
+    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
   fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
