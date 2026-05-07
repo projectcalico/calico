@@ -732,7 +732,7 @@ func printPodmanFails(fails []scanResult) {
 			sortArchs(archs)
 			fmt.Printf("  %s [%s]\n", k.msg, strings.Join(archs, ", "))
 			if k.output != "" {
-				for _, line := range strings.Split(strings.TrimRight(k.output, "\n"), "\n") {
+				for line := range strings.SplitSeq(strings.TrimRight(k.output, "\n"), "\n") {
 					fmt.Printf("    %s\n", line)
 				}
 			}
