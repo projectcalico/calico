@@ -1675,20 +1675,41 @@ LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 $(LIBBPF_MARKER):
 	$(MAKE) -C $(REPO_ROOT)/felix libbpf
 
-$(REPO_ROOT)/node/.image.created-$(ARCH): $(LIBBPF_MARKER) $(call local-deps-go-files,node)
+# MISSING-IMAGE forces a rebuild when the previously-built image has been
+# pruned from the local Docker daemon. Each stamp records the image ref
+# that was built; hack/image-exists prints MISSING-IMAGE (a phony,
+# always-out-of-date target) when that ref is gone, dragging the rule
+# back in. The stamp is removed before the sub-make so the sub-make's
+# own up-to-date check doesn't short-circuit the rebuild.
+.PHONY: MISSING-IMAGE
+MISSING-IMAGE:
+
+$(REPO_ROOT)/node/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/node/.image.created-$(ARCH)) \
+    $(LIBBPF_MARKER) $(call local-deps-go-files,node)
+	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/node image
-	touch $@
+	echo "node:latest-$(ARCH)" > $@
 
-$(REPO_ROOT)/whisker/.image.created-$(ARCH):
+$(REPO_ROOT)/whisker/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/whisker/.image.created-$(ARCH))
+	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/whisker image
-	touch $@
+	echo "whisker:latest-$(ARCH)" > $@
 
-$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): $(LIBBPF_MARKER) $(call local-deps-go-files,cmd)
+$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)) \
+    $(LIBBPF_MARKER) $(call local-deps-go-files,cmd)
+	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/cmd/calico image
+	echo "calico:latest-$(ARCH)" > $@
 
-$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): $(call local-deps-go-files,key-cert-provisioner)
+$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)) \
+    $(call local-deps-go-files,key-cert-provisioner)
+	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
-	touch $@
+	echo "test-signer:latest-$(ARCH)" > $@
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
