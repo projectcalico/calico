@@ -82,7 +82,6 @@ func newIPIPManagerWithShims(
 	opRecorder logutils.OpRecorder,
 	nlHandle netlinkHandle,
 ) *ipipManager {
-
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
@@ -124,8 +123,9 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
-		if msg.Hostname == m.hostname {
+		if msg.Hostname == m.hostname && msg.Ipv4Addr != "" {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
+			return
 		}
 		// An empty Ipv4Addr means the host has no v4 BGP/host IP (e.g. its BGP
 		// spec was cleared). Drop the map entry so tunnelRoute won't try to
