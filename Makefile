@@ -467,3 +467,6 @@ bin/gotestsum:
 
 postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate
+
+rh-cert-preflight:
+	@go run ./hack/cmd/rhcert check 
