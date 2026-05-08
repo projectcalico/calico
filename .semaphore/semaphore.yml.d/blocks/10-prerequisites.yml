@@ -143,15 +143,13 @@
       machine:
         type: f1-standard-4
         os_image: ubuntu2204
+    prologue:
+      commands:
+        - export BUILD_LOG="~/build-nft-rpms-${ARCH}.log"
     epilogue:
       always:
         commands:
-          - |-
-            build_log="/tmp/nft-build-${ARCH}.log"
-            if [ -f "$build_log" ]; then
-              gcloud storage cp "$build_log" "${GCS_WORKFLOW_DIR}/nft-build-${ARCH}.log" || true
-              artifact push job "$build_log" --destination semaphore/logs/nft-build-${ARCH}.log || true
-            fi
+          - artifact push job ${BUILD_LOG} --destination semaphore/logs || true
     jobs:
       - name: "Build/cache nftables RPMs"
         matrix:

@@ -11,11 +11,14 @@ if [ -z "$ARCH" ]; then
   echo "Usage: $0 <arch>"
   exit 1
 fi
+if [ -z "$BUILD_LOG" ]; then
+  echo "Error: BUILD_LOG environment variable must be set to the path of the log file."
+  exit 1
+fi
 
 NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
 NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
 CACHE_PATH="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
-BUILD_LOG="/tmp/nft-build-${ARCH}.log"
 
 # Use a subshell to capture all output to the log file while still printing to stdout.
 {
