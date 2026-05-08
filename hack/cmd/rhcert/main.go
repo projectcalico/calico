@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// certify runs Openshift preflight against Calico images and optionally
+// rhcert runs Openshift preflight against Calico images and optionally
 // submits the results to Openshift Connect for the certification process.
 //
 // The certification process also requires:
@@ -37,13 +37,14 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -60,6 +61,12 @@ const httpConcurrency = 8
 
 // imagesPageSize is the page_size used for the paginated /images endpoint.
 const imagesPageSize = 100
+
+// defaultScanConcurrency is the default cap on simultaneous preflight runs.
+// Preflight pulls and exercises multi-GB images, so the limiting resource is
+// disk and network rather than CPU; a small fixed default avoids saturating
+// either. Override with --concurrency.
+const defaultScanConcurrency = 4
 
 var linuxPlatforms = []string{"amd64", "arm64", "s390x", "ppc64le"}
 
@@ -78,6 +85,31 @@ var calicoImageProject = map[string]string{
 
 var operatorImageProject = map[string]string{
 	"operator": "5e60736f2f3c1acdd05f6014",
+}
+
+// containerRuntime is what we shell out to for each scan: podman or docker run
+// the preflight container image; native expects the preflight binary on $PATH.
+type containerRuntime string
+
+const (
+	runtimePodman containerRuntime = "podman"
+	runtimeDocker containerRuntime = "docker"
+	runtimeNative containerRuntime = "native"
+)
+
+func parseRuntime(s string) (containerRuntime, error) {
+	switch r := containerRuntime(s); r {
+	case runtimePodman, runtimeDocker, runtimeNative:
+		return r, nil
+	default:
+		return "", fmt.Errorf("invalid --runtime %q (must be podman, docker, or native)", s)
+	}
+}
+
+// usesContainer reports whether the runtime spawns the preflight image inside
+// a container (true for podman/docker, false for native).
+func (r containerRuntime) usesContainer() bool {
+	return r == runtimePodman || r == runtimeDocker
 }
 
 type checkResult struct {
@@ -122,6 +154,18 @@ type rootOpts struct {
 	allowMaster     bool
 }
 
+// runOpts groups the per-invocation knobs for `rhcert run`.
+type runOpts struct {
+	preflightTag   string
+	submit         bool
+	concurrency    int
+	runtime        containerRuntime
+	outputDir      string
+	imageFilter    []string
+	platformFilter []string
+	dryRun         bool
+}
+
 // exitErr lets RunE / PersistentPreRunE signal a specific exit code through
 // cobra's error path. main() unwraps it and exits with the requested code.
 type exitErr struct {
@@ -138,11 +182,11 @@ func usageErrorf(format string, args ...any) error {
 
 func lookForGitRoot() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	if output, err := cmd.Output(); err != nil {
-		return "", fmt.Errorf("could not find git toplevel")
-	} else {
-		return strings.TrimSpace(string(output)), nil
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("could not find git toplevel: %w", err)
 	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func relativeGitRoot() (string, error) {
@@ -158,17 +202,21 @@ func relativeGitRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not get relative path: %w", err)
 	}
-	fmt.Println(rel)
 	return rel, nil
-
 }
 
 func main() {
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat:        time.DateTime,
+		FullTimestamp:          true,
+		DisableLevelTruncation: true,
+		PadLevelText:           true,
+	})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := newRootCmd().ExecuteContext(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		log.Errorf("%v", err)
 		var ee *exitErr
 		if errors.As(err, &ee) {
 			os.Exit(ee.code)
@@ -177,15 +225,61 @@ func main() {
 	}
 }
 
+// parallel runs fn on each input with at most max concurrent calls,
+// returning results in input order.
+func parallel[T, R any](items []T, max int, fn func(T) R) []R {
+	if max < 1 {
+		max = 1
+	}
+	results := make([]R, len(items))
+	sem := make(chan struct{}, max)
+	var wg sync.WaitGroup
+	for i, item := range items {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, item T) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[i] = fn(item)
+		}(i, item)
+	}
+	wg.Wait()
+	return results
+}
+
+// pyxisGetJSON performs an authenticated GET against the catalog.redhat.com
+// Pyxis API and decodes a 2xx response into out.
+//
+// The header is set directly (not via http.Header.Set) because the API
+// rejects the canonicalised X-Api-Key form; it requires X-API-KEY.
+func pyxisGetJSON(ctx context.Context, url, apiKey string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header["X-API-KEY"] = []string{apiKey}
+	req.Header["Accept"] = []string{"application/json"}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
 func newRootCmd() *cobra.Command {
 	opts := &rootOpts{}
 	gitRoot, err := relativeGitRoot()
 	if err != nil {
-		os.Exit(1)
+		gitRoot = ""
 	}
-	defaultAbsValuesFilePath := filepath.Join(gitRoot, defaultValuesFilePath)
+	defaultGitRootRelativeValuesFilePath := filepath.Join(gitRoot, defaultValuesFilePath)
 	cmd := &cobra.Command{
-		Use:           "certify",
+		Use:           "rhcert",
 		Short:         "Openshift preflight runner and certification checker for Calico images",
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -194,9 +288,9 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 	cmd.PersistentFlags().StringVar(&opts.calicoVersion, "calico-version", os.Getenv("CALICO_VERSION"), "calico version to certify (defaults to value from --values-file)")
-	cmd.PersistentFlags().StringVar(&opts.operatorVersion, "operator-version", os.Getenv("OPERATOR_VERSION"), "operator version to certify (defaults to value from --values-file)")
+	cmd.PersistentFlags().StringVar(&opts.operatorVersion, "operator-version", os.Getenv("OPERATOR_VERSION"), "tigera operator version to certify (defaults to value from --values-file; for any given Calico version this is fixed and should rarely need overriding)")
 	cmd.PersistentFlags().StringVar(&opts.rhAPIKey, "rh-api-key", os.Getenv("RH_API_KEY"), "Red Hat API key (sent as the X-API-KEY header)")
-	cmd.PersistentFlags().StringVar(&opts.valuesFile, "values-file", defaultAbsValuesFilePath, "helm values.yaml file to read default versions from")
+	cmd.PersistentFlags().StringVar(&opts.valuesFile, "values-file", defaultGitRootRelativeValuesFilePath, "helm values.yaml file to read default versions from")
 	cmd.PersistentFlags().BoolVar(&opts.allowMaster, "allow-master", false, "proceed even if a version is \"master\" (not a valid certification target)")
 	cmd.AddCommand(newRunCmd(opts), newCheckCmd(opts))
 	return cmd
@@ -208,7 +302,7 @@ func resolveVersions(opts *rootOpts) error {
 	if opts.calicoVersion == "" || opts.operatorVersion == "" {
 		cv, ov, err := readChartVersions(opts.valuesFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not read defaults from %s: %v\n", opts.valuesFile, err)
+			log.WithError(err).Warnf("could not read defaults from %s", opts.valuesFile)
 		}
 		if opts.calicoVersion == "" {
 			opts.calicoVersion = cv
@@ -240,24 +334,32 @@ func resolveVersions(opts *rootOpts) error {
 }
 
 func newRunCmd(opts *rootOpts) *cobra.Command {
-	var (
-		preflightTag string
-		submit       bool
-		concurrency  int
-	)
+	ro := runOpts{}
+	var runtimeName string
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run preflight scans against Calico images and optionally submit results to Openshift Connect",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if submit && opts.rhAPIKey == "" {
+			rt, err := parseRuntime(runtimeName)
+			if err != nil {
+				return usageErrorf("%v", err)
+			}
+			ro.runtime = rt
+			if ro.submit && opts.rhAPIKey == "" {
 				return usageErrorf("--submit requires --rh-api-key (or RH_API_KEY env var)")
 			}
-			return runScans(cmd.Context(), opts, preflightTag, submit, concurrency)
+			return runScans(cmd.Context(), opts, ro)
 		},
+		Args: cobra.NoArgs,
 	}
-	cmd.Flags().StringVar(&preflightTag, "preflight-tag", envOr("PREFLIGHT_TAG", "stable"), "preflight image tag")
-	cmd.Flags().BoolVar(&submit, "submit", false, "actually submit results to Openshift Connect")
-	cmd.Flags().IntVar(&concurrency, "concurrency", runtime.GOMAXPROCS(0), "number of scans to run concurrently")
+	cmd.Flags().StringVar(&ro.preflightTag, "preflight-tag", envOr("PREFLIGHT_TAG", "stable"), "preflight image tag (only used by --runtime=podman/docker)")
+	cmd.Flags().BoolVar(&ro.submit, "submit", false, "actually submit results to Openshift Connect")
+	cmd.Flags().IntVar(&ro.concurrency, "concurrency", defaultScanConcurrency, "number of scans to run concurrently")
+	cmd.Flags().StringVar(&runtimeName, "runtime", string(runtimePodman), `how to run preflight: "podman", "docker", or "native" (preflight binary from $PATH)`)
+	cmd.Flags().StringVar(&ro.outputDir, "output-dir", "", `directory for per-scan artifacts (default "output-<calico-version>")`)
+	cmd.Flags().StringSliceVar(&ro.imageFilter, "image", nil, "scan only these images (repeatable / comma-separated; default all)")
+	cmd.Flags().StringSliceVar(&ro.platformFilter, "platform", nil, "scan only these architectures (repeatable / comma-separated; default all)")
+	cmd.Flags().BoolVar(&ro.dryRun, "dry-run", false, "list the scans that would run and exit")
 	return cmd
 }
 
@@ -271,39 +373,60 @@ func newCheckCmd(opts *rootOpts) *cobra.Command {
 			}
 			return runCertCheck(cmd.Context(), opts)
 		},
+		Args: cobra.NoArgs,
 	}
 	return cmd
 }
 
-func runScans(ctx context.Context, opts *rootOpts, preflightTag string, submit bool, concurrency int) error {
-	outputRoot := "output-" + opts.calicoVersion
+func runScans(ctx context.Context, opts *rootOpts, ro runOpts) error {
+	outputRoot := ro.outputDir
+	if outputRoot == "" {
+		outputRoot = "output-" + opts.calicoVersion
+	}
 	jobs := buildJobs(outputRoot, opts.calicoVersion, opts.operatorVersion)
+	jobs = filterJobs(jobs, ro.imageFilter, ro.platformFilter)
+	if len(jobs) == 0 {
+		return usageErrorf("no scans match the --image / --platform filters")
+	}
+
+	if ro.dryRun {
+		fmt.Printf("scans that would run (%d):\n", len(jobs))
+		for _, j := range jobs {
+			fmt.Printf("  %s/%s:%s [%s] -> %s\n", j.org, j.image, j.version, j.platform, j.workdir)
+		}
+		return nil
+	}
 
 	if err := os.MkdirAll(outputRoot, 0o755); err != nil {
 		return fmt.Errorf("failed to create %s: %w", outputRoot, err)
 	}
 
-	preflightImage := "quay.io/opdev/preflight:" + preflightTag
-	fmt.Printf("Pulling %s\n", preflightImage)
-	if out, err := exec.CommandContext(ctx, "podman", "pull", preflightImage).CombinedOutput(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", out)
-		return fmt.Errorf("podman pull: %w", err)
+	var preflightImage string
+	if ro.runtime.usesContainer() {
+		preflightImage = "quay.io/opdev/preflight:" + ro.preflightTag
+		log.Infof("Pulling %s with %s", preflightImage, ro.runtime)
+		if out, err := exec.CommandContext(ctx, string(ro.runtime), "pull", preflightImage).CombinedOutput(); err != nil {
+			log.Errorf("%s pull output:\n%s", ro.runtime, out)
+			return fmt.Errorf("%s pull: %w", ro.runtime, err)
+		}
+	} else if _, err := exec.LookPath("preflight"); err != nil {
+		return fmt.Errorf("--runtime=native requires the preflight binary on $PATH: %w", err)
 	}
 
-	fmt.Printf("Running %d scans (concurrency %d)\n", len(jobs), concurrency)
+	log.Infof("Running %d scans (concurrency %d, runtime %s)", len(jobs), ro.concurrency, ro.runtime)
 
 	var privileged map[string]bool
 	if opts.rhAPIKey != "" {
-		fmt.Println("Fetching project info from catalog.redhat.com")
+		log.Info("Fetching project info from catalog.redhat.com")
 		privileged = fetchProjectPrivileged(ctx, jobs, opts.rhAPIKey)
 	} else {
-		fmt.Fprintln(os.Stderr, "note: no --rh-api-key supplied; skipping project privileged-flag lookup")
+		log.Info("no --rh-api-key supplied; skipping project privileged-flag lookup")
 	}
 
-	results := runJobs(ctx, jobs, concurrency, preflightImage, opts.rhAPIKey, submit)
+	results := runJobs(ctx, jobs, ro, preflightImage, opts.rhAPIKey)
 
 	if err := consolidate(outputRoot, linuxPlatforms); err != nil {
-		fmt.Fprintf(os.Stderr, "consolidation failed: %v\n", err)
+		log.WithError(err).Warn("consolidation failed")
 	}
 
 	if !printReport(results, privileged) {
@@ -312,10 +435,29 @@ func runScans(ctx context.Context, opts *rootOpts, preflightTag string, submit b
 	return nil
 }
 
+// filterJobs returns the subset of jobs whose image and platform are in the
+// respective allow-lists. An empty list for either dimension means "no filter
+// on this dimension".
+func filterJobs(jobs []scanJob, images, platforms []string) []scanJob {
+	if len(images) == 0 && len(platforms) == 0 {
+		return jobs
+	}
+	out := make([]scanJob, 0, len(jobs))
+	for _, j := range jobs {
+		if len(images) > 0 && !slices.Contains(images, j.image) {
+			continue
+		}
+		if len(platforms) > 0 && !slices.Contains(platforms, j.platform) {
+			continue
+		}
+		out = append(out, j)
+	}
+	return out
+}
+
 func runCertCheck(ctx context.Context, opts *rootOpts) error {
-	outputRoot := "output-" + opts.calicoVersion
-	jobs := buildJobs(outputRoot, opts.calicoVersion, opts.operatorVersion)
-	fmt.Println("Fetching certification status from catalog.redhat.com")
+	jobs := buildJobs("", opts.calicoVersion, opts.operatorVersion)
+	log.Info("Fetching certification status from catalog.redhat.com")
 	certResults := fetchAllCertStatus(ctx, jobs, opts.rhAPIKey)
 	if !printCertStatus(certResults) {
 		return &exitErr{code: 1, err: errors.New("one or more images are not fully certified")}
@@ -330,25 +472,8 @@ type projectInfo struct {
 }
 
 func fetchProjectInfo(ctx context.Context, projectID, apiKey string) (*projectInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, catalogAPIBase+projectID, nil)
-	if err != nil {
-		return nil, err
-	}
-	// The Pyxis catalog API requires the header in upper-case (X-API-KEY);
-	// http.Header.Set would canonicalise to X-Api-Key.
-	req.Header["X-API-KEY"] = []string{apiKey}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
 	var pi projectInfo
-	if err := json.NewDecoder(resp.Body).Decode(&pi); err != nil {
+	if err := pyxisGetJSON(ctx, catalogAPIBase+projectID, apiKey, &pi); err != nil {
 		return nil, err
 	}
 	return &pi, nil
@@ -377,8 +502,8 @@ func fetchProjectImagesPaged(ctx context.Context, projectID, apiKey string) ([]i
 	var all []imageCertEntry
 	for page := 0; ; page++ {
 		url := fmt.Sprintf("%s%s/images?page_size=%d&page=%d", catalogAPIBase, projectID, imagesPageSize, page)
-		ir, err := fetchImagesPage(ctx, url, apiKey)
-		if err != nil {
+		var ir imagesResponse
+		if err := pyxisGetJSON(ctx, url, apiKey, &ir); err != nil {
 			return nil, err
 		}
 		all = append(all, ir.Data...)
@@ -386,30 +511,6 @@ func fetchProjectImagesPaged(ctx context.Context, projectID, apiKey string) ([]i
 			return all, nil
 		}
 	}
-}
-
-func fetchImagesPage(ctx context.Context, url, apiKey string) (*imagesResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	// See fetchProjectInfo for the upper-case header rationale.
-	req.Header["X-API-KEY"] = []string{apiKey}
-	req.Header["Accept"] = []string{"application/json"}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var ir imagesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&ir); err != nil {
-		return nil, err
-	}
-	return &ir, nil
 }
 
 type certStatus int
@@ -470,37 +571,29 @@ func checkProjectCertification(ctx context.Context, projectID, version, apiKey s
 }
 
 // fetchAllCertStatus runs checkProjectCertification concurrently for every
-// unique image in jobs, capped at httpConcurrency in flight at a time.
+// unique image in jobs, capped at httpConcurrency in flight at a time. Results
+// are returned sorted by image name.
 func fetchAllCertStatus(ctx context.Context, jobs []scanJob, apiKey string) []imageCertResult {
-	type info struct{ projectID, version string }
-	seen := map[string]info{}
+	type input struct{ image, projectID, version string }
+	seen := map[string]input{}
 	for _, j := range jobs {
-		seen[j.image] = info{j.project, j.version}
+		seen[j.image] = input{j.image, j.project, j.version}
 	}
-	results := make([]imageCertResult, 0, len(seen))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, httpConcurrency)
-	for image, i := range seen {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(image string, i info) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			statuses, err := checkProjectCertification(ctx, i.projectID, i.version, apiKey)
-			mu.Lock()
-			results = append(results, imageCertResult{
-				image:    image,
-				version:  i.version,
-				statuses: statuses,
-				err:      err,
-			})
-			mu.Unlock()
-		}(image, i)
+	items := make([]input, 0, len(seen))
+	for _, in := range seen {
+		items = append(items, in)
 	}
-	wg.Wait()
-	sort.Slice(results, func(i, j int) bool { return results[i].image < results[j].image })
-	return results
+	sort.Slice(items, func(i, j int) bool { return items[i].image < items[j].image })
+
+	return parallel(items, httpConcurrency, func(in input) imageCertResult {
+		statuses, err := checkProjectCertification(ctx, in.projectID, in.version, apiKey)
+		return imageCertResult{
+			image:    in.image,
+			version:  in.version,
+			statuses: statuses,
+			err:      err,
+		}
+	})
 }
 
 // printCertStatus prints the per-image certification breakdown and returns
@@ -547,31 +640,36 @@ func printCertStatus(results []imageCertResult) bool {
 // image is omitted (treated as not privileged). At most httpConcurrency
 // fetches run at once.
 func fetchProjectPrivileged(ctx context.Context, jobs []scanJob, apiKey string) map[string]bool {
+	type input struct{ image, projectID string }
+	type output struct {
+		image      string
+		privileged bool
+		ok         bool
+	}
 	seen := map[string]string{}
 	for _, j := range jobs {
 		seen[j.image] = j.project
 	}
-	privileged := make(map[string]bool, len(seen))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, httpConcurrency)
+	items := make([]input, 0, len(seen))
 	for image, projectID := range seen {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(image, projectID string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			pi, err := fetchProjectInfo(ctx, projectID, apiKey)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: project info for %s (%s): %v\n", image, projectID, err)
-				return
-			}
-			mu.Lock()
-			privileged[image] = pi.Container.Privileged
-			mu.Unlock()
-		}(image, projectID)
+		items = append(items, input{image, projectID})
 	}
-	wg.Wait()
+
+	results := parallel(items, httpConcurrency, func(in input) output {
+		pi, err := fetchProjectInfo(ctx, in.projectID, apiKey)
+		if err != nil {
+			log.WithError(err).Warnf("project info for %s (%s)", in.image, in.projectID)
+			return output{image: in.image}
+		}
+		return output{image: in.image, privileged: pi.Container.Privileged, ok: true}
+	})
+
+	privileged := make(map[string]bool, len(results))
+	for _, r := range results {
+		if r.ok {
+			privileged[r.image] = r.privileged
+		}
+	}
 	return privileged
 }
 
@@ -596,29 +694,17 @@ func buildJobs(outputRoot, calicoVersion, operatorVersion string) []scanJob {
 	return jobs
 }
 
-func runJobs(ctx context.Context, jobs []scanJob, concurrency int, preflightImage, apiKey string, submit bool) []scanResult {
-	if concurrency < 1 {
-		concurrency = 1
-	}
-	results := make([]scanResult, len(jobs))
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-	for i, job := range jobs {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(i int, job scanJob) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			fmt.Printf("[start] %s/%s\n", job.image, job.platform)
-			results[i] = runScan(ctx, job, preflightImage, apiKey, submit)
-			fmt.Printf("[done ] %s/%s — %s\n", job.image, job.platform, summarise(results[i]))
-		}(i, job)
-	}
-	wg.Wait()
-	return results
+func runJobs(ctx context.Context, jobs []scanJob, ro runOpts, preflightImage, apiKey string) []scanResult {
+	return parallel(jobs, ro.concurrency, func(job scanJob) scanResult {
+		entry := log.WithFields(log.Fields{"image": job.image, "platform": job.platform})
+		entry.Info("scan starting")
+		res := runScan(ctx, job, ro, preflightImage, apiKey)
+		entry.Infof("scan done: %s", summarise(res))
+		return res
+	})
 }
 
-func runScan(ctx context.Context, job scanJob, preflightImage, apiKey string, submit bool) scanResult {
+func runScan(ctx context.Context, job scanJob, ro runOpts, preflightImage, apiKey string) scanResult {
 	res := scanResult{job: job}
 	if err := os.MkdirAll(job.workdir, 0o755); err != nil {
 		res.runErr = fmt.Errorf("mkdir %s: %w", job.workdir, err)
@@ -631,24 +717,14 @@ func runScan(ctx context.Context, job scanJob, preflightImage, apiKey string, su
 	}
 
 	imageRef := fmt.Sprintf("%s/%s:%s", job.org, job.image, job.version)
-	args := []string{
-		"run", "--rm", "--security-opt=label=disable",
-		"--env", "PFLT_PYXIS_API_TOKEN",
-		"-v", abs + ":/artifacts",
-		preflightImage,
-		"check", "container", imageRef,
-		"--platform", job.platform,
-		"--artifacts", "/artifacts",
-		"--logfile", "/artifacts/preflight.log",
-		"--certification-component-id", job.project,
-	}
-	if submit {
-		args = append(args, "--submit")
-	}
+	name, args := preflightCommand(ro, abs, imageRef, job, preflightImage, apiKey != "")
 
 	var buf bytes.Buffer
-	cmd := exec.CommandContext(ctx, "podman", args...)
-	cmd.Env = append(os.Environ(), "PFLT_PYXIS_API_TOKEN="+apiKey)
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = os.Environ()
+	if apiKey != "" {
+		cmd.Env = append(cmd.Env, "PFLT_PYXIS_API_TOKEN="+apiKey)
+	}
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
@@ -670,10 +746,48 @@ func runScan(ctx context.Context, job scanJob, preflightImage, apiKey string, su
 	return res
 }
 
+// preflightCommand builds the command name + arguments to run a single scan.
+// For podman/docker, the preflight container image is invoked with
+// /artifacts mounted from the host workdir; for native, preflight is run
+// directly with absolute paths and no mount.
+func preflightCommand(ro runOpts, abs, imageRef string, job scanJob, preflightImage string, haveToken bool) (string, []string) {
+	if ro.runtime.usesContainer() {
+		args := []string{"run", "--rm", "--security-opt=label=disable"}
+		if haveToken {
+			args = append(args, "--env", "PFLT_PYXIS_API_TOKEN")
+		}
+		args = append(args,
+			"-v", abs+":/artifacts",
+			preflightImage,
+			"check", "container", imageRef,
+			"--platform", job.platform,
+			"--artifacts", "/artifacts",
+			"--logfile", "/artifacts/preflight.log",
+			"--certification-component-id", job.project,
+		)
+		if ro.submit {
+			args = append(args, "--submit")
+		}
+		return string(ro.runtime), args
+	}
+
+	args := []string{
+		"check", "container", imageRef,
+		"--platform", job.platform,
+		"--artifacts", abs,
+		"--logfile", filepath.Join(abs, "preflight.log"),
+		"--certification-component-id", job.project,
+	}
+	if ro.submit {
+		args = append(args, "--submit")
+	}
+	return "preflight", args
+}
+
 func summarise(r scanResult) string {
 	switch {
 	case r.runErr != nil:
-		return fmt.Sprintf("podman error: %v", r.runErr)
+		return fmt.Sprintf("scan run error: %v", r.runErr)
 	case r.parseErr != nil:
 		return fmt.Sprintf("parse error: %v", r.parseErr)
 	case r.preflight == nil:
@@ -744,11 +858,11 @@ func writeConsolidated(out string, paths []string) error {
 // has .container.privileged=true; for those images, RunAsNonRoot failures
 // (but not errors) are hidden from the output.
 func printReport(results []scanResult, privileged map[string]bool) bool {
-	var podmanFails, scanIssues []scanResult
+	var runFails, scanIssues []scanResult
 	for _, r := range results {
 		switch {
 		case r.runErr != nil, r.preflight == nil:
-			podmanFails = append(podmanFails, r)
+			runFails = append(runFails, r)
 		case scanHasRemainingIssues(r, privileged):
 			scanIssues = append(scanIssues, r)
 		}
@@ -756,17 +870,17 @@ func printReport(results []scanResult, privileged map[string]bool) bool {
 
 	fmt.Println()
 	fmt.Println("===================== summary =====================")
-	fmt.Printf("scans run: %d, podman failures: %d, scans with issues: %d\n",
-		len(results), len(podmanFails), len(scanIssues))
+	fmt.Printf("scans run: %d, run failures: %d, scans with issues: %d\n",
+		len(results), len(runFails), len(scanIssues))
 
-	if len(podmanFails) > 0 {
-		printPodmanFails(podmanFails)
+	if len(runFails) > 0 {
+		printRunFails(runFails)
 	}
 	if len(scanIssues) > 0 {
 		printScanIssues(scanIssues, privileged)
 	}
 
-	if len(podmanFails) == 0 && len(scanIssues) == 0 {
+	if len(runFails) == 0 && len(scanIssues) == 0 {
 		fmt.Println("All scans passed.")
 		return true
 	}
@@ -810,9 +924,9 @@ func sortArchs(archs []string) {
 	sort.Slice(archs, func(i, j int) bool { return archIndex(archs[i]) < archIndex(archs[j]) })
 }
 
-func printPodmanFails(fails []scanResult) {
+func printRunFails(fails []scanResult) {
 	fmt.Println()
-	fmt.Println("--- podman runs that failed ---")
+	fmt.Println("--- scan runs that failed ---")
 
 	type key struct{ msg, output string }
 	byImage := map[string]map[key][]string{}
