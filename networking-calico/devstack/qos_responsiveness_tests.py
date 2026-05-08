@@ -12,6 +12,7 @@ a few seconds when QoS policies are applied to networks and ports.
 import json
 import logging
 import os
+import subprocess
 import time
 import unittest
 
@@ -564,6 +565,103 @@ class QoSResponsivenessTest(unittest.TestCase):
             policy = self.conn.network.find_qos_policy(full_name)
             if policy:
                 self.conn.network.delete_qos_policy(policy.id)
+
+
+class QoSResyncTest(QoSResponsivenessTest):
+    """Verify that the OpenStack periodic resync preserves qosControls.
+
+    Reproduces the scenario behind a customer report (Calico 3.30.7) in
+    which the periodic resync was silently stripping qosControls from
+    the WorkloadEndpoint, removing the corresponding TC qdisc.
+
+    DevStack's ``bootstrap.sh`` sets ``CALICO_RESYNC_INTERVAL_SECS=0``,
+    so the rest of this test module runs with resync disabled.  This
+    class flips the setting on for its duration (via setUpClass /
+    tearDownClass, with a Neutron restart at each end), and lexicographic
+    ordering puts it after QoSResponsivenessTest so a teardown failure
+    can't affect the other tests.
+    """
+
+    NEUTRON_CONF = "/etc/neutron/neutron.conf"
+    NEUTRON_SERVICE = "devstack@q-svc.service"
+    RESYNC_INTERVAL_SECS = 5
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._set_resync_interval(cls.RESYNC_INTERVAL_SECS)
+        cls._restart_neutron()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls._set_resync_interval(0)
+            cls._restart_neutron()
+        finally:
+            super().tearDownClass()
+
+    @classmethod
+    def _set_resync_interval(cls, secs):
+        logger.info(
+            f"Setting [calico]resync_interval_secs = {secs} in {cls.NEUTRON_CONF}"
+        )
+        subprocess.run(
+            [
+                "sudo",
+                "crudini",
+                "--set",
+                cls.NEUTRON_CONF,
+                "calico",
+                "resync_interval_secs",
+                str(secs),
+            ],
+            check=True,
+        )
+
+    @classmethod
+    def _restart_neutron(cls):
+        logger.info(f"Restarting {cls.NEUTRON_SERVICE}")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", cls.NEUTRON_SERVICE],
+            check=True,
+        )
+        # Wait for the Neutron API to come back, otherwise the test's
+        # next OpenStack call will hit a connection error.
+        retry_until_success(
+            lambda: list(cls.conn.network.networks()),
+            retries=30,
+            wait_time=2,
+            context_string="waiting for Neutron API after restart",
+        )
+        logger.info("Neutron API responsive again")
+
+    def test_resync_preserves_qos_controls(self):
+        # Create a VM with a port-level QoS policy whose rules cover all
+        # the qosControls fields we expect a resync to round-trip.  We
+        # use port-level (not network-level) QoS because the customer's
+        # report is for that path.
+        state = {
+            "port_qos_name": "A",
+            "port_qos_rules": list(self.qos_rules),
+            "net_qos_name": None,
+            "net_qos_rules": [],
+        }
+        port_id = self._create_initial_state(state)
+
+        # Sanity-check the immediate-write path produced the expected
+        # qosControls (this is what update_port_postcommit wrote).
+        self._verify_wep_qos(port_id, state)
+
+        # Sleep long enough for at least two resync cycles to fire, then
+        # re-verify.  On the customer's broken setup the second resync
+        # would have rewritten the WEP without qosControls; here we
+        # require that the WEP is unchanged.
+        wait = self.RESYNC_INTERVAL_SECS * 3
+        logger.info(f"Sleeping {wait}s for periodic resync to fire")
+        time.sleep(wait)
+
+        logger.info("Re-verify WEP qosControls after resync")
+        self._verify_wep_qos(port_id, state)
 
 
 if __name__ == "__main__":
