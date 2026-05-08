@@ -17,20 +17,20 @@ NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
 CACHE_PATH="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
 BUILD_LOG="/tmp/nft-build-${ARCH}.log"
 
-echo "Building nftables RPMs for ${ARCH}..."
-echo "NFT_RPMS_TAG: ${NFT_RPMS_TAG}"
-echo "NFT_RPMS_IMAGE: ${NFT_RPMS_IMAGE}"
-
 # Use a subshell to capture all output to the log file while still printing to stdout.
 {
-  if docker manifest inspect "$NFT_RPMS_IMAGE" >/dev/null 2>&1; then
+  echo "Building nftables RPMs for ${ARCH}..."
+  echo "NFT_RPMS_TAG: ${NFT_RPMS_TAG}"
+  echo "NFT_RPMS_IMAGE: ${NFT_RPMS_IMAGE}"
+
+  if docker manifest inspect "$NFT_RPMS_IMAGE"; then
     echo "Cache hit for $NFT_RPMS_IMAGE, pulling"
     docker pull "$NFT_RPMS_IMAGE"
   else
     echo "Cache miss for $NFT_RPMS_IMAGE, building"
     docker run --privileged --rm tonistiigi/binfmt --install all
     make -C hack/rpms/nftables image ARCH="$ARCH"
-    
+
     # SEMAPHORE_GIT_BRANCH is the PR target branch on PR builds (so it
     # equals "master" for every PR landing on master), not the source
     # branch — gate on SEMAPHORE_GIT_PR_NUMBER being empty to detect

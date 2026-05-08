@@ -150,7 +150,7 @@
             build_log="/tmp/nft-build-${ARCH}.log"
             if [ -f "$build_log" ]; then
               gcloud storage cp "$build_log" "${GCS_WORKFLOW_DIR}/nft-build-${ARCH}.log" || true
-              artifact push job "$build_log" --destination semaphore/logs/nft-build.log || true
+              artifact push job "$build_log" --destination semaphore/logs/nft-build-${ARCH}.log || true
             fi
     jobs:
       - name: "Build/cache nftables RPMs"
