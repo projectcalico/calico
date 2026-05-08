@@ -1,0 +1,19 @@
+# Ignore everything except:
+*
+# - The filesystem that gets copied in and the generated binaries
+!clean-up-filesystem.sh
+!filesystem
+!dist/bin
+!vendor/github.com/kelseyhightower/confd/etc/calico/confd
+# - AlmaLinux repository file and our license
+!almalinux.repo
+!patches/svlogd_use_0644_permission_instead_of_0744.patch
+!dist/LICENSE
+# - Files used in the windows image
+!windows-packaging/CalicoWindows/libs
+!windows-packaging/CalicoWindows/node
+!windows-packaging/CalicoWindows/felix
+!windows-packaging/CalicoWindows/confd
+!windows-packaging/CalicoWindows/config-hpc.ps1
+!windows-packaging/CalicoWindows/uninstall-calico-hpc.ps1
+!windows-packaging/nssm.exe
