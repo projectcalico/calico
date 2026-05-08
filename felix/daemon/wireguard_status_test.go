@@ -26,9 +26,10 @@ import (
 
 var _ = Describe("handleWireguardStatUpdateFromDataplane", func() {
 	var (
-		fc       *DataplaneConnector
-		fake     *fakeReconciler
-		stopAll  func()
+		fc      *DataplaneConnector
+		fake    *fakeReconciler
+		done    chan struct{}
+		stopped chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -36,15 +37,17 @@ var _ = Describe("handleWireguardStatUpdateFromDataplane", func() {
 		fc = &DataplaneConnector{
 			wireguardStatUpdateFromDataplane: make(chan *proto.WireguardStatusUpdate, 1),
 		}
-		// Run the handler in a goroutine. The handler loops forever; the
-		// test simply leaks it once the channel has no more senders, since
-		// the handler will block in select{}. AfterEach is purely advisory.
-		stopAll = func() {}
-		go fc.handleWireguardStatUpdateFromDataplane(fake.reconcile)
+		done = make(chan struct{})
+		stopped = make(chan struct{})
+		go func() {
+			defer close(stopped)
+			fc.handleWireguardStatUpdateFromDataplane(fake.reconcile, done)
+		}()
 	})
 
 	AfterEach(func() {
-		stopAll()
+		close(done)
+		Eventually(stopped, "5s").Should(BeClosed())
 	})
 
 	It("retries a failed v6 update even when a v4 update arrives during the failure", func() {

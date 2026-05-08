@@ -1357,6 +1357,7 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 
 func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane(
 	reconcile func(pubKey string, ipVersion proto.IPVersion) error,
+	done <-chan struct{},
 ) {
 	// pending tracks the latest desired public key per IP version that we have
 	// not yet successfully written to the datastore. We must track per IP
@@ -1375,6 +1376,11 @@ func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane(
 			pending[msg.IpVersion] = msg.PublicKey
 		case <-retryC:
 			log.Debug("retrying failed Wireguard status update")
+		case <-done:
+			if ticker != nil {
+				ticker.Stop()
+			}
+			return
 		}
 		if ticker != nil {
 			ticker.Stop()
@@ -1462,7 +1468,7 @@ func (fc *DataplaneConnector) Start() {
 	go fc.readMessagesFromDataplane()
 
 	// Start a background thread to handle Wireguard update to Node.
-	go fc.handleWireguardStatUpdateFromDataplane(fc.reconcileWireguardStatUpdate)
+	go fc.handleWireguardStatUpdateFromDataplane(fc.reconcileWireguardStatUpdate, nil)
 
 	log.WithFields(log.Fields{
 		"statusUpdatesFromDataplaneConsumers": len(fc.statusUpdatesFromDataplaneConsumers),
