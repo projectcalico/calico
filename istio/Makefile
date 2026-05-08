@@ -58,11 +58,8 @@ $(ZTUNNEL_DOWNLOADED):
 ###############################################################################
 # Build
 ###############################################################################
-.PHONY: build build-istio build-ztunnel
-build: build-istio build-ztunnel
-
-build-istio: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH)
-build-ztunnel: bin/ztunnel-$(ARCH)
+.PHONY: build
+build: bin/pilot-discovery-$(ARCH) bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) bin/pilot-agent-$(ARCH) bin/ztunnel-$(ARCH)
 
 bin/install-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
 bin/istio-cni-$(ARCH): BUILD_TAGS=agent,disable_pgv,grpcnotrace,retrynotrace
@@ -81,10 +78,10 @@ bin/pilot-agent-$(ARCH): $(ISTIO_DOWNLOADED)
 bin/pilot-discovery-$(ARCH): $(ISTIO_DOWNLOADED)
 	$(call build_binary_dir,istio,./pilot/cmd/pilot-discovery,../$@)
 
-bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED) | register
+bin/ztunnel-$(ARCH): $(ZTUNNEL_DOWNLOADED)
 	$(DOCKER_RUST_BUILD) \
 		sh -c 'cd ztunnel && cargo build --release'
-	cp ztunnel/out/rust/release/ztunnel bin/ztunnel-$(ARCH)
+	cp ztunnel/out/rust/$(RUST_TARGET)/release/ztunnel bin/ztunnel-$(ARCH)
 
 ###############################################################################
 # Image

@@ -136,6 +136,13 @@ CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 RUST_BUILD_IMAGE ?= calico/rust-build
 CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
+# Map Calico's ARCH to Rust target triple. CARGO_BUILD_TARGET is then injected
+# into DOCKER_RUST_BUILD so cargo cross-compiles transparently — analogous to
+# how DOCKER_GO_BUILD injects GOARCH for Go.
+RUST_TARGET_amd64 = x86_64-unknown-linux-gnu
+RUST_TARGET_arm64 = aarch64-unknown-linux-gnu
+RUST_TARGET = $(RUST_TARGET_$(ARCH))
+
 # We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 GOEXPERIMENT?=boringcrypto
@@ -399,12 +406,31 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# Cross-compile env for Rust + cc-rs / bindgen when building for arm64.
+# The CARGO_TARGET_* vars replace cargo's [target.aarch64-unknown-linux-gnu]
+# config table (linker + rustflags); the *_aarch64_unknown_linux_gnu vars
+# cover the C-compilation side that cc-rs / bindgen read at build time.
+# All arch-specific config lives here so the rust-build image stays neutral.
+ifeq ($(ARCH),arm64)
+RUST_CROSS_ENV := \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--target=aarch64-linux-gnu -C link-arg=--sysroot=/usr/aarch64-linux-gnu/sys-root -C link-arg=-fuse-ld=lld" \
+	-e CC_aarch64_unknown_linux_gnu=clang \
+	-e CXX_aarch64_unknown_linux_gnu=clang++ \
+	-e AR_aarch64_unknown_linux_gnu=aarch64-unknown-linux-gnu-ar \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu/sys-root" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=/usr/aarch64-linux-gnu/sys-root" \
+	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=aarch64-linux-gnu --sysroot=/usr/aarch64-linux-gnu/sys-root -I/usr/aarch64-linux-gnu/sys-root/usr/include"
+endif
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
-		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
+		--platform linux/amd64 \
+		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
+		$(RUST_CROSS_ENV) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
