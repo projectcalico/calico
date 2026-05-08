@@ -44,10 +44,7 @@ clean-windows: clean-windows-builder
 ###############################################################################
 # Building the binary
 ###############################################################################
-# The Linux cni-plugin ships in the combined calico/calico image; this
-# Makefile no longer builds standalone Linux binaries. Unit tests source the
-# calico/calico-ipam binaries from cmd/calico (see the ut targets below).
-# Only the Windows image is built standalone here.
+# Only the Windows image is built standalone here; Linux ships in calico/calico.
 .PHONY: build
 build:
 ifeq ($(ARCH),amd64)
@@ -166,12 +163,8 @@ remove-kubevirt-crds:
 		echo "KubeVirt CRDs already removed or not present"
 
 
-# The combined calico binary (built by cmd/calico) supplies the CNI plugin and
-# IPAM entry points used by unit tests. Tests invoke it via BIN/PLUGIN env
-# vars under the names "calico" and "calico-ipam"; the binary's argv[0]
-# dispatch (cmd/calico/main.go) routes those calls to the right entry point.
-# The combined binary's deps come from cmd/deps.txt, which transitively
-# covers cni-plugin sources, so changes here trigger a rebuild here.
+# Source the CNI plugin and IPAM binaries from the combined calico binary;
+# argv[0] dispatch in cmd/calico/main.go picks the right entry point.
 COMBINED_BINARY = $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH)
 
 $(COMBINED_BINARY): $(call local-deps-go-files,cmd)
