@@ -1472,6 +1472,21 @@ spec:
                         - VPP
                         - Nftables
                       type: string
+                    linuxPodInterfaceType:
+                      description: |-
+                        LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                        creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                        plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                        falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                        dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                        improved throughput and tail-latency under contention; for non-BPF dataplanes
+                        it is functionally equivalent to veth. Only valid when using the Calico CNI
+                        plugin.
+                        Default: Veth
+                      enum:
+                        - Veth
+                        - Netkit
+                      type: string
                     linuxPolicySetupTimeoutSeconds:
                       description: |-
                         LinuxPolicySetupTimeoutSeconds delays new pods from running containers
@@ -10693,6 +10708,21 @@ spec:
                             - BPF
                             - VPP
                             - Nftables
+                          type: string
+                        linuxPodInterfaceType:
+                          description: |-
+                            LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                            creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                            plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                            falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                            dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                            improved throughput and tail-latency under contention; for non-BPF dataplanes
+                            it is functionally equivalent to veth. Only valid when using the Calico CNI
+                            plugin.
+                            Default: Veth
+                          enum:
+                            - Veth
+                            - Netkit
                           type: string
                         linuxPolicySetupTimeoutSeconds:
                           description: |-
