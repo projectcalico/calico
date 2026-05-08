@@ -19,6 +19,7 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 
 Common code for Neutron driver UT.
 """
+import contextlib
 import inspect
 import logging
 import sys
@@ -41,6 +42,8 @@ _log = logging.getLogger(__name__)
 sys.modules["neutron"] = m_neutron = mock.MagicMock()
 sys.modules["neutron.agent"] = m_neutron.agent
 sys.modules["neutron.agent.rpc"] = m_neutron.agent.rpc
+sys.modules["neutron.api"] = m_neutron.api
+sys.modules["neutron.api.wsgi"] = m_neutron.api.wsgi
 sys.modules["neutron.common"] = m_neutron.common
 sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
 sys.modules["neutron.conf"] = m_neutron.conf
@@ -60,10 +63,15 @@ sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks
+sys.modules["neutron_lib.callbacks.events"] = m_neutron_lib.callbacks.events
+sys.modules["neutron_lib.callbacks.registry"] = m_neutron_lib.callbacks.registry
+sys.modules["neutron_lib.callbacks.resources"] = m_neutron_lib.callbacks.resources
 sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
+sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
@@ -638,6 +646,31 @@ class Lib(object):
         threads to run.
         """
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+
+    def simulate_neutron_workers(self, uuid_str=None):
+        """Simulate the post-fork init that Neutron triggers in production.
+
+        Replaces the old ``give_way() + simulated_time_advance(31)`` idiom
+        which used to drive ``_post_fork_init`` via a backstop
+        ``eventlet.spawn_after`` in ``__init__``.  Now ``_post_fork_init`` is
+        only called from ``post_fork_initialize`` (the Neutron AFTER_INIT
+        callback), so tests have to drive it explicitly.
+
+        We simulate AFTER_INIT firing for both:
+
+        * a non-API worker (so ``_post_fork_init`` runs with
+          ``voting=True``, creating the elector and master-only threads), and
+        * the ``CalicoStartupResyncWorker`` (so the one-shot resync runs,
+          if ``startup_resync`` is ``always``).
+
+        ``uuid_str`` controls the UUID generated during init (used for
+        ClusterInformation's clusterGUID).
+        """
+        cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
+        with cm:
+            self.driver._post_fork_init(voting=True)
+            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+                self.driver._do_startup_resync()
 
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(

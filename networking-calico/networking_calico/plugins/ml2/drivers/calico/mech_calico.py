@@ -25,15 +25,16 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
+import inspect
 import os
 import threading
-from functools import wraps
 
 import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 
 from neutron.agent import rpc as agent_rpc
+from neutron.api import wsgi
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
@@ -44,6 +45,9 @@ from neutron_lib import constants
 from neutron_lib import context as ctx
 from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
+from neutron_lib.callbacks import events
+from neutron_lib.callbacks import registry
+from neutron_lib.callbacks import resources
 from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
@@ -76,6 +80,9 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import (
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
 from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
+from networking_calico.plugins.ml2.drivers.calico.workers import (
+    CalicoStartupResyncWorker,
+)
 from networking_calico.resync import scope as resync
 
 
@@ -125,11 +132,8 @@ calico_opts = [
         choices=["always", "never"],
         help=(
             "Whether the driver should run a full Neutron DB -> etcd "
-            "resync when neutron-server starts.  'always' (default) "
-            "spawns a one-shot greenthread from each fork that drives "
-            "the resync and exits.  'never' disables the start-of-day "
-            "resync; an operator must drive resyncs out-of-band using "
-            "the calico-resync CLI."
+            "resync when neutron-server starts.  Note that a resync "
+            "can also be run on demand using the calico-resync CLI."
         ),
     ),
     cfg.IntOpt(
@@ -138,7 +142,7 @@ calico_opts = [
         deprecated_for_removal=True,
         deprecated_reason=(
             "The driver no longer runs a periodic resync thread. "
-            "Resync is now driven once at start-of-day and on demand "
+            "Resync is now driven once on startup and on demand "
             "via the calico-resync CLI.  This option has no effect."
         ),
         help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
@@ -178,10 +182,6 @@ MASTER_CHECK_INTERVAL_SECS = 5
 # Delay before retrying a failed port status update to the Neutron DB.
 PORT_UPDATE_RETRY_DELAY_SECS = 5
 
-# We wait for a short period of time before we initialize our state to avoid
-# problems with Neutron forking.
-STARTUP_DELAY_SECS = 10
-
 # Set a low refresh interval on the master key.  This reduces the chance of
 # the etcd event buffer wrapping while non-masters are waiting for the key to
 # be refreshed.
@@ -193,25 +193,16 @@ PRIORITY_LOW = 1
 PRIORITY_RETRY = 2
 
 
-def requires_state(f):
-    """requires_state
+def _trigger_class(trigger):
+    """Class of the bound-method ``trigger`` argument that Neutron passes to the
+    AFTER_INIT callback.  Returns None for non-method triggers.
 
-    This decorator is used to ensure that any method that requires that
-    state be initialized will do that. This is to make sure that, if a user
-    attempts an action before STARTUP_DELAY_SECS have passed, they don't
-    have to wait.
-
-    This decorator only needs to be applied to top-level functions of the
-    CalicoMechanismDriver class: specifically, those that are called directly
-    from Neutron.
+    Borrowed from neutron.common.ovn.utils; replicated here to avoid pulling in
+    the ovn package as a dependency.
     """
-
-    @wraps(f)
-    def wrapper(self, *args, **kwargs):
-        self._post_fork_init()
-        return f(self, *args, **kwargs)
-
-    return wrapper
+    if not inspect.ismethod(trigger):
+        return None
+    return trigger.__self__.__class__
 
 
 # The execution model of the Neutron server is complex.  It runs as multiple OS
@@ -333,9 +324,66 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
 
-        # Make sure we initialise even if we don't see any API calls.
-        eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init, voting=True)
         LOG.info("Created Calico mechanism driver %s", self)
+
+    def initialize(self):
+        """Called once by ML2 in the parent process, before any forks.
+
+        We use this hook to subscribe to Neutron's process-AFTER_INIT callback
+        so that we get a chance to run code in each worker process we own (see
+        ``get_workers``) once it has been forked.
+        """
+        super(CalicoMechanismDriver, self).initialize()
+        registry.subscribe(
+            self.post_fork_initialize,
+            resources.PROCESS,
+            events.AFTER_INIT,
+            cancellable=True,
+        )
+
+    def get_workers(self):
+        """Workers that neutron-server should fork on our behalf.
+
+        Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of
+        which becomes one OS process.  Today we ask for a single worker that
+        runs the one-shot resync.
+
+        ``[calico] startup_resync = never`` suppresses the worker entirely so
+        the operator can take responsibility for resync (typically by running
+        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on
+        exactly one neutron-server in the deployment).
+        """
+        if cfg.CONF.calico.startup_resync == "never":
+            return []
+        return [CalicoStartupResyncWorker()]
+
+    def post_fork_initialize(self, resource, event, trigger, payload=None):
+        """Per-worker-process initialisation, fired by Neutron after fork.
+
+        ``trigger`` is the worker instance (its bound ``start`` method, in
+        practice).  We dispatch on the worker's class so each worker process
+        runs only the code it's responsible for:
+
+        * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
+
+        * ``neutron.api.wsgi.WorkerService`` -> connection state only,
+          ``voting=False``.  Per PR #11580, API workers must never be elected
+          master, because their primary job is to serve API requests quickly:
+          getting tied up running the master-only background threads (status
+          watcher, port-status writers, periodic compaction) would hurt API
+          response latency, and the resync work specifically now lives in
+          ``CalicoStartupResyncWorker`` anyway.
+
+        * Anything else (RPC / state-report / similar) -> connection state
+          plus the elector and master-only background threads.
+        """
+        trigger_cls = _trigger_class(trigger)
+        if trigger_cls is CalicoStartupResyncWorker:
+            self._do_startup_resync()
+        elif trigger_cls is wsgi.WorkerService:
+            self._post_fork_init(voting=False)
+        else:
+            self._post_fork_init(voting=True)
 
     @logging_exceptions(LOG)
     def _post_fork_init(self, voting=False):
@@ -352,10 +400,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         # The self._init_lock semaphore mediates if two or more eventlet
         # threads call _post_fork_init at the same time, within the same
-        # Neutron server fork.  This can happen if the timed initialization
-        # (after STARTUP_DELAY_SECS) coincides with the handling of a Neutron
-        # API request, or if this fork processes multiple Neutron API requests
-        # at the same time.
+        # Neutron server fork.  This shouldn't normally happen now that
+        # ``post_fork_initialize`` drives the call from a single AFTER_INIT
+        # event, but the lock is cheap insurance against future call sites.
         with self._init_lock:
             current_pid = os.getpid()
             if self._my_pid == current_pid:
@@ -431,14 +478,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 eventlet.spawn(self._status_updating_thread, self._epoch)
                 for _ in range(cfg.CONF.calico.num_port_status_threads):
                     eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
-
-                # Start-of-day resync.  Runs once in this fork and exits.  Multiple
-                # forks racing each other is harmless: the writes are idempotent and the
-                # etcd transactions are mod_revision-conditioned, so only the first
-                # writer wins for any given key.  Operators can drive further resyncs
-                # out-of-band with the calico-resync CLI.
-                if cfg.CONF.calico.startup_resync == "always":
-                    eventlet.spawn(self._run_startup_resync)
+                # Note, resync runs in a dedicated worker process spawned via
+                # ``get_workers``, not here.  See ``post_fork_initialize``.
             else:
                 LOG.info(
                     "PID %s: Not a voting participant; "
@@ -536,8 +577,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # sync in the resync case too; however,
         #
         # - the impact on the database of sending port status updates to
-        #   Neutron for all ports is significant (we do have to do it as
-        #   start-of-day, because our cache is empty)
+        #   Neutron for all ports is significant (we do have to do it on
+        #   startup, because our cache is empty)
         #
         # - the impact of an incorrect port status for a normal, live VM is
         #   minimal (and it shouldn't get out of sync unless another component
@@ -758,7 +799,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Nothing else needed here.  There cannot yet be any ports on a network that has
         # only just been created.
 
-    @requires_state
     def update_network_postcommit(self, context):
         TrackTask("UPDATE_NETWORK_POSTCOMMIT")
         LOG.info("UPDATE_NETWORK_POSTCOMMIT: %s" % context)
@@ -800,7 +840,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if _port_is_endpoint_port(p):
                 self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
 
-    @requires_state
     def handle_qos_policy_update(self, context, policy_id):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
@@ -841,7 +880,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Nothing else needed here.  If there were ports on this network, we would have
         # got separate callbacks for those ports being deleted.
 
-    @requires_state
     def create_subnet_postcommit(self, context):
         TrackTask("CREATE_SUBNET_POSTCOMMIT")
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
@@ -856,7 +894,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if subnet["enable_dhcp"]:
                 self.subnet_syncer.write_subnet(subnet, context)
 
-    @requires_state
     def update_subnet_postcommit(self, context):
         TrackTask("UPDATE_SUBNET_POSTCOMMIT")
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
@@ -873,14 +910,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             else:
                 self.subnet_syncer.delete_subnet(subnet["id"])
 
-    @requires_state
     def delete_subnet_postcommit(self, context):
         TrackTask("DELETE_SUBNET_POSTCOMMIT")
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
         self.subnet_syncer.delete_subnet(context.current["id"])
 
     # Idealised method forms.
-    @requires_state
     def create_port_postcommit(self, context):
         """create_port_postcommit
 
@@ -910,7 +945,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         with self._txn_from_context(plugin_context, tag="create-port"):
             self.endpoint_syncer.write_endpoint(port, plugin_context)
 
-    @requires_state
     def update_port_postcommit(self, context):
         """update_port_postcommit
 
@@ -1072,7 +1106,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             else:
                 LOG.info("Update on unbound port: no action")
 
-    @requires_state
     def update_floatingip(self, plugin_context):
         """update_floatingip
 
@@ -1086,7 +1119,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
             self._update_port(plugin_context, port)
 
-    @requires_state
     def delete_port_postcommit(self, context):
         """delete_port_postcommit
 
@@ -1125,7 +1157,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Delete source WEP.
         self.endpoint_syncer.delete_endpoint(port)
 
-    @requires_state
     def security_groups_rule_updated(self, context):
         """Called whenever security group rules or membership change.
 
@@ -1189,29 +1220,38 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.endpoint_syncer.delete_endpoint(port)
 
     @logging_exceptions(LOG)
-    def _run_startup_resync(self):
-        """Drive a one-shot start-of-day resync from this fork.
+    def _do_startup_resync(self):
+        """Run one-shot resync.
 
-        Spawned from ``_post_fork_init`` when ``[calico] startup_resync`` is ``always``
-        (the default).  Delegates to the resync runner package, which is the same code
-        path used by the ``calico-resync`` CLI.  Exits on completion; failures are
-        logged (including the structured JSON outcome) and swallowed - operators can
-        drive a retry with ``calico-resync --all``.
+        Called from ``post_fork_initialize`` inside the dedicated
+        ``CalicoStartupResyncWorker`` process when ``[calico] startup_resync`` is
+        ``always`` (the default).  Also called from the test framework to simulate the
+        worker's behaviour.
 
-        We pass the driver's own endpoint syncer into the resync scope so it doesn't
-        need to build a fresh one, and the same Keystone client and project-data cache
-        are reused.
+        Failures are logged loudly but not retried.  Operators can drive a retry via
+        ``calico-resync --all`` or by restarting neutron-server.
         """
         TrackTask("RESYNC")
-        LOG.info("Start-of-day resync thread started")
-        result = resync.Scope(
-            self.db,
-            driver=self,
-        ).run()
+        LOG.info("One-shot resync starting")
+
+        # (Re)init the DB.  The resync worker is its own OS process and doesn't
+        # share connection state with the API/RPC forks.  Scope.run() builds
+        # its own subnet/policy/endpoint syncers from the DB plus its
+        # module-level _txn_from_context helper; we don't need to set the
+        # driver's syncer attributes here because nothing else in this worker
+        # process uses them.
+        self.db = None
+        self._get_db()
+
+        result = resync.Scope(self.db).run()
         if result.ok:
-            LOG.info("Start-of-day resync done: %s", result.to_dict())
+            LOG.info("One-shot resync done: %s", result.to_dict())
         else:
-            LOG.error("Start-of-day resync failed: %s", result.to_dict())
+            LOG.error(
+                "One-shot resync FAILED: %s.  "
+                "Run `calico-resync --all` to retry, or restart neutron-server.",
+                result.to_dict(),
+            )
 
     def periodic_compaction_thread(self, launch_epoch):
         """Periodic etcd compaction logic.

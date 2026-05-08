@@ -94,10 +94,9 @@ class ResourceSyncer(object):
     def resync(self, context, scope):
         """Reconcile this resource type's etcd state with Neutron.
 
-        ``scope.all()`` is True for an all-resources resync (the start-of-day path): we
-        read every resource of this kind from both sides, and reconcile in both
-        directions (writing missing/incorrect etcd resources and deleting etcd resources
-        whose Neutron counterpart is gone).
+        When ``scope.all()`` is True, we read every resource of this kind from both
+        sides, and reconcile in both directions (writing missing/incorrect etcd
+        resources and deleting etcd resources whose Neutron counterpart is gone).
 
         Alternatively, ``scope.ids()`` is a set of specific Neutron resource IDs, in
         which case the reconcile is restricted to just those resources: we read only

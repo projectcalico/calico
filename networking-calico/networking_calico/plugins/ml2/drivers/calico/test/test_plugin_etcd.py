@@ -466,10 +466,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.osdb_networks = [lib.network1, lib.network2]
         self.osdb_ports = [lib.port1, lib.port2]
 
-        # Allow the etcd transport's resync thread to run.
-        with lib.FixedUUID("uuid-start-two-ports"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        # Drive the one-shot resync.
+        self.simulate_neutron_workers("uuid-start-two-ports")
 
         ep_deadbeef_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
@@ -1170,9 +1168,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Allow the etcd transport's resync thread to run. The last thing it
         # does is write the Felix config, so let it run three reads.
 
-        with lib.FixedUUID("uuid-start-no-ports"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-start-no-ports")
 
         self.assertEtcdWrites(self.initial_etcd3_writes)
 
@@ -1212,9 +1208,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Allow the etcd transport's resync thread to run.  Expect the usual
         # writes.
-        with lib.FixedUUID("uuid-subnet-hooks"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-subnet-hooks")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1275,9 +1269,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         self.driver.create_subnet_postcommit(context)
         self.assertEtcdWrites({})
 
-        # Allow the etcd transport's resync thread to run again.  Expect no
-        # change in etcd subnet data.
-        self.give_way()
+        # Re-run the resync.  Expect no change in etcd subnet data.
         self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -1308,7 +1300,6 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Do a resync where we simulate the etcd data having been lost.
         with lib.FixedUUID("uuid-subnet-hooks-2"):
-            self.give_way()
             self.etcd_data = {}
             self._trigger_resync()
 
@@ -1333,7 +1324,6 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # changed which subnets where DHCP-enabled.
         subnet1["enable_dhcp"] = True
         subnet2["enable_dhcp"] = False
-        self.give_way()
         self._trigger_resync()
         self.assertEtcdWrites(
             {
@@ -1354,7 +1344,6 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Do a resync where we simulate having missed a dynamic update that
         # changed a Calico-relevant property of a DHCP-enabled subnet.
         subnet1["gateway_ip"] = "10.65.0.2"
-        self.give_way()
         self._trigger_resync()
         self.assertEtcdWrites(
             {
@@ -1589,10 +1578,9 @@ class TestPluginEtcd(TestPluginEtcdBase):
         )
 
     def test_startup_resync_disabled(self):
-        """With startup_resync=never, nothing is written at start-of-day."""
+        """With startup_resync=never, nothing is written."""
         lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
-        self.give_way()
-        self.simulated_time_advance(31)
+        self.simulate_neutron_workers()
         self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
@@ -1633,9 +1621,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             )
         }
-        with lib.FixedUUID("uuid-profile-prefixing"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1683,9 +1669,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             ),
         }
-        with lib.FixedUUID("uuid-profile-prefixing"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1746,9 +1730,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        with lib.FixedUUID("uuid-old-data"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1772,10 +1754,7 @@ class TestNarrowResync(TestPluginEtcdBase):
         """Set up a couple of ports and run a full resync to populate etcd."""
         self.osdb_networks = [lib.network1, lib.network2]
         self.osdb_ports = [lib.port1, lib.port2]
-        self.driver._post_fork_init(voting=True)
-        with lib.FixedUUID(uuid):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers(uuid)
         # Clear writes so the per-test assertions see only the narrow
         # resync's effect.
         self.recent_writes = {}
@@ -1875,9 +1854,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.port = copy.deepcopy(lib.port1)
         self.osdb_networks = [lib.network1]
         self.osdb_ports = [self.port]
-        with lib.FixedUUID("uuid-lm-test"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-lm-test")
         # Clear initial writes.
         self.recent_writes = {}
         self.recent_deletes = set()
@@ -2449,9 +2426,7 @@ class TestPluginEtcdRegion(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        with lib.FixedUUID("uuid-old-data"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.simulate_neutron_workers("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[

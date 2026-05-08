@@ -58,7 +58,7 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
     def _disable_background_threads(self, driver):
         """Disable background threads that would touch etcd or do unrelated things."""
-        driver._run_startup_resync = mock.Mock()
+        driver._do_startup_resync = mock.Mock()
         driver._status_updating_thread = mock.Mock()
 
     @mock.patch.object(mech_calico, "Elector")
