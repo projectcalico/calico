@@ -27,17 +27,21 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -47,7 +51,15 @@ const catalogAPIBase = "https://catalog.redhat.com/api/containers/v1/projects/ce
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
 
-const valuesFilePath = "../../charts/tigera-operator/values.yaml"
+const defaultValuesFilePath = "charts/tigera-operator/values.yaml"
+
+// httpConcurrency caps concurrent HTTP fetches against catalog.redhat.com
+// during privileged-flag and certification-status lookups, so a large image
+// catalog doesn't hammer the API.
+const httpConcurrency = 8
+
+// imagesPageSize is the page_size used for the paginated /images endpoint.
+const imagesPageSize = 100
 
 var linuxPlatforms = []string{"amd64", "arm64", "s390x", "ppc64le"}
 
@@ -106,59 +118,125 @@ type rootOpts struct {
 	calicoVersion   string
 	operatorVersion string
 	rhAPIKey        string
+	valuesFile      string
 	allowMaster     bool
 }
 
-func main() {
-	defaultCalico, defaultOperator, err := readChartVersions(valuesFilePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not read defaults from %s: %v\n", valuesFilePath, err)
-	}
-	if defaultCalico == "" {
-		defaultCalico = "master"
-	}
-	if defaultOperator == "" {
-		defaultOperator = "master"
-	}
+// exitErr lets RunE / PersistentPreRunE signal a specific exit code through
+// cobra's error path. main() unwraps it and exits with the requested code.
+type exitErr struct {
+	code int
+	err  error
+}
 
-	if err := newRootCmd(defaultCalico, defaultOperator).Execute(); err != nil {
+func (e *exitErr) Error() string { return e.err.Error() }
+func (e *exitErr) Unwrap() error { return e.err }
+
+func usageErrorf(format string, args ...any) error {
+	return &exitErr{code: 2, err: fmt.Errorf(format, args...)}
+}
+
+func lookForGitRoot() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	if output, err := cmd.Output(); err != nil {
+		return "", fmt.Errorf("could not find git toplevel")
+	} else {
+		return strings.TrimSpace(string(output)), nil
+	}
+}
+
+func relativeGitRoot() (string, error) {
+	gitRoot, err := lookForGitRoot()
+	if err != nil {
+		return "", err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not get cwd: %w", err)
+	}
+	rel, err := filepath.Rel(cwd, gitRoot)
+	if err != nil {
+		return "", fmt.Errorf("could not get relative path: %w", err)
+	}
+	fmt.Println(rel)
+	return rel, nil
+
+}
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := newRootCmd().ExecuteContext(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		var ee *exitErr
+		if errors.As(err, &ee) {
+			os.Exit(ee.code)
+		}
 		os.Exit(1)
 	}
 }
 
-func newRootCmd(defaultCalico, defaultOperator string) *cobra.Command {
+func newRootCmd() *cobra.Command {
 	opts := &rootOpts{}
+	gitRoot, err := relativeGitRoot()
+	if err != nil {
+		os.Exit(1)
+	}
+	defaultAbsValuesFilePath := filepath.Join(gitRoot, defaultValuesFilePath)
 	cmd := &cobra.Command{
 		Use:           "certify",
 		Short:         "Openshift preflight runner and certification checker for Calico images",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if opts.allowMaster {
-				return nil
-			}
-			bad := false
-			if opts.calicoVersion == "master" {
-				fmt.Fprintln(os.Stderr, "WARNING: --calico-version is \"master\" — not a valid certification target.")
-				bad = true
-			}
-			if opts.operatorVersion == "master" {
-				fmt.Fprintln(os.Stderr, "WARNING: --operator-version is \"master\" — not a valid certification target.")
-				bad = true
-			}
-			if bad {
-				fmt.Fprintln(os.Stderr, "Pass --allow-master to bypass this check.")
-				os.Exit(2)
-			}
-			return nil
+			return resolveVersions(opts)
 		},
 	}
-	cmd.PersistentFlags().StringVar(&opts.calicoVersion, "calico-version", envOr("CALICO_VERSION", defaultCalico), "calico version to certify")
-	cmd.PersistentFlags().StringVar(&opts.operatorVersion, "operator-version", envOr("OPERATOR_VERSION", defaultOperator), "operator version to certify")
+	cmd.PersistentFlags().StringVar(&opts.calicoVersion, "calico-version", os.Getenv("CALICO_VERSION"), "calico version to certify (defaults to value from --values-file)")
+	cmd.PersistentFlags().StringVar(&opts.operatorVersion, "operator-version", os.Getenv("OPERATOR_VERSION"), "operator version to certify (defaults to value from --values-file)")
 	cmd.PersistentFlags().StringVar(&opts.rhAPIKey, "rh-api-key", os.Getenv("RH_API_KEY"), "Red Hat API key (sent as the X-API-KEY header)")
+	cmd.PersistentFlags().StringVar(&opts.valuesFile, "values-file", defaultAbsValuesFilePath, "helm values.yaml file to read default versions from")
 	cmd.PersistentFlags().BoolVar(&opts.allowMaster, "allow-master", false, "proceed even if a version is \"master\" (not a valid certification target)")
 	cmd.AddCommand(newRunCmd(opts), newCheckCmd(opts))
 	return cmd
+}
+
+// resolveVersions fills in any unset version flags from the helm values file
+// (falling back to "master") and rejects "master" unless --allow-master is set.
+func resolveVersions(opts *rootOpts) error {
+	if opts.calicoVersion == "" || opts.operatorVersion == "" {
+		cv, ov, err := readChartVersions(opts.valuesFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not read defaults from %s: %v\n", opts.valuesFile, err)
+		}
+		if opts.calicoVersion == "" {
+			opts.calicoVersion = cv
+		}
+		if opts.operatorVersion == "" {
+			opts.operatorVersion = ov
+		}
+	}
+	if opts.calicoVersion == "" {
+		opts.calicoVersion = "master"
+	}
+	if opts.operatorVersion == "" {
+		opts.operatorVersion = "master"
+	}
+	if opts.allowMaster {
+		return nil
+	}
+	var bad []string
+	if opts.calicoVersion == "master" {
+		bad = append(bad, "--calico-version is \"master\"")
+	}
+	if opts.operatorVersion == "master" {
+		bad = append(bad, "--operator-version is \"master\"")
+	}
+	if len(bad) > 0 {
+		return usageErrorf("%s — not a valid certification target. Pass --allow-master to bypass.", strings.Join(bad, " and "))
+	}
+	return nil
 }
 
 func newRunCmd(opts *rootOpts) *cobra.Command {
@@ -172,18 +250,14 @@ func newRunCmd(opts *rootOpts) *cobra.Command {
 		Short: "Run preflight scans against Calico images and optionally submit results to Openshift Connect",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if submit && opts.rhAPIKey == "" {
-				fmt.Fprintln(os.Stderr, "--submit requires --rh-api-key (or RH_API_KEY env var)")
-				os.Exit(2)
+				return usageErrorf("--submit requires --rh-api-key (or RH_API_KEY env var)")
 			}
-			if cmd.Flags().Changed("concurrency") && concurrency > 0 {
-				runtime.GOMAXPROCS(concurrency)
-			}
-			return runScans(opts, preflightTag, submit, concurrency)
+			return runScans(cmd.Context(), opts, preflightTag, submit, concurrency)
 		},
 	}
 	cmd.Flags().StringVar(&preflightTag, "preflight-tag", envOr("PREFLIGHT_TAG", "stable"), "preflight image tag")
-	cmd.Flags().BoolVar(&submit, "submit", os.Getenv("SUBMIT") == "--submit", "actually submit results to Openshift Connect")
-	cmd.Flags().IntVar(&concurrency, "concurrency", runtime.GOMAXPROCS(0), "number of scans to run concurrently; if set, also overrides GOMAXPROCS")
+	cmd.Flags().BoolVar(&submit, "submit", false, "actually submit results to Openshift Connect")
+	cmd.Flags().IntVar(&concurrency, "concurrency", runtime.GOMAXPROCS(0), "number of scans to run concurrently")
 	return cmd
 }
 
@@ -193,16 +267,15 @@ func newCheckCmd(opts *rootOpts) *cobra.Command {
 		Short: "Fetch certification status from catalog.redhat.com and report per-architecture results",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.rhAPIKey == "" {
-				fmt.Fprintln(os.Stderr, "check requires --rh-api-key (or RH_API_KEY env var)")
-				os.Exit(2)
+				return usageErrorf("check requires --rh-api-key (or RH_API_KEY env var)")
 			}
-			return runCertCheck(opts)
+			return runCertCheck(cmd.Context(), opts)
 		},
 	}
 	return cmd
 }
 
-func runScans(opts *rootOpts, preflightTag string, submit bool, concurrency int) error {
+func runScans(ctx context.Context, opts *rootOpts, preflightTag string, submit bool, concurrency int) error {
 	outputRoot := "output-" + opts.calicoVersion
 	jobs := buildJobs(outputRoot, opts.calicoVersion, opts.operatorVersion)
 
@@ -212,7 +285,7 @@ func runScans(opts *rootOpts, preflightTag string, submit bool, concurrency int)
 
 	preflightImage := "quay.io/opdev/preflight:" + preflightTag
 	fmt.Printf("Pulling %s\n", preflightImage)
-	if out, err := exec.Command("podman", "pull", preflightImage).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, "podman", "pull", preflightImage).CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", out)
 		return fmt.Errorf("podman pull: %w", err)
 	}
@@ -222,30 +295,30 @@ func runScans(opts *rootOpts, preflightTag string, submit bool, concurrency int)
 	var privileged map[string]bool
 	if opts.rhAPIKey != "" {
 		fmt.Println("Fetching project info from catalog.redhat.com")
-		privileged = fetchProjectPrivileged(jobs, opts.rhAPIKey)
+		privileged = fetchProjectPrivileged(ctx, jobs, opts.rhAPIKey)
 	} else {
 		fmt.Fprintln(os.Stderr, "note: no --rh-api-key supplied; skipping project privileged-flag lookup")
 	}
 
-	results := runJobs(jobs, concurrency, preflightImage, opts.rhAPIKey, submit)
+	results := runJobs(ctx, jobs, concurrency, preflightImage, opts.rhAPIKey, submit)
 
 	if err := consolidate(outputRoot, linuxPlatforms); err != nil {
 		fmt.Fprintf(os.Stderr, "consolidation failed: %v\n", err)
 	}
 
 	if !printReport(results, privileged) {
-		os.Exit(1)
+		return &exitErr{code: 1, err: errors.New("one or more scans had issues; see report above")}
 	}
 	return nil
 }
 
-func runCertCheck(opts *rootOpts) error {
+func runCertCheck(ctx context.Context, opts *rootOpts) error {
 	outputRoot := "output-" + opts.calicoVersion
 	jobs := buildJobs(outputRoot, opts.calicoVersion, opts.operatorVersion)
 	fmt.Println("Fetching certification status from catalog.redhat.com")
-	certResults := fetchAllCertStatus(jobs, opts.rhAPIKey)
+	certResults := fetchAllCertStatus(ctx, jobs, opts.rhAPIKey)
 	if !printCertStatus(certResults) {
-		os.Exit(1)
+		return &exitErr{code: 1, err: errors.New("one or more images are not fully certified")}
 	}
 	return nil
 }
@@ -256,12 +329,13 @@ type projectInfo struct {
 	} `json:"container"`
 }
 
-func fetchProjectInfo(projectID, apiKey string) (*projectInfo, error) {
-	req, err := http.NewRequest(http.MethodGet, catalogAPIBase+projectID, nil)
+func fetchProjectInfo(ctx context.Context, projectID, apiKey string) (*projectInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, catalogAPIBase+projectID, nil)
 	if err != nil {
 		return nil, err
 	}
-
+	// The Pyxis catalog API requires the header in upper-case (X-API-KEY);
+	// http.Header.Set would canonicalise to X-Api-Key.
 	req.Header["X-API-KEY"] = []string{apiKey}
 
 	resp, err := httpClient.Do(req)
@@ -297,35 +371,45 @@ type imagesResponse struct {
 	Total    int              `json:"total"`
 }
 
-func fetchProjectImagesPaged(projectID, apiKey string) ([]imageCertEntry, error) {
+// fetchProjectImagesPaged walks every page of the project's /images endpoint
+// and returns the full set of entries.
+func fetchProjectImagesPaged(ctx context.Context, projectID, apiKey string) ([]imageCertEntry, error) {
 	var all []imageCertEntry
-	url := fmt.Sprintf("https://catalog.redhat.com/api/containers/v1/projects/certification/id/%s/images", projectID)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	for page := 0; ; page++ {
+		url := fmt.Sprintf("%s%s/images?page_size=%d&page=%d", catalogAPIBase, projectID, imagesPageSize, page)
+		ir, err := fetchImagesPage(ctx, url, apiKey)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, ir.Data...)
+		if len(ir.Data) == 0 || len(all) >= ir.Total {
+			return all, nil
+		}
+	}
+}
+
+func fetchImagesPage(ctx context.Context, url, apiKey string) (*imagesResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
+	// See fetchProjectInfo for the upper-case header rationale.
 	req.Header["X-API-KEY"] = []string{apiKey}
 	req.Header["Accept"] = []string{"application/json"}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var ir imagesResponse
-	err = json.NewDecoder(resp.Body).Decode(&ir)
-	resp.Body.Close()
-	if err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&ir); err != nil {
 		return nil, err
 	}
-	all = append(all, ir.Data...)
-	if len(ir.Data) == 0 || len(all) >= ir.Total {
-		return all, nil
-	}
-	return all, nil
+	return &ir, nil
 }
 
 type certStatus int
@@ -358,8 +442,8 @@ func entryHasVersion(e imageCertEntry, version string) bool {
 // each architecture in linuxPlatforms as certified, not certified (arch
 // present but no entry satisfies all criteria), or missing (no entry at all
 // for that arch).
-func checkProjectCertification(projectID, version, apiKey string) (map[string]certStatus, error) {
-	entries, err := fetchProjectImagesPaged(projectID, apiKey)
+func checkProjectCertification(ctx context.Context, projectID, version, apiKey string) (map[string]certStatus, error) {
+	entries, err := fetchProjectImagesPaged(ctx, projectID, apiKey)
 	if err != nil {
 		return nil, err
 	}
@@ -386,8 +470,8 @@ func checkProjectCertification(projectID, version, apiKey string) (map[string]ce
 }
 
 // fetchAllCertStatus runs checkProjectCertification concurrently for every
-// unique image in jobs.
-func fetchAllCertStatus(jobs []scanJob, apiKey string) []imageCertResult {
+// unique image in jobs, capped at httpConcurrency in flight at a time.
+func fetchAllCertStatus(ctx context.Context, jobs []scanJob, apiKey string) []imageCertResult {
 	type info struct{ projectID, version string }
 	seen := map[string]info{}
 	for _, j := range jobs {
@@ -396,11 +480,14 @@ func fetchAllCertStatus(jobs []scanJob, apiKey string) []imageCertResult {
 	results := make([]imageCertResult, 0, len(seen))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, httpConcurrency)
 	for image, i := range seen {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(image string, i info) {
 			defer wg.Done()
-			statuses, err := checkProjectCertification(i.projectID, i.version, apiKey)
+			defer func() { <-sem }()
+			statuses, err := checkProjectCertification(ctx, i.projectID, i.version, apiKey)
 			mu.Lock()
 			results = append(results, imageCertResult{
 				image:    image,
@@ -457,8 +544,9 @@ func printCertStatus(results []imageCertResult) bool {
 
 // fetchProjectPrivileged returns image -> privileged for every unique project
 // referenced by jobs. Failures are reported as warnings and the corresponding
-// image is omitted (treated as not privileged).
-func fetchProjectPrivileged(jobs []scanJob, apiKey string) map[string]bool {
+// image is omitted (treated as not privileged). At most httpConcurrency
+// fetches run at once.
+func fetchProjectPrivileged(ctx context.Context, jobs []scanJob, apiKey string) map[string]bool {
 	seen := map[string]string{}
 	for _, j := range jobs {
 		seen[j.image] = j.project
@@ -466,11 +554,14 @@ func fetchProjectPrivileged(jobs []scanJob, apiKey string) map[string]bool {
 	privileged := make(map[string]bool, len(seen))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, httpConcurrency)
 	for image, projectID := range seen {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(image, projectID string) {
 			defer wg.Done()
-			pi, err := fetchProjectInfo(projectID, apiKey)
+			defer func() { <-sem }()
+			pi, err := fetchProjectInfo(ctx, projectID, apiKey)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "warning: project info for %s (%s): %v\n", image, projectID, err)
 				return
@@ -505,7 +596,7 @@ func buildJobs(outputRoot, calicoVersion, operatorVersion string) []scanJob {
 	return jobs
 }
 
-func runJobs(jobs []scanJob, concurrency int, preflightImage, apiKey string, submit bool) []scanResult {
+func runJobs(ctx context.Context, jobs []scanJob, concurrency int, preflightImage, apiKey string, submit bool) []scanResult {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -519,7 +610,7 @@ func runJobs(jobs []scanJob, concurrency int, preflightImage, apiKey string, sub
 			defer wg.Done()
 			defer func() { <-sem }()
 			fmt.Printf("[start] %s/%s\n", job.image, job.platform)
-			results[i] = runScan(job, preflightImage, apiKey, submit)
+			results[i] = runScan(ctx, job, preflightImage, apiKey, submit)
 			fmt.Printf("[done ] %s/%s — %s\n", job.image, job.platform, summarise(results[i]))
 		}(i, job)
 	}
@@ -527,7 +618,7 @@ func runJobs(jobs []scanJob, concurrency int, preflightImage, apiKey string, sub
 	return results
 }
 
-func runScan(job scanJob, preflightImage, apiKey string, submit bool) scanResult {
+func runScan(ctx context.Context, job scanJob, preflightImage, apiKey string, submit bool) scanResult {
 	res := scanResult{job: job}
 	if err := os.MkdirAll(job.workdir, 0o755); err != nil {
 		res.runErr = fmt.Errorf("mkdir %s: %w", job.workdir, err)
@@ -542,21 +633,22 @@ func runScan(job scanJob, preflightImage, apiKey string, submit bool) scanResult
 	imageRef := fmt.Sprintf("%s/%s:%s", job.org, job.image, job.version)
 	args := []string{
 		"run", "--rm", "--security-opt=label=disable",
-		"--env", "PFLT_PLATFORM=" + job.platform,
-		"--env", "PFLT_ARTIFACTS=/artifacts",
-		"--env", "PFLT_LOGFILE=/artifacts/preflight.log",
-		"--env", "PFLT_CERTIFICATION_COMPONENT_ID=" + job.project,
-		"--env", "PFLT_PYXIS_API_TOKEN=" + apiKey,
+		"--env", "PFLT_PYXIS_API_TOKEN",
 		"-v", abs + ":/artifacts",
 		preflightImage,
 		"check", "container", imageRef,
+		"--platform", job.platform,
+		"--artifacts", "/artifacts",
+		"--logfile", "/artifacts/preflight.log",
+		"--certification-component-id", job.project,
 	}
 	if submit {
 		args = append(args, "--submit")
 	}
 
 	var buf bytes.Buffer
-	cmd := exec.Command("podman", args...)
+	cmd := exec.CommandContext(ctx, "podman", args...)
+	cmd.Env = append(os.Environ(), "PFLT_PYXIS_API_TOKEN="+apiKey)
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
@@ -594,6 +686,10 @@ func summarise(r scanResult) string {
 	}
 }
 
+// consolidate writes a single JSON array per architecture combining every
+// per-image results.json. The original shell script emitted concatenated
+// objects with no separator (technically invalid JSON); we emit a real array
+// so the file is parseable with jq / json.Unmarshal.
 func consolidate(outputRoot string, platforms []string) error {
 	for _, platform := range platforms {
 		matches, err := filepath.Glob(filepath.Join(outputRoot, "*", platform, "results.json"))
@@ -601,24 +697,41 @@ func consolidate(outputRoot string, platforms []string) error {
 			return err
 		}
 		out := filepath.Join(outputRoot, platform+"-results.json")
-		f, err := os.Create(out)
+		if err := writeConsolidated(out, matches); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeConsolidated(out string, paths []string) error {
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := io.WriteString(f, "[\n"); err != nil {
+		return err
+	}
+	for i, p := range paths {
+		data, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		for _, m := range matches {
-			data, err := os.ReadFile(m)
-			if err != nil {
-				f.Close()
-				return err
-			}
-			if _, err := f.Write(data); err != nil {
-				f.Close()
+		if !json.Valid(data) {
+			return fmt.Errorf("%s: invalid JSON", p)
+		}
+		if i > 0 {
+			if _, err := io.WriteString(f, ",\n"); err != nil {
 				return err
 			}
 		}
-		if err := f.Close(); err != nil {
+		if _, err := f.Write(bytes.TrimRight(data, "\n")); err != nil {
 			return err
 		}
+	}
+	if _, err := io.WriteString(f, "\n]\n"); err != nil {
+		return err
 	}
 	return nil
 }
@@ -827,7 +940,7 @@ func readChartVersions(path string) (calico, operator string, err error) {
 		if line == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
-		if !(line[0] == ' ' || line[0] == '\t') {
+		if line[0] != ' ' && line[0] != '\t' {
 			if i := strings.IndexByte(line, ':'); i > 0 {
 				section = line[:i]
 			} else {
