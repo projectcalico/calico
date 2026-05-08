@@ -54,7 +54,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values: ["4.20.1", "4.19.17", "4.18.27"]
+              values: ["4.21.14", "4.20.21", "4.19.30"]
           env_vars:
             - name: OPENSHIFT_CLUSTER_TYPE
               value: "Standalone"
@@ -77,7 +77,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: OPENSHIFT_VERSION
-              value: "4.20.1"
+              value: "4.21.14"
             - name: OPENSHIFT_CLUSTER_TYPE
               value: "HCP-hosting"
             - name: HOSTING_CLUSTER
@@ -100,7 +100,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
             - env_var: OPENSHIFT_VERSION
-              values: ["4.20.1", "4.19.17", "4.18.27"]
+              values: ["4.21.14", "4.20.21", "4.19.30"]
           env_vars:
             - name: HCP_STAGE
               value: "hosted"
