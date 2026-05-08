@@ -16,7 +16,7 @@ ARG NFTABLES_SHA256
 
 RUN dnf upgrade -y && dnf install -y epel-release
 
-RUN dnf --enablerepo=crb install -y \
+RUN dnf --enablerepo=powertools install -y \
     autoconf \
     automake \
     bison \
