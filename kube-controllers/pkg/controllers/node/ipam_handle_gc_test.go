@@ -356,4 +356,3 @@ var _ = Describe("Handle GC unit tests", func() {
 		})
 	})
 })
-

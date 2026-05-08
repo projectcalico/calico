@@ -217,13 +217,14 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type IPAMController struct {
-	client     client.Interface
+	client client.Interface
 	// bc is the raw datastore backend used by the handle reconciler for CAS
 	// writes. Sourced from client.(backendAccessor).Backend() at
 	// construction. May be nil if the supplied client doesn't expose a
 	// backend (e.g. some narrow test fakes); the handle reconciler
 	// short-circuits in that case.
-	bc         bapi.Client
+	bc bapi.Client
+
 	clientset  kubernetes.Interface
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
