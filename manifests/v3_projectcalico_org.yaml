@@ -7281,6 +7281,30 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              patch:
+                                description: |-
+                                  Patch allows the Service for a gateway to be patched in ways that aren't more explicitly
+                                  supported by the fields above.  For example, the following YAML could be used to set the
+                                  Service's healthCheckNodePort:
+                                    patch:
+                                      type: StrategicMerge
+                                      value:
+                                        spec:
+                                          healthCheckNodePort: 12345
+                                properties:
+                                  type:
+                                    description: |-
+                                      Type is the type of merge operation to perform
+                                      By default, StrategicMerge is used as the patch type.
+                                    type: string
+                                  value:
+                                    description:
+                                      Object contains the raw configuration
+                                      for merged object
+                                    x-kubernetes-preserve-unknown-fields: true
+                                required:
+                                  - value
+                                type: object
                             type: object
                         type: object
                       name:
@@ -11862,6 +11886,21 @@ spec:
                         - BPF
                         - VPP
                         - Nftables
+                      type: string
+                    linuxPodInterfaceType:
+                      description: |-
+                        LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                        creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                        plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                        falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                        dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                        improved throughput and tail-latency under contention; for non-BPF dataplanes
+                        it is functionally equivalent to veth. Only valid when using the Calico CNI
+                        plugin.
+                        Default: Veth
+                      enum:
+                        - Veth
+                        - Netkit
                       type: string
                     linuxPolicySetupTimeoutSeconds:
                       description: |-
@@ -21084,6 +21123,21 @@ spec:
                             - BPF
                             - VPP
                             - Nftables
+                          type: string
+                        linuxPodInterfaceType:
+                          description: |-
+                            LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                            creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                            plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                            falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                            dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                            improved throughput and tail-latency under contention; for non-BPF dataplanes
+                            it is functionally equivalent to veth. Only valid when using the Calico CNI
+                            plugin.
+                            Default: Veth
+                          enum:
+                            - Veth
+                            - Netkit
                           type: string
                         linuxPolicySetupTimeoutSeconds:
                           description: |-
