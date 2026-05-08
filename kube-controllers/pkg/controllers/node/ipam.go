@@ -230,6 +230,37 @@ type IPAMController struct {
 	fullSyncRequired bool
 }
 
+// assignAllocation registers a new allocation in all internal tracking maps.
+// This is the counterpart to releaseAllocation — both must be kept in sync
+// so that every map updated on assign is also cleaned up on release.
+func (c *IPAMController) assignAllocation(a *allocation) {
+	if _, ok := c.allocationsByBlock[a.block]; !ok {
+		c.allocationsByBlock[a.block] = map[string]*allocation{}
+	}
+	c.allocationsByBlock[a.block][a.id()] = a
+	if a.node() != "" {
+		c.allocationState.allocate(a)
+	}
+	c.handleTracker.setAllocation(a)
+}
+
+// releaseAllocation removes an allocation from all internal tracking maps.
+// Every code path that removes an allocation should call this to ensure
+// consistent cleanup and avoid leaking entries in any map.
+func (c *IPAMController) releaseAllocation(a *allocation) {
+	c.handleTracker.removeAllocation(a)
+	delete(c.confirmedLeaks, a.id())
+	if a.node() != "" {
+		c.allocationState.release(a)
+	}
+
+	// Remove from allocationsByBlock. The block-level map entry itself is
+	// cleaned up by callers when the entire block is deleted.
+	if allocs, ok := c.allocationsByBlock[a.block]; ok {
+		delete(allocs, a.id())
+	}
+}
+
 func (c *IPAMController) Start(stop chan struct{}) {
 	go c.acceptScheduleRequests(stop)
 }
@@ -502,6 +533,9 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		if n, ok := c.nodesByBlock[blockCIDR]; ok {
 			delete(c.nodesByBlock, blockCIDR)
 			delete(c.blocksByNode[n], blockCIDR)
+			if len(c.blocksByNode[n]) == 0 {
+				delete(c.blocksByNode, n)
+			}
 		}
 	}
 
@@ -539,16 +573,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 
 		// This is a new allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
-			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
-		}
-		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
-
-		// Update the allocations-by-node view.
-		if node := alloc.node(); node != "" {
-			c.allocationState.allocate(&alloc)
-		}
-		c.handleTracker.setAllocation(&alloc)
+		c.assignAllocation(&alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -569,18 +594,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// Remove any previously assigned allocations that have since been released.
 	for id, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := currentAllocations[id]; !ok {
-			// Needs release.
-			c.handleTracker.removeAllocation(alloc)
-			delete(c.allocationsByBlock[blockCIDR], id)
-
-			// Also remove from the node view.
-			node := alloc.node()
-			if node != "" {
-				c.allocationState.release(alloc)
-			}
-
-			// And to be safe, remove from confirmed leaks just in case.
-			delete(c.confirmedLeaks, id)
+			c.releaseAllocation(alloc)
 		}
 	}
 
@@ -597,10 +611,7 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	// Remove allocations that were contributed by this block.
 	allocations := c.allocationsByBlock[blockCIDR]
 	for _, alloc := range allocations {
-		node := alloc.node()
-		if node != "" {
-			c.allocationState.release(alloc)
-		}
+		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
@@ -608,6 +619,9 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
 		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
+		if len(c.blocksByNode[n]) == 0 {
+			delete(c.blocksByNode, n)
+		}
 	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
@@ -777,6 +791,9 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 		// accidentally release all of the node's blocks.
 		delete(c.emptyBlocks, blockCIDR)
 		delete(c.blocksByNode[node], blockCIDR)
+		if len(c.blocksByNode[node]) == 0 {
+			delete(c.blocksByNode, node)
+		}
 		delete(c.nodesByBlock, blockCIDR)
 		delete(c.allBlocks, blockCIDR)
 
@@ -1158,13 +1175,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 			return err
 		}
 
-		// No longer a leak. Remove it here so we're not dependent on receiving
-		// the update from the syncer (which we will do eventually, this is just cleaner).
-		c.allocationState.release(a)
-
+		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
+		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
+		c.releaseAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
-
-		delete(c.confirmedLeaks, id)
 	}
 	return nil
 }
