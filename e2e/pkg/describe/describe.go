@@ -148,8 +148,6 @@ func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
 }
 
-// RequiresExternalNode marks tests that need EXT_IP/EXT_KEY/EXT_USER. Differs
-// from WithExternalNode (traffic patterns) by needing creds to actually run.
 func RequiresExternalNode() any {
 	return framework.WithLabel("RequiresExternalNode")
 }

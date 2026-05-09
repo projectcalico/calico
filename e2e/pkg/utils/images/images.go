@@ -74,14 +74,10 @@ const (
 	// Source: tigera/k8s-e2e/images/flask.
 	PacketSizeServer = "calico/k8s-e2e-dataplane-server:stable"
 
-	// KubeVirtUbuntu is a containerDisk image with Ubuntu 20.04 used as the
-	// guest OS for KubeVirt VM-based e2e tests. Pinned by digest so test runs
-	// don't drift if the upstream :latest tag is repushed; bump deliberately.
+	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
 
-	// CalicoBIRD is the Calico BIRD 1.x build used as the BGP daemon on the
-	// external TOR node in the KubeVirt eBGP live-migration test. Must be
-	// kept in sync with BIRD_VERSION in metadata.mk.
+	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
 	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
 )
 

@@ -109,9 +109,6 @@ func ExtNodeIP() string {
 	return allConfigOptions[externalNodeIP].actualValue
 }
 
-// KubeVirtTestVMImage returns the value of the KUBEVIRT_TEST_VM_IMAGE env
-// var / --calico.kubevirt-test-vm-image flag, or empty if unset. Test
-// packages pick their own digest-pinned default when this returns empty.
 func KubeVirtTestVMImage() string {
 	return allConfigOptions[kubevirtTestVMImage].actualValue
 }

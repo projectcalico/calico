@@ -218,10 +218,7 @@ func (e *Client) RunIperfCmd(iperfCmd string, timeoutSecs int) string {
 	return output
 }
 
-// dockerArgs joins extra `docker run` flags + image + args into the suffix of
-// a docker run / docker exec command line, escaping nothing — callers are
-// expected to pass already-shell-safe tokens.
-func dockerArgs(parts ...string) string {
+func joinArgs(parts ...string) string {
 	return strings.Join(parts, " ")
 }
 
@@ -232,9 +229,9 @@ func dockerArgs(parts ...string) string {
 //
 // For one-shot probes, prefer RunContainerOnce (which sets --rm).
 func (e *Client) RunContainer(name, image string, flags []string, args ...string) (string, error) {
-	cmd := "sudo docker run " + dockerArgs(flags...) + " --name " + name + " " + image
+	cmd := "sudo docker run " + joinArgs(flags...) + " --name " + name + " " + image
 	if len(args) > 0 {
-		cmd = cmd + " " + dockerArgs(args...)
+		cmd = cmd + " " + joinArgs(args...)
 	}
 	return e.Exec("/bin/sh", "-c", cmd)
 }
@@ -243,9 +240,9 @@ func (e *Client) RunContainer(name, image string, flags []string, args ...string
 // capture stdout, container is removed on exit. Useful for one-shot probes
 // where the caller only cares about the captured output.
 func (e *Client) RunContainerOnce(image string, flags []string, args ...string) (string, error) {
-	cmd := "sudo docker run --rm " + dockerArgs(flags...) + " " + image
+	cmd := "sudo docker run --rm " + joinArgs(flags...) + " " + image
 	if len(args) > 0 {
-		cmd = cmd + " " + dockerArgs(args...)
+		cmd = cmd + " " + joinArgs(args...)
 	}
 	return e.Exec("/bin/sh", "-c", cmd)
 }
@@ -271,7 +268,7 @@ func (e *Client) IsContainerRunning(name string) (bool, error) {
 // RunInContainer executes args inside an already-running named container via
 // `docker exec`. Returns the command's stdout.
 func (e *Client) RunInContainer(name string, args ...string) (string, error) {
-	cmd := "sudo docker exec " + name + " " + dockerArgs(args...)
+	cmd := "sudo docker exec " + name + " " + joinArgs(args...)
 	return e.Exec("/bin/sh", "-c", cmd)
 }
 
