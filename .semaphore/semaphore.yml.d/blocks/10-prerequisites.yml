@@ -133,8 +133,9 @@
   # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
   # this block is just a `docker manifest inspect` + GCS upload of the
   # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
-  # arches) and, on master/release branches, pushes to Docker Hub so
-  # subsequent workflows hit the cache.
+  # arches) and uploads the image tarball to GCS for downstream consumers.
+  # Publishing to Docker Hub happens in a separate trusted-only block so PRs
+  # never receive the push credential.
   run:
     when: "true"
   dependencies: []
@@ -143,15 +144,11 @@
       machine:
         type: f1-standard-4
         os_image: ubuntu2204
-
-    secrets:
-      # Needed for pushing to Docker Hub on cache miss.
-      - name: docker-hub
     prologue:
       commands:
         - mkdir logs
         - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
-        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+        - ssh-add ~/.ssh/id_rsa
     epilogue:
       always:
         commands:
@@ -167,6 +164,41 @@
               - s390x
         commands:
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
+
+- name: "Push: nftables RPMs"
+  # Publish the cached nftables RPM images to Docker Hub only from trusted
+  # branch builds. Keeping this separate from the shared build/cache block
+  # ensures PR workflows never receive the push credential.
+  run:
+    when: "(branch =~ 'master|release-.*') and (pull_request !~ '.+')"
+  dependencies:
+    - "Build: nftables RPMs"
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    secrets:
+      - name: docker
+    prologue:
+      commands:
+        - mkdir logs
+        - export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+    epilogue:
+      always:
+        commands:
+          - artifact push job logs --destination semaphore/logs || true
+    jobs:
+      - name: "Push cached nftables RPMs"
+        matrix:
+          - env_var: ARCH
+            values:
+              - amd64
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - .semaphore/scripts/push-nft-rpms.sh "${ARCH}"
 
 - name: "Pull: go-build image"
   # Populate the GCS cache of calico/go-build so that every downstream job can
