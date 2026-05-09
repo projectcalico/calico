@@ -19,7 +19,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -42,8 +41,8 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
-	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -60,6 +59,18 @@ const (
 	// out CI when something else has gone wrong.
 	testTimeout = 6 * time.Minute
 )
+
+// vmImage returns the containerDisk image used by VM-based e2e tests:
+// KUBEVIRT_TEST_VM_IMAGE (via the e2e config package) when set, otherwise
+// the digest-pinned default in images.KubeVirtUbuntu. Reading the env var
+// through the config package keeps env-var declarations centralized and
+// keeps this test file free of direct os.Getenv calls.
+func vmImage() string {
+	if v := config.KubeVirtTestVMImage(); v != "" {
+		return v
+	}
+	return images.KubeVirtUbuntu
+}
 
 // defaultCloudInit configures the VM's default user with a known password and
 // enables SSH password auth so test debuggers can console in.
@@ -157,7 +168,7 @@ func (v *kubeVirtVM) spec() *kubevirtv1.VirtualMachine {
 					Networks:                      []kubevirtv1.Network{{Name: "default", NetworkSource: kubevirtv1.NetworkSource{Pod: &kubevirtv1.PodNetwork{}}}},
 					TerminationGracePeriodSeconds: ptrInt64(30),
 					Volumes: []kubevirtv1.Volume{
-						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: images.KubeVirtUbuntu}}},
+						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage()}}},
 						{Name: "cloudinitdisk", VolumeSource: kubevirtv1.VolumeSource{CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
 							UserData: cloudInit,
 						}}},
@@ -259,20 +270,6 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 	return nil, fmt.Errorf("no running virt-launcher pod found for VM %s (total pods: %d)", v.name, len(pods.Items))
 }
 
-// setupPingPod creates a long-running pod for connectivity checks (ping, nc)
-// via the shared conncheck builder. Conncheck handles pod creation, readiness,
-// and cleanup; the test code just needs the underlying *v1.Pod for kubectl
-// exec calls.
-func setupPingPod(f *framework.Framework) *corev1.Pod {
-	By("Creating a ping pod for connectivity checks")
-	tester := conncheck.NewConnectionTester(f)
-	DeferCleanup(tester.Stop)
-	client := conncheck.NewClient("ping-test", f.Namespace)
-	tester.AddClient(client)
-	tester.Deploy()
-	return client.Pod()
-}
-
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
 // given node, used for TCP tests where the client must be on a different node
 // than the server VM to exercise cross-node BGP routing.
@@ -361,23 +358,6 @@ func waitForMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *k
 		}
 		return nil
 	}, 5*time.Minute, 1*time.Second).Should(Succeed())
-}
-
-// expectPingSuccess verifies ICMP connectivity from a pod to the target IP.
-// Retries for up to 60s — generous compared with steady-state ping but tight
-// enough to catch routing breakage. After live-migration we expect route
-// convergence in a few seconds (BIRD reload, kernel route swap); 60s catches
-// genuine wedges without dragging out a failing test for 3 minutes.
-func expectPingSuccess(ns, podName, targetIP string) {
-	GinkgoHelper()
-	Eventually(func() error {
-		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
-			"ping", "-c", "3", "-W", "2", targetIP).Exec()
-		if err != nil {
-			return fmt.Errorf("ping failed: %v, output: %s", err, output)
-		}
-		return nil
-	}, 60*time.Second, 5*time.Second).Should(Succeed(), "failed to ping %s", targetIP)
 }
 
 // newLibcalicoClient creates a libcalico-go clientv3.Interface for direct IPAM queries.
@@ -607,49 +587,45 @@ func discoverPodCIDR(ctx context.Context, lcgc clientv3.Interface) string {
 	return ""
 }
 
-// startBirdOnTOR starts a calico/bird container on the TOR node with host networking,
-// injects the peer config, and reloads BIRD. Follows the same pattern as
-// node/tests/k8st/utils/utils.py:start_external_node_with_bgp.
+// startBirdOnTOR launches a calico/bird container on the TOR, applies the
+// per-test peer config, and registers cleanup to remove the container. BIRD
+// lifecycle (container + bird.conf) is owned by the test rather than the
+// cluster provisioner so that different test cases can run with different
+// BIRD configurations independently.
 func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
+	GinkgoHelper()
 	By("Starting BIRD container on TOR")
 
-	// Remove any prior container — best effort.
-	_, _ = runOnTOR(tor, "sudo docker rm -f tor-bird 2>/dev/null")
+	_ = tor.RemoveContainer("tor-bird")
 
-	// Start the container with host networking. The calico/bird image ships with
-	// a base bird.conf that defines router id, protocol kernel, and protocol device.
-	_, err := runOnTOR(tor, "sudo docker run -d --privileged --name tor-bird --network host "+images.CalicoBIRD)
+	// The calico/bird image ships with a base bird.conf that defines router
+	// id, protocol kernel, and protocol device, plus an include for
+	// /etc/bird/*.conf so peers.conf is picked up on reload.
+	_, err := tor.RunContainer("tor-bird", images.CalicoBIRD,
+		[]string{"-d", "--privileged", "--network", "host"})
 	Expect(err).NotTo(HaveOccurred(), "failed to start BIRD container on TOR")
-	// Register cleanup before the readiness wait below — if that wait
-	// panics, we still need to remove the container we just created.
+	// Register cleanup before the readiness wait so a panic still removes
+	// the container we just created.
 	DeferCleanup(func() { stopBirdOnTOR(tor) })
 
-	// Wait for the container to be running.
-	Eventually(func() string {
-		out, _ := runOnTOR(tor, "sudo docker ps --filter name=tor-bird --filter status=running -q")
-		return out
-	}, 30*time.Second, 2*time.Second).ShouldNot(BeEmpty(), "tor-bird container is not running")
-	logrus.Info("BIRD container started on TOR")
+	Eventually(func() (bool, error) {
+		return tor.IsContainerRunning("tor-bird")
+	}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tor-bird container is not running")
 
 	// Add "merge paths on" to the kernel protocol block for ECMP support.
-	// With different BIRD preferences (200 for community-tagged, 100 for default),
-	// merge paths only merges routes of equal preference, so the higher-preference
-	// route wins during migration.
-	_, err = runOnTOR(tor, `sudo docker exec tor-bird sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf`)
+	// With different BIRD preferences (200 for community-tagged, 100 for
+	// default), merge paths only merges routes of equal preference, so the
+	// higher-preference route wins during migration.
+	_, err = tor.RunInContainer("tor-bird", "sed", "-i",
+		"'/protocol kernel {/a merge paths on;'", "/etc/bird.conf")
 	Expect(err).NotTo(HaveOccurred(), "failed to enable merge paths in tor-bird")
 
-	// Write the peers config, replacing ip@local with the actual TOR IP.
 	peersConf = strings.ReplaceAll(peersConf, "ip@local", torIP)
+	Expect(tor.WriteFileInContainer("tor-bird", "/etc/bird/peers.conf", []byte(peersConf))).
+		To(Succeed(), "failed to write BIRD peers config to TOR")
 
-	// Base64-encode locally in Go to avoid SSH quoting issues with
-	// multi-line config content containing special characters.
-	encoded := base64.StdEncoding.EncodeToString([]byte(peersConf))
-	_, err = runOnTOR(tor, fmt.Sprintf("echo %s | base64 -d | sudo docker exec -i tor-bird tee /etc/bird/peers.conf > /dev/null", encoded))
-	Expect(err).NotTo(HaveOccurred(), "failed to write BIRD peers config to TOR")
-
-	// Reload BIRD to pick up the new peers config.
 	By("Reloading BIRD config on TOR")
-	out, err := runOnTOR(tor, "sudo docker exec tor-bird birdcl configure")
+	out, err := tor.RunInContainer("tor-bird", "birdcl", "configure")
 	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
 	logrus.Infof("birdcl configure: %s", out)
 }
@@ -657,7 +633,7 @@ func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
 // stopBirdOnTOR removes the BIRD container from the TOR node.
 func stopBirdOnTOR(tor *externalnode.Client) {
 	By("Stopping BIRD on TOR")
-	_, _ = runOnTOR(tor, "sudo docker rm -f tor-bird 2>/dev/null")
+	_ = tor.RemoveContainer("tor-bird")
 }
 
 // startTCPClientOnTOR starts a long-running nc TCP client container on the
@@ -667,23 +643,19 @@ func stopBirdOnTOR(tor *externalnode.Client) {
 func startTCPClientOnTOR(tor *externalnode.Client, name, vmIP string) {
 	GinkgoHelper()
 	By(fmt.Sprintf("Starting TCP client container %s on TOR connecting to %s", name, vmIP))
-	_, _ = runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null", name))
-	_, err := runOnTOR(tor, fmt.Sprintf(
-		"sudo docker run -d --name %s --network host alpine sh -c 'sleep 999999 | nc %s 9999'",
-		name, vmIP))
+	_ = tor.RemoveContainer(name)
+	_, err := tor.RunContainer(name, images.Alpine,
+		[]string{"-d", "--network", "host"},
+		"sh", "-c", fmt.Sprintf("'sleep 999999 | nc %s 9999'", vmIP))
 	Expect(err).NotTo(HaveOccurred(), "failed to start TCP client container on TOR")
 	DeferCleanup(func() {
 		By(fmt.Sprintf("Removing TCP client container %s from TOR", name))
-		_, _ = runOnTOR(tor, fmt.Sprintf("sudo docker rm -f %s 2>/dev/null", name))
+		_ = tor.RemoveContainer(name)
 	})
 
-	Eventually(func() error {
-		out, _ := runOnTOR(tor, fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %s 2>&1", name))
-		if strings.TrimSpace(out) != "true" {
-			return fmt.Errorf("container %s not running (state=%q)", name, out)
-		}
-		return nil
-	}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client container did not start on TOR")
+	Eventually(func() (bool, error) {
+		return tor.IsContainerRunning(name)
+	}, 15*time.Second, 1*time.Second).Should(BeTrue(), "TCP client container did not start on TOR")
 }
 
 // setupEBGPPeering configures eBGP peering between a TOR node and all cluster nodes.
@@ -703,16 +675,16 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
 
-	bgpSubnet := &net.IPNet{
-		IP:   net.ParseIP("172.16.8.0"),
-		Mask: net.CIDRMask(24, 32),
-	}
-
-	// Find the master (control-plane) node and its BGP IP. Only the master
-	// will peer with the TOR — it re-advertises all iBGP-learned routes with
-	// "next hop keep", so the TOR gets the correct per-node next-hop and can
-	// route directly to the node hosting each workload.
-	var masterName, masterBGPIP string
+	// Find the master (control-plane) node and its BGP-peering address. Only
+	// the master will peer with the TOR — it re-advertises all iBGP-learned
+	// routes with "next hop keep", so the TOR gets the correct per-node
+	// next-hop and can route directly to the node hosting each workload.
+	//
+	// The annotation is in CIDR form (e.g. "172.16.8.5/24") so the subnet for
+	// the BGP-peering network is implied by the master's address. Discover it
+	// here rather than hard-coding so the test runs on clusters with a
+	// different L2TP / underlay layout.
+	var masterName, masterAddr string
 	for _, node := range nodeList.Items {
 		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; !ok {
 			continue
@@ -721,18 +693,20 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		if addr == "" {
 			continue
 		}
-		ip := strings.Split(addr, "/")[0]
-		if bgpSubnet.Contains(net.ParseIP(ip)) {
-			masterName = node.Name
-			masterBGPIP = ip
-			break
-		}
+		masterName = node.Name
+		masterAddr = addr
+		break
 	}
-	Expect(masterBGPIP).NotTo(BeEmpty(),
-		"no control-plane node found with BGP IP in 172.16.8.0/24 subnet")
-	logrus.Infof("Master node: %s, BGP IP: %s", masterName, masterBGPIP)
+	Expect(masterAddr).NotTo(BeEmpty(),
+		"no control-plane node found with projectcalico.org/IPv4Address annotation")
 
-	// Find the TOR's L2TP IP by matching against the BGP subnet.
+	masterIP, bgpSubnet, err := net.ParseCIDR(masterAddr)
+	Expect(err).NotTo(HaveOccurred(),
+		"failed to parse master node BGP address %q", masterAddr)
+	masterBGPIP := masterIP.String()
+	logrus.Infof("Master node: %s, BGP IP: %s, BGP subnet: %s", masterName, masterBGPIP, bgpSubnet)
+
+	// Find the TOR's L2TP IP by matching against the discovered BGP subnet.
 	torIPs := tor.IPs()
 	Expect(torIPs).NotTo(BeEmpty(), "could not discover TOR IPs")
 	var torL2tpIP string
@@ -743,7 +717,7 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		}
 	}
 	Expect(torL2tpIP).NotTo(BeEmpty(),
-		"no TOR IP found in 172.16.8.0/24 subnet (TOR IPs: %v)", torIPs)
+		"no TOR IP found in BGP subnet %s (TOR IPs: %v)", bgpSubnet, torIPs)
 	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
 
 	// Discover the cluster's pod CIDR from the active IPv4 IPPool so the BIRD
@@ -752,9 +726,9 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	podCIDR := discoverPodCIDR(ctx, lcgc)
 	logrus.Infof("Discovered pod CIDR for BIRD import filter: %s", podCIDR)
 
-	// Generate peers config with only the master as peer and start BIRD on the TOR.
-	// startBirdOnTOR registers its own DeferCleanup to remove the tor-bird
-	// container, so we don't need a second registration here.
+	// Generate peers config with only the master as peer and start BIRD on
+	// the TOR. startBirdOnTOR registers its own DeferCleanup to remove the
+	// tor-bird container, so we don't need a second registration here.
 	peersConf := generateTORBirdPeersConf(podCIDR, []string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
 	startBirdOnTOR(tor, torL2tpIP, peersConf)
@@ -866,7 +840,7 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	// Wait for the eBGP session to establish on the TOR.
 	By("Waiting for eBGP session to establish")
 	Eventually(func() error {
-		out, err := runOnTOR(tor, "sudo docker exec tor-bird birdcl show protocols")
+		out, err := tor.RunInContainer("tor-bird", "birdcl", "show", "protocols")
 		if err != nil {
 			return err
 		}
@@ -1304,153 +1278,46 @@ func waitForMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, 
 	return vmi
 }
 
-// requireTyphaWatchingLiveMigrations fails the calling test if Typha has not
-// picked up the LiveMigration (KubeVirt VirtualMachineInstanceMigration) CRD.
-//
-// Background: when Calico is installed before the KubeVirt CRDs are available
-// (the common bootstrap order on fresh clusters), Typha's libcalico-go
-// watcher-syncer hits a 30-minute backoff and silently misses VMIM events.
-// Felix never learns that an incoming pod is a migration target, so it
-// programs normal-priority routes and the live-migration tests fail with
-// confusing route/TCP-stream symptoms minutes into the run.
-//
-// This precondition probes Typha's logs for the "Backing API has been
-// installed" line emitted by libcalico-go/lib/backend/watchersyncer/
-// watchercache.go when the CRD is observed. If absent, fail fast with a
-// pointer to the documented Typha-restart workaround.
-func requireTyphaWatchingLiveMigrations(ctx context.Context, f *framework.Framework) {
+// pickThirdWorkerNode returns the name of a schedulable worker node that is
+// neither node1 nor node2. Used to pin the second live-migration target via
+// VMIM.Spec.AddedNodeSelector so the test exercises a fresh /32 route.
+func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, node2 string) string {
 	GinkgoHelper()
-
-	// Operator installs use calico-system; manifest installs may use
-	// kube-system. Try both.
-	var typhaPods []corev1.Pod
-	var typhaNamespace string
-	for _, ns := range []string{"calico-system", "kube-system"} {
-		pods, err := f.ClientSet.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{
-			LabelSelector: "k8s-app=calico-typha",
-		})
-		if err == nil && len(pods.Items) > 0 {
-			typhaPods = pods.Items
-			typhaNamespace = ns
-			break
+	nodes, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "list nodes to pick a third worker")
+	for _, n := range nodes.Items {
+		if _, isControlPlane := n.Labels["node-role.kubernetes.io/control-plane"]; isControlPlane {
+			continue
 		}
-	}
-	if len(typhaPods) == 0 {
-		// The Feature:KubeVirt label gates whether this suite runs at all;
-		// if a caller selects it, missing prerequisites are real failures —
-		// we deliberately do not Skip here.
-		Fail("Typha not deployed; live-migration tests require Typha (no calico-typha pods found in calico-system or kube-system)")
-	}
-
-	const docURL = "https://docs.tigera.io/calico/latest/networking/kubevirt/kubevirt-networking#restart-typha-after-installing-kubevirt"
-	const installedMarker = "Backing API has been installed"
-	const liveMigrationsListRoot = "/v3/pc.org/livemigrations"
-
-	for _, pod := range typhaPods {
-		// Cap the log read so we never slurp hundreds of MB on long-running
-		// Typha pods. The "Backing API …" markers we look for are emitted at
-		// startup or on a transition (early in the log), so reading from the
-		// beginning up to a generous limit is sufficient.
-		const typhaLogLimitBytes = int64(10 * 1024 * 1024)
-		logBytes := typhaLogLimitBytes
-		req := f.ClientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-			LimitBytes: &logBytes,
-		})
-		stream, err := req.Stream(ctx)
-		Expect(err).NotTo(HaveOccurred(), "reading logs of typha %s/%s", pod.Namespace, pod.Name)
-		b, readErr := io.ReadAll(stream)
-		_ = stream.Close()
-		Expect(readErr).NotTo(HaveOccurred(), "reading logs of typha %s/%s", pod.Namespace, pod.Name)
-
-		// Determine Typha's livemigrations syncer state from logs. Three
-		// scenarios:
-		//
-		//   (a) "Backing API not installed" appears, then later "Backing API
-		//       has been installed"        → recovered, healthy.
-		//   (b) Neither marker appears                        → Typha started
-		//       AFTER the CRD existed; first List succeeded silently. Healthy.
-		//   (c) "Backing API not installed" appears but "Backing API has been
-		//       installed" does not yet     → still in the missing-CRD
-		//       backoff. This is the bug.
-		//
-		// markInstalled() only logs the "installed" line on a transition from
-		// !crdInstalled to crdInstalled, so case (b) silently has no log
-		// entry. We must therefore look at "is 'not installed' the last
-		// observed state", not "did we see 'installed' at all".
-		const notInstalledMarker = "Backing API not installed"
-		var sawNotInstalled, sawInstalled bool
-		for _, line := range strings.Split(string(b), "\n") {
-			if !strings.Contains(line, liveMigrationsListRoot) {
-				continue
-			}
-			if strings.Contains(line, notInstalledMarker) {
-				sawNotInstalled = true
-			} else if strings.Contains(line, installedMarker) {
-				sawInstalled = true
-			}
+		// Skip infrastructure-pool nodes. They are reported as schedulable by
+		// KubeVirt but live-migration to them is unreliable on this cluster
+		// layout, and they typically host platform components rather than
+		// general workloads.
+		if v, ok := n.Labels["cloud.google.com/gke-nodepool"]; ok && v == "infrastructure" {
+			continue
 		}
-		if sawNotInstalled && !sawInstalled {
-			Fail(fmt.Sprintf(
-				"Typha pod %s/%s is stuck in the missing-CRD backoff for KubeVirt LiveMigration.\n"+
-					"This is a known startup-order issue: Calico was installed before the KubeVirt CRDs.\n"+
-					"Restart Typha to recover, then re-run the tests:\n"+
-					"  kubectl rollout restart deployment calico-typha -n %s\n"+
-					"  kubectl rollout status   deployment calico-typha -n %s --timeout=60s\n"+
-					"Docs: %s",
-				pod.Namespace, pod.Name, typhaNamespace, typhaNamespace, docURL))
+		if n.Spec.Unschedulable {
+			continue
 		}
+		if n.Name == node1 || n.Name == node2 {
+			continue
+		}
+		return n.Name
 	}
+	Fail(fmt.Sprintf("no third worker node found (node1=%s, node2=%s); need at least 3 schedulable workers for the double-migration eBGP test", node1, node2))
+	return ""
 }
 
 // requireOperatorManagedCluster fails the calling test if the cluster does not
 // have an operator-managed Installation/default. The live-migration tests patch
 // the Installation CR to disable natOutgoing; without an Installation that path
 // is invalid (manifest installs configure IPPool directly).
-func requireOperatorManagedCluster(ctx context.Context, f *framework.Framework) {
+func requireOperatorManagedCluster(ctx context.Context, cli ctrlclient.Client) {
 	GinkgoHelper()
-	out, err := kubectl.NewKubectlCommand("", "get", "installation", "default",
-		"-o", "jsonpath={.metadata.name}").Exec()
-	if err != nil || strings.TrimSpace(out) != "default" {
-		Fail("Installation/default not found — these tests require an operator-managed cluster (got err=" +
-			fmt.Sprintf("%v", err) + " output=" + out + ")")
+	err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{})
+	if apierrors.IsNotFound(err) {
+		Fail("Installation/default not found, these tests require an operator-managed cluster")
 	}
+	Expect(err).NotTo(HaveOccurred(), "checking for Installation/default")
 }
 
-// patchInstallationPoolNATOutgoing finds the IPPool with the given name in the
-// Installation default and patches its natOutgoing field via the
-// controller-runtime client. Resolves the index by pool name (rather than
-// hard-coding /ipPools/0/) so the test works on clusters with multiple pools.
-// Wrapped in Eventually so a transient apiserver hiccup or operator-reconcile
-// race does not leave the cluster mis-patched.
-func patchInstallationPoolNATOutgoing(f *framework.Framework, poolName, value string) {
-	GinkgoHelper()
-	cli, err := e2eclient.NewAPIClient(f.ClientConfig())
-	Expect(err).NotTo(HaveOccurred(), "build controller-runtime client")
-	Eventually(func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		inst := &operatorv1.Installation{}
-		if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, inst); err != nil {
-			return fmt.Errorf("get installation: %w", err)
-		}
-		if inst.Spec.CalicoNetwork == nil {
-			return fmt.Errorf("Installation default has no CalicoNetwork spec")
-		}
-		idx := -1
-		for i := range inst.Spec.CalicoNetwork.IPPools {
-			if inst.Spec.CalicoNetwork.IPPools[i].Name == poolName {
-				idx = i
-				break
-			}
-		}
-		if idx < 0 {
-			return fmt.Errorf("IPPool %q not found in Installation default", poolName)
-		}
-		inst.Spec.CalicoNetwork.IPPools[idx].NATOutgoing = operatorv1.NATOutgoingType(value)
-		if err := cli.Update(ctx, inst); err != nil {
-			return fmt.Errorf("update installation: %w", err)
-		}
-		return nil
-	}, 60*time.Second, 2*time.Second).Should(Succeed(),
-		"failed to patch Installation %q natOutgoing=%s", poolName, value)
-}

@@ -27,12 +27,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
 
@@ -75,18 +77,45 @@ var _ = describe.CalicoDescribe(
 			vmName := "e2e-migration-test"
 			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
-			pingPod := setupPingPod(f)
+			By("Creating ping client pod via conncheck")
+			tester := conncheck.NewConnectionTester(f)
+			DeferCleanup(tester.Stop)
+			pingClient := conncheck.NewClient("ping-test", f.Namespace)
+			tester.AddClient(pingClient)
+			tester.Deploy()
+
 			vm.Create(ctx, cli)
 			DeferCleanup(func() { vm.Delete(cli) })
 
 			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("VM %s running on node %s with IP %s", vmName, sourceNode, originalIP)
 
+			sourceLauncher, err := vm.FindVirtLauncherPod(ctx, f)
+			Expect(err).NotTo(HaveOccurred())
+
+			// KubeVirt reports VMI Running once virt-launcher starts, but the
+			// guest still needs to boot (cloud-init + network) before it
+			// responds to ICMP. On a fresh cluster the containerDisk pull
+			// adds another ~30s. Wait here as a setup step so the assertion
+			// below runs against a warm VM at the default budget.
+			By("Waiting for VM guest to become reachable")
+			Eventually(func() error {
+				_, err := kubectl.NewKubectlCommand(ns, "exec", pingClient.Pod().Name, "--",
+					"sh", "-c", fmt.Sprintf("ping -c 1 -W 2 %s", originalIP)).Exec()
+				return err
+			}, 90*time.Second, 5*time.Second).Should(Succeed(),
+				"VM guest did not respond to ICMP within cold-start budget")
+
+			// KubeVirt with pod-bridge networking gives the VM the same IP as
+			// its virt-launcher pod, so pinging the launcher pod is pinging
+			// the VM. Using conncheck.NewPodPingTarget keeps the connection
+			// check on the same path as the rest of the e2e suite.
 			By("Verifying connectivity to VM before migration")
-			expectPingSuccess(ns, pingPod.Name, originalIP)
+			tester.ExpectSuccess(pingClient, conncheck.NewPodPingTarget(sourceLauncher))
+			tester.Execute()
 
 			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
-			err := cli.Create(ctx, vmim)
+			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 			waitForMigrationSuccess(ctx, cli, vmim)
@@ -114,8 +143,14 @@ var _ = describe.CalicoDescribe(
 			Expect(postMigrationNode).NotTo(Equal(sourceNode), "VM should have moved")
 			logrus.Infof("VM migrated from %s to %s, IP preserved: %s", sourceNode, postMigrationNode, originalIP)
 
+			// Re-fetch the virt-launcher pod (it's a new pod on the new node
+			// with the same IP per KubeVirt's IP-persistence guarantee).
 			By("Verifying connectivity after migration")
-			expectPingSuccess(ns, pingPod.Name, originalIP)
+			postLauncher, err := vm.FindVirtLauncherPod(ctx, f)
+			Expect(err).NotTo(HaveOccurred())
+			tester.ResetExpectations()
+			tester.ExpectSuccess(pingClient, conncheck.NewPodPingTarget(postLauncher))
+			tester.Execute()
 		})
 
 		// Test 2: IP persists when virt-launcher pod is deleted (simulating eviction).

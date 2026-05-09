@@ -80,8 +80,8 @@ const (
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
 
 	// CalicoBIRD is the Calico BIRD 1.x build used as the BGP daemon on the
-	// external TOR node in the KubeVirt eBGP live-migration test. Pinned to a
-	// known-good Calico build; bump deliberately if BIRD behaviour changes.
+	// external TOR node in the KubeVirt eBGP live-migration test. Must be
+	// kept in sync with BIRD_VERSION in metadata.mk.
 	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
 )
 

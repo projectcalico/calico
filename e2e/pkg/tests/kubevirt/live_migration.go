@@ -24,12 +24,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
+	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
@@ -75,14 +76,6 @@ var _ = describe.CalicoDescribe(
 		BeforeEach(func() {
 			// Live migration needs at least 2 nodes to migrate between.
 			utils.RequireNodeCount(f, 2)
-
-			// Fail fast (with a pointer to the doc workaround) when Typha is
-			// in the missing-CRD backoff for LiveMigration. Otherwise the
-			// real failure surfaces 5 minutes into the test as a confusing
-			// route or TCP-stream timeout.
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			requireTyphaWatchingLiveMigrations(ctx, f)
 
 			var err error
 			cli, err = e2eclient.NewAPIClient(f.ClientConfig())
@@ -327,8 +320,12 @@ var _ = describe.CalicoDescribe(
 				// that path only exists on operator-managed clusters. Fail fast
 				// rather than after the first patch attempt 404s.
 				preCtx, preCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				requireOperatorManagedCluster(preCtx, f)
+				requireOperatorManagedCluster(preCtx, cli)
 				preCancel()
+
+				ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+				defer cancel()
+				ns := f.Namespace.Name
 
 				By("Setting up eBGP peering between TOR and cluster nodes")
 				setupEBGPPeering(f, tor)
@@ -340,29 +337,36 @@ var _ = describe.CalicoDescribe(
 				// directly because the operator reconciles the IPPool from Installation
 				// and would revert any direct IPPool patch.
 				const vmIPPoolName = "default-ipv4-ippool"
-				DeferCleanup(func() {
-					By("Re-enabling natOutgoing via Installation")
-					patchInstallationPoolNATOutgoing(f, vmIPPoolName, "Enabled")
-				})
-
 				By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
-				patchInstallationPoolNATOutgoing(f, vmIPPoolName, "Disabled")
+				restoreNATOutgoing, err := utils.ConfigureWithCleanup(cli,
+					ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{},
+					func(inst *operatorv1.Installation) {
+						if inst.Spec.CalicoNetwork == nil {
+							Fail("Installation default has no CalicoNetwork spec")
+						}
+						for i := range inst.Spec.CalicoNetwork.IPPools {
+							if inst.Spec.CalicoNetwork.IPPools[i].Name == vmIPPoolName {
+								inst.Spec.CalicoNetwork.IPPools[i].NATOutgoing = operatorv1.NATOutgoingDisabled
+								return
+							}
+						}
+						Fail(fmt.Sprintf("IPPool %q not found in Installation default", vmIPPoolName))
+					})
+				Expect(err).NotTo(HaveOccurred(), "disable natOutgoing on Installation")
+				DeferCleanup(restoreNATOutgoing)
 
-				// Wait for operator to reconcile the IPPool and Felix to drain the masq ipset.
-				// When natOutgoing is disabled, the field is omitted from the IPPool spec
-				// (jsonpath returns empty string rather than "false").
-				logrus.Info("Waiting for natOutgoing=Disabled to propagate...")
-				Eventually(func() string {
-					out, _ := kubectl.NewKubectlCommand("", "get", "ippool", vmIPPoolName,
-						"-o", "jsonpath={.spec.natOutgoing}").Exec()
-					return strings.TrimSpace(out)
-				}, 30*time.Second, 2*time.Second).ShouldNot(Equal("true"),
-					"natOutgoing should not be true on IPPool after Installation patch")
-				logrus.Info("natOutgoing disabled confirmed on IPPool")
-
-				ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-				defer cancel()
-				ns := f.Namespace.Name
+				// Wait for the operator to reconcile the change to the IPPool resource
+				// and for Felix to drain the masq ipset.
+				logrus.Info("Waiting for natOutgoing=false to propagate to IPPool...")
+				Eventually(func() (bool, error) {
+					pool := &v3.IPPool{}
+					if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: vmIPPoolName}, pool); err != nil {
+						return true, err
+					}
+					return pool.Spec.NATOutgoing, nil
+				}, 30*time.Second, 2*time.Second).Should(BeFalse(),
+					"natOutgoing should be false on IPPool after Installation patch")
+				logrus.Info("natOutgoing=false confirmed on IPPool")
 
 				timeline := newRouteTimeline()
 				DeferCleanup(func() { timeline.writeToTOR(tor) })
@@ -463,7 +467,7 @@ var _ = describe.CalicoDescribe(
 				})
 
 				// ---- First migration ----
-				By("Migrating the VM")
+				By("Starting first migration")
 				vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
 				Expect(cli.Create(ctx, vmim1)).To(Succeed())
 				DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
@@ -526,43 +530,20 @@ var _ = describe.CalicoDescribe(
 				midLines, _ := torContainerLineCount(tor, ncClientContainer)
 				Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
 
-				// Cordon node1 (the original node) so the second migration cannot
-				// go back there — we want the VM to land on a third node so that a
-				// new /32 route is needed.
-				By(fmt.Sprintf("Cordoning original node %s to prevent migrate-back", node1))
-				Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
-					n, err := f.ClientSet.CoreV1().Nodes().Get(ctx, node1, metav1.GetOptions{})
-					if err != nil {
-						return err
-					}
-					n.Spec.Unschedulable = true
-					_, err = f.ClientSet.CoreV1().Nodes().Update(ctx, n, metav1.UpdateOptions{})
-					return err
-				})).To(Succeed(), "cordoning %s", node1)
-				DeferCleanup(func() {
-					By(fmt.Sprintf("Uncordoning node %s", node1))
-					// Wrap in RetryOnConflict so a transient apiserver hiccup or
-					// concurrent Node update from another controller does not leave
-					// the node cordoned for the rest of the suite.
-					if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-						n, err := f.ClientSet.CoreV1().Nodes().Get(context.Background(), node1, metav1.GetOptions{})
-						if err != nil {
-							return err
-						}
-						n.Spec.Unschedulable = false
-						_, err = f.ClientSet.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
-						return err
-					}); err != nil {
-						// Last-resort log; the test has already passed and we don't
-						// want to fail cleanup, but flag loudly so a stuck cordon is
-						// visible in CI artifacts.
-						logrus.WithError(err).Errorf("Failed to uncordon node %s after retries — manual cleanup required", node1)
-					}
-				})
+				// Pick a worker that's neither the original node nor the
+				// current migration-1 target so the second migration lands on a
+				// fresh node and we exercise a brand-new /32 route. We pin
+				// destination via VMIM.Spec.AddedNodeSelector instead of
+				// cordoning the cluster — per-migration scope, auto-cleared
+				// when the VMIM is deleted, no cluster-wide state to leak.
+				thirdNode := pickThirdWorkerNode(ctx, f, node1, node2)
 
 				// ---- Second migration ----
-				By("Migrating the VM a second time")
+				By(fmt.Sprintf("Migrating the VM a second time, pinned to node %s", thirdNode))
 				vmim2 := newVMIMigration(vmName+"-migration2", ns, vmName)
+				vmim2.Spec.AddedNodeSelector = map[string]string{
+					"kubernetes.io/hostname": thirdNode,
+				}
 				Expect(cli.Create(ctx, vmim2)).To(Succeed())
 				DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
 				waitForMigrationSuccess(ctx, cli, vmim2)
