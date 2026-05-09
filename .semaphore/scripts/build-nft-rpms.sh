@@ -34,14 +34,6 @@ CACHE_PATH="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
     docker run --privileged --rm tonistiigi/binfmt --install all
     make -C hack/rpms/nftables image ARCH="$ARCH"
 
-    # SEMAPHORE_GIT_BRANCH is the PR target branch on PR builds (so it
-    # equals "master" for every PR landing on master), not the source
-    # branch — gate on SEMAPHORE_GIT_PR_NUMBER being empty to detect
-    # an actual branch build before pushing.
-    if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && ( "$SEMAPHORE_GIT_BRANCH" == "master" || "$SEMAPHORE_GIT_BRANCH" == release-* ) ]]; then
-      echo "Pushing $NFT_RPMS_IMAGE"
-      docker push "$NFT_RPMS_IMAGE"
-    fi
   fi
 
   echo "Saving and uploading image tarball..."
