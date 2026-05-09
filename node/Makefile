@@ -368,12 +368,6 @@ dist/calicoctl:
 	make -C ../calicoctl build
 	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
-dist/calico dist/calico-ipam:
-	mkdir -p dist
-	make -C ../cni-plugin build
-	cp ../cni-plugin/bin/$(ARCH)/calico dist/calico
-	cp ../cni-plugin/bin/$(ARCH)/calico-ipam dist/calico-ipam
-
 # Create images for containers used in the tests
 busybox.tar:
 	docker pull $(ARCH)/busybox:latest
