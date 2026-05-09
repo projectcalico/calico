@@ -361,12 +361,13 @@ blocks:
           os_image: ubuntu2204
       secrets:
         # Needed for pushing to Docker Hub on cache miss.
-        - name: docker-hub
+        - name: docker
       prologue:
         commands:
           - mkdir logs
           - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
-          - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          - echo $DOCKER_TOKEN | docker login --username "$DOCKER_USER" --password-stdin
+          - ssh-add ~/.ssh/id_rsa
       epilogue:
         always:
           commands:
