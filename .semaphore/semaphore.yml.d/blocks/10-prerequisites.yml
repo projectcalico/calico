@@ -148,7 +148,6 @@
       commands:
         - mkdir logs
         - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
-        - ssh-add ~/.ssh/id_rsa
     epilogue:
       always:
         commands:
