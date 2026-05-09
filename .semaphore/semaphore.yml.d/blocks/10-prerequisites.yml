@@ -133,8 +133,9 @@
   # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
   # this block is just a `docker manifest inspect` + GCS upload of the
   # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
-  # arches) and, on master/release branches, pushes to Docker Hub so
-  # subsequent workflows hit the cache.
+  # arches) and uploads the image tarball to GCS for downstream consumers.
+  # Publishing to Docker Hub happens in a separate post-build promotion
+  # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
   run:
     when: "true"
   dependencies: []
@@ -143,15 +144,10 @@
       machine:
         type: f1-standard-4
         os_image: ubuntu2204
-
-    secrets:
-      # Needed for pushing to Docker Hub on cache miss.
-      - name: docker-hub
     prologue:
       commands:
         - mkdir logs
         - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
-        - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
     epilogue:
       always:
         commands:
