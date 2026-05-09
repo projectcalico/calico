@@ -65,11 +65,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
-		// Test 1: Core live migration with IP preservation and connectivity.
-		// Verifies the fundamental IPAM requirement: when a VM is live-migrated via VMIM,
-		// the VM-based IPAM handle (hashed from VMI namespace+name) ensures the same IP
-		// is assigned to the target pod. A ping pod confirms network reachability before
-		// and after migration.
+		// Test 1: live migration via VMIM must keep the same IP on the target pod
+		// (Calico's VM-handle IPAM); the VM must remain reachable over ICMP from a
+		// ping-client pod before and after.
 		It("should preserve VM IP address across live migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -153,11 +151,9 @@ var _ = describe.CalicoDescribe(
 			tester.Execute()
 		})
 
-		// Test 2: IP persists when virt-launcher pod is deleted (simulating eviction).
-		// When a virt-launcher pod is force-deleted (e.g. node eviction, OOM kill),
-		// KubeVirt's VM controller (with RunStrategyAlways) recreates the VMI and pod.
-		// Because Calico IPAM uses a VM-based handle ID derived from the VMI namespace+name
-		// (not the ephemeral container ID), the new pod gets the same IP allocation.
+		// Test 2: force-deleting a virt-launcher pod recreates it via the VM controller;
+		// the VM-handle IPAM (keyed on VMI namespace+name, not container ID) must reassign
+		// the same IP to the new pod.
 		It("should preserve VM IP across pod recreation", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -200,12 +196,9 @@ var _ = describe.CalicoDescribe(
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
 		})
 
-		// Test 3: IP persists across VMI recreation (VM reboot).
-		// Stopping a VM (RunStrategyHalted) deletes the VMI and its pod, but the IPAM
-		// allocation is retained because kube-controllers GC has a 5-minute grace period
-		// for VM recreation events. When the VM is started again (RunStrategyAlways),
-		// the new VMI gets a new UID but the same name, so the VM-based handle ID matches
-		// and the same IP is allocated.
+		// Test 3: stop (RunStrategyHalted) and restart (RunStrategyAlways) gives a new
+		// VMI UID with the same name, so the VM-handle ID matches and the same IP is
+		// reallocated. Relies on kube-controllers' 5m GC grace period.
 		It("should preserve VM IP across VMI recreation (reboot)", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -226,8 +219,6 @@ var _ = describe.CalicoDescribe(
 			By("Stopping the VM")
 			vm.Stop(ctx, cli)
 
-			// Return an error with diagnostic context so a timeout failure
-			// reports what was actually being checked, not just "false".
 			By("Waiting for VMI to be deleted")
 			Eventually(func() error {
 				err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, &kubevirtv1.VirtualMachineInstance{})
@@ -267,11 +258,8 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("VMI recreated with new UID, same IP %s", newIP)
 		})
 
-		// Test 4: IPAM handle released when VM is deleted.
-		// Validates the cleanup path: when a VM is deleted (has deletion timestamp) and
-		// its pod is removed, the CNI IPAM DEL must release the VM-based handle so the
-		// IP returns to the pool. Without this, deleted VMs would leak IP addresses.
-		// This is the e2e counterpart of the CNI FV test in kubevirt_ipam_test.go.
+		// Test 4: deleting the VM (and its pod) must release the VM IPAM handle so the
+		// IP returns to the pool. e2e counterpart of the CNI FV in kubevirt_ipam_test.go.
 		It("should release IPAM handle when VM is deleted", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()

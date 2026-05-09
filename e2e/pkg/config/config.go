@@ -80,7 +80,6 @@ var allConfigOptions = map[string]*configOption{
 		defaultValue: "",
 	},
 
-	// KubeVirt-specific configuration.
 	kubevirtTestVMImage: {
 		envVarName:   kubevirtTestVMImage,
 		helpText:     "Override the containerDisk image used for KubeVirt e2e VM-based tests. When empty, the test package picks its own digest-pinned default.",

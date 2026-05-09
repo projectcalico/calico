@@ -53,18 +53,12 @@ import (
 )
 
 const (
-	// testTimeout is the per-test context timeout. Tightened from 10m: even
-	// the longest test (eBGP double-migration) finishes in ~5m on healthy
-	// clusters; a generous 6m budget catches genuine hangs without dragging
-	// out CI when something else has gone wrong.
+	// testTimeout caps each spec at 6m. The longest test (eBGP double-migration)
+	// finishes in ~5m on healthy clusters.
 	testTimeout = 6 * time.Minute
 )
 
-// vmImage returns the containerDisk image used by VM-based e2e tests:
-// KUBEVIRT_TEST_VM_IMAGE (via the e2e config package) when set, otherwise
-// the digest-pinned default in images.KubeVirtUbuntu. Reading the env var
-// through the config package keeps env-var declarations centralized and
-// keeps this test file free of direct os.Getenv calls.
+// vmImage returns KUBEVIRT_TEST_VM_IMAGE when set, otherwise images.KubeVirtUbuntu.
 func vmImage() string {
 	if v := config.KubeVirtTestVMImage(); v != "" {
 		return v
@@ -76,15 +70,9 @@ func vmImage() string {
 // enables SSH password auth so test debuggers can console in.
 const defaultCloudInit = "#cloud-config\npassword: testpass\nchpasswd: { expire: False }\nssh_pwauth: True\n"
 
-// tcpServerCloudInit configures the VM with the default debug user (see
-// defaultCloudInit) and additionally writes /usr/local/bin/tcp-server.py — a
-// small Python TCP echo server that accepts connections on port 9999 and
-// streams "seq=N\n" lines once per second per client. The runcmd backgrounds
-// the server with nohup so it survives the cloud-init shell exiting.
-//
-// The seq=N stream is used by the live-migration tests as a tripwire for TCP
-// connection continuity across migrations — gaps in the sequence number prove
-// the connection was reset rather than seamlessly handed over.
+// tcpServerCloudInit boots the VM with /usr/local/bin/tcp-server.py: a TCP echo
+// server on port 9999 that emits "seq=N\n" once per second per client. Live-
+// migration tests use seq gaps as a connection-continuity tripwire.
 const tcpServerCloudInit = `#cloud-config
 password: testpass
 chpasswd: { expire: False }
@@ -303,16 +291,9 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode
 	return pod
 }
 
-// newVMIMigration returns a KubeVirt VirtualMachineInstanceMigration object
-// that triggers a live migration of vmiName when applied. The returned
-// pointer is intended to be passed straight to the typed-client Create call:
-//
-//	vmim := newVMIMigration("my-vm-migration1", ns, "my-vm")
-//	Expect(cli.Create(ctx, vmim)).To(Succeed())
-//
-// Keeping the spec a plain object (rather than wrapping it in a builder type
-// that owns a client) keeps the VM-as-data and the API client as distinct
-// concepts, in line with how the kubeVirtVM type is structured.
+// newVMIMigration returns a VMIM object that triggers live migration of vmiName
+// when applied. Plain object (no embedded client) so VM-as-data and API client
+// stay distinct, matching kubeVirtVM.
 func newVMIMigration(name, namespace, vmiName string) *kubevirtv1.VirtualMachineInstanceMigration {
 	return &kubevirtv1.VirtualMachineInstanceMigration{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
@@ -344,7 +325,6 @@ func waitForMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *k
 		}
 		if got.Status.Phase == kubevirtv1.MigrationFailed {
 			logrus.Warnf("Migration %s FAILED. Conditions: %+v", vmim.Name, got.Status.Conditions)
-			// Check VMI for migration state details.
 			vmi := &kubevirtv1.VirtualMachineInstance{}
 			if vmiErr := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: vmim.Namespace, Name: vmim.Spec.VMIName}, vmi); vmiErr == nil && vmi.Status.MigrationState != nil {
 				ms := vmi.Status.MigrationState
@@ -479,11 +459,8 @@ func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 	return
 }
 
-// runOnTOR executes a shell command on the external TOR node via SSH and
-// returns stdout plus any SSH/transport error wrapped with context. Callers
-// who genuinely want to ignore failures (cleanup, fire-and-forget) can drop
-// the error explicitly with `_, _ = runOnTOR(...)` — there is no longer a
-// silent-failure variant that returns "" on error.
+// runOnTOR runs cmd on the external TOR via SSH and returns stdout plus any
+// wrapped error. Callers wanting fire-and-forget must explicitly drop the error.
 func runOnTOR(tor *externalnode.Client, cmd string) (string, error) {
 	out, err := tor.Exec("sh", "-c", cmd)
 	if err != nil {
@@ -507,15 +484,10 @@ func torContainerLineCount(tor *externalnode.Client, container string) (int, err
 	})
 }
 
-// torBirdHeaderTemplate is the static header of the TOR BIRD peers config
-// (filters + bgp template). The %s placeholder takes the cluster's pod CIDR
-// at render time, discovered from the active IPv4 IPPool — this avoids the
-// previous hardcoded `192.168.0.0/16` silently rejecting routes on clusters
-// with a different IPPool layout.
-//
-// The import filter follows Calico's confd-generated BIRD config: community
-// match → bgp_local_pref, then bgp_local_pref check → preference = 200,
-// mirroring confd/tests/compiled_templates/bgpfilter/communities_and_operations/bird.cfg.
+// torBirdHeaderTemplate is the static header of the TOR BIRD peers config.
+// The %s placeholder is the cluster's IPv4 IPPool CIDR, used to gate the
+// import filter so only pod-network routes are accepted. Filter shape mirrors
+// confd's communities_and_operations bird.cfg.
 const torBirdHeaderTemplate = `function import_community_lp() {
   if ((65000, 100) ~ bgp_community) then { bgp_local_pref = 2147483135; accept; }
   accept;
@@ -558,10 +530,8 @@ const torBirdPeerTemplate = `protocol bgp node_%d from bgp_template {
 
 `
 
-// generateTORBirdPeersConf returns a BIRD 1.x peers config for the TOR node.
-// The podCIDR (e.g. "192.168.0.0/16") gates the import filter so only routes
-// within the pod network are accepted; pass the cluster's actual IPv4 IPPool
-// CIDR rather than a hardcoded literal.
+// generateTORBirdPeersConf renders a BIRD 1.x peers config for the TOR. podCIDR
+// gates the import filter; pass the cluster's IPv4 IPPool CIDR.
 func generateTORBirdPeersConf(podCIDR string, nodeIPs []string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, torBirdHeaderTemplate, podCIDR)
@@ -588,10 +558,8 @@ func discoverPodCIDR(ctx context.Context, lcgc clientv3.Interface) string {
 }
 
 // startBirdOnTOR launches a calico/bird container on the TOR, applies the
-// per-test peer config, and registers cleanup to remove the container. BIRD
-// lifecycle (container + bird.conf) is owned by the test rather than the
-// cluster provisioner so that different test cases can run with different
-// BIRD configurations independently.
+// per-test peer config, and registers cleanup. Lifecycle is owned by the test
+// so different cases can use different BIRD configs.
 func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
 	GinkgoHelper()
 	By("Starting BIRD container on TOR")
@@ -671,19 +639,13 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	lcgc := newLibcalicoClient(f)
 	ctx := context.Background()
 
-	// Collect node BGP IPs from the projectcalico.org/IPv4Address annotation.
 	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
 
-	// Find the master (control-plane) node and its BGP-peering address. Only
-	// the master will peer with the TOR — it re-advertises all iBGP-learned
-	// routes with "next hop keep", so the TOR gets the correct per-node
-	// next-hop and can route directly to the node hosting each workload.
-	//
-	// The annotation is in CIDR form (e.g. "172.16.8.5/24") so the subnet for
-	// the BGP-peering network is implied by the master's address. Discover it
-	// here rather than hard-coding so the test runs on clusters with a
-	// different L2TP / underlay layout.
+	// Pick the control-plane node and its BGP-peering address. Only the master
+	// peers with the TOR; "next hop keep" re-advertises iBGP routes with
+	// per-node next-hops, so the TOR routes directly to each workload's host.
+	// The annotation is in CIDR form, so the BGP subnet falls out of the parse.
 	var masterName, masterAddr string
 	for _, node := range nodeList.Items {
 		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; !ok {
@@ -721,14 +683,12 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
 
 	// Discover the cluster's pod CIDR from the active IPv4 IPPool so the BIRD
-	// import filter accepts the right network range. Hardcoding 192.168.0.0/16
-	// silently rejected pod routes on any cluster with a different layout.
+	// import filter accepts the right network range.
 	podCIDR := discoverPodCIDR(ctx, lcgc)
 	logrus.Infof("Discovered pod CIDR for BIRD import filter: %s", podCIDR)
 
-	// Generate peers config with only the master as peer and start BIRD on
-	// the TOR. startBirdOnTOR registers its own DeferCleanup to remove the
-	// tor-bird container, so we don't need a second registration here.
+	// Start BIRD on the TOR with the master as the only peer. startBirdOnTOR
+	// registers its own cleanup.
 	peersConf := generateTORBirdPeersConf(podCIDR, []string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
 	startBirdOnTOR(tor, torL2tpIP, peersConf)
@@ -806,12 +766,9 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	// additive: the master advertises routes to the TOR via eBGP while all
 	// nodes continue to exchange routes with each other via the iBGP mesh.
 
-	// Wait for confd on the master to regenerate bird.cfg with the new
-	// kubevirt-lm filter and TOR peer block. Polling for the actual file
-	// contents avoids both a fixed-time sleep (always too long or too short)
-	// and the previous large dev-scaffolding DEBUG dump of every config and
-	// routing table on every test run; the relevant configs are dumped only
-	// on failure via the AfterEach gate registered below.
+	// Wait for confd on the master to regenerate bird.cfg with the kubevirt-lm
+	// filter. Polling for actual contents avoids both a fixed sleep and a noisy
+	// unconditional debug dump.
 	By("Waiting for confd to regenerate bird.cfg with the kubevirt-lm filter on master")
 	masterPodName := waitForMasterCalicoNodePod(ctx, f, masterName)
 	Eventually(func() error {
@@ -827,9 +784,7 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	}, 30*time.Second, 1*time.Second).Should(Succeed(),
 		"confd never regenerated bird.cfg with the kubevirt-lm filter")
 
-	// On failure dump the master's BIRD config + routes for diagnostics.
-	// This replaces the previous unconditional DEBUG: dump that ran on every
-	// test invocation, regardless of outcome.
+	// Dump master BIRD config + routes on failure for diagnostics.
 	DeferCleanup(func() {
 		if !CurrentSpecReport().Failed() {
 			return
@@ -837,7 +792,6 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		logBIRDDiagnostics(masterPodName)
 	})
 
-	// Wait for the eBGP session to establish on the TOR.
 	By("Waiting for eBGP session to establish")
 	Eventually(func() error {
 		out, err := tor.RunInContainer("tor-bird", "birdcl", "show", "protocols")
@@ -1046,13 +1000,9 @@ func parseBIRDRouteOutput(output string) []torBIRDRoute {
 	return routes
 }
 
-// queryTORRoute queries the TOR's BIRD routing table and kernel for the state
-// of a /32 VM route. Returns Has32=false if BIRD reports "Network not in table".
-//
-// This function is invoked from polling Eventually loops; it deliberately does
-// NOT log per-route detail on every call (that turned the test logs into
-// thousands of identical "queryTORRoute" lines). Callers that want a snapshot
-// for debugging should log the returned state themselves.
+// queryTORRoute returns the /32 BIRD route state plus the kernel next-hop.
+// Called from polling loops, so it does not log per-call: callers log
+// snapshots themselves.
 func queryTORRoute(tor *externalnode.Client, vmIP string) torRouteState {
 	ip := strings.Split(vmIP, "/")[0]
 
@@ -1085,7 +1035,6 @@ func queryTORRoute(tor *externalnode.Client, vmIP string) torRouteState {
 func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
 	ip := strings.Split(vmIP, "/")[0]
 
-	// Compute /26 block from VM IP.
 	parsed := net.ParseIP(ip).To4()
 	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
 	block26 := fmt.Sprintf("%s/26", blockIP)
@@ -1104,7 +1053,6 @@ func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
 
 	var snap torRouteSnapshot
 
-	// Split by section markers and parse each.
 	sections := strings.Split(out, "=== ")
 	for _, sec := range sections {
 		switch {
@@ -1221,7 +1169,6 @@ func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
 		return
 	}
 
-	// Log compact table summary.
 	logrus.Infof("Route timeline summary (%d entries):", len(entries))
 	logrus.Infof("  %-12s %-28s %-10s %-10s %-12s %s", "TIME", "PHASE", "/32", "/26", "LP32", "TCP_LINES")
 	for _, e := range entries {
@@ -1236,7 +1183,6 @@ func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
 			lp32, e.TCPLines)
 	}
 
-	// Marshal to JSON.
 	data, err := json.MarshalIndent(entries, "", "  ")
 	if err != nil {
 		logrus.WithError(err).Warn("Route timeline: failed to marshal JSON")
@@ -1257,12 +1203,9 @@ func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
 
 func ptrInt64(v int64) *int64 { return &v }
 
-// waitForMigrationStatePopulated returns once the VMI has a non-nil
-// MigrationState with Completed=true and a non-empty TargetPod / TargetNode.
-// migration.WaitForSuccess only checks the VMIM phase; the VMI's
-// MigrationState is populated asynchronously by virt-handler, so a bare read
-// immediately after WaitForSuccess can race. Polling here makes the assertion
-// deterministic.
+// waitForMigrationStatePopulated polls the VMI for a fully populated
+// MigrationState. virt-handler writes it asynchronously after the VMIM phase
+// flips, so a bare read can race.
 func waitForMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
 	GinkgoHelper()
 	vmi := &kubevirtv1.VirtualMachineInstance{}

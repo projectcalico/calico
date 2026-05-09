@@ -110,9 +110,8 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 
-	// KubeVirt VirtualMachine / VirtualMachineInstance / VirtualMachineInstanceMigration.
-	// Registered here so KubeVirt e2e tests can use the shared controller-runtime
-	// client instead of standing up a parallel typed clientset.
+	// KubeVirt VM/VMI/VMIM types: register so KubeVirt e2e tests share this
+	// client instead of a parallel typed clientset.
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}

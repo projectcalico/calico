@@ -82,15 +82,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
-		// Test 1: Target pod is promoted to active IPAM owner after migration.
-		// Validates the IPAM dual-owner mechanism by comparing the owner attributes
-		// before and after migration:
-		//
-		//   Before:  Active=source,  Alternate=empty
-		//   After:   Active=target,  Alternate=empty    (Felix EnsureActiveVMOwnerAttrs)
-		//
-		// The test positively asserts that the final active owner matches the real
-		// target pod and node, not just that it differs from the source.
+		// Test 1: active IPAM owner promotes from source to target after migration.
+		// Asserts Active=target,Alternate=empty (Felix EnsureActiveVMOwnerAttrs) by
+		// matching the real target pod/node, not just "differs from source".
 		It("should promote target pod to active IPAM owner after migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -175,14 +169,9 @@ var _ = describe.CalicoDescribe(
 				targetPodName, targetNode, sourcePod.Name, sourceNode)
 		})
 
-		// Test 2: TCP connection over iBGP survives two consecutive migrations.
-		// This is the key seamless migration test. A server VM runs a TCP server that sends
-		// "seq=N" every second. A client pod on a different node connects via nc and logs
-		// the stream. The server VM is migrated twice across 3 worker nodes. After both
-		// migrations, the TCP stream must have zero sequence gaps — proving that Felix's
-		// live migration FSM (Target→Live→TimeWait→Base), GARP/RARP detection, elevated
-		// BGP route priority, and ARP suppression all work together to maintain connectivity
-		// with no packet loss during the handover.
+		// Test 2: TCP stream over iBGP must not lose any "seq=N" segments across two
+		// consecutive cross-node live migrations on a 3-worker cluster (server VM hops,
+		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
@@ -296,16 +285,11 @@ var _ = describe.CalicoDescribe(
 				"seamless live migration must not drop any TCP segments")
 		})
 
-		// Test 3: TCP connection from external eBGP client survives two consecutive migrations.
-		// Same as Test 2 but the TCP client runs on an external TOR node connected via eBGP
-		// (ASN 63000) over L2TP tunnels, rather than an in-cluster pod using iBGP mesh.
-		// This validates that the BGP route priority mechanism (krt_metric) works end-to-end:
-		// when the VM migrates, the elevated-priority route advertisement from the target
-		// node reaches the TOR via eBGP, causing the TOR's kernel routing table to switch
-		// to the new next-hop without dropping the TCP connection. Two consecutive migrations
-		// verify the route priority reverts correctly after the TimeWait period and can be
-		// re-elevated for the second migration.
-		// Requires EXT_IP, EXT_KEY, EXT_USER env vars pointing to the TOR/external node.
+		// Test 3: same as Test 2 but the client runs on an external TOR over eBGP.
+		// Validates that elevated krt_metric on the target node propagates via eBGP to
+		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
+		// priority correctly reverts and re-elevates across two consecutive migrations.
+		// Requires EXT_IP, EXT_KEY, EXT_USER.
 		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				tor := externalnode.NewClient()
@@ -414,13 +398,9 @@ var _ = describe.CalicoDescribe(
 
 				startTCPClientOnTOR(tor, ncClientContainer, vmIP)
 
-				// Start a goroutine that logs seq count every 2 seconds throughout
-				// the test. We record but do NOT assert — the goal is to collect
-				// a timeline we can analyse after the test finishes.
-				//
-				// We wait for the goroutine to exit before returning from the It,
-				// so timeline.writeToTOR (registered as DeferCleanup) does not race
-				// the monitor's last SSH session on the shared TOR client.
+				// seq-monitor logs the line count every 2s for post-mortem analysis
+				// (recorded, not asserted). Stopped before the It returns so its SSH
+				// session can't race timeline.writeToTOR on the shared TOR client.
 				seqStopCh := make(chan struct{})
 				seqDoneCh := make(chan struct{})
 				defer func() {
@@ -466,7 +446,6 @@ var _ = describe.CalicoDescribe(
 					TCPLines: preLines,
 				})
 
-				// ---- First migration ----
 				By("Starting first migration")
 				vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
 				Expect(cli.Create(ctx, vmim1)).To(Succeed())
@@ -530,15 +509,11 @@ var _ = describe.CalicoDescribe(
 				midLines, _ := torContainerLineCount(tor, ncClientContainer)
 				Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
 
-				// Pick a worker that's neither the original node nor the
-				// current migration-1 target so the second migration lands on a
-				// fresh node and we exercise a brand-new /32 route. We pin
-				// destination via VMIM.Spec.AddedNodeSelector instead of
-				// cordoning the cluster — per-migration scope, auto-cleared
-				// when the VMIM is deleted, no cluster-wide state to leak.
+				// Pin migration 2 to a fresh worker via VMIM.Spec.AddedNodeSelector so
+				// we exercise a brand-new /32 route. Per-VMIM scope, no cluster-wide
+				// cordon to leak.
 				thirdNode := pickThirdWorkerNode(ctx, f, node1, node2)
 
-				// ---- Second migration ----
 				By(fmt.Sprintf("Migrating the VM a second time, pinned to node %s", thirdNode))
 				vmim2 := newVMIMigration(vmName+"-migration2", ns, vmName)
 				vmim2.Spec.AddedNodeSelector = map[string]string{
@@ -609,7 +584,6 @@ var _ = describe.CalicoDescribe(
 				Expect(finalLines).To(BeNumerically(">", midLines),
 					"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
 
-				// Dump full seq log and assert on sequence integrity.
 				By("Verifying TCP stream integrity")
 				streamAll, err := runOnTOR(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null", ncClientContainer))
 				Expect(err).NotTo(HaveOccurred(), "failed to retrieve TCP stream from TOR")
@@ -643,11 +617,9 @@ var _ = describe.CalicoDescribe(
 			})
 		})
 
-		// Test 4: Kubernetes NetworkPolicy enforcement survives live migration.
-		// After migration, KubeVirt creates a new virt-launcher pod on the target node.
-		// Network policies that selected the old pod must also apply to the new pod.
-		// This test verifies that an allowed client can still connect and a denied
-		// client is still blocked after the VM migrates to a different node.
+		// Test 4: a NetworkPolicy selecting the VM (app=vm) by ingress role=allowed must
+		// keep applying after the VM live-migrates to a different node, both for an
+		// allowed and a denied client.
 		It("should enforce NetworkPolicy after live migration", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()

@@ -148,11 +148,8 @@ func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
 }
 
-// RequiresExternalNode marks tests that require external-node SSH credentials
-// (EXT_IP / EXT_KEY / EXT_USER) to run. Distinct from WithExternalNode, which
-// marks tests that depend on out-of-cluster traffic patterns; RequiresExternalNode
-// is for tests whose body itself runs commands against an external node and so
-// cannot proceed without those credentials.
+// RequiresExternalNode marks tests that need EXT_IP/EXT_KEY/EXT_USER. Differs
+// from WithExternalNode (traffic patterns) by needing creds to actually run.
 func RequiresExternalNode() any {
 	return framework.WithLabel("RequiresExternalNode")
 }
