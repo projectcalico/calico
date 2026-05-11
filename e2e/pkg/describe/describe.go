@@ -85,12 +85,27 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
+// routing mechanism. These tests disable the mesh and expect connectivity to break, which
+// only works when there's no other routing path (e.g., VXLAN). Skip these on VXLAN clusters
+// via --ginkgo.skip=RequiresBGPMesh.
+func RequiresBGPMesh() any {
+	return framework.WithLabel("RequiresBGPMesh")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
 		framework.Failf("%s is not a supported feature", feature)
 	}
 	return framework.WithLabel(fmt.Sprintf("Feature:%s", feature))
+}
+
+// WithNoTierPrefix marks tests that use bare policy names (without tier prefix).
+// This naming style is only supported in v3.32+. Older branches should skip
+// these tests via -skip=NoTierPrefix.
+func WithNoTierPrefix() any {
+	return framework.WithLabel("NoTierPrefix")
 }
 
 // WithWindows marks tests that can run on clusters with Windows nodes.
