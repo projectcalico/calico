@@ -42,8 +42,6 @@ _log = logging.getLogger(__name__)
 sys.modules["neutron"] = m_neutron = mock.MagicMock()
 sys.modules["neutron.agent"] = m_neutron.agent
 sys.modules["neutron.agent.rpc"] = m_neutron.agent.rpc
-sys.modules["neutron.api"] = m_neutron.api
-sys.modules["neutron.api.wsgi"] = m_neutron.api.wsgi
 sys.modules["neutron.common"] = m_neutron.common
 sys.modules["neutron.common.exceptions"] = m_neutron.common.exceptions
 sys.modules["neutron.conf"] = m_neutron.conf
@@ -61,6 +59,7 @@ sys.modules["neutron.plugins"] = m_neutron.plugins
 sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
 sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron.wsgi"] = m_neutron.wsgi
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
 sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks

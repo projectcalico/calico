@@ -33,8 +33,8 @@ import eventlet
 from eventlet.queue import PriorityQueue
 from eventlet.semaphore import Semaphore
 
+from neutron import wsgi
 from neutron.agent import rpc as agent_rpc
-from neutron.api import wsgi
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
@@ -366,7 +366,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.api.wsgi.WorkerService`` -> connection state only,
+        * ``neutron.wsgi.WorkerService`` -> connection state only,
           ``voting=False``.  Per PR #11580, API workers must never be elected
           master, because their primary job is to serve API requests quickly:
           getting tied up running the master-only background threads (status
