@@ -33,15 +33,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
-	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
+	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
-	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -639,45 +638,17 @@ var _ = describe.CalicoDescribe(
 			vmIP, node1 := vm.WaitForRunningWithIP(ctx, cli)
 			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
 
-			By("Creating allowed client pod (role=allowed)")
-			client1Pod, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "client-allowed",
-					Namespace: ns,
-					Labels:    map[string]string{"role": "allowed", utils.TestResourceLabel: "true"},
-				},
-				Spec: corev1.PodSpec{
-					Containers:    []corev1.Container{{Name: "client", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
-					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), client1Pod.Name, metav1.DeleteOptions{})
-			})
-			err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, client1Pod.Name, ns, 2*time.Minute)
-			Expect(err).NotTo(HaveOccurred(), "client-allowed pod not Running")
-
-			By("Creating denied client pod (role=denied)")
-			client2Pod, err := f.ClientSet.CoreV1().Pods(ns).Create(ctx, &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "client-denied",
-					Namespace: ns,
-					Labels:    map[string]string{"role": "denied", utils.TestResourceLabel: "true"},
-				},
-				Spec: corev1.PodSpec{
-					Containers:    []corev1.Container{{Name: "client", Image: images.Alpine, Command: []string{"sleep", "3600"}}},
-					RestartPolicy: corev1.RestartPolicyNever,
-					NodeSelector:  map[string]string{"kubernetes.io/os": "linux"},
-				},
-			}, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				_ = f.ClientSet.CoreV1().Pods(ns).Delete(context.Background(), client2Pod.Name, metav1.DeleteOptions{})
-			})
-			err = e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, client2Pod.Name, ns, 2*time.Minute)
-			Expect(err).NotTo(HaveOccurred(), "client-denied pod not Running")
+			tester := conncheck.NewConnectionTester(f)
+			DeferCleanup(tester.Stop)
+			allowed := conncheck.NewClient("client-allowed", f.Namespace,
+				conncheck.WithClientLabels(map[string]string{"role": "allowed"}))
+			denied := conncheck.NewClient("client-denied", f.Namespace,
+				conncheck.WithClientLabels(map[string]string{"role": "denied"}))
+			tester.AddClient(allowed)
+			tester.AddClient(denied)
+			tester.Deploy()
+			client1Pod := allowed.Pod()
+			client2Pod := denied.Pod()
 
 			By("Verifying both clients can reach VM before policy is applied")
 			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
@@ -705,7 +676,7 @@ var _ = describe.CalicoDescribe(
 					}},
 				},
 			}
-			_, err = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Create(ctx, netpol, metav1.CreateOptions{})
+			_, err := f.ClientSet.NetworkingV1().NetworkPolicies(ns).Create(ctx, netpol, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() {
 				_ = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Delete(context.Background(), netpol.Name, metav1.DeleteOptions{})
