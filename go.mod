@@ -327,7 +327,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
-	github.com/tigera/api v0.0.0-20260310182635-546021df243c // indirect
+	github.com/tigera/api v0.0.0-20260310182635-546021df243c
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/urfave/cli v1.22.16 // indirect
