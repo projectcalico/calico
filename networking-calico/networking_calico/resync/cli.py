@@ -15,8 +15,8 @@
 
 """Entry point for the ``calico-resync`` CLI.
 
-The CLI is a one-shot wrapper around :func:`networking_calico.resync.runner.run_resync`.
-It does the minimum required to make the runner usable out-of-process:
+The CLI is a one-shot wrapper around :meth:`networking_calico.resync.scope.Scope.run`.
+It does the minimum required to make the resync usable out-of-process:
 
 1. Register Calico's oslo.config options.
 2. Parse ``--config-file`` and friends via ``neutron.common.config``.
@@ -28,8 +28,8 @@ It does the minimum required to make the runner usable out-of-process:
 Exit codes
 ----------
 * ``0`` - resync completed and ``ok`` is True.
-* ``1`` - resync completed but ``ok`` is False (something raised inside ``run_resync``);
-  the JSON ``error`` field describes it.
+* ``1`` - resync completed but ``ok`` is False (something raised inside ``Scope.run``);
+          the JSON ``error`` field describes it.
 * ``2`` - argument parsing or setup failed (argparse default).
 """
 

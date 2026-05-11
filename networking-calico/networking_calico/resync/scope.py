@@ -285,11 +285,13 @@ def _run_phase(fn) -> Dict[str, Any]:
 def provide_felix_config():
     """Write/refresh the global ClusterInformation and FelixConfiguration.
 
-    Lifted unchanged in semantics from the original mech_calico
-    implementation, with ``time.sleep`` substituted for
-    ``eventlet.sleep`` so the function is safe to call from the CLI as
-    well as from a greenthread.  Exceptions propagate; the caller
-    (``_run_phase`` in this module) records them in the result.
+    Lifted unchanged in semantics from the original mech_calico implementation, with
+    ``time.sleep`` substituted for ``eventlet.sleep`` so the function is safe to call
+    from the CLI as well as from a greenthread.  Exceptions propagate; ``_run_phase``
+    does not catch them, but the outer ``try`` in :meth:`Scope.run` does and records the
+    exception type + message in the top-level ResyncResult's ``error`` field while
+    flipping ``ok`` to False.  The per-phase ``error`` field remains as a
+    forward-compatible placeholder.
     """
     LOG.info("Providing Felix configuration")
 

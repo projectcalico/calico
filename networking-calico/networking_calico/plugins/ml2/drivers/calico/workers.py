@@ -43,8 +43,9 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
     ``calico-resync`` CLI uses.  The worker process then idles for the lifetime of
     neutron-server.
 
-    Failures are logged loudly but not retried; an operator can drive a retry via
-    ``calico-resync --all`` or by restarting neutron-server.
+    Failures are logged loudly but not retried; an operator can drive a retry by
+    running ``calico-resync`` with no scope flags (which means resync everything)
+    or by restarting neutron-server.
 
     The "do the work, then idle in wait()" pattern is intentional.  Neutron's worker
     supervisor expects long-running services and may respawn a worker that exits

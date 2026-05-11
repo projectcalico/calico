@@ -1228,8 +1228,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         ``always`` (the default).  Also called from the test framework to simulate the
         worker's behaviour.
 
-        Failures are logged loudly but not retried.  Operators can drive a retry via
-        ``calico-resync --all`` or by restarting neutron-server.
+        Failures are logged loudly but not retried.  Operators can drive a retry by
+        running ``calico-resync`` (with no scope flags, which means resync everything)
+        or by restarting neutron-server.
         """
         TrackTask("RESYNC")
         LOG.info("One-shot resync starting")
@@ -1249,7 +1250,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         else:
             LOG.error(
                 "One-shot resync FAILED: %s.  "
-                "Run `calico-resync --all` to retry, or restart neutron-server.",
+                "Run `calico-resync` (with no scope flags) to retry, or "
+                "restart neutron-server.",
                 result.to_dict(),
             )
 

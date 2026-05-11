@@ -119,8 +119,14 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             if not _port_is_endpoint_port(port):
                 continue
             neutron_map["wep " + endpoint_name(port)] = port
-            if "binding:profile" in port and "migrating_to" in port["binding:profile"]:
-                dest_host = port["binding:profile"]["migrating_to"]
+            # binding:profile may carry migrating_to=None (or be missing
+            # entirely) after a migration completes or is cancelled.  Only
+            # generate destination-side entries when migrating_to is a
+            # truthy host string - calling endpoint_name with host_id=None
+            # would raise.  Matches the truthy-check pattern used in
+            # mech_calico.py's update_port_postcommit / status handling.
+            dest_host = port.get("binding:profile", {}).get("migrating_to")
+            if dest_host:
                 dest_port = port.copy()
                 dest_port["binding:host_id"] = dest_host
                 dest_wep_name = endpoint_name(dest_port)
@@ -635,7 +641,16 @@ def endpoint_name_without_host(name):
     # The `device_id` and `id` parts of the name are UUIDs and so cannot contain
     # "openstack".  Hence...
     parts = name.split("-")
-    openstack_pos = len(parts) - 1 - parts[::-1].index("openstack")
+    try:
+        openstack_pos = len(parts) - 1 - parts[::-1].index("openstack")
+    except ValueError:
+        # No "openstack" segment in the name.  This can happen during
+        # clean_live_migrations resync if etcd contains a legacy or
+        # hand-edited LiveMigration with a non-standard name; we don't
+        # want one bad entry to abort the whole pass.  Return the input
+        # unchanged so the caller's dict lookup misses cleanly and the
+        # bad entry is left for an operator to deal with.
+        return name
     return "-".join(parts[openstack_pos:])
 
 
