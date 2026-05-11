@@ -53,9 +53,17 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
     blocks until ``set()`` is called.
     """
 
+    def __init__(self, *args, **kwargs):
+        super(CalicoStartupResyncWorker, self).__init__(*args, **kwargs)
+        # Create the stop event here, not in start(), because oslo_service can
+        # call wait() / stop() on the worker independently of start() - e.g.
+        # during fork-and-supervise teardown if start() hasn't run in this
+        # process yet.  Having _stop_event exist from __init__ makes wait()
+        # and stop() safe to call in any order.
+        self._stop_event = threading.Event()
+
     def start(self, name="calico-startup-resync", desc=None):
         super(CalicoStartupResyncWorker, self).start(name, desc)
-        self._stop_event = threading.Event()
 
     def wait(self):
         # Block until stop() is called.  The mech driver's post-fork callback
