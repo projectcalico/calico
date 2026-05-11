@@ -543,9 +543,6 @@ configRetry:
 	} else {
 		// Use the syncer locally.
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
-
-		log.Info("using resource updates where applicable")
-		configParams.SetUseNodeResourceUpdates(true)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
@@ -582,10 +579,6 @@ configRetry:
 			break
 		}
 		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-
-		// Typha client now requires support for node updates and will refuse
-		// to connect to an (ancient) Typha that does not support them.
-		configParams.SetUseNodeResourceUpdates(true)
 
 		go func() {
 			typhaConnection.Finished.Wait()

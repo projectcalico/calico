@@ -52,12 +52,18 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # there's no reason to drag in the build toolchain -- use the
   # official golang image (debian-bookworm base, glibc-compatible
   # with the binary, ~800MB vs ~2GB).
+  # The e2e binary is CGO-linked against libbpf and dynamically depends on
+  # libelf and libz at runtime; the test scripts also call uuidgen. The
+  # calico/go-build image already has these; the upstream golang:bookworm
+  # image does not, so install them on the fly when using that path.
+  PRE_RUN=":"
   if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
     GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
     RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
   else
     GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"
+    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
   fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
@@ -75,11 +81,13 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
-    make e2e-run \
-      KUBECONFIG=/kubeconfig \
-      E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
-      E2E_OUTPUT_DIR=report \
-      E2E_JUNIT_REPORT=junit.xml \
+    bash -c "${PRE_RUN} && \
+      git config --global --add safe.directory '*' && \
+      make e2e-run \
+        KUBECONFIG=/kubeconfig \
+        E2E_TEST_CONFIG='${E2E_TEST_CONFIG}' \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.

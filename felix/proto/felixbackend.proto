@@ -84,10 +84,10 @@ message ToDataplane {
     // ConfigUpdate is sent at start of day or when the config changes.
     ConfigUpdate config_update = 13;
 
-    // HostMetadataV4V6Update is sent when a host is added or updated.
-    HostMetadataV4V6Update host_metadata_v4v6_update = 37;
-    // HostIPRemove is sent when a host is removed.
-    HostMetadataV4V6Remove host_metadata_v4v6_remove = 38;
+    // HostMetadataUpdate is sent when a host is added or updated.
+    HostMetadataUpdate host_metadata_update = 14;
+    // HostMetadataRemove is sent when a host is removed.
+    HostMetadataRemove host_metadata_remove = 18;
 
     // IPAMPoolUpdate is sent when an IPAM pool is added/updated.
     IPAMPoolUpdate ipam_pool_update = 16;
@@ -132,9 +132,9 @@ message ToDataplane {
     // WireguardEndpointV6Remove is sent to undo IPv6 wireguard on the host.
     WireguardEndpointV6Remove wireguard_endpoint_v6_remove = 34;
   }
-  // Deprecated fields related to host information. Removed in favor of HostMetadataV4V6* messages.
-  reserved "HostMetadataUpdate", "HostMetadataRemove", "HostMetadataV6Update", "HostMetadataV6Remove";
-  reserved 14, 18, 35, 36;
+  // Deprecated fields related to host information. Replaced by HostMetadataUpdate and HostMetadataRemove.
+  reserved "HostMetadataV6Update", "HostMetadataV6Remove", "HostMetadataV4V6Update", "HostMetadataV4V6Remove";
+  reserved 35, 36, 37, 38;
 }
 
 message FromDataplane {
@@ -533,7 +533,7 @@ message WireguardStatusUpdate {
 message DataplaneInSync {
 }
 
-message HostMetadataV4V6Update {
+message HostMetadataUpdate {
   string hostname = 1;
   string ipv4_addr = 2;
   string ipv6_addr = 3;
@@ -541,7 +541,7 @@ message HostMetadataV4V6Update {
   map<string, string> labels = 5;
 }
 
-message HostMetadataV4V6Remove {
+message HostMetadataRemove {
   string hostname = 1;
   string ipv4_addr = 2;
 }

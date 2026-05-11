@@ -203,6 +203,10 @@ promotions:
     pipeline_file: push-images/istio.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push nftables RPM images
+    pipeline_file: push-images/nft-rpms.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
 blocks:
   - name: Check images availability
     run:
@@ -343,6 +347,42 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  - name: "Build: nftables RPMs"
+    # Producer for the patched nftables + libnftnl RPMs that calico/node and the
+    # istio CNI install image consume. The image tag is content-addressed (sha
+    # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
+    # this block is just a `docker manifest inspect` + GCS upload of the
+    # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
+    # arches) and uploads the image tarball to GCS for downstream consumers.
+    # Publishing to Docker Hub happens in a separate post-build promotion
+    # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - mkdir logs
+          - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      epilogue:
+        always:
+          commands:
+            - artifact push job logs --destination semaphore/logs || true
+      jobs:
+        - name: "Build/cache nftables RPMs"
+          matrix:
+            - env_var: ARCH
+              values:
+                - amd64
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so that every downstream job can
     # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
@@ -434,7 +474,8 @@ blocks:
     # can depend on the shared producer→GCS→consumer upload pattern.
     run:
       when: "true"
-    dependencies: []
+    dependencies:
+      - "Build: nftables RPMs"
     task:
       agent:
         machine:
@@ -443,6 +484,13 @@ blocks:
       jobs:
         - name: "Build and cache node image"
           commands:
+            # Load the patched nftables RPMs producer image (built/cached by
+            # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
+            # resolves locally without re-pulling from Docker Hub.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
@@ -1214,6 +1262,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: nftables RPMs"
     task:
       prologue:
         commands:
@@ -1221,6 +1270,12 @@ blocks:
       jobs:
         - name: "Istio: CI"
           commands:
+            # Load the amd64 patched nftables RPMs producer image so the
+            # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
@@ -1371,6 +1426,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: nftables RPMs"
     task:
       prologue:
         commands:
@@ -1384,6 +1440,13 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
+            # Load the per-arch patched nftables RPMs producer image (built/cached
+            # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
+            # resolves locally without re-pulling from Docker Hub.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Node: build Windows archive"
           commands:

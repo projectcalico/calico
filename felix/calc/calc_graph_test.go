@@ -29,17 +29,27 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var testIP = mustParseIP("10.0.0.1")
-var testIP2 = mustParseIP("10.0.0.2")
-var testIPAs6 = net.IP{IP: testIP.To16()}
-var testIPAs4 = net.IP{IP: testIP.To4()}
-var udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
-var tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
+var (
+	testIP  = mustParseIP("10.0.0.1")
+	udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
+	tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
+)
+
+func nodeWithBGPv4(name, cidr string) *internalapi.Node {
+	n := internalapi.NewNode()
+	n.Name = name
+	n.Spec.BGP = &internalapi.NodeBGPSpec{IPv4Address: cidr}
+	return n
+}
+
+func nodeKey(name string) model.ResourceKey {
+	return model.ResourceKey{Kind: internalapi.KindNode, Name: name}
+}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input any, expUpdate any, expRemove any) {
@@ -69,8 +79,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolUpdate), expUpdate.(*proto.IPAMPoolUpdate))).To(BeTrue())
-		case *proto.HostMetadataV4V6Update:
-			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataV4V6Update), expUpdate.(*proto.HostMetadataV4V6Update))).To(BeTrue())
+		case *proto.HostMetadataUpdate:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataUpdate), expUpdate.(*proto.HostMetadataUpdate))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expUpdate.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointUpdate:
@@ -95,8 +105,8 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		switch messageReceived.(type) {
 		case *proto.IPAMPoolRemove:
 			Expect(googleproto.Equal(messageReceived.(*proto.IPAMPoolRemove), expRemove.(*proto.IPAMPoolRemove))).To(BeTrue())
-		case *proto.HostMetadataV4V6Remove:
-			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataV4V6Remove), expRemove.(*proto.HostMetadataV4V6Remove))).To(BeTrue())
+		case *proto.HostMetadataRemove:
+			Expect(googleproto.Equal(messageReceived.(*proto.HostMetadataRemove), expRemove.(*proto.HostMetadataRemove))).To(BeTrue())
 		case *proto.GlobalBGPConfigUpdate:
 			Expect(googleproto.Equal(messageReceived.(*proto.GlobalBGPConfigUpdate), expRemove.(*proto.GlobalBGPConfigUpdate))).To(BeTrue())
 		case *proto.WireguardEndpointRemove:
@@ -138,14 +148,14 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&proto.IPAMPoolRemove{
 			Id: "10.0.0.0-16",
 		}),
-	Entry("HostIP",
-		model.HostIPKey{Hostname: "foo"},
-		&testIP,
-		&proto.HostMetadataV4V6Update{
+	Entry("Node",
+		nodeKey("foo"),
+		nodeWithBGPv4("foo", "10.0.0.1/32"),
+		&proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
 		},
-		&proto.HostMetadataV4V6Remove{
+		&proto.HostMetadataRemove{
 			Hostname: "foo",
 		}),
 	Entry("Global BGPConfiguration",
@@ -249,21 +259,21 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs4,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(1))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
@@ -272,25 +282,25 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIP2,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.2/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(2))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.2/32",
 		})).To(BeTrue())
@@ -299,35 +309,35 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVDeleted,
+			KVPair: model.KVPair{
+				Key: nodeKey("foo"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key: model.HostIPKey{Hostname: "foo"},
-			},
-		})
-		eb.Flush()
-		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
-			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(3))
-		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
+		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataV4V6Remove), &proto.HostMetadataV4V6Remove{
+		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
 			Hostname: "foo",
 		})).To(BeTrue())
-		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataV4V6Update), &proto.HostMetadataV4V6Update{
+		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
 			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
