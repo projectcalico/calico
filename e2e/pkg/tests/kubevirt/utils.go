@@ -261,7 +261,7 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
 // given node, used for TCP tests where the client must be on a different node
 // than the server VM to exercise cross-node BGP routing.
-func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) *corev1.Pod {
+func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) *conncheck.Client {
 	By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	tester := conncheck.NewConnectionTester(f)
 	DeferCleanup(tester.Stop)
@@ -288,7 +288,7 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode
 	pod := client.Pod()
 	Expect(pod.Spec.NodeName).NotTo(Equal(avoidNode), "client pod should be on a different node")
 	logrus.Infof("Client pod %s on %s (server VM on %s)", pod.Name, pod.Spec.NodeName, avoidNode)
-	return pod
+	return client
 }
 
 // newVMIMigration returns a VMIM object that triggers live migration of vmiName
@@ -407,30 +407,6 @@ func expectTCPConnectionBlocked(ns, podName, vmIP string) {
 		"TCP connection to %s:9999 should be blocked by policy", vmIP)
 }
 
-// lineCount runs the supplied exec closure (which must produce a bare integer
-// — typically `wc -l < <file>`) and parses the result. Centralises the parse
-// and error-wrapping logic so the three *LineCount helpers below stay one-liners.
-func lineCount(label string, exec func() (string, error)) (int, error) {
-	output, err := exec()
-	if err != nil {
-		return 0, fmt.Errorf("%s line-count exec failed: %w (output=%q)", label, err, output)
-	}
-	var n int
-	if _, scanErr := fmt.Sscanf(strings.TrimSpace(output), "%d", &n); scanErr != nil {
-		return 0, fmt.Errorf("%s: failed to parse line-count output %q: %w", label, output, scanErr)
-	}
-	return n, nil
-}
-
-// tcpStreamLineCount returns the number of lines in the given file inside the
-// given pod.
-func tcpStreamLineCount(ns, podName, streamFile string) (int, error) {
-	return lineCount(fmt.Sprintf("%s/%s:%s", ns, podName, streamFile), func() (string, error) {
-		return kubectl.NewKubectlCommand(ns, "exec", podName, "--",
-			"sh", "-c", fmt.Sprintf("wc -l < %s", streamFile)).Exec()
-	})
-}
-
 // countSequenceGaps parses "seq=N" lines and counts gaps in the sequence. When a gap is
 // found, it logs the lost range together with a small window of surrounding raw lines
 // to aid debugging in CI (e.g., distinguishing a clean re-sequence from a stream restart).
@@ -467,21 +443,6 @@ func runOnTOR(tor *externalnode.Client, cmd string) (string, error) {
 		return out, fmt.Errorf("TOR cmd %q failed: %w (output=%q)", cmd, err, out)
 	}
 	return out, nil
-}
-
-// torStreamLineCount returns the number of lines in the given file on the TOR node.
-// Mirrors tcpStreamLineCount but executes via SSH on the external TOR.
-func torStreamLineCount(tor *externalnode.Client, file string) (int, error) {
-	return lineCount(fmt.Sprintf("tor:%s", file), func() (string, error) {
-		return runOnTOR(tor, fmt.Sprintf("wc -l < %s", file))
-	})
-}
-
-// torContainerLineCount counts lines in a Docker container's stdout logs on the TOR.
-func torContainerLineCount(tor *externalnode.Client, container string) (int, error) {
-	return lineCount(fmt.Sprintf("tor:docker logs %s", container), func() (string, error) {
-		return runOnTOR(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null | wc -l", container))
-	})
 }
 
 // torBirdHeaderTemplate is the static header of the TOR BIRD peers config.
@@ -602,28 +563,6 @@ func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
 func stopBirdOnTOR(tor *externalnode.Client) {
 	By("Stopping BIRD on TOR")
 	_ = tor.RemoveContainer("tor-bird")
-}
-
-// startTCPClientOnTOR starts a long-running nc TCP client container on the
-// external TOR node, waits for it to be Running, and registers a DeferCleanup
-// to remove it. Used by the eBGP live-migration test to keep an open TCP
-// stream from the TOR through cluster routing while the VM migrates.
-func startTCPClientOnTOR(tor *externalnode.Client, name, vmIP string) {
-	GinkgoHelper()
-	By(fmt.Sprintf("Starting TCP client container %s on TOR connecting to %s", name, vmIP))
-	_ = tor.RemoveContainer(name)
-	_, err := tor.RunContainer(name, images.Alpine,
-		[]string{"-d", "--network", "host"},
-		"sh", "-c", fmt.Sprintf("'sleep 999999 | nc %s 9999'", vmIP))
-	Expect(err).NotTo(HaveOccurred(), "failed to start TCP client container on TOR")
-	DeferCleanup(func() {
-		By(fmt.Sprintf("Removing TCP client container %s from TOR", name))
-		_ = tor.RemoveContainer(name)
-	})
-
-	Eventually(func() (bool, error) {
-		return tor.IsContainerRunning(name)
-	}, 15*time.Second, 1*time.Second).Should(BeTrue(), "TCP client container did not start on TOR")
 }
 
 // setupEBGPPeering configures eBGP peering between a TOR node and all cluster nodes.

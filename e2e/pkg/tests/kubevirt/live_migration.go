@@ -41,6 +41,7 @@ import (
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -186,48 +187,31 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Server VM: %s on %s", serverIP, node1)
 
 			By("Creating client pod on a different node than server VM")
-			clientPod := setupAntiAffinityPod(ctx, f, node1)
+			clientConn := setupAntiAffinityPod(ctx, f, node1)
+			clientPod := clientConn.Pod()
 			expectConnectionToTCPServer(ns, clientPod.Name, serverIP)
 
-			// Use nohup to prevent SIGHUP when kubectl exec session closes. The Exec()
-			// return is intentionally ignored: `nohup ... &` backgrounds immediately and
-			// always returns success, so its error value tells us nothing about whether
-			// nc actually connected. We verify liveness explicitly below.
-			By("Starting TCP client")
-			_, _ = kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-				"sh", "-c", fmt.Sprintf("nohup nc %s 9999 > /tmp/tcp_stream 2>&1 &", serverIP)).Exec()
-			DeferCleanup(func() {
-				_, _ = kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-					"pkill", "-f", fmt.Sprintf("nc %s 9999", serverIP)).Exec()
-			})
-
-			By("Verifying nc client process is running")
-			Eventually(func() error {
-				out, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-					"pgrep", "-f", fmt.Sprintf("nc %s 9999", serverIP)).Exec()
-				if err != nil {
-					return fmt.Errorf("pgrep failed: %w (output=%q)", err, out)
-				}
-				if strings.TrimSpace(out) == "" {
-					return fmt.Errorf("nc process not found — client exited immediately")
-				}
-				return nil
-			}, 15*time.Second, 1*time.Second).Should(Succeed(), "TCP client did not start")
+			By("Starting TCP client stream probe")
+			probe := conncheck.NewStreamProbe("tcp-stream",
+				conncheck.NewPodSource(f, clientConn),
+				conncheck.WithStreamCommand("nc", serverIP, "9999"))
+			Expect(probe.Start(ctx)).To(Succeed())
+			DeferCleanup(func() { _ = probe.Stop() })
 
 			By("Verifying TCP data is flowing before migration")
-			var preLines int
 			Eventually(func() (int, error) {
-				var err error
-				preLines, err = tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
-				return preLines, err
+				if err := probe.Err(); err != nil {
+					return 0, StopTrying(fmt.Sprintf("stream failed: %v", err))
+				}
+				return probe.NumLines(), nil
 			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
 				"TCP data should be flowing")
+			preLines := len(probe.Lines())
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
 			By("Migrating the VM")
 			vmim1 := newVMIMigration(serverVMName+"-migration1", ns, serverVMName)
-			err := cli.Create(ctx, vmim1)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, vmim1)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
 			waitForMigrationSuccess(ctx, cli, vmim1)
 			vmi := &kubevirtv1.VirtualMachineInstance{}
@@ -236,23 +220,18 @@ var _ = describe.CalicoDescribe(
 			Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
 
 			By("Verifying TCP stream survived first migration")
-			var midLines int
-			Eventually(func() (int, error) {
-				var err error
-				midLines, err = tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
-				return midLines, err
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", preLines+5),
+			Eventually(probe.NumLines,
+				30*time.Second, 2*time.Second).Should(BeNumerically(">=", preLines+5),
 				"TCP data should have grown after first migration")
+			midLines := len(probe.Lines())
 			logrus.Infof("After first migration: %d lines", midLines)
 
 			By("Migrating the VM a second time")
 			vmim2 := newVMIMigration(serverVMName+"-migration2", ns, serverVMName)
-			err = cli.Create(ctx, vmim2)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, vmim2)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
 			waitForMigrationSuccess(ctx, cli, vmim2)
-			err = cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)).To(Succeed())
 			node3 := vmi.Status.NodeName
 			// With 3 worker nodes, second migration moves away from node2.
 			// It could return to node1 — that's fine, we only require it left node2.
@@ -265,16 +244,14 @@ var _ = describe.CalicoDescribe(
 				"server was scheduled to the same node as the client")
 
 			By("Waiting for TCP data to grow after second migration")
-			Eventually(func() (int, error) {
-				return tcpStreamLineCount(ns, clientPod.Name, "/tmp/tcp_stream")
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", midLines+5),
+			Eventually(probe.NumLines,
+				30*time.Second, 2*time.Second).Should(BeNumerically(">=", midLines+5),
 				"TCP data should have grown after second migration")
 
 			By("Checking sequence continuity")
-			streamAll, err := kubectl.NewKubectlCommand(ns, "exec", clientPod.Name, "--",
-				"cat", "/tmp/tcp_stream").Exec()
-			Expect(err).NotTo(HaveOccurred())
-			lines := strings.Split(strings.TrimSpace(streamAll), "\n")
+			_ = probe.Stop()
+			Expect(probe.Err()).NotTo(HaveOccurred())
+			lines := probe.Lines()
 			logrus.Infof("TCP stream: %d lines, first: %s, last: %s",
 				len(lines), lines[0], lines[len(lines)-1])
 
@@ -395,11 +372,15 @@ var _ = describe.CalicoDescribe(
 					"TCP server not reachable from TOR")
 				logrus.Infof("TCP server on %s:9999 is reachable and sending data from TOR", vmIP)
 
-				startTCPClientOnTOR(tor, ncClientContainer, vmIP)
+				By(fmt.Sprintf("Starting TCP client container %s on TOR", ncClientContainer))
+				probe := conncheck.NewStreamProbe("tor-tcp-stream",
+					externalnode.NewContainerSource(tor, ncClientContainer, images.Alpine, "--network", "host"),
+					conncheck.WithStreamCommand("sh", "-c", fmt.Sprintf("'sleep 999999 | nc %s 9999'", vmIP)))
+				Expect(probe.Start(ctx)).To(Succeed())
+				DeferCleanup(func() { _ = probe.Stop() })
 
 				// seq-monitor logs the line count every 2s for post-mortem analysis
-				// (recorded, not asserted). Stopped before the It returns so its SSH
-				// session can't race timeline.writeToTOR on the shared TOR client.
+				// (recorded, not asserted).
 				seqStopCh := make(chan struct{})
 				seqDoneCh := make(chan struct{})
 				defer func() {
@@ -411,14 +392,7 @@ var _ = describe.CalicoDescribe(
 					ticker := time.NewTicker(2 * time.Second)
 					defer ticker.Stop()
 					for {
-						n, err := torContainerLineCount(tor, ncClientContainer)
-						if err != nil {
-							logrus.Warnf("[seq-monitor] error: %v", err)
-						} else {
-							logrus.Infof("[seq-monitor] lines=%d", n)
-						}
-						// Honor stopCh during the wait so the goroutine doesn't do
-						// one extra SSH after the test body returns.
+						logrus.Infof("[seq-monitor] lines=%d", len(probe.Lines()))
 						select {
 						case <-seqStopCh:
 							return
@@ -428,13 +402,14 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By("Waiting for TCP data to flow before migration")
-				var preLines int
 				Eventually(func() (int, error) {
-					var err error
-					preLines, err = torContainerLineCount(tor, ncClientContainer)
-					return preLines, err
+					if err := probe.Err(); err != nil {
+						return 0, StopTrying(fmt.Sprintf("stream failed: %v", err))
+					}
+					return len(probe.Lines()), nil
 				}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
 					"TCP data should be flowing from TOR")
+				preLines := len(probe.Lines())
 				logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
 
 				preTime := time.Now()
@@ -470,7 +445,7 @@ var _ = describe.CalicoDescribe(
 					g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
 				}, 20*time.Second, 1*time.Second).Should(Succeed())
 
-				firstMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+				firstMigLines := len(probe.Lines())
 				timeline.record(routeTimelineEntry{
 					Phase:    "first-migration-complete",
 					VMNode:   node2,
@@ -483,7 +458,7 @@ var _ = describe.CalicoDescribe(
 				By("Waiting for TOR /32 local_pref to revert to normal after convergence")
 				Eventually(func() int {
 					snap := queryTORSnapshot(tor, vmIP)
-					pollLines, _ := torContainerLineCount(tor, ncClientContainer)
+					pollLines := len(probe.Lines())
 					timeline.record(routeTimelineEntry{
 						Phase:    "convergence-poll",
 						VMNode:   node2,
@@ -497,7 +472,7 @@ var _ = describe.CalicoDescribe(
 				}, 45*time.Second, 2*time.Second).Should(Equal(100),
 					"TOR /32 local_pref should revert to 100 after convergence")
 
-				convergenceLines, _ := torContainerLineCount(tor, ncClientContainer)
+				convergenceLines := len(probe.Lines())
 				timeline.record(routeTimelineEntry{
 					Phase:    "convergence-done",
 					VMNode:   node2,
@@ -505,7 +480,7 @@ var _ = describe.CalicoDescribe(
 					TCPLines: convergenceLines,
 				})
 
-				midLines, _ := torContainerLineCount(tor, ncClientContainer)
+				midLines := len(probe.Lines())
 				Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
 
 				// Pin migration 2 to a fresh worker via VMIM.Spec.AddedNodeSelector so
@@ -552,7 +527,7 @@ var _ = describe.CalicoDescribe(
 						"two /32 routes must have different local_pref to avoid ECMP")
 				}, 20*time.Second, 1*time.Second).Should(Succeed())
 
-				secondMigLines, _ := torContainerLineCount(tor, ncClientContainer)
+				secondMigLines := len(probe.Lines())
 				timeline.record(routeTimelineEntry{
 					Phase:    "second-migration-complete",
 					VMNode:   node3,
@@ -565,7 +540,7 @@ var _ = describe.CalicoDescribe(
 				By("Waiting for TOR /32 local_pref to revert after second migration")
 				Eventually(func() int {
 					snap := queryTORSnapshot(tor, vmIP)
-					pollLines, _ := torContainerLineCount(tor, ncClientContainer)
+					pollLines := len(probe.Lines())
 					timeline.record(routeTimelineEntry{
 						Phase:    "second-convergence-poll",
 						VMNode:   node3,
@@ -579,14 +554,14 @@ var _ = describe.CalicoDescribe(
 				}, 45*time.Second, 2*time.Second).Should(Equal(100),
 					"TOR /32 local_pref should revert to 100 after second migration convergence")
 
-				finalLines, _ := torContainerLineCount(tor, ncClientContainer)
+				finalLines := len(probe.Lines())
 				Expect(finalLines).To(BeNumerically(">", midLines),
 					"TCP stream should have continued growing after second migration (final=%d, mid=%d)", finalLines, midLines)
 
 				By("Verifying TCP stream integrity")
-				streamAll, err := runOnTOR(tor, fmt.Sprintf("sudo docker logs %s 2>/dev/null", ncClientContainer))
-				Expect(err).NotTo(HaveOccurred(), "failed to retrieve TCP stream from TOR")
-				lines := strings.Split(strings.TrimSpace(streamAll), "\n")
+				_ = probe.Stop()
+				Expect(probe.Err()).NotTo(HaveOccurred())
+				lines := probe.Lines()
 				logrus.Infof("TIMELINE: total lines=%d, first=%s, last=%s", len(lines), lines[0], lines[len(lines)-1])
 				// Show the last 30 lines for quick inspection.
 				start := 0
