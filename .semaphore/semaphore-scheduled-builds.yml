@@ -100,7 +100,7 @@ global_job_config:
       # cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
-          GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
           image="calico/go-build:${GO_BUILD_VER}"
           if ! docker image inspect "$image" >/dev/null 2>&1; then
             cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
@@ -399,7 +399,7 @@ blocks:
       jobs:
         - name: "Cache calico/go-build to GCS"
           commands:
-            - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
             - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
             - |-
               if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
