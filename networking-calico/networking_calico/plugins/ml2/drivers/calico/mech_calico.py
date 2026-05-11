@@ -188,14 +188,6 @@ PRIORITY_HIGH = 0
 PRIORITY_LOW = 1
 PRIORITY_RETRY = 2
 
-# This terrible global variable points to the running instance of the
-# Calico Mechanism Driver. This variable relies on the basic assertion that
-# any Neutron process, forked or not, should only ever have *one* Calico
-# Mechanism Driver in it. It's used by our monkeypatch of the
-# security_groups_rule_updated method below to locate the mechanism driver.
-# TODO(nj): Let's not do this anymore. Please?
-mech_driver = None
-
 
 def requires_state(f):
     """requires_state
@@ -340,11 +332,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # Last resync completion time
         self.last_resync_time = datetime.now()
-
-        # Tell the monkeypatch where we are.
-        global mech_driver
-        assert mech_driver is None
-        mech_driver = self
 
         # Make sure we initialise even if we don't see any API calls.
         eventlet.spawn_after(STARTUP_DELAY_SECS, self._post_fork_init, voting=True)
@@ -745,10 +732,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not self.db:
             self.db = plugin_dir.get_plugin()
             LOG.info("db = %s" % self.db)
-
-            # Update the reference to ourselves.
-            global mech_driver
-            mech_driver = self
 
     def bind_port(self, context):
         """bind_port

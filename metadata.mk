@@ -11,7 +11,7 @@ LLVM_VERSION=20.1.8
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
 RUST_BUILD_VER=1.94.1
 
-CALICO_BASE_VER=ubi9-1776708455
+CALICO_BASE_VER=ubi9-1777576815
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -28,6 +28,7 @@ KIND_VERSION=v0.31.0
 # differently for a forked repo.
 ORGANIZATION  ?= projectcalico
 GIT_REPO      ?= calico
+GIT_REMOTE    ?= origin
 
 RELEASE_BRANCH_PREFIX ?=release
 DEV_TAG_SUFFIX        ?= 0.dev
@@ -66,6 +67,14 @@ LIBBPF_VERSION=v1.6.2
 
 # The bpftool image to use; this is the output of the https://github.com/projectcalico/bpftool repo.
 BPFTOOL_IMAGE=calico/bpftool:v7.5.0
+
+# Patched nftables + libnftnl shipped in calico/node and the istio CNI install
+# image. Built by hack/rpms/nftables/ and consumed via calico/nftables-rpms:<sha>-<arch>.
+# Do not bump NFTABLES_VER past 1.1.1 - see projectcalico/calico#11750.
+NFTABLES_VER=1.1.1
+NFTABLES_SHA256=6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
+LIBNFTNL_VER=1.2.8
+LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # The operator branch corresponding to this branch.
 OPERATOR_BRANCH ?= master

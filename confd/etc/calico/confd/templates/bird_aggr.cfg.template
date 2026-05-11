@@ -2,7 +2,7 @@
 {{- $config := getBGPConfig 4 . }}
 
 {{$route_added := false}}
-protocol static {
+template static static_template {
 {{- $block_key := printf "/ipam/v2/host/%s/ipv4/block" $config.NodeName}}
 {{- if ls $block_key}}
 {{- $route_added = true}}
@@ -57,6 +57,11 @@ protocol static {
    # No IP blocks or static routes for this host.
 {{- end}}
 }
+
+{{ if $route_added }}
+protocol static from static_template {
+}
+{{ end }}
 
 # Aggregation of routes on this host; export the block, nothing beneath it.
 function calico_aggr ()

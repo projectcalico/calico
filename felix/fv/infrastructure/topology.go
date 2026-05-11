@@ -51,15 +51,12 @@ type TopologyOptions struct {
 	FelixDebugFilenameRegex string
 	FelixCoreDumpsEnabled   bool
 	EnableIPv6              bool
-	// Temporary flag to implement and test IPv6 in bpf dataplane.
-	// TODO: Remove it when IPv6 implementation in BPF mode is complete.
-	BPFEnableIPv6     bool
-	ExtraEnvVars      map[string]string
-	ExtraVolumes      map[string]string
-	WithTypha         bool
-	WithFelixTyphaTLS bool
-	TestManagesBPF    bool
-	TyphaLogSeverity  string
+	ExtraEnvVars            map[string]string
+	ExtraVolumes            map[string]string
+	WithTypha               bool
+	WithFelixTyphaTLS       bool
+	TestManagesBPF          bool
+	TyphaLogSeverity        string
 	// In some cases, we rely on BIRD to program IPIP and noEncap routes. VXLAN routes are always programmed by Felix.
 	SimulateBIRDRoutes        bool
 	IPIPMode                  api.IPIPMode
@@ -116,7 +113,6 @@ func DefaultTopologyOptions() TopologyOptions {
 		FelixLogSeverity:      felixLogLevel,
 		FelixCoreDumpsEnabled: true,
 		EnableIPv6:            os.Getenv("FELIX_FV_ENABLE_BPF") != "true",
-		BPFEnableIPv6:         false,
 		ExtraEnvVars:          map[string]string{},
 		ExtraVolumes:          map[string]string{},
 		WithTypha:             false,

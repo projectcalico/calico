@@ -43,13 +43,31 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
 fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
-  # Run the e2e binary directly via ginkgo inside calico/go-build.
   echo "[INFO] starting e2e tests..."
   pushd "${HOME}/calico" || exit
-  _go_ver=$(grep '^GO_VERSION=' ./metadata.mk | cut -d= -f2)
-  _llvm_ver=$(grep '^LLVM_VERSION=' ./metadata.mk | cut -d= -f2)
-  _k8s_ver=$(grep '^K8S_VERSION=' ./metadata.mk | cut -d= -f2)
-  GO_BUILD_VER="${_go_ver}-llvm${_llvm_ver}-k8s${_k8s_ver#v}"
+
+  # Pick a runtime image. The local-build path already pulled
+  # calico/go-build to compile the binary, so reusing it for the run
+  # step is free. The hashrelease path didn't compile anything, so
+  # there's no reason to drag in the build toolchain -- use the
+  # official golang image (debian-bookworm base, glibc-compatible
+  # with the binary, ~800MB vs ~2GB).
+  # The e2e binary is CGO-linked against libbpf and dynamically depends on
+  # libelf and libz at runtime; the test scripts also call uuidgen. The
+  # calico/go-build image already has these; the upstream golang:bookworm
+  # image does not, so install them on the fly when using that path.
+  PRE_RUN=":"
+  if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+    _go_ver=$(grep '^GO_VERSION=' ./metadata.mk | cut -d= -f2)
+    _llvm_ver=$(grep '^LLVM_VERSION=' ./metadata.mk | cut -d= -f2)
+    _k8s_ver=$(grep '^K8S_VERSION=' ./metadata.mk | cut -d= -f2)
+    GO_BUILD_VER="${_go_ver}-llvm${_llvm_ver}-k8s${_k8s_ver#v}"
+    RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
+  else
+    GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
+    RUN_IMAGE="golang:${GO_VERSION}-bookworm"
+    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
+  fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
@@ -65,12 +83,14 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
-    "calico/go-build:${GO_BUILD_VER}" \
-    make e2e-run \
-      KUBECONFIG=/kubeconfig \
-      E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
-      E2E_OUTPUT_DIR=report \
-      E2E_JUNIT_REPORT=junit.xml \
+    "${RUN_IMAGE}" \
+    bash -c "${PRE_RUN} && \
+      git config --global --add safe.directory '*' && \
+      make e2e-run \
+        KUBECONFIG=/kubeconfig \
+        E2E_TEST_CONFIG='${E2E_TEST_CONFIG}' \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.

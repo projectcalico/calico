@@ -131,14 +131,14 @@ func WithWindows() any {
 	return framework.WithLabel("RunsOnWindows")
 }
 
-// WithAzure marks tests that must run on Azure.
-func WithAzure() any {
-	return framework.WithLabel("RunsOnAzure")
+// RequiresAzure marks tests that can only run on Azure.
+func RequiresAzure() any {
+	return framework.WithLabel("RequiresAzure")
 }
 
-// WithAWS marks tests that must run on AWS.
-func WithAWS() any {
-	return framework.WithLabel("RunsOnAWS")
+// RequiresAWS marks tests that can only run on AWS.
+func RequiresAWS() any {
+	return framework.WithLabel("RequiresAWS")
 }
 
 // WithExternalNode marks tests that require an external node outside of the base cluster,

@@ -539,6 +539,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 			}
 		}
 	}
+
 	logc.Debugf("Skipping service with no local endpoints")
 	return false
 }

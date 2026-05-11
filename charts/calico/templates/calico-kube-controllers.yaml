@@ -42,8 +42,9 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.registry}}/{{.Values.kubeControllers.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
+          args: ["component", "kube-controllers"]
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -72,7 +73,7 @@ spec:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: policy,namespace,serviceaccount,workloadendpoint,node,loadbalancer
-{{- if .Values.kubeControllers.env }}
+{{- if and .Values.kubeControllers .Values.kubeControllers.env }}
 {{ toYaml .Values.kubeControllers.env | indent 12 }}
 {{- end }}
           volumeMounts:
@@ -82,7 +83,10 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -l
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -91,7 +95,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -r
             periodSeconds: 10
           securityContext:
@@ -106,8 +113,9 @@ spec:
 {{- else }}
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.kubeControllers.registry}}/{{.Values.kubeControllers.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
+          args: ["component", "kube-controllers"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -117,7 +125,10 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -l
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -126,7 +137,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -r
             periodSeconds: 10
           securityContext:

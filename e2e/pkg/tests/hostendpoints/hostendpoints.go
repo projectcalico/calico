@@ -369,8 +369,15 @@ var _ = describe.CalicoDescribe(
 					}
 				}
 
+				// Target the server's host IP + ports directly. The server pod is host-networked,
+				// so traffic from the external node hits the HEP-protected node on these ports.
+				serverHostIP := hepServer1.Pod().Status.HostIP
+				Expect(serverHostIP).NotTo(BeEmpty(), "server pod must have a host IP")
+				target1 := fmt.Sprintf("http://%s:%d/", serverHostIP, hepPort1)
+				target2 := fmt.Sprintf("http://%s:%d/", serverHostIP, hepPort2)
+
 				// create a networkpolicy that allows all incoming connections.
-				// assert client can ping hep
+				// assert external node can reach the hep.
 				allowIngressPolicy := &v3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("%s-allow-all", hepPolicyName),
@@ -394,11 +401,9 @@ var _ = describe.CalicoDescribe(
 					Expect(err).NotTo(HaveOccurred())
 				}()
 
-				By("asserting connections work now from an external node", func() {
-					checker.ResetExpectations()
-					checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort1))
-					checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort2))
-					checker.Execute()
+				By("asserting connections work now from the external node", func() {
+					extClient.TestCanConnect(target1)
+					extClient.TestCanConnect(target2)
 				})
 
 				// We need to enable generic XDP to test XDP in Iptables mode, otherwise the raw table
@@ -475,10 +480,8 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By(fmt.Sprintf("asserting that none of the ports (tcp %d, %d) are accessible from the external node", hepPort1, hepPort2), func() {
-					checker.ResetExpectations()
-					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort1))
-					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort2))
-					checker.Execute()
+					extClient.TestCannotConnect(target1)
+					extClient.TestCannotConnect(target2)
 				})
 			})
 		})

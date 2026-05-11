@@ -76,7 +76,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 	startController := func() {
 		// Add 3 seconds delay before main thread starts, this is to make sure FV can add watch channels
-		// before controller logs out to stderr.
+		// before controller logs out to stdout.
 		// (container.Run returns after 'docker ps' shows the container, the polling interval is 1 second.)
 		// Add 60 seconds delay before main thread exits, this is to make sure controller is still running
 		// after test case completed and stopped by AfterEach.
@@ -159,7 +159,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 			startController()
 
-			w := migrationController.WatchStderrFor(regexp.MustCompile(`.*no migration process is needed.*`))
+			w := migrationController.WatchStdoutFor(regexp.MustCompile(`.*no migration process is needed.*`))
 			Eventually(w, "10s").Should(BeClosed(),
 				"Timed out waiting for migration controller report 'no migration process is needed'")
 		})
@@ -171,7 +171,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 
 			startController()
 
-			w := migrationController.WatchStderrFor(regexp.MustCompile(`.*abort migration process.*`))
+			w := migrationController.WatchStdoutFor(regexp.MustCompile(`.*abort migration process.*`))
 			Eventually(w, "10s").Should(BeClosed(),
 				"Timed out waiting for migration controller report 'abort migration process'")
 		})
@@ -180,7 +180,7 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 	Context("IPAM migrate FV tests", func() {
 		checkCalicoIPAM := func() {
 			// Wait for ipam migration is done.
-			w := migrationController.WatchStderrFor(regexp.MustCompile(`.*nodes completed IPAM migration process.*`))
+			w := migrationController.WatchStdoutFor(regexp.MustCompile(`.*nodes completed IPAM migration process.*`))
 			Eventually(w, "10s").Should(BeClosed(),
 				"Timed out waiting for migration controller report 'nodes completed IPAM migration process'")
 
@@ -231,13 +231,13 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 	Context("Node ordering FV tests", func() {
 		checkNodeOrdering := func() {
 			// Set watch for node index.
-			w0 := migrationController.WatchStderrFor(regexp.MustCompile(`.*node-2\[index 0\].*`))
-			w1 := migrationController.WatchStderrFor(regexp.MustCompile(`.*node-3\[index 1\].*`))
-			w2 := migrationController.WatchStderrFor(regexp.MustCompile(`.*node-1\[index 2\].*`))
-			w3 := migrationController.WatchStderrFor(regexp.MustCompile(`.*node-0\[index 3\].*`))
+			w0 := migrationController.WatchStdoutFor(regexp.MustCompile(`.*node-2\[index 0\].*`))
+			w1 := migrationController.WatchStdoutFor(regexp.MustCompile(`.*node-3\[index 1\].*`))
+			w2 := migrationController.WatchStdoutFor(regexp.MustCompile(`.*node-1\[index 2\].*`))
+			w3 := migrationController.WatchStdoutFor(regexp.MustCompile(`.*node-0\[index 3\].*`))
 
 			// Wait for ipam migration is done.
-			w := migrationController.WatchStderrFor(regexp.MustCompile(`.*nodes completed IPAM migration process.*`))
+			w := migrationController.WatchStdoutFor(regexp.MustCompile(`.*nodes completed IPAM migration process.*`))
 			Eventually(w, "10s").Should(BeClosed(),
 				"Timed out waiting for migration controller report 'nodes completed IPAM migration process'")
 
