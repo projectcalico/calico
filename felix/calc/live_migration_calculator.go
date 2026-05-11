@@ -220,9 +220,6 @@ func (lmc *LiveMigrationCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.End
 func (lmc *LiveMigrationCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
-	if _, ok := lmc.selectorKeys[cs]; !ok {
-		return
-	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
@@ -243,9 +240,6 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 }
 
 func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
-	if _, ok := lmc.selectorKeys[cs]; !ok {
-		return
-	}
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
@@ -429,7 +423,7 @@ func (lmc *LiveMigrationCalculator) refSelector(
 	}
 	keys.Add(lmKey)
 	if keys.Len() == 1 {
-		lmc.activeRulesCalc.AddExtraComputedSelector(selector)
+		lmc.activeRulesCalc.AddExtraComputedSelector(selector, lmc)
 	}
 }
 
@@ -441,7 +435,7 @@ func (lmc *LiveMigrationCalculator) unrefSelector(
 	if keys != nil {
 		keys.Discard(lmKey)
 		if keys.Len() == 0 {
-			lmc.activeRulesCalc.RemoveExtraComputedSelector(selector)
+			lmc.activeRulesCalc.RemoveExtraComputedSelector(selector, lmc)
 			delete(lmc.selectorKeys, selector)
 		}
 	}

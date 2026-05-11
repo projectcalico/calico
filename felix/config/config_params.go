@@ -68,6 +68,7 @@ type Source uint8
 const (
 	Default Source = iota
 	DatastoreGlobal
+	DatastorePerSelector
 	DatastorePerHost
 	ConfigFile
 	EnvironmentVariable
@@ -82,7 +83,7 @@ const (
 	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
 )
 
-var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
+var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastorePerSelector, DatastoreGlobal}
 
 func (source Source) String() string {
 	switch source {
@@ -90,6 +91,8 @@ func (source Source) String() string {
 		return "<default>"
 	case DatastoreGlobal:
 		return "datastore (global)"
+	case DatastorePerSelector:
+		return "datastore (per-node-selector)"
 	case DatastorePerHost:
 		return "datastore (per-host)"
 	case ConfigFile:
@@ -220,6 +223,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool              `config:"bool;false"`
+	BPFIPFragmentReassemblyEnabled     bool              `config:"bool;true"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
@@ -523,8 +527,6 @@ type Config struct {
 	Err error
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
-
-	useNodeResourceUpdates bool
 
 	RequireMTUFile bool `config:"bool;false"`
 
@@ -1241,14 +1243,6 @@ func mustParseOptionalInt(rawValue string, defaultVal int, fieldName string) int
 		log.Panicf("Failed to parse value %q for %v", rawValue, fieldName)
 	}
 	return value
-}
-
-func (config *Config) SetUseNodeResourceUpdates(b bool) {
-	config.useNodeResourceUpdates = b
-}
-
-func (config *Config) UseNodeResourceUpdates() bool {
-	return config.useNodeResourceUpdates
 }
 
 func (config *Config) RawValues() map[string]string {

@@ -3,6 +3,7 @@ src = "bird.cfg.template"
 dest = "/etc/calico/confd/config/bird.cfg"
 prefix = "/calico/"
 keys = [
+    "/bgpconfig",
     "/bgp/v1/host",
     "/bgp/v1/global",
     "/resources/v3/projectcalico.org/bgpfilters",

@@ -39,24 +39,24 @@ class TestReadiness(TestBase):
     def assert_readiness(self, node, flag, ready):
         if not ready:
             try:
-                exec_in_calico_node(node, "/bin/calico-node -%s-ready" % flag)
+                exec_in_calico_node(node, "/usr/bin/calico component node health --%s-ready" % flag)
             except CalledProcessError as e:
                 _log.info("Got expected error: %s", e)
                 return
             raise AssertionError("Expected %s not to be ready" % flag)
 
-        exec_in_calico_node(node, "/bin/calico-node -%s-ready" % flag)
+        exec_in_calico_node(node, "/usr/bin/calico component node health --%s-ready" % flag)
 
     def assert_liveness(self, node, flag, live):
         if not live:
             try:
-                exec_in_calico_node(node, "/bin/calico-node -%s-live" % flag)
+                exec_in_calico_node(node, "/usr/bin/calico component node health --%s-live" % flag)
             except CalledProcessError as e:
                 _log.info("Got expected error: %s", e)
                 return
             raise AssertionError("Expected %s not to be live" % flag)
 
-        exec_in_calico_node(node, "/bin/calico-node -%s-live" % flag)
+        exec_in_calico_node(node, "/usr/bin/calico component node health --%s-live" % flag)
 
     def test_readiness_bird_down(self):
         """

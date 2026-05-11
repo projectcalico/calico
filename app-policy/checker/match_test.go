@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -123,11 +124,13 @@ func TestMatchHTTPPaths(t *testing.T) {
 	}{
 		{"empty", []*proto.HTTPMatch_PathMatch{}, "/foo", true},
 		{"exact", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo", true},
-		{"prefix", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foobar", true},
+		{"prefix segment boundary", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foo/bar", true},
+		{"prefix not segment aligned", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foobar", false},
 		{"exact fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joo", false},
 		{"exact not match prefix", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foobar", false},
 		{"prefix fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/joobar", false},
-		{"multiple", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joobar", true},
+		{"multiple none match", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joobar", false},
+		{"multiple one matches", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joo/bar", true},
 		{"exact path with query", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo?xyz", true},
 		{"exact path with fragment", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo#xyz", true},
 		{"prefix path with query fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo?bar", false},
@@ -140,6 +143,251 @@ func TestMatchHTTPPaths(t *testing.T) {
 			Expect(matchHTTPPaths(tc.paths, &tc.reqPath)).To(Equal(tc.result))
 		})
 	}
+}
+
+// TestMatchHTTPPaths_Normalization pins down the expected behaviour of
+// matchHTTPPaths when the incoming request-target contains characters that
+// change meaning after RFC 3986 / RFC 7230 normalisation.
+//
+// Upstream HTTP servers (Nginx, Apache, Envoy with normalize_path, Go's
+// net/http, most language frameworks) collapse ".", "..", and repeated "/"
+// segments, and most decode unreserved percent-escapes, before dispatching
+// the request to a handler. If matchHTTPPaths decides Allow/Deny against the
+// raw request-target, the upstream server can serve a resource different
+// from the one Dikastes authorised — which is a path-traversal style
+// authorisation bypass (CWE-22 / CWE-23).
+//
+// Prefix matches must also be anchored to a path-segment boundary, otherwise
+// prefix "/pub" authorises "/public-leak-endpoint". RFC 7230 §5.3 and
+// common L7 matcher semantics (Envoy, Istio AuthorizationPolicy) treat path
+// prefixes as segment-aligned.
+//
+// Cases below provide regression coverage for normalisation and
+// segment-aligned prefix matching.
+func TestMatchHTTPPaths_Normalization(t *testing.T) {
+	exact := func(p string) *proto.HTTPMatch_PathMatch {
+		return &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: p}}
+	}
+	prefix := func(p string) *proto.HTTPMatch_PathMatch {
+		return &proto.HTTPMatch_PathMatch{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: p}}
+	}
+
+	testCases := []struct {
+		title   string
+		paths   []*proto.HTTPMatch_PathMatch
+		reqPath string
+		result  bool
+	}{
+		// --- Regression guards: legitimate requests must stay matched ---
+		{"prefix baseline", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public", true},
+		{"prefix with trailing slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/", true},
+		{"prefix with subpath", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/index.html", true},
+		{"exact baseline", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public", true},
+		{"trailing dot-segment collapses to exact", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/.", true},
+
+		// --- Dotdot traversal: must NOT match prefix /public ---
+		{"dotdot escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin", false},
+		{"dotdot nested escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/a/../../admin", false},
+		{"dotdot escapes exact", []*proto.HTTPMatch_PathMatch{exact("/public")}, "/public/../public", true}, // normalises to /public
+		{"dotdot changes exact", []*proto.HTTPMatch_PathMatch{exact("/public/foo")}, "/public/bar/../foo", true},
+
+		// --- Percent-encoded slashes and dots ---
+		{"percent-encoded slash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%2F..%2Fadmin", false},
+		{"percent-encoded dots traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%2e%2e/admin", false},
+		{"percent-encoded uppercase dots", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%2E%2E/admin", false},
+		{"percent-encoded unreserved should not be re-escaped", []*proto.HTTPMatch_PathMatch{exact("/public/file")}, "/public/%66ile", true}, // %66 = 'f'
+
+		// --- Repeated slash collapse ---
+		{"double slash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//../admin", false},
+		{"leading double slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "//public", true},
+		{"interior double slash collapsed still matches prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public//foo", true},
+
+		// --- Prefix not anchored to segment boundary ---
+		{"short-prefix sibling leak", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/public-leak-endpoint", false},
+		{"short-prefix sibling path", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/public", false},
+		{"short-prefix matches own segment", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/pub", true},
+		{"short-prefix matches deeper segment", []*proto.HTTPMatch_PathMatch{prefix("/pub")}, "/pub/x", true},
+
+		// --- Query/fragment retained after normalisation ---
+		{"query stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin?x=1", false},
+		{"fragment stripped then normalised", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/../admin#frag", false},
+
+		// --- Backslash separator: Windows / IIS backends may treat "\" as a path
+		// separator. "\" is not a valid HTTP path character per RFC 3986, so we
+		// normalise it to "/" before resolving dot-segments to stay aligned with
+		// the most permissive (Windows) upstream interpretation. ---
+		{"backslash traversal escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public\\..\\admin", false},
+		{"backslash mixed with slash", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..\\admin", false},
+		{"percent-encoded backslash traversal", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%5C..%5Cadmin", false},
+		{"backslash within legitimate segment still inside prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo\\bar", true},
+
+		// --- Matrix parameters on traversal segments (JSR-339 / Servlet
+		// 3.0+). Tomcat, Jetty, Jersey, Spring MVC and Resin strip ";..."
+		// per path segment before dispatch, so an attacker can hide a
+		// traversal dot-segment inside a matrix parameter suffix: a request
+		// like /public/..;x/admin is authorised here as literal segment
+		// "..;x" (matches prefix /public), but the upstream strips ";x",
+		// resolves the remaining "..", and serves /admin. Strip matrix
+		// parameters per segment before dot-segment resolution so we see
+		// the same path shape the upstream will. ---
+		{"matrix param on dotdot escapes prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..;x/admin", false},
+		{"matrix param jsessionid on dotdot", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..;jsessionid=abc/admin", false},
+		{"matrix param percent-encoded semicolon on dotdot", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/..%3Bx/admin", false},
+		{"matrix param on leaf segment still under prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo;jsessionid=abc", true},
+		{"matrix param on middle segment still under prefix", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo;x=1/bar", true},
+
+		// --- Still-encoded separators after single decode. A compliant
+		// upstream decodes once, but Spring Security
+		// (setAllowUrlEncodedSlash), some nginx merge_slashes=off
+		// configurations, and some WAF placements decode twice. A request
+		// whose single-decode form still contains a path-sensitive
+		// percent-escape (%2e / %2f / %5c) carries a second layer of
+		// traversal payload that a double-decoding upstream would resolve
+		// into a different path than the one we authorise here. Reject so
+		// the authorisation view stays aligned with the most permissive
+		// upstream. ---
+		{"double-encoded dotdot rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%252e%252e/admin", false},
+		{"double-encoded slash rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%252fadmin", false},
+		{"double-encoded backslash rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%255c..%255cadmin", false},
+		{"deep double-encoded dot rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/%25%32%65%25%32%65/admin", false},
+
+		// --- Null byte. Some Java stacks and any C-string-aware upstream
+		// treat a null byte as end-of-string: "/admin%00/../public" on
+		// such a stack truncates to "/admin" at dispatch, which would let
+		// a request bypass a rule targeting the truncated prefix. Reject
+		// null bytes so the authorisation view stays aligned. ---
+		{"percent-null in traversal rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public%00/admin", false},
+		{"percent-null mid-segment rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo%00bar", false},
+		{"raw null byte rejected", []*proto.HTTPMatch_PathMatch{prefix("/public")}, "/public/foo\x00", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(matchHTTPPaths(tc.paths, &tc.reqPath)).To(Equal(tc.result))
+		})
+	}
+}
+
+// TestNormalizeHTTPPath exercises normalizeHTTPPath directly so its contract
+// is pinned independently of the matchHTTPPaths rule-iteration logic. Each
+// case lists the raw path Envoy may deliver and the canonical path that must
+// be used for authorisation decisions.
+func TestNormalizeHTTPPath(t *testing.T) {
+	cases := []struct {
+		title string
+		in    string
+		want  string
+		ok    bool
+	}{
+		{"root", "/", "/", true},
+		{"plain", "/public", "/public", true},
+		{"trailing slash stripped", "/public/", "/public", true},
+		{"single dot segment", "/public/.", "/public", true},
+		{"dotdot resolved", "/public/../admin", "/admin", true},
+		{"nested dotdot resolved", "/public/a/../../admin", "/admin", true},
+		{"dotdot above root clamped", "/..", "/", true},
+		{"repeated slash collapsed", "/public//foo", "/public/foo", true},
+		{"leading repeated slash collapsed", "//public", "/public", true},
+		{"percent-encoded slash decoded", "/public%2F..%2Fadmin", "/admin", true},
+		{"percent-encoded dot decoded", "/public/%2e%2e/admin", "/admin", true},
+		{"percent-encoded unreserved decoded", "/public/%66ile", "/public/file", true},
+		{"query stripped before decode", "/public/../admin?q=1", "/admin", true},
+		{"fragment stripped before decode", "/public/../admin#x", "/admin", true},
+		{"encoded query marker stays literal", "/public%3Ffoo", "/public?foo", true},
+		{"backslash converted to slash", "/public/..\\admin", "/admin", true},
+		{"only backslash separators", "\\public\\..\\admin", "/admin", true},
+		{"percent-encoded backslash decoded and normalised", "/public%5C..%5Cadmin", "/admin", true},
+		{"matrix param on leaf stripped", "/public/foo;x=1", "/public/foo", true},
+		{"matrix param jsessionid stripped", "/public/foo;jsessionid=abc", "/public/foo", true},
+		{"matrix param on dotdot resolves traversal", "/public/..;x/admin", "/admin", true},
+		{"matrix param on every segment stripped", "/a;p=1/b;q=2/c;r=3", "/a/b/c", true},
+		{"percent-encoded semicolon stripped", "/public/..%3Bx/admin", "/admin", true},
+		{"double percent-encoded dot rejected", "/public/%252e%252e/admin", "", false},
+		{"double percent-encoded slash rejected", "/public%252fadmin", "", false},
+		{"double percent-encoded backslash rejected", "/public%255c..%255cadmin", "", false},
+		{"deep double-encoded dot rejected", "/public/%25%32%65%25%32%65/admin", "", false},
+		{"mixed-case double-encoded dot rejected", "/public/%252E%252E/admin", "", false},
+		{"percent-null rejected", "/public%00/admin", "", false},
+		{"raw null byte rejected", "/public/foo\x00bar", "", false},
+		{"invalid percent escape rejected", "/%XY/admin", "", false},
+		{"non-absolute rejected", "relative/path", "", false},
+		{"absolute URI form rejected", "http://example.com/admin", "", false},
+		{"empty rejected", "", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.title, func(t *testing.T) {
+			RegisterTestingT(t)
+			got, ok := normalizeHTTPPath(tc.in)
+			Expect(ok).To(Equal(tc.ok), "ok mismatch for input %q", tc.in)
+			if tc.ok {
+				Expect(got).To(Equal(tc.want), "normalised form mismatch for input %q", tc.in)
+			}
+		})
+	}
+}
+
+// FuzzMatchHTTPPaths is a canary that explores arbitrary request paths and
+// asserts structural invariants on the normalised form whenever normalisation
+// succeeds:
+//
+//   - Starts with "/".
+//   - Contains no "\" separator (backslashes are folded during normalisation).
+//   - Contains no "//" (repeated slashes collapsed).
+//   - Contains no "." or ".." path segments (dot-segments resolved).
+//
+// Idempotence is intentionally not asserted: the normaliser is a deliberate
+// single-decode to match a compliant upstream HTTP server. An input with two
+// layers of percent-encoding (e.g. "%252e%252e") normalises to one with a
+// literal "%2e%2e" segment; a second normalisation would decode further and
+// diverge. See the "double percent-encoded traversal stays literal" case in
+// TestMatchHTTPPaths_Normalization for the pinned behaviour.
+func FuzzMatchHTTPPaths(f *testing.F) {
+	seeds := []string{
+		"/public",
+		"/public/",
+		"/public/index.html",
+		"/public/../admin",
+		"/public%2F..%2Fadmin",
+		"/public//../admin",
+		"/public-leak",
+		"/public/%2e%2e/admin",
+		"/public/..\\admin",
+		"/public%5C..%5Cadmin",
+		"/public/%252e%252e/admin",
+		"/%2e%2e/admin",
+		"/public/foo%00bar",
+		"/public/.",
+		"/public/./././foo",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		// Reject inputs that the matcher is documented to panic on — those are
+		// filtered before the matcher would ever see them in production.
+		if raw == "" || raw[0] != '/' {
+			return
+		}
+		got, ok := normalizeHTTPPath(raw)
+		if !ok {
+			return
+		}
+		if !strings.HasPrefix(got, "/") {
+			t.Fatalf("normalised path %q (from %q) does not start with /", got, raw)
+		}
+		if strings.Contains(got, "\\") {
+			t.Fatalf("normalised path %q (from %q) still contains backslash", got, raw)
+		}
+		if strings.Contains(got, "//") {
+			t.Fatalf("normalised path %q (from %q) still contains repeated slash", got, raw)
+		}
+		for _, seg := range strings.Split(got, "/") {
+			if seg == "." || seg == ".." {
+				t.Fatalf("normalised path %q (from %q) still contains dot-segment", got, raw)
+			}
+		}
+	})
 }
 
 // An omitted HTTP Match clause always matches.

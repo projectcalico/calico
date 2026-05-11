@@ -92,6 +92,7 @@ const StartTimeFilter: React.FC<StartTimeFilterProps> = ({
                                         ...styles,
                                         ...SelectStyles.menuList,
                                         borderRadius: 0,
+                                        minHeight: 'fit-content',
                                     }),
                                     option: (styles) => ({
                                         ...styles,

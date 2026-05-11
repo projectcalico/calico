@@ -19,7 +19,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -169,26 +170,29 @@ func dumpInterface(cmd *cobra.Command, m maps.Map, iface *net.Interface) error {
 }
 
 func dumpInterfaceTable(cmd *cobra.Command, iface *net.Interface, values [][]uint64) error {
-	table := tablewriter.NewWriter(cmd.OutOrStdout())
-	table.SetCaption(true, fmt.Sprintf("dumped %s counters.", iface.Name))
-	table.SetHeader([]string{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
+	t := table.NewWriter()
+	t.SetOutputMirror(cmd.OutOrStdout())
+	t.SetCaption("dumped %s counters.", iface.Name)
+	t.AppendHeader(table.Row{"CATEGORY", "TYPE", "INGRESS", "EGRESS", "XDP"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Name: "CATEGORY", AutoMerge: true},
+		{Name: "INGRESS", Align: text.AlignRight},
+		{Name: "EGRESS", Align: text.AlignRight},
+		{Name: "XDP", Align: text.AlignRight},
+	})
 
-	var rows [][]string
 	for _, c := range counters.Descriptions() {
-		newRow := []string{c.Category, c.Caption}
+		row := table.Row{c.Category, c.Caption}
 		for hook := range hook.All {
 			if values[hook] == nil {
-				newRow = append(newRow, "N/A")
+				row = append(row, "N/A")
 			} else {
-				newRow = append(newRow, fmt.Sprintf("%v", values[hook][c.Counter]))
+				row = append(row, values[hook][c.Counter])
 			}
 		}
-		rows = append(rows, newRow)
+		t.AppendRow(row)
 	}
-	table.AppendBulk(rows)
-	table.SetAutoMergeCells(true)
-	table.SetAutoMergeCellsByColumnIndex([]int{0})
-	table.Render()
+	t.Render()
 	return nil
 }
 

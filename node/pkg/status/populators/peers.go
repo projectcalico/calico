@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
@@ -406,19 +406,11 @@ func (b BirdBGPPeers) Show() {
 
 // printPeers prints out the slice of peers in table format.
 func printPeers(peers []*bgpPeer, out io.Writer) {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader([]string{"Peer address", "Peer type", "State", "Since", "BGPState"})
-
+	t := table.NewWriter()
+	t.SetOutputMirror(out)
+	t.AppendHeader(table.Row{"Peer address", "Peer type", "State", "Since", "BGPState"})
 	for _, peer := range peers {
-		row := []string{
-			peer.peerIP,
-			peer.peerType,
-			peer.state,
-			peer.since,
-			peer.bgpState,
-		}
-		table.Append(row)
+		t.AppendRow(table.Row{peer.peerIP, peer.peerType, peer.state, peer.since, peer.bgpState})
 	}
-
-	table.Render()
+	t.Render()
 }

@@ -104,10 +104,7 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
-			bpfMode = false
-			if dp := detectDataplane(cli, f.ClientSet); dp.Calico == dataplaneBPF {
-				bpfMode = true
-			}
+			bpfMode = utils.DetectDataplane(cli, f.ClientSet).IsBPF()
 		})
 
 		// runEgressTest executes the standard egress test flow for a single scenario.

@@ -10,7 +10,7 @@ fi
 
 # Run the startup initialisation script.
 # These ensure the node is correctly configured to run.
-calico-node -startup || exit 1
+calico component node startup || exit 1
 
 # Set the nodename based on the value picked by the startup procedure.
 if [ ! -f "/var/lib/calico/nodename" ]; then
@@ -21,7 +21,7 @@ NODENAME=$(cat /var/lib/calico/nodename)
 export NODENAME
 
 # If possible pre-allocate any tunnel addresses.
-calico-node -allocate-tunnel-addrs -allocate-tunnel-addrs-run-once || exit 1
+calico component node allocate-tunnel-addrs --run-once || exit 1
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled

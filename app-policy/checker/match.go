@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,9 @@ package checker
 import (
 	"fmt"
 	"net"
+	"net/url"
+	"path"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -158,7 +161,6 @@ func computeNamespaceMatch(
 // matchRequest checks if the request part of the Rule matches the request. It returns true if the
 // Rule matches, false otherwise.
 func matchRequest(rule *proto.Rule, req *requestCache) bool {
-	log.WithField("request", req).Debug("Matching request.")
 	return matchHTTP(rule.GetHttpMatch(), req.GetHttpMethod(), req.GetHttpPath())
 }
 
@@ -297,6 +299,14 @@ func matchHTTPMethods(methods []string, reqMethod *string) bool {
 
 // matchHTTPPaths checks if the HTTP paths match. It returns true if the paths match, false
 // otherwise.
+//
+// The request-target is normalised per RFC 3986 / RFC 7230 before comparison:
+// query and fragment are stripped, percent-escapes are decoded, repeated
+// slashes are collapsed, and "." / ".." segments are resolved. This matches
+// what upstream HTTP servers do before dispatching a request, so an
+// authorisation decision here is made on the same path the upstream will
+// actually serve. Prefix matches are anchored to path-segment boundaries so
+// that prefix "/pub" does not authorise "/public-leak".
 func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
@@ -312,33 +322,155 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 		log.Debug("nil HTTP Path. Default is /")
 		return true
 	}
-	// Accept only valid paths
+	// Accept only valid paths.
 	if !strings.HasPrefix(*reqPath, "/") {
 		s := fmt.Sprintf("Invalid HTTP Path \"%s\"", *reqPath)
 		log.Error(s)
 		// Let the caller recover from the panic.
 		panic(&InvalidDataFromDataPlane{s})
 	}
-	// Strip out the query '?' and fragment '#' identifier
-	for _, s := range []string{"?", "#"} {
-		*reqPath = strings.Split(*reqPath, s)[0]
+	normalizedReq, ok := normalizeHTTPPath(*reqPath)
+	if !ok {
+		log.WithField("reqPath", *reqPath).Debug("HTTP Path could not be normalized; not matched.")
+		return false
 	}
 	for _, pathMatch := range paths {
-		switch pathMatch.GetPathMatch().(type) {
+		switch m := pathMatch.GetPathMatch().(type) {
 		case *proto.HTTPMatch_PathMatch_Exact:
-			if *reqPath == pathMatch.GetExact() {
+			rulePath, ok := normalizeHTTPPath(m.Exact)
+			if !ok {
+				log.WithField("rulePath", m.Exact).Warn("HTTP Path exact rule could not be normalized; skipping.")
+				continue
+			}
+			if normalizedReq == rulePath {
 				log.Debug("HTTP Path exact matched.")
 				return true
 			}
 		case *proto.HTTPMatch_PathMatch_Prefix:
-			if strings.HasPrefix(*reqPath, pathMatch.GetPrefix()) {
-				log.Debugf("HTTP Path prefix %s matched.", pathMatch.GetPrefix())
+			rulePrefix, ok := normalizeHTTPPath(m.Prefix)
+			if !ok {
+				log.WithField("rulePath", m.Prefix).Warn("HTTP Path prefix rule could not be normalized; skipping.")
+				continue
+			}
+			if segmentPrefixMatch(normalizedReq, rulePrefix) {
+				log.Debugf("HTTP Path prefix %s matched.", m.Prefix)
 				return true
 			}
 		}
 	}
 	log.Debug("HTTP Path not matched.")
 	return false
+}
+
+// reStillEncodedPathSensitive matches a surviving percent-encoding of a
+// path-sensitive character after one decode: "." (%2e), "/" (%2f) or "\"
+// (%5c), upper or lower case. Presence of these after a single decode
+// indicates a double-encoded payload that a double-decoding upstream
+// (e.g. Spring Security with setAllowUrlEncodedSlash, nginx with
+// merge_slashes=off, some WAF placements) would resolve differently
+// from the single-decode view we use for authorisation.
+var reStillEncodedPathSensitive = regexp.MustCompile(`(?i)%(2e|2f|5c)`)
+
+// normalizeHTTPPath applies RFC 3986 / RFC 7230 style normalisation to an HTTP
+// request-target so prefix and exact comparisons are resilient to
+// percent-encoded path separators, repeated slashes and "." / ".." segments.
+// It returns false when the input cannot be interpreted as an absolute path,
+// or when the decoded path contains shapes whose resolved form depends on
+// upstream-specific behaviour we cannot predict (surviving path-sensitive
+// escapes, null bytes). Callers treat "false" as a non-match rather than
+// falling back to raw byte comparison.
+func normalizeHTTPPath(p string) (string, bool) {
+	// Strip query and fragment — not part of the path.
+	if i := strings.IndexAny(p, "?#"); i >= 0 {
+		p = p[:i]
+	}
+	// Percent-decode once. Upstream servers decode once before dispatch, so a
+	// single decode here gives the same view they act on. Double-decoding
+	// would over-authorise (e.g. %252e%252e would become "..").
+	decoded, err := url.PathUnescape(p)
+	if err != nil {
+		return "", false
+	}
+	// Reject still-encoded path-sensitive escapes. After a single decode any
+	// remaining %2e / %2f / %5c was originally double-encoded, which carries
+	// a second layer of traversal payload that a double-decoding upstream
+	// would resolve into a different path than the one we'd authorise here.
+	if reStillEncodedPathSensitive.MatchString(decoded) {
+		return "", false
+	}
+	// Reject null bytes. Some Java stacks and any C-string-aware upstream
+	// treat NUL as end-of-string, so "/admin\x00/../public" dispatches to
+	// "/admin"; the authorisation view diverges from what will be served.
+	if strings.IndexByte(decoded, 0) >= 0 {
+		return "", false
+	}
+	// Fold backslash to forward slash. "\" is not a valid HTTP path character
+	// per RFC 3986, but Windows / IIS backends accept it as a path separator,
+	// so an attacker could otherwise smuggle traversal past path.Clean using
+	// "\..\". Folding here aligns the authorisation view with the most
+	// permissive upstream interpretation.
+	if strings.ContainsRune(decoded, '\\') {
+		decoded = strings.ReplaceAll(decoded, "\\", "/")
+	}
+	if !strings.HasPrefix(decoded, "/") {
+		return "", false
+	}
+	// Strip matrix / path parameters per segment (JSR-339 / Servlet 3.0+).
+	// Tomcat, Jetty, Jersey, Spring MVC and Resin remove ";..." suffixes
+	// per segment before dispatch, so a request like "/public/..;x/admin"
+	// dispatches to "/admin" after the container resolves the now-visible
+	// "..". We strip matrix parameters before dot-segment resolution so the
+	// authorisation view matches.
+	if strings.IndexByte(decoded, ';') >= 0 {
+		decoded = stripMatrixParams(decoded)
+	}
+	// path.Clean collapses repeated slashes and resolves "." / ".." segments,
+	// and always returns a path rooted at "/" for inputs starting with "/".
+	// Trailing slashes are stripped, which is fine for matching: "/foo" and
+	// "/foo/" address the same resource for an authorisation decision.
+	return path.Clean(decoded), true
+}
+
+// stripMatrixParams removes ";..." matrix-parameter suffixes from every path
+// segment. Given "/a;x=1/b;y=2/c" it returns "/a/b/c". A leading segment of
+// ";foo" (no body before the semicolon) becomes empty; path.Clean will then
+// collapse it away during subsequent cleaning.
+func stripMatrixParams(p string) string {
+	var b strings.Builder
+	b.Grow(len(p))
+	for i := 0; i < len(p); {
+		j := strings.IndexByte(p[i:], '/')
+		var seg string
+		if j < 0 {
+			seg = p[i:]
+			i = len(p)
+		} else {
+			seg = p[i : i+j]
+			i += j + 1
+		}
+		if k := strings.IndexByte(seg, ';'); k >= 0 {
+			seg = seg[:k]
+		}
+		b.WriteString(seg)
+		if i <= len(p) && j >= 0 {
+			b.WriteByte('/')
+		}
+	}
+	return b.String()
+}
+
+// segmentPrefixMatch reports whether req equals prefix or extends it at a path
+// segment boundary. Both arguments are expected to have been passed through
+// normalizeHTTPPath already, so prefix does not end with a trailing slash
+// (except for the root "/").
+func segmentPrefixMatch(req, prefix string) bool {
+	if prefix == "/" {
+		return strings.HasPrefix(req, "/")
+	}
+	if req == prefix {
+		return true
+	}
+	return strings.HasPrefix(req, prefix+"/")
 }
 
 // matchSrcIPSets checks if the source IP is within the IP sets and not in the not IP sets. It

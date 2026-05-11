@@ -55,36 +55,32 @@ func TestImageComponents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve pinned version: %v", err)
 	}
+	// The combined calico image (from cmd/calico) bundles typha, apiserver,
+	// kube-controllers, dikastes, goldmane, guardian, whisker-backend,
+	// key-cert-provisioner, CSI, flexvol, webhooks, and the Linux CNI
+	// plugin. Those components no longer get independent entries.
+	// "calico" is listed in the pinned version file as a meta-component
+	// representing the product release, but it is filtered out by
+	// ImageComponents (see noImageComponents), so the expected maps below
+	// do not include it.
+	commonComponents := map[string]registry.Component{
+		"node":              {Version: "v3.31.0", Image: "node"},
+		"node-windows":      {Version: "v3.31.0", Image: "node-windows"},
+		"cni-windows":       {Version: "v3.31.0", Image: "cni-windows"},
+		"flannel":           {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+		"envoy-gateway":     {Version: "v3.31.0", Image: "envoy-gateway"},
+		"envoy-proxy":       {Version: "v3.31.0", Image: "envoy-proxy"},
+		"envoy-ratelimit":   {Version: "v3.31.0", Image: "envoy-ratelimit"},
+		"whisker":           {Version: "v3.31.0", Image: "whisker"},
+		"istio-install-cni": {Version: "v3.31.0", Image: "istio-install-cni"},
+		"istio-pilot":       {Version: "v3.31.0", Image: "istio-pilot"},
+		"istio-proxyv2":     {Version: "v3.31.0", Image: "istio-proxyv2"},
+		"istio-ztunnel":     {Version: "v3.31.0", Image: "istio-ztunnel"},
+	}
 	t.Run("without operator", func(t *testing.T) {
-		expectedComponents := map[string]registry.Component{
-			"typha":                        {Version: "v3.31.0", Image: "typha"},
-			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
-			"node":                         {Version: "v3.31.0", Image: "node"},
-			"cni":                          {Version: "v3.31.0", Image: "cni"},
-			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
-			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
-			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
-			"flannel":                      {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-			"flannel-migration-controller": {Version: "v3.31.0", Image: "flannel-migration-controller"},
-			"dikastes":                     {Version: "v3.31.0", Image: "dikastes"},
-			"envoy-gateway":                {Version: "v3.31.0", Image: "envoy-gateway"},
-			"envoy-proxy":                  {Version: "v3.31.0", Image: "envoy-proxy"},
-			"envoy-ratelimit":              {Version: "v3.31.0", Image: "envoy-ratelimit"},
-			"flexvol":                      {Version: "v3.31.0", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":         {Version: "v3.31.0", Image: "key-cert-provisioner"},
-			"test-signer":                  {Version: "v3.31.0", Image: "test-signer"},
-			"csi":                          {Version: "v3.31.0", Image: "csi"},
-			"csi-node-driver-registrar":    {Version: "v3.31.0", Image: "node-driver-registrar"},
-			"cni-windows":                  {Version: "v3.31.0", Image: "cni-windows"},
-			"node-windows":                 {Version: "v3.31.0", Image: "node-windows"},
-			"guardian":                     {Version: "v3.31.0", Image: "guardian"},
-			"webhooks":                     {Version: "v3.31.0", Image: "webhooks"},
-			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
-			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
-			"istio-install-cni":            {Version: "v3.31.0", Image: "istio-install-cni"},
-			"istio-pilot":                  {Version: "v3.31.0", Image: "istio-pilot"},
-			"istio-proxyv2":                {Version: "v3.31.0", Image: "istio-proxyv2"},
-			"istio-ztunnel":                {Version: "v3.31.0", Image: "istio-ztunnel"},
+		expectedComponents := map[string]registry.Component{}
+		for k, v := range commonComponents {
+			expectedComponents[k] = v
 		}
 		actualComponents := p.ImageComponents(false)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {
@@ -93,35 +89,10 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"typha":                        {Version: "v3.31.0", Image: "typha"},
-			"calicoctl":                    {Version: "v3.31.0", Image: "ctl"},
-			"node":                         {Version: "v3.31.0", Image: "node"},
-			"cni":                          {Version: "v3.31.0", Image: "cni"},
-			"apiserver":                    {Version: "v3.31.0", Image: "apiserver"},
-			"kube-controllers":             {Version: "v3.31.0", Image: "kube-controllers"},
-			"goldmane":                     {Version: "v3.31.0", Image: "goldmane"},
-			"flannel":                      {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-			"flannel-migration-controller": {Version: "v3.31.0", Image: "flannel-migration-controller"},
-			"dikastes":                     {Version: "v3.31.0", Image: "dikastes"},
-			"envoy-gateway":                {Version: "v3.31.0", Image: "envoy-gateway"},
-			"envoy-proxy":                  {Version: "v3.31.0", Image: "envoy-proxy"},
-			"envoy-ratelimit":              {Version: "v3.31.0", Image: "envoy-ratelimit"},
-			"flexvol":                      {Version: "v3.31.0", Image: "pod2daemon-flexvol"},
-			"key-cert-provisioner":         {Version: "v3.31.0", Image: "key-cert-provisioner"},
-			"test-signer":                  {Version: "v3.31.0", Image: "test-signer"},
-			"csi":                          {Version: "v3.31.0", Image: "csi"},
-			"csi-node-driver-registrar":    {Version: "v3.31.0", Image: "node-driver-registrar"},
-			"cni-windows":                  {Version: "v3.31.0", Image: "cni-windows"},
-			"node-windows":                 {Version: "v3.31.0", Image: "node-windows"},
-			"guardian":                     {Version: "v3.31.0", Image: "guardian"},
-			"webhooks":                     {Version: "v3.31.0", Image: "webhooks"},
-			"whisker":                      {Version: "v3.31.0", Image: "whisker"},
-			"whisker-backend":              {Version: "v3.31.0", Image: "whisker-backend"},
-			"istio-install-cni":            {Version: "v3.31.0", Image: "istio-install-cni"},
-			"istio-pilot":                  {Version: "v3.31.0", Image: "istio-pilot"},
-			"istio-proxyv2":                {Version: "v3.31.0", Image: "istio-proxyv2"},
-			"istio-ztunnel":                {Version: "v3.31.0", Image: "istio-ztunnel"},
-			"tigera/operator":              {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+			"tigera/operator": {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+		}
+		for k, v := range commonComponents {
+			expectedComponents[k] = v
 		}
 		actualComponents := p.ImageComponents(true)
 		if diff := cmp.Diff(expectedComponents, actualComponents); diff != "" {

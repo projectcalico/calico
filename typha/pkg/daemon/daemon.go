@@ -25,7 +25,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	log "github.com/sirupsen/logrus"
@@ -51,19 +50,11 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
 )
 
-const usage = `Typha, Calico's fan-out proxy.
+const DefaultConfigFile = "/etc/calico/typha.cfg"
 
-Usage:
-  calico-typha [options]
-
-Options:
-  -c --config-file=<filename>  Config file to load [default: /etc/calico/typha.cfg].
-  --version                    Print the version and exit.
-`
-
-// TyphaDaemon handles the lifecycle of the Typha process.  The main() function of the Typha executable
-// should simply call InitializeAndServeForever() to start the Typha server.  The lifecycle is broken out into
-// several individual methods for ease of testing.
+// TyphaDaemon handles the lifecycle of the Typha process. Use NewCommand() for the CLI
+// entry point, or call Run() directly for programmatic use. The lifecycle is broken out
+// into several individual methods for ease of testing.
 type TyphaDaemon struct {
 	BuildInfoLogCxt *log.Entry
 	ConfigFilePath  string
@@ -124,16 +115,23 @@ func New() *TyphaDaemon {
 	}
 }
 
-func (t *TyphaDaemon) InitializeAndServeForever(cxt context.Context) error {
+// Run starts the Typha daemon with the given config file path and blocks until shutdown.
+func (t *TyphaDaemon) Run(ctx context.Context, configFile string) error {
 	t.DoEarlyRuntimeSetup()
-	t.ParseCommandLineArgs(nil)
-	err := t.LoadConfiguration(cxt)
-	if err != nil { // Should only happen if context is canceled.
+	t.ConfigFilePath = configFile
+	t.BuildInfoLogCxt = log.WithFields(log.Fields{
+		"version":    buildinfo.Version,
+		"buildDate":  buildinfo.BuildDate,
+		"gitCommit":  buildinfo.GitRevision,
+		"GOMAXPROCS": runtime.GOMAXPROCS(0),
+	})
+	t.BuildInfoLogCxt.Info("Typha starting up")
+	if err := t.LoadConfiguration(ctx); err != nil {
 		return err
 	}
 	t.CreateServer()
-	t.Start(cxt)
-	t.WaitAndShutDown(cxt)
+	t.Start(ctx)
+	t.WaitAndShutDown(ctx)
 	return nil
 }
 
@@ -144,28 +142,16 @@ func (t *TyphaDaemon) DoEarlyRuntimeSetup() {
 	t.ConfigureEarlyLogging()
 }
 
-// ParseCommandLineArgs parses the command line args and either exits with a usage warning or stores the parsed
-// arguments on fields of the struct.
-func (t *TyphaDaemon) ParseCommandLineArgs(argv []string) {
-	// Parse command-line args.
-	version := "Version:            " + buildinfo.Version + "\n" +
-		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
-		"Build date:         " + buildinfo.BuildDate + "\n"
-	p := &docopt.Parser{OptionsFirst: false, SkipHelpFlags: false}
-	arguments, err := p.ParseArgs(usage, argv, version)
-	if err != nil {
-		println(usage)
-		log.Fatalf("Failed to parse usage, exiting: %v", err)
-	}
-	t.ConfigFilePath = arguments["--config-file"].(string)
+// SetConfigFilePath sets the config file path and initializes the build info log context.
+// Used by tests that need to configure the daemon without going through the CLI.
+func (t *TyphaDaemon) SetConfigFilePath(path string) {
+	t.ConfigFilePath = path
 	t.BuildInfoLogCxt = log.WithFields(log.Fields{
 		"version":    buildinfo.Version,
 		"buildDate":  buildinfo.BuildDate,
 		"gitCommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
-	t.BuildInfoLogCxt.Info("Typha starting up")
-	log.Infof("Command line arguments: %v", arguments)
 }
 
 // LoadConfiguration uses the command-line configuration and environment variables to load our configuration.
