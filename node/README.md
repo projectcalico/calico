@@ -64,26 +64,25 @@ For `k8s-test` Kubernetes tests, you will need to have `kubectl` setup on your m
 
 ## How can I run a subset of the tests?
 
-If you want to run tests for a specific package for more iterative development, you can filter down into a subset of tests using the following parameters:
-- For filtering `st` tests, use `ST_TO_RUN`
-- For filtering `k8s-test` tests, use `K8ST_TO_RUN`
+If you want to run tests for a specific package for more iterative development, you can filter down into a subset of the `k8s-test` tests using the following parameters:
+- `PYTEST_WHAT` - path to test files/directories (default: `tests/`)
+- `FOCUS` - pytest `-k` keyword expression to filter tests
+- `PYTEST_ARGS` - additional pytest arguments
 
-For example, the following only runs tests within the `bgp` subfolder of the `st` category:
+For example, the following only runs tests from a single file:
 ```
-make st ST_TO_RUN="tests/st/bgp/"
-```
-
-To only run tests from a single file (e.g. `test_bgp.py`), use the following:
-```
-make st ST_TO_RUN="tests/st/bgp/test_bgp.py"
+make kind-k8st-run-test PYTEST_WHAT="tests/test_bgp_advert.py"
 ```
 
-To only run a single test within a test file use the below syntax:
+To filter by keyword expression (pytest `-k`):
 ```
-make st ST_TO_RUN="tests/st/bgp/test_bgp.py:TestReadiness.test_readiness_multihost"
+make kind-k8st-run-test FOCUS="bgp"
 ```
 
-The above examples should apply in the same fashion if you are using `K8ST_TO_RUN` instead for the `k8s-test` category.
+To exclude slow tests:
+```
+make kind-k8st-run-test PYTEST_ARGS="-m 'not slow'"
+```
 
 ## How do I debug tests?
 There are a number of possible avenues you can use to debug failing tests.

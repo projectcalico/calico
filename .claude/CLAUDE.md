@@ -63,10 +63,10 @@ cd lib/httpmachinery && go test ./...
 make -C felix fv GINKGO_ARGS="-ginkgo.v"
 
 # Run specific FV tests by pattern
-make -C felix fv GINKGO_FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
+make -C felix fv FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
 
 # Felix FV in eBPF mode (BPF-SAFE tests only)
-make -C felix fv-bpf GINKGO_FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
+make -C felix fv-bpf FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
 
 # Felix FV in nftables mode
 make -C felix fv GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled
@@ -77,7 +77,7 @@ make -C felix fv GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled
 - Felix FV tests are in `felix/fv/`, using **Ginkgo v2** (`github.com/onsi/ginkgo/v2`)
 - Test IDs include all nested Context/Describe headings
 - **Always run FVs via Makefile** — builds required tooling and sets up permissions
-- Use `GINKGO_FOCUS="regex"` to target specific tests, `GINKGO_ARGS` for extra flags
+- Use `FOCUS="regex"` to target specific tests, `SKIP="regex"` to skip, `GINKGO_ARGS` for extra flags
 - Useful flags: `-ginkgo.dryRun` (list tests), `-ginkgo.v` (verbose), `FV_FELIX_LOG_LEVEL=debug`
 - **Prefer vanilla `go test` for new packages.** Only use Ginkgo if established pattern exists.
 - Felix "brain" is the calculation graph in `felix/calc/` — changes require calc graph "FV" tests (`felix/calc/calc_graph_fv_test.go`)
