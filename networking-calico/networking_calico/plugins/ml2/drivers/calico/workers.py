@@ -24,8 +24,13 @@ based on the trigger's class.
 
 import threading
 
+import eventlet.patcher
 from neutron.common import config
 from neutron_lib import worker
+from oslo_log import log
+
+
+LOG = log.getLogger(__name__)
 
 
 class CalicoStartupResyncWorker(worker.BaseWorker):
@@ -61,6 +66,16 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
         # process yet.  Having _stop_event exist from __init__ makes wait()
         # and stop() safe to call in any order.
         self._stop_event = threading.Event()
+        # Record whether eventlet has hijacked the underlying thread
+        # primitives.  threading.Event remains correct either way (it picks
+        # up whichever lock _thread provides), but logging this once gives
+        # us a tripwire for when neutron-server's eventlet monkey-patching
+        # changes - notably the planned eventlet removal, after which this
+        # should flip from True to False without any code change needed here.
+        LOG.info(
+            "CalicoStartupResyncWorker: eventlet thread monkey-patch = %s",
+            eventlet.patcher.is_monkey_patched("thread"),
+        )
 
     def start(self, name="calico-startup-resync", desc=None):
         super(CalicoStartupResyncWorker, self).start(name, desc)
