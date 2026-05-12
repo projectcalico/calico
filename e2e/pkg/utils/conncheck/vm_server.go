@@ -122,16 +122,35 @@ func (s *VMServer) noService(method string) Target {
 	return nil
 }
 
-func (s *VMServer) ClusterIPs(_ ...TargetOption) []Target       { _ = s.noService("ClusterIPs"); return nil }
-func (s *VMServer) ClusterIP(_ ...TargetOption) Target          { return s.noService("ClusterIP") }
-func (s *VMServer) ClusterIPv4(_ ...TargetOption) Target        { return s.noService("ClusterIPv4") }
-func (s *VMServer) ClusterIPv6(_ ...TargetOption) Target        { return s.noService("ClusterIPv6") }
+func (s *VMServer) ClusterIPs(_ ...TargetOption) []Target {
+	_ = s.noService("ClusterIPs")
+	return nil
+}
+
+func (s *VMServer) ClusterIP(_ ...TargetOption) Target {
+	return s.noService("ClusterIP")
+}
+
+func (s *VMServer) ClusterIPv4(_ ...TargetOption) Target {
+	return s.noService("ClusterIPv4")
+}
+
+func (s *VMServer) ClusterIPv6(_ ...TargetOption) Target {
+	return s.noService("ClusterIPv6")
+}
+
 func (s *VMServer) NodePortPort() int {
 	framework.Failf("VMServer %s: NodePortPort requires a Service", s.ID())
 	return 0
 }
-func (s *VMServer) NodePort(_ string, _ ...TargetOption) Target { return s.noService("NodePort") }
-func (s *VMServer) ServiceDomain(_ ...TargetOption) Target      { return s.noService("ServiceDomain") }
+
+func (s *VMServer) NodePort(_ string, _ ...TargetOption) Target {
+	return s.noService("NodePort")
+}
+
+func (s *VMServer) ServiceDomain(_ ...TargetOption) Target {
+	return s.noService("ServiceDomain")
+}
 
 // HostPorts returns one target per host IP of the launcher pod at the given port.
 func (s *VMServer) HostPorts(port int) []Target {

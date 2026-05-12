@@ -102,13 +102,7 @@ func (t *target) GetProtocol() Protocol {
 // String returns a human-readable name for the target.
 func (t *target) String() string {
 	if t.server != nil {
-		var idTag string
-		if p := t.server.Pod(); p != nil {
-			idTag = fmt.Sprintf("%s/%s", p.Namespace, p.Name)
-		} else {
-			idTag = t.server.ID()
-		}
-		chunks := []string{idTag}
+		chunks := []string{t.server.ID()}
 		if t.destination != "" {
 			chunks = append(chunks, t.destination)
 		}
