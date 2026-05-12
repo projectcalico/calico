@@ -109,10 +109,11 @@ REGISTRAR_CREATED=.registrar.created-$(ARCH)
 .PHONY: registrar-image
 registrar-image: $(REGISTRAR_CREATED)
 
-$(REGISTRAR_CREATED): clone-registrar-upstream
+$(REGISTRAR_CREATED): clone-registrar-upstream $(KO)
 	cp registrar.ko.yaml $(REGISTRAR_IMAGE)/.ko.yaml
 	cd $(REGISTRAR_IMAGE) && \
-		KO_DOCKER_REPO=$(REGISTRAR_IMAGE) ko build \
+		GOTOOLCHAIN=$(GOTOOLCHAIN) \
+		KO_DOCKER_REPO=$(REGISTRAR_IMAGE) $(KO) build \
 		    --local --bare \
 		    --platform=linux/$(ARCH) \
 		    --tags=latest-$(ARCH) \

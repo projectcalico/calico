@@ -100,9 +100,10 @@ image: $(CONTAINER_MARKER)
 # bin/ artifact involved. Note: the resulting image lacks the calicoctl /
 # calico-ipam symlinks the old Dockerfile created in /usr/bin — invoke as
 # `calico ctl ...` and `calico-ipam` (host CNI install path) instead.
-$(CONTAINER_MARKER):
+$(CONTAINER_MARKER): $(KO)
 	GIT_DESCRIPTION=$(GIT_DESCRIPTION) DATE=$(DATE) GIT_COMMIT=$(GIT_COMMIT) \
-	KO_DOCKER_REPO=$(CALICO_IMAGE) ko build \
+	GOTOOLCHAIN=$(GOTOOLCHAIN) \
+	KO_DOCKER_REPO=$(CALICO_IMAGE) $(KO) build \
 	    --local --bare \
 	    --platform=linux/$(ARCH) \
 	    --tags=$(IMAGE_TAG)-$(ARCH) \

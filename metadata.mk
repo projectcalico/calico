@@ -21,6 +21,7 @@ GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.20.2
 KINDEST_NODE_VERSION=v1.35.1
 KIND_VERSION=v0.31.0
+KO_VERSION=v0.18.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.

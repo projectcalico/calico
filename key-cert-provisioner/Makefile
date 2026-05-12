@@ -35,8 +35,9 @@ SIGNER_CREATED=.signer.created-$(ARCH)
 .PHONY: image
 image: $(SIGNER_CREATED)
 
-$(SIGNER_CREATED):
-	KO_DOCKER_REPO=$(TEST_SIGNER_IMAGE) ko build \
+$(SIGNER_CREATED): $(KO)
+	GOTOOLCHAIN=$(GOTOOLCHAIN) \
+	KO_DOCKER_REPO=$(TEST_SIGNER_IMAGE) $(KO) build \
 	    --local --bare \
 	    --platform=linux/$(ARCH) \
 	    --tags=latest-$(ARCH) \
