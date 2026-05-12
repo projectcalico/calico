@@ -108,8 +108,10 @@ wsrep_node_name = pxc1
 wsrep_provider_options = "base_port=4567"
 wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:4444
-# Credentials xtrabackup uses when this node serves as the SST donor.
-wsrep_sst_auth = root:${DATABASE_PASSWORD}
+
+# Note: wsrep_sst_auth was removed in PXC 8.0.34 -- SST now uses the
+# auto-provisioned mysql.pxc.sst.user system account, so we don't set
+# it here.  Setting it would cause an "unknown variable" abort.
 
 # Default wsrep_sync_wait = 0 -- causality NOT enforced.  This is the
 # real-world default and the configuration that exposes the bug.
@@ -128,12 +130,24 @@ pxc_strict_mode = PERMISSIVE
 # PXC 8.0 defaults pxc-encrypt-cluster-traffic = ON, which would require
 # pre-shared SSL certs across all 3 nodes.  Without that, each mysqld
 # auto-generates its own per-node certs that don't match, so SST fails.
-# Disabled for this single-host test setup.
-pxc-encrypt-cluster-traffic = OFF
+# Disabled for this single-host test setup.  The "loose-" prefix means
+# an unrecognised option becomes a warning instead of a fatal abort.
+loose-pxc-encrypt-cluster-traffic = OFF
 EOF
 
 # Bring node 1 up as the cluster primary using PXC's bootstrap unit.
-sudo systemctl start mysql@bootstrap.service
+# If the start command itself fails (e.g. mysqld aborts during config
+# parsing), dump diagnostics before the script exits via set -e.
+if ! sudo systemctl start mysql@bootstrap.service; then
+    echo "mysql@bootstrap.service failed to start.  Diagnostic dumps follow:"
+    echo "----- /var/log/mysql/error.log (last 200 lines) -----"
+    sudo tail -200 /var/log/mysql/error.log 2>&1 || echo "(no error log)"
+    echo "----- systemctl status mysql@bootstrap.service -----"
+    sudo systemctl status mysql@bootstrap.service --no-pager -l || true
+    echo "----- journalctl -u mysql@bootstrap.service (last 100 lines) -----"
+    sudo journalctl -u mysql@bootstrap.service -n 100 --no-pager || true
+    exit 1
+fi
 
 # Wait for node 1 to be Synced.
 for i in $(seq 1 30); do
@@ -147,7 +161,14 @@ for i in $(seq 1 30); do
     echo "Waiting for node 1 to reach Synced (currently '${state}'), attempt $i/30"
     sleep 2
 done
-[ "${state}" = "Synced" ] || { echo "Node 1 failed to sync"; exit 1; }
+if [ "${state}" != "Synced" ]; then
+    echo "Node 1 failed to sync.  Diagnostic dumps follow:"
+    echo "----- /var/log/mysql/error.log (last 200 lines) -----"
+    sudo tail -200 /var/log/mysql/error.log 2>&1 || echo "(no error log)"
+    echo "----- systemctl status mysql@bootstrap.service -----"
+    sudo systemctl status mysql@bootstrap.service --no-pager -l || true
+    exit 1
+fi
 
 # Set the root password so DevStack (and HAProxy clients) can authenticate.
 # PXC 8 with auth_socket on root@localhost lets us issue this without a
@@ -197,14 +218,13 @@ wsrep_node_name = pxc${N}
 wsrep_provider_options = "base_port=${BASE_PORT}"
 wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:${SST_PORT}
-wsrep_sst_auth = root:${DATABASE_PASSWORD}
 wsrep_sync_wait = 0
 
 binlog_format = ROW
 default_storage_engine = InnoDB
 innodb_autoinc_lock_mode = 2
 pxc_strict_mode = PERMISSIVE
-pxc-encrypt-cluster-traffic = OFF
+loose-pxc-encrypt-cluster-traffic = OFF
 EOF
 
     sudo tee /etc/systemd/system/${UNIT} >/dev/null <<EOF
