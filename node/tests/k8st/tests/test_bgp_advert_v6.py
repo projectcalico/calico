@@ -512,8 +512,8 @@ spec:
     action: Reject
 EOF
 """)
-        kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
-        self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
+        kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
+        self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
         self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-1"))
 
         # Assert that local clusterIP is no longer advertised.
@@ -692,7 +692,7 @@ metadata:
     app: nginx
     run: nginx-rr
   annotations:
-    metallb.universe.tf/loadBalancerIPs: fdff::96
+    projectcalico.org/loadBalancerIPs: '["fdff::96"]'
 spec:
   ipFamilies:
   - IPv6
@@ -703,6 +703,7 @@ spec:
     app: nginx
     run: nginx-rr
   type: LoadBalancer
+  loadBalancerClass: calico
   loadBalancerIP: fdff::96
   externalTrafficPolicy: Local
 EOF

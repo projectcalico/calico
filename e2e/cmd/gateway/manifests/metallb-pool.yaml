@@ -1,16 +1,18 @@
-# Gateway API conformance metallb IPAddressPool.
+# Gateway API conformance metallb IPAddressPool (L2 mode).
 #
-# Calico's default metallb pool (hack/test/kind/infra/metallb-config.yaml)
-# uses BGP advertisement with public-IP addresses (80.15.0.0/24). Those IPs
-# get programmed as routes inside the cluster via Calico's BGP fan-out, so
-# in-cluster pods can reach them, but the Gateway API conformance test
-# binary runs from the host (Semaphore VM or developer laptop) where there
-# is no BGP session and so the IPs aren't reachable.
+# Calico's default LoadBalancer IP pools (hack/test/kind/infra/calico-lb-pools.yaml,
+# 80.15.0.0/24 + fdff::/64) are advertised via BGP through confd, gated on each
+# test's BGPConfiguration.serviceLoadBalancerIPs allow-list. Those IPs are
+# reachable inside the cluster via Calico's BGP fan-out, but the Gateway API
+# conformance test binary runs from the host (Semaphore VM or developer
+# laptop) where there is no BGP session and so the IPs aren't reachable.
 #
-# This file adds a SECOND, namespace-scoped pool in L2 mode whose addresses
-# come from the kind docker bridge subnet. Hosts have a direct route to
-# that bridge, so LB IPs land on the bridge and are reachable from the
-# test runner without any BGP fan-out.
+# This file adds a namespace-scoped L2-mode pool whose addresses come from the
+# kind docker bridge subnet. Hosts have a direct route to that bridge, so LB
+# IPs land on the bridge and are reachable from the test runner via metallb's
+# L2 speaker ARP-ing for the IP. No Calico component announces LB IPs on L2
+# today (kube-controllers' loadbalancer controller is IPAM-only; confd is BGP
+# only) — metallb's speaker is the only L2 announcer available.
 #
 # The address range placeholder below is substituted at apply time by
 # `make e2e-gateway-setup`, which queries `docker network inspect kind`
