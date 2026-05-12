@@ -96,6 +96,23 @@ var NetkitEgressMapParameters = maps.MapParameters{
 	Version:    2,
 }
 
+// PolicyJumpMapName returns the pinned name of the policy program jump map for
+// the given attach mode (netkit vs TC/TCX) and direction ("ingress"/"egress").
+// Each direction lives in its own prog_array, so picking the wrong one returns
+// indices from the wrong namespace.
+func PolicyJumpMapName(netkit bool, ingressOrEgress string) string {
+	switch {
+	case netkit && ingressOrEgress == "egress":
+		return NetkitEgressMapParameters.VersionedName()
+	case netkit:
+		return NetkitIngressMapParameters.VersionedName()
+	case ingressOrEgress == "egress":
+		return EgressMapParameters.VersionedName()
+	default:
+		return IngressMapParameters.VersionedName()
+	}
+}
+
 func NetkitMaps() []maps.Map {
 	return []maps.Map{
 		maps.NewPinnedMap(NetkitIngressMapParameters),

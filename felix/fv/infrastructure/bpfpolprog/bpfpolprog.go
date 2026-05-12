@@ -48,19 +48,7 @@ func NumPolProgramsTotalByEntryPointFn(f *infrastructure.Felix, entryPointIdx in
 
 func NumPolProgramsByEntryPoint(f *infrastructure.Felix, entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
 	gapSeen := false
-	var jmpMapName string
-	if infrastructure.NetkitMode() {
-		jmpMapName = jump.NetkitEgressMapParameters.VersionedName()
-		if ingressOrEgress == "egress" {
-			jmpMapName = jump.NetkitIngressMapParameters.VersionedName()
-		}
-	} else {
-		jmpMapName = jump.EgressMapParameters.VersionedName()
-		if ingressOrEgress == "egress" {
-			jmpMapName = jump.IngressMapParameters.VersionedName()
-		}
-	}
-	pinnedMap := "/sys/fs/bpf/tc/globals/" + jmpMapName
+	pinnedMap := "/sys/fs/bpf/tc/globals/" + jump.PolicyJumpMapName(infrastructure.NetkitMode(), ingressOrEgress)
 	for i := range jump.MaxSubPrograms {
 		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
 		out, err := f.ExecOutput(
