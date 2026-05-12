@@ -75,3 +75,7 @@ promotions:
     pipeline_file: push-images/istio.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push nftables RPM images
+    pipeline_file: push-images/nft-rpms.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"

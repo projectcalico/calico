@@ -274,7 +274,7 @@ var _ = describe.CalicoDescribe(
 			nodeNames []string
 			nodeIPs   []string
 			tunnelIPs []string
-			dp        clusterDataplane
+			dp        utils.ClusterDataplane
 		)
 
 		BeforeEach(func() {
@@ -299,7 +299,7 @@ var _ = describe.CalicoDescribe(
 			tunnelIPs = allTunnelIPs[:3]
 			logrus.Infof("Nodes: %v IPs: %v tunnelIPs: %v", nodeNames, nodeIPs, tunnelIPs)
 
-			dp = detectDataplane(cli, f.ClientSet)
+			dp = utils.DetectDataplane(cli, f.ClientSet)
 			logrus.Infof("Cluster dataplane: calico=%s BPF=%v IPVS=%v VPP=%v",
 				dp.Calico, dp.IsBPF(), dp.IsIPVS(), dp.IsVPP())
 		})

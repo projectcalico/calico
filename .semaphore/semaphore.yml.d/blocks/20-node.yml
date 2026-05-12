@@ -41,6 +41,7 @@
     when: "${CHANGE_IN(node)}"
   dependencies:
     - Prerequisites
+    - "Build: nftables RPMs"
   task:
     prologue:
       commands:
@@ -54,6 +55,13 @@
               - ppc64le
               - s390x
         commands:
+          # Load the per-arch patched nftables RPMs producer image (built/cached
+          # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
+          # resolves locally without re-pulling from Docker Hub.
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+          - zstd -d --rm /tmp/nft-rpms.tar.zst
+          - docker load -i /tmp/nft-rpms.tar
+          - rm -f /tmp/nft-rpms.tar
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
       - name: "Node: build Windows archive"
         commands:
