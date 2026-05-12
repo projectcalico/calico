@@ -2,7 +2,7 @@ include ../../metadata.mk
 
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-ratelimit
 
-ENVOY_RATELIMIT_IMAGE ?= envoy-ratelimit
+ENVOY_RATELIMIT_IMAGE ?= calico/envoy-ratelimit
 BUILD_IMAGES ?= $(ENVOY_RATELIMIT_IMAGE)
 
 # For updating this version please see

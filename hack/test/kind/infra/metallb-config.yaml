@@ -1,13 +1,30 @@
-apiVersion: v1
-kind: ConfigMap
+# Default cluster-wide LoadBalancer pool, advertised via BGP.
+#
+# These addresses get programmed as routes inside the cluster by Calico's
+# BGP fan-out, so in-cluster pods can reach them. They are NOT routable
+# from the host (no BGP session there); tests that need to reach LB IPs
+# from the host bring their own L2-mode pool — see for example
+# e2e/cmd/gateway/manifests/metallb-pool.yaml, applied by
+# `make e2e-gateway-setup`.
+#
+# Migrated from the legacy ConfigMap-driven config to CRDs as part of the
+# metallb v0.14.9 upgrade. The address ranges and BGP semantics are
+# preserved verbatim from the previous ConfigMap.
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
 metadata:
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: bgp
-      addresses:
-      - 80.15.0.0/24
-      - fdff::/64
+  name: default
+spec:
+  addresses:
+    - 80.15.0.0/24
+    - fdff::/64
+---
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  namespace: metallb-system
+  name: default
+spec:
+  ipAddressPools:
+    - default
