@@ -6,8 +6,8 @@
 #
 # Reproduction runner for the QoS resync Galera causality bug.
 #
-# Prerequisite: galera_setup.sh must have already been run successfully
-# on this host.  This script:
+# Prerequisite: pxc_setup.sh must have already been run successfully on
+# this host (it's called from bootstrap.sh before stack.sh).  This script:
 #
 #   1. Throttles MariaDB Galera node 3's CPU to widen its apply lag,
 #      so reads landing on node 3 are more likely to miss a recently
@@ -28,8 +28,8 @@ DEVSTACK_DIR=${DEVSTACK_DIR:-/opt/stack/devstack}
 ITERATIONS=${CALICO_GALERA_ITERATIONS:-100}
 CPU_LIMIT_PCT=${CPU_LIMIT_PCT:-10}
 
-if ! systemctl is-active --quiet mariadb-galera3; then
-    echo "ERROR: mariadb-galera3 is not running.  Run galera_setup.sh first."
+if ! systemctl is-active --quiet mysql-pxc3; then
+    echo "ERROR: mysql-pxc3 is not running.  Run pxc_setup.sh first."
     exit 1
 fi
 
@@ -37,16 +37,16 @@ if ! command -v cpulimit >/dev/null 2>&1; then
     sudo apt-get install -y cpulimit
 fi
 
-NODE3_PID=$(systemctl show -p MainPID --value mariadb-galera3)
+NODE3_PID=$(systemctl show -p MainPID --value mysql-pxc3)
 if [ -z "${NODE3_PID}" ] || [ "${NODE3_PID}" = "0" ]; then
-    echo "ERROR: could not find MainPID for mariadb-galera3"
+    echo "ERROR: could not find MainPID for mysql-pxc3"
     exit 1
 fi
-echo "Node 3 mariadbd PID = ${NODE3_PID}"
+echo "Node 3 mysqld PID = ${NODE3_PID}"
 
 # cpulimit throttles by sending SIGSTOP/SIGCONT to the target.  HAProxy's
 # basic TCP check stays satisfied because the kernel still accepts the
-# connection, but the userspace mariadbd apply thread falls behind.
+# connection, but the userspace mysqld apply thread falls behind.
 sudo cpulimit -l "${CPU_LIMIT_PCT}" -p "${NODE3_PID}" >/dev/null 2>&1 &
 CPULIMIT_PID=$!
 echo "cpulimit ${CPULIMIT_PID} throttling node 3 to ${CPU_LIMIT_PCT}% CPU"

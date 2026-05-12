@@ -668,9 +668,9 @@ class GaleraQoSResyncTest(QoSResyncTest):
     """Long-running variant for reproducing the Galera causality-gap bug.
 
     Run this only against a Galera-backed Neutron DB (see
-    ``galera_setup.sh`` for how to stand one up on top of a normal
-    DevStack).  The test creates a VM with a port-level QoS policy, then
-    loops:
+    ``pxc_setup.sh`` for the Percona XtraDB Cluster that bootstrap.sh
+    stands up before DevStack runs).  The test creates a VM with a
+    port-level QoS policy, then loops:
 
       1. Touch a rule in the attached policy.  Even a no-op-value
          ``update_qos_bandwidth_limit_rule`` issues a DB UPDATE that
