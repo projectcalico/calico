@@ -664,5 +664,70 @@ class QoSResyncTest(QoSResponsivenessTest):
         self._verify_wep_qos(port_id, state)
 
 
+class GaleraQoSResyncTest(QoSResyncTest):
+    """Long-running variant for reproducing the Galera causality-gap bug.
+
+    Run this only against a Galera-backed Neutron DB (see
+    ``galera_setup.sh`` for how to stand one up on top of a normal
+    DevStack).  The test creates a VM with a port-level QoS policy, then
+    loops:
+
+      1. Touch a rule in the attached policy.  Even a no-op-value
+         ``update_qos_bandwidth_limit_rule`` issues a DB UPDATE that
+         needs Galera replication.
+      2. Sleep long enough for at least one periodic resync cycle to
+         fire.
+      3. Verify the WEP's ``qosControls`` still match the original
+         rule's controls.
+
+    On vanilla single-node MariaDB every iteration passes.  On Galera,
+    if the suspected causality-gap bug fires, the resync's transaction-
+    less read of the rules table can miss the most recent write on a
+    different node, ``add_port_qos`` produces an empty qos dict, and the
+    WEP is rewritten with ``qosControls`` stripped.  ``_verify_wep_qos``
+    then fails on the affected iteration.
+    """
+
+    ITERATIONS = int(os.environ.get("CALICO_GALERA_ITERATIONS", "100"))
+
+    def test_resync_under_galera_churn(self):
+        rule = self.qos_rules[0]
+        state = {
+            "port_qos_name": "A",
+            "port_qos_rules": [rule],
+            "net_qos_name": None,
+            "net_qos_rules": [],
+        }
+        port_id = self._create_initial_state(state)
+        self._verify_wep_qos(port_id, state)
+
+        policy = self.conn.network.find_qos_policy("test-qos-policyA")
+        rule_id = policy.rules[0]["id"]
+        max_kbps = rule["rule"]["max_kbps"]
+        max_burst_kbps = rule["rule"]["max_burst_kbps"]
+
+        for i in range(self.ITERATIONS):
+            logger.info(f"Galera churn iteration {i+1}/{self.ITERATIONS}")
+            # Generate a DB write on the rules table.  Updating to the
+            # same values still triggers an UPDATE that needs Galera
+            # replication, so a read on a lagged node within the
+            # certification gap can miss it.
+            self.conn.network.update_qos_bandwidth_limit_rule(
+                rule_id,
+                policy.id,
+                max_kbps=max_kbps,
+                max_burst_kbps=max_burst_kbps,
+            )
+            time.sleep(self.RESYNC_INTERVAL_SECS * 1.5)
+            try:
+                self._verify_wep_qos(port_id, state)
+            except AssertionError:
+                logger.error(
+                    "qosControls divergence on iteration "
+                    f"{i+1}/{self.ITERATIONS} — Galera causality bug reproduced"
+                )
+                raise
+
+
 if __name__ == "__main__":
     unittest.main()

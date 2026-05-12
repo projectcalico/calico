@@ -109,9 +109,11 @@ cd
 mkdir -p devstack-bootstrap
 cd devstack-bootstrap
 
-# Ensure that Git is installed.
+# Ensure that Git, crudini, and the packages galera_setup.sh / galera_repro.sh
+# need are installed.  The Galera/HAProxy/cpulimit packages are inert until
+# galera_setup.sh actually runs.
 sudo apt-get update
-sudo apt-get -y install git
+sudo apt-get -y install git crudini galera-4 haproxy cpulimit
 
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
