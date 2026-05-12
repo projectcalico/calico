@@ -50,6 +50,15 @@ func (e *Client) IP() string {
 	return e.IPs()[0]
 }
 
+// SSHIP returns the address used to ssh to the external node.
+func (e *Client) SSHIP() string { return e.extIP }
+
+// SSHUser returns the ssh user.
+func (e *Client) SSHUser() string { return e.extUser }
+
+// SSHKeyPath returns the path to the private key used for ssh.
+func (e *Client) SSHKeyPath() string { return e.extKey }
+
 func (e *Client) IPs() []string {
 	e.lock.Lock()
 	defer e.lock.Unlock()
