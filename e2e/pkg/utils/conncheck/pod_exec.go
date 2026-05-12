@@ -53,6 +53,9 @@ func execShellInPod(pod *v1.Pod, cmd string) (string, error) {
 // triggers the streamWrapper reaper to SIGTERM the child) and waits for the
 // stream to drain.
 func execStreamInPod(ctx context.Context, pod *v1.Pod, command []string, w io.Writer) (func() error, error) {
+	if windows.ClusterIsWindows() {
+		return nil, fmt.Errorf("execStreamInPod: streaming probes are not supported on Windows pods")
+	}
 	if len(pod.Spec.Containers) == 0 {
 		return nil, fmt.Errorf("execStreamInPod: pod %s/%s has no containers", pod.Namespace, pod.Name)
 	}

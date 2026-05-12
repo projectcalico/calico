@@ -93,9 +93,12 @@ func (s *VMServer) WaitReady(ctx context.Context, f *framework.Framework) error 
 func (s *VMServer) resolveLauncher(ctx context.Context, f *framework.Framework) error {
 	deadline := time.Now().Add(podReadyTimeout(ctx))
 	selector := fmt.Sprintf("%s=%s", kubevirtv1.CreatedByLabel, string(s.vmi.UID))
+	var lastErr error
 	for {
 		pods, err := f.ClientSet.CoreV1().Pods(s.namespace.Name).List(ctx, metav1.ListOptions{LabelSelector: selector})
-		if err == nil {
+		if err != nil {
+			lastErr = err
+		} else {
 			for i := range pods.Items {
 				p := &pods.Items[i]
 				if p.DeletionTimestamp != nil {
@@ -106,6 +109,9 @@ func (s *VMServer) resolveLauncher(ctx context.Context, f *framework.Framework) 
 			}
 		}
 		if time.Now().After(deadline) {
+			if lastErr != nil {
+				return fmt.Errorf("VMServer %s: launcher pod not found via %q (last list error: %w)", s.ID(), selector, lastErr)
+			}
 			return fmt.Errorf("VMServer %s: launcher pod not found via %q", s.ID(), selector)
 		}
 		select {

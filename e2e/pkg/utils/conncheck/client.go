@@ -171,6 +171,7 @@ func (c *PodClient) Cleanup(ctx context.Context, f *framework.Framework) error {
 	if err := e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, c.pod.Name, c.pod.Namespace, deletionTimeout); err != nil {
 		return err
 	}
+	c.pod = nil
 	return nil
 }
 

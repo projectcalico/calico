@@ -607,12 +607,16 @@ func logDiagsForConnection(f *framework.Framework, res connectionResult) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, fmt.Sprintf("%s-container", pod.Name))
+	container := ""
+	if len(pod.Spec.Containers) > 0 {
+		container = pod.Spec.Containers[0].Name
+	}
+	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
 		logrus.WithError(err).Error("Error getting container logs")
 	}
 	logrus.Infof("[DIAGS] Pod %s/%s logs:\n%s", pod.Namespace, pod.Name, logs)
-	prevLogs, err := e2epod.GetPreviousPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, fmt.Sprintf("%s-container", pod.Name))
+	prevLogs, err := e2epod.GetPreviousPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
 		logrus.WithError(err).Error("Error getting prev container logs")
 	}
@@ -857,9 +861,17 @@ func (c *checkpointer) ExpectNoDisruption(reason string, opts ...DisruptionOptio
 		break
 	}
 
+	if len(keys) == 0 {
+		framework.Fail(fmt.Sprintf("ExpectNoDisruption %s: no probe results captured. Did probes start?", reason), 2)
+	}
+
 	var problems []string
 	for _, k := range keys {
 		series := byTarget[k]
+		if len(series) == 0 {
+			problems = append(problems, fmt.Sprintf("target %s: no probe results captured", k))
+			continue
+		}
 		if cfg.lossSet {
 			consec := 0
 			worst := 0

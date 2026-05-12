@@ -162,12 +162,14 @@ func (s *PodServer) Cleanup(ctx context.Context, f *framework.Framework) error {
 		if err := e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, s.pod.Name, s.pod.Namespace, deletionTimeout); err != nil {
 			return err
 		}
+		s.pod = nil
 	}
 	if s.service != nil {
 		err := f.ClientSet.CoreV1().Services(s.namespace.Name).Delete(ctx, s.service.Name, metav1.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
+		s.service = nil
 	}
 	return nil
 }
