@@ -70,7 +70,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # exec-into-pod step (RunHostCmd, etc.), so kubectl must be on PATH inside
   # the runner. Fetch a K8S_VERSION-pinned binary via the repo's `make
   # kubectl` target; it lands in hack/test/kind/ which is bind-mounted into
-  # the container, and we prepend that to PATH below.
+  # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
@@ -82,7 +82,6 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
-    -e PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
@@ -90,6 +89,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
     bash -c "${PRE_RUN} && \
+      export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:\$PATH && \
       git config --global --add safe.directory '*' && \
       make e2e-run \
         KUBECONFIG=/kubeconfig \
