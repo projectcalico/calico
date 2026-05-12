@@ -12,3 +12,4 @@ v1_crd_projectcalico_org.yaml linguist-generated=true
 calico-v3-crds.yaml           linguist-generated=true
 calicoctl.yaml                linguist-generated=true
 flannel-migration/calico.yaml linguist-generated=true
+tigera-operator-ocp-upgrade.yaml linguist-generated=true
