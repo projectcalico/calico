@@ -367,7 +367,7 @@ var _ = describe.CalicoDescribe(
 		// buildTarget returns the connection target for the given scenario, using the
 		// already-deployed server. All targets use HTTP GET /clientip so that
 		// checkConnection can verify SNAT behavior from the response body.
-		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
+		buildTarget := func(s ingressScenario, server conncheck.Server) conncheck.Target {
 			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			switch s.dest {
 			case "clusterIP":
