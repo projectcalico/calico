@@ -219,7 +219,10 @@ EOF
 # it appears there is something in the stack.sh setup that closes stdin, and that means that bash
 # doesn't read any further commands from stdin after the exit of the ./stack.sh line.
 
-# Run QoS responsiveness tests
+# Run QoS responsiveness tests against the vanilla single-MariaDB setup
+# first.  Explicitly enumerate the test classes so GaleraQoSResyncTest
+# is excluded -- it's a separate, longer run that needs galera_setup.sh
+# to have promoted the DB into a multi-node Galera cluster first.
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 
@@ -231,7 +234,24 @@ cd /opt/stack/devstack
 sudo pip install openstacksdk etcd3
 
 export ETCD_HOST=${SERVICE_HOST}
-python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
+python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v \
+    QoSResponsivenessTest QoSResyncTest
+EOF
+
+# Promote DevStack's MariaDB into a 3-node Galera cluster and repoint
+# Neutron's [database]connection at HAProxy fronting it.  Then run the
+# Galera-specific resync repro test under CPU throttle on node 3.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+bash /opt/stack/calico/networking-calico/devstack/galera_setup.sh
+EOF
+
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+export ETCD_HOST=${SERVICE_HOST}
+bash /opt/stack/calico/networking-calico/devstack/galera_repro.sh
 EOF
 
 # Run Tempest tests
