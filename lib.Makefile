@@ -1729,14 +1729,6 @@ $(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
 $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
 
-# Operator is built from a separate repo/branch. It only needs
-# calico_versions.yml (a static file with version strings), not the
-# actual built images, so it can run in parallel with component builds.
-# Track the operator source selection in a generated inputs file so
-# changes to repo/branch invalidate the operator stamp.
-.PHONY: FORCE
-FORCE:
-
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
 # kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
