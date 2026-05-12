@@ -61,14 +61,15 @@ DEBCONF
         sudo dpkg -i /tmp/percona-release.deb
     fi
     sudo percona-release setup pxc-80
+    # PXC 8.0 no longer supports rsync SST -- it forces xtrabackup-v2 -- so
+    # we need percona-xtrabackup-80 as well.  That package lives in the
+    # separate pxb-80 repo, which `setup pxc-80` does NOT enable (`setup`
+    # is selective: it disables all other Percona repos).  Use `enable` to
+    # add pxb-80 alongside.
+    sudo percona-release enable pxb-80 release
     sudo apt-get update
-    # The percona-xtradb-cluster meta-package handles its own xtrabackup
-    # dependency.  We don't specify the version explicitly because Percona
-    # has shipped it under various names (percona-xtrabackup-80, -81, -84)
-    # and "Unable to locate package" would fail the whole install.  We use
-    # wsrep_sst_method=rsync anyway, so xtrabackup is only needed for the
-    # meta-package's dependency closure.
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y percona-xtradb-cluster
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        percona-xtradb-cluster percona-xtrabackup-80
 fi
 
 # Install HAProxy if not already present (separate from PXC packages).
@@ -105,7 +106,7 @@ wsrep_cluster_address = ${CLUSTER_ADDRESS}
 wsrep_node_address = 127.0.0.1
 wsrep_node_name = pxc1
 wsrep_provider_options = "base_port=4567"
-wsrep_sst_method = rsync
+wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:4444
 
 # Default wsrep_sync_wait = 0 -- causality NOT enforced.  This is the
@@ -186,7 +187,7 @@ wsrep_cluster_address = ${CLUSTER_ADDRESS}
 wsrep_node_address = 127.0.0.1
 wsrep_node_name = pxc${N}
 wsrep_provider_options = "base_port=${BASE_PORT}"
-wsrep_sst_method = rsync
+wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:${SST_PORT}
 wsrep_sync_wait = 0
 
