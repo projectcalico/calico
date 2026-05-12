@@ -1209,6 +1209,45 @@ blocks:
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+  - name: "E2E tests: Gateway API Conformance"
+    run:
+      when: >-
+        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
+      jobs:
+        - name: "Gateway API: Conformance Tests"
+          commands:
+            # Build the runner, bring up kind+Calico, deploy Envoy Gateway,
+            # run the upstream conformance suite, emit ./report/. Each step
+            # is defined in the root Makefile so this YAML and a local
+            # invocation stay in lockstep.
+            - .semaphore/run-and-monitor gateway-conformance.log make e2e-test-gateway-conformance
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+            - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
+            # Permanent copy in GCS for upstream submission and historical
+            # comparison. Semaphore's job artifacts are GC'd after ~30 days,
+            # which isn't long enough for "go fish out the v3.30 report next
+            # year". PRs are skipped — their Semaphore artifact is plenty,
+            # and PR runs would otherwise flood the bucket.
+            - |-
+              if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
+                ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
+                sha="${SEMAPHORE_GIT_SHA:0:12}"
+                dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+                echo "Publishing conformance report to ${dst}"
+                gcloud storage cp ./report/* "${dst}" || true
+              fi
   - name: Goldmane
     run:
       when: "true"
