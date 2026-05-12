@@ -108,6 +108,8 @@ wsrep_node_name = pxc1
 wsrep_provider_options = "base_port=4567"
 wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:4444
+# Credentials xtrabackup uses when this node serves as the SST donor.
+wsrep_sst_auth = root:${DATABASE_PASSWORD}
 
 # Default wsrep_sync_wait = 0 -- causality NOT enforced.  This is the
 # real-world default and the configuration that exposes the bug.
@@ -122,6 +124,12 @@ innodb_autoinc_lock_mode = 2
 # things PXC considers unsafe, like CREATE TABLE without explicit PK)
 # can operate.  TODO: confirm customer's value.
 pxc_strict_mode = PERMISSIVE
+
+# PXC 8.0 defaults pxc-encrypt-cluster-traffic = ON, which would require
+# pre-shared SSL certs across all 3 nodes.  Without that, each mysqld
+# auto-generates its own per-node certs that don't match, so SST fails.
+# Disabled for this single-host test setup.
+pxc-encrypt-cluster-traffic = OFF
 EOF
 
 # Bring node 1 up as the cluster primary using PXC's bootstrap unit.
@@ -189,12 +197,14 @@ wsrep_node_name = pxc${N}
 wsrep_provider_options = "base_port=${BASE_PORT}"
 wsrep_sst_method = xtrabackup-v2
 wsrep_sst_receive_address = 127.0.0.1:${SST_PORT}
+wsrep_sst_auth = root:${DATABASE_PASSWORD}
 wsrep_sync_wait = 0
 
 binlog_format = ROW
 default_storage_engine = InnoDB
 innodb_autoinc_lock_mode = 2
 pxc_strict_mode = PERMISSIVE
+pxc-encrypt-cluster-traffic = OFF
 EOF
 
     sudo tee /etc/systemd/system/${UNIT} >/dev/null <<EOF
@@ -230,7 +240,16 @@ EOF
         echo "Waiting for node ${N} to reach Synced (currently '${state}'), attempt $i/60"
         sleep 2
     done
-    [ "${state}" = "Synced" ] || { echo "Node ${N} failed to sync"; exit 1; }
+    if [ "${state}" != "Synced" ]; then
+        echo "Node ${N} failed to sync.  Diagnostic dumps follow:"
+        echo "----- /var/log/mysql/pxc${N}.err (last 200 lines) -----"
+        sudo tail -200 "/var/log/mysql/pxc${N}.err" 2>&1 || echo "(no error log)"
+        echo "----- systemctl status mysql-pxc${N} -----"
+        sudo systemctl status "${UNIT}" --no-pager -l || true
+        echo "----- journalctl -u mysql-pxc${N} (last 100 lines) -----"
+        sudo journalctl -u "${UNIT}" -n 100 --no-pager || true
+        exit 1
+    fi
 done
 
 # Sanity: cluster should now have 3 members.
