@@ -80,7 +80,7 @@ type Target interface {
 var _ Target = &target{}
 
 type target struct {
-	server      *Server
+	server      Server
 	destination string
 	port        int
 	protocol    Protocol
@@ -102,9 +102,13 @@ func (t *target) GetProtocol() Protocol {
 // String returns a human-readable name for the target.
 func (t *target) String() string {
 	if t.server != nil {
-		chunks := []string{
-			fmt.Sprintf("%s/%s", t.server.Pod().Namespace, t.server.Pod().Name),
+		var idTag string
+		if p := t.server.Pod(); p != nil {
+			idTag = fmt.Sprintf("%s/%s", p.Namespace, p.Name)
+		} else {
+			idTag = t.server.ID()
 		}
+		chunks := []string{idTag}
 		if t.destination != "" {
 			chunks = append(chunks, t.destination)
 		}
