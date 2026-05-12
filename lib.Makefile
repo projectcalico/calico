@@ -1673,7 +1673,7 @@ KIND_IMAGE_MARKERS = \
 LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 $(LIBBPF_MARKER):
-	$(MAKE) -C $(REPO_ROOT)/felix libbpf
+	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
 
 # MISSING-IMAGE forces a rebuild when the previously-built image has been
 # pruned from the local Docker daemon. Each stamp records the image ref
