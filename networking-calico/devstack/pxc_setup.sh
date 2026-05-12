@@ -62,8 +62,13 @@ DEBCONF
     fi
     sudo percona-release setup pxc-80
     sudo apt-get update
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        percona-xtradb-cluster percona-xtrabackup-80
+    # The percona-xtradb-cluster meta-package handles its own xtrabackup
+    # dependency.  We don't specify the version explicitly because Percona
+    # has shipped it under various names (percona-xtrabackup-80, -81, -84)
+    # and "Unable to locate package" would fail the whole install.  We use
+    # wsrep_sst_method=rsync anyway, so xtrabackup is only needed for the
+    # meta-package's dependency closure.
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y percona-xtradb-cluster
 fi
 
 # Install HAProxy if not already present (separate from PXC packages).
