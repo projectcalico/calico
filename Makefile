@@ -307,13 +307,14 @@ GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
 GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
 # Name of the docker network kind binds to. The kind default is "kind".
 GATEWAY_KIND_DOCKER_NETWORK ?= kind
-# Calico's tigera-operator-provisioned GatewayClass doesn't populate
-# .status.supportedFeatures, so the conformance suite's auto-inference returns
-# an empty set and refuses to construct. Default to the curated envoy-gateway
-# set (see e2e/cmd/gateway/e2e_test.go::envoyGatewayCuratedSet) since Calico's
-# implementation is a Calico-deployed Envoy Gateway and inherits its supported
-# feature surface verbatim. Override GATEWAY_CONFORMANCE_CURATED to "" and set
-# the individual flags below for ad-hoc / debugging runs.
+# Envoy Gateway deliberately leaves GatewayClass .status.supportedFeatures empty
+# (the field is experimental and datatype-unstable upstream; see EG's
+# internal/gatewayapi/status/gatewayclass.go). With empty status the conformance
+# suite's auto-inference returns no features and refuses to run. Default to the
+# curated envoy-gateway set (see e2e/cmd/gateway/e2e_test.go::envoyGatewayCuratedSet)
+# -- Calico ships stock unpatched Envoy Gateway so its feature surface matches
+# upstream's. Override GATEWAY_CONFORMANCE_CURATED to "" and set the individual
+# flags below for ad-hoc / debugging runs.
 GATEWAY_CONFORMANCE_CURATED ?= envoy-gateway
 GATEWAY_CONFORMANCE_ALL_FEATURES ?= false
 GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
