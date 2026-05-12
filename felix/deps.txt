@@ -3,6 +3,7 @@ Run 'make gen-deps-files' to regenerate.
 
 go 1.26.2
 cel.dev/expr v0.25.1
+github.com/Masterminds/semver v1.5.0
 github.com/Masterminds/semver/v3 v3.4.0
 github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/aws/aws-sdk-go-v2 v1.41.6
@@ -45,9 +46,9 @@ github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
-github.com/go-openapi/jsonpointer v0.21.0
-github.com/go-openapi/jsonreference v0.20.2
-github.com/go-openapi/swag v0.23.0
+github.com/go-openapi/jsonpointer v0.21.2
+github.com/go-openapi/jsonreference v0.21.0
+github.com/go-openapi/swag v0.23.1
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/go-viper/mapstructure/v2 v2.4.0
@@ -74,7 +75,7 @@ github.com/kelseyhightower/envconfig v1.4.0
 github.com/leodido/go-urn v1.4.0
 github.com/libp2p/go-reuseport v0.4.0
 github.com/lithammer/dedent v1.1.0
-github.com/mailru/easyjson v0.7.7
+github.com/mailru/easyjson v0.9.0
 github.com/mattn/go-runewidth v0.0.19
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
