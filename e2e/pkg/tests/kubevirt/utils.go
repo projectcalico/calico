@@ -1202,4 +1202,3 @@ func requireOperatorManagedCluster(ctx context.Context, cli ctrlclient.Client) {
 	}
 	Expect(err).NotTo(HaveOccurred(), "checking for Installation/default")
 }
-
