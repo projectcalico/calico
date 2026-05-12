@@ -47,8 +47,8 @@ var _ = describe.CalicoDescribe(
 	func() {
 		var cli ctrlclient.Client
 		var checker conncheck.ConnectionTester
-		var server1 *conncheck.Server
-		var client1 *conncheck.Client
+		var server1 conncheck.Server
+		var client1 conncheck.Client
 		var restoreBGPConfig func()
 
 		f := utils.NewDefaultFramework("bgp-password")
