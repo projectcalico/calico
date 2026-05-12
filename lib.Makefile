@@ -1635,6 +1635,32 @@ helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
+# ko is used by component Makefiles (cmd/calico, key-cert-provisioner,
+# pod2daemon) to build OCI images directly without a Dockerfile. Pin the
+# version so CI and local builds stay reproducible. Use absolute paths so
+# the rules work when invoked from a component subdirectory.
+KO_DIR ?= $(REPO_ROOT)/bin
+KO ?= $(KO_DIR)/ko
+
+# Pin the Go toolchain ko uses to the same version baked into calico/go-build,
+# so on-host ko builds match in-container builds. GO_BUILD_VER looks like
+# "1.26.2-llvm20.1.8-k8s1.35.4-1"; we only want the leading Go version.
+GOTOOLCHAIN ?= go$(word 1,$(subst -, ,$(GO_BUILD_VER)))
+
+$(KO_DIR)/ko-$(KO_VERSION):
+	mkdir -p $(KO_DIR)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/bin go install github.com/google/ko@$(KO_VERSION) && mv /go/src/github.com/projectcalico/calico/bin/ko /go/src/github.com/projectcalico/calico/bin/ko-$(KO_VERSION)"
+
+$(KO_DIR)/.ko-updated-$(KO_VERSION): $(KO_DIR)/ko-$(KO_VERSION)
+	rm -f $(KO_DIR)/.ko-updated-*
+	cd $(KO_DIR) && ln -fs ko-$(KO_VERSION) ko
+	touch $@
+
+.PHONY: ko
+ko: $(KO)
+	@echo "ko: $(KO)"
+$(KO): $(KO_DIR)/.ko-updated-$(KO_VERSION)
+
 ###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################
