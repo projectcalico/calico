@@ -107,8 +107,8 @@ var _ = describe.CalicoDescribe(
 		}
 
 		var checker conncheck.ConnectionTester
-		var hepServer1 *conncheck.Server
-		var client1 *conncheck.Client
+		var hepServer1 conncheck.Server
+		var client1 conncheck.Client
 		var hep *v3.HostEndpoint
 
 		BeforeEach(func() {
