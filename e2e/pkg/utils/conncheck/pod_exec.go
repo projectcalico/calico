@@ -97,8 +97,8 @@ func execStreamInPod(ctx context.Context, pod *v1.Pod, command []string, w io.Wr
 	stdinR, stdinW := io.Pipe()
 	doneCh := make(chan struct{})
 	var (
-		mu       sync.Mutex
-		stopping bool
+		mu        sync.Mutex
+		stopping  bool
 		streamErr error
 	)
 

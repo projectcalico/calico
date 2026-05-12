@@ -45,12 +45,30 @@ func NewExternalNodeClient(name string, node *externalnode.Client) Client {
 	return &ExternalNodeClient{name: name, node: node}
 }
 
-func (c *ExternalNodeClient) ID() string                                       { return "external/" + c.name }
-func (c *ExternalNodeClient) Name() string                                     { return c.name }
-func (c *ExternalNodeClient) Namespace() *v1.Namespace                         { return nil }
-func (c *ExternalNodeClient) Pod() *v1.Pod                                     { return nil }
-func (c *ExternalNodeClient) Deploy(_ context.Context, _ *framework.Framework) error  { return nil }
-func (c *ExternalNodeClient) Cleanup(_ context.Context, _ *framework.Framework) error { return nil }
+func (c *ExternalNodeClient) ID() string {
+	return "external/" + c.name
+}
+
+func (c *ExternalNodeClient) Name() string {
+	return c.name
+}
+
+func (c *ExternalNodeClient) Namespace() *v1.Namespace {
+	return nil
+}
+
+func (c *ExternalNodeClient) Pod() *v1.Pod {
+	return nil
+}
+
+func (c *ExternalNodeClient) Deploy(_ context.Context, _ *framework.Framework) error {
+	return nil
+}
+
+func (c *ExternalNodeClient) Cleanup(_ context.Context, _ *framework.Framework) error {
+	return nil
+}
+
 func (c *ExternalNodeClient) WaitReady(_ context.Context, _ *framework.Framework) error {
 	return nil
 }

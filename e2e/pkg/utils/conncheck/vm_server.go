@@ -50,10 +50,21 @@ func NewVMServer(vmi *kubevirtv1.VirtualMachineInstance) Server {
 	}
 }
 
-func (s *VMServer) ID() string               { return fmt.Sprintf("%s/%s", s.namespace.Name, s.name) }
-func (s *VMServer) Name() string             { return s.name }
-func (s *VMServer) Namespace() *v1.Namespace { return s.namespace }
-func (s *VMServer) Service() *v1.Service     { return nil }
+func (s *VMServer) ID() string {
+	return fmt.Sprintf("%s/%s", s.namespace.Name, s.name)
+}
+
+func (s *VMServer) Name() string {
+	return s.name
+}
+
+func (s *VMServer) Namespace() *v1.Namespace {
+	return s.namespace
+}
+
+func (s *VMServer) Service() *v1.Service {
+	return nil
+}
 
 func (s *VMServer) Pod() *v1.Pod {
 	if s.pod == nil {
