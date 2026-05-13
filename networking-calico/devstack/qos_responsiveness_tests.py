@@ -703,21 +703,26 @@ class GaleraQoSResyncTest(QoSResyncTest):
 
         policy = self.conn.network.find_qos_policy("test-qos-policyA")
         rule_id = policy.rules[0]["id"]
-        max_kbps = rule["rule"]["max_kbps"]
-        max_burst_kbps = rule["rule"]["max_burst_kbps"]
+        rule_args = {
+            "max_kbps": rule["rule"]["max_kbps"],
+            "max_burst_kbps": rule["rule"]["max_burst_kbps"],
+            "direction": rule["rule"]["direction"],
+        }
 
         for i in range(self.ITERATIONS):
             logger.info(f"Galera churn iteration {i+1}/{self.ITERATIONS}")
-            # Generate a DB write on the rules table.  Updating to the
-            # same values still triggers an UPDATE that needs Galera
-            # replication, so a read on a lagged node within the
-            # certification gap can miss it.
-            self.conn.network.update_qos_bandwidth_limit_rule(
-                rule_id,
-                policy.id,
-                max_kbps=max_kbps,
-                max_burst_kbps=max_burst_kbps,
+            # Delete and recreate the rule.  An in-place UPDATE only
+            # touches one row's values, and a lagged Galera read still
+            # sees *a* rule (just an older revision).  Delete+create
+            # produces a brief "zero rules" intermediate state that a
+            # lagged read can observe -- which is exactly the empty
+            # result that add_port_qos's rule query needs to see to
+            # produce the empty-qosControls symptom the customer reported.
+            self.conn.network.delete_qos_bandwidth_limit_rule(rule_id, policy.id)
+            new_rule = self.conn.network.create_qos_bandwidth_limit_rule(
+                policy.id, **rule_args
             )
+            rule_id = new_rule.id
             time.sleep(self.RESYNC_INTERVAL_SECS * 1.5)
             try:
                 self._verify_wep_qos(port_id, state)
