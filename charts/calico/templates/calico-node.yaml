@@ -53,7 +53,7 @@ spec:
         - name: upgrade-ipam
           image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
-          command: ["/usr/bin/calico-ipam", "-upgrade"]
+          command: ["calico-ipam", "-upgrade"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
