@@ -16,12 +16,9 @@ package kubevirt
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -31,13 +28,13 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/sirupsen/logrus"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
+	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,10 +49,16 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
+// Per-test timeouts. Each sized to the sum of the test's inner Eventually
+// budgets plus VM/pod boot, so a failure surfaces as the inner timeout, not
+// an outer context-cancelled.
 const (
-	// testTimeout caps each spec at 6m. The longest test (eBGP double-migration)
-	// finishes in ~5m on healthy clusters.
-	testTimeout = 6 * time.Minute
+	ipPersistenceTimeout       = 3 * time.Minute
+	podRecreationTimeout       = 5 * time.Minute
+	vmiRecreationTimeout       = 9 * time.Minute
+	singleMigrationTimeout     = 3 * time.Minute
+	doubleMigrationTimeout     = 6 * time.Minute
+	eBGPDoubleMigrationTimeout = 6 * time.Minute
 )
 
 // vmImage returns KUBEVIRT_TEST_VM_IMAGE when set, otherwise images.KubeVirtUbuntu.
@@ -154,7 +157,7 @@ func (v *kubeVirtVM) spec() *kubevirtv1.VirtualMachine {
 						},
 					},
 					Networks:                      []kubevirtv1.Network{{Name: "default", NetworkSource: kubevirtv1.NetworkSource{Pod: &kubevirtv1.PodNetwork{}}}},
-					TerminationGracePeriodSeconds: ptrInt64(30),
+					TerminationGracePeriodSeconds: ptr.To(int64(30)),
 					Volumes: []kubevirtv1.Volume{
 						{Name: "containerdisk", VolumeSource: kubevirtv1.VolumeSource{ContainerDisk: &kubevirtv1.ContainerDiskSource{Image: vmImage()}}},
 						{Name: "cloudinitdisk", VolumeSource: kubevirtv1.VolumeSource{CloudInitNoCloud: &kubevirtv1.CloudInitNoCloudSource{
@@ -371,17 +374,13 @@ func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr str
 // expectConnectionToTCPServer verifies that the client pod can connect to the VM's TCP
 // server on port 9999 and receive at least one "seq=" line. Retries for up to 2 minutes
 // to accommodate slow-booting VMs where the TCP server may not yet be listening.
-//
-// The kubectl exec error is intentionally ignored: `timeout 5 nc` always exits
-// 143 (SIGTERM from `timeout`) once the budget elapses, even when the
-// connection succeeded and stdout contains the expected seq= lines. Checking
-// stdout is the only honest signal here.
 func expectConnectionToTCPServer(ns, podName, vmIP string) {
 	GinkgoHelper()
 	By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
 	Eventually(func() error {
-		output, _ := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
+		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
 			"sh", "-c", fmt.Sprintf("timeout 5 nc %s 9999", vmIP)).Exec()
+		_ = err // `timeout 5 nc` exits 143 even on success; stdout is the signal.
 		if !strings.Contains(output, "seq=") {
 			return fmt.Errorf("TCP server not ready (no seq= in output)")
 		}
@@ -397,8 +396,9 @@ func expectTCPConnectionBlocked(ns, podName, vmIP string) {
 	GinkgoHelper()
 	By(fmt.Sprintf("Verifying TCP connection to %s:9999 is blocked from %s", vmIP, podName))
 	Consistently(func() error {
-		output, _ := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
+		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
 			"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
+		_ = err // see expectConnectionToTCPServer.
 		if strings.Contains(output, "seq=") {
 			return fmt.Errorf("connection succeeded unexpectedly")
 		}
@@ -709,10 +709,9 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	// filter. Polling for actual contents avoids both a fixed sleep and a noisy
 	// unconditional debug dump.
 	By("Waiting for confd to regenerate bird.cfg with the kubevirt-lm filter on master")
-	masterPodName := waitForMasterCalicoNodePod(ctx, f, masterName)
+	masterPod := waitForMasterCalicoNodePod(f, masterName)
 	Eventually(func() error {
-		cfg, err := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--",
-			"sh", "-c", "cat /etc/calico/confd/config/bird.cfg").Exec()
+		cfg, err := utils.ExecInCalicoNode(masterPod, "cat /etc/calico/confd/config/bird.cfg")
 		if err != nil {
 			return fmt.Errorf("read bird.cfg: %w", err)
 		}
@@ -728,7 +727,7 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		if !CurrentSpecReport().Failed() {
 			return
 		}
-		logBIRDDiagnostics(masterPodName)
+		logBIRDDiagnostics(masterPod)
 	})
 
 	By("Waiting for eBGP session to establish")
@@ -747,103 +746,35 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 }
 
 // waitForMasterCalicoNodePod polls until the calico-node pod on the
-// control-plane node is observable. Returns the pod name. Used as a
-// precondition for any test step that needs to exec birdcl on the master.
-func waitForMasterCalicoNodePod(ctx context.Context, f *framework.Framework, masterName string) string {
+// control-plane node is observable. Returns the pod. Used as a precondition
+// for any test step that needs to exec birdcl on the master.
+func waitForMasterCalicoNodePod(f *framework.Framework, masterName string) *corev1.Pod {
 	GinkgoHelper()
-	var name string
+	var pod *corev1.Pod
 	Eventually(func() error {
-		pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-			LabelSelector: "k8s-app=calico-node",
-			FieldSelector: "spec.nodeName=" + masterName,
-		})
-		if err != nil {
-			return err
-		}
-		if len(pods.Items) == 0 {
+		pod = utils.GetCalicoNodePodOnNode(f.ClientSet, masterName)
+		if pod == nil {
 			return fmt.Errorf("no calico-node pod on master %s", masterName)
 		}
-		name = pods.Items[0].Name
 		return nil
 	}, 30*time.Second, 1*time.Second).Should(Succeed())
-	return name
+	return pod
 }
 
 // logBIRDDiagnostics dumps the master's confd-generated BIRD configs and
 // runtime state. Only call this from failure-gated paths.
-func logBIRDDiagnostics(masterPodName string) {
+func logBIRDDiagnostics(masterPod *corev1.Pod) {
 	type item struct{ label, cmd string }
 	items := []item{
 		{"bird.cfg (BGPFilter + TOR peer)", "cat /etc/calico/confd/config/bird.cfg | sed -n '/kubevirt-lm/,/^$/p'"},
 		{"bird_ipam.cfg", "cat /etc/calico/confd/config/bird_ipam.cfg"},
 		{"bird_aggr.cfg", "cat /etc/calico/confd/config/bird_aggr.cfg"},
+		{"birdcl show route", "birdcl show route"},
+		{"birdcl show protocols", "birdcl show protocols"},
 	}
 	for _, it := range items {
-		out, _ := kubectl.NewKubectlCommand("calico-system", "exec", masterPodName, "-c", "calico-node", "--", "sh", "-c", it.cmd).Exec()
+		out, _ := utils.ExecInCalicoNode(masterPod, it.cmd)
 		logrus.Infof("FAILURE-DEBUG %s:\n%s", it.label, out)
-	}
-	for _, args := range [][]string{
-		{"birdcl", "show", "route"},
-		{"birdcl", "show", "protocols"},
-	} {
-		out, _ := kubectl.NewKubectlCommand("calico-system", append([]string{"exec", masterPodName, "-c", "calico-node", "--"}, args...)...).Exec()
-		logrus.Infof("FAILURE-DEBUG %s:\n%s", strings.Join(args, " "), out)
-	}
-}
-
-// startRouteMonitor polls TOR kernel routes for a VM IP and logs changes.
-// It monitors both the /32 host route (advertised during migration for the
-// specific VM) and the /26 block route (the steady-state subnet route),
-// clearly showing how routes transition during live migration.
-// Call the returned stop function to terminate the monitor goroutine.
-func startRouteMonitor(tor *externalnode.Client, vmIP string) func() {
-	ip := strings.Split(vmIP, "/")[0]
-
-	// Determine the /26 block that contains this IP. Calico allocates /26 blocks
-	// by default, so mask the IP to find the block prefix.
-	parsed := net.ParseIP(ip).To4()
-	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
-	block26 := fmt.Sprintf("%s/26", blockIP)
-
-	logrus.Infof("Route monitor: tracking /32=%s and /26=%s", ip, block26)
-
-	stopCh := make(chan struct{})
-	doneCh := make(chan struct{})
-	go func() {
-		defer close(doneCh)
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		var lastRoutes string
-		for {
-			// Query kernel routes and BIRD routing table for the /32.
-			// The BIRD "show route all" output shows preference, community,
-			// and bgp_local_pref — critical for diagnosing ECMP issues.
-			out, _ := runOnTOR(tor, fmt.Sprintf(
-				"echo '--- /32 kernel ---'; ip route show proto bird %s/32 2>&1; "+
-					"echo '--- /26 kernel ---'; ip route show proto bird %s 2>&1; "+
-					"echo '--- BIRD /32 ---'; sudo docker exec tor-bird birdcl show route %s/32 all 2>&1; "+
-					"echo '--- route lookup ---'; ip route get %s 2>&1",
-				ip, block26, ip, ip))
-			out = strings.TrimSpace(out)
-			if out != lastRoutes {
-				logrus.Infof("TOR route change:\n%s", out)
-				lastRoutes = out
-			}
-			// Honor stopCh during the wait so the goroutine exits promptly
-			// after stop() is called and does not start one more SSH RT.
-			select {
-			case <-stopCh:
-				return
-			case <-ticker.C:
-			}
-		}
-	}()
-	// Returned stop closer waits for the goroutine to exit — prevents an
-	// in-flight SSH session from racing other cleanups (e.g. the timeline
-	// writer) that share the same TOR client.
-	return func() {
-		close(stopCh)
-		<-doneCh
 	}
 }
 
@@ -1024,18 +955,13 @@ func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
 // worker node's calico-node pod. Returns the metric value (e.g. 512 for
 // elevated, 1024 for normal) or -1 if the route is not found.
 func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) int {
-	ctx := context.Background()
 	ip := strings.Split(vmIP, "/")[0]
-	pods, err := f.ClientSet.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-node",
-		FieldSelector: "spec.nodeName=" + nodeName,
-	})
-	if err != nil || len(pods.Items) == 0 {
-		logrus.Warnf("queryWorkerMetric: no calico-node pod on %s: %v", nodeName, err)
+	pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
+	if pod == nil {
+		logrus.Warnf("queryWorkerMetric: no calico-node pod on %s", nodeName)
 		return -1
 	}
-	out, err := kubectl.NewKubectlCommand("calico-system", "exec", pods.Items[0].Name, "-c", "calico-node", "--",
-		"sh", "-c", fmt.Sprintf("ip route show %s/32", ip)).Exec()
+	out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("ip route show %s/32", ip))
 	if err != nil {
 		logrus.Warnf("queryWorkerMetric: ip route show failed on %s: %v", nodeName, err)
 		return -1
@@ -1057,90 +983,6 @@ func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) int {
 	logrus.Infof("queryWorkerMetric(%s, %s): no metric field (route: %s)", nodeName, ip, out)
 	return -1
 }
-
-// routeTimelineEntry captures the route state at a single point in time.
-type routeTimelineEntry struct {
-	Timestamp string           `json:"ts"`
-	Phase     string           `json:"phase"`
-	VMNode    string           `json:"vmNode,omitempty"`
-	TOR       torRouteSnapshot `json:"tor"`
-	TCPLines  int              `json:"tcpLines"`
-}
-
-// routeTimeline collects route state snapshots at key test phases.
-type routeTimeline struct {
-	mu      sync.Mutex
-	entries []routeTimelineEntry
-}
-
-func newRouteTimeline() *routeTimeline {
-	return &routeTimeline{}
-}
-
-// record appends a timestamped entry to the timeline and logs a one-line summary.
-func (t *routeTimeline) record(entry routeTimelineEntry) {
-	entry.Timestamp = time.Now().UTC().Format("15:04:05.000")
-	t.mu.Lock()
-	t.entries = append(t.entries, entry)
-	t.mu.Unlock()
-
-	lp32 := -1
-	if len(entry.TOR.Host32.Routes) > 0 {
-		lp32 = entry.TOR.Host32.Routes[0].LocalPref
-	}
-	logrus.Infof("TIMELINE[%s] phase=%-28s /32=%v(%d) /26=%v(%d) lp32=%-12d tcpLines=%d",
-		entry.Timestamp, entry.Phase,
-		entry.TOR.Host32.Present, len(entry.TOR.Host32.Routes),
-		entry.TOR.Block26.Present, len(entry.TOR.Block26.Routes),
-		lp32, entry.TCPLines)
-}
-
-// writeToTOR logs a summary table, marshals the timeline to JSON, and writes
-// it to /tmp/route-timeline.json on the TOR node via SSH.
-func (t *routeTimeline) writeToTOR(tor *externalnode.Client) {
-	t.mu.Lock()
-	entries := make([]routeTimelineEntry, len(t.entries))
-	copy(entries, t.entries)
-	t.mu.Unlock()
-
-	if len(entries) == 0 {
-		logrus.Warn("Route timeline: no entries to write")
-		return
-	}
-
-	logrus.Infof("Route timeline summary (%d entries):", len(entries))
-	logrus.Infof("  %-12s %-28s %-10s %-10s %-12s %s", "TIME", "PHASE", "/32", "/26", "LP32", "TCP_LINES")
-	for _, e := range entries {
-		lp32 := -1
-		if len(e.TOR.Host32.Routes) > 0 {
-			lp32 = e.TOR.Host32.Routes[0].LocalPref
-		}
-		logrus.Infof("  %-12s %-28s %-10s %-10s %-12d %d",
-			e.Timestamp, e.Phase,
-			fmt.Sprintf("%v(%d)", e.TOR.Host32.Present, len(e.TOR.Host32.Routes)),
-			fmt.Sprintf("%v(%d)", e.TOR.Block26.Present, len(e.TOR.Block26.Routes)),
-			lp32, e.TCPLines)
-	}
-
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		logrus.WithError(err).Warn("Route timeline: failed to marshal JSON")
-		return
-	}
-
-	// Write to TOR via base64 — the TOR is an Ubuntu host with base64 available.
-	encoded := base64.StdEncoding.EncodeToString(data)
-	cmd := fmt.Sprintf("echo '%s' | base64 -d > /tmp/route-timeline.json", encoded)
-	_, err = runOnTOR(tor, cmd)
-	if err != nil {
-		logrus.WithError(err).Warn("Route timeline: failed to write JSON to TOR")
-		return
-	}
-	logrus.Infof("Route timeline: wrote %d entries (%d bytes) to TOR:/tmp/route-timeline.json",
-		len(entries), len(data))
-}
-
-func ptrInt64(v int64) *int64 { return &v }
 
 // waitForMigrationStatePopulated polls the VMI for a fully populated
 // MigrationState. virt-handler writes it asynchronously after the VMIM phase
@@ -1194,11 +1036,9 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 // have an operator-managed Installation/default. The live-migration tests patch
 // the Installation CR to disable natOutgoing; without an Installation that path
 // is invalid (manifest installs configure IPPool directly).
-func requireOperatorManagedCluster(ctx context.Context, cli ctrlclient.Client) {
+func requireOperatorManagedCluster(cli ctrlclient.Client) {
 	GinkgoHelper()
-	err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{})
-	if apierrors.IsNotFound(err) {
+	if utils.GetInstallation(cli) == nil {
 		Fail("Installation/default not found, these tests require an operator-managed cluster")
 	}
-	Expect(err).NotTo(HaveOccurred(), "checking for Installation/default")
 }

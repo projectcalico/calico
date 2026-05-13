@@ -31,17 +31,12 @@ import (
 
 const defaultStreamMaxBytes = 1 << 20
 
-// StreamSource abstracts the transport-specific bottom half of a stream probe:
-// how the command is launched and where its combined stdout/stderr is read.
-// Implementations: conncheck.PodSource (in-cluster SPDY exec),
-// externalnode.ContainerSource (SSH + docker on an external host).
+// StreamSource is the transport-specific bottom half of a stream probe.
+// Implementations: PodSource (in-cluster SPDY exec), externalnode.ContainerSource
+// (SSH + docker on an external host).
 type StreamSource interface {
-	// Start launches the command. Output bytes are written to w by the
-	// implementation, possibly asynchronously. errSink, if non-nil, is the
-	// channel implementations use to surface transport-level errors that
-	// arise after Start returns (e.g. a mid-stream SPDY exec failure).
-	// Returns when the command is launched (or fails to launch).
-	// Single-use: Start may be called once per source instance.
+	// Start launches command and writes its merged stdout/stderr to w. Any
+	// async transport error after Start returns goes to errSink. Single-use.
 	Start(ctx context.Context, command []string, w io.Writer, errSink func(error)) error
 	// Stop terminates the command. Idempotent.
 	Stop() error
@@ -84,19 +79,13 @@ type streamDisruptionConfig struct {
 }
 
 // StreamDisruptionOption tunes StreamCheckpointer.ExpectNoDisruption.
-//
-// Intentionally a distinct type from DisruptionOption used by Checkpointer:
-// the "gap" metric measures different physical quantities in the two worlds
-// (interval-between-probe-attempts vs interval-between-line-arrivals), and
-// WithMaxConsecutiveLoss is meaningless for streams. Forcing separate types
-// keeps the unsupported combinations unrepresentable rather than rejected
-// at runtime.
+// Distinct from DisruptionOption: stream "gap" is interval-between-line-arrivals,
+// not interval-between-probe-attempts.
 type StreamDisruptionOption func(*streamDisruptionConfig)
 
-// WithStreamMaxGap fails ExpectNoDisruption if any two consecutive captured
-// lines arrived more than d apart. The producer must emit at a known cadence
-// (e.g. `ping -i 0.2`) for this to be meaningful; for sporadic producers like
-// raw `nc`, gaps are dominated by application traffic patterns, not connectivity.
+// WithStreamMaxGap fails ExpectNoDisruption if two consecutive captured lines
+// arrived more than d apart. Only meaningful for known-cadence producers like
+// `ping -i 0.2`; raw `nc` cadence is dominated by traffic, not connectivity.
 func WithStreamMaxGap(d time.Duration) StreamDisruptionOption {
 	return func(c *streamDisruptionConfig) {
 		c.maxGap = d
@@ -104,40 +93,27 @@ func WithStreamMaxGap(d time.Duration) StreamDisruptionOption {
 	}
 }
 
-// StreamCheckpointer runs a long-lived command via a StreamSource and lets the
-// test assert on the cadence of its output. Each newline-terminated record is
-// one "event", timestamped at the moment of arrival.
-//
-// Contrast with Checkpointer (from ExpectContinuously): that one runs discrete
-// pass/fail probes; this one watches the line cadence of a single live stream.
-// They are separate by design.
+// StreamCheckpointer runs a long-lived command via a StreamSource and asserts
+// on the cadence of its output. One newline-terminated record = one event,
+// timestamped at arrival. Separate from Checkpointer (discrete probes) by design.
 type StreamCheckpointer interface {
-	// Stop terminates the source and drains. Returns the terminal error, if
-	// any (also exposed via Err for use before Stop). Idempotent.
+	// Stop terminates the source and drains. Returns the terminal error
+	// (also sticky in Err). Idempotent.
 	Stop() error
-
-	// Err returns the first non-EOF stream error seen so far, or nil. Sticky.
+	// Err returns the first non-EOF stream error, or nil. Sticky.
 	Err() error
-
-	// NumLines is the count of newline-terminated records captured so far.
-	// Cheap (no allocation) for tight polling loops.
+	// NumLines is the count of captured records. Allocation-free.
 	NumLines() int
-
-	// Events returns a snapshot of line-arrival timestamps in order. Primary
-	// input for disruption analysis.
+	// Events returns line-arrival timestamps, the primary input for gap analysis.
 	Events() []time.Time
-
-	// Lines returns a snapshot of the captured records (debug aid).
+	// Lines returns the captured records (debug aid).
 	Lines() []string
-
-	// ExpectNoDisruption fails the test if the inter-line gap analysis
-	// exceeds the supplied bounds. WithStreamMaxGap is required.
+	// ExpectNoDisruption fails if inter-line gap analysis exceeds the
+	// supplied bounds. WithStreamMaxGap is required.
 	ExpectNoDisruption(opts ...StreamDisruptionOption)
 }
 
-// streamCheckpointer is the in-tree (unexported) implementation of
-// StreamCheckpointer. The interface is the API surface; this struct is an
-// internal detail.
+// streamCheckpointer is the unexported impl of StreamCheckpointer.
 type streamCheckpointer struct {
 	name   string
 	source StreamSource
@@ -155,12 +131,9 @@ type streamCheckpointer struct {
 	stopErr  error         // terminal error from Stop (sticky into err)
 }
 
-// StartStream constructs a StreamCheckpointer, validates options, and starts
-// the underlying source. Invalid arguments or a failed Start fail the test
-// immediately via framework.Failf (consistent with the rest of conncheck).
-//
-// WithStreamCommand is required. The returned checkpointer is single-use; the
-// caller is responsible for calling Stop (typically via DeferCleanup).
+// StartStream builds a StreamCheckpointer and starts source. WithStreamCommand
+// is required. Single-use; caller must Stop (typically via DeferCleanup).
+// Invalid args or a failed Start fail the test via framework.Failf.
 func StartStream(ctx context.Context, name string, source StreamSource, opts ...StreamOption) StreamCheckpointer {
 	if name == "" {
 		framework.Failf("StartStream: name is required")
@@ -188,19 +161,14 @@ func StartStream(ctx context.Context, name string, source StreamSource, opts ...
 	return cp
 }
 
-// Stop runs the source teardown exactly once. Concurrent callers (e.g. a
-// DeferCleanup racing with an explicit Stop in the test body) all block on
-// the same teardown and return the same sticky error.
-//
-// stopDone is closed via defer so that a panic inside source.Stop() does
-// not strand later callers blocked on the channel.
+// Stop tears down the source exactly once; concurrent callers block on the
+// same teardown. Deferred close of stopDone keeps a panic in source.Stop from
+// stranding them.
 func (p *streamCheckpointer) Stop() error {
 	p.stopOnce.Do(func() {
 		defer close(p.stopDone)
 		err := p.source.Stop()
-		// A trailing un-terminated chunk is intentionally dropped: no
-		// newline means no event. Don't manufacture a final line from
-		// partial data; timestamps and content would both be unreliable.
+		// Drop any trailing un-terminated chunk: no newline = no event.
 		p.mu.Lock()
 		p.pending = nil
 		if err != nil && p.err == nil {
@@ -252,8 +220,7 @@ func (p *streamCheckpointer) ExpectNoDisruption(opts ...StreamDisruptionOption) 
 		framework.Fail(fmt.Sprintf("StreamCheckpointer %q: ExpectNoDisruption requires WithStreamMaxGap", p.name), 2)
 	}
 
-	// Surface any stream error first so we don't blame a gap on what was
-	// really a transport failure.
+	// Surface transport errors before doing gap math.
 	if err := p.Err(); err != nil {
 		framework.Failf("StreamCheckpointer %q: stream error: %v", p.name, err)
 	}
@@ -298,10 +265,8 @@ func (p *streamCheckpointer) setErr(err error) {
 	p.mu.Unlock()
 }
 
-// streamWriter is the io.Writer wired to the source's output. Newline-delimited
-// records are timestamped at the split boundary (not at Write entry) so that
-// when a single Write carries many lines we don't bias gap stats by attributing
-// them all to the same instant.
+// streamWriter splits source output on newlines and timestamps each record
+// at the split (not at Write entry) so multi-line writes don't bias gaps.
 type streamWriter struct {
 	cp *streamCheckpointer
 }
@@ -324,12 +289,10 @@ func (w *streamWriter) Write(b []byte) (int, error) {
 		p.pending = p.pending[nl+1:]
 	}
 
-	// Byte cap: drop oldest line+event pairs first. If pending alone still
-	// exceeds the cap, drop pending wholesale and mark overflow — head-
-	// truncating pending would leave a partial-record fragment that would
-	// later be promoted to a fake "line" with a fresh timestamp, silently
-	// corrupting gap analysis. ExpectNoDisruption refuses to analyse a
-	// stream that overflowed.
+	// Byte cap: drop oldest line+event pairs; if pending still exceeds the
+	// cap, drop pending wholesale and mark overflow. Truncating pending
+	// would manufacture a fake line on the next newline; ExpectNoDisruption
+	// refuses overflowed streams instead.
 	size := len(p.pending)
 	for _, l := range p.lines {
 		size += len(l) + 1
@@ -348,10 +311,8 @@ func (w *streamWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// WaitForCadence blocks until cp has captured at least n lines, the context
-// is cancelled, the 'within' budget elapses, or the stream errors out. On
-// timeout, context cancellation, or stream error the test fails via
-// framework.Failf.
+// WaitForCadence blocks until cp has captured at least n lines, or fails the
+// test (framework.Failf) on ctx cancel, the 'within' budget, or stream error.
 func WaitForCadence(ctx context.Context, cp StreamCheckpointer, n int, within time.Duration) {
 	deadline := time.Now().Add(within)
 	for {
@@ -453,10 +414,8 @@ func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer, er
 			Stdout: w,
 			Stderr: w,
 		})
-		// Suppress the non-zero exit the wrapper produces when Stop closes
-		// stdin (reaper SIGTERMs the child, wait returns rc=143). Errors
-		// observed before Stop set the stopping flag are real and must
-		// reach the checkpointer.
+		// Suppress the wrapper's expected rc=143 after Stop closes stdin;
+		// errors seen before stopping is set are real.
 		s.mu.Lock()
 		stopping := s.stopping
 		s.mu.Unlock()
@@ -468,8 +427,8 @@ func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer, er
 	return nil
 }
 
-// Stop closes the SPDY stdin (which triggers the wrapper's reaper to SIGTERM
-// the child) and waits for the executor to return.
+// Stop closes the SPDY stdin (wrapper's reaper SIGTERMs the child) and waits
+// for the executor.
 func (s *PodSource) Stop() error {
 	s.mu.Lock()
 	s.stopping = true

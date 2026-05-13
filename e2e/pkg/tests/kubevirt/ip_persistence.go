@@ -28,6 +28,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
+	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -69,7 +70,7 @@ var _ = describe.CalicoDescribe(
 		// (Calico's VM-handle IPAM); the VM must remain reachable over ICMP from a
 		// ping-client pod before and after.
 		It("should preserve VM IP address across live migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), ipPersistenceTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-migration-test"
@@ -155,7 +156,7 @@ var _ = describe.CalicoDescribe(
 		// the VM-handle IPAM (keyed on VMI namespace+name, not container ID) must reassign
 		// the same IP to the new pod.
 		It("should preserve VM IP across pod recreation", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), podRecreationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-pod-recreate"
@@ -172,7 +173,7 @@ var _ = describe.CalicoDescribe(
 
 			By("Deleting the virt-launcher pod to simulate eviction")
 			err = f.ClientSet.CoreV1().Pods(ns).Delete(ctx, sourcePodName, metav1.DeleteOptions{
-				GracePeriodSeconds: ptrInt64(0),
+				GracePeriodSeconds: ptr.To(int64(0)),
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -200,7 +201,7 @@ var _ = describe.CalicoDescribe(
 		// VMI UID with the same name, so the VM-handle ID matches and the same IP is
 		// reallocated. Relies on kube-controllers' 5m GC grace period.
 		It("should preserve VM IP across VMI recreation (reboot)", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), vmiRecreationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-vmi-recreate"
@@ -261,7 +262,7 @@ var _ = describe.CalicoDescribe(
 		// Test 4: deleting the VM (and its pod) must release the VM IPAM handle so the
 		// IP returns to the pool. e2e counterpart of the CNI FV in kubevirt_ipam_test.go.
 		It("should release IPAM handle when VM is deleted", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), ipPersistenceTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-handle-release"

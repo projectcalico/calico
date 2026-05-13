@@ -57,16 +57,12 @@ import (
 //   - At least 2 schedulable worker nodes (3 recommended for double-migration tests)
 //   - For Test 3: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
 //
-// The live-migration tests mutate cluster-global state — the Installation
-// resource (natOutgoing), global BGPPeer/BGPFilter resources with fixed names
-// (kubevirt-lm, tor-ebgp-peer), and BIRD configuration on the TOR. They must
-// not run in parallel with each other or with other tests that touch Calico
-// configuration.
+// Only the eBGP test (Test 3) mutates cluster-global state; WithSerial is
+// scoped to that Context, leaving Tests 1, 2, 4 parallel-safe.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
 	describe.WithCategory(describe.Networking),
-	describe.WithSerial(),
 	"KubeVirt live migration",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt")
@@ -86,7 +82,7 @@ var _ = describe.CalicoDescribe(
 		// Asserts Active=target,Alternate=empty (Felix EnsureActiveVMOwnerAttrs) by
 		// matching the real target pod/node, not just "differs from source".
 		It("should promote target pod to active IPAM owner after migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			vmName := "e2e-attr-promote"
@@ -173,7 +169,7 @@ var _ = describe.CalicoDescribe(
 		// consecutive cross-node live migrations on a 3-worker cluster (server VM hops,
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 			serverVMName := "e2e-tcp-double-srv"
@@ -259,7 +255,7 @@ var _ = describe.CalicoDescribe(
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
 		// priority correctly reverts and re-elevates across two consecutive migrations.
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
-		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
+		framework.Context("eBGP external client", describe.RequiresExternalNode(), describe.WithSerial(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				tor := externalnode.NewClient()
 				if tor == nil {
@@ -272,11 +268,9 @@ var _ = describe.CalicoDescribe(
 				// Only this spec patches the Installation CR (natOutgoing) —
 				// that path only exists on operator-managed clusters. Fail fast
 				// rather than after the first patch attempt 404s.
-				preCtx, preCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				requireOperatorManagedCluster(preCtx, cli)
-				preCancel()
+				requireOperatorManagedCluster(cli)
 
-				ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+				ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 				defer cancel()
 				ns := f.Namespace.Name
 
@@ -321,9 +315,6 @@ var _ = describe.CalicoDescribe(
 					"natOutgoing should be false on IPPool after Installation patch")
 				logrus.Info("natOutgoing=false confirmed on IPPool")
 
-				timeline := newRouteTimeline()
-				DeferCleanup(func() { timeline.writeToTOR(tor) })
-
 				vmName := "e2e-ebgp-tcp"
 				vm := &kubeVirtVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit}
 
@@ -348,10 +339,6 @@ var _ = describe.CalicoDescribe(
 				}, 2*time.Minute, 5*time.Second).Should(Succeed(),
 					"TOR cannot reach VM — eBGP routing may not be configured")
 
-				By("Starting route monitor on TOR")
-				stopMonitor := startRouteMonitor(tor, vmIP)
-				defer stopMonitor()
-
 				By("Waiting for TCP server on VM to be reachable from TOR")
 				const ncClientContainer = "tor-nc-client"
 				Eventually(func() error {
@@ -371,40 +358,11 @@ var _ = describe.CalicoDescribe(
 					conncheck.WithStreamCommand("sh", "-c", fmt.Sprintf("'sleep 999999 | nc %s 9999'", vmIP)))
 				DeferCleanup(func() { _ = probe.Stop() })
 
-				// seq-monitor logs the line count every 2s for post-mortem analysis
-				// (recorded, not asserted).
-				seqStopCh := make(chan struct{})
-				seqDoneCh := make(chan struct{})
-				defer func() {
-					close(seqStopCh)
-					<-seqDoneCh
-				}()
-				go func() {
-					defer close(seqDoneCh)
-					ticker := time.NewTicker(2 * time.Second)
-					defer ticker.Stop()
-					for {
-						logrus.Infof("[seq-monitor] lines=%d", probe.NumLines())
-						select {
-						case <-seqStopCh:
-							return
-						case <-ticker.C:
-						}
-					}
-				}()
-
 				By("Waiting for TCP data to flow before migration")
 				conncheck.WaitForCadence(ctx, probe, 5, 30*time.Second)
 				preLines := len(probe.Lines())
-				logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
-
+				logrus.Infof("Pre-migration: %d lines on TOR client", preLines)
 				preTime := time.Now()
-				timeline.record(routeTimelineEntry{
-					Phase:    "pre-migration",
-					VMNode:   node1,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: preLines,
-				})
 
 				By("Starting first migration")
 				vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
@@ -431,40 +389,17 @@ var _ = describe.CalicoDescribe(
 					g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
 				}, 20*time.Second, 1*time.Second).Should(Succeed())
 
-				firstMigLines := len(probe.Lines())
-				timeline.record(routeTimelineEntry{
-					Phase:    "first-migration-complete",
-					VMNode:   node2,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: firstMigLines,
-				})
-
 				// Wait for the elevated /32 route to revert to normal local_pref
 				// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
 				By("Waiting for TOR /32 local_pref to revert to normal after convergence")
 				Eventually(func() int {
 					snap := queryTORSnapshot(tor, vmIP)
-					pollLines := len(probe.Lines())
-					timeline.record(routeTimelineEntry{
-						Phase:    "convergence-poll",
-						VMNode:   node2,
-						TOR:      snap,
-						TCPLines: pollLines,
-					})
 					if len(snap.Host32.Routes) > 0 {
 						return snap.Host32.Routes[0].LocalPref
 					}
 					return -1
 				}, 45*time.Second, 2*time.Second).Should(Equal(100),
 					"TOR /32 local_pref should revert to 100 after convergence")
-
-				convergenceLines := len(probe.Lines())
-				timeline.record(routeTimelineEntry{
-					Phase:    "convergence-done",
-					VMNode:   node2,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: convergenceLines,
-				})
 
 				midLines := len(probe.Lines())
 				Expect(midLines).To(BeNumerically(">", preLines), "TCP should still be flowing after first migration")
@@ -513,26 +448,11 @@ var _ = describe.CalicoDescribe(
 						"two /32 routes must have different local_pref to avoid ECMP")
 				}, 20*time.Second, 1*time.Second).Should(Succeed())
 
-				secondMigLines := len(probe.Lines())
-				timeline.record(routeTimelineEntry{
-					Phase:    "second-migration-complete",
-					VMNode:   node3,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: secondMigLines,
-				})
-
 				// Wait for the second migration's /32 route to revert to normal
 				// local_pref, same as after the first migration.
 				By("Waiting for TOR /32 local_pref to revert after second migration")
 				Eventually(func() int {
 					snap := queryTORSnapshot(tor, vmIP)
-					pollLines := len(probe.Lines())
-					timeline.record(routeTimelineEntry{
-						Phase:    "second-convergence-poll",
-						VMNode:   node3,
-						TOR:      snap,
-						TCPLines: pollLines,
-					})
 					if len(snap.Host32.Routes) > 0 {
 						return snap.Host32.Routes[0].LocalPref
 					}
@@ -567,13 +487,6 @@ var _ = describe.CalicoDescribe(
 				// setup delay and scheduling jitter but catching major data loss.
 				Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
 					fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
-
-				timeline.record(routeTimelineEntry{
-					Phase:    "test-complete",
-					VMNode:   node3,
-					TOR:      queryTORSnapshot(tor, vmIP),
-					TCPLines: finalLines,
-				})
 			})
 		})
 
@@ -581,7 +494,7 @@ var _ = describe.CalicoDescribe(
 		// keep applying after the VM live-migrates to a different node, both for an
 		// allowed and a denied client.
 		It("should enforce NetworkPolicy after live migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 
