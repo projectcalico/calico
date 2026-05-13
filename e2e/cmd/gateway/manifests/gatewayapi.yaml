@@ -1,0 +1,27 @@
+# GatewayAPI CR consumed by tigera-operator. Reconciled into:
+#   - GatewayClass "tigera-gateway-class"
+#   - Envoy Gateway controller in namespace "tigera-gateway"
+#
+# `envoyProxyRef` points at the EnvoyProxy CR in
+# e2e/cmd/gateway/manifests/envoyproxy.yaml, which sets
+# externalTrafficPolicy: Cluster on the data-plane Service so the host-side
+# conformance runner gets deterministic routing through any speaker node
+# (see envoyproxy.yaml for the full rationale).
+#
+# The EnvoyProxy CR lives in the test-owned `e2e-gateway-conformance`
+# namespace rather than the operator-owned `tigera-gateway` namespace.
+# Reason: the operator's gatewayapi controller resolves envoyProxyRef
+# before it renders `tigera-gateway`, so referencing an EnvoyProxy in
+# `tigera-gateway` on a fresh install deadlocks ("EnvoyProxy ... not
+# found"). Putting it in our own namespace lets us pre-create the ns and
+# apply the EnvoyProxy CR without racing the operator.
+apiVersion: operator.tigera.io/v1
+kind: GatewayAPI
+metadata:
+  name: default
+spec:
+  gatewayClasses:
+    - name: tigera-gateway-class
+      envoyProxyRef:
+        namespace: e2e-gateway-conformance
+        name: gateway-conformance-base

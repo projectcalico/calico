@@ -1,0 +1,92 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+  labels:
+    global-peer: yes
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-filter-peertype
+spec:
+  exportV4:
+    - action: Accept
+      peerType: eBGP
+      matchOperator: In
+      cidr: 10.0.0.0/8
+    - action: Reject
+      peerType: iBGP
+      matchOperator: In
+      cidr: 172.16.0.0/12
+    - action: Reject
+  importV4:
+    - action: Accept
+      peerType: iBGP
+      communities:
+        values: ["65000:100"]
+      operations:
+        - setPriority:
+            value: 100
+    - action: Accept
+  exportV6:
+    - action: Accept
+      peerType: eBGP
+      matchOperator: In
+      cidr: fd00::/8
+    - action: Reject
+      peerType: iBGP
+      matchOperator: In
+      cidr: fe80::/10
+    - action: Reject
+  importV6:
+    - action: Accept
+      peerType: iBGP
+      communities:
+        values: ["65000:100"]
+      operations:
+        - setPriority:
+            value: 100
+    - action: Accept
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-global-peer-with-filter
+spec:
+  peerSelector: has(global-peer)
+  filters:
+    - test-filter-peertype

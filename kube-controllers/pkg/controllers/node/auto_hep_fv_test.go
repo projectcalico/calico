@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Auto Hostendpoint FV tests", func() {
+var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		nodeController    *containers.Container
@@ -110,7 +110,7 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		},
 	}}
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -139,13 +139,20 @@ var _ = Describe("Auto Hostendpoint FV tests", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = c.Close()
 		controllerManager.Stop()
-		nodeController.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		// Stop the per-spec controller instance.
+		if nodeController != nil {
+			nodeController.Stop()
+		}
+		testutils.CleanupAllResources(context.Background(), k8sClient, c, nil, testutils.CleanupOptions{})
 	})
 
 	It("should create and sync hostendpoints for Calico nodes", func() {

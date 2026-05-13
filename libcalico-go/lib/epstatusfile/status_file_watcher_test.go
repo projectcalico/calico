@@ -178,7 +178,7 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 		clearDir(statusDir)
 		fsnotifyActivity = new(activityReporter)
 		fsnotifyErr = new(fsnotifyError)
-		w = NewFileWatcherWithShim(statusDir, 10*time.Second, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
+		w = NewFileWatcherWithShim(statusDir, 1*time.Second, fsnotifyErr.newFsnotifyWatcherShim, fsnotifyActivity)
 		r = newEventRecorder()
 		w.SetCallbacks(Callbacks{
 			OnFileCreation: r.OnFileCreate,

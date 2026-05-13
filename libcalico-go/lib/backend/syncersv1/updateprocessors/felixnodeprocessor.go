@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
-	cresources "github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for
@@ -55,7 +54,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// v1 model.  For a delete these will all be nil.  If we fail to convert any value then
 	// just treat that as a delete on the underlying key and return the error alongside
 	// the updates.
-	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac, vxlanV6TunlIp, vxlanV6TunlMac, wgConfig any
+	var ipv4Tunl, vxlanTunlIp, vxlanTunlMac, vxlanV6TunlIp, vxlanV6TunlMac, wgConfig any
 	var node *internalapi.Node
 	var ok bool
 	if kvp.Value != nil {
@@ -65,21 +64,6 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		}
 
 		if bgp := node.Spec.BGP; bgp != nil {
-			var ip *cnet.IP
-			var cidr *cnet.IPNet
-
-			// Parse the IPv4 address, Felix expects this as a HostIPKey.  If we fail to parse then
-			// treat as a delete (i.e. leave ipv4 as nil).
-			if len(bgp.IPv4Address) != 0 {
-				ip, cidr, err = cnet.ParseCIDROrIP(bgp.IPv4Address)
-				if err == nil {
-					log.WithFields(log.Fields{"ip": ip, "cidr": cidr}).Debug("Parsed IPv4 address")
-					ipv4 = ip
-				} else {
-					log.WithError(err).WithField("IPv4Address", bgp.IPv4Address).Warn("Failed to parse IPv4Address")
-				}
-			}
-
 			// Parse the IPv4 IPIP tunnel address, Felix expects this as a HostConfigKey.  If we fail to parse then
 			// treat as a delete (i.e. leave ipv4Tunl as nil).
 			if len(bgp.IPv4IPIPTunnelAddr) != 0 {
@@ -91,19 +75,6 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 					log.WithField("IPv4IPIPTunnelAddr", bgp.IPv4IPIPTunnelAddr).Warn("Failed to parse IPv4IPIPTunnelAddr")
 					err = fmt.Errorf("failed to parsed IPv4IPIPTunnelAddr as an IP address")
 				}
-			}
-		}
-		// Look for internal node address, if BGP is not running
-		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, internalapi.InternalIP, 4)
-			if ip != nil {
-				ipv4 = ip
-			}
-		}
-		if ipv4 == nil {
-			ip, _ := cresources.FindNodeAddress(node, internalapi.ExternalIP, 4)
-			if ip != nil {
-				ipv4 = ip
 			}
 		}
 
@@ -218,13 +189,6 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	}
 
 	kvps := []*model.KVPair{
-		{
-			Key: model.HostIPKey{
-				Hostname: name,
-			},
-			Value:    ipv4,
-			Revision: kvp.Revision,
-		},
 		{
 			Key: model.HostConfigKey{
 				Hostname: name,

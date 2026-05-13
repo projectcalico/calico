@@ -558,7 +558,11 @@ func (c *Container) GetHostname() string {
 }
 
 func (c *Container) GetPIDs(processName string) []int {
-	out, err := c.ExecOutput("pgrep", "-f", fmt.Sprintf("^%s$", processName))
+	// Match either the bare name or the name followed by subcommand args
+	// (the combined calico binary is invoked as e.g. "calico-felix
+	// component felix", so an anchored exact match on the cmdline misses
+	// it).
+	out, err := c.ExecOutput("pgrep", "-f", fmt.Sprintf("^%s( |$)", processName))
 	if err != nil {
 		log.WithError(err).Warn("pgrep failed, assuming no PIDs")
 		return nil

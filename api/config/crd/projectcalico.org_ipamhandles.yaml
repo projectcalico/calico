@@ -24,20 +24,43 @@ spec:
         openAPIV3Schema:
           properties:
             apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
               type: string
             kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
               type: string
             metadata:
               type: object
             spec:
+              description: |-
+                IPAMHandleSpec contains the specification for an IPAMHandle resource.
+                This resource is managed internally by Calico IPAM and should not be modified manually.
               properties:
                 block:
                   additionalProperties:
                     type: integer
+                  description:
+                    Block maps block CIDRs to the number of allocations from
+                    that block held by this handle.
                   type: object
                 deleted:
+                  description:
+                    Deleted is an internal flag used to prevent races during
+                    handle cleanup. Should not be set manually.
                   type: boolean
                 handleID:
+                  description:
+                    HandleID is the unique identifier for this allocation
+                    handle.
                   type: string
               required:
                 - block

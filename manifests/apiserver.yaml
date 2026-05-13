@@ -69,12 +69,14 @@ spec:
     spec:
       containers:
         - args:
+            - component
+            - apiserver
             - --secure-port=5443
             - -v=5
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
-          image: quay.io/calico/apiserver:master
+          image: quay.io/calico/calico:master
           name: calico-apiserver
           readinessProbe:
             httpGet:

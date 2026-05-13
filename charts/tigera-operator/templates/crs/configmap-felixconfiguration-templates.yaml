@@ -1,7 +1,11 @@
 {{ if .Values.defaultFelixConfiguration.enabled }}
 {{ $spec := omit .Values.defaultFelixConfiguration "enabled" }}
 kind: FelixConfiguration
+{{- if lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "felixconfigurations.projectcalico.org" }}
+apiVersion: projectcalico.org/v3
+{{- else }}
 apiVersion: crd.projectcalico.org/v1
+{{- end }}
 metadata:
   name: default
 spec:

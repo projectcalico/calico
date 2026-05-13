@@ -1,0 +1,49 @@
+version: v1.0
+name: Publish nftables RPM images
+agent:
+  machine:
+    type: f1-standard-4
+    os_image: ubuntu2204
+execution_time_limit:
+  minutes: 60
+global_job_config:
+  secrets:
+    - name: docker
+    - name: google-service-account-for-gce
+  env_vars:
+    - name: GOOGLE_PROJECT
+      value: unique-caldron-775
+    - name: GCS_BUILD_CACHE_BUCKET
+      value: calico-transient-build-artifacts-europe-west3
+  prologue:
+    commands:
+      - checkout
+      - retry git fetch --unshallow
+      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - sudo apt-get install -y zstd || true
+      - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+      - gcloud config set project ${GOOGLE_PROJECT}
+      - mkdir -p logs
+      - export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
+  epilogue:
+    always:
+      commands:
+        - artifact push job logs --destination semaphore/logs || true
+blocks:
+  - name: Publish nftables RPM images
+    dependencies: []
+    skip:
+      when: "branch !~ '.+'"
+    task:
+      jobs:
+        - name: Push cached nftables RPMs
+          matrix:
+            - env_var: ARCH
+              values:
+                - amd64
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - .semaphore/scripts/push-nft-rpms.sh "${ARCH}"

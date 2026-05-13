@@ -1,0 +1,52 @@
+# Gateway API conformance metallb IPAddressPool (L2 mode).
+#
+# Calico's default LoadBalancer IP pools (hack/test/kind/infra/calico-lb-pools.yaml,
+# 80.15.0.0/24 + fdff::/64) are advertised via BGP through confd, gated on each
+# test's BGPConfiguration.serviceLoadBalancerIPs allow-list. Those IPs are
+# reachable inside the cluster via Calico's BGP fan-out, but the Gateway API
+# conformance test binary runs from the host (Semaphore VM or developer
+# laptop) where there is no BGP session and so the IPs aren't reachable.
+#
+# This file adds a namespace-scoped L2-mode pool whose addresses come from the
+# kind docker bridge subnet. Hosts have a direct route to that bridge, so LB
+# IPs land on the bridge and are reachable from the test runner via metallb's
+# L2 speaker ARP-ing for the IP. No Calico component announces LB IPs on L2
+# today (kube-controllers' loadbalancer controller is IPAM-only; confd is BGP
+# only) — metallb's speaker is the only L2 announcer available.
+#
+# The address range placeholder below is substituted at apply time by
+# `make e2e-gateway-setup`, which queries `docker network inspect kind`
+# for the kind bridge IPv4 subnet and picks .200-.250 of the same prefix
+# (matches what envoyproxy/gateway's tools/hack/create-cluster.sh does).
+#
+# serviceAllocation.priority is higher than the default BGP pool so the
+# conformance LB Services pin here deterministically. Only tigera-gateway
+# needs to be listed: Envoy Gateway runs in its default mode (rather than
+# GatewayNamespaceMode), so it provisions all data-plane Services in the
+# EG controller namespace, which Calico's tigera-operator hard-codes to
+# tigera-gateway. The Gateway resources themselves live in
+# gateway-conformance-infra, but those are CRs, not LB Services.
+# (Reference: envoyproxy/gateway internal/infrastructure/kubernetes/
+# proxy_infra.go GetResourceNamespace, and tigera-operator's gatewayapi
+# render which leaves Provider.Kubernetes.Deploy unset.)
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: gateway-conformance
+  namespace: metallb-system
+spec:
+  addresses:
+    - "__LB_RANGE_V4__"
+  serviceAllocation:
+    priority: 100
+    namespaces:
+      - tigera-gateway
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: gateway-conformance
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - gateway-conformance

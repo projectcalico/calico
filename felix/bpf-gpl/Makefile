@@ -41,18 +41,23 @@ CFLAGS +=  \
 	-I ./libbpf/src/ \
 	-I ./libbpf/include/uapi
 
-# Workaround for Debian placing "asm/types.h" in /usr/include/x86_64-linux-gnu
-# We also pick up a couple of other definitions from here, such as the socket
-# type constants (which are architecture dependent for historical reasons).
-TRIPLET := $(shell gcc -dumpmachine)
-CFLAGS += -I/usr/include/$(TRIPLET)
+# Host architecture define — BPF compilation uses "-target bpf" which
+# doesn't define the host arch, but glibc's gnu/stubs.h needs it to
+# select the right stubs file.  Since BPF always compiles natively,
+# derive this from the build host.
+HOST_ARCH := $(shell uname -m)
+ifeq ($(HOST_ARCH),x86_64)
+CFLAGS += -D__x86_64__
+endif
 
-ifeq ($(findstring x86_64,$(TRIPLET)),x86_64)
-	CFLAGS += -D__TARGET_ARCH_x86 -D__x86_64__
-else ifeq ($(findstring aarch64,$(TRIPLET)),aarch64)
-	CFLAGS += -D__TARGET_ARCH_arm64
-else ifeq ($(findstring ppc64le,$(TRIPLET)),ppc64le)
-	CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
+# Set target-arch defines for BPF compilation.  ARCH is passed from
+# felix/Makefile (defined in lib.Makefile as the target architecture).
+ifeq ($(ARCH),amd64)
+CFLAGS += -D__TARGET_ARCH_x86
+else ifeq ($(ARCH),arm64)
+CFLAGS += -D__TARGET_ARCH_arm64
+else ifeq ($(ARCH),ppc64le)
+CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
 endif
 CC := clang
 LD := llc
@@ -124,15 +129,23 @@ ut-objs: $(UT_OBJS)
 map-objs: $(MAP_OBJS)
 
 libbpf: $(LIBBPF_FILE_CREATED)
+# Clone libbpf at the pinned version in a single network round-trip.
+# Using `--branch $(LIBBPF_VERSION)` with `--depth 1` avoids a separate
+# `git fetch --tags` call, which was a flake source (GitHub occasionally
+# returns HTTP 500 for tag listings).
+#
+# NO_LIBBPF_CLONE=1 turns the clone into a hard failure. CI sets this
+# after restoring the libbpf tarball from GCS so that a missing marker
+# surfaces as an error instead of silently re-cloning (which would
+# negate the cache and restore the HTTP 500 flake risk).
 $(LIBBPF_FILE_CREATED):
-ifeq ("$(wildcard ./$(LIBBPF_DIR))", "")
-	$(info "Directory does not exist.")
-	@echo "Directory does not exist."
-	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --single-branch https://github.com/libbpf/libbpf.git
-endif
-	rm -rf .libbpf-*
-	cd $(LIBBPF_DIR) && \
-		env -u GIT_DIR -u GIT_WORK_TREE git fetch --tags && env -u GIT_DIR -u GIT_WORK_TREE git checkout $(LIBBPF_VERSION)
+	@if [ -n "$$NO_LIBBPF_CLONE" ]; then \
+		echo "ERROR: libbpf clone triggered but NO_LIBBPF_CLONE is set." >&2; \
+		echo "       The GCS-cached libbpf tarball was not restored correctly." >&2; \
+		exit 1; \
+	fi
+	rm -rf $(LIBBPF_DIR) .libbpf-*
+	env -u GIT_DIR -u GIT_WORK_TREE git clone --depth 1 --branch $(LIBBPF_VERSION) https://github.com/libbpf/libbpf.git
 	touch $(LIBBPF_FILE_CREATED)
 
 

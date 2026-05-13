@@ -16,7 +16,7 @@ type CalicoNodePeerApplyConfiguration struct {
 	// IP address of the peer whose condition we are reporting.
 	PeerIP *string `json:"peerIP,omitempty"`
 	// Type indicates whether this peer is configured via the node-to-node mesh,
-	// or via en explicit global or per-node BGPPeer object.
+	// or via an explicit global or per-node BGPPeer object.
 	Type *projectcalicov3.BGPPeerType `json:"type,omitempty"`
 	// State is the BGP session state.
 	State *projectcalicov3.BGPSessionState `json:"state,omitempty"`

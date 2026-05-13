@@ -61,7 +61,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 
 		By("adding host1")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
 			Ipv4Addr: "10.0.0.1",
 		})
@@ -70,7 +70,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("adding host2")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -79,7 +79,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
 		By("testing tolerance for duplicate ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host3",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -88,7 +88,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
 		By("removing the duplicate ip should keep the ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host3",
 		})
 		err = manager.CompleteDeferredWork()
@@ -96,7 +96,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", "10.0.0.2", externalCIDR)))
 
 		By("removing the initial copy of ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host2",
 		})
 		err = manager.CompleteDeferredWork()
@@ -104,11 +104,11 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("adding/removing a duplicate IP in one batch")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",
 			Ipv4Addr: "10.0.0.1",
 		})
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host2",
 		})
 		err = manager.CompleteDeferredWork()
@@ -116,7 +116,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 		Expect(allHostsSet()).To(Equal(set.From("10.0.0.1", externalCIDR)))
 
 		By("changing ip of host1")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
 			Ipv4Addr: "10.0.0.2",
 		})
@@ -170,7 +170,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
 
 		By("adding host1")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
 			Ipv6Addr: "dead:beef::1",
 		})
@@ -181,7 +181,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1")))
 
 		By("adding host2")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",
 			Ipv6Addr: "dead:beef::2",
 		})
@@ -190,7 +190,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1", "dead:beef::2")))
 
 		By("testing tolerance for duplicate ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host3",
 			Ipv6Addr: "dead:beef::2",
 		})
@@ -199,7 +199,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1", "dead:beef::2")))
 
 		By("removing the duplicate ip should keep the ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host3",
 		})
 		err = manager.CompleteDeferredWork()
@@ -207,7 +207,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1", "dead:beef::2")))
 
 		By("removing the initial copy of ip")
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host2",
 		})
 		err = manager.CompleteDeferredWork()
@@ -215,11 +215,11 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1")))
 
 		By("adding/removing a duplicate IP in one batch")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host2",
 			Ipv6Addr: "dead:beef::1",
 		})
-		manager.OnUpdate(&proto.HostMetadataV4V6Remove{
+		manager.OnUpdate(&proto.HostMetadataRemove{
 			Hostname: "host2",
 		})
 		err = manager.CompleteDeferredWork()
@@ -227,7 +227,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 		Expect(allHostsSet()).To(Equal(set.From("dead:beef::1")))
 
 		By("changing ip of host1")
-		manager.OnUpdate(&proto.HostMetadataV4V6Update{
+		manager.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "host1",
 			Ipv6Addr: "dead:beef::2",
 		})

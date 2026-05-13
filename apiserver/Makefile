@@ -6,11 +6,6 @@ LOCAL_CHECKS     = lint-cache-dir
 # Used so semaphore commits generated files when pins are updated
 EXTRA_FILES_TO_COMMIT=*_generated.go *_generated.*.go
 
-# Name of the images.
-# e.g., <registry>/<name>:<tag>
-API_SERVER_IMAGE      ?=apiserver
-BUILD_IMAGES          ?=$(API_SERVER_IMAGE)
-
 EXTRA_DOCKER_ARGS += -v $(CURDIR)/../hack/boilerplate:/go/src/k8s.io/kubernetes/hack/boilerplate:rw
 
 ###############################################################################
@@ -22,15 +17,6 @@ SRC_DIRS = $(shell sh -c "find $(TOP_SRC_DIRS) -name \\*.go \
                    -exec dirname {} \\; | sort | uniq")
 TEST_DIRS ?= $(shell sh -c "find $(TOP_SRC_DIRS) -name \\*_test.go \
                     -exec dirname {} \\; | sort | uniq")
-
-ifeq ($(shell uname -s),Darwin)
-	STAT = stat -f '%c %N'
-else
-	STAT = stat -c '%Y %n'
-endif
-
-K8SAPISERVER_GO_FILES = $(shell find $(SRC_DIRS) -name \*.go -exec $(STAT) {} \; \
-                   | sort -r | head -n 1 | sed "s/.* //")
 
 ifdef UNIT_TESTS
 UNIT_TEST_FLAGS = -run $(UNIT_TESTS) -v
@@ -47,61 +33,6 @@ CALICO_API_GROUP := crd.projectcalico.org/v1
 #   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ##############################################################################
 include ../lib.Makefile
-
-
-FIPS ?= false
-
-ifeq ($(FIPS),true)
-CONTAINER_MARKER=$(CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-BINDIR=bin/$(ARCH)-fips
-else
-CONTAINER_MARKER=$(CONTAINER_CREATED)
-BINDIR=bin
-endif
-
-###############################################################################
-# This section builds the output binaries.
-# Some will have dedicated targets to make it easier to type, for example
-# "apiserver" instead of "$(BINDIR)/apiserver".
-###############################################################################
-$(BINDIR)/apiserver-$(ARCH): $(K8SAPISERVER_GO_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
-else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/apiserver, $@)
-endif
-
-###############################################################################
-# Building the image
-###############################################################################
-.PHONY: build
-build: $(BINDIR)/apiserver-$(ARCH)
-
-bin/LICENSE: ../LICENSE.md
-	cp ../LICENSE.md $@
-
-CONTAINER_CREATED=.apiserver.created-$(ARCH)
-CONTAINER_FIPS_CREATED=.apiserver.created-$(ARCH)-fips
-
-.PHONY: image $(API_SERVER_IMAGE)
-image: $(API_SERVER_IMAGE)
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
-sub-image-%:
-	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
-
-$(API_SERVER_IMAGE): $(CONTAINER_MARKER)
-$(CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-$(ARCH) -f Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-$(CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/apiserver-$(ARCH) bin/LICENSE
-	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(API_SERVER_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
-	$(MAKE) FIPS=true retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
-	touch $@
 
 .PHONY: lint-cache-dir
 lint-cache-dir:
@@ -186,16 +117,11 @@ fv-kdd: run-kubernetes-server hack-lib
 		sh -c 'DATASTORE_TYPE="kubernetes" test/integration.sh'
 
 .PHONY: clean
-clean: clean-bin clean-hack-lib
-	# Clean .created files which indicate images / releases have been built.
+clean: clean-hack-lib
+	rm -rf $(BINDIR) bin
 	find . -name '.*.created*' -type f -delete
 	find . -name '.*.published*' -type f -delete
 	rm -rf .lint-cache
-	-docker image rm -f $$(docker images $(API_SERVER_IMAGE) -a -q)
-
-clean-bin:
-	rm -rf $(BINDIR) \
-	    docker-image/bin
 
 clean-hack-lib:
 	rm -rf hack/lib/
@@ -205,37 +131,7 @@ clean-hack-lib:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks image ut fv
-
-## Deploys images to registry
-cd: image-all cd-common
-
-###############################################################################
-# Release
-###############################################################################
-## Produces a clean build of release artifacts at the specified version.
-release-build: .release-$(VERSION).created
-.release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries IMAGETAG=$(VERSION) RELEASE=true
-	# Generate the `latest` images.
-	$(MAKE) retag-build-images-with-registries IMAGETAG=latest RELEASE=true
-	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=$(VERSION)-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries IMAGETAG=latest-fips RELEASE=true LATEST_IMAGE_TAG=latest-fips
-	touch $@
-
-## Pushes a github release and release artifacts produced by `make release-build`.
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
-
-# WARNING: Only run this target if this release is the latest stable release. Do NOT
-# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
-## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=latest RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
+ci: clean static-checks ut fv
 
 ###############################################################################
 # Utils

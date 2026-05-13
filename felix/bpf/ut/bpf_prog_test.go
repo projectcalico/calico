@@ -667,7 +667,7 @@ func initMapsOnce() {
 		allowSourcesMap = allowsources.Map()
 		allowSourcesMapV6 = allowsources.MapV6()
 
-		ringBufMap = ringbuf.Map("rb_evnt", 1024*1024)
+		ringBufMap = ringbuf.Map("rb_evnt", rbSize)
 		ringBufDropsMap = ringbuf.DropsMap()
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
@@ -683,6 +683,49 @@ func initMapsOnce() {
 		}
 
 	})
+}
+
+// rbSize is the size in bytes of the shared cali_rb_evnt ring buffer map.
+// Must be a power of two and a multiple of the page size (the kernel ring buffer ABI requirement).
+const rbSize = 1024 * 1024
+
+// newTestRingBuf opens a reader on the shared cali_rb_evnt ring buffer used
+// by all BPF UT programs and drains any events left over from earlier tests,
+// so rb.Next() only observes events produced after this call. The reader is
+// closed automatically at the end of the test via t.Cleanup, even if an
+// assertion fails partway through.
+//
+// Prefer this helper over calling ringbuf.New directly — the ring buffer map
+// is pinned and shared across tests, so a naked reader can pick up stray
+// records (TYPE_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
+func newTestRingBuf(t *testing.T) *ringbuf.RingBuffer {
+	rb, err := ringbuf.New(ringBufMap, rbSize)
+	Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() { _ = rb.Close() })
+	if n := rb.Drain(); n > 0 {
+		t.Logf("newTestRingBuf: drained %d stale event(s) from cali_rb_evnt — an earlier test likely left records unread", n)
+	}
+	return rb
+}
+
+// ringBufNextWithTimeout reads the next event from rb, failing the test after
+// 5s rather than blocking on epoll indefinitely. Use this instead of rb.Next()
+// directly so a silent BPF-side regression surfaces as a clear timeout instead
+// of a hung test.
+func ringBufNextWithTimeout(t *testing.T, rb *ringbuf.RingBuffer) ringbuf.Event {
+	t.Helper()
+	var (
+		evt ringbuf.Event
+		err error
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		evt, err = rb.Next()
+	}()
+	Eventually(done, "5s").Should(BeClosed(), "timed out waiting for ring buffer event")
+	Expect(err).NotTo(HaveOccurred())
+	return evt
 }
 
 func cleanupMap(m maps.Map) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Pod setup status wait", []a
 
 		It("should create endpoint-status files in a directory named endpoint-status with the specified directory prefix", func() {
 			tc.Felixes[0].TriggerDelayedStart()
+			Eventually(dataplaneInSyncReceivedC, "10s").Should(BeClosed(), "receipt of DataplaneInSync message not seen in logs")
 			var filenames [2]string
 			var statCmds [2]func() error
 			for i := range dummyWorkloads {

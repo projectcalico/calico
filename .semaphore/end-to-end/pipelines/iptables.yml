@@ -209,6 +209,10 @@ blocks:
           matrix:
             - env_var: MANIFEST_FILE
               values: ["calico.yaml", "calico-typha.yaml"]
+          env_vars:
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
         - name: etcd
           execution_time_limit:
             hours: 7
@@ -220,7 +224,7 @@ blocks:
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
       env_vars:
         - name: K8S_VERSION
           value: "stable-1" # Normally this would be stable, but kind doesn't always support stable immediately
@@ -336,6 +340,9 @@ blocks:
               value: "true"
             - name: PROVISIONER
               value: "gcp-kubeadm"
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
 
   - name: k8s distros
     dependencies: []
@@ -712,6 +719,10 @@ blocks:
               values: ["stable-3"]
             - env_var: MANIFEST_FILE
               values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
+          env_vars:
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
         - name: kdd - new
           execution_time_limit:
             hours: 7
@@ -725,6 +736,9 @@ blocks:
           env_vars:
             - name: K8S_E2E_FLAGS
               value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
 
         - name: etcd
           execution_time_limit:
@@ -739,6 +753,9 @@ blocks:
               value: "true"
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
+            # No API server in etcd mode; skip tiered RBAC tests.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.skip=(Tiered RBAC)
       env_vars:
         - name: PROVISIONER
           value: gcp-kubeadm

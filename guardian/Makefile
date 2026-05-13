@@ -2,13 +2,6 @@ include ../metadata.mk
 
 PACKAGE_NAME   ?= github.com/projectcalico/calico/guardian
 
-#############################################
-# Env vars related to packaging and releasing
-#############################################
-COMPONENTS            ?=guardian
-GUARDIAN_IMAGE        ?=guardian
-BUILD_IMAGES          ?=$(GUARDIAN_IMAGE)
-
 ##############################################################################
 # Include ../lib.Makefile before anything else
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -16,52 +9,15 @@ BUILD_IMAGES          ?=$(GUARDIAN_IMAGE)
 ##############################################################################
 include ../lib.Makefile
 
-##########################################################################################
-# Define some constants
-##########################################################################################
 BRANCH_NAME ?= $(PIN_BRANCH)
 
 BINDIR        ?= bin
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
 
-##########################################################################################
-# BUILD
-##########################################################################################
-build: $(BINDIR)/guardian-$(ARCH)
-
-.PHONY: $(BINDIR)/guardian-$(ARCH)
-$(BINDIR)/guardian-$(ARCH): $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./cmd/guardian/main.go, $@)
-else
-	$(call build_binary, ./cmd/guardian/main.go, $@)
-endif
-
 gen-mocks:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'mockery'
 
 gen-files: gen-mocks
-
-#############################################
-# Docker Image
-#############################################
-GUARDIAN_CONTAINER_CREATED=.guardian.created-$(ARCH)
-
-# by default, build the image for the target architecture
-.PHONY: image-all
-image-all: $(addprefix sub-image-,$(VALIDARCHES))
-sub-image-%:
-	$(MAKE) image ARCH=$*
-
-.PHONY: image
-image: $(BUILD_IMAGES)
-
-$(GUARDIAN_IMAGE): $(GUARDIAN_CONTAINER_CREATED)
-IMAGE_DEPS = docker-image/guardian/Dockerfile
-$(GUARDIAN_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/guardian-$(ARCH)
-	$(DOCKER_BUILD) -t $(GUARDIAN_IMAGE):latest-$(ARCH) -f docker-image/guardian/Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest BUILD_IMAGES=$(GUARDIAN_IMAGE)
-	touch $@
 
 #############################################
 # Run unit level tests
@@ -72,41 +28,18 @@ ut:
 	mkdir -p report
 	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_ut.xml -- -race ./pkg/... -cover -count 1
 
-.PHONY: ut
+.PHONY: fv
 ## Run only Unit Tests.
 fv:
 	mkdir -p report
 	$(DOCKER_GO_BUILD) gotestsum --junitfile report/guardian_fv.xml -- -race ./tests/fv/... -cover -count 1
 
 ##########################################################################################
-# CI/CD
+# CI
 ##########################################################################################
-.PHONY: ci cd
-
-#############################################
-# Run CI cycle - build, test, etc.
-#############################################
+.PHONY: ci
 ## Run all CI steps for build and test, likely other targets.
 ci: static-checks ut fv
 
 clean:
 	rm -rf $(BINDIR)
-	rm -f $(GUARDIAN_CONTAINER_CREATED)
-
-#############################################
-# Deploy images to registry
-#############################################
-## Run all CD steps, normally pushing images out to registries.
-cd: image-all cd-common
-
-release-build: .release-$(VERSION).created
-.release-$(VERSION).created:
-	$(MAKE) clean image-all RELEASE=true
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
-	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	touch $@
-
-release-publish: release-prereqs .release-$(VERSION).published
-.release-$(VERSION).published:
-	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@

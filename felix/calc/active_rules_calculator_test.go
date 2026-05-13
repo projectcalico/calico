@@ -17,15 +17,15 @@ package calc
 import (
 	"testing"
 
+	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-// testPolicyMatchListener records calls to the PolicyMatchListener interface.
-type testPolicyMatchListener struct {
-	policyMatches              []policyMatchEvent
-	policyMatchStops           []policyMatchEvent
+// testComputedSelectorListener records calls to the ComputedSelectorListener interface.
+type testComputedSelectorListener struct {
 	computedSelectorMatches    []computedSelectorMatchEvent
 	computedSelectorMatchStops []computedSelectorMatchEvent
 }
@@ -40,19 +40,11 @@ type computedSelectorMatchEvent struct {
 	EndpointKey model.EndpointKey
 }
 
-func (t *testPolicyMatchListener) OnPolicyMatch(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
-	t.policyMatches = append(t.policyMatches, policyMatchEvent{policyKey, endpointKey})
-}
-
-func (t *testPolicyMatchListener) OnPolicyMatchStopped(policyKey model.PolicyKey, endpointKey model.EndpointKey) {
-	t.policyMatchStops = append(t.policyMatchStops, policyMatchEvent{policyKey, endpointKey})
-}
-
-func (t *testPolicyMatchListener) OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey) {
+func (t *testComputedSelectorListener) OnComputedSelectorMatch(cs string, endpointKey model.EndpointKey) {
 	t.computedSelectorMatches = append(t.computedSelectorMatches, computedSelectorMatchEvent{cs, endpointKey})
 }
 
-func (t *testPolicyMatchListener) OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey) {
+func (t *testComputedSelectorListener) OnComputedSelectorMatchStopped(cs string, endpointKey model.EndpointKey) {
 	t.computedSelectorMatchStops = append(t.computedSelectorMatchStops, computedSelectorMatchEvent{cs, endpointKey})
 }
 
@@ -64,11 +56,10 @@ func (n *noopRuleScanner) OnPolicyInactive(model.PolicyKey)                     
 func (n *noopRuleScanner) OnProfileActive(model.ProfileRulesKey, *model.ProfileRules) {}
 func (n *noopRuleScanner) OnProfileInactive(model.ProfileRulesKey)                    {}
 
-func createARC() (*ActiveRulesCalculator, *testPolicyMatchListener) {
+func createARC() (*ActiveRulesCalculator, *testComputedSelectorListener) {
 	arc := NewActiveRulesCalculator()
 	arc.RuleScanner = &noopRuleScanner{}
-	listener := &testPolicyMatchListener{}
-	arc.RegisterPolicyMatchListener(listener)
+	listener := &testComputedSelectorListener{}
 	return arc, listener
 }
 
@@ -95,7 +86,7 @@ func deleteEndpoint(arc *ActiveRulesCalculator, key model.WorkloadEndpointKey) {
 func TestARC_ComputedSelector_MatchOnEndpointAdd(t *testing.T) {
 	arc, listener := createARC()
 
-	arc.AddExtraComputedSelector("has(foo)")
+	arc.AddExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -120,7 +111,7 @@ func TestARC_ComputedSelector_MatchOnEndpointAdd(t *testing.T) {
 func TestARC_ComputedSelector_MatchStoppedOnEndpointRemove(t *testing.T) {
 	arc, listener := createARC()
 
-	arc.AddExtraComputedSelector("has(foo)")
+	arc.AddExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -147,7 +138,7 @@ func TestARC_ComputedSelector_MatchStoppedOnEndpointRemove(t *testing.T) {
 func TestARC_ComputedSelector_NoMatchForNonMatchingEndpoint(t *testing.T) {
 	arc, listener := createARC()
 
-	arc.AddExtraComputedSelector("has(foo)")
+	arc.AddExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -169,7 +160,7 @@ func TestARC_ComputedSelector_NoMatchForNonMatchingEndpoint(t *testing.T) {
 func TestARC_RemoveComputedSelector(t *testing.T) {
 	arc, listener := createARC()
 
-	arc.AddExtraComputedSelector("has(foo)")
+	arc.AddExtraComputedSelector("has(foo)", listener)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -184,7 +175,7 @@ func TestARC_RemoveComputedSelector(t *testing.T) {
 	}
 
 	// Remove the computed selector — should fire match-stopped.
-	arc.RemoveExtraComputedSelector("has(foo)")
+	arc.RemoveExtraComputedSelector("has(foo)", listener)
 
 	if len(listener.computedSelectorMatchStops) != 1 {
 		t.Fatalf("expected 1 match stop after removing selector, got %d", len(listener.computedSelectorMatchStops))
@@ -211,10 +202,16 @@ func TestARC_RemoveComputedSelector(t *testing.T) {
 	}
 }
 
-func TestARC_ComputedSelector_DoesNotTriggerPolicyCallbacks(t *testing.T) {
-	arc, listener := createARC()
+// --- Multi-listener AddExtraComputedSelector tests ---
 
-	arc.AddExtraComputedSelector("has(foo)")
+func TestARC_MultiListener_BothGetCallbacks(t *testing.T) {
+	arc, _ := createARC()
+	listenerA := &testComputedSelectorListener{}
+	listenerB := &testComputedSelectorListener{}
+
+	// Two different components register the same selector.
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
 
 	epKey := model.WorkloadEndpointKey{
 		Hostname:       "host1",
@@ -224,13 +221,173 @@ func TestARC_ComputedSelector_DoesNotTriggerPolicyCallbacks(t *testing.T) {
 	}
 	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
 
-	// Computed selector match should NOT produce policy callbacks.
-	if len(listener.policyMatches) != 0 {
-		t.Errorf("expected no policy matches, got %d", len(listener.policyMatches))
+	// Both listeners get a callback.
+	for name, l := range map[string]*testComputedSelectorListener{"A": listenerA, "B": listenerB} {
+		if len(l.computedSelectorMatches) != 1 {
+			t.Fatalf("listener %s: expected 1 match callbacks, got %d", name, len(l.computedSelectorMatches))
+		}
+		if l.computedSelectorMatches[0].Selector != "has(foo)" {
+			t.Errorf("listener %s: expected selector %q, got %q", name, "has(foo)", l.computedSelectorMatches[0].Selector)
+		}
 	}
-	if len(listener.policyMatchStops) != 0 {
-		t.Errorf("expected no policy match stops, got %d", len(listener.policyMatchStops))
+}
+
+func TestARC_MultiListener_RemoveOneStillActive(t *testing.T) {
+	RegisterTestingT(t)
+	arc, _ := createARC()
+	listenerA := &testComputedSelectorListener{}
+	listenerB := &testComputedSelectorListener{}
+
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
+
+	epKey := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl1",
+		EndpointID:     "ep1",
 	}
+	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
+	listenerA.computedSelectorMatches = nil
+	listenerB.computedSelectorMatches = nil
+
+	// Remove listener A — B still holds a reference.
+	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
+
+	// Expect match-stopped to listener A only
+	Expect(listenerA.computedSelectorMatchStops).To(HaveLen(1))
+	Expect(listenerB.computedSelectorMatchStops).To(HaveLen(0))
+
+	// A new matching endpoint should still trigger a match on listenerB.
+	epKey2 := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl2",
+		EndpointID:     "ep2",
+	}
+	addEndpoint(arc, epKey2, map[string]string{"foo": "baz"})
+	Expect(listenerB.computedSelectorMatches).To(HaveLen(1))
+	Expect(listenerA.computedSelectorMatches).To(HaveLen(0))
+
+	// Removing a matching endpoint should trigger a match-stopped on listenerB.
+	listenerA.computedSelectorMatchStops = nil
+	listenerB.computedSelectorMatchStops = nil
+	deleteEndpoint(arc, epKey2)
+	Expect(listenerA.computedSelectorMatchStops).To(HaveLen(0))
+	Expect(listenerB.computedSelectorMatchStops).To(HaveLen(1))
+}
+
+func TestARC_MultiListener_RemoveBothDeactivates(t *testing.T) {
+	arc, _ := createARC()
+	listenerA := &testComputedSelectorListener{}
+	listenerB := &testComputedSelectorListener{}
+
+	arc.AddExtraComputedSelector("has(foo)", listenerA)
+	arc.AddExtraComputedSelector("has(foo)", listenerB)
+
+	epKey := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl1",
+		EndpointID:     "ep1",
+	}
+	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
+
+	// Remove both listeners.
+	arc.RemoveExtraComputedSelector("has(foo)", listenerA)
+	arc.RemoveExtraComputedSelector("has(foo)", listenerB)
+
+	// Both listeners should have match-stopped.
+	for name, l := range map[string]*testComputedSelectorListener{"A": listenerA, "B": listenerB} {
+		if len(l.computedSelectorMatchStops) != 1 {
+			t.Fatalf("listener %s: expected 1 match stop after removing both listeners, got %d", name, len(l.computedSelectorMatchStops))
+		}
+	}
+
+	// Reset and verify no further callbacks.
+	listenerA.computedSelectorMatches = nil
+	listenerA.computedSelectorMatchStops = nil
+	listenerB.computedSelectorMatches = nil
+	listenerB.computedSelectorMatchStops = nil
+
+	epKey2 := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl2",
+		EndpointID:     "ep2",
+	}
+	addEndpoint(arc, epKey2, map[string]string{"foo": "baz"})
+
+	for name, l := range map[string]*testComputedSelectorListener{"A": listenerA, "B": listenerB} {
+		if len(l.computedSelectorMatches) != 0 {
+			t.Errorf("listener %s: expected no matches after both listeners removed, got %d", name, len(l.computedSelectorMatches))
+		}
+	}
+}
+
+func TestARC_MultiListener_DuplicateAddFromSameListener(t *testing.T) {
+	arc, _ := createARC()
+	listener := &testComputedSelectorListener{}
+
+	// Same listener adds the same selector twice.
+	arc.AddExtraComputedSelector("has(foo)", listener)
+	arc.AddExtraComputedSelector("has(foo)", listener)
+
+	epKey := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl1",
+		EndpointID:     "ep1",
+	}
+	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
+
+	if len(listener.computedSelectorMatches) != 1 {
+		t.Fatalf("expected 1 match, got %d", len(listener.computedSelectorMatches))
+	}
+
+	// A single Remove should be enough since the set deduplicates the listener.
+	arc.RemoveExtraComputedSelector("has(foo)", listener)
+
+	if len(listener.computedSelectorMatchStops) != 1 {
+		t.Fatalf("expected 1 match stop after single remove, got %d", len(listener.computedSelectorMatchStops))
+	}
+}
+
+func TestARC_MultiListener_RemoveWithoutAdd(t *testing.T) {
+	arc, _ := createARC()
+	listener := &testComputedSelectorListener{}
+
+	// Removing a selector that was never added should be a no-op.
+	arc.RemoveExtraComputedSelector("has(foo)", listener)
+
+	epKey := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl1",
+		EndpointID:     "ep1",
+	}
+	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
+
+	if len(listener.computedSelectorMatches) != 0 {
+		t.Errorf("expected no matches, got %d", len(listener.computedSelectorMatches))
+	}
+	if len(listener.computedSelectorMatchStops) != 0 {
+		t.Errorf("expected no match stops, got %d", len(listener.computedSelectorMatchStops))
+	}
+}
+
+func TestARC_ComputedSelector_DoesNotCreatePolicyEntries(t *testing.T) {
+	arc, listener := createARC()
+
+	arc.AddExtraComputedSelector("has(foo)", listener)
+
+	epKey := model.WorkloadEndpointKey{
+		Hostname:       "host1",
+		OrchestratorID: "orch",
+		WorkloadID:     "wl1",
+		EndpointID:     "ep1",
+	}
+	addEndpoint(arc, epKey, map[string]string{"foo": "bar"})
 
 	// policyIDToEndpointKeys should be empty — computed selectors don't create policy entries.
 	if arc.policyIDToEndpointKeys.Len() != 0 {

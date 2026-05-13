@@ -17,7 +17,6 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	net2 "net"
 	"reflect"
 	"strings"
 	"time"
@@ -39,13 +38,11 @@ const (
 type (
 	rawString string
 	rawBool   bool
-	rawIP     net.IP
 )
 
 var (
 	rawStringType = reflect.TypeFor[rawString]()
 	rawBoolType   = reflect.TypeFor[rawBool]()
-	rawIPType     = reflect.TypeFor[rawIP]()
 )
 
 // LegacyKey is an interface implemented by keys that carry old information but
@@ -301,13 +298,6 @@ func keyFromDefaultPathInner(path string, parts []string) Key {
 				}
 				return HostMetadataKey{
 					Hostname: hostname,
-				}
-			case "bird_ip":
-				if len(parts) != 5 {
-					return nil
-				}
-				return HostIPKey{
-					Hostname: unescapeName(hostname),
 				}
 			case "wireguard":
 				if len(parts) != 5 {
@@ -565,9 +555,6 @@ func OldKeyFromDefaultPath(path string) Key {
 	} else if m := matchTier.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a policy tier: %v", path)
 		return TierKey{Name: m[1]}
-	} else if m := matchHostIp.FindStringSubmatch(path); m != nil {
-		log.Debugf("Path is a host ID: %v", path)
-		return HostIPKey{Hostname: unescapeName(m[1])}
 	} else if m := matchWireguard.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a node name: %v", path)
 		return WireguardKey{NodeName: unescapeName(m[1])}
@@ -621,14 +608,6 @@ func parseRawBool(rawData []byte) bool {
 	return string(rawData) == "true"
 }
 
-func parseRawIP(rawData []byte) *net.IP {
-	ip := net2.ParseIP(string(rawData))
-	if ip == nil {
-		return nil
-	}
-	return &net.IP{IP: ip}
-}
-
 func parseJSONValue[V any](key Key, rawData []byte) (V, error) {
 	var v V
 
@@ -678,9 +657,6 @@ func SerializeValue(d *KVPair) ([]byte, error) {
 		return []byte(d.Value.(string)), nil
 	}
 	if valueType == rawBoolType {
-		return fmt.Append(nil, d.Value), nil
-	}
-	if valueType == rawIPType {
 		return fmt.Append(nil, d.Value), nil
 	}
 	return json.Marshal(d.Value)

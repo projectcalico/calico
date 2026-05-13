@@ -26,10 +26,12 @@ type BirdBGPConfig struct {
 	Communities      []CommunityRule
 	LogLevel         string
 	DebugMode        string // "all", "{ states }", or "" (none)
+	PeerDebugMode    string // Debug configuration for BGP peers (more verbose than DebugMode)
 	ListenAddress    string
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
 
+	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string

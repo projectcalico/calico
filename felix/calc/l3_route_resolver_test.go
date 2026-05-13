@@ -33,7 +33,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 		BeforeEach(func() {
 			eventBuf = make(rtEventsMock, 100)
-			l3RR = NewL3RouteResolver("test-hostname", eventBuf, true, "CalicoIPAM")
+			l3RR = NewL3RouteResolver("test-hostname", eventBuf, "CalicoIPAM")
 			l3RR.OnAlive = func() {}
 		})
 
@@ -148,7 +148,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 		BeforeEach(func() {
 			eventBuf = make(rtEventsMock, 100)
-			l3RR = NewL3RouteResolver("local-host", eventBuf, true, "CalicoIPAM")
+			l3RR = NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
 			l3RR.OnAlive = func() {}
 		})
 

@@ -106,6 +106,15 @@ func TestTCPResetIPv6(t *testing.T) {
 		Expect(tcpR.SrcPort).To(Equal(tcp.DstPort))
 		Expect(tcpR.DstPort).To(Equal(tcp.SrcPort))
 		Expect(tcpR.Seq).To(Equal(uint32(0)))
+
+		// Verify TCP checksum by recomputing it with gopacket
+		tcpCSum := tcpR.Checksum
+		_ = tcpR.SetNetworkLayerForChecksum(ipv6R)
+		buf := gopacket.NewSerializeBuffer()
+		err = gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true},
+			ipv6R, tcpR)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(tcpCSum).To(Equal(tcpR.Checksum), "IPv6 TCP checksum mismatch")
 	}, withIPv6())
 
 }
@@ -136,4 +145,13 @@ func checkTcpRst(pktR gopacket.Packet, ipv4 *layers.IPv4, tcp *layers.TCP, ack b
 	Expect(tcpR.SrcPort).To(Equal(tcp.DstPort))
 	Expect(tcpR.DstPort).To(Equal(tcp.SrcPort))
 	Expect(tcpR.Seq).To(Equal(uint32(0)))
+
+	// Verify TCP checksum by recomputing it with gopacket
+	tcpCSum := tcpR.Checksum
+	_ = tcpR.SetNetworkLayerForChecksum(ipv4R)
+	buf := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(buf, gopacket.SerializeOptions{ComputeChecksums: true},
+		ipv4R, tcpR)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(tcpCSum).To(Equal(tcpR.Checksum), "TCP checksum mismatch")
 }

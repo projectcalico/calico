@@ -24,9 +24,12 @@ import (
 
 // +k8s:openapi-gen=true
 // +kubebuilder:resource:scope=Cluster
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-admin' ? self.spec.defaultAction == 'Pass' : true", message="The 'kube-admin' tier must have default action 'Pass'"
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-baseline' ? self.spec.defaultAction == 'Pass' : true", message="The 'kube-baseline' tier must have default action 'Pass'"
-// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' ? self.spec.defaultAction == 'Deny' : true", message="The 'default' tier must have default action 'Deny'"
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-admin' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Pass') : true", message="The 'kube-admin' tier must have default action 'Pass'",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'kube-baseline' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Pass') : true", message="The 'kube-baseline' tier must have default action 'Pass'",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' ? (has(self.spec.defaultAction) && self.spec.defaultAction == 'Deny') : true", message="The 'default' tier must have default action 'Deny'",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'default' || (has(self.spec.order) && self.spec.order == 1000000.0)",message="default tier order must be 1000000",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-admin' || (has(self.spec.order) && self.spec.order == 1000.0)",message="kube-admin tier order must be 1000",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="self.metadata.name != 'kube-baseline' || (has(self.spec.order) && self.spec.order == 10000000.0)",message="kube-baseline tier order must be 10000000",reason=FieldValueInvalid
 // +kubebuilder:subresource:status
 type Tier struct {
 	metav1.TypeMeta   `json:",inline"`

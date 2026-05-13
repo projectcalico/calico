@@ -8,7 +8,7 @@ import { SelectOption } from '@/libs/tigera/ui-components/components/common/Sele
 import {
     DataListOmniFilterParam,
     FilterHintKey,
-    FilterKey,
+    SelectedOmniFilterValues,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import React from 'react';
@@ -18,6 +18,7 @@ type PolicySelectProps = {
     value: OmniFilterOption | null | undefined;
     onChange: (value: SelectOption | null) => void;
     showSearch?: boolean;
+    placeholder: string;
 };
 
 const PolicySelect: React.FC<PolicySelectProps> = ({
@@ -25,6 +26,7 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
     value,
     onChange,
     showSearch = true,
+    placeholder,
 }) => {
     const { data, fetchData } = useOmniFilterQuery(filterKey);
     const debounce = useDebouncedCallback();
@@ -33,7 +35,7 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
 
     const getData = (searchOption?: string) => {
         const query = transformToFlowsFilterQuery(
-            {} as Record<FilterKey, string[]>,
+            {} as SelectedOmniFilterValues,
             filterKey as DataListOmniFilterParam,
             searchOption,
         );
@@ -84,7 +86,7 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
                 customContent: value ? (
                     <p>{value.label}</p>
                 ) : (
-                    <p className='text-tigera-token-fg-subtle'>Select...</p>
+                    <p className='text-tigera-token-fg-subtle'>{placeholder}</p>
                 ),
             },
         }),

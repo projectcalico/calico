@@ -688,7 +688,8 @@ func restClient(cfg rest.Config, group resources.BackingAPIGroup) (*rest.RESTCli
 
 // Create an entry in the datastore.  This errors if the entry already exists.
 func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
-	log.Debugf("Performing 'Create' for %+v", d)
+	// Do not log d.Value, it may contain sensitive resource specs (e.g. BGPPassword).
+	log.Debugf("Performing 'Create' for %s", d.Key)
 	client := c.getResourceClientFromKey(d.Key)
 	if client == nil {
 		log.Debug("Attempt to 'Create' using kubernetes backend is not supported.")
@@ -703,7 +704,8 @@ func (c *KubeClient) Create(ctx context.Context, d *model.KVPair) (*model.KVPair
 // Update an existing entry in the datastore.  This errors if the entry does
 // not exist.
 func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
-	log.Debugf("Performing 'Update' for %+v", d)
+	// Do not log d.Value, it may contain sensitive resource specs (e.g. BGPPassword).
+	log.Debugf("Performing 'Update' for %s", d.Key)
 	client := c.getResourceClientFromKey(d.Key)
 	if client == nil {
 		log.Debug("Attempt to 'Update' using kubernetes backend is not supported.")
@@ -718,7 +720,8 @@ func (c *KubeClient) Update(ctx context.Context, d *model.KVPair) (*model.KVPair
 // UpdateStatus updates the status of an existing entry in the datastore using
 // the status subresource.  This errors if the entry does not exist.
 func (c *KubeClient) UpdateStatus(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
-	log.Debugf("Performing 'UpdateStatus' for %+v", d)
+	// Do not log d.Value, it may contain sensitive resource specs (e.g. BGPPassword).
+	log.Debugf("Performing 'UpdateStatus' for %s", d.Key)
 	client := c.getResourceClientFromKey(d.Key)
 	if client == nil {
 		log.Debug("Attempt to 'UpdateStatus' using kubernetes backend is not supported.")
@@ -742,10 +745,8 @@ func (c *KubeClient) UpdateStatus(ctx context.Context, d *model.KVPair) (*model.
 // exists.  This is not exposed in the main client - but we keep here for the backend
 // API.
 func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	logContext := log.WithFields(log.Fields{
-		"Key":   kvp.Key,
-		"Value": kvp.Value,
-	})
+	// Do not log kvp.Value, it may contain sensitive resource specs (e.g. BGPPassword).
+	logContext := log.WithField("Key", kvp.Key)
 	logContext.Debug("Apply Kubernetes resource")
 
 	// Attempt to Create and do an Update if the resource already exists.

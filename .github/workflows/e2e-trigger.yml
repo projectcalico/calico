@@ -227,11 +227,11 @@ jobs:
           steps.validate.outputs.profile_invalid == 'false' &&
           (steps.check-images.outputs.calico_exists == 'true' || steps.build-images.outcome == 'success')
         id: helm-chart
-        run: .github/scripts/package-helm-chart.sh
-        env:
-          TAG: ${{ steps.pr.outputs.image_tag }}
-          REGISTRY: gcr.io
-          IMAGE_PATH: unique-caldron-775/ci/calico
+        run: |
+          make push-chart \
+            DEV_IMAGE_REGISTRY=gcr.io \
+            DEV_IMAGE_PATH=unique-caldron-775/ci/calico \
+            DEV_IMAGE_TAG="${{ steps.pr.outputs.image_tag }}"
 
       - name: Update status comment after build success
         if: >
