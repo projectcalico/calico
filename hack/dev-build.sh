@@ -57,7 +57,7 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
-# Build the operator image if its inputs (tag, registry, branch, versions)
+# Build the operator image if its inputs (tag, registry, repo, branch, versions)
 # have changed since the last run.
 operator() {
     mkdir -p "$STAMP_DIR"

@@ -16,12 +16,16 @@ set -e
 REPO=${REPO:-tigera/operator}
 BRANCH=${BRANCH:-master}
 
-# Reuse the existing clone if branch and remote URL match, otherwise start fresh.
+# Reuse the existing clone if branch and remote repo (org/name slug) match, otherwise start fresh.
+# Normalise a remote URL to an "org/repo" slug regardless of protocol or .git suffix so that
+# URL rewriting (e.g. https→ssh) doesn't cause spurious re-clones.
 repo_url="https://github.com/${REPO}"
 if [ -d operator/.git ]; then
   existing_branch=$(git -C operator rev-parse --abbrev-ref HEAD 2>/dev/null || true)
   existing_url=$(git -C operator remote get-url origin 2>/dev/null || true)
-  if [ "$existing_branch" = "$BRANCH" ] && [ "$existing_url" = "$repo_url" ]; then
+  # Strip protocol+host and optional .git to get the bare "org/repo" slug.
+  existing_slug=$(echo "$existing_url" | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+  if [ "$existing_branch" = "$BRANCH" ] && [ "$existing_slug" = "$REPO" ]; then
     echo "Reusing cached operator clone (branch: ${BRANCH}), pulling latest..."
     git -C operator fetch --depth=1 origin ${BRANCH}
     git -C operator reset --hard origin/${BRANCH}
@@ -29,7 +33,7 @@ if [ -d operator/.git ]; then
     if [ "$existing_branch" != "$BRANCH" ]; then
       echo "Branch changed (${existing_branch} -> ${BRANCH}), re-cloning..."
     else
-      echo "Repo changed (${existing_url} -> ${repo_url}), re-cloning..."
+      echo "Repo changed (${existing_slug} -> ${REPO}), re-cloning..."
     fi
     rm -rf operator/
     git clone --depth=1 ${repo_url} -b ${BRANCH} operator
