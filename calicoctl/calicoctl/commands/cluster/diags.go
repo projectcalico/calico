@@ -519,17 +519,22 @@ func collectCalicoRelatedNamespaces(dir string, namespaces set.Typed[string]) {
 	}
 	commands := []common.Cmd{}
 	for ns := range namespaces.All() {
-		filter := ""
+		// Build the base argv as a slice (not a string) because the label
+		// selector contains spaces (e.g. "k8s-app in (...)") which would be
+		// mangled if we let strings.Fields tokenise it.
+		base := []string{"kubectl", "get", "all", "-n", ns}
 		if !isCalicoNamedNamespace(ns) {
-			filter = fmt.Sprintf(" -l '%s'", calicoWorkloadSelector)
+			base = append(base, "-l", calicoWorkloadSelector)
 		}
+		yamlArgs := append(append([]string{}, base...), "-o", "yaml")
+		wideArgs := append(append([]string{}, base...), "-o", "wide")
 		commands = append(commands, common.Cmd{
 			Info:     fmt.Sprintf("Collect all in %s (yaml)", ns),
-			CmdStr:   fmt.Sprintf("kubectl get all -n %s%s -o yaml", ns, filter),
+			CmdArgs:  yamlArgs,
 			FilePath: fmt.Sprintf("%s/%s.yaml", dir, ns),
 		}, common.Cmd{
 			Info:     fmt.Sprintf("Collect all in %s (wide text)", ns),
-			CmdStr:   fmt.Sprintf("kubectl get all -n %s%s -o wide", ns, filter),
+			CmdArgs:  wideArgs,
 			FilePath: fmt.Sprintf("%s/%s.txt", dir, ns),
 		})
 	}
