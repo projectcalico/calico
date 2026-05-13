@@ -1639,8 +1639,13 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 # pod2daemon) to build OCI images directly without a Dockerfile. Pin the
 # version so CI and local builds stay reproducible. Use absolute paths so
 # the rules work when invoked from a component subdirectory.
-KO_DIR ?= $(REPO_ROOT)/bin
-KO ?= $(KO_DIR)/ko
+#
+# KO_DIR is intentionally NOT overrideable: the install step runs inside the
+# go-build container with the repo mounted at /go/src/github.com/projectcalico/calico,
+# and GOBIN must point at a host path that maps to that mount. Pointing KO_DIR
+# elsewhere would install into a path the host can't see.
+KO_DIR = $(REPO_ROOT)/bin
+KO = $(KO_DIR)/ko
 
 # Pin the Go toolchain ko uses to the same version baked into calico/go-build,
 # so on-host ko builds match in-container builds. GO_BUILD_VER looks like

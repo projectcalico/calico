@@ -105,7 +105,7 @@ func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
 // calico cobra tree. Used by dispatch to disambiguate when CNI_COMMAND is set.
 func isCobraSubcommand(s string) bool {
 	switch s {
-	case "component", "ctl", "health", "version", "help":
+	case "component", "ctl", "health", "ipam-upgrade", "version", "help":
 		return true
 	}
 	return false

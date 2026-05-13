@@ -26,8 +26,9 @@ func newIPAMUpgradeCommand() *cobra.Command {
 		Short: "Migrate node IP allocations from host-local to calico-ipam",
 		Long: `Migrate the node's IP allocations from the host-local CNI IPAM
 plugin to calico-ipam. Reads the node name from the KUBERNETES_NODE_NAME
-environment variable and writes a marker file once migration succeeds so
-subsequent invocations are a no-op.`,
+environment variable. Migration removes the host-local IPAM data directory
+on success, so subsequent invocations short-circuit when the directory is
+absent.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return ipamplugin.RunUpgrade(cmd.Context())

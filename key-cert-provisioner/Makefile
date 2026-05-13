@@ -35,8 +35,9 @@ SIGNER_CREATED=.signer.created-$(ARCH)
 .PHONY: image
 image: $(SIGNER_CREATED)
 
-$(SIGNER_CREATED): $(KO)
+$(SIGNER_CREATED): $(KO) $(shell find test-signer -name '*.go') .ko.yaml
 	GOTOOLCHAIN=$(GOTOOLCHAIN) \
+	KO_DEFAULTBASEIMAGE=$(CALICO_BASE) \
 	KO_DOCKER_REPO=$(TEST_SIGNER_IMAGE) $(KO) build \
 	    --local --bare \
 	    --platform=linux/$(ARCH) \

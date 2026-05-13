@@ -109,10 +109,11 @@ REGISTRAR_CREATED=.registrar.created-$(ARCH)
 .PHONY: registrar-image
 registrar-image: $(REGISTRAR_CREATED)
 
-$(REGISTRAR_CREATED): clone-registrar-upstream $(KO)
+$(REGISTRAR_CREATED): clone-registrar-upstream $(KO) registrar.ko.yaml
 	cp registrar.ko.yaml $(REGISTRAR_IMAGE)/.ko.yaml
 	cd $(REGISTRAR_IMAGE) && \
 		GOTOOLCHAIN=$(GOTOOLCHAIN) \
+		KO_DEFAULTBASEIMAGE=$(CALICO_BASE) \
 		KO_DOCKER_REPO=$(REGISTRAR_IMAGE) $(KO) build \
 		    --local --bare \
 		    --platform=linux/$(ARCH) \
