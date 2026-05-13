@@ -1647,19 +1647,20 @@ KO ?= $(KO_DIR)/ko
 # "1.26.2-llvm20.1.8-k8s1.35.4-1"; we only want the leading Go version.
 GOTOOLCHAIN ?= go$(word 1,$(subst -, ,$(GO_BUILD_VER)))
 
-$(KO_DIR)/ko-$(KO_VERSION):
+# Stamp file tracks the installed ko version. `rm -f .ko-stamp-*` clears the
+# previous stamp on a version bump so the next make run reinstalls. The binary
+# itself stays at $(KO)/ko — no rename, which avoids races when concurrent
+# sub-makes (cmd/calico, pod2daemon, key-cert-provisioner) hit this rule.
+$(KO_DIR)/.ko-stamp-$(KO_VERSION):
+	rm -f $(KO_DIR)/.ko-stamp-*
 	mkdir -p $(KO_DIR)
-	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/bin go install github.com/google/ko@$(KO_VERSION) && mv /go/src/github.com/projectcalico/calico/bin/ko /go/src/github.com/projectcalico/calico/bin/ko-$(KO_VERSION)"
-
-$(KO_DIR)/.ko-updated-$(KO_VERSION): $(KO_DIR)/ko-$(KO_VERSION)
-	rm -f $(KO_DIR)/.ko-updated-*
-	cd $(KO_DIR) && ln -fs ko-$(KO_VERSION) ko
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/bin go install github.com/google/ko@$(KO_VERSION)"
 	touch $@
 
 .PHONY: ko
 ko: $(KO)
 	@echo "ko: $(KO)"
-$(KO): $(KO_DIR)/.ko-updated-$(KO_VERSION)
+$(KO): $(KO_DIR)/.ko-stamp-$(KO_VERSION)
 
 ###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
