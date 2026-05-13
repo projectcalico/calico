@@ -192,20 +192,13 @@ var _ = describe.CalicoDescribe(
 			expectConnectionToTCPServer(ns, clientPod.Name, serverIP)
 
 			By("Starting TCP client stream probe")
-			probe := conncheck.NewStreamProbe("tcp-stream",
+			probe := conncheck.StartStream(ctx, "tcp-stream",
 				conncheck.NewPodSource(f, clientConn),
 				conncheck.WithStreamCommand("nc", serverIP, "9999"))
-			Expect(probe.Start(ctx)).To(Succeed())
 			DeferCleanup(func() { _ = probe.Stop() })
 
 			By("Verifying TCP data is flowing before migration")
-			Eventually(func() (int, error) {
-				if err := probe.Err(); err != nil {
-					return 0, StopTrying(fmt.Sprintf("stream failed: %v", err))
-				}
-				return probe.NumLines(), nil
-			}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
-				"TCP data should be flowing")
+			conncheck.WaitForCadence(ctx, probe, 5, 30*time.Second)
 			preLines := len(probe.Lines())
 			logrus.Infof("Pre-migration: %d lines on client pod", preLines)
 
@@ -373,10 +366,9 @@ var _ = describe.CalicoDescribe(
 				logrus.Infof("TCP server on %s:9999 is reachable and sending data from TOR", vmIP)
 
 				By(fmt.Sprintf("Starting TCP client container %s on TOR", ncClientContainer))
-				probe := conncheck.NewStreamProbe("tor-tcp-stream",
+				probe := conncheck.StartStream(ctx, "tor-tcp-stream",
 					externalnode.NewContainerSource(tor, ncClientContainer, images.Alpine, "--network", "host"),
 					conncheck.WithStreamCommand("sh", "-c", fmt.Sprintf("'sleep 999999 | nc %s 9999'", vmIP)))
-				Expect(probe.Start(ctx)).To(Succeed())
 				DeferCleanup(func() { _ = probe.Stop() })
 
 				// seq-monitor logs the line count every 2s for post-mortem analysis
@@ -392,7 +384,7 @@ var _ = describe.CalicoDescribe(
 					ticker := time.NewTicker(2 * time.Second)
 					defer ticker.Stop()
 					for {
-						logrus.Infof("[seq-monitor] lines=%d", len(probe.Lines()))
+						logrus.Infof("[seq-monitor] lines=%d", probe.NumLines())
 						select {
 						case <-seqStopCh:
 							return
@@ -402,13 +394,7 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By("Waiting for TCP data to flow before migration")
-				Eventually(func() (int, error) {
-					if err := probe.Err(); err != nil {
-						return 0, StopTrying(fmt.Sprintf("stream failed: %v", err))
-					}
-					return len(probe.Lines()), nil
-				}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 5),
-					"TCP data should be flowing from TOR")
+				conncheck.WaitForCadence(ctx, probe, 5, 30*time.Second)
 				preLines := len(probe.Lines())
 				logrus.Infof("TIMELINE: pre-migration lines=%d", preLines)
 

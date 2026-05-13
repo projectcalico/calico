@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -30,16 +31,18 @@ import (
 
 const defaultStreamMaxBytes = 1 << 20
 
-// StreamSource abstracts the transport-specific bottom half of a StreamProbe:
+// StreamSource abstracts the transport-specific bottom half of a stream probe:
 // how the command is launched and where its combined stdout/stderr is read.
 // Implementations: conncheck.PodSource (in-cluster SPDY exec),
 // externalnode.ContainerSource (SSH + docker on an external host).
 type StreamSource interface {
 	// Start launches the command. Output bytes are written to w by the
-	// implementation, possibly asynchronously. Returns when the command is
-	// launched (or fails to launch). Single-use: Start may be called once
-	// per source instance.
-	Start(ctx context.Context, command []string, w io.Writer) error
+	// implementation, possibly asynchronously. errSink, if non-nil, is the
+	// channel implementations use to surface transport-level errors that
+	// arise after Start returns (e.g. a mid-stream SPDY exec failure).
+	// Returns when the command is launched (or fails to launch).
+	// Single-use: Start may be called once per source instance.
+	Start(ctx context.Context, command []string, w io.Writer, errSink func(error)) error
 	// Stop terminates the command. Idempotent.
 	Stop() error
 }
@@ -49,8 +52,10 @@ type streamConfig struct {
 	maxBytes int
 }
 
+// StreamOption configures the streaming probe at construction.
 type StreamOption func(*streamConfig) error
 
+// WithStreamCommand sets the command argv the source will run. Required.
 func WithStreamCommand(argv ...string) StreamOption {
 	return func(c *streamConfig) error {
 		if len(argv) == 0 {
@@ -61,6 +66,8 @@ func WithStreamCommand(argv ...string) StreamOption {
 	}
 }
 
+// WithStreamMaxBytes caps the in-memory line buffer. Oldest lines and events
+// are dropped on overflow. Default 1 MiB.
 func WithStreamMaxBytes(n int) StreamOption {
 	return func(c *streamConfig) error {
 		if n <= 0 {
@@ -71,92 +78,164 @@ func WithStreamMaxBytes(n int) StreamOption {
 	}
 }
 
-// StreamProbe runs a long-lived command via a StreamSource and captures its
-// stdout (merged with stderr) into an in-memory line buffer. The buffer is
-// capped; oldest lines are dropped on overflow. Single-use.
-type StreamProbe struct {
+type streamDisruptionConfig struct {
+	maxGap time.Duration
+	gapSet bool
+}
+
+// StreamDisruptionOption tunes StreamCheckpointer.ExpectNoDisruption.
+//
+// Intentionally a distinct type from DisruptionOption used by Checkpointer:
+// the "gap" metric measures different physical quantities in the two worlds
+// (interval-between-probe-attempts vs interval-between-line-arrivals), and
+// WithMaxConsecutiveLoss is meaningless for streams. Forcing separate types
+// keeps the unsupported combinations unrepresentable rather than rejected
+// at runtime.
+type StreamDisruptionOption func(*streamDisruptionConfig)
+
+// WithStreamMaxGap fails ExpectNoDisruption if any two consecutive captured
+// lines arrived more than d apart. The producer must emit at a known cadence
+// (e.g. `ping -i 0.2`) for this to be meaningful; for sporadic producers like
+// raw `nc`, gaps are dominated by application traffic patterns, not connectivity.
+func WithStreamMaxGap(d time.Duration) StreamDisruptionOption {
+	return func(c *streamDisruptionConfig) {
+		c.maxGap = d
+		c.gapSet = true
+	}
+}
+
+// StreamCheckpointer runs a long-lived command via a StreamSource and lets the
+// test assert on the cadence of its output. Each newline-terminated record is
+// one "event", timestamped at the moment of arrival.
+//
+// Contrast with Checkpointer (from ExpectContinuously): that one runs discrete
+// pass/fail probes; this one watches the line cadence of a single live stream.
+// They are separate by design.
+type StreamCheckpointer interface {
+	// Stop terminates the source and drains. Returns the terminal error, if
+	// any (also exposed via Err for use before Stop). Idempotent.
+	Stop() error
+
+	// Err returns the first non-EOF stream error seen so far, or nil. Sticky.
+	Err() error
+
+	// NumLines is the count of newline-terminated records captured so far.
+	// Cheap (no allocation) for tight polling loops.
+	NumLines() int
+
+	// Events returns a snapshot of line-arrival timestamps in order. Primary
+	// input for disruption analysis.
+	Events() []time.Time
+
+	// Lines returns a snapshot of the captured records (debug aid).
+	Lines() []string
+
+	// ExpectNoDisruption fails the test if the inter-line gap analysis
+	// exceeds the supplied bounds. WithStreamMaxGap is required.
+	ExpectNoDisruption(opts ...StreamDisruptionOption)
+}
+
+// streamCheckpointer is the in-tree (unexported) implementation of
+// StreamCheckpointer. The interface is the API surface; this struct is an
+// internal detail.
+type streamCheckpointer struct {
 	name   string
 	source StreamSource
 	cfg    streamConfig
 
-	mu      sync.Mutex
-	lines   []string
-	pending []byte
-	started bool
-	stopped bool
-	err     error
+	mu         sync.Mutex
+	events     []time.Time
+	lines      []string
+	pending    []byte
+	err        error
+	overflowed bool // true once the byte cap had to drop pending wholesale
+
+	stopOnce sync.Once
+	stopDone chan struct{} // closed when Stop has finished tearing down
+	stopErr  error         // terminal error from Stop (sticky into err)
 }
 
-// NewStreamProbe builds a StreamProbe. WithStreamCommand is required.
-// Fails (via framework.Failf) on bad input to match the conncheck package
-// convention (see NewClient, NewServer, NewTarget).
-func NewStreamProbe(name string, source StreamSource, opts ...StreamOption) *StreamProbe {
+// StartStream constructs a StreamCheckpointer, validates options, and starts
+// the underlying source. Invalid arguments or a failed Start fail the test
+// immediately via framework.Failf (consistent with the rest of conncheck).
+//
+// WithStreamCommand is required. The returned checkpointer is single-use; the
+// caller is responsible for calling Stop (typically via DeferCleanup).
+func StartStream(ctx context.Context, name string, source StreamSource, opts ...StreamOption) StreamCheckpointer {
 	if name == "" {
-		framework.Failf("NewStreamProbe: name is required")
+		framework.Failf("StartStream: name is required")
 	}
 	if source == nil {
-		framework.Failf("NewStreamProbe: source is required")
+		framework.Failf("StartStream: source is required")
 	}
-	p := &StreamProbe{
-		name:   name,
-		source: source,
-		cfg:    streamConfig{maxBytes: defaultStreamMaxBytes},
+	cp := &streamCheckpointer{
+		name:     name,
+		source:   source,
+		cfg:      streamConfig{maxBytes: defaultStreamMaxBytes},
+		stopDone: make(chan struct{}),
 	}
 	for _, opt := range opts {
-		if err := opt(&p.cfg); err != nil {
-			framework.Failf("NewStreamProbe %q: option error: %v", name, err)
+		if err := opt(&cp.cfg); err != nil {
+			framework.Failf("StartStream %q: option error: %v", name, err)
 		}
 	}
-	if len(p.cfg.command) == 0 {
-		framework.Failf("NewStreamProbe %q: WithStreamCommand is required", name)
+	if len(cp.cfg.command) == 0 {
+		framework.Failf("StartStream %q: WithStreamCommand is required", name)
 	}
-	return p
+	if err := source.Start(ctx, cp.cfg.command, &streamWriter{cp: cp}, cp.setErr); err != nil {
+		framework.Failf("StartStream %q: source.Start: %v", name, err)
+	}
+	return cp
 }
 
-// Start launches the underlying command via the source. The probe is
-// single-use: calling Start twice (or after Stop) returns an error.
-func (p *StreamProbe) Start(ctx context.Context) error {
-	p.mu.Lock()
-	if p.started {
-		p.mu.Unlock()
-		return fmt.Errorf("StreamProbe %q: already started", p.name)
-	}
-	if p.stopped {
-		p.mu.Unlock()
-		return fmt.Errorf("StreamProbe %q: stopped, single-use", p.name)
-	}
-	p.started = true
-	p.mu.Unlock()
-
-	return p.source.Start(ctx, p.cfg.command, &streamWriter{probe: p})
-}
-
-// Stop terminates the underlying source. Idempotent. After Stop, Lines() and
-// Err() reflect the final captured state.
-func (p *StreamProbe) Stop() error {
-	p.mu.Lock()
-	if p.stopped {
-		p.mu.Unlock()
-		return nil
-	}
-	p.stopped = true
-	p.mu.Unlock()
-
-	err := p.source.Stop()
-
-	// Flush any trailing un-terminated bytes as a final line.
-	p.mu.Lock()
-	if len(p.pending) > 0 {
-		p.lines = append(p.lines, string(p.pending))
+// Stop runs the source teardown exactly once. Concurrent callers (e.g. a
+// DeferCleanup racing with an explicit Stop in the test body) all block on
+// the same teardown and return the same sticky error.
+//
+// stopDone is closed via defer so that a panic inside source.Stop() does
+// not strand later callers blocked on the channel.
+func (p *streamCheckpointer) Stop() error {
+	p.stopOnce.Do(func() {
+		defer close(p.stopDone)
+		err := p.source.Stop()
+		// A trailing un-terminated chunk is intentionally dropped: no
+		// newline means no event. Don't manufacture a final line from
+		// partial data; timestamps and content would both be unreliable.
+		p.mu.Lock()
 		p.pending = nil
-	}
-	p.mu.Unlock()
-
-	return err
+		if err != nil && p.err == nil {
+			p.err = err
+		}
+		p.stopErr = p.err
+		p.mu.Unlock()
+	})
+	<-p.stopDone
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stopErr
 }
 
-// Lines returns a snapshot of newline-delimited records captured so far.
-func (p *StreamProbe) Lines() []string {
+func (p *streamCheckpointer) Err() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.err
+}
+
+func (p *streamCheckpointer) NumLines() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.lines)
+}
+
+func (p *streamCheckpointer) Events() []time.Time {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]time.Time, len(p.events))
+	copy(out, p.events)
+	return out
+}
+
+func (p *streamCheckpointer) Lines() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	out := make([]string, len(p.lines))
@@ -164,24 +243,51 @@ func (p *StreamProbe) Lines() []string {
 	return out
 }
 
-// NumLines returns the count of newline-delimited records captured so far.
-// Cheaper than Lines() in tight polling loops (no slice copy).
-func (p *StreamProbe) NumLines() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return len(p.lines)
-}
+func (p *streamCheckpointer) ExpectNoDisruption(opts ...StreamDisruptionOption) {
+	cfg := &streamDisruptionConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if !cfg.gapSet {
+		framework.Fail(fmt.Sprintf("StreamCheckpointer %q: ExpectNoDisruption requires WithStreamMaxGap", p.name), 2)
+	}
 
-// Err returns the first non-EOF stream error reported by the source, or nil.
-func (p *StreamProbe) Err() error {
+	// Surface any stream error first so we don't blame a gap on what was
+	// really a transport failure.
+	if err := p.Err(); err != nil {
+		framework.Failf("StreamCheckpointer %q: stream error: %v", p.name, err)
+	}
+
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.err
+	overflowed := p.overflowed
+	p.mu.Unlock()
+	if overflowed {
+		framework.Failf("StreamCheckpointer %q: byte cap overflowed; gap analysis would be unreliable. Raise WithStreamMaxBytes or reduce probe verbosity.", p.name)
+	}
+
+	events := p.Events()
+	if len(events) == 0 {
+		framework.Failf("StreamCheckpointer %q: no events captured", p.name)
+	}
+	if len(events) < 2 {
+		framework.Failf("StreamCheckpointer %q: only %d event(s) captured; need >=2 for gap analysis", p.name, len(events))
+	}
+	var worst time.Duration
+	for i := 1; i < len(events); i++ {
+		gap := events[i].Sub(events[i-1])
+		if gap > worst {
+			worst = gap
+		}
+	}
+	if worst > cfg.maxGap {
+		framework.Failf("StreamCheckpointer %q: max inter-line gap %v exceeds bound %v (events=%d)",
+			p.name, worst, cfg.maxGap, len(events))
+	}
 }
 
 // setErr records a stream error if one isn't already set. Called by sources
 // that detect a transport-level error and want to surface it via Err().
-func (p *StreamProbe) setErr(err error) {
+func (p *streamCheckpointer) setErr(err error) {
 	if err == nil {
 		return
 	}
@@ -192,14 +298,16 @@ func (p *StreamProbe) setErr(err error) {
 	p.mu.Unlock()
 }
 
-// streamWriter is the io.Writer wired to the source's output. It splits on
-// newlines into lines and enforces the byte cap by dropping the oldest line(s).
+// streamWriter is the io.Writer wired to the source's output. Newline-delimited
+// records are timestamped at the split boundary (not at Write entry) so that
+// when a single Write carries many lines we don't bias gap stats by attributing
+// them all to the same instant.
 type streamWriter struct {
-	probe *StreamProbe
+	cp *streamCheckpointer
 }
 
 func (w *streamWriter) Write(b []byte) (int, error) {
-	p := w.probe
+	p := w.cp
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -209,14 +317,19 @@ func (w *streamWriter) Write(b []byte) (int, error) {
 		if nl < 0 {
 			break
 		}
+		ts := time.Now()
 		line := bytes.TrimSuffix(p.pending[:nl], []byte{'\r'})
 		p.lines = append(p.lines, string(line))
+		p.events = append(p.events, ts)
 		p.pending = p.pending[nl+1:]
 	}
 
-	// Cap: drop oldest lines first; if pending alone still exceeds cap,
-	// head-truncate pending. Invariant: bufferedSize() <= maxBytes (best
-	// effort; a single Write larger than maxBytes is clipped after split).
+	// Byte cap: drop oldest line+event pairs first. If pending alone still
+	// exceeds the cap, drop pending wholesale and mark overflow — head-
+	// truncating pending would leave a partial-record fragment that would
+	// later be promoted to a fake "line" with a fresh timestamp, silently
+	// corrupting gap analysis. ExpectNoDisruption refuses to analyse a
+	// stream that overflowed.
 	size := len(p.pending)
 	for _, l := range p.lines {
 		size += len(l) + 1
@@ -224,14 +337,39 @@ func (w *streamWriter) Write(b []byte) (int, error) {
 	for size > p.cfg.maxBytes && len(p.lines) > 0 {
 		dropped := p.lines[0]
 		p.lines = p.lines[1:]
+		p.events = p.events[1:]
 		size -= len(dropped) + 1
 	}
-	if size > p.cfg.maxBytes && len(p.pending) > p.cfg.maxBytes {
-		drop := len(p.pending) - p.cfg.maxBytes
-		p.pending = p.pending[drop:]
+	if size > p.cfg.maxBytes {
+		p.pending = nil
+		p.overflowed = true
 	}
 
 	return len(b), nil
+}
+
+// WaitForCadence blocks until cp has captured at least n lines, the context
+// is cancelled, the 'within' budget elapses, or the stream errors out. On
+// timeout, context cancellation, or stream error the test fails via
+// framework.Failf.
+func WaitForCadence(ctx context.Context, cp StreamCheckpointer, n int, within time.Duration) {
+	deadline := time.Now().Add(within)
+	for {
+		if err := cp.Err(); err != nil {
+			framework.Failf("WaitForCadence: stream error: %v", err)
+		}
+		if cp.NumLines() >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			framework.Failf("WaitForCadence: expected %d lines within %v, got %d", n, within, cp.NumLines())
+		}
+		select {
+		case <-ctx.Done():
+			framework.Failf("WaitForCadence: context cancelled while waiting for %d lines (have %d): %v", n, cp.NumLines(), ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // PodSource is a StreamSource that runs the command in a Kubernetes pod via
@@ -245,12 +383,11 @@ type PodSource struct {
 	mu       sync.Mutex
 	stdinW   io.WriteCloser
 	doneCh   chan struct{}
-	probe    *StreamProbe // for setErr; set on Start binding via streamWriter's parent
-	stopping bool         // true once Stop() has been called; suppresses expected SIGTERM exit
+	stopping bool // true once Stop() has been called; suppresses expected SIGTERM rc=143 exit
 }
 
-// NewPodSource builds a PodSource for the given conncheck Client. The
-// pod's first container is used unless overridden with WithPodContainer.
+// NewPodSource builds a PodSource for the given conncheck Client. The pod's
+// first container is used unless overridden with WithPodContainer.
 func NewPodSource(f *framework.Framework, client Client) *PodSource {
 	if f == nil {
 		framework.Failf("NewPodSource: framework is required")
@@ -261,15 +398,16 @@ func NewPodSource(f *framework.Framework, client Client) *PodSource {
 	return &PodSource{f: f, client: client}
 }
 
-// WithPodContainer sets the container name to exec in. Defaults to the
-// first container in the client's pod.
+// WithPodContainer sets the container name to exec in. Defaults to the first
+// container in the client's pod.
 func (s *PodSource) WithPodContainer(name string) *PodSource {
 	s.container = name
 	return s
 }
 
 // Start launches the command via SPDY exec. Output writes to w.
-func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer) error {
+// errSink, if non-nil, receives any mid-stream SPDY error.
+func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer, errSink func(error)) error {
 	pod := s.client.Pod()
 	container := s.container
 	if container == "" && len(pod.Spec.Containers) > 0 {
@@ -306,10 +444,6 @@ func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer) er
 	s.mu.Lock()
 	s.stdinW = stdinW
 	s.doneCh = doneCh
-	// Stash the streamWriter's parent probe so we can surface errors.
-	if sw, ok := w.(*streamWriter); ok {
-		s.probe = sw.probe
-	}
 	s.mu.Unlock()
 
 	go func() {
@@ -320,15 +454,14 @@ func (s *PodSource) Start(ctx context.Context, command []string, w io.Writer) er
 			Stderr: w,
 		})
 		// Suppress the non-zero exit the wrapper produces when Stop closes
-		// stdin (the reaper SIGTERMs the child, so wait returns rc=143 and
-		// the wrapper propagates it). Errors before Stop are real.
+		// stdin (reaper SIGTERMs the child, wait returns rc=143). Errors
+		// observed before Stop set the stopping flag are real and must
+		// reach the checkpointer.
 		s.mu.Lock()
 		stopping := s.stopping
 		s.mu.Unlock()
-		if streamErr != nil && !errors.Is(streamErr, io.EOF) && !stopping {
-			if s.probe != nil {
-				s.probe.setErr(streamErr)
-			}
+		if streamErr != nil && !errors.Is(streamErr, io.EOF) && !stopping && errSink != nil {
+			errSink(streamErr)
 		}
 	}()
 

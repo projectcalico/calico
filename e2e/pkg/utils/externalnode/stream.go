@@ -26,7 +26,7 @@ import (
 
 // ContainerSource implements conncheck.StreamSource by running a command in a
 // docker container on the external node and polling `docker logs` for output.
-// Use with conncheck.NewStreamProbe.
+// Use with conncheck.StartStream.
 type ContainerSource struct {
 	client       *Client
 	container    string
@@ -45,7 +45,7 @@ type ContainerSource struct {
 // NewContainerSource builds a ContainerSource. container is the docker
 // container name on the external host, image is the container image, runFlags
 // are extra `docker run` flags (e.g. "--network", "host"). The command itself
-// is supplied by StreamProbe at Start time.
+// is supplied by StartStream at Start time.
 //
 // Shell-quoting contract: the command tokens passed via WithStreamCommand are
 // space-joined and re-executed under `sh -c` over SSH, NOT auto-quoted. For a
@@ -84,7 +84,11 @@ func (s *ContainerSource) WithPollInterval(d time.Duration) *ContainerSource {
 // Start launches `docker run -d <runFlags> --name <container> <image> <command>`
 // and starts a goroutine that periodically polls `docker logs` and writes new
 // bytes to w. Implements conncheck.StreamSource.
-func (s *ContainerSource) Start(ctx context.Context, command []string, w io.Writer) error {
+//
+// errSink is currently unused: docker-logs polling never propagates errors
+// up the stack (a missing/dying container shows up as a long gap in the
+// captured event stream, which ExpectNoDisruption detects).
+func (s *ContainerSource) Start(ctx context.Context, command []string, w io.Writer, errSink func(error)) error {
 	s.mu.Lock()
 	if s.started {
 		s.mu.Unlock()
