@@ -1635,6 +1635,33 @@ helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
+# ko is used by component Makefiles (cmd/calico, key-cert-provisioner,
+# pod2daemon) to build OCI images directly without a Dockerfile. Pin the
+# version so CI and local builds stay reproducible. Use absolute paths so
+# the rules work when invoked from a component subdirectory.
+KO_DIR ?= $(REPO_ROOT)/bin
+KO ?= $(KO_DIR)/ko
+
+# Pin the Go toolchain ko uses to the same version baked into calico/go-build,
+# so on-host ko builds match in-container builds. GO_BUILD_VER looks like
+# "1.26.2-llvm20.1.8-k8s1.35.4-1"; we only want the leading Go version.
+GOTOOLCHAIN ?= go$(word 1,$(subst -, ,$(GO_BUILD_VER)))
+
+# Stamp file tracks the installed ko version. `rm -f .ko-stamp-*` clears the
+# previous stamp on a version bump so the next make run reinstalls. The binary
+# itself stays at $(KO)/ko — no rename, which avoids races when concurrent
+# sub-makes (cmd/calico, pod2daemon, key-cert-provisioner) hit this rule.
+$(KO_DIR)/.ko-stamp-$(KO_VERSION):
+	rm -f $(KO_DIR)/.ko-stamp-*
+	mkdir -p $(KO_DIR)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/bin go install github.com/google/ko@$(KO_VERSION)"
+	touch $@
+
+.PHONY: ko
+ko: $(KO)
+	@echo "ko: $(KO)"
+$(KO): $(KO_DIR)/.ko-stamp-$(KO_VERSION)
+
 ###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################

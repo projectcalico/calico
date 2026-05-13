@@ -96,7 +96,10 @@ type Config struct {
 	EtcdCaFile    string   `config:"file(must-exist);;local"`
 	EtcdEndpoints []string `config:"endpoint-list;;local"`
 
-	LogFilePath string `config:"file;/var/log/calico/typha.log;die-on-fail"`
+	// LogFilePath defaults to empty so containerized typha doesn't try to
+	// create /var/log/calico at startup when running as non-root. Operators
+	// who want file logging should set TYPHA_LOGFILEPATH explicitly.
+	LogFilePath string `config:"file;;die-on-fail"`
 
 	LogSeverityFile   string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,CRITICAL);INFO"`
