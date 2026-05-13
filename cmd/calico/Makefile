@@ -89,15 +89,22 @@ $(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
 	mkdir -p $(BINDIR)
 	cp $(REPO_ROOT)/LICENSE.md $@
 
-REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
-$(REGISTRAR_BIN):
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
-
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
-$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+# ko cross-compiles, layers the binary on calico/base, and loads the result
+# into the local Docker daemon. No Dockerfile, no scratch shim, no host-built
+# bin/ artifact involved. Note: the resulting image lacks the calicoctl /
+# calico-ipam symlinks the old Dockerfile created in /usr/bin — invoke as
+# `calico ctl ...` and `calico-ipam` (host CNI install path) instead.
+$(CONTAINER_MARKER): $(KO)
+	GIT_DESCRIPTION=$(GIT_DESCRIPTION) DATE=$(DATE) GIT_COMMIT=$(GIT_COMMIT) \
+	GOTOOLCHAIN=$(GOTOOLCHAIN) \
+	KO_DOCKER_REPO=$(CALICO_IMAGE) $(KO) build \
+	    --local --bare \
+	    --platform=linux/$(ARCH) \
+	    --tags=$(IMAGE_TAG)-$(ARCH) \
+	    ./
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 

@@ -42,8 +42,6 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
-	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
-	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -77,37 +75,9 @@ func Main(version string) {
 
 	// Migration logic
 	if *upgradeFlag {
-		logrus.Info("migrating from host-local to calico-ipam...")
-		ctxt := context.Background()
-
-		// nodename associates IPs to this node.
-		nodename := os.Getenv("KUBERNETES_NODE_NAME")
-		if nodename == "" {
-			logrus.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
+		if err := RunUpgrade(context.Background()); err != nil {
+			logrus.WithError(err).Fatal("ipam upgrade failed")
 		}
-		logCtxt := logrus.WithField("node", nodename)
-
-		// calicoClient makes IPAM calls.
-		cfg, err := apiconfig.LoadClientConfig("")
-		if err != nil {
-			logCtxt.Fatal("failed to load api client config")
-		}
-		cfg.Spec.DatastoreType = apiconfig.Kubernetes
-		calicoClient, err := client.New(*cfg)
-		if err != nil {
-			logCtxt.Fatal("failed to initialize api client")
-		}
-
-		// Perform the migration.
-		for {
-			err := upgrade.Migrate(ctxt, calicoClient, nodename)
-			if err == nil {
-				break
-			}
-			logCtxt.WithError(err).Error("failed to migrate ipam, retrying...")
-			time.Sleep(time.Second)
-		}
-		logCtxt.Info("migration from host-local to calico-ipam complete")
 		os.Exit(0)
 	}
 
