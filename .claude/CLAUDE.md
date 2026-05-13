@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file is **operational guidance** for agents working in this repo: build commands, test invocation, debugging, conventions, and the process rules every PR follows. For **architecture, invariants, and review criteria**, see [`DESIGN.md`](../DESIGN.md) at the repo root, and the per-component `DESIGN.md` files it links to. Do not look here for architecture; look there.
 
 ## Repository Overview
 
@@ -165,102 +165,95 @@ eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX identif
   - Utility functions; can be interspersed with methods if tightly coupled with particular methods.
   - Larger secondary structs at the bottom.
 
-## Repository Architecture
+## Documentation map
 
-### Component Dependency Order
+This repo carries an extensive corpus of architecture and review
+guidance. **Consult it first, instead of reverse-engineering from
+the code** — it captures invariants, design rationale, and review
+criteria that are hard to recover from the source alone.
 
-Core components (dependency order):
-```
-api/              - Calico API definitions (CRDs, protobuf), separate go.mod
-libcalico-go/     - Core Go client library and data model
-typha/            - Datastore fan-out proxy for scaling (reduces etcd load)
-felix/            - Core per-host networking agent (eBPF/iptables/nftables dataplane)
-node/             - Node initialization container (includes Felix, confd, BIRD, startup scripts)
-calicoctl/        - CLI tool for Calico management
-kube-controllers/ - Kubernetes-specific controllers (namespace, pod, node, serviceaccount)
-cni-plugin/       - Kubernetes CNI integration
-confd/            - Configuration management daemon
-app-policy/       - Application layer policy (L7)
-apiserver/        - Kubernetes API aggregation layer
-```
+Where it lives:
 
-Additional components:
-```
-goldmane/             - Log aggregation and flow log storage
-guardian/             - Secure tunnel proxy for management cluster connections
-pod2daemon/           - Flex volume driver for injecting credentials into pods
-key-cert-provisioner/ - TLS certificate provisioner for Calico components
-whisker/              - Flow log UI (TypeScript/React frontend)
-whisker-backend/      - Backend for whisker flow log UI
-e2e/                  - End-to-end test suites
-release/              - Release tooling and automation
-lib/std/              - Internal shared Go library (separate go.mod)
-lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
-```
+- **[`DESIGN.md`](../DESIGN.md) at the repo root** — Calico's
+  cross-cutting architecture: the component dependency tables,
+  the combined `calico` binary pattern, health reporting, Go
+  module structure, build system, and entry points. The
+  authoritative starting point for *what the repo is*.
+- **`<component>/DESIGN.md`** — per-component architecture,
+  invariants, and per-section review notes. Authoritative source
+  for "what does this code promise?". A coding agent writing a PR
+  and a reviewer checking one read the same file and apply the
+  same embedded review notes.
+- **Complex components have an index.** Felix has
+  [`felix/DESIGN.md`](../felix/DESIGN.md) at its root listing
+  per-topic sub-designs under
+  [`felix/design/`](../felix/design/) with an "applies to" glob
+  per topic. A PR touching multiple globs must load every matching
+  sub-design. This pattern applies to any component that grows
+  more than one design topic.
+- **`<component>/CLAUDE.md`** (or `AGENTS.md`) — operational
+  agent guidance: build commands, test invocation, debugging,
+  in-repo conventions. **Not** for architecture. If you are looking
+  for invariants or design rationale, look for a `DESIGN.md`, not
+  here.
+- **[`.github/copilot-instructions.md`](../.github/copilot-instructions.md)**
+  and
+  **[`.github/instructions/*.instructions.md`](../.github/instructions/)**
+  — repo-wide and path-scoped Copilot configuration. The
+  path-scoped files are thin pointers to the relevant `DESIGN.md`
+  plus meta-rules (update rule, `@copilot` invocation pattern).
+  They do not restate design content.
 
-### Key Architectural Concepts
+**Rules for agents reading this repo:**
 
-**Felix** is the core per-host agent responsible for:
-- Programming dataplane (eBPF, iptables, nftables)
-- Maintaining routing tables
-- Processing policy and programming ACLs
-- Source: `felix/daemon/daemon.go`
-- **Calculation graph** (`felix/calc/`): DAG that processes datastore updates and calculates dataplane state. Changes here require calc graph FV tests.
+1. Before writing or reviewing code in a component, read that
+   component's `DESIGN.md` (or, for Felix, the topic sub-designs
+   that match the paths you're touching).
+2. Follow links. A sub-design may reference sibling docs, other
+   components' designs, or external references. Load them — a
+   design is a graph, not a single node.
+3. A PR that changes how a component works — its behaviour,
+   data model, configuration surface, or any invariant the
+   design doc records — must update the relevant `DESIGN.md` in
+   the same PR. For components with a design directory (Felix
+   uses `felix/design/`), this means updating the relevant file
+   under that directory — the sub-design covering the area —
+   and/or the index itself when the sub-design table or scope
+   changes. Exemptions: bug fix restoring documented behaviour,
+   mechanical refactor, comment or log-message edits, dependency
+   bumps. If in doubt, update the doc.
 
-**Typha** is a fan-out proxy that:
-- Sits between Felix instances and the datastore (etcd/K8s API)
-- Reduces load on datastore by caching and fanning out to multiple Felix instances
-- Optional but recommended for clusters >50 nodes
+## Tests required for code changes
 
-**Node container** orchestrates node initialization:
-- Runs Felix, confd, and BIRD in a single container
-- Handles CNI plugin installation
-- Source: `node/pkg/lifecycle/startup/startup.go`
+A PR that fixes a bug must include a test in the same PR that
+reproduces the bug. A PR that adds a feature must include tests
+that exercise the feature. A change without a corresponding test
+is the exception, not the default, and requires explicit
+justification (untestable interface boundary, infrastructure-only
+change).
 
-### Combined `calico` binary
+Prefer the lowest test level that meaningfully exercises the
+change:
 
-Most component daemons are registered as subcommands of a single `calico` binary rather than shipping as independent binaries — felix, confd, kube-controllers, goldmane, guardian, whisker-backend, key-cert-provisioner, typha, dikastes, csi, flexvol, and webhooks all dispatch through `calico component <name>`. Inside the node container, runit services exec the subcommand directly (see `node/filesystem/etc/service/available/<name>/run`).
+1. **Unit tests** — deterministic, fast, hermetic. Always the
+   first choice when the behaviour can be reached without real
+   infrastructure. UT failures point at the change directly.
+2. **Functional verification (FV) tests** — real binary against
+   real infrastructure (containers, dataplane, kernel). Catch
+   integration bugs UT cannot, but slower, harder to write, and
+   can flake. Use FV when the integration *is* the thing being
+   tested.
+3. **End-to-end / Kubernetes tests** — full stack against a real
+   cluster. Reserve for behaviour that genuinely requires it.
 
-**Adding a new component:**
+Tests-only follow-ups are an anti-pattern: by the time they land,
+the change has shipped untested. A reviewer who sees "I tested it
+manually" or "tests in a follow-up PR" should push back.
 
-1. Expose a `NewCommand() *cobra.Command` from the component's package.
-2. Register it in `cmd/calico/component.go` under `newComponentCommand`.
-3. If the component runs in the node container, add a runit service at `node/filesystem/etc/service/available/<name>/run` whose body is `exec calico component <name>`.
-4. The component's `Run` handler should call `logutils.ConfigureFormatter("<name>")` so log lines carry a consistent component prefix.
-
-**Restart-on-config-change (exit 129):** A component that intentionally exits with `cmdwrapper.RestartReturnCode` (129) to request a live restart on config change (currently felix and kube-controllers) must wrap its cobra `Run` with `cmdwrapper.WrapSelf(innerEnvVar, fn)` from `pkg/cmdwrapper`. Without this, `exec calico component <name>` from runit just exits — there is no outer process to restart the child.
-
-- Pick a unique `innerEnvVar` per component (e.g. `CALICO_FELIX_INNER`, `CALICO_KUBE_CONTROLLERS_INNER`). `WrapSelf` strips any pre-existing value before re-execing.
-- The caller configures logrus before calling `WrapSelf`; `fn` is the inner daemon body.
-- Don't change the log line format in `cmdwrapper` — integration tests grep stdout for `"Received exit status N, restarting"`.
-
-### Health reporting
-
-Components expose liveness/readiness through the shared aggregator in `libcalico-go/lib/health`.
-
-1. Construct once per component: `ha := health.NewHealthAggregator()`.
-2. For each independent health source, register a named reporter declaring what it will report: `ha.RegisterReporter("Startup", &health.HealthReport{Live: true, Ready: true}, timeout)`. A non-zero timeout means reports must refresh before expiry or the aggregator treats that reporter as unhealthy — use this for long-running loops where silent stalls matter.
-3. Call `ha.Report(name, &health.HealthReport{...})` at startup and as state changes inside running goroutines.
-4. Serve the endpoints with `ha.ServeHTTP(enabled, host, port)` — this exposes `/readiness` and `/liveness` on the given port.
-
-For Kubernetes probes, use the generic `calico health --port=<port> --type=readiness|liveness` exec command (`cmd/calico/health.go`) rather than adding a per-component healthcheck binary or a bare `httpGet` probe. It does the HTTP GET and exits 0 on 2xx/3xx — that's the standard for pods running the combined image.
-
-Examples worth copying from: `kube-controllers/pkg/kubecontrollers/run.go` (Startup / CalicoDatastore / KubeAPIServer reporters, no timeout) and `felix/daemon/daemon.go` (lifecycle reporter plus per-subsystem reporters with timeouts).
-
-### Go Module Structure
-
-- Root `go.mod` (`github.com/projectcalico/calico`) is the primary module for most components
-- `api/go.mod` (`github.com/projectcalico/api`) is separate (API exported as independent repo)
-- `lib/std/go.mod` and `lib/httpmachinery/go.mod` are internal libraries
-- When adding Go dependencies: `cd <component> && go mod tidy && cd .. && make check-go-mod`
-
-### Docker Build System
-
-- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
-- Base images configured in `metadata.mk`
-- Build cache in `.go-pkg-cache/` (speeds up rebuilds)
-- Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
-- Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
+Per-area sub-designs carry the area-specific test conventions on
+top of this general rule (e.g.
+[`felix/design/bpf-tests.md`](../felix/design/bpf-tests.md) for
+the BPF dataplane).
 
 ## Common Development Workflows
 
@@ -321,12 +314,7 @@ Image loading is incremental — `kind-reload` and `kind-deploy` compare local D
 - `lib.Makefile` - Shared Makefile logic for all components
 - `Makefile` - Root orchestration
 
-**Component Entry Points:**
-- `felix/daemon/daemon.go` - Felix main entry point
-- `felix/calc/` - Felix calculation graph (policy processing brain)
-- `felix/dataplane/` - Dataplane implementations (eBPF, iptables, nftables)
-- `node/pkg/lifecycle/startup/startup.go` - Node initialization
-- `calicoctl/calicoctl/calicoctl.go` - CLI entry point
+For component entry points and architectural code paths, see [`DESIGN.md`](../DESIGN.md) §6.
 
 **Kind Cluster Infrastructure:**
 - `hack/test/kind/` - Kind cluster scripts (creation, image loading, deployment, teardown)
