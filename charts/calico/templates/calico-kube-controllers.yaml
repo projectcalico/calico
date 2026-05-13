@@ -83,7 +83,7 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/calico
+                - calico
                 - component
                 - kube-controllers
                 - kube-controllers-health
@@ -95,7 +95,7 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/calico
+                - calico
                 - component
                 - kube-controllers
                 - kube-controllers-health
@@ -125,7 +125,7 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/calico
+                - calico
                 - component
                 - kube-controllers
                 - kube-controllers-health
@@ -137,7 +137,7 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/calico
+                - calico
                 - component
                 - kube-controllers
                 - kube-controllers-health

@@ -1,0 +1,28 @@
+# FIPS variant of the ko build. Toggled via KO_CONFIG_PATH in cmd/calico/Makefile
+# when FIPS=true. Mirrors the legacy build_cgo_boring_binary macro from
+# lib.Makefile: CGO + GOEXPERIMENT=boringcrypto + fipsstrict build tag. ko itself
+# does not run the post-build `go tool nm | grep _Cfunc__goboringcrypto_` check
+# that the legacy macro does — the Makefile runs that verification on the
+# extracted binary.
+#
+# As with the non-FIPS config, the base image is set at build time via
+# KO_DEFAULTBASEIMAGE; the literal here is a fallback for ad-hoc `ko build`.
+defaultBaseImage: calico/base:ubi9-1777576815
+defaultPlatforms:
+  - linux/amd64
+
+builds:
+  - id: calico
+    main: ./
+    env:
+      - CGO_ENABLED=1
+      - GOEXPERIMENT=boringcrypto
+    ldflags:
+      - "-s -w"
+      - "-X github.com/projectcalico/calico/pkg/buildinfo.Version={{.Env.GIT_DESCRIPTION}}"
+      - "-X github.com/projectcalico/calico/pkg/buildinfo.BuildDate={{.Env.DATE}}"
+      - "-X github.com/projectcalico/calico/pkg/buildinfo.GitRevision={{.Env.GIT_COMMIT}}"
+    flags:
+      - -trimpath
+      - -buildvcs=false
+      - -tags=fipsstrict
