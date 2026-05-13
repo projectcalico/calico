@@ -32,3 +32,6 @@ exclude:
 
     - label: RequiresXtables
       reason: "requires iptables or nftables dataplane, but this cluster uses BPF"
+
+    - label: Feature:KubeVirt
+      reason: "e2e infra integration with Banzai not ready, currently run manually"
