@@ -75,6 +75,7 @@ var features = map[string]bool{
 	"QoS":             true,
 	"Datapath":        true,
 	"Istio":           true,
+	"KubeVirt":        true,
 }
 
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
@@ -145,6 +146,10 @@ func RequiresAWS() any {
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
+}
+
+func RequiresExternalNode() any {
+	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.
