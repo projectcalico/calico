@@ -48,7 +48,7 @@ spec:
         - name: calico-csi
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/usr/bin/calico", "component", "csi"]
+          command: ["calico", "component", "csi"]
           args:
             - --nodeid=$(KUBE_NODE_NAME)
             - --loglevel=$(LOG_LEVEL)
