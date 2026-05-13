@@ -100,7 +100,12 @@ func (s *VMServer) WaitReady(ctx context.Context, f *framework.Framework) error 
 	return nil
 }
 
-// resolveLauncher polls for the virt-launcher pod matching this VMI.
+// resolveLauncher polls for the virt-launcher pod matching this VMI. During
+// live migration two launcher pods exist briefly (source + target); we skip
+// any with a DeletionTimestamp and prefer the newest by CreationTimestamp so
+// that callers re-resolving after a migration land on the target pod rather
+// than the source. Callers that need the source pod must resolve before
+// triggering migration.
 func (s *VMServer) resolveLauncher(ctx context.Context, f *framework.Framework) error {
 	deadline := time.Now().Add(podReadyTimeout(ctx))
 	selector := fmt.Sprintf("%s=%s", kubevirtv1.CreatedByLabel, string(s.vmi.UID))
@@ -110,12 +115,21 @@ func (s *VMServer) resolveLauncher(ctx context.Context, f *framework.Framework) 
 		if err != nil {
 			lastErr = err
 		} else {
+			var newest *v1.Pod
 			for i := range pods.Items {
 				p := &pods.Items[i]
 				if p.DeletionTimestamp != nil {
 					continue
 				}
-				s.pod = p
+				if p.Status.Phase == v1.PodFailed || p.Status.Phase == v1.PodSucceeded {
+					continue
+				}
+				if newest == nil || p.CreationTimestamp.After(newest.CreationTimestamp.Time) {
+					newest = p
+				}
+			}
+			if newest != nil {
+				s.pod = newest
 				return nil
 			}
 		}
