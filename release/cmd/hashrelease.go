@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -72,7 +73,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				}
 
 				// Clone the operator repository.
-				operatorDir := filepath.Join(cfg.TmpDir, operator.DefaultRepoName)
+				operatorDir := filepath.Join(cfg.TmpDir, c.String(operatorRepoFlag.Name))
 				err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir)
 				if err != nil {
 					return fmt.Errorf("failed to clone operator repository: %v", err)
@@ -155,6 +156,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
 					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
+					calico.WithLogsDir(filepath.Join(cfg.LogsDir, data.ProductVersion())),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -238,7 +240,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// Push the operator hashrelease first before validaion
 				// This is because validation checks all images exists and sends to Image Scan Service
 				o := operator.NewManager(
-					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, operator.DefaultRepoName)),
+					operator.WithOperatorDirectory(filepath.Join(cfg.TmpDir, c.String(operatorRepoFlag.Name))),
 					operator.IsHashRelease(),
 					operator.WithImage(hashrel.Operator.Image),
 					operator.WithRegistry(hashrel.Operator.Registry),
@@ -261,6 +263,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithOperatorVersion(hashrel.Operator.Version),
 					calico.WithOutputDir(hashrel.Source),
 					calico.WithTmpDir(cfg.TmpDir),
+					calico.WithLogsDir(filepath.Join(cfg.LogsDir, hashrel.ProductVersion)),
 					calico.WithGithubOrg(c.String(orgFlag.Name)),
 					calico.WithRepoName(c.String(repoFlag.Name)),
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -317,7 +320,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 
 // hashreleaseBuildFlags returns the flags for the hashrelease build command.
 func hashreleaseBuildFlags() []cli.Flag {
-	f := append(productFlags, buildStepFlags(true)...)
+	f := append(slices.Clone(productFlags), buildStepFlags(true)...)
 	f = append(f,
 		registryFlag,
 		archFlag)
@@ -337,9 +340,9 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	}
 
 	// Hashrelease regenerates manifests before building the OCP bundle.
-	if c.Bool(ocpBundleFlagName) && !c.Bool(manifestsFlagName) {
+	if c.Bool(ocpBundleFlag.Name) && !c.Bool(manifestsFlag.Name) {
 		return fmt.Errorf("--%s requires --%s on hashrelease builds; either drop --%s or also set --%s",
-			ocpBundleFlagName, manifestsFlagName, inverseFlagName(manifestsFlagName), inverseFlagName(ocpBundleFlagName))
+			ocpBundleFlag.Name, manifestsFlag.Name, inverseFlagName(manifestsFlag.Name), inverseFlagName(ocpBundleFlag.Name))
 	}
 
 	// CI conditional checks.
@@ -368,7 +371,7 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 
 // hashreleasePublishFlags returns the flags for the hashrelease publish command.
 func hashreleasePublishFlags() []cli.Flag {
-	f := append(productFlags, publishStepFlags(true)...)
+	f := append(slices.Clone(productFlags), publishStepFlags(true)...)
 	f = append(f,
 		registryFlag,
 		helmRegistryFlag,

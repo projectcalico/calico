@@ -230,6 +230,16 @@ func WithTmpDir(tmpDir string) Option {
 	}
 }
 
+// WithLogsDir sets the directory under which per-step build/publish logs
+// are written. When unset, file capture is disabled and only the existing
+// in-memory output is returned to callers.
+func WithLogsDir(logsDir string) Option {
+	return func(r *CalicoManager) error {
+		r.logsDir = logsDir
+		return nil
+	}
+}
+
 func WithHashrelease(hashrelease hashreleaseserver.Hashrelease, cfg hashreleaseserver.Config) Option {
 	return func(r *CalicoManager) error {
 		r.hashrelease = hashrelease

@@ -104,16 +104,13 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
-			bpfMode = false
-			if dp := detectDataplane(cli, f.ClientSet); dp.Calico == dataplaneBPF {
-				bpfMode = true
-			}
+			bpfMode = utils.DetectDataplane(cli, f.ClientSet).IsBPF()
 		})
 
 		// runEgressTest executes the standard egress test flow for a single scenario.
 		runEgressTest := func(
 			ct conncheck.ConnectionTester,
-			clientPod *conncheck.Client,
+			clientPod conncheck.Client,
 			target conncheck.Target,
 			expectSNAT bool,
 			scenario egressScenario,
@@ -249,7 +246,7 @@ var _ = describe.CalicoDescribe(
 
 			// For loopback tests (dstPod==0), the source is the server pod itself.
 			// For other tests, create a separate client on node0.
-			var clientPod *conncheck.Client
+			var clientPod conncheck.Client
 			var applyLabels map[string]string
 
 			clientPod = conncheck.NewClient("client-0", f.Namespace,

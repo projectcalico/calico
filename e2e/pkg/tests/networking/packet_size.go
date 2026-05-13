@@ -215,7 +215,7 @@ var _ = describe.CalicoDescribe(
 // packetBaseTarget returns a base target for the given target type. Callers add
 // protocol-specific options (WithHTTP for GET/POST, WithUDP for UDP) on top.
 type packetTarget struct {
-	server    *conncheck.Server
+	server    conncheck.Server
 	nodeIPs   []string
 	typ       int
 	podIP     string
@@ -224,7 +224,7 @@ type packetTarget struct {
 	clusterIP string
 }
 
-func packetBaseTarget(server *conncheck.Server, nodeIPs []string, targetType int) packetTarget {
+func packetBaseTarget(server conncheck.Server, nodeIPs []string, targetType int) packetTarget {
 	return packetTarget{
 		server:    server,
 		nodeIPs:   nodeIPs,
@@ -271,7 +271,7 @@ func (t packetTarget) makeTargetMultiOpt(opts ...conncheck.TargetOption) connche
 }
 
 // packetTestViaConncheck runs GET, POST, and UDP packet size tests using conncheck.
-func packetTestViaConncheck(ct conncheck.ConnectionTester, client *conncheck.Client, base packetTarget, getLengths, postLengths, udpLengths []int) {
+func packetTestViaConncheck(ct conncheck.ConnectionTester, client conncheck.Client, base packetTarget, getLengths, postLengths, udpLengths []int) {
 	for _, length := range getLengths {
 		By(fmt.Sprintf("Testing GET with payload length %d", length), func() {
 			target := base.getTarget(length)

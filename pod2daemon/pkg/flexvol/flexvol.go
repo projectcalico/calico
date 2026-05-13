@@ -24,9 +24,11 @@ package flexvol
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/syslog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -126,7 +128,7 @@ var (
 // NewCommand returns the root cobra command for the flexvol driver.
 func NewCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:           "flexvoldrv",
+		Use:           "flexvol",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -192,12 +194,87 @@ func NewCommand() *cobra.Command {
 		},
 	}
 
+	var installTarget string
+	installCmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install the flex volume driver onto the host filesystem.",
+		Long: "Install copies the running binary to --target with mode 0550. " +
+			"The basename must be 'uds' since kubelet calls the driver as " +
+			"<plugin-dir>/uds and the argv[0] dispatch only matches that name. " +
+			"Must run as root - the target dir is typically owned by root.",
+		RunE: func(c *cobra.Command, args []string) error {
+			return installDriver(installTarget)
+		},
+	}
+	installCmd.Flags().StringVar(&installTarget, "target", "", "Path on the host where the driver binary is installed (e.g. /host/driver/uds).")
+
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(unmountCmd)
+	rootCmd.AddCommand(installCmd)
 
 	return rootCmd
+}
+
+// installDriver copies the running binary to target with mode 0550. Uses
+// write-tmp-then-rename so a kubelet mid-invocation never sees a partial
+// file. Target basename must be "uds" - the argv[0] dispatch in
+// cmd/calico/main.go only routes that name back into this package.
+func installDriver(target string) error {
+	if target == "" {
+		return fmt.Errorf("target is required")
+	}
+	if base := filepath.Base(target); base != "uds" {
+		return fmt.Errorf("target basename must be \"uds\", got %q", base)
+	}
+	src, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolving running binary: %w", err)
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("opening %s: %w", src, err)
+	}
+	defer func() {
+		if err := in.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close source file %s: %s\n", src, err.Error()), syslogOnlyTrue)
+		}
+	}()
+
+	dir := filepath.Dir(target)
+	tmp, err := os.CreateTemp(dir, ".uds.*")
+	if err != nil {
+		return fmt.Errorf("creating temp file in %s: %w", dir, err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		if err := os.Remove(tmpPath); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to remove temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
+	}()
+
+	if _, err := io.Copy(tmp, in); err != nil {
+		if err := tmp.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
+		return fmt.Errorf("copying binary: %w", err)
+	}
+	if err := tmp.Chmod(0o550); err != nil {
+		if err := tmp.Close(); err != nil {
+			logError("installDriver", target, fmt.Sprintf("failed to close temp file %s: %s\n", tmpPath, err.Error()), syslogOnlyTrue)
+		}
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, target); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", tmpPath, target, err)
+	}
+	return nil
 }
 
 // initCommand handles the init command for the driver.
@@ -237,7 +314,7 @@ func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
 func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath string) error {
 	inp := strings.Join([]string{destinationDir, workloadPath}, "|")
 	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
-	err := os.MkdirAll(newDir, 0777)
+	err := os.MkdirAll(newDir, 0o777)
 	if err != nil {
 		logError("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir), syslogOnlyTrue)
 		return err
@@ -253,7 +330,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	}
 
 	newDestinationDir := destinationDir + "/nodeagent"
-	err = os.MkdirAll(newDestinationDir, 0777)
+	err = os.MkdirAll(newDestinationDir, 0o777)
 	if err != nil {
 		cmd := exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
@@ -411,8 +488,8 @@ func logToSys(caller, inp, opts string) {
 
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
 func addCredentialFile(ninputs *creds.Credentials) error {
-	//Make the directory and then write the ninputs as json to it.
-	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
+	// Make the directory and then write the ninputs as json to it.
+	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0o755)
 	if err != nil {
 		return err
 	}
@@ -424,7 +501,7 @@ func addCredentialFile(ninputs *creds.Credentials) error {
 	}
 
 	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
-	_ = os.WriteFile(credsFileTmp, attrs, 0644)
+	_ = os.WriteFile(credsFileTmp, attrs, 0o644)
 
 	// Move it to the right location now.
 	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
@@ -460,7 +537,7 @@ func initConfiguration() {
 		return
 	}
 
-	//fill in if missing configurations
+	// fill in if missing configurations
 	if len(config.NodeAgentManagementHomeDir) == 0 {
 		config.NodeAgentManagementHomeDir = NODEAGENT_HOME
 	}

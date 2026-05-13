@@ -261,7 +261,7 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
 // given node, used for TCP tests where the client must be on a different node
 // than the server VM to exercise cross-node BGP routing.
-func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) *conncheck.Client {
+func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) conncheck.Client {
 	By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	tester := conncheck.NewConnectionTester(f)
 	DeferCleanup(tester.Stop)

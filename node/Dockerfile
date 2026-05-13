@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,14 @@ ARG RUNIT_VER=2.1.2
 FROM ${BPFTOOL_IMAGE} AS bpftool
 
 FROM ${BIRD_IMAGE} AS bird
+
+# nft-rpms is supplied as a named build context
+# (--build-context nft-rpms=docker-image://<NFT_RPMS_IMAGE>) by node/Makefile.
+# Using a build context rather than FROM ${NFT_RPMS_IMAGE} avoids buildkit's
+# `--pull=always` trying to fetch our locally-built/loaded producer image
+# from a registry. The image is built by hack/rpms/nftables/ and carries the
+# patched nftables + libnftnl RPMs (referenced via COPY --from=nft-rpms
+# below). The tag is content-addressed; see hack/rpms/nftables/Makefile.
 
 # Use this build stage to install iptables-legacy and build runit binaries.
 # We need to build runit because there aren't any rpms for it in AlmaLinux or ubi repositories.
@@ -67,7 +75,7 @@ RUN microdnf install -y \
     libpcap libmnl libnfnetlink libnetfilter_conntrack \
     ipset \
     iputils \
-    nftables \
+    # nftables is installed below from our patched RPMs (calico/nftables-rpms).
     # Need arp
     net-tools \
     # Need kmod to ensure ip6tables-save works correctly
@@ -91,7 +99,20 @@ RUN microdnf --enablerepo=appstream --enablerepo=baseos install -y \
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools \
     # From baseos
-    iproute-tc iptables-nft
+    iproute-tc iptables-nft \
+    # Runtime deps of our patched nftables RPM (libnftnl is pulled in
+    # transitively by iptables-nft).
+    gmp jansson
+
+# Install our patched libnftnl and nftables RPMs. Their Provides/Obsoletes
+# clauses cleanly upgrade the BaseOS libnftnl that iptables-nft pulled in
+# above and add nftables, leaving the runtime image's rpm db as the owner of
+# /usr/sbin/nft, /usr/lib64/libnftables.so.*, and /usr/lib64/libnftnl.so.*.
+# `rpm -Uvh` is used here because UBI's microdnf does not accept local rpm
+# files as install arguments.
+COPY --from=nft-rpms /rpms/ /tmp/rpms/
+RUN rpm -Uvh /tmp/rpms/libnftnl-*.rpm /tmp/rpms/nftables-*.rpm && \
+    rm -rf /tmp/rpms
 
 RUN microdnf clean all
 

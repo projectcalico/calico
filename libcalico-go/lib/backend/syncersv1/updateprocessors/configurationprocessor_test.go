@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -39,7 +38,6 @@ const (
 	isGlobalBgpConfig
 	isNodeBgpConfig
 
-	hostIPMarker    = "*HOSTIP*"
 	nodeMarker      = "*NODEMARKER*"
 	wireguardMarker = "*WIREGUARDMARKER*"
 )
@@ -445,13 +443,6 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 				node := kt.Hostname
 				ExpectWithOffset(1, node).To(Equal("mynode"))
 				name = kt.Name
-			case model.HostIPKey:
-				// Although the HostIPKey is not in the same key space as the HostConfig, we
-				// special case this to make this test reusable for more tests.
-				node := kt.Hostname
-				ExpectWithOffset(1, node).To(Equal("mynode"))
-				name = hostIPMarker
-				logrus.Warnf("IP in key: %s", kvp.Value)
 			case model.ResourceKey:
 				node := kt.Name
 				ExpectWithOffset(1, node).To(Equal("mynode"))

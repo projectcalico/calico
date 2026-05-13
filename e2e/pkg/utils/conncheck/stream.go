@@ -234,32 +234,12 @@ func (w *streamWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-// streamWrapper is /bin/sh -c body that wraps the user command. Closing the
-// SPDY stdin from outside causes the reaper subshell to read EOF and SIGTERM
-// the child. This is the only reliable way to terminate a remote process via
-// SPDY exec since signals are not forwarded.
-//
-// `exec 3<&0` saves the wrapper's stdin to fd 3 BEFORE any backgrounding,
-// because non-interactive shells redirect backgrounded subshell stdin to
-// /dev/null (the reaper would otherwise read /dev/null and fire instantly).
-// The child gets /dev/null stdin; busybox nc tolerates this by continuing to
-// read the socket until EOF (or our SIGTERM).
-const streamWrapper = `exec 3<&0
-"$@" </dev/null &
-child=$!
-( cat <&3 >/dev/null ; kill -TERM "$child" 2>/dev/null || true ) &
-reaper=$!
-wait "$child"
-rc=$?
-kill -TERM "$reaper" 2>/dev/null || true
-exit "$rc"
-`
-
 // PodSource is a StreamSource that runs the command in a Kubernetes pod via
-// SPDY exec. Termination uses the stdin-EOF wrapper (see streamWrapper).
+// SPDY exec. Termination uses the stdin-EOF wrapper (see streamWrapper in
+// pod_exec.go).
 type PodSource struct {
 	f         *framework.Framework
-	client    *Client
+	client    Client
 	container string
 
 	mu       sync.Mutex
@@ -271,7 +251,7 @@ type PodSource struct {
 
 // NewPodSource builds a PodSource for the given conncheck Client. The
 // pod's first container is used unless overridden with WithPodContainer.
-func NewPodSource(f *framework.Framework, client *Client) *PodSource {
+func NewPodSource(f *framework.Framework, client Client) *PodSource {
 	if f == nil {
 		framework.Failf("NewPodSource: framework is required")
 	}
