@@ -280,6 +280,39 @@ echo "wsrep_cluster_size = ${size}"
 [ "${size}" = "3" ] || { echo "Expected 3-member cluster"; exit 1; }
 
 # -----------------------------------------------------------------------------
+# Switch node 1 from mysql@bootstrap.service to mysql.service.
+#
+# This is required so DevStack's `restart_service mysql` works -- PXC's
+# startup wrapper refuses to start mysql.service while mysql@bootstrap
+# is still active.  We do this *after* nodes 2 and 3 are up, so the
+# brief node-1 outage during the swap leaves a quorate 2-member cluster
+# and node 1 rejoins via IST (very little to catch up on).
+# -----------------------------------------------------------------------------
+
+sudo systemctl stop mysql@bootstrap.service
+sudo systemctl start mysql.service
+
+for i in $(seq 1 60); do
+    state=$(sudo mysql --protocol=socket -uroot -p"${DATABASE_PASSWORD}" \
+        -e "SHOW STATUS LIKE 'wsrep_local_state_comment'" 2>/dev/null \
+        | awk '/wsrep_local_state_comment/ {print $2}' || true)
+    if [ "${state}" = "Synced" ]; then
+        echo "Node 1 rejoined as mysql.service, Synced."
+        break
+    fi
+    echo "Waiting for node 1 to rejoin under mysql.service (currently '${state}'), attempt $i/60"
+    sleep 2
+done
+if [ "${state}" != "Synced" ]; then
+    echo "Node 1 failed to rejoin under mysql.service.  Diagnostic dumps follow:"
+    echo "----- /var/log/mysql/error.log (last 200 lines) -----"
+    sudo tail -200 /var/log/mysql/error.log 2>&1 || echo "(no error log)"
+    echo "----- systemctl status mysql.service -----"
+    sudo systemctl status mysql.service --no-pager -l || true
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
 # HAProxy in front of the three PXC nodes, listening on 3320.
 # Plain TCP roundrobin -- we intentionally do not use option mysql-check
 # because we do NOT want HAProxy to mark a slow-applying node down; the
