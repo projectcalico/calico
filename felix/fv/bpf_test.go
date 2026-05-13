@@ -1719,6 +1719,67 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
+					// CI-1988: With a HostEndpoint Deny-ingress policy on the source node,
+					// the SNAT'd return traffic for pod-to-off-cluster connections must
+					// still be matched by BPF conntrack and forwarded back to the pod —
+					// i.e. it must not be evaluated against the host-endpoint policy
+					// (which would deny it as host-bound).
+					//
+					// applyOnForward defaults to false on the deny GNP, so pod egress
+					// (forwarded through eth0) is unaffected. Only a packet that the
+					// dataplane classifies as host-bound hits this policy. In iptables
+					// mode the reply matches nf_conntrack uniformly across protocols and
+					// is classified as forwarded ESTABLISHED. The bug report (Visa) is
+					// that in BPF mode UDP replies miss conntrack and get denied, while
+					// TCP/ICMP replies are correctly matched.
+					It("should not block SNAT'd return traffic via HEP policy", func() {
+						denyPol := api.NewGlobalNetworkPolicy()
+						denyPol.Name = "ci-1988-hep-deny-ingress"
+						denyOrder := float64(10)
+						denyPol.Spec.Order = &denyOrder
+						denyPol.Spec.Selector = "ep-type == 'host' && node == '" + tc.Felixes[0].Name + "'"
+						denyPol.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+						denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
+						_ = createPolicy(denyPol)
+
+						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny-ingress")
+
+						// hostW[1] sits at felixIP(1), outside the cluster IP pool, so
+						// pod traffic to it is SNAT'd to felixIP(0) by natOutgoing.
+						// felix[1]'s HEP is unaffected by the deny policy (it selects
+						// felix[0] only), so the reply leaves hostW[1] normally; the
+						// question is whether felix[0]'s ingress hook lets the reply
+						// back in.
+						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
+						cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+						// The NAT-outgoing flow has two BPF conntrack entries on the source
+						// node: a workload-side entry keyed by the pre-SNAT 5-tuple
+						// (pod IP) and a host-side entry keyed by the post-SNAT 5-tuple
+						// (node IP). The host-side entry must exist for the reply at
+						// FROM_HEP to skip policy.
+						ctDumpArgs := []string{"calico-bpf", "conntrack", "dump", "--raw"}
+						if testOpts.ipv6 {
+							ctDumpArgs = []string{"calico-bpf", "conntrack", "-6", "dump", "--raw"}
+						}
+						ctDump, err := tc.Felixes[0].ExecOutput(ctDumpArgs...)
+						Expect(err).NotTo(HaveOccurred())
+						// BPF conntrack keys are canonicalized (smaller IP first), so each
+						// entry can appear in either A<->B or B<->A order.
+						ctEntry := func(ipA, ipB string) *regexp.Regexp {
+							qA, qB := regexp.QuoteMeta(ipA), regexp.QuoteMeta(ipB)
+							return regexp.MustCompile(fmt.Sprintf(
+								`proto=%d (?:%s:\d+ <-> %s:8055|%s:8055 <-> %s:\d+)`,
+								numericProto, qA, qB, qB, qA))
+						}
+						podToHost := ctEntry(w[0][0].IP, hostW[1].IP)
+						nodeToHost := ctEntry(felixIP(0), hostW[1].IP)
+						Expect(podToHost.MatchString(ctDump)).To(BeTrue(),
+							"BPF conntrack missing workload-side (pre-SNAT) entry; dump:\n"+ctDump)
+						Expect(nodeToHost.MatchString(ctDump)).To(BeTrue(),
+							"BPF conntrack missing host-side (post-SNAT) entry; dump:\n"+ctDump)
+					})
+
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
