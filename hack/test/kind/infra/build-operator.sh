@@ -17,7 +17,7 @@ REPO=${REPO:-tigera/operator}
 BRANCH=${BRANCH:-master}
 
 # Reuse the existing clone if branch and remote repo (org/name slug) match, otherwise start fresh.
-# Normalise a remote URL to an "org/repo" slug regardless of protocol or .git suffix so that
+# Normalize a remote URL to an "org/repo" slug regardless of protocol or .git suffix so that
 # URL rewriting (e.g. https→ssh) doesn't cause spurious re-clones.
 repo_url="https://github.com/${REPO}"
 if [ -d operator/.git ]; then
