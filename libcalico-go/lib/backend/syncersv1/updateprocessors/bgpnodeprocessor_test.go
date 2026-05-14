@@ -308,10 +308,10 @@ var _ = Describe("Test the (BGP) Node update processor with USE_POD_CIDR=true", 
 		// Make sure we have the correct KVP updates - one for each CIDR.
 		c1 := net.MustParseCIDR("192.168.1.0/24")
 		v := model.BlockAffinity{State: model.StateConfirmed}
-		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c1, Host: "mynode"}, Value: &v})
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(c1), Host: "mynode"}, Value: &v})
 
 		c2 := net.MustParseCIDR("192.168.2.0/24")
-		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c2, Host: "mynode"}, Value: &v})
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(c2), Host: "mynode"}, Value: &v})
 
 		// Remove CIDR 2 and make sure we get a delete for it.
 		By("handling an update that removes a CIDR")
@@ -327,10 +327,10 @@ var _ = Describe("Test the (BGP) Node update processor with USE_POD_CIDR=true", 
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert we get block affinity 1
-		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c1, Host: "mynode"}, Value: &v})
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(c1), Host: "mynode"}, Value: &v})
 
 		// And a remove for block affinity 2.
-		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: c2, Host: "mynode"}, Value: nil})
+		assertBlockAffinityUpdate(kvps, &model.KVPair{Key: model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(c2), Host: "mynode"}, Value: nil})
 	})
 })
 

@@ -50,7 +50,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affinity k8s backend tests", testut
 		kvp := model.KVPair{
 			Key: model.BlockAffinityKey{
 				Host:         "my-host",
-				CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+				CIDR:         model.PrefixFromIPNet(net.MustParseCIDR("192.168.1.0/24")),
 				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
@@ -224,7 +224,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 			kvp := &model.KVPair{
 				Key: model.BlockAffinityKey{
 					Host:         "my-host",
-					CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+					CIDR:         model.PrefixFromIPNet(net.MustParseCIDR("192.168.1.0/24")),
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{State: model.StateConfirmed},
