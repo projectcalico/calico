@@ -134,6 +134,12 @@ def main(argv=None) -> int:
     # Register options before parsing config so cfg.CONF.calico exists.
     calico_config.register_options(cfg.CONF)
 
+    # Register Neutron's core options (base_mac, etc) before init() — it
+    # validates cfg.CONF.base_mac immediately but does NOT register the
+    # core opts itself.  In neutron-server this happens earlier in startup;
+    # as a standalone CLI we have to do it ourselves.
+    common_config.register_common_config_options()
+
     # Parse oslo.config (and configure logging) from --config-file.
     common_config.init(["--config-file=%s" % path for path in config_files])
     common_config.setup_logging()
