@@ -23,10 +23,13 @@ LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 
 ## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
+CONFD_CONFD_FILES = $(patsubst ../confd/etc/calico/confd/conf.d/%,filesystem/etc/calico/confd/conf.d/%,$(shell find ../confd/etc/calico/confd/conf.d -type f))
+CONFD_TEMPLATE_FILES = $(patsubst ../confd/etc/calico/confd/templates/%,filesystem/etc/calico/confd/templates/%,$(shell find ../confd/etc/calico/confd/templates -type f))
+
 BUILD_DEPS = $(LIBBPF_A) \
 	     filesystem/usr/lib/calico/bpf \
-	     filesystem/etc/calico/confd/conf.d \
-	     filesystem/etc/calico/confd/templates
+	     $(CONFD_CONFD_FILES) \
+	     $(CONFD_TEMPLATE_FILES)
 
 ## IMAGE_DEPS lists non-Go files the calico/node image depends on.
 IMAGE_DEPS = ./Dockerfile $(BUILD_DEPS)
@@ -181,14 +184,18 @@ clean-windows: clean-windows-builder
 ###############################################################################
 build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 
-# Pull in config from confd.
-filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/conf.d $@
-	chmod +w $@
+# Pull in config from confd. NODE_CONTAINER_FILES enumerates the copies
+# under filesystem/ individually as prereqs of the node image, so each
+# template needs its own rule - a directory-level "rm -rf && cp -r" recipe
+# races with parallel make when sibling targets re-evaluate prereqs in the
+# window between the rm and the cp.
+filesystem/etc/calico/confd/conf.d/%: ../confd/etc/calico/confd/conf.d/%
+	@mkdir -p $(@D)
+	cp $< $@
 
-filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
-	chmod +w $@
+filesystem/etc/calico/confd/templates/%: ../confd/etc/calico/confd/templates/%
+	@mkdir -p $(@D)
+	cp $< $@
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
