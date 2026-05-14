@@ -69,7 +69,7 @@ var (
 		Name: "ippool-2",
 	}
 	l3Key1 = model.BlockAffinityKey{
-		CIDR:         cnet.MustParseCIDR("1.2.3.0/24"),
+		CIDR:         model.PrefixFromIPNet(cnet.MustParseCIDR("1.2.3.0/24")),
 		Host:         "mynode",
 		AffinityType: string(ipam.AffinityTypeHost),
 	}
