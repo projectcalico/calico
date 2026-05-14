@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 cloud.google.com/go v0.123.0
 cloud.google.com/go/auth v0.19.0
