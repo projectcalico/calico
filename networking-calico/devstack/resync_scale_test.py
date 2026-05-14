@@ -240,6 +240,28 @@ def connect_openstack():
     )
 
 
+def bump_quotas(conn):
+    """Set the current project's Neutron quotas to unlimited (-1).
+
+    Defaults are 10 networks / 50 ports / 10 SGs / 100 SG rules, way
+    below what the 10000-port scale needs.  -1 means unlimited.
+    """
+    project = conn.identity.find_project(os.environ.get("OS_PROJECT_NAME", "admin"))
+    LOG.info(
+        "Bumping Neutron quotas for project %s (%s) to unlimited",
+        project.name,
+        project.id,
+    )
+    conn.network.update_quota(
+        project.id,
+        networks=-1,
+        subnets=-1,
+        ports=-1,
+        security_groups=-1,
+        security_group_rules=-1,
+    )
+
+
 def create_networks_and_subnets(conn, num_networks):
     """Create N flat networks, each with a /24 subnet.
 
@@ -602,6 +624,8 @@ def main():
     etcd_port = env_int("ETCD_PORT", 2379)
     etcd_client = etcd3.client(host=etcd_host, port=etcd_port)
     LOG.info("etcd %s:%d", etcd_host, etcd_port)
+
+    bump_quotas(conn)
 
     scales = parse_scales()
     LOG.info("Scales: %s", scales)
