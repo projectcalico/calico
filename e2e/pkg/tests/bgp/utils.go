@@ -13,7 +13,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -23,7 +22,7 @@ import (
 // requireNonVXLANCluster checks that no IP pool uses VXLAN encapsulation. Tests that
 // disable the BGP mesh and expect connectivity to break cannot work on VXLAN clusters
 // because Felix programs VXLAN tunnel routes independently of BGP.
-func requireNonVXLANCluster(cli ctrlclient.Client) {
+func requireBGPForClusterRouting(cli ctrlclient.Client) bool {
 	pools := &v3.IPPoolList{}
 	err := cli.List(context.Background(), pools)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing IP pools")
@@ -31,12 +30,18 @@ func requireNonVXLANCluster(cli ctrlclient.Client) {
 	for _, pool := range pools.Items {
 		switch pool.Spec.VXLANMode {
 		case v3.VXLANModeAlways, v3.VXLANModeCrossSubnet:
-			framework.Failf(
-				"This test requires BGP full mesh as the sole routing mechanism, and cannot run with VXLAN enabled (pool %s uses VXLANMode %s)",
-				pool.Name, pool.Spec.VXLANMode,
-			)
+			return false
 		}
 	}
+
+	bgpConfig := &v3.BGPConfiguration{}
+	err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, bgpConfig)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
+
+	if bgpConfig.Spec.ProgramClusterRoutes != nil && *bgpConfig.Spec.ProgramClusterRoutes != "Enabled" {
+		return false
+	}
+	return true
 }
 
 // ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
