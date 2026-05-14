@@ -21,9 +21,6 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-// VERSION is filled out during the build process (using git describe output)
-var VERSION string
-
 func main() {
 	err := install.Install(buildinfo.Version)
 	if err != nil {

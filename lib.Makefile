@@ -127,6 +127,14 @@ endif
 endif
 endif
 
+# Optional cap on go build/test package parallelism. Appended to GOFLAGS so
+# it flows through every docker invocation that already passes GOFLAGS in.
+# Useful for limiting memory pressure when running multiple parallel builds
+# on a workstation (each in-flight package can fork its own compiler).
+ifneq ($(GO_BUILD_PARALLELISM),)
+GOFLAGS := $(GOFLAGS) -p=$(GO_BUILD_PARALLELISM)
+endif
+
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -308,6 +316,23 @@ else
 endif
 
 EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+
+# Optional per-build resource caps. When unset, no flags are added and the
+# container has full host access (current behaviour). Useful when running
+# multiple parallel builds on a workstation to avoid memory thrash.
+#   DOCKER_CPUS=N           Hard cap on total CPU bandwidth (any core).
+#   DOCKER_CPUSET_CPUS=0-3  Pin container to specific cores (true affinity).
+#   GOMAXPROCS=N            Cap goroutine parallelism inside each go invocation
+#                           (linker, vet, etc.); complements -p=N from GOFLAGS.
+ifneq ($(DOCKER_CPUS),)
+EXTRA_DOCKER_ARGS += --cpus=$(DOCKER_CPUS)
+endif
+ifneq ($(DOCKER_CPUSET_CPUS),)
+EXTRA_DOCKER_ARGS += --cpuset-cpus=$(DOCKER_CPUSET_CPUS)
+endif
+ifneq ($(GOMAXPROCS),)
+EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
+endif
 
 # Define go architecture flags
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)
@@ -1649,7 +1674,10 @@ KIND_TEST_BUILD_TAG = test-build
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/calico:$(KIND_TEST_BUILD_TAG)
+	calico/calico:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1659,7 +1687,10 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
-	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)
+	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1673,7 +1704,7 @@ KIND_IMAGE_MARKERS = \
 LIBBPF_MARKER = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 $(LIBBPF_MARKER):
-	$(MAKE) -C $(REPO_ROOT)/felix libbpf
+	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
 
 # MISSING-IMAGE forces a rebuild when the previously-built image has been
 # pruned from the local Docker daemon. Each stamp records the image ref
@@ -1710,6 +1741,18 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	echo "test-signer:latest-$(ARCH)" > $@
+
+# Envoy components: the third_party/envoy-* sub-makes use their own marker
+# names (.envoy-<comp>.created-$(ARCH)). The sub-make handles fetching
+# upstream sources and building the image as calico/envoy-<comp>:latest-$(ARCH).
+$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-gateway image
+
+$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-proxy image
+
+$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with

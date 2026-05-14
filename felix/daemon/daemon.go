@@ -1355,30 +1355,50 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 	return nil
 }
 
-func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane() {
-	var current *proto.WireguardStatusUpdate
+func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane(
+	reconcile func(pubKey string, ipVersion proto.IPVersion) error,
+	done <-chan struct{},
+) {
+	// pending tracks the latest desired public key per IP version that we have
+	// not yet successfully written to the datastore. We must track per IP
+	// version: v4 and v6 status updates are independent, and an in-flight
+	// retry for one version must not be displaced by an arriving update for
+	// the other.
+	pending := make(map[proto.IPVersion]string)
 	var ticker *jitter.Ticker
 	var retryC <-chan time.Time
 
 	for {
 		// Block until we either get an update or it's time to retry a failed update.
 		select {
-		case current = <-fc.wireguardStatUpdateFromDataplane:
-			log.Debugf("Wireguard status update from dataplane driver: %s, IP version: %d", current.PublicKey, current.IpVersion)
+		case msg := <-fc.wireguardStatUpdateFromDataplane:
+			log.Debugf("Wireguard status update from dataplane driver: %s, IP version: %d", msg.PublicKey, msg.IpVersion)
+			pending[msg.IpVersion] = msg.PublicKey
 		case <-retryC:
 			log.Debug("retrying failed Wireguard status update")
+		case <-done:
+			if ticker != nil {
+				ticker.Stop()
+			}
+			return
 		}
 		if ticker != nil {
 			ticker.Stop()
+			ticker = nil
+			retryC = nil
 		}
 
-		// Try and reconcile the current wireguard status data.
-		err := fc.reconcileWireguardStatUpdate(current.PublicKey, current.IpVersion)
-		if err == nil {
-			current = nil
-			retryC = nil
-			ticker = nil
-		} else {
+		// Reconcile every IP version that has a pending update. Drop entries
+		// that succeed; on any failure, schedule a retry tick.
+		anyFailed := false
+		for ipVersion, pubKey := range pending {
+			if err := reconcile(pubKey, ipVersion); err != nil {
+				anyFailed = true
+				continue
+			}
+			delete(pending, ipVersion)
+		}
+		if anyFailed {
 			// retry reconciling between 2-4 seconds.
 			ticker = jitter.NewTicker(2*time.Second, 2*time.Second)
 			retryC = ticker.C
@@ -1448,7 +1468,7 @@ func (fc *DataplaneConnector) Start() {
 	go fc.readMessagesFromDataplane()
 
 	// Start a background thread to handle Wireguard update to Node.
-	go fc.handleWireguardStatUpdateFromDataplane()
+	go fc.handleWireguardStatUpdateFromDataplane(fc.reconcileWireguardStatUpdate, nil)
 
 	log.WithFields(log.Fields{
 		"statusUpdatesFromDataplaneConsumers": len(fc.statusUpdatesFromDataplaneConsumers),

@@ -276,6 +276,94 @@ e2e-run-cnp:
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
 
 ###############################################################################
+# Gateway API conformance
+#
+# Runs the upstream sigs.k8s.io/gateway-api conformance suite against
+# Calico's Envoy-Gateway-based implementation on the cluster at $KUBECONFIG,
+# and emits a ConformanceReport YAML.
+#
+# Caller must set KUBECONFIG (e.g. $(KIND_KUBECONFIG)). Everything else
+# is inferred from git: GATEWAY_CONFORMANCE_VERSION defaults to
+# `git describe --tags --always --dirty`, which produces a useful
+# identifier on every build (a clean tag for release builds, a
+# describe-style ref for branch/PR builds). Whether to submit the
+# resulting report upstream is a separate decision and is not gated
+# here.
+#
+# The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
+# tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
+###############################################################################
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null)
+GATEWAY_CLASS_NAME ?= tigera-gateway-class
+GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
+GATEWAY_CONFORMANCE_MODE ?= default
+GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance-report.yaml
+GATEWAY_CONFORMANCE_ORG ?= projectcalico
+GATEWAY_CONFORMANCE_PROJECT ?= calico
+GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
+GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/CODE-OF-CONDUCT.md
+GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
+GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
+# Name of the docker network kind binds to. The kind default is "kind".
+GATEWAY_KIND_DOCKER_NETWORK ?= kind
+# Envoy Gateway deliberately leaves GatewayClass .status.supportedFeatures empty
+# (the field is experimental and datatype-unstable upstream; see EG's
+# internal/gatewayapi/status/gatewayclass.go). With empty status the conformance
+# suite's auto-inference returns no features and refuses to run. Default to the
+# curated envoy-gateway set (see e2e/cmd/gateway/e2e_test.go::envoyGatewayCuratedSet)
+# -- Calico ships stock unpatched Envoy Gateway so its feature surface matches
+# upstream's. Override GATEWAY_CONFORMANCE_CURATED to "" and set the individual
+# flags below for ad-hoc / debugging runs.
+GATEWAY_CONFORMANCE_CURATED ?= envoy-gateway
+GATEWAY_CONFORMANCE_ALL_FEATURES ?= false
+GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
+GATEWAY_CONFORMANCE_EXEMPT_FEATURES ?=
+
+## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
+GATEWAY_SETUP_CRD_TIMEOUT ?= 300
+GATEWAY_SETUP_GWC_TIMEOUT ?= 5m
+
+.PHONY: e2e-gateway-setup
+e2e-gateway-setup:
+	KUBECONFIG=$(KUBECONFIG) \
+	GATEWAY_API_CR=$(GATEWAY_API_CR) \
+	GATEWAY_ENVOY_PROXY=$(GATEWAY_ENVOY_PROXY) \
+	GATEWAY_METALLB_POOL=$(GATEWAY_METALLB_POOL) \
+	GATEWAY_CLASS_NAME=$(GATEWAY_CLASS_NAME) \
+	GATEWAY_KIND_DOCKER_NETWORK=$(GATEWAY_KIND_DOCKER_NETWORK) \
+	GATEWAY_SETUP_CRD_TIMEOUT=$(GATEWAY_SETUP_CRD_TIMEOUT) \
+	GATEWAY_SETUP_GWC_TIMEOUT=$(GATEWAY_SETUP_GWC_TIMEOUT) \
+	$(REPO_ROOT)/hack/test/kind/gateway-setup.sh
+
+## Run the Gateway API conformance suite.
+e2e-run-gateway-conformance: e2e-gateway-setup
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-gateway-conformance: KUBECONFIG must be set"; exit 1; fi
+	mkdir -p $(dir $(GATEWAY_CONFORMANCE_REPORT))
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/gateway/e2e.test \
+	  -gateway-class='$(GATEWAY_CLASS_NAME)' \
+	  -curated='$(GATEWAY_CONFORMANCE_CURATED)' \
+	  -conformance-profiles='$(GATEWAY_CONFORMANCE_PROFILES)' \
+	  -mode='$(GATEWAY_CONFORMANCE_MODE)' \
+	  -all-features='$(GATEWAY_CONFORMANCE_ALL_FEATURES)' \
+	  -supported-features='$(GATEWAY_CONFORMANCE_SUPPORTED_FEATURES)' \
+	  -exempt-features='$(GATEWAY_CONFORMANCE_EXEMPT_FEATURES)' \
+	  -organization='$(GATEWAY_CONFORMANCE_ORG)' \
+	  -project='$(GATEWAY_CONFORMANCE_PROJECT)' \
+	  -url='$(GATEWAY_CONFORMANCE_URL)' \
+	  -contact='$(GATEWAY_CONFORMANCE_CONTACT)' \
+	  -version='$(GATEWAY_CONFORMANCE_VERSION)' \
+	  -report-output='$(GATEWAY_CONFORMANCE_REPORT)' \
+	  -test.v -test.timeout=60m
+
+## End-to-end: build, kind-up, deploy Envoy Gateway, run conformance, emit report.
+.PHONY: e2e-test-gateway-conformance
+e2e-test-gateway-conformance:
+	$(MAKE) -C e2e bin/gateway/e2e.test
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) e2e-run-gateway-conformance KUBECONFIG=$(KIND_KUBECONFIG)
+
+###############################################################################
 # Release logic below
 ###############################################################################
 .PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes

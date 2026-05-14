@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -51,46 +50,47 @@ const (
 
 type connectionTester struct {
 	f              *framework.Framework
-	servers        map[string]*Server
-	clients        map[string]*Client
+	servers        map[string]Server
+	clients        map[string]Client
 	expectations   map[string]*Expectation
 	deployed       bool
 	executeTimeout time.Duration
 }
 
 type ConnectionTester interface {
-	// Methods for setup and teardown.
-	AddClient(client *Client)
-	AddServer(server *Server)
+	AddClient(client Client)
+	AddServer(server Server)
 	Deploy()
 	Stop()
-	StopClient(client *Client)
+	StopClient(client Client)
 
-	// Methods for one-shot execution.
-	ExpectSuccess(client *Client, targets ...Target)
-	ExpectFailure(client *Client, targets ...Target)
+	ExpectSuccess(client Client, targets ...Target)
+	ExpectFailure(client Client, targets ...Target)
 	Execute()
 	ResetExpectations()
 	WithTimeout(d time.Duration)
 
-	// Methods for continuous execution.
-	ExpectContinuously(client *Client, targets ...Target) Checkpointer
+	ExpectContinuously(client Client, targets ...Target) Checkpointer
 
-	// Connect executes a connection attempt from the client to the target and returns the output.
-	// This is useful for traffic generation where you don't need success/failure semantics.
-	Connect(client *Client, target Target) (string, error)
+	// Connect runs a one-shot probe and returns its output, without
+	// recording success/failure expectations.
+	Connect(client Client, target Target) (string, error)
 
-	// Methods for encryption verification. The client must have NET_RAW and NET_ADMIN
-	// capabilities for tcpdump (use WithCapture() client option).
-	ExpectEncrypted(client *Client, target Target)
-	ExpectPlaintext(client *Client, target Target)
+	// Encryption verification. The client must have NET_RAW and NET_ADMIN
+	// (use WithCapture()).
+	ExpectEncrypted(client Client, target Target)
+	ExpectPlaintext(client Client, target Target)
 }
 
-// Checkpointer provides a way to checkpoint continuous connection tests at specific points in time
-// during a test to verify that all connections are as expected up to that point.
+// Checkpointer asserts on results captured by a continuous probe.
 type Checkpointer interface {
 	ExpectSuccess(msg string)
 	ExpectFailure(msg string)
+	// ExpectNoDisruption asserts that the captured probe results have no
+	// disruption gap beyond what the supplied options allow. At least one
+	// of WithMaxGap / WithMaxConsecutiveLoss must be provided; there is
+	// no default tolerance.
+	ExpectNoDisruption(msg string, opts ...DisruptionOption)
 	Stop()
 }
 
@@ -99,8 +99,8 @@ var _ ConnectionTester = &connectionTester{}
 func NewConnectionTester(f *framework.Framework) ConnectionTester {
 	return &connectionTester{
 		f:            f,
-		clients:      make(map[string]*Client),
-		servers:      make(map[string]*Server),
+		clients:      make(map[string]Client),
+		servers:      make(map[string]Server),
 		expectations: make(map[string]*Expectation),
 	}
 }
@@ -113,10 +113,9 @@ func (c *connectionTester) ResetExpectations() {
 	c.executeTimeout = 0
 }
 
-// WithTimeout sets the timeout for the next Execute() call. The timeout
-// resets to the default after each ResetExpectations(). This is useful when
-// a particular connectivity check needs more time, e.g. waiting for Windows
-// HNS policy programming.
+// WithTimeout sets the timeout for the next Execute() call. Useful when a
+// connectivity check needs more time, e.g. waiting for Windows HNS policy
+// programming.
 func (c *connectionTester) WithTimeout(d time.Duration) {
 	c.executeTimeout = d
 }
@@ -126,62 +125,33 @@ func (c *connectionTester) Deploy() {
 }
 
 func (c *connectionTester) deploy() error {
-	// For each client and server, deploy a long lived pod.
-	for _, client := range c.clients {
-		if client.pod != nil {
-			// Pod was already deployed. Skip it, and only deploy new pods.
-			continue
-		}
-		By(fmt.Sprintf("Deploying client pod %s/%s", client.namespace.Name, client.name))
-		pod, err := CreateClientPod(c.f, client.namespace, client.name, client.labels, client.composedCustomizer())
-		if err != nil {
-			return err
-		}
-		client.pod = pod
-	}
-	for _, server := range c.servers {
-		if server.pod != nil {
-			// Pod was already deployed. Skip it, and only deploy new pods.
-			continue
-		}
-		By(fmt.Sprintf("Deploying server pod %s/%s", server.namespace.Name, server.name))
-		server.pod, server.service = server.deploy(c.f)
-	}
-
-	// Wait for all pods to be running.
-	By("Waiting for all pods in the connection checker to be running")
-	timeout := 1 * time.Minute
-	if windows.ClusterIsWindows() {
-		// Windows images are very large (sometimes 2GB+), so this needs a considerably
-		// longer timeout in order to allow them to be pulled
-		timeout = 15 * time.Minute
-	}
+	timeout := podReadyTimeout(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, client := range c.clients {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, timeout)
-		if err != nil {
-			return err
-		}
-		// Update the client pod object with the actual pod spec. i.e Spec.NodeName etc.
-		p, err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Get(ctx, client.pod.Name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		client.pod = p
-	}
-	for _, server := range c.servers {
-		err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, timeout)
-		if err != nil {
-			return err
-		}
 
-		// Update the server pod object with the actual pod IP.
-		p, err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Get(ctx, server.pod.Name, metav1.GetOptions{})
-		if err != nil {
+	for _, cl := range c.clients {
+		By(fmt.Sprintf("Deploying client %s", cl.ID()))
+		if err := cl.Deploy(ctx, c.f); err != nil {
 			return err
 		}
-		server.pod = p
+	}
+	for _, srv := range c.servers {
+		By(fmt.Sprintf("Deploying server %s", srv.ID()))
+		if err := srv.Deploy(ctx, c.f); err != nil {
+			return err
+		}
+	}
+
+	By("Waiting for all clients and servers to be ready")
+	for _, cl := range c.clients {
+		if err := cl.WaitReady(ctx, c.f); err != nil {
+			return err
+		}
+	}
+	for _, srv := range c.servers {
+		if err := srv.WaitReady(ctx, c.f); err != nil {
+			return err
+		}
 	}
 	c.deployed = true
 	return nil
@@ -194,46 +164,20 @@ func (c *connectionTester) Stop() {
 func (c *connectionTester) stop() error {
 	By("Tearing down the connection tester")
 
-	// Delete all of the pods.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	for _, client := range c.clients {
-		By(fmt.Sprintf("Deleting client pod %s", client.pod.Name))
-		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
+	for _, cl := range c.clients {
+		By(fmt.Sprintf("Cleaning up client %s", cl.ID()))
+		if err := cl.Cleanup(ctx, c.f); err != nil {
 			return err
 		}
 	}
-
-	for _, server := range c.servers {
-		By(fmt.Sprintf("Deleting server pod %s", server.pod.Name))
-		err := c.f.ClientSet.CoreV1().Pods(server.namespace.Name).Delete(ctx, server.pod.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-		if server.service != nil {
-			By(fmt.Sprintf("Deleting server service %s", server.service.Name))
-			err = c.f.ClientSet.CoreV1().Services(server.namespace.Name).Delete(ctx, server.service.Name, metav1.DeleteOptions{})
-			if err != nil && !apierrors.IsNotFound(err) {
-				return err
-			}
-		}
-	}
-
-	// Wait for pods to be deleted.
-	for _, client := range c.clients {
-		By(fmt.Sprintf("Waiting for client pod %s to be deleted", client.pod.Name))
-		if err := e2epod.WaitForPodNotFoundInNamespace(ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute); err != nil {
+	for _, srv := range c.servers {
+		By(fmt.Sprintf("Cleaning up server %s", srv.ID()))
+		if err := srv.Cleanup(ctx, c.f); err != nil {
 			return err
 		}
 	}
-	for _, server := range c.servers {
-		By(fmt.Sprintf("Waiting for server pod %s to be deleted", server.pod.Name))
-		if err := e2epod.WaitForPodNotFoundInNamespace(ctx, c.f.ClientSet, server.pod.Name, server.pod.Namespace, 1*time.Minute); err != nil {
-			return err
-		}
-	}
-
 	return c.expectationsTested()
 }
 
@@ -246,140 +190,105 @@ func (c *connectionTester) expectationsTested() error {
 	return nil
 }
 
-func (c *connectionTester) AddClient(client *Client) {
-	if client.namespace == nil {
-		framework.Failf("Client %s has no namespace", client.name)
+func (c *connectionTester) AddClient(cl Client) {
+	if _, ok := c.clients[cl.ID()]; ok {
+		framework.Failf("Client with ID %s already exists", cl.ID())
 	}
-	if _, ok := c.clients[client.ID()]; ok {
-		framework.Failf("Client with ID %s already exists", client.ID())
-	}
-	c.clients[client.ID()] = client
+	c.clients[cl.ID()] = cl
 }
 
-func (c *connectionTester) StopClient(client *Client) {
-	framework.ExpectNoErrorWithOffset(1, c.stopClient(client))
+func (c *connectionTester) StopClient(cl Client) {
+	framework.ExpectNoErrorWithOffset(1, c.stopClient(cl))
 }
 
-func (c *connectionTester) stopClient(client *Client) error {
-	id := client.ID()
+func (c *connectionTester) stopClient(cl Client) error {
+	id := cl.ID()
 	if _, ok := c.clients[id]; !ok {
 		return fmt.Errorf("client %s not found", id)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	if client.pod != nil {
-		By(fmt.Sprintf("Stopping client pod %s", client.pod.Name))
-		err := c.f.ClientSet.CoreV1().Pods(client.namespace.Name).Delete(ctx, client.pod.Name, metav1.DeleteOptions{})
-		if err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-		if err := e2epod.WaitForPodNotFoundInNamespace(
-			ctx, c.f.ClientSet, client.pod.Name, client.pod.Namespace, 1*time.Minute,
-		); err != nil {
-			return err
-		}
+	if err := c.clients[id].Cleanup(ctx, c.f); err != nil {
+		return err
 	}
 	delete(c.clients, id)
 	return nil
 }
 
-func (c *connectionTester) AddServer(server *Server) {
-	if server.namespace == nil {
-		framework.Failf("Server %s has no namespace", server.name)
+func (c *connectionTester) AddServer(srv Server) {
+	if _, ok := c.servers[srv.ID()]; ok {
+		framework.Failf("Server with ID %s already exists", srv.ID())
 	}
-	if _, ok := c.servers[server.ID()]; ok {
-		framework.Failf("Server with ID %s already exists", server.ID())
-	}
-	c.servers[server.ID()] = server
+	c.servers[srv.ID()] = srv
 }
 
 type Expectation struct {
-	Client         *v1.Pod
+	Client         Client
 	Target         Target
 	Description    string
 	ExpectedResult ResultStatus
 
-	// Track whether or not we have executed this expectation.
-	// This is helpful for spotting test bugs where we forget to execute.
 	executed bool
 }
 
 func (e *Expectation) String() string {
-	// An Expectation is defined by:
-	// - Client name and namespace.
-	// - The target name (and if applicable, namespace).
-	// - The type of connection, e.g., ClusterIP/ICMP.
-	return fmt.Sprintf("Client=%s/%s; Server=%s; Type=%s",
-		e.Client.Namespace,
-		e.Client.Name,
+	return fmt.Sprintf("Client=%s; Server=%s; Type=%s",
+		e.Client.ID(),
 		e.Target.String(),
 		e.Target.AccessType(),
 	)
 }
 
-func (c *connectionTester) ExpectSuccess(client *Client, targets ...Target) {
+func (c *connectionTester) ExpectSuccess(cl Client, targets ...Target) {
 	for _, target := range targets {
-		c.expectSuccess(client, target)
+		c.expectSuccess(cl, target)
 	}
 }
 
-func (c *connectionTester) expectSuccess(client *Client, target Target) {
-	if c.clients[client.ID()] == nil {
-		framework.Fail(fmt.Sprintf("Test bug: client %s not registered with connection tester. AddClient()?", client.ID()), 2)
+func (c *connectionTester) expectSuccess(cl Client, target Target) {
+	if c.clients[cl.ID()] == nil {
+		framework.Fail(fmt.Sprintf("Test bug: client %s not registered with connection tester. AddClient()?", cl.ID()), 2)
 	}
-	if c.clients[client.ID()].pod == nil {
-		framework.Fail(fmt.Sprintf("Client %s has no running pod. Did you Deploy()?", client.ID()), 2)
-	}
-
-	// Prevent duplication expectations. This is a common mistake when writing tests.
 	e := &Expectation{
-		Client:         c.clients[client.ID()].pod,
+		Client:         cl,
 		Target:         target,
-		Description:    fmt.Sprintf("%s -> %s", client.name, target.String()),
+		Description:    fmt.Sprintf("%s -> %s", cl.Name(), target.String()),
 		ExpectedResult: Success,
 	}
 	if c.expectations[e.String()] != nil {
-		// Protect against tests accidentally calling ExpectX with the same values
-		// multiple times, which is indicative of a test bug.
 		framework.Fail(fmt.Sprintf("Test bug: duplicate expectation: %s", e.String()), 2)
 	}
 	c.expectations[e.String()] = e
 }
 
-// ExpectContinuously starts continuous connection tests from the given client to the given targets.
-// It returns a Checkpointer that can be used to checkpoint and verify the results at specific points in time.
-// Callers must call Stop() on the returned Checkpointer when done.
-func (c *connectionTester) ExpectContinuously(client *Client, targets ...Target) Checkpointer {
-	checkpointer := &checkpointer{
+// ExpectContinuously starts continuous probes from cl to targets. Callers must
+// call Stop() on the returned Checkpointer when done.
+func (c *connectionTester) ExpectContinuously(cl Client, targets ...Target) Checkpointer {
+	cp := &checkpointer{
 		results: make(chan connectionResult, 1000),
 		done:    make(chan struct{}),
-		client:  client,
+		client:  cl,
 		targets: targets,
 		tester:  c,
 	}
-	checkpointer.start()
-	return checkpointer
+	cp.start()
+	return cp
 }
 
-func (c *connectionTester) ExpectFailure(client *Client, targets ...Target) {
+func (c *connectionTester) ExpectFailure(cl Client, targets ...Target) {
 	for _, target := range targets {
-		c.expectFailure(client, target)
+		c.expectFailure(cl, target)
 	}
 }
 
-func (c *connectionTester) expectFailure(client *Client, target Target) {
-	if c.clients[client.ID()] == nil {
-		framework.Fail(fmt.Sprintf("Test bug: client %s not registered with connection tester. AddClient()?", client.ID()), 2)
+func (c *connectionTester) expectFailure(cl Client, target Target) {
+	if c.clients[cl.ID()] == nil {
+		framework.Fail(fmt.Sprintf("Test bug: client %s not registered with connection tester. AddClient()?", cl.ID()), 2)
 	}
-	if c.clients[client.ID()].pod == nil {
-		framework.Fail(fmt.Sprintf("Client %s has no running pod. Did you Deploy()?", client.ID()), 2)
-	}
-
-	// Prevent duplication expectations. This is a common mistake when writing tests.
 	e := &Expectation{
-		Client:         c.clients[client.ID()].pod,
+		Client:         cl,
 		Target:         target,
-		Description:    fmt.Sprintf("%s -> %s", client.name, target.String()),
+		Description:    fmt.Sprintf("%s -> %s", cl.Name(), target.String()),
 		ExpectedResult: Failure,
 	}
 	if c.expectations[e.String()] != nil {
@@ -388,19 +297,14 @@ func (c *connectionTester) expectFailure(client *Client, target Target) {
 	c.expectations[e.String()] = e
 }
 
-// TestConnections tests one or more connections in parallel. It will fail the test if any of the connections fail.
 func (c *connectionTester) Execute() {
 	if !c.deployed {
 		framework.Fail("Execute() called before Deploy()", 1)
 	}
 	By(fmt.Sprintf("Testing %d connections in parallel", len(c.expectations)))
 
-	// Channel to collect results.
 	resultChan := make(chan connectionResult, len(c.expectations))
 
-	// Context to control overall timeout for all connections. After it times out, we'll forcefully
-	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
-	// something goes wrong.
 	timeout := c.executeTimeout
 	if timeout == 0 {
 		timeout = defaultExecuteTimeout
@@ -408,12 +312,10 @@ func (c *connectionTester) Execute() {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
 	for _, expectation := range c.expectations {
 		go c.runConnection(ctx, expectation, resultChan)
 	}
 
-	// Wait for all of the connections to finish.
 	var results []connectionResult
 	var failed bool
 	for range c.expectations {
@@ -424,48 +326,37 @@ func (c *connectionTester) Execute() {
 			logDiagsForConnection(c.f, result)
 		}
 	}
-
-	// Only close the result channel after all connections have finished to avoid
-	// connection goroutines attempting to write to a closed channel.
 	close(resultChan)
 
-	// If we had any errors, log out the per-test diags and then fail the test.
 	if failed {
 		logDiagsForNamespace(c.f, c.f.Namespace)
-		msg := buildFailureMessage(results)
-		framework.Fail(msg, 1)
+		framework.Fail(buildFailureMessage(results), 1)
 	}
 }
 
 func (c *connectionTester) runConnection(ctx context.Context, exp *Expectation, results chan<- connectionResult) {
-	// Exec into the client pod and try to connect to the server.
 	cmd := c.command(exp.Target)
 
 	logCtx := logrus.WithFields(logrus.Fields{
 		"cmd":      cmd,
-		"client":   fmt.Sprintf("%s/%s", exp.Client.Namespace, exp.Client.Name),
+		"client":   exp.Client.ID(),
 		"target":   exp.Target.String(),
 		"expected": exp.ExpectedResult,
 	})
 
-	// First attempt.
-	out, result, err := c.execCommandInPod(exp.Client, cmd)
+	out, result, err := c.execCommand(exp.Client, cmd)
 	if err != nil {
 		logCtx.WithError(err).Warn("Connection attempt returned an error")
 	}
 
-	// Retry until the context expires if we didn't get the expected result. This helps to avoid flakes due to transient issues.
-	// We don't want to retry too many times, as that could mask real issues and slow down tests. However, we know that
-	// especially on CPU constrained environments such as CI, there can be a delay between making changes (e.g., applying a NetworkPolicy) and
-	// those changes taking effect. So a short retry loop is helpful.
-
+	// Retry on mismatch until the context expires. Avoids flakes during
+	// short windows after policy/route changes propagate.
 loop:
 	for result != exp.ExpectedResult {
 		select {
 		case <-ctx.Done():
 			break loop
 		default:
-			// Not timed out yet.
 		}
 
 		logCtx.WithFields(logrus.Fields{
@@ -476,7 +367,7 @@ loop:
 
 		time.Sleep(1 * time.Second)
 
-		out, result, err = c.execCommandInPod(exp.Client, cmd)
+		out, result, err = c.execCommand(exp.Client, cmd)
 		if err != nil {
 			logCtx.WithError(err).Warn("Connection attempt returned an error")
 		}
@@ -490,46 +381,40 @@ loop:
 
 	exp.executed = true
 	results <- connectionResult{
-		clientPod: exp.Client,
-		target:    exp.Target,
-		expected:  exp.ExpectedResult,
-		actual:    result,
-		err:       err,
+		client:     exp.Client,
+		target:     exp.Target,
+		expected:   exp.ExpectedResult,
+		actual:     result,
+		err:        err,
+		recordedAt: time.Now(),
 	}
 }
 
-// Connect runs a one-shot connection attempt from the client pod to the given target, and returns the output of the command.
-func (c *connectionTester) Connect(client *Client, target Target) (string, error) {
-	if c.clients[client.ID()] == nil {
-		return "", fmt.Errorf("test bug: client %s not registered with connection tester. AddClient()?", client.ID())
+// Connect runs a one-shot probe from the client to target and returns the output.
+func (c *connectionTester) Connect(cl Client, target Target) (string, error) {
+	if c.clients[cl.ID()] == nil {
+		return "", fmt.Errorf("test bug: client %s not registered with connection tester. AddClient()?", cl.ID())
 	}
-	if c.clients[client.ID()].pod == nil {
-		return "", fmt.Errorf("Client %s has no running pod. Did you Deploy()?", client.ID())
-	}
-
 	cmd := c.command(target)
-	out, _, err := c.execCommandInPod(c.clients[client.ID()].pod, cmd)
+	out, _, err := c.execCommand(cl, cmd)
 	return out, err
 }
 
-func (c *connectionTester) execCommandInPod(pod *v1.Pod, cmd string) (string, ResultStatus, error) {
+func (c *connectionTester) execCommand(cl Client, cmd string) (string, ResultStatus, error) {
 	var out string
 	var err error
 
-	// Ensure the kubectl command executes in the remote cluster if required. Remote framework objects do not control
-	// how kubeconfigs are resolved by the kubectl command, so we must use this wrapper. See NewDefaultFrameworkForRemoteCluster.
+	// Wrap kubectl calls so they pick up the remote cluster kubeconfig when
+	// the framework is configured for one. See NewDefaultFrameworkForRemoteCluster.
 	remotecluster.RemoteFrameworkAwareExec(c.f, func() {
-		if windows.ClusterIsWindows() {
-			out, err = ExecInPod(pod, "powershell.exe", "-Command", cmd)
-		} else {
-			out, err = ExecInPod(pod, "sh", "-c", cmd)
-		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		out, err = cl.Exec(ctx, cmd)
 	})
 	result := Success
 	if err != nil {
 		result = Failure
 	}
-
 	return out, result, err
 }
 
@@ -537,7 +422,6 @@ func (c *connectionTester) command(t Target) string {
 	var cmd string
 
 	if windows.ClusterIsWindows() {
-		// Windows.
 		switch t.GetProtocol() {
 		case TCP:
 			cmd = fmt.Sprintf("Invoke-WebRequest %s -UseBasicParsing -TimeoutSec 5 -DisableKeepAlive -ErrorAction Stop | Out-Null", t.Destination())
@@ -547,7 +431,6 @@ func (c *connectionTester) command(t Target) string {
 			framework.Failf("Unsupported protocol %s", t.GetProtocol())
 		}
 	} else {
-		// Linux.
 		switch t.GetProtocol() {
 		case TCP:
 			cmd = fmt.Sprintf("wget -qO- -T 5 http://%s", t.Destination())
@@ -590,34 +473,32 @@ const (
 	Failure ResultStatus = "FAILURE"
 )
 
-func NewConnectionResult(exp, act ResultStatus, c v1.Pod, t Target, err error) connectionResult {
-	return connectionResult{
-		expected:  exp,
-		actual:    act,
-		clientPod: &c,
-		target:    t,
-		err:       err,
-	}
-}
-
 type connectionResult struct {
-	clientPod *v1.Pod
-	target    Target
-	expected  ResultStatus
-	actual    ResultStatus
-	err       error
+	client     Client
+	target     Target
+	expected   ResultStatus
+	actual     ResultStatus
+	err        error
+	recordedAt time.Time
 }
 
 func (r *connectionResult) Failed() bool {
 	return r.expected != r.actual
 }
 
+// clientLabel returns a printable identifier for the client, falling back to
+// the interface ID when there's no pod.
+func (r *connectionResult) clientLabel() string {
+	if r.client == nil {
+		return "<nil>"
+	}
+	return r.client.ID()
+}
+
 func buildFailureMessage(results []connectionResult) string {
-	// Builed an error message.
 	var msg strings.Builder
 	msg.WriteString("One or more connection tests failed:\n")
 
-	// Add expected results.
 	for _, res := range results {
 		exp := res.expected
 		actual := res.actual
@@ -626,9 +507,9 @@ func buildFailureMessage(results []connectionResult) string {
 			status = "ERROR"
 		}
 		msg.WriteString(fmt.Sprintf(
-			"\n%s: %s/%s -> %s (%s, %s, %s); Expected=%s, Actual=%s",
+			"\n%s: %s -> %s (%s, %s, %s); Expected=%s, Actual=%s",
 			status,
-			res.clientPod.Namespace, res.clientPod.Name,
+			res.clientLabel(),
 			res.target.String(),
 			res.target.Destination(),
 			res.target.GetProtocol(),
@@ -641,14 +522,13 @@ func buildFailureMessage(results []connectionResult) string {
 	return msg.String()
 }
 
-// CreateClientPod creates a long lived pod that sleeps, and can be used to execute connection tests as a client.
+// CreateClientPod creates a long-lived sleep pod usable as a connection-test client.
 func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName string, labels map[string]string, customizer func(pod *v1.Pod)) (*v1.Pod, error) {
 	var image string
 	var args []string
 	var command []string
 	nodeselector := map[string]string{}
 
-	// Randomize pod names to avoid clashes with previous tests.
 	podName := utils.GenerateRandomName(baseName)
 
 	if windows.ClusterIsWindows() {
@@ -663,13 +543,11 @@ func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 		nodeselector["kubernetes.io/os"] = "linux"
 	}
 
-	// Merge the base labels with the pod name label.
 	mergedLabels := make(map[string]string)
 	maps.Copy(mergedLabels, labels)
 	mergedLabels["pod-name"] = baseName
 	mergedLabels[roleLabel] = roleClient
 
-	// Create the pod.
 	zero := int64(0)
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -690,7 +568,7 @@ func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 				},
 			},
 			Tolerations: []v1.Toleration{
-				v1.Toleration{
+				{
 					Key:      "kubernetes.io/arch",
 					Operator: v1.TolerationOpEqual,
 					Value:    "arm64",
@@ -709,38 +587,49 @@ func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 }
 
 func logDiagsForConnection(f *framework.Framework, res connectionResult) {
-	By(fmt.Sprintf("Collecting diagnostics for connection %s -> %s", res.clientPod.Name, res.target.Destination()))
+	pod := res.client.Pod()
+	if pod == nil {
+		logrus.WithError(res.err).WithFields(logrus.Fields{
+			"from":   res.clientLabel(),
+			"to":     res.target.Destination(),
+			"expect": res.expected,
+		}).Error("Error running connection test (no pod for client)")
+		return
+	}
+	By(fmt.Sprintf("Collecting diagnostics for connection %s -> %s", pod.Name, res.target.Destination()))
 
 	logrus.WithError(res.err).WithFields(logrus.Fields{
-		"from":   fmt.Sprintf("%s/%s", res.clientPod.Namespace, res.clientPod.Name),
+		"from":   fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
 		"to":     res.target.Destination(),
-		"ns":     res.clientPod.Namespace,
+		"ns":     pod.Namespace,
 		"expect": res.expected,
 	}).Error("Error running connection test")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, res.clientPod.Namespace, res.clientPod.Name, fmt.Sprintf("%s-container", res.clientPod.Name))
+	container := ""
+	if len(pod.Spec.Containers) > 0 {
+		container = pod.Spec.Containers[0].Name
+	}
+	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
 		logrus.WithError(err).Error("Error getting container logs")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s logs:\n%s", res.clientPod.Namespace, res.clientPod.Name, logs)
-	prevLogs, err := e2epod.GetPreviousPodLogs(ctx, f.ClientSet, res.clientPod.Namespace, res.clientPod.Name, fmt.Sprintf("%s-container", res.clientPod.Name))
+	logrus.Infof("[DIAGS] Pod %s/%s logs:\n%s", pod.Namespace, pod.Name, logs)
+	prevLogs, err := e2epod.GetPreviousPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
 		logrus.WithError(err).Error("Error getting prev container logs")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s logs (previous):\n%s", res.clientPod.Namespace, res.clientPod.Name, prevLogs)
+	logrus.Infof("[DIAGS] Pod %s/%s logs (previous):\n%s", pod.Namespace, pod.Name, prevLogs)
 
-	// Get Pod Describe output.
-	podDesc, err := kubectl.RunKubectl(res.clientPod.Namespace, "describe", "pod", res.clientPod.Name)
+	podDesc, err := kubectl.RunKubectl(pod.Namespace, "describe", "pod", pod.Name)
 	if err != nil {
 		logrus.WithError(err).Error("Error getting pod description")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s describe:\n%s", res.clientPod.Namespace, res.clientPod.Name, podDesc)
+	logrus.Infof("[DIAGS] Pod %s/%s describe:\n%s", pod.Namespace, pod.Name, podDesc)
 }
 
 func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
-	// Collect current NetworkPolicies applied in the test namespace.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	policies, err := f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).List(ctx, metav1.ListOptions{})
@@ -750,7 +639,6 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	logrus.Infof("[DIAGS] NetworkPolicies:\n\t%v", policies.Items)
 
 	if f.Namespace.Name != ns.Name {
-		// If the pod namespace is different from the test namespace, collect the NetworkPolicies for the pod namespace as well.
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		policies, err := f.ClientSet.NetworkingV1().NetworkPolicies(ns.Name).List(ctx, metav1.ListOptions{})
@@ -760,7 +648,6 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 		logrus.Infof("[DIAGS] NetworkPolicies (pod NS):\n\t%v", policies.Items)
 	}
 
-	// Collect Calico network policies and heps.
 	nps := &v3.NetworkPolicyList{}
 	gnps := &v3.GlobalNetworkPolicyList{}
 	heps := &v3.HostEndpointList{}
@@ -787,7 +674,6 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	logrus.Infof("[DIAGS] Calico GlobalNetworkPolicies:\n\t%v", gnps.Items)
 	logrus.Infof("[DIAGS] Calico HostEndpoints:\n\t%v", heps.Items)
 
-	// Collect the list of pods running in the test namespace.
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	podsInNS, err := e2epod.GetPodsInNamespace(ctx, f.ClientSet, ns.Name, map[string]string{})
@@ -799,11 +685,10 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 		logrus.Infof("Namespace: %s, Pod: %s, Status: %s", ns.Name, p.Name, p.Status.String())
 	}
 
-	// Dump debug information for the test namespace.
 	e2eoutput.DumpDebugInfo(context.Background(), f.ClientSet, f.Namespace.Name)
 }
 
-// ExecInPod executes a kubectl command in a pod. Returns the response as a string, or an error upon failure.
+// ExecInPod runs a kubectl exec against pod and returns the output.
 func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 	args := []string{"exec", pod.Name, "--", sh, opt, cmd}
 	return kubectl.NewKubectlCommand(pod.Namespace, args...).
@@ -811,13 +696,12 @@ func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 		Exec()
 }
 
-// checkpointer implements the Checkpointer interface.
-// It runs continuous connection checks in the background, and allows
-// the test to checkpoint and verify the results at specific points in time.
+// checkpointer runs continuous connection probes in the background and lets
+// the test assert results at specific points in time.
 type checkpointer struct {
 	results               chan connectionResult
 	done                  chan struct{}
-	client                *Client
+	client                Client
 	targets               []Target
 	routinesDone          sync.WaitGroup
 	expectationInProgress sync.WaitGroup
@@ -840,7 +724,6 @@ func (c *checkpointer) ExpectFailure(reason string) {
 }
 
 func (c *checkpointer) start() {
-	// Start goroutines running continuous checks for each target.
 	for _, target := range c.targets {
 		c.routinesDone.Add(1)
 
@@ -848,27 +731,27 @@ func (c *checkpointer) start() {
 			for {
 				select {
 				case <-c.done:
-					// Stop the goroutine, and mark it as done.
 					c.routinesDone.Done()
 					return
 				default:
 				}
 
-				// Block if we are currently performing an expectation check.
 				c.expectationInProgress.Wait()
 
 				c.requestsInProgress.Add(1)
-				_, result, err := c.tester.execCommandInPod(c.tester.clients[c.client.ID()].pod, c.tester.command(t))
+				started := time.Now()
+				_, result, err := c.tester.execCommand(c.client, c.tester.command(t))
 				if err != nil {
 					logrus.WithError(err).Warn("Continuous connection attempt returned an error")
 				}
 
 				c.results <- connectionResult{
-					clientPod: c.tester.clients[c.client.ID()].pod,
-					target:    t,
-					expected:  Success,
-					actual:    result,
-					err:       err,
+					client:     c.client,
+					target:     t,
+					expected:   Success,
+					actual:     result,
+					err:        err,
+					recordedAt: started,
 				}
 				c.requestsInProgress.Done()
 				time.Sleep(10 * time.Millisecond)
@@ -889,7 +772,6 @@ func (c *checkpointer) expect(reason string, expectFailure bool) {
 		return ""
 	}
 
-	// Wait for at least one result to be available.
 	select {
 	case res := <-c.results:
 		if msg := checkResult(res); msg != "" {
@@ -899,17 +781,11 @@ func (c *checkpointer) expect(reason string, expectFailure bool) {
 		framework.Fail("Timeout waiting for continuous connection results", 2)
 	}
 
-	// Block new connection attempts, and wait for any in-progress attempts to complete before
-	// draining the results channel. This ensures we have a consistent view of all connection attempts
-	// up to this point in time, and prevents possible races where new attempts are started while we are
-	// checking results.
+	// Block new probe attempts and drain the channel for a consistent view.
 	c.expectationInProgress.Add(1)
 	defer c.expectationInProgress.Done()
-
-	// Wait for any in-progress requests to complete.
 	c.requestsInProgress.Wait()
 
-	// Drain the results channel and log any failures.
 	for {
 		select {
 		case res := <-c.results:
@@ -917,8 +793,117 @@ func (c *checkpointer) expect(reason string, expectFailure bool) {
 				framework.Fail(msg, 2)
 			}
 		default:
-			// No more results to process.
 			return
 		}
+	}
+}
+
+// disruptionConfig captures user-supplied tolerance for ExpectNoDisruption.
+// Either or both bounds may be set. A zero bound means that bound is not enforced.
+type disruptionConfig struct {
+	maxGap             time.Duration
+	maxConsecutiveLoss int
+	gapSet             bool
+	lossSet            bool
+}
+
+// DisruptionOption tunes ExpectNoDisruption's tolerance.
+type DisruptionOption func(*disruptionConfig)
+
+// WithMaxGap fails the assertion if any two consecutive probes (per target)
+// are recorded more than d apart.
+func WithMaxGap(d time.Duration) DisruptionOption {
+	return func(c *disruptionConfig) {
+		c.maxGap = d
+		c.gapSet = true
+	}
+}
+
+// WithMaxConsecutiveLoss fails the assertion if any target sees more than n
+// consecutive failed probes.
+func WithMaxConsecutiveLoss(n int) DisruptionOption {
+	return func(c *disruptionConfig) {
+		c.maxConsecutiveLoss = n
+		c.lossSet = true
+	}
+}
+
+func (c *checkpointer) ExpectNoDisruption(reason string, opts ...DisruptionOption) {
+	cfg := &disruptionConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if !cfg.gapSet && !cfg.lossSet {
+		framework.Fail("ExpectNoDisruption: must set WithMaxGap and/or WithMaxConsecutiveLoss", 2)
+	}
+
+	By(fmt.Sprintf("Checking continuous connection disruption %s", reason))
+
+	// Block new probe attempts and drain everything captured so far.
+	c.expectationInProgress.Add(1)
+	defer c.expectationInProgress.Done()
+	c.requestsInProgress.Wait()
+
+	// Group results by target so per-target gap/loss is meaningful.
+	byTarget := map[string][]connectionResult{}
+	keys := []string{}
+	for {
+		select {
+		case res := <-c.results:
+			k := res.target.String()
+			if _, ok := byTarget[k]; !ok {
+				keys = append(keys, k)
+			}
+			byTarget[k] = append(byTarget[k], res)
+			continue
+		default:
+		}
+		break
+	}
+
+	if len(keys) == 0 {
+		framework.Fail(fmt.Sprintf("ExpectNoDisruption %s: no probe results captured. Did probes start?", reason), 2)
+	}
+
+	var problems []string
+	for _, k := range keys {
+		series := byTarget[k]
+		if len(series) == 0 {
+			problems = append(problems, fmt.Sprintf("target %s: no probe results captured", k))
+			continue
+		}
+		if cfg.lossSet {
+			consec := 0
+			worst := 0
+			for _, r := range series {
+				if r.actual != Success {
+					consec++
+					if consec > worst {
+						worst = consec
+					}
+				} else {
+					consec = 0
+				}
+			}
+			if worst > cfg.maxConsecutiveLoss {
+				problems = append(problems, fmt.Sprintf("target %s: %d consecutive failed probes (max allowed %d)", k, worst, cfg.maxConsecutiveLoss))
+			}
+		}
+		if cfg.gapSet && len(series) > 1 {
+			var worst time.Duration
+			for i := 1; i < len(series); i++ {
+				gap := series[i].recordedAt.Sub(series[i-1].recordedAt)
+				if gap > worst {
+					worst = gap
+				}
+			}
+			if worst > cfg.maxGap {
+				problems = append(problems, fmt.Sprintf("target %s: max inter-probe gap %s exceeds bound %s", k, worst, cfg.maxGap))
+			}
+		}
+	}
+
+	if len(problems) > 0 {
+		framework.Fail(fmt.Sprintf("ExpectNoDisruption %s:\n  %s", reason, strings.Join(problems, "\n  ")), 2)
 	}
 }
