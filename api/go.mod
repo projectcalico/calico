@@ -83,6 +83,5 @@ replace (
 	k8s.io/kubelet => k8s.io/kubelet v0.36.4
 	k8s.io/metrics => k8s.io/metrics v0.36.4
 	k8s.io/mount-utils => k8s.io/mount-utils v0.36.4
-	k8s.io/node-api => k8s.io/node-api v0.35.4
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.36.4
 )

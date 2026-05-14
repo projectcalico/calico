@@ -87,7 +87,6 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	   sh -c '$(GIT_CONFIG_SSH) deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "/go/src/$(PACKAGE_NAME)/hack/boilerplate/boilerplate.go.txt" \
-		--bounding-dirs $(PACKAGE_NAME) \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/pkg/apis/projectcalico/v3"'
 
