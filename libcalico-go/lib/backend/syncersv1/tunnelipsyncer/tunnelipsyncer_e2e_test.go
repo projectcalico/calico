@@ -16,6 +16,7 @@ package tunnelipsyncer_test
 
 import (
 	"context"
+	"net/netip"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -94,7 +95,7 @@ var _ = testutils.E2eDatastoreDescribe("Tunnel IP allocation syncer tests", test
 			)
 			Expect(err).NotTo(HaveOccurred())
 			// The pool will add as single entry ( +1 )
-			poolKeyV1 := model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")}
+			poolKeyV1 := model.IPPoolKey{CIDR: netip.MustParsePrefix("192.124.0.0/21")}
 			expectedCacheSize += 1
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectData(model.KVPair{
