@@ -235,6 +235,10 @@ cd /opt/stack/devstack
 . openrc admin admin
 
 export ETCD_HOST=${SERVICE_HOST}
+# calico-resync is installed alongside calico-dhcp-agent under
+# ${DEVSTACK_VENV:-/usr/local}/bin, which is not necessarily on the
+# stack user's PATH under sudo.  Pass the absolute path explicitly.
+export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
 # Override via RESYNC_SCALES if a Semaphore run is too slow for the
 # default 100,1000,10000 ladder.
 python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
