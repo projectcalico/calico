@@ -192,12 +192,10 @@ build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 filesystem/etc/calico/confd/conf.d/%: ../confd/etc/calico/confd/conf.d/%
 	@mkdir -p $(@D)
 	cp $< $@
-	chmod +w $@
 
 filesystem/etc/calico/confd/templates/%: ../confd/etc/calico/confd/templates/%
 	@mkdir -p $(@D)
 	cp $< $@
-	chmod +w $@
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
