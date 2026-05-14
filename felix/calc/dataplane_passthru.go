@@ -119,6 +119,19 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	node, _ := update.Value.(*internalapi.Node)
 	logrus.WithField("update", update).Debug("Passing-through Node update")
 
+	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
+	// Node had been deleted — there is no useful metadata to pass through. A nil
+	// BGP, by contrast, leaves the Node entry alive (with empty IPs) since other
+	// Node info such as labels may still be relevant.
+	bgpSpec := node.Spec.BGP
+	if bgpSpec != nil && bgpSpec.IPv4Address == "" && bgpSpec.IPv6Address == "" && bgpSpec.ASNumber == nil {
+		delete(h.nodeInfo, hostname)
+		if before != nil {
+			h.callbacks.OnHostMetadataRemove(hostname)
+		}
+		return
+	}
+
 	info := &HostInfo{
 		labels:  node.Labels,
 		ip4Addr: extractNodeAddress(node, 4, true),
@@ -128,16 +141,6 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	if node.Spec.BGP != nil && node.Spec.BGP.ASNumber != nil {
 		info.asnumber = node.Spec.BGP.ASNumber.String()
 	}
-
-	// There is no useful metadata to pass through.
-	if info.ip4Addr == "" && info.ip6Addr == "" && info.asnumber == "" {
-		delete(h.nodeInfo, hostname)
-		if before != nil {
-			h.callbacks.OnHostMetadataRemove(hostname)
-		}
-		return
-	}
-
 	h.nodeInfo[hostname] = info
 
 	if before != nil && before.equals(info) {
