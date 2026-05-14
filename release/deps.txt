@@ -23,7 +23,7 @@ github.com/cloudflare/circl v1.6.3
 github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5
 github.com/containerd/stargz-snapshotter/estargz v0.18.2
 github.com/docker/cli v29.4.0+incompatible
-github.com/docker/docker v28.2.2+incompatible
+github.com/docker/docker v24.0.0+incompatible
 github.com/docker/docker-credential-helpers v0.9.3
 github.com/envoyproxy/go-control-plane v0.14.0
 github.com/envoyproxy/go-control-plane/envoy v1.37.0
@@ -81,7 +81,7 @@ google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478
 google.golang.org/grpc v1.80.0
 google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a
-google.golang.org/protobuf v1.36.11
+google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
 
