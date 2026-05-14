@@ -161,12 +161,14 @@ def insert_fake_agents(db_args, hosts):
                 )
                 if cur.fetchone():
                     continue
+                # `binary` and `load` are MySQL reserved words and must
+                # be quoted.  Backtick the rest for consistency.
                 cur.execute(
                     """
                     INSERT INTO agents (
-                        id, agent_type, binary, topic, host,
-                        admin_state_up, created_at, started_at,
-                        heartbeat_timestamp, configurations, load
+                        `id`, `agent_type`, `binary`, `topic`, `host`,
+                        `admin_state_up`, `created_at`, `started_at`,
+                        `heartbeat_timestamp`, `configurations`, `load`
                     ) VALUES (
                         %s, %s, %s, %s, %s,
                         1, UTC_TIMESTAMP(), UTC_TIMESTAMP(),
