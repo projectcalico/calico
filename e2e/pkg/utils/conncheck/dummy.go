@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,9 @@
 package conncheck
 
 import (
-	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
 )
 
 type DummyConnectionTester struct{}
@@ -31,53 +30,55 @@ func (d *DummyConnectionTester) Stop() {
 }
 
 func (d *DummyConnectionTester) AddClient(_ Client) {
-	Fail("Unexpected AddClient call")
+	ginkgo.Fail("Unexpected AddClient call")
 }
 
 func (d *DummyConnectionTester) AddServer(_ Server) {
-	Fail("Unexpected AddServer call")
+	ginkgo.Fail("Unexpected AddServer call")
 }
 
 func (d *DummyConnectionTester) Deploy() {
-	Fail("Unexpected Deploy call")
+	ginkgo.Fail("Unexpected Deploy call")
 }
 
 func (d *DummyConnectionTester) StopClient(_ Client) {
-	Fail("Unexpected StopClient call")
+	ginkgo.Fail("Unexpected StopClient call")
 }
 
 func (d *DummyConnectionTester) ExpectSuccess(_ Client, _ ...Target) {
-	Fail("Unexpected ExpectSuccess call")
+	ginkgo.Fail("Unexpected ExpectSuccess call")
 }
 
 func (d *DummyConnectionTester) ExpectFailure(_ Client, _ ...Target) {
-	Fail("Unexpected ExpectFailure call")
+	ginkgo.Fail("Unexpected ExpectFailure call")
 }
 
 func (d *DummyConnectionTester) Execute() {
-	Fail("Unexpected Execute call")
+	ginkgo.Fail("Unexpected Execute call")
 }
 
 func (d *DummyConnectionTester) ResetExpectations() {
-	Fail("Unexpected ResetExpectations call")
+	ginkgo.Fail("Unexpected ResetExpectations call")
 }
 
 func (d *DummyConnectionTester) WithTimeout(_ time.Duration) {
-	Fail("Unexpected WithTimeout call")
+	ginkgo.Fail("Unexpected WithTimeout call")
 }
 
 func (d *DummyConnectionTester) ExpectContinuously(_ Client, _ ...Target) Checkpointer {
-	panic("Unexpected ExpectContinuously call")
+	ginkgo.Fail("Unexpected ExpectContinuously call")
+	return nil
 }
 
 func (d *DummyConnectionTester) Connect(_ Client, _ Target) (string, error) {
-	panic("Unexpected Connect call")
+	ginkgo.Fail("Unexpected Connect call")
+	return "", nil
 }
 
 func (d *DummyConnectionTester) ExpectEncrypted(_ Client, _ Target) {
-	Fail("Unexpected ExpectEncrypted call")
+	ginkgo.Fail("Unexpected ExpectEncrypted call")
 }
 
 func (d *DummyConnectionTester) ExpectPlaintext(_ Client, _ Target) {
-	Fail("Unexpected ExpectPlaintext call")
+	ginkgo.Fail("Unexpected ExpectPlaintext call")
 }
