@@ -37,6 +37,8 @@ import argparse
 import json
 import sys
 
+from keystoneauth1 import loading as ksa_loading
+
 from neutron import manager
 from neutron.common import config as common_config
 from neutron_lib.plugins import directory as plugin_dir
@@ -139,6 +141,23 @@ def main(argv=None) -> int:
     # core opts itself.  In neutron-server this happens earlier in startup;
     # as a standalone CLI we have to do it ourselves.
     common_config.register_common_config_options()
+
+    # Register the [keystone_authtoken] options that make_keystone_client
+    # reads (username, password, auth_url, etc).  In neutron-server these
+    # are registered as a side-effect of keystonemiddleware loading the
+    # auth plugin on the first request; the CLI has no such trigger so we
+    # force-register them here.  We register the v3password plugin's
+    # options because make_keystone_client is hardcoded to build a
+    # v3.Password client — any deployment that calico-resync supports is
+    # therefore using v3password fields in [keystone_authtoken], whether
+    # or not auth_type is set explicitly.
+    ksa_loading.register_auth_conf_options(cfg.CONF, "keystone_authtoken")
+    ksa_loading.register_session_conf_options(cfg.CONF, "keystone_authtoken")
+    v3password_loader = ksa_loading.get_plugin_loader("password")
+    cfg.CONF.register_opts(
+        ksa_loading.get_plugin_conf_options(v3password_loader),
+        group="keystone_authtoken",
+    )
 
     # Parse oslo.config (and configure logging) from --config-file.
     common_config.init(["--config-file=%s" % path for path in config_files])
