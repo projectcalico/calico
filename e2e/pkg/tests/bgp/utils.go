@@ -19,7 +19,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
-// felixProgramsClusterRoutes checks that Felix is not programming cluster routes.
+// felixProgramsClusterRoutes checks that Felix is programming cluster routes.
 // Tests that disable the BGP mesh and expect connectivity to break cannot work
 // when Felix is handling cluster routes independently of BGP.
 func felixProgramsClusterRoutes(cli ctrlclient.Client) bool {
