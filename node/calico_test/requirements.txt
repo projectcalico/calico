@@ -17,7 +17,7 @@ pluggy==1.6.0
 pyasn1-modules==0.4.2
 pyasn1==0.6.2
 #pyparsing - already provided by Alpine
-pytest==9.0.2
+pytest==9.0.3
 pytest-timeout
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
