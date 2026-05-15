@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"os"
 	"sort"
 	"time"
 
@@ -37,6 +38,15 @@ func main() {
 	keys := flag.Int("keys", 100000, "number of lookup keys to test per config")
 	customN := flag.Int("n", 0, "if > 0, only test this member count (default: sweep)")
 	flag.Parse()
+
+	if *keys < 1 {
+		fmt.Fprintf(os.Stderr, "-keys must be >= 1\n")
+		os.Exit(2)
+	}
+	if *customN < 0 {
+		fmt.Fprintf(os.Stderr, "-n must be >= 0\n")
+		os.Exit(2)
+	}
 
 	memberCounts := []int{100, 1000}
 	if *customN > 0 {
@@ -95,8 +105,8 @@ func report(cfg config, numKeys int) {
 	sort.Float64s(ownership)
 
 	mean := float64(numKeys) / float64(cfg.members)
-	min := ownership[0]
-	max := ownership[len(ownership)-1]
+	lo := ownership[0]
+	hi := ownership[len(ownership)-1]
 	p99 := ownership[int(float64(len(ownership))*0.99)]
 	variance := 0.0
 	for _, o := range ownership {
@@ -110,6 +120,6 @@ func report(cfg config, numKeys int) {
 
 	fmt.Printf("%-10d %-10d %-12d %-10.3f %-10.3f %-10.1f %-10.3f %-12s %-12s\n",
 		cfg.replicas, cfg.probes, cfg.members*cfg.replicas,
-		min/mean, max/mean, stddev, p99/mean,
+		lo/mean, hi/mean, stddev, p99/mean,
 		insertPer, lookupPer)
 }

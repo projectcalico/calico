@@ -29,7 +29,7 @@ var configs = []struct {
 }{
 	{"vnodes_R100_P1", 100, 1},
 	{"multiprobe_R1_P21", 1, 21},
-	{"hybrid_R10_P5", 10, 5},
+	{"hybrid_R10_P10", 10, 10},
 }
 
 func forEachConfig(t *testing.T, fn func(t *testing.T, replicas, probes int)) {

@@ -202,6 +202,11 @@ func (r *Ring[V]) Lookup(key string) (V, bool) {
 		return zero, false
 	}
 	if len(r.deletedKeys) > 0 {
+		// slices.DeleteFunc must preserve relative order — Lookup
+		// binary-searches r.entries assuming it stays sorted when
+		// r.sorted is true. If you replace this with any non-stable
+		// filter (swap-and-truncate etc.), set r.sorted = false
+		// here.
 		r.entries = slices.DeleteFunc(r.entries, func(e entry) bool {
 			_, dead := r.deletedKeys[e.key]
 			return dead
@@ -210,7 +215,6 @@ func (r *Ring[V]) Lookup(key string) (V, bool) {
 			delete(r.members, k)
 		}
 		clear(r.deletedKeys)
-		// DeleteFunc preserves order, so r.sorted is still valid.
 	}
 	if !r.sorted {
 		slices.SortFunc(r.entries, func(a, b entry) int {
