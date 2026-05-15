@@ -51,7 +51,7 @@ github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.67.5
 github.com/prometheus/procfs v0.20.1
 github.com/sirupsen/logrus v1.9.4
-github.com/slack-go/slack v0.22.0
+github.com/slack-go/slack v0.23.1
 github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 github.com/spiffe/go-spiffe/v2 v2.6.0
 github.com/urfave/cli v1.22.16

@@ -68,7 +68,7 @@ require (
 	github.com/safchain/ethtool v0.7.0
 	github.com/shirou/gopsutil/v4 v4.26.3
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.22.0
+	github.com/slack-go/slack v0.23.1
 	github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
