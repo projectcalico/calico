@@ -19,11 +19,11 @@
 // (each replicated as several virtual nodes) such that adding or
 // removing a member reassigns only ~1/N of keys.
 //
-// The default hash is FNV-1a (allocation-free, deterministic).
-// Callers can swap in any deterministic string hasher via
-// WithHash — for stronger distribution, wrap crypto/sha256 to
-// return the first eight bytes as a uint64. Do not use
-// hash/maphash: its seed is process-local.
+// The default hash is FNV-1a (stdlib hash/fnv, used via a
+// per-Ring hasher). Callers can swap in any deterministic string
+// hasher via WithHash — for stronger distribution, wrap
+// crypto/sha256 to return the first eight bytes as a uint64. Do
+// not use hash/maphash: its seed is process-local.
 //
 // The Ring is not safe for concurrent use. Callers sharing a
 // ring across goroutines should wrap it in their own lock.
@@ -32,6 +32,7 @@ package hashring
 import (
 	"cmp"
 	"encoding/binary"
+	"hash/fnv"
 	"slices"
 )
 
@@ -39,20 +40,17 @@ import (
 // deterministic across processes. Do not use hash/maphash.
 type Hash func(string) uint64
 
-// FNV1a is the default Hash used when no WithHash option is passed.
-// It is the standard 64-bit FNV-1a (RFC-style: offset basis
-// 0xcbf29ce484222325, prime 0x100000001b3) — fast, deterministic
-// across machines, allocation-free. Exposed so callers can compose
-// it (e.g. wrap with a counter) without duplicating the constants.
-func FNV1a(s string) uint64 {
-	const offset = 14695981039346656037
-	const prime = 1099511628211
-	h := uint64(offset)
-	for i := 0; i < len(s); i++ {
-		h ^= uint64(s[i])
-		h *= prime
+// newDefaultHash returns a Hash backed by a per-Ring stdlib
+// hash/fnv.New64a hasher. Each Ring gets its own hasher so the
+// closure has no shared state (no goroutine-safety pitfall beyond
+// the Ring itself).
+func newDefaultHash() Hash {
+	h := fnv.New64a()
+	return func(s string) uint64 {
+		h.Reset()
+		h.Write([]byte(s))
+		return h.Sum64()
 	}
-	return h
 }
 
 // Ring is a consistent hash ring keyed by string, owning values of
@@ -83,8 +81,10 @@ type ringConfig struct {
 	replicas, probes int
 }
 
-// WithHash sets the hash function used by the Ring. Defaults to
-// FNV1a. The hasher MUST be deterministic across processes.
+// WithHash sets the hash function used by the Ring. The default is
+// stdlib hash/fnv 64-bit FNV-1a, used via a per-Ring hasher. The
+// hasher MUST be deterministic across processes (do not use
+// hash/maphash).
 func WithHash(h Hash) Option {
 	return func(c *ringConfig) { c.hash = h }
 }
@@ -114,7 +114,10 @@ func WithProbes(n int) Option {
 // R=10,P=10 is a hybrid). Any supplied replicas/probes must be >= 1
 // and the hash must be non-nil; New panics otherwise.
 func New[V any](opts ...Option) *Ring[V] {
-	cfg := ringConfig{hash: FNV1a, replicas: 1, probes: 1}
+	// Pre-build the default hasher so options can override it; any
+	// explicit WithHash(nil) lands as cfg.hash == nil after the
+	// loop and is caught as a programmer error.
+	cfg := ringConfig{hash: newDefaultHash(), replicas: 1, probes: 1}
 	for _, opt := range opts {
 		opt(&cfg)
 	}

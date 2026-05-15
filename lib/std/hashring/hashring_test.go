@@ -517,7 +517,15 @@ func TestProbeCount_LookupHashesKeyP(t *testing.T) {
 			var calls int
 			counting := func(s string) uint64 {
 				calls++
-				return FNV1a(s)
+				// Return a key-dependent value so members still
+				// occupy distinct ring positions. The exact mapping
+				// is irrelevant — this test only checks call count.
+				var h uint64 = 14695981039346656037
+				for i := 0; i < len(s); i++ {
+					h ^= uint64(s[i])
+					h *= 1099511628211
+				}
+				return h
 			}
 			r := New[string](WithHash(counting), WithReplicas(cfg.replicas), WithProbes(cfg.probes))
 			for _, m := range []string{"a", "b", "c"} {
