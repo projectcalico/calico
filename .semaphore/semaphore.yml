@@ -127,7 +127,10 @@ global_job_config:
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
-  # Manual promotion for publishing a hashrelease.
+  # Manual promotion for publishing a hashrelease. To push per-component
+  # images at the current SHA, trigger this with BUILD_CONTAINER_IMAGES=true
+  # and PUBLISH_IMAGES=true — that replaces the previous per-merge auto-push
+  # behavior that fired the Push * promotions below on every merge.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
     parameters:
@@ -161,52 +164,34 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
-  # Have separate promotions for publishing images so we can re-run
-  # them individually if they fail, and so we can run them in parallel.
+  # Separate promotions for publishing images individually, kept as manual
+  # buttons so a single component can be re-pushed without re-running the
+  # full hashrelease. These no longer auto-fire on master/release merges —
+  # use "Publish hashrelease" with PUBLISH_IMAGES=true for the bulk push.
   - name: Push calico images
     pipeline_file: push-images/calico.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
-    auto_promote:
-      when: "branch =~ 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push nftables RPM images
     pipeline_file: push-images/nft-rpms.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
 blocks:
   - name: Check images availability
     run:
