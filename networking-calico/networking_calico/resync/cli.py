@@ -155,7 +155,7 @@ def main(argv=None) -> int:
     ksa_loading.register_session_conf_options(cfg.CONF, "keystone_authtoken")
     v3password_loader = ksa_loading.get_plugin_loader("password")
     cfg.CONF.register_opts(
-        ksa_loading.get_plugin_conf_options(v3password_loader),
+        ksa_loading.get_auth_plugin_conf_options(v3password_loader),
         group="keystone_authtoken",
     )
 
