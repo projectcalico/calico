@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2025 Tigera, Inc.
+# Copyright (c) 2025-2026 Tigera, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -58,9 +58,8 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
 
     def _disable_background_threads(self, driver):
         """Disable background threads that would touch etcd or do unrelated things."""
-        driver.periodic_resync_thread = mock.Mock()
+        driver._do_startup_resync = mock.Mock()
         driver._status_updating_thread = mock.Mock()
-        driver.resync_monitor_thread = mock.Mock()
 
     @mock.patch.object(mech_calico, "Elector")
     def test_parent_creates_elector(self, m_elector):
