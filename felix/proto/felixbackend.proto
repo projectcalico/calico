@@ -560,6 +560,7 @@ message IPAMPool {
   bool masquerade = 2;
   string ipip_mode = 3;
   string vxlan_mode = 4;
+  repeated string allowed_uses = 5;
 }
 
 message Encapsulation {
