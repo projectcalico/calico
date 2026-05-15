@@ -23,7 +23,9 @@ It does the minimum required to make the resync usable out-of-process:
 3. Initialise the Neutron plugin registry so ``directory.get_plugin()`` returns the
    configured core plugin.
 4. Build a :class:`Scope` from the CLI flags.
-5. Run the resync and print the JSON result to stdout.
+5. Run the resync and write the JSON result to stdout (or to the file
+   given by ``--output``, which is preferable for tooling that doesn't
+   want to compete with oslo.log noise on stdout).
 
 Exit codes
 ----------
@@ -122,6 +124,18 @@ def _build_parser() -> argparse.ArgumentParser:
             "you are seeing stale LMs."
         ),
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write the JSON ResyncResult to PATH instead of stdout.  "
+            "Useful for tooling — depending on the layered config, "
+            "oslo.log may emit log lines to stdout, making the result "
+            "harder to parse cleanly."
+        ),
+    )
     return parser
 
 
@@ -159,7 +173,12 @@ def main(argv=None) -> int:
         group="keystone_authtoken",
     )
 
-    # Parse oslo.config (and configure logging) from --config-file.
+    # Parse oslo.config (and configure logging) from --config-file.  To
+    # route logs anywhere other than wherever neutron.conf would naturally
+    # send them (typically stderr/journald, which mixes badly with the
+    # JSON result on stdout), layer in an additional --config-file with
+    # [DEFAULT] log_file = ... and use_stderr = False, the same way
+    # neutron-dhcp-agent reads neutron.conf + dhcp_agent.ini.
     common_config.init(["--config-file=%s" % path for path in config_files])
     common_config.setup_logging()
 
@@ -177,8 +196,13 @@ def main(argv=None) -> int:
         clean_live_migrations=args.clean_live_migrations,
     ).run()
 
-    json.dump(result.to_dict(), sys.stdout, indent=2, sort_keys=True)
-    sys.stdout.write("\n")
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(result.to_dict(), f, indent=2, sort_keys=True)
+            f.write("\n")
+    else:
+        json.dump(result.to_dict(), sys.stdout, indent=2, sort_keys=True)
+        sys.stdout.write("\n")
 
     return 0 if result.ok else 1
 
