@@ -18,9 +18,7 @@ spec:
   scope: Cluster
   versions:
     - additionalPrinterColumns:
-        - description:
-            The node name identifying the Calico node instance that is targeted
-            by this HostEndpoint
+        - description: The node name identifying the Calico node instance that is targeted by this HostEndpoint
           jsonPath: .spec.node
           name: Node
           type: string
@@ -50,20 +48,10 @@ spec:
             metadata:
               type: object
             spec:
-              description:
-                HostEndpointSpec contains the specification for a HostEndpoint
-                resource.
+              description: HostEndpointSpec contains the specification for a HostEndpoint resource.
               properties:
                 expectedIPs:
-                  description:
-                    "The expected IP addresses (IPv4 and IPv6) of the endpoint.\nIf
-                    \"InterfaceName\" is not present, Calico will look for an interface
-                    matching any\nof the IPs in the list and apply policy to that.\nNote:\n\tWhen
-                    using the selector match criteria in an ingress or egress security
-                    Policy\n\tor Profile, Calico converts the selector into a set of
-                    IP addresses. For host\n\tendpoints, the ExpectedIPs field is used
-                    for that purpose. (If only the interface\n\tname is specified, Calico
-                    does not learn the IPs of the interface for use in match\n\tcriteria.)"
+                  description: "The expected IP addresses (IPv4 and IPv6) of the endpoint.\nIf \"InterfaceName\" is not present, Calico will look for an interface matching any\nof the IPs in the list and apply policy to that.\nNote:\n\tWhen using the selector match criteria in an ingress or egress security Policy\n\tor Profile, Calico converts the selector into a set of IP addresses. For host\n\tendpoints, the ExpectedIPs field is used for that purpose. (If only the interface\n\tname is specified, Calico does not learn the IPs of the interface for use in match\n\tcriteria.)"
                   items:
                     type: string
                   type: array
@@ -91,9 +79,7 @@ spec:
                   maxLength: 253
                   type: string
                 ports:
-                  description:
-                    Ports contains the endpoint's named ports, which may
-                    be referenced in security policy rules.
+                  description: Ports contains the endpoint's named ports, which may be referenced in security policy rules.
                   items:
                     properties:
                       name:
@@ -103,11 +89,16 @@ spec:
                         minimum: 1
                         type: integer
                       protocol:
+                        description: |-
+                          UInt8OrString is a type that can hold an uint8 or a string.  When used in
+                          JSON or YAML marshalling and unmarshalling, it produces or consumes the
+                          inner type.  This allows you to have, for example, a JSON field that can
+                          accept a name or number.
+                        x-kubernetes-int-or-string: true
                         anyOf:
                           - type: integer
                           - type: string
                         pattern: ^.*
-                        x-kubernetes-int-or-string: true
                     required:
                       - name
                       - port
@@ -128,9 +119,7 @@ spec:
               x-kubernetes-validations:
                 - message: at least one of interfaceName or expectedIPs must be specified
                   reason: FieldValueInvalid
-                  rule:
-                    (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs)
-                    && size(self.expectedIPs) > 0)
+                  rule: (has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs) && size(self.expectedIPs) > 0)
                 - message: node must be specified
                   reason: FieldValueInvalid
                   rule: has(self.node) && size(self.node) > 0

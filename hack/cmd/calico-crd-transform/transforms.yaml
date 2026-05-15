@@ -1,0 +1,53 @@
+# Post-processing rules for controller-gen-produced CRDs.
+#
+# Each rule has either a shape matcher or a path matcher, plus a patch.
+# Patches are JSON-Merge-Patch: a value sets a key, a null deletes it,
+# omitted keys are preserved (so description, default, etc. survive).
+#
+# Rules with zero matches across the input directory are an error: a renamed
+# field or upstream behavior change should fail loud, not silently no-op.
+
+rules:
+  # numorstring.Port is a struct{ MinPort, MaxPort, PortName } whose
+  # MarshalJSON emits a numeric port, "min:max" range, or named port.
+  # Replace controller-gen's struct walk with the int-or-string union.
+  - name: numorstring.Port -> int-or-string union
+    shape:
+      type: object
+      properties: [minPort, maxPort, portName]
+      required: [portName]
+    patch:
+      type: null
+      properties: null
+      required: null
+      x-kubernetes-int-or-string: true
+      anyOf:
+        - type: integer
+        - type: string
+      pattern: ^.*
+
+  # numorstring.Protocol is `type Protocol Uint8OrString`; same JSON form
+  # (number or string) — same patch as Port.
+  - name: numorstring.{Protocol,Uint8OrString} -> int-or-string union
+    shape:
+      type: object
+      properties: [numVal, strVal, type]
+      required: [numVal, strVal, type]
+    patch:
+      type: null
+      properties: null
+      required: null
+      x-kubernetes-int-or-string: true
+      anyOf:
+        - type: integer
+        - type: string
+      pattern: ^.*
+
+  # IPAMBlock.allocations is []*int with nil entries meaning "free slot".
+  # controller-gen does not auto-detect that []*T elements should be
+  # nullable, so mark the items schema explicitly.
+  - name: IPAMBlock allocations items -> nullable
+    crd: ipamblocks.*
+    path: .spec.allocations[*]
+    patch:
+      nullable: true

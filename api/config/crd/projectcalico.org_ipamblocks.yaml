@@ -70,8 +70,6 @@ spec:
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
                     type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
                     nullable: true
                   type: array
                   x-kubernetes-list-type: atomic
@@ -81,28 +79,20 @@ spec:
                     attributes for a given allocation, use the value of the allocation's entry in the Allocations array
                     as the index of the element in this array.
                   items:
-                    description:
-                      AllocationAttribute holds metadata associated with
-                      a single IP allocation within a block.
+                    description: AllocationAttribute holds metadata associated with a single IP allocation within a block.
                     properties:
                       alternateOwnerAttrs:
                         additionalProperties:
                           type: string
-                        description:
-                          AlternateOwnerAttrs stores attributes of a secondary
-                          owner, used during IP address migration.
+                        description: AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.
                         type: object
                       handle_id:
-                        description:
-                          HandleID is the ID of the IPAM handle that owns
-                          this allocation.
+                        description: HandleID is the ID of the IPAM handle that owns this allocation.
                         type: string
                       secondary:
                         additionalProperties:
                           type: string
-                        description:
-                          ActiveOwnerAttrs stores attributes of the primary
-                          owner of this allocation (e.g., pod name, namespace).
+                        description: ActiveOwnerAttrs stores attributes of the primary owner of this allocation (e.g., pod name, namespace).
                         type: object
                     type: object
                   type: array
@@ -136,14 +126,10 @@ spec:
                     the key is cast to a string.
                   type: object
                 strictAffinity:
-                  description:
-                    StrictAffinity on the IPAMBlock is deprecated and no
-                    longer used by the code. Use IPAMConfig StrictAffinity instead.
+                  description: StrictAffinity on the IPAMBlock is deprecated and no longer used by the code. Use IPAMConfig StrictAffinity instead.
                   type: boolean
                 unallocated:
-                  description:
-                    Unallocated is an ordered list of allocations which are
-                    free in the block.
+                  description: Unallocated is an ordered list of allocations which are free in the block.
                   items:
                     type: integer
                   type: array
