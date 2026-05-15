@@ -3,8 +3,7 @@
 #
 # Used by `make e2e-test` with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1,
 # which deploys the aggregated Calico API server. RequiresCalicoAPIServer tests
-# run here (and not in the BIRD job, which runs in v3 CRD mode). BGP tests are
-# excluded since Felix routing doesn't run BIRD.
+# run here (and not in the BIRD job, which runs in v3 CRD mode).
 #
 # This config is standalone (doesn't extend base.yaml) because it uses a
 # narrower include scope (Conformance-only for sig-calico) that can't be
@@ -14,6 +13,7 @@ include:
   - Conformance && sig-calico
   - Conformance && sig-network
   - RequiresCalicoAPIServer
+  - Feature:BGPPeer
 
 exclude:
   labels:
@@ -25,6 +25,3 @@ exclude:
 
     - label: ExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
-
-    - label: Feature:BGPPeer
-      reason: "Felix routing (no BIRD) can't run BGP tests"
