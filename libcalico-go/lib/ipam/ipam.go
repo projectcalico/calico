@@ -831,8 +831,17 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					logCtx.WithError(maxAllocErr)
 					existingIPs, handleErr := c.handleMaxAllocReached(ctx, *handleID, num, version, logCtx)
 					if handleErr != nil {
-						// Either insufficient IPs or query failed - both cases should retry
-						// because the concurrent operation may complete on the next attempt
+						// assignFromExistingBlock mutated b in place (bitmap, attributes,
+						// Unallocated) before incrementHandle returned ErrMaxAllocReached,
+						// so b has uncommitted allocations relative to the datastore.
+						// Re-query before retrying so the next attempt doesn't pile new
+						// allocations on top and persist the leaked ones via updateBlock.
+						blockCIDR := b.Key.(model.BlockKey).CIDR
+						b, err = c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
+						if err != nil {
+							logCtx.WithError(err).Warn("Failed to re-query block after ErrMaxAllocReached")
+							break
+						}
 						logCtx.WithError(handleErr).Debug("Will retry after maxAlloc handling")
 						continue
 					}
