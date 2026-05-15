@@ -65,9 +65,10 @@ type Ring[V any] struct {
 	replicas int
 	probes   int
 
-	members map[string]V
-	entries []entry
-	sorted  bool
+	members     map[string]V
+	deletedKeys map[string]struct{} // subset of members queued for sweep
+	entries     []entry
+	sorted      bool
 
 	scratch []byte
 }
@@ -135,17 +136,28 @@ func New[V any](opts ...Option) *Ring[V] {
 		panic("hashring: probes must be >= 1")
 	}
 	return &Ring[V]{
-		hash:     cfg.hash,
-		replicas: cfg.replicas,
-		probes:   cfg.probes,
-		members:  make(map[string]V),
+		hash:        cfg.hash,
+		replicas:    cfg.replicas,
+		probes:      cfg.probes,
+		members:     make(map[string]V),
+		deletedKeys: make(map[string]struct{}),
 	}
 }
 
 // Insert adds (or updates) a member. If key is already present the
 // value is replaced but the virtual-node placement is unchanged --
 // the same key always produces the same ring positions.
+//
+// Insert of a key that has been removed but not yet swept (see
+// Remove) is also O(R*hash) — the previous virtual nodes are
+// reclaimed by dropping the key from the pending-delete set, and
+// the new value is stored. No double-counting on the ring.
 func (r *Ring[V]) Insert(key string, value V) {
+	if _, deleted := r.deletedKeys[key]; deleted {
+		delete(r.deletedKeys, key)
+		r.members[key] = value
+		return
+	}
 	if _, ok := r.members[key]; ok {
 		r.members[key] = value
 		return
@@ -161,32 +173,44 @@ func (r *Ring[V]) Insert(key string, value V) {
 	r.sorted = false
 }
 
-// Remove drops a member and all of its virtual nodes. It is a no-op
-// if key is not present.
+// Remove queues a member for removal. The member's virtual nodes
+// stay in the ring until the next Lookup, which sweeps them in one
+// pass; this amortises bulk Removes from O(K*N) to O(N). Remove
+// itself is O(1). It is a no-op if key is not present (whether
+// "not present" means never inserted or already queued).
 func (r *Ring[V]) Remove(key string) {
 	if _, ok := r.members[key]; !ok {
 		return
 	}
-	delete(r.members, key)
-	r.entries = slices.DeleteFunc(r.entries, func(e entry) bool {
-		return e.key == key
-	})
+	r.deletedKeys[key] = struct{}{}
 }
 
-// Len returns the number of distinct members in the ring.
+// Len returns the number of distinct members in the ring (excluding
+// any queued for removal).
 func (r *Ring[V]) Len() int {
-	return len(r.members)
+	return len(r.members) - len(r.deletedKeys)
 }
 
 // Lookup returns the member that owns key. The boolean is false
-// (and the returned value is the zero V) iff the ring has no
-// members. Lookup may sort the underlying entry table the first
-// time it is called after a mutation; subsequent lookups are
-// O(probes * log N).
+// (and the returned value is the zero V) iff the ring has no live
+// members. Lookup may sort and/or sweep the underlying entry table
+// the first time it is called after a mutation; subsequent lookups
+// are O(probes * log N).
 func (r *Ring[V]) Lookup(key string) (V, bool) {
 	var zero V
-	if len(r.entries) == 0 {
+	if r.Len() == 0 {
 		return zero, false
+	}
+	if len(r.deletedKeys) > 0 {
+		r.entries = slices.DeleteFunc(r.entries, func(e entry) bool {
+			_, dead := r.deletedKeys[e.key]
+			return dead
+		})
+		for k := range r.deletedKeys {
+			delete(r.members, k)
+		}
+		clear(r.deletedKeys)
+		// DeleteFunc preserves order, so r.sorted is still valid.
 	}
 	if !r.sorted {
 		slices.SortFunc(r.entries, func(a, b entry) int {

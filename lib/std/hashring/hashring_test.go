@@ -143,16 +143,20 @@ func TestRemove_ExactNoTrace(t *testing.T) {
 			r.Insert(m, m)
 		}
 		r.Remove("b")
+		// Len reflects the removal immediately; entries/members
+		// state is swept lazily on the next Lookup.
+		if r.Len() != 2 {
+			t.Fatalf("Len=%d, want 2", r.Len())
+		}
+		// Trigger the sweep, then assert no internal trace remains.
+		_, _ = r.Lookup("warmup")
 		if _, ok := r.members["b"]; ok {
-			t.Fatalf("member 'b' still in members map")
+			t.Fatalf("member 'b' still in members map after sweep")
 		}
 		for _, e := range r.entries {
 			if e.key == "b" {
-				t.Fatalf("entry with key 'b' still present")
+				t.Fatalf("entry with key 'b' still present after sweep")
 			}
-		}
-		if r.Len() != 2 {
-			t.Fatalf("Len=%d, want 2", r.Len())
 		}
 		for i := range 1000 {
 			v, ok := r.Lookup(fmt.Sprintf("k%d", i))
@@ -161,6 +165,59 @@ func TestRemove_ExactNoTrace(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestRemove_IsDeferredUntilLookup documents the laziness contract:
+// Remove only queues a sweep; the entries slice and members map
+// retain the key until the next Lookup performs the sweep. Insert
+// of a queued-for-removal key un-queues it and preserves the
+// original ring positions.
+func TestRemove_IsDeferredUntilLookup(t *testing.T) {
+	r := newRing[string](10, 1)
+	r.Insert("a", "a-v1")
+	r.Insert("b", "b-v1")
+	entriesAfterInsert := len(r.entries)
+
+	r.Remove("a")
+	// Len reflects removal immediately.
+	if r.Len() != 1 {
+		t.Fatalf("Len after Remove=%d, want 1", r.Len())
+	}
+	// But entries and members still hold "a" until the sweep.
+	if len(r.entries) != entriesAfterInsert {
+		t.Fatalf("entries len changed before sweep: got %d want %d", len(r.entries), entriesAfterInsert)
+	}
+	if _, ok := r.members["a"]; !ok {
+		t.Fatalf("members lost 'a' before sweep")
+	}
+	if _, ok := r.deletedKeys["a"]; !ok {
+		t.Fatalf("deletedKeys missing 'a' after Remove")
+	}
+
+	// Re-inserting un-queues without churning entries.
+	r.Insert("a", "a-v2")
+	if _, ok := r.deletedKeys["a"]; ok {
+		t.Fatalf("deletedKeys still contains 'a' after re-Insert")
+	}
+	if len(r.entries) != entriesAfterInsert {
+		t.Fatalf("entries len changed by re-Insert: got %d want %d", len(r.entries), entriesAfterInsert)
+	}
+	if r.members["a"] != "a-v2" {
+		t.Fatalf("re-Insert did not update value: got %q", r.members["a"])
+	}
+
+	// Now actually remove and trigger a sweep.
+	r.Remove("a")
+	_, _ = r.Lookup("warmup")
+	if _, ok := r.members["a"]; ok {
+		t.Fatalf("members still has 'a' after sweep")
+	}
+	if len(r.deletedKeys) != 0 {
+		t.Fatalf("deletedKeys not cleared after sweep")
+	}
+	if len(r.entries) != 10 {
+		t.Fatalf("entries=%d after sweep, want 10 (just b's replicas)", len(r.entries))
+	}
 }
 
 func TestRemove_AbsentIsNoOp(t *testing.T) {
@@ -593,17 +650,26 @@ func FuzzRing(f *testing.F) {
 				_, _ = r.Lookup(fmt.Sprintf("probe-%d", op))
 			}
 
-			// Invariants after every op.
-			if r.Len() != len(r.members) {
-				t.Fatalf("Len()=%d members=%d", r.Len(), len(r.members))
+			// Invariants after every op. With deferred deletes:
+			//   - members and entries flush together at sweep time,
+			//     so len(entries) == len(members)*replicas always.
+			//   - deletedKeys is a subset of members.
+			//   - Len = live = members - deletedKeys.
+			if r.Len() != len(r.members)-len(r.deletedKeys) {
+				t.Fatalf("Len()=%d members=%d deleted=%d", r.Len(), len(r.members), len(r.deletedKeys))
 			}
-			wantEntries := r.Len() * rep
+			wantEntries := len(r.members) * rep
 			if len(r.entries) != wantEntries {
-				t.Fatalf("entries=%d want=%d (R=%d)", len(r.entries), wantEntries, rep)
+				t.Fatalf("entries=%d want=%d (members=%d R=%d)", len(r.entries), wantEntries, len(r.members), rep)
 			}
 			for _, e := range r.entries {
 				if _, ok := r.members[e.key]; !ok {
 					t.Fatalf("entry key %q not in members map", e.key)
+				}
+			}
+			for k := range r.deletedKeys {
+				if _, ok := r.members[k]; !ok {
+					t.Fatalf("deletedKey %q not in members map", k)
 				}
 			}
 			if r.sorted {
