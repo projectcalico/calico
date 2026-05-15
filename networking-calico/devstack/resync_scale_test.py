@@ -38,6 +38,11 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
     RESYNC_SCALES=100,1000 (default; comma-separated port counts)
     RESYNC_HOSTS_PER_SCALE=auto  (default: sqrt(ports), min 1)
     RESYNC_CALICO_RESYNC=calico-resync  (default; path to the CLI)
+    RESYNC_CALICO_RESYNC_CONF=<path>  (default /tmp/calico-resync-scale.ini;
+                                       extra config file layered on top of
+                                       neutron.conf)
+    RESYNC_CALICO_RESYNC_LOG=<path>   (default /tmp/calico-resync-scale.log;
+                                       where calico-resync writes its logs)
 """
 
 import argparse
@@ -51,6 +56,7 @@ import os
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from urllib.parse import urlparse
@@ -440,38 +446,58 @@ def cleanup_etcd(etcd_client):
 # ---------------------------------------------------------------------------
 
 
-def run_calico_resync(neutron_conf_path):
+def run_calico_resync(neutron_conf_path, extra_conf_path):
     """Run calico-resync once.  Return (elapsed_seconds, result_dict).
+
+    Layers a benchmark-specific config file on top of neutron.conf so
+    calico-resync's logs land in a file rather than competing with the
+    JSON result on stdout (oslo.log's neutron-server defaults can put
+    log lines on stdout in this environment).  Uses --output to direct
+    the JSON to a dedicated file for the same reason.
 
     elapsed_seconds is the wall-clock time of the subprocess, which is
     a slight overestimate of result_dict['total_ms']/1000 because it
     includes Python startup.  Both are reported.
     """
-    cmd = [
-        os.environ.get("RESYNC_CALICO_RESYNC", "calico-resync"),
-        "--config-file",
-        neutron_conf_path,
-    ]
-    LOG.info("Running %s", " ".join(cmd))
-    t0 = time.monotonic()
-    proc = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    elapsed = time.monotonic() - t0
-    if proc.returncode != 0:
-        LOG.error(
-            "calico-resync exited %d.  stderr:\n%s",
-            proc.returncode,
-            proc.stderr,
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".json", prefix="calico-resync-"
+    ) as out_file:
+        cmd = [
+            os.environ.get("RESYNC_CALICO_RESYNC", "calico-resync"),
+            "--config-file",
+            neutron_conf_path,
+            "--config-file",
+            extra_conf_path,
+            "--output",
+            out_file.name,
+        ]
+        LOG.info("Running %s", " ".join(cmd))
+        t0 = time.monotonic()
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
         )
-    try:
-        result = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        LOG.error("calico-resync did not produce valid JSON.  stdout:\n%s", proc.stdout)
-        result = {"ok": False, "error": "non-json stdout", "phases": {}}
+        elapsed = time.monotonic() - t0
+        if proc.returncode != 0:
+            LOG.error(
+                "calico-resync exited %d.  stderr:\n%s",
+                proc.returncode,
+                proc.stderr,
+            )
+        out_file.seek(0)
+        raw = out_file.read()
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            LOG.error(
+                "calico-resync did not produce valid JSON in --output.  "
+                "Contents:\n%s\nstderr:\n%s",
+                raw,
+                proc.stderr,
+            )
+            result = {"ok": False, "error": "non-json output", "phases": {}}
     if not result.get("ok"):
         LOG.warning("calico-resync result ok=False: %s", result.get("error"))
     return elapsed, result
@@ -554,7 +580,7 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
 # ---------------------------------------------------------------------------
 
 
-def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf):
+def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
     """Populate, measure, clean up.  Returns True on success."""
     LOG.info("=" * 60)
     LOG.info("Scale = %d ports", scale)
@@ -583,13 +609,13 @@ def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf):
         steady_runs = []
         for run_i in range(3):
             LOG.info("Steady-state run %d/3", run_i + 1)
-            steady_runs.append(run_calico_resync(neutron_conf))
+            steady_runs.append(run_calico_resync(neutron_conf, extra_conf))
 
         # Cold: wipe etcd, then resync.  This forces every WEP /
         # NetworkPolicy / Subnet to be re-created.
         cleanup_etcd(etcd_client)
         LOG.info("Cold-etcd run")
-        cold = run_calico_resync(neutron_conf)
+        cold = run_calico_resync(neutron_conf, extra_conf)
 
         summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs)
         return True
@@ -627,13 +653,36 @@ def main():
 
     bump_quotas(conn)
 
+    # Write a small INI that calico-resync will read on top of
+    # neutron.conf, the same way neutron-dhcp-agent layers neutron.conf
+    # + dhcp_agent.ini.  This sends calico-resync logs to a file so
+    # they don't compete with the JSON result on stdout.
+    extra_conf = os.environ.get(
+        "RESYNC_CALICO_RESYNC_CONF", "/tmp/calico-resync-scale.ini"
+    )
+    log_file = os.environ.get(
+        "RESYNC_CALICO_RESYNC_LOG", "/tmp/calico-resync-scale.log"
+    )
+    with open(extra_conf, "w") as f:
+        f.write("[DEFAULT]\n")
+        f.write("log_file = %s\n" % log_file)
+        f.write("use_stderr = False\n")
+    LOG.info("calico-resync extra config: %s (logs -> %s)", extra_conf, log_file)
+
     scales = parse_scales()
     LOG.info("Scales: %s", scales)
 
     failed = False
     for scale in scales:
         try:
-            run_one_scale(scale, conn, etcd_client, db_args, args.neutron_conf)
+            run_one_scale(
+                scale,
+                conn,
+                etcd_client,
+                db_args,
+                args.neutron_conf,
+                extra_conf,
+            )
         except Exception:
             LOG.exception("Scale %d failed", scale)
             failed = True
