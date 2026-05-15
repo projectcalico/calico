@@ -30,55 +30,55 @@ func (d *DummyConnectionTester) Stop() {
 }
 
 func (d *DummyConnectionTester) AddClient(_ Client) {
-	ginkgo.Fail("Unexpected AddClient call")
+	ginkgo.Fail("Unexpected AddClient call", 1)
 }
 
 func (d *DummyConnectionTester) AddServer(_ Server) {
-	ginkgo.Fail("Unexpected AddServer call")
+	ginkgo.Fail("Unexpected AddServer call", 1)
 }
 
 func (d *DummyConnectionTester) Deploy() {
-	ginkgo.Fail("Unexpected Deploy call")
+	ginkgo.Fail("Unexpected Deploy call", 1)
 }
 
 func (d *DummyConnectionTester) StopClient(_ Client) {
-	ginkgo.Fail("Unexpected StopClient call")
+	ginkgo.Fail("Unexpected StopClient call", 1)
 }
 
 func (d *DummyConnectionTester) ExpectSuccess(_ Client, _ ...Target) {
-	ginkgo.Fail("Unexpected ExpectSuccess call")
+	ginkgo.Fail("Unexpected ExpectSuccess call", 1)
 }
 
 func (d *DummyConnectionTester) ExpectFailure(_ Client, _ ...Target) {
-	ginkgo.Fail("Unexpected ExpectFailure call")
+	ginkgo.Fail("Unexpected ExpectFailure call", 1)
 }
 
 func (d *DummyConnectionTester) Execute() {
-	ginkgo.Fail("Unexpected Execute call")
+	ginkgo.Fail("Unexpected Execute call", 1)
 }
 
 func (d *DummyConnectionTester) ResetExpectations() {
-	ginkgo.Fail("Unexpected ResetExpectations call")
+	ginkgo.Fail("Unexpected ResetExpectations call", 1)
 }
 
 func (d *DummyConnectionTester) WithTimeout(_ time.Duration) {
-	ginkgo.Fail("Unexpected WithTimeout call")
+	ginkgo.Fail("Unexpected WithTimeout call", 1)
 }
 
 func (d *DummyConnectionTester) ExpectContinuously(_ Client, _ ...Target) Checkpointer {
-	ginkgo.Fail("Unexpected ExpectContinuously call")
+	ginkgo.Fail("Unexpected ExpectContinuously call", 1)
 	return nil
 }
 
 func (d *DummyConnectionTester) Connect(_ Client, _ Target) (string, error) {
-	ginkgo.Fail("Unexpected Connect call")
+	ginkgo.Fail("Unexpected Connect call", 1)
 	return "", nil
 }
 
 func (d *DummyConnectionTester) ExpectEncrypted(_ Client, _ Target) {
-	ginkgo.Fail("Unexpected ExpectEncrypted call")
+	ginkgo.Fail("Unexpected ExpectEncrypted call", 1)
 }
 
 func (d *DummyConnectionTester) ExpectPlaintext(_ Client, _ Target) {
-	ginkgo.Fail("Unexpected ExpectPlaintext call")
+	ginkgo.Fail("Unexpected ExpectPlaintext call", 1)
 }
