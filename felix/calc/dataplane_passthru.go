@@ -33,9 +33,8 @@ import (
 // with the rest of the dataplane API.
 //
 // HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6 plus labels and ASN.
-// IPv4 falls back to the Node's address list (Internal preferred, External as backup) whenever
-// BGP doesn't supply one — mirroring the old felixnodeprocessor logic that previously fed the
-// retired HostIPKey channel. IPv6 falls back to the address list only when BGP is absent.
+// IPv4/IPv6 falls back to the Node's address list (Internal preferred, External as backup) whenever
+// BGP doesn't supply one.
 type DataplanePassthru struct {
 	callbacks passthruCallbacks
 
