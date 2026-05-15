@@ -331,7 +331,7 @@ func TestHashCollision_TiebreakIsKeyOrder(t *testing.T) {
 	// Hash always returns 0. With identical hashes, ownership must
 	// depend only on member keys, not insertion order. Run against
 	// each config so probes>1 inherits the tiebreak too.
-	constHash := func(_ string) uint64 { return 0 }
+	constHash := func(_ []byte) uint64 { return 0 }
 	for _, cfg := range configs {
 		t.Run(cfg.name, func(t *testing.T) {
 			mk := func() *Ring[string] {
@@ -377,10 +377,10 @@ func TestLookup_WrapsAroundRing(t *testing.T) {
 		saltedKey("probe-between", 0):   150,
 		saltedKey("probe-above-max", 0): 250,
 	}
-	stub := func(s string) uint64 {
-		v, ok := known[s]
+	stub := func(b []byte) uint64 {
+		v, ok := known[string(b)]
 		if !ok {
-			t.Fatalf("unexpected hash input %q", s)
+			t.Fatalf("unexpected hash input %q", b)
 		}
 		return v
 	}
@@ -421,10 +421,10 @@ func TestLookup_MultiProbeWrapDistance(t *testing.T) {
 		saltedKey("k", 0): 99,
 		saltedKey("k", 1): 250,
 	}
-	stub := func(s string) uint64 {
-		v, ok := known[s]
+	stub := func(b []byte) uint64 {
+		v, ok := known[string(b)]
 		if !ok {
-			t.Fatalf("unexpected hash input %q", s)
+			t.Fatalf("unexpected hash input %q", b)
 		}
 		return v
 	}
@@ -451,10 +451,10 @@ func TestLookup_MultiProbeWrapWins(t *testing.T) {
 		saltedKey("k", 0): 300,
 		saltedKey("k", 1): 199,
 	}
-	stub := func(s string) uint64 {
-		v, ok := known[s]
+	stub := func(b []byte) uint64 {
+		v, ok := known[string(b)]
 		if !ok {
-			t.Fatalf("unexpected hash input %q", s)
+			t.Fatalf("unexpected hash input %q", b)
 		}
 		return v
 	}
@@ -515,14 +515,14 @@ func TestProbeCount_LookupHashesKeyP(t *testing.T) {
 	for _, cfg := range configs {
 		t.Run(cfg.name, func(t *testing.T) {
 			var calls int
-			counting := func(s string) uint64 {
+			counting := func(b []byte) uint64 {
 				calls++
 				// Return a key-dependent value so members still
 				// occupy distinct ring positions. The exact mapping
 				// is irrelevant — this test only checks call count.
 				var h uint64 = 14695981039346656037
-				for i := 0; i < len(s); i++ {
-					h ^= uint64(s[i])
+				for _, c := range b {
+					h ^= uint64(c)
 					h *= 1099511628211
 				}
 				return h

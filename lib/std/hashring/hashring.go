@@ -36,9 +36,13 @@ import (
 	"slices"
 )
 
-// Hash hashes a string to a uint64. Implementations must be
-// deterministic across processes. Do not use hash/maphash.
-type Hash func(string) uint64
+// Hash hashes a byte slice to a uint64. Implementations must be
+// deterministic across processes. Do not use hash/maphash (its
+// seed is process-local).
+//
+// The Ring may pass a buffer it owns and reuses; implementations
+// must not retain or mutate the slice past the call.
+type Hash func([]byte) uint64
 
 // newDefaultHash returns a Hash backed by a per-Ring stdlib
 // hash/fnv.New64a hasher. Each Ring gets its own hasher so the
@@ -46,9 +50,9 @@ type Hash func(string) uint64
 // the Ring itself).
 func newDefaultHash() Hash {
 	h := fnv.New64a()
-	return func(s string) uint64 {
+	return func(b []byte) uint64 {
 		h.Reset()
-		h.Write([]byte(s))
+		h.Write(b)
 		return h.Sum64()
 	}
 }
@@ -222,5 +226,5 @@ func (r *Ring[V]) saltedHash(key string, i int) uint64 {
 	var idx [4]byte
 	binary.LittleEndian.PutUint32(idx[:], uint32(i))
 	r.scratch = append(r.scratch, idx[:]...)
-	return r.hash(string(r.scratch))
+	return r.hash(r.scratch)
 }
