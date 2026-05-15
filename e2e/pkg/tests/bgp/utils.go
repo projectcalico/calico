@@ -38,10 +38,7 @@ func felixProgramsClusterRoutes(cli ctrlclient.Client) bool {
 	err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, felixConfig)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default FelixConfiguration resource")
 
-	if felixConfig.Spec.ProgramClusterRoutes != nil && *felixConfig.Spec.ProgramClusterRoutes != "Disabled" {
-		return true
-	}
-	return false
+	return felixConfig.Spec.ProgramClusterRoutes != nil && *felixConfig.Spec.ProgramClusterRoutes == "Enabled"
 }
 
 // ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
