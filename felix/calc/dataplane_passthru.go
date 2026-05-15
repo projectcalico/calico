@@ -37,19 +37,17 @@ import (
 // BGP doesn't supply one — mirroring the old felixnodeprocessor logic that previously fed the
 // retired HostIPKey channel. IPv6 falls back to the address list only when BGP is absent.
 type DataplanePassthru struct {
-	ipv6Support bool
-	callbacks   passthruCallbacks
+	callbacks passthruCallbacks
 
 	// nodeInfo is the per-host info derived from a Node resource. A non-nil entry
 	// means the Node resource currently exists for that host.
 	nodeInfo map[string]*HostInfo
 }
 
-func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
+func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
 	return &DataplanePassthru{
-		ipv6Support: ipv6Support,
-		callbacks:   callbacks,
-		nodeInfo:    map[string]*HostInfo{},
+		callbacks: callbacks,
+		nodeInfo:  map[string]*HostInfo{},
 	}
 }
 
@@ -134,8 +132,8 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 
 	info := &HostInfo{
 		labels:  node.Labels,
-		ip4Addr: extractNodeAddress(node, 4, true),
-		ip6Addr: extractNodeAddress(node, 6, h.ipv6Support),
+		ip4Addr: extractNodeAddress(node, 4),
+		ip6Addr: extractNodeAddress(node, 6),
 	}
 
 	if node.Spec.BGP != nil && node.Spec.BGP.ASNumber != nil {
@@ -150,9 +148,8 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 }
 
 // extractNodeAddress returns the IPv4/6 host address for a Node resource, preferring
-// the BGP IPv4/6Address and falling back to the Node's InternalIP/ExternalIP — the
-// same source as the retired HostIPKey channel (see dataplane_passthru.go).
-func extractNodeAddress(node *internalapi.Node, ipVersion int, ipv6Support bool) string {
+// the BGP IPv4/6Address and falling back to the Node's InternalIP/ExternalIP.
+func extractNodeAddress(node *internalapi.Node, ipVersion int) string {
 	if node == nil {
 		return ""
 	}
@@ -172,23 +169,16 @@ func extractNodeAddress(node *internalapi.Node, ipVersion int, ipv6Support bool)
 			if s, ok := parseCIDR(addr); ok {
 				return s
 			}
-			logrus.WithField("addr", addr).Warn("Ignoring Node BGP address: not a CIDR")
+			logrus.WithFields(logrus.Fields{
+				"ipVersion": ipVersion,
+				"address":   addr,
+			}).Warn("Ignoring Node BGP address: not a CIDR")
 		}
 	}
 
 	// Fallback path.
-	if ipVersion == 6 && (!ipv6Support || bgpSpec != nil) {
-		// IPv6 fallback only fires when BGP is absent, preserving the historical
-		// asymmetry: IPv4 had a backup channel (HostIPKey) but IPv6 did not, so
-		// the Address list was only consulted for IPv6 when BGP itself was nil.
-		return ""
-	}
-
 	// If BGP didn't supply an address, fall back to the Node's address
-	// list. This applies whether BGP is nil or BGP is set without an
-	// IPv4/6Address — matching the legacy felixnodeprocessor behaviour that fed
-	// the retired HostIPKey channel.
-
+	// list. This applies whether BGP is nil or BGP is set without an IPv4/6Address.
 	ip, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, ipVersion)
 	if ipnet == nil {
 		ip, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, ipVersion)
