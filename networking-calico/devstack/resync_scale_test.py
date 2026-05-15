@@ -525,10 +525,14 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
         f"cold_endpoints_ms={phase_ms(cold_result, 'endpoints')}",
         f"cold_felix_config_ms={phase_ms(cold_result, 'felix_config')}",
     ]
-    if steady_runs:
-        # Pick the median run for the per-phase breakdown.
-        steady_sorted = sorted(steady_runs, key=lambda t: t[1].get("total_ms", 0))
-        median_result = steady_sorted[len(steady_sorted) // 2][1]
+    # Pick the median *successful* run for the per-phase breakdown.
+    # Failed runs are excluded because their phase dicts are partial
+    # (e.g. no endpoints phase if the failure happened earlier), which
+    # would otherwise show up as misleading zeros in the summary line.
+    successful = [r for r in steady_runs if r[1].get("ok")]
+    if successful:
+        successful_sorted = sorted(successful, key=lambda t: t[1].get("total_ms", 0))
+        median_result = successful_sorted[len(successful_sorted) // 2][1]
         line_fields.extend(
             [
                 f"steady_med_subnets_ms={phase_ms(median_result, 'subnets')}",
