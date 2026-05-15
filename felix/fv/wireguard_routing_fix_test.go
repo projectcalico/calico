@@ -112,6 +112,78 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 			}, "30s", "500ms").Should(Succeed())
 		})
 
+		Context("with Typha", func() {
+			BeforeEach(func() {
+				for ii := range wls {
+					if wls[ii] != nil {
+						wls[ii].Stop()
+					}
+				}
+				topologyContainers.Stop()
+
+				topologyContainers = infrastructure.RunTopology(infrastructure.TopologyOptions{
+					FelixLogSeverity: "info",
+					EnableIPv6:       false,
+					ExtraEnvVars: map[string]string{
+						"FELIX_WIREGUARDENABLED":              "true",
+						"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
+					},
+					NATOutgoingEnabled: true,
+					WithTypha:          true,
+				}, &infra)
+
+				var err error
+				client, err = infra.GetCalicoClient()
+				Expect(err).NotTo(HaveOccurred())
+
+				for ii := range wls {
+					wls[ii] = workload.Run(
+						&topologyContainers.Felixes[ii].Container,
+						fmt.Sprintf("w%d", ii),
+						"default",
+						fmt.Sprintf("10.65.%d.2", ii),
+						"8055",
+						"tcp",
+					)
+					wls[ii].ConfigureInInfra(infra)
+				}
+				cc = &connectivity.Checker{}
+			})
+
+			It("should keep startup recovery working with Typha present", func() {
+				Eventually(func() error {
+					if topologyContainers.Typha == nil {
+						return fmt.Errorf("typha not started")
+					}
+					for i, felix := range topologyContainers.Felixes {
+						rule, err := felix.ExecOutput("ip", "rule", "show", "pref", "99")
+						if err != nil {
+							return fmt.Errorf("node %d: failed to get routing rule: %v", i, err)
+						}
+						if rule == "" {
+							return fmt.Errorf("node %d: no routing rule found at priority 99", i)
+						}
+						if !strings.Contains(rule, "from 10.65.") {
+							return fmt.Errorf("node %d: routing rule missing source constraint with Typha present: %s", i, rule)
+						}
+						if !regexp.MustCompile(`from 10\.65\.\d+\.\d+/\d+`).MatchString(rule) {
+							return fmt.Errorf("node %d: routing rule malformed with Typha present: %s", i, rule)
+						}
+						if strings.Contains(rule, "not from") {
+							return fmt.Errorf("node %d: routing rule must not use inverted source constraint with Typha present: %s", i, rule)
+						}
+					}
+					return nil
+				}, "30s", "500ms").Should(Succeed())
+
+				cc.ExpectSome(topologyContainers.Felixes[0], wls[1])
+				cc.ExpectSome(topologyContainers.Felixes[1], wls[0])
+				cc.ExpectSome(topologyContainers.Felixes[0], connectivity.TargetIP(topologyContainers.Typha.IP), 5473)
+				cc.ExpectSome(topologyContainers.Felixes[1], connectivity.TargetIP(topologyContainers.Typha.IP), 5473)
+				cc.CheckConnectivity()
+			})
+		})
+
 		It("should allow host-to-pod connectivity", func() {
 			cc.ExpectSome(topologyContainers.Felixes[0], wls[0])
 			cc.ExpectSome(topologyContainers.Felixes[1], wls[1])
