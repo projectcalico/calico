@@ -159,9 +159,9 @@ endif
 # slow QEMU emulation for CGO builds.
 #
 # Map Go ARCH names to clang target triples.
-# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+CLANG_CROSS_TRIPLE_s390x   := s390x-linux-gnu
 
 # Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
 ifeq ($(BUILDARCH),amd64)

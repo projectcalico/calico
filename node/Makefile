@@ -204,8 +204,6 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-apache/bin/* $@
 
 # We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
 CGO_ENABLED=1
 # Normalize userspace types to ensure consistency across architectures.
 ARCH_CGO_CFLAGS=
@@ -221,11 +219,6 @@ ifneq ($(CROSS_SYSROOT),)
 endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
-else
-CGO_ENABLED=0
-CGO_LDFLAGS=""
-CGO_CFLAGS=""
-endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
 # Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
@@ -250,12 +243,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
 	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(CGO_ENABLED),1)
 	$(call build_cgo_binary, ./cmd/mountns, $@)
-else
-	$(call build_binary, ./cmd/mountns, $@)
-endif
-
 
 ###############################################################################
 # Building the image
