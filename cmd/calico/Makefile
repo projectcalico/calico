@@ -85,9 +85,6 @@ $(BINDIR)/calico-race-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 		$(CALICO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) go build -race -o $@ -v -buildvcs=false -ldflags "$(LDFLAGS)" ./'
 
-$(LIBBPF_A):
-	$(MAKE) -C $(REPO_ROOT)/felix libbpf ARCH=$(ARCH)
-
 $(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
 	mkdir -p $(BINDIR)
 	cp $(REPO_ROOT)/LICENSE.md $@
@@ -138,8 +135,3 @@ release-publish: release-prereqs .release-$(VERSION).published
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@
-
-release-prereqs:
-ifndef VERSION
-	$(error VERSION is undefined - set VERSION=vX.Y.Z)
-endif

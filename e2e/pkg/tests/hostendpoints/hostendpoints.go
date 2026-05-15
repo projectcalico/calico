@@ -107,8 +107,8 @@ var _ = describe.CalicoDescribe(
 		}
 
 		var checker conncheck.ConnectionTester
-		var hepServer1 *conncheck.Server
-		var client1 *conncheck.Client
+		var hepServer1 conncheck.Server
+		var client1 conncheck.Client
 		var hep *v3.HostEndpoint
 
 		BeforeEach(func() {
@@ -369,12 +369,17 @@ var _ = describe.CalicoDescribe(
 					}
 				}
 
+				// Wrap the external node as a conncheck Client so the probes
+				// go through the standard ConnectionTester machinery.
+				ext := conncheck.NewExternalNodeClient("ext", extClient)
+				checker.AddClient(ext)
+
 				// Target the server's host IP + ports directly. The server pod is host-networked,
 				// so traffic from the external node hits the HEP-protected node on these ports.
 				serverHostIP := hepServer1.Pod().Status.HostIP
 				Expect(serverHostIP).NotTo(BeEmpty(), "server pod must have a host IP")
-				target1 := fmt.Sprintf("http://%s:%d/", serverHostIP, hepPort1)
-				target2 := fmt.Sprintf("http://%s:%d/", serverHostIP, hepPort2)
+				target1 := conncheck.NewTarget(serverHostIP, conncheck.TypePodIP, conncheck.TCP).Port(hepPort1)
+				target2 := conncheck.NewTarget(serverHostIP, conncheck.TypePodIP, conncheck.TCP).Port(hepPort2)
 
 				// create a networkpolicy that allows all incoming connections.
 				// assert external node can reach the hep.
@@ -402,8 +407,9 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By("asserting connections work now from the external node", func() {
-					extClient.TestCanConnect(target1)
-					extClient.TestCanConnect(target2)
+					checker.ExpectSuccess(ext, target1, target2)
+					checker.Execute()
+					checker.ResetExpectations()
 				})
 
 				// We need to enable generic XDP to test XDP in Iptables mode, otherwise the raw table
@@ -480,8 +486,9 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By(fmt.Sprintf("asserting that none of the ports (tcp %d, %d) are accessible from the external node", hepPort1, hepPort2), func() {
-					extClient.TestCannotConnect(target1)
-					extClient.TestCannotConnect(target2)
+					checker.ExpectFailure(ext, target1, target2)
+					checker.Execute()
+					checker.ResetExpectations()
 				})
 			})
 		})

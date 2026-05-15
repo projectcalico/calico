@@ -11,11 +11,12 @@
 
 NFT_RPMS_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
-# Content-addressed tag. Hashes the spec files, patches, and the four
-# nftables/libnftnl version pins from metadata.mk. First 12 hex chars so the
-# tag stays human-scannable.
+# Content-addressed tag. Hashes the producer Dockerfile (whose base image
+# determines the dist tag and glibc requirements of the resulting RPMs), the
+# spec files, patches, and the four nftables/libnftnl version pins from
+# metadata.mk. First 12 hex chars so the tag stays human-scannable.
 NFT_RPMS_TAG := $(shell ( \
-		cat $(NFT_RPMS_DIR)libnftnl.spec $(NFT_RPMS_DIR)nftables.spec $(NFT_RPMS_DIR)patches/*.patch && \
+		cat $(NFT_RPMS_DIR)Dockerfile $(NFT_RPMS_DIR)libnftnl.spec $(NFT_RPMS_DIR)nftables.spec $(NFT_RPMS_DIR)patches/*.patch && \
 		echo $(NFTABLES_VER) $(NFTABLES_SHA256) $(LIBNFTNL_VER) $(LIBNFTNL_SHA256) \
 	) | sha256sum | cut -c1-12)
 
