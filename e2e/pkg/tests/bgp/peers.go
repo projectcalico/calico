@@ -44,13 +44,15 @@ var _ = describe.CalicoDescribe(
 	"BGPPeer",
 	func() {
 		// Define variables common across all tests.
-		var err error
-		var cli ctrlclient.Client
-		var checker conncheck.ConnectionTester
-		var server1 conncheck.Server
-		var client1 conncheck.Client
-		var restoreBGPConfig func()
-		var bgpStatus *BGPStatusMonitor
+		var (
+			err              error
+			cli              ctrlclient.Client
+			checker          conncheck.ConnectionTester = conncheck.NewDummyConnectionTester()
+			server1          conncheck.Server
+			client1          conncheck.Client
+			restoreBGPConfig func() = func() {}
+			bgpStatus        *BGPStatusMonitor
+		)
 
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgppeer")

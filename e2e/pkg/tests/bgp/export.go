@@ -45,10 +45,10 @@ var _ = describe.CalicoDescribe(
 		var (
 			err              error
 			cli              ctrlclient.Client
-			checker          conncheck.ConnectionTester
+			checker          conncheck.ConnectionTester = conncheck.NewDummyConnectionTester()
 			server1          conncheck.Server
 			client1          conncheck.Client
-			restoreBGPConfig func()
+			restoreBGPConfig func() = func() {}
 			bgpStatus        *BGPStatusMonitor
 		)
 
