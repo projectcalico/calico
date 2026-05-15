@@ -72,11 +72,11 @@ logging.basicConfig(
 )
 LOG = logging.getLogger("resync-scale")
 
-# Default scales to measure if RESYNC_SCALES is not set.  The 10000
-# scale is included because it is closer to the customer concern that
-# motivated this work; if Semaphore times out at that level, drop it
-# via the env var rather than editing this file.
-DEFAULT_SCALES = "100,1000,10000"
+# Default scales to measure if RESYNC_SCALES is not set.  Stops at
+# 3000 because larger scales take longer than Semaphore CI is willing
+# to wait — 10000 ports took >12 minutes just to populate.  Override
+# via the env var to push higher when running off-CI.
+DEFAULT_SCALES = "100,1000,3000"
 
 # Calico's mech driver looks for this exact agent_type in the agents
 # table when binding a port to a host.  Must match AGENT_TYPE_FELIX
@@ -156,6 +156,12 @@ def insert_fake_agents(db_args, hosts):
     """INSERT one Calico-felix agent row per host into the Neutron DB.
 
     Idempotent: existing rows for (agent_type, host) are left alone.
+
+    heartbeat_timestamp is set to one day in the future, so Neutron's
+    aliveness check (`now - heartbeat <= agent_down_time`) reads them
+    as alive throughout the test without needing a refresh thread.
+    Real felix processes would heartbeat naturally; for a benchmark
+    that's just churning bind_port we don't care.
     """
     conn = pymysql.connect(**db_args)
     try:
@@ -178,7 +184,8 @@ def insert_fake_agents(db_args, hosts):
                     ) VALUES (
                         %s, %s, %s, %s, %s,
                         1, UTC_TIMESTAMP(), UTC_TIMESTAMP(),
-                        UTC_TIMESTAMP(), '{}', 0
+                        DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 DAY),
+                        '{}', 0
                     )
                     """,
                     (
@@ -189,29 +196,6 @@ def insert_fake_agents(db_args, hosts):
                         host,
                     ),
                 )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def refresh_fake_agent_heartbeats(db_args):
-    """Bump heartbeat_timestamp on all Calico-felix agent rows.
-
-    The Calico mech driver treats an agent as alive if its heartbeat
-    is recent (default 75s window).  Population of N=10000 ports can
-    take long enough that the original heartbeats stale out part-way
-    through, leading to "no live agent" bind failures.  Call this
-    once at the start of each scale, and again after every batch of
-    port creates if the populate phase is long.
-    """
-    conn = pymysql.connect(**db_args)
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE agents SET heartbeat_timestamp=UTC_TIMESTAMP() "
-                "WHERE agent_type=%s",
-                (AGENT_TYPE_FELIX,),
-            )
         conn.commit()
     finally:
         conn.close()
@@ -340,15 +324,12 @@ def create_security_groups(conn, num_sgs):
     return sgs
 
 
-def create_ports(conn, num_ports, networks, subnets, sgs, hosts, db_args):
+def create_ports(conn, num_ports, networks, subnets, sgs, hosts):
     """Create N ports spread across networks, subnets, SGs and hosts.
 
     Uses single-port REST calls in a thread pool.  Ports go in with
     binding:host_id set so the Calico ML2 bind_port flow runs and the
     port reaches ACTIVE.
-
-    Refreshes the fake-agent heartbeats every PORT_BULK_BATCH ports so
-    long populate runs don't stale-out the heartbeat window.
     """
     LOG.info(
         "Populating %d ports across %d networks, %d sgs, %d hosts...",
@@ -381,7 +362,6 @@ def create_ports(conn, num_ports, networks, subnets, sgs, hosts, db_args):
             return None
 
     created = []
-    next_heartbeat = time.monotonic() + 30
     for batch_start in range(0, num_ports, PORT_BULK_BATCH):
         batch = [
             _build_port_spec(i)
@@ -390,9 +370,6 @@ def create_ports(conn, num_ports, networks, subnets, sgs, hosts, db_args):
         with concurrent.futures.ThreadPoolExecutor(max_workers=POPULATE_WORKERS) as ex:
             results = list(ex.map(_create_one, batch))
         created.extend(p for p in results if p is not None)
-        if time.monotonic() > next_heartbeat:
-            refresh_fake_agent_heartbeats(db_args)
-            next_heartbeat = time.monotonic() + 30
         if (batch_start // PORT_BULK_BATCH) % 10 == 0:
             LOG.info("  ...created %d/%d ports", len(created), num_ports)
     LOG.info("Port creation done: %d ports", len(created))
@@ -600,12 +577,11 @@ def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
 
         nets, subs = create_networks_and_subnets(conn, num_networks)
         sgs = create_security_groups(conn, num_sgs)
-        create_ports(conn, scale, nets, subs, sgs, hosts, db_args)
+        create_ports(conn, scale, nets, subs, sgs, hosts)
 
         # Steady-state: etcd is whatever the postcommit hooks left,
         # which should be the full set of WEPs/Subnets/Policies for
         # everything we just created.  3 runs to get min/median/max.
-        refresh_fake_agent_heartbeats(db_args)
         steady_runs = []
         for run_i in range(3):
             LOG.info("Steady-state run %d/3", run_i + 1)
