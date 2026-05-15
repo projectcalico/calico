@@ -687,6 +687,79 @@ func FuzzRing(f *testing.F) {
 	})
 }
 
+// BenchmarkRemove measures the cost of a single Remove on a populated
+// ring. With deferred deletion this is O(1) regardless of ring size.
+// Each iteration re-Inserts before Removing so the timer only sees
+// the Remove call.
+func BenchmarkRemove(b *testing.B) {
+	cases := []struct {
+		name             string
+		members          int
+		replicas, probes int
+	}{
+		{"N1000_R100_P1", 1000, 100, 1},
+		{"N1000_R1_P21", 1000, 1, 21},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			r := newRing[string](tc.replicas, tc.probes)
+			for i := range tc.members {
+				m := fmt.Sprintf("member-%d", i)
+				r.Insert(m, m)
+			}
+			_, _ = r.Lookup("warmup") // sort + ensure no pending sweep
+			b.ResetTimer()
+			i := 0
+			for b.Loop() {
+				// Re-Insert (un-queues if needed) then Remove.
+				k := fmt.Sprintf("member-%d", i%tc.members)
+				b.StopTimer()
+				r.Insert(k, k)
+				b.StartTimer()
+				r.Remove(k)
+				i++
+			}
+		})
+	}
+}
+
+// BenchmarkBulkRemoveThenLookup amortises a batch of Removes plus the
+// single Lookup that pays for the sweep. Demonstrates the benefit of
+// deferred deletion: the slice scan happens once for the whole batch
+// rather than once per Remove.
+func BenchmarkBulkRemoveThenLookup(b *testing.B) {
+	cases := []struct {
+		name             string
+		members          int
+		removeBatch      int
+		replicas, probes int
+	}{
+		{"N1000_remove500_R100_P1", 1000, 500, 100, 1},
+		{"N1000_remove500_R1_P21", 1000, 500, 1, 21},
+	}
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			memberNames := make([]string, tc.members)
+			for i := range memberNames {
+				memberNames[i] = fmt.Sprintf("member-%d", i)
+			}
+			for b.Loop() {
+				b.StopTimer()
+				r := newRing[string](tc.replicas, tc.probes)
+				for _, m := range memberNames {
+					r.Insert(m, m)
+				}
+				_, _ = r.Lookup("warmup")
+				b.StartTimer()
+				for i := range tc.removeBatch {
+					r.Remove(memberNames[i])
+				}
+				_, _ = r.Lookup("post-batch")
+			}
+		})
+	}
+}
+
 // BenchmarkFirstLookup measures the cost of the first Lookup after a
 // bulk Insert (i.e. one Lookup includes the deferred sort of the
 // virtual-node table). Each iteration rebuilds the ring; the timer is
