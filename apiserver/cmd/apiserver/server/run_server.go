@@ -27,6 +27,7 @@ import (
 	gpath "path"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apiserver/pkg/admission/plugin/policy/mutating"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
@@ -43,11 +44,16 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 		opts.StopCh = make(chan struct{})
 	}
 
+	// Calico's aggregated apiserver does not need to re-evaluate MutatingAdmissionPolicy —
+	// kube-apiserver already enforces this on inbound requests before delegation.
+	disabledPlugins := []string{mutating.PluginName}
 	klog.Infof("Enabling ValidatingAdmissionPolicy: %v", opts.EnableValidatingAdmissionPolicy)
 	if !opts.EnableValidatingAdmissionPolicy {
-		opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
-		opts.RecommendedOptions.Admission.DisablePlugins = []string{validating.PluginName}
+		disabledPlugins = append(disabledPlugins, validating.PluginName)
 	}
+	opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
+	opts.RecommendedOptions.Admission.DisablePlugins = disabledPlugins
+
 	config, err := opts.Config()
 	if err != nil {
 		return nil, err
