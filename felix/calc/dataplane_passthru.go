@@ -177,7 +177,7 @@ func extractNodeAddress(node *internalapi.Node, ipVersion int, ipv6Support bool)
 	}
 
 	// Fallback path.
-	if ipVersion == 6 && !ipv6Support {
+	if ipVersion == 6 && (!ipv6Support || bgpSpec != nil) {
 		// IPv6 fallback only fires when BGP is absent, preserving the historical
 		// asymmetry: IPv4 had a backup channel (HostIPKey) but IPv6 did not, so
 		// the Address list was only consulted for IPv6 when BGP itself was nil.
