@@ -401,7 +401,7 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
 	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
-		npa, p.healthzServer)
+		npa, p.healthzServer, p.v1IPFamily())
 }
 
 func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataUpdate, requestResync bool) {
