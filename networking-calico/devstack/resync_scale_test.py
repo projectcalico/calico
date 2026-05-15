@@ -486,14 +486,15 @@ def run_calico_resync(neutron_conf_path, extra_conf_path):
 
 
 def phase_ms(result, phase):
-    """Get duration_ms for a named phase from a ResyncResult dict.
+    """Get total_ms for a named phase from a ResyncResult dict.
 
     Returns 0 if the phase wasn't run (e.g. felix_config on a narrow
-    scope) or the result is malformed.
+    scope, or endpoints when the run errored out before reaching it)
+    or the result is malformed.
     """
     phases = result.get("phases", {}) or {}
     phase_dict = phases.get(phase) or {}
-    return int(phase_dict.get("duration_ms", 0))
+    return int(phase_dict.get("total_ms", 0))
 
 
 def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
