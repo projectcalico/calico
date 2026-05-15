@@ -187,6 +187,28 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             except etcdv3.KeyNotFound:
                 pass
 
+        # Narrow port resync can't synthesise a WEP etcd key from a port_id
+        # alone (the key also includes the port's host and device_id), so
+        # without help it can't delete a stale WEP whose host or device_id
+        # no longer matches the port's current binding -- or whose port has
+        # gone from Neutron entirely.  When --clean-workload-endpoints is
+        # set, scan every WEP in etcd and add to etcd_map any whose
+        # trailing port_id segment matches one of the in-scope port_ids.
+        # The compare loop then deletes WEPs that aren't in neutron_map
+        # (stale binding or deleted port) and leaves correctly-bound ones
+        # alone.
+        if scope.clean_workload_endpoints and scope.ids():
+            escaped_port_ids = {pid.replace("-", "--") for pid in scope.ids()}
+            for name, spec, revision in datamodel_v3.get_all(
+                "WorkloadEndpoint",
+                self.namespace,
+                with_labels_and_annotations=True,
+            ):
+                for escaped_pid in escaped_port_ids:
+                    if name.endswith("-" + escaped_pid):
+                        etcd_map["wep " + name] = (spec, revision)
+                        break
+
         return etcd_map
 
     def delete_legacy_etcd_data(self):

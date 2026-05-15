@@ -2237,6 +2237,59 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
 
+    def test_narrow_resync_no_wep_cleanup_without_flag(self):
+        """Without --clean-workload-endpoints, a stale WEP for an in-scope
+        port stays in etcd, because a narrow --port resync can't synthesise
+        the WEP key from port_id alone."""
+        self._do_initial_resync()
+        # Inject a stale WEP under a different host than the port's
+        # current binding.
+        stale_host = "old-source-host"
+        stale_key = self._ep_key(stale_host)
+        self.etcd_data[stale_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "WorkloadEndpoint",
+                "metadata": {
+                    "name": stale_key.rsplit("/", 1)[-1],
+                    "namespace": self.namespace,
+                },
+                "spec": {},
+            }
+        )
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        self.assertNotIn(stale_key, self.recent_deletes)
+
+    def test_narrow_resync_cleans_stale_wep_when_flagged(self):
+        """With --clean-workload-endpoints, a stale WEP for an in-scope
+        port is deleted."""
+        self._do_initial_resync()
+        # Inject a stale WEP under a different host than the port's
+        # current binding.
+        stale_host = "old-source-host"
+        stale_key = self._ep_key(stale_host)
+        self.etcd_data[stale_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "WorkloadEndpoint",
+                "metadata": {
+                    "name": stale_key.rsplit("/", 1)[-1],
+                    "namespace": self.namespace,
+                },
+                "spec": {},
+            }
+        )
+        result = self._trigger_resync(
+            ports=[self.port["id"]], clean_workload_endpoints=True
+        )
+        self.assertTrue(result.ok)
+        self.assertIn(stale_key, self.recent_deletes)
+        # The current WEP (correctly bound) is NOT deleted.
+        self.assertNotIn(
+            self._ep_key(self.port["binding:host_id"]), self.recent_deletes
+        )
+
     def test_narrow_resync_no_lm_cleanup_without_flag(self):
         """Without --clean-live-migrations, stale LMs for in-scope ports stay."""
         self._do_initial_resync()

@@ -93,11 +93,12 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="ports",
         metavar="ID",
         help=(
-            "Resync this port.  Note: a narrow --port resync cannot delete a "
-            "stale WorkloadEndpoint for a port that no longer exists in "
-            "Neutron, because the WEP etcd key includes the port's host and "
-            "device_id which aren't recoverable from the port ID alone.  Use "
-            "a full resync (no narrow flags) to clean those up."
+            "Resync this port.  Note: a narrow --port resync cannot by itself "
+            "delete a stale WorkloadEndpoint for a port that no longer exists "
+            "in Neutron, because the WEP etcd key includes the port's host "
+            "and device_id which aren't recoverable from the port ID alone.  "
+            "Use --clean-workload-endpoints (or a full resync) to clean those "
+            "up."
         ),
     )
     parser.add_argument(
@@ -128,6 +129,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "that port's current migrating_to state.  Reads all "
             "LiveMigration resources from etcd; only worthwhile if "
             "you are seeing stale LMs."
+        ),
+    )
+    parser.add_argument(
+        "--clean-workload-endpoints",
+        action="store_true",
+        help=(
+            "When resyncing ports, also delete any WorkloadEndpoint "
+            "resources in etcd whose trailing port_id segment matches "
+            "an in-scope port but whose host or device_id no longer "
+            "matches the port's current binding (or the port no "
+            "longer exists in Neutron).  Reads all WorkloadEndpoint "
+            "resources from etcd; only worthwhile if you are seeing "
+            "stale WEPs."
         ),
     )
     parser.add_argument(
@@ -200,6 +214,7 @@ def main(argv=None) -> int:
         security_groups=args.security_groups,
         include_security_groups_for_ports=args.include_sgs_for_ports,
         clean_live_migrations=args.clean_live_migrations,
+        clean_workload_endpoints=args.clean_workload_endpoints,
     ).run()
 
     if args.output:
