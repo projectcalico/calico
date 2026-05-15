@@ -45,7 +45,7 @@ var _ = describe.CalicoDescribe(
 		var (
 			err              error
 			cli              ctrlclient.Client
-			checker          conncheck.ConnectionTester = conncheck.NewDummyConnectionTester()
+			checker          conncheck.ConnectionTester
 			server1          conncheck.Server
 			client1          conncheck.Client
 			restoreBGPConfig func() = func() {}

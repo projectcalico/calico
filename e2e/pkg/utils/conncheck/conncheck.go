@@ -158,6 +158,9 @@ func (c *connectionTester) deploy() error {
 }
 
 func (c *connectionTester) Stop() {
+	if c == nil {
+		return
+	}
 	framework.ExpectNoErrorWithOffset(1, c.stop())
 }
 
