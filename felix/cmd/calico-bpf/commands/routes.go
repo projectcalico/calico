@@ -17,6 +17,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -284,6 +285,9 @@ func (r *routeCmd) parseInputs(op string) error {
 		i, err := strconv.Atoi(r.IfIndex)
 		if err != nil {
 			return fmt.Errorf("invalid ifindex: %w", err)
+		}
+		if i < 0 || i > int(math.MaxUint32) {
+			return fmt.Errorf("invalid ifindex: %d out of range", i)
 		}
 		r.ifIdx = i
 	}
