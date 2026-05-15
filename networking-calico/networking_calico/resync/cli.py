@@ -92,7 +92,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         dest="ports",
         metavar="ID",
-        help="Resync this port.",
+        help=(
+            "Resync this port.  Note: a narrow --port resync cannot delete a "
+            "stale WorkloadEndpoint for a port that no longer exists in "
+            "Neutron, because the WEP etcd key includes the port's host and "
+            "device_id which aren't recoverable from the port ID alone.  Use "
+            "a full resync (no narrow flags) to clean those up."
+        ),
     )
     parser.add_argument(
         "--security-group",
