@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 
 Common code for Neutron driver UT.
 """
+import contextlib
 import inspect
 import logging
 import sys
@@ -57,12 +59,18 @@ sys.modules["neutron.plugins"] = m_neutron.plugins
 sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
 sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron.wsgi"] = m_neutron.wsgi
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks
+sys.modules["neutron_lib.callbacks.events"] = m_neutron_lib.callbacks.events
+sys.modules["neutron_lib.callbacks.registry"] = m_neutron_lib.callbacks.registry
+sys.modules["neutron_lib.callbacks.resources"] = m_neutron_lib.callbacks.resources
 sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
+sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
@@ -233,6 +241,7 @@ from networking_calico.plugins.ml2.drivers.calico import policy
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.plugins.ml2.drivers.calico import subnets
 from networking_calico.plugins.ml2.drivers.calico import syncer
+from networking_calico.resync import scope
 
 # Replace the elector.
 mech_calico.Elector = GrandDukeOfSalzburg
@@ -249,8 +258,7 @@ def mock_projects_list():
 
 keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
-mech_calico.KeystoneClient = mock.Mock()
-mech_calico.KeystoneClient.return_value = keystone_client
+endpoints.make_keystone_client = mock.Mock(return_value=keystone_client)
 mech_calico.TrackTask = mock.Mock()
 mech_calico.TrackTask.return_value = None
 
@@ -556,6 +564,7 @@ class Lib(object):
             policy,
             status,
             subnets,
+            scope,
             syncer,
             datamodel_v3,
             etcdutils,
@@ -637,6 +646,31 @@ class Lib(object):
         """
         self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
 
+    def simulate_neutron_workers(self, uuid_str=None):
+        """Simulate the post-fork init that Neutron triggers in production.
+
+        Replaces the old ``give_way() + simulated_time_advance(31)`` idiom
+        which used to drive ``_post_fork_init`` via a backstop
+        ``eventlet.spawn_after`` in ``__init__``.  Now ``_post_fork_init`` is
+        only called from ``post_fork_initialize`` (the Neutron AFTER_INIT
+        callback), so tests have to drive it explicitly.
+
+        We simulate AFTER_INIT firing for both:
+
+        * a non-API worker (so ``_post_fork_init`` runs with
+          ``voting=True``, creating the elector and master-only threads), and
+        * the ``CalicoStartupResyncWorker`` (so the one-shot resync runs,
+          if ``startup_resync`` is ``always``).
+
+        ``uuid_str`` controls the UUID generated during init (used for
+        ClusterInformation's clusterGUID).
+        """
+        cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
+        with cm:
+            self.driver._post_fork_init(voting=True)
+            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+                self.driver._do_startup_resync()
+
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(
             context._plugin_context,
@@ -655,10 +689,13 @@ class Lib(object):
         if filters is None:
             return self.osdb_ports
 
-        assert list(filters.keys()) == ["id"]
-        allowed_ids = set(filters["id"])
-
-        return [p for p in self.osdb_ports if p["id"] in allowed_ids]
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [p for p in self.osdb_ports if p["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [p for p in self.osdb_ports if p["network_id"] in allowed]
+        raise AssertionError("unsupported get_ports filter: %s" % filters)
 
     def get_subnet(self, context, id):
         matches = [s for s in self.osdb_subnets if s["id"] == id]
@@ -670,12 +707,15 @@ class Lib(object):
             return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
-        if filters:
-            self.assertTrue("id" in filters)
-            matches = [s for s in self.osdb_subnets if s["id"] in filters["id"]]
-        else:
-            matches = [s for s in self.osdb_subnets]
-        return matches
+        if not filters:
+            return list(self.osdb_subnets)
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [s for s in self.osdb_subnets if s["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [s for s in self.osdb_subnets if s["network_id"] in allowed]
+        raise AssertionError("unsupported get_subnets filter: %s" % filters)
 
     def get_network(self, context, id):
         return self.get_networks(context, filters={"id": [id]})[0]

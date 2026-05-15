@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -145,6 +145,24 @@ def get(resource_kind, name):
     """
     value, mod_revision = _get_with_metadata(resource_kind, NOT_NAMESPACED, name)
     return value["spec"], mod_revision
+
+
+def get_namespaced(resource_kind, namespace, name, with_labels_and_annotations=False):
+    """Read a single Calico v3 resource from etcdv3.
+
+    Returns either ``(spec, mod_revision)`` or ``((spec, labels, annotations),
+    mod_revision)`` depending on ``with_labels_and_annotations``.  This mirrors the
+    per-tuple shape that :func:`get_all` returns for the matching kind, so callers can
+    use the result interchangeably.  Raises :class:`etcdv3.KeyNotFound` if the key is
+    absent.
+    """
+    value, mod_revision = _get_with_metadata(resource_kind, namespace, name)
+    spec = value["spec"]
+    if with_labels_and_annotations:
+        labels = value["metadata"].get("labels", {})
+        annotations = value["metadata"].get("annotations", {})
+        return (spec, labels, annotations), mod_revision
+    return spec, mod_revision
 
 
 def delete_legacy(resource_kind, name_prefix=""):
