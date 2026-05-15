@@ -227,4 +227,64 @@ var _ = Describe("Masquerade manager", func() {
 			}}})
 		})
 	})
+
+	Describe("after adding a LoadBalancer-only pool", func() {
+		BeforeEach(func() {
+			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+				Id: "lb-pool",
+				Pool: &proto.IPAMPool{
+					Cidr:        "10.20.40.64/27",
+					Masquerade:  true,
+					AllowedUses: []string{"LoadBalancer"},
+				},
+			})
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should add the pool to the masq IP set", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.40.64/27")))
+		})
+		It("should NOT add the pool to the all IP set", func() {
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+		})
+
+		Describe("after removing the LoadBalancer-only pool", func() {
+			BeforeEach(func() {
+				masqMgr.OnUpdate(&proto.IPAMPoolRemove{
+					Id: "lb-pool",
+				})
+				err := masqMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
+			})
+			It("masq set should be empty", func() {
+				Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+			})
+			It("all set should be empty", func() {
+				Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+			})
+		})
+	})
+
+	Describe("after adding a pool with Workload and LoadBalancer uses", func() {
+		BeforeEach(func() {
+			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+				Id: "mixed-pool",
+				Pool: &proto.IPAMPool{
+					Cidr:        "10.1.0.0/16",
+					Masquerade:  true,
+					AllowedUses: []string{"Workload", "LoadBalancer"},
+				},
+			})
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should add the pool to the masq IP set", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
+		})
+		It("should add the pool to the all IP set since it includes Workload", func() {
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
+		})
+	})
 })
