@@ -125,9 +125,17 @@ class ResourceSyncer(object):
             scope,
         )
 
-        # Read Neutron state first.
-        with self.txn_from_context(context, "get-all-" + self.resource_kind):
-            neutron_map = self.get_from_neutron(context, scope)
+        # Read Neutron state first.  Narrow scope that expanded to no IDs (e.g.
+        # `calico-resync --port <pid>` without --include-sgs-for-ports leaves the
+        # SG scope empty) means there are no Neutron rows to fetch — skip the
+        # call and avoid passing an empty list to SQLAlchemy's column.in_()
+        # (well defined in 1.4+, but older versions matched all rows).  The
+        # rest of resync runs through naturally on an empty neutron_map.
+        if not scope.all() and not scope.ids():
+            neutron_map = {}
+        else:
+            with self.txn_from_context(context, "get-all-" + self.resource_kind):
+                neutron_map = self.get_from_neutron(context, scope)
         t_neutron_read = time.monotonic()
 
         # Read etcd state.  When the scope is not "all", this means the etcd data
