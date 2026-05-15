@@ -59,7 +59,7 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			if requireBGPForClusterRouting(cli) {
+			if felixProgramsClusterRoutes(cli) {
 				ginkgo.Skip("Skipping test since it needs BGP to be responsible for cluster routing")
 			}
 

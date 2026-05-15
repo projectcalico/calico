@@ -19,10 +19,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
-// requireNonVXLANCluster checks that no IP pool uses VXLAN encapsulation. Tests that
-// disable the BGP mesh and expect connectivity to break cannot work on VXLAN clusters
-// because Felix programs VXLAN tunnel routes independently of BGP.
-func requireBGPForClusterRouting(cli ctrlclient.Client) bool {
+// felixProgramsClusterRoutes checks that Felix is not programming cluster routes.
+// Tests that disable the BGP mesh and expect connectivity to break cannot work
+// when Felix is handling cluster routes independently of BGP.
+func felixProgramsClusterRoutes(cli ctrlclient.Client) bool {
 	pools := &v3.IPPoolList{}
 	err := cli.List(context.Background(), pools)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing IP pools")
@@ -30,18 +30,18 @@ func requireBGPForClusterRouting(cli ctrlclient.Client) bool {
 	for _, pool := range pools.Items {
 		switch pool.Spec.VXLANMode {
 		case v3.VXLANModeAlways, v3.VXLANModeCrossSubnet:
-			return false
+			return true
 		}
 	}
 
-	bgpConfig := &v3.BGPConfiguration{}
-	err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, bgpConfig)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default BGPConfiguration resource")
+	felixConfig := &v3.FelixConfiguration{}
+	err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, felixConfig)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default FelixConfiguration resource")
 
-	if bgpConfig.Spec.ProgramClusterRoutes != nil && *bgpConfig.Spec.ProgramClusterRoutes != "Enabled" {
-		return false
+	if felixConfig.Spec.ProgramClusterRoutes != nil && *felixConfig.Spec.ProgramClusterRoutes != "Disabled" {
+		return true
 	}
-	return true
+	return false
 }
 
 // ensureInitialBGPConfig updates the default BGPConfiguration to ensures that full mesh BGP is enabled.
