@@ -124,13 +124,13 @@ var _ = describe.CalicoDescribe(
 			checker.AddClient(client1)
 			checker.Deploy()
 
+			// Wait for BGP to be fully established before baseline connectivity check.
+			bgpStatus.WaitForEstablished()
+
 			// Verify initial connectivity.
 			checker.ResetExpectations()
 			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
 			checker.Execute()
-
-			// Wait for BGP to be fully established before baseline connectivity check.
-			bgpStatus.WaitForEstablished()
 		})
 
 		ginkgo.AfterEach(func() {
