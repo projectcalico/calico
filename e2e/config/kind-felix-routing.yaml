@@ -13,6 +13,7 @@
 include:
   - Conformance && sig-calico
   - Conformance && sig-network
+  - Feature:BGPPeer
   - RequiresCalicoAPIServer
 
 exclude:
@@ -25,6 +26,3 @@ exclude:
 
     - label: ExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
-
-    - label: Feature:BGPPeer
-      reason: "Felix routing (no BIRD) can't run BGP tests"
