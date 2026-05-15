@@ -126,7 +126,10 @@ class Scope:
 
         Returns ResyncResult
           A JSON-serialisable record of what happened.  ``ok`` is False and ``error`` is
-          set if the pass raised; the caller decides whether to propagate.
+          set if the pass raised; the caller decides whether to propagate.  Phases bail
+          out on the first exception rather than continuing, because they share state
+          via etcd and running a later phase on top of a half-failed earlier one risks
+          compounding the problem.
         """
         started = datetime.now(timezone.utc)
         started_mono = time.monotonic()
@@ -269,14 +272,16 @@ class Scope:
 def _run_phase(fn) -> Dict[str, Any]:
     """Time ``fn`` and return a phase summary dict.
 
-    If ``fn`` itself returns a dict (the resource syncers do, with
-    item counts and per-step timings), it is merged into the
-    summary so callers see both the wall-clock total and the
-    syncer-internal breakdown.
+    If ``fn`` itself returns a dict (the resource syncers do, with item counts and
+    per-step timings), it is merged into the summary so callers see both the wall-clock
+    total and the syncer-internal breakdown.
+
+    Exceptions are not caught here: they propagate to ``Scope.run``, which records them
+    in the top-level ResyncResult.error and bails out of the remaining phases.
     """
     t0 = time.monotonic()
     detail = fn()
-    summary = {"total_ms": int((time.monotonic() - t0) * 1000), "error": None}
+    summary = {"total_ms": int((time.monotonic() - t0) * 1000)}
     if isinstance(detail, dict):
         summary.update(detail)
     return summary
@@ -287,11 +292,9 @@ def provide_felix_config():
 
     Lifted unchanged in semantics from the original mech_calico implementation, with
     ``time.sleep`` substituted for ``eventlet.sleep`` so the function is safe to call
-    from the CLI as well as from a greenthread.  Exceptions propagate; ``_run_phase``
-    does not catch them, but the outer ``try`` in :meth:`Scope.run` does and records the
-    exception type + message in the top-level ResyncResult's ``error`` field while
-    flipping ``ok`` to False.  The per-phase ``error`` field remains as a
-    forward-compatible placeholder.
+    from the CLI as well as from a greenthread.  Exceptions propagate to
+    :meth:`Scope.run`, which records the message in the top-level ResyncResult.error and
+    skips the remaining phases.
     """
     LOG.info("Providing Felix configuration")
 
