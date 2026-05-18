@@ -67,6 +67,7 @@ func TestImageComponents(t *testing.T) {
 		"node":              {Version: "v3.31.0", Image: "node"},
 		"node-windows":      {Version: "v3.31.0", Image: "node-windows"},
 		"cni-windows":       {Version: "v3.31.0", Image: "cni-windows"},
+		"cni-plugins":       {Version: "v3.31.0", Image: "cni-plugins"},
 		"flannel":           {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
 		"envoy-gateway":     {Version: "v3.31.0", Image: "envoy-gateway"},
 		"envoy-proxy":       {Version: "v3.31.0", Image: "envoy-proxy"},
