@@ -37,9 +37,12 @@ import (
 
 // checkReadiness runs `calico health --type=readiness` inside the given container
 // and returns the exit status — nil when the controller reports ready.
+// Use bare "calico" so it resolves via PATH; the binary's in-image location
+// differs between the legacy Dockerfile build (/usr/bin/calico) and the
+// ko-built image (/ko-app/calico).
 func checkReadiness(containerName string) error {
 	return exec.Command("docker", "exec", containerName,
-		"/usr/bin/calico", "health", "--port=9099", "--type=readiness").Run()
+		"calico", "health", "--port=9099", "--type=readiness").Run()
 }
 
 var _ = Describe("[etcd] kube-controllers health check FV tests", func() {

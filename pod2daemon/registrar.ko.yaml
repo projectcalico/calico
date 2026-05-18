@@ -1,0 +1,18 @@
+# Base image is set at build time via KO_DEFAULTBASEIMAGE so it tracks
+# metadata.mk's CALICO_BASE_VER (and any USE_UBI_AS_CALICO_BASE override).
+# This literal is a fallback for ad-hoc `ko build` invocations without make.
+defaultBaseImage: calico/base:ubi9-1777576815
+defaultPlatforms:
+  - linux/amd64
+  - linux/arm64
+
+builds:
+  - id: csi-node-driver-registrar
+    main: ./cmd/csi-node-driver-registrar
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s -w"
+    flags:
+      - -trimpath
+      - -buildvcs=false
