@@ -17,7 +17,6 @@ package dedupebuffer
 import (
 	"container/list"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -46,15 +45,15 @@ type DedupeBuffer struct {
 	cond *sync.Cond
 
 	// keyToPendingUpdate holds an entry for each updateWithKey in the
-	// pendingUpdates queue.  Keys are either comparable model.Key structs
-	// (zero allocation) or string-encoded paths for non-comparable key types.
-	keyToPendingUpdate    map[any]*list.Element
+	// pendingUpdates queue.  model.Key is an interface, but all concrete
+	// key types are Go-comparable so they are safe to use as map keys.
+	keyToPendingUpdate    map[model.Key]*list.Element
 	peakPendingUpdatesLen int
 
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
-	liveResourceKeys              set.Set[any]
-	liveKeysNotSeenSinceReconnect set.Set[any]
+	liveResourceKeys              set.Set[model.Key]
+	liveKeysNotSeenSinceReconnect set.Set[model.Key]
 	resyncStart                   time.Time
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
@@ -67,8 +66,8 @@ type DedupeBuffer struct {
 
 func New() *DedupeBuffer {
 	d := &DedupeBuffer{
-		keyToPendingUpdate: map[any]*list.Element{},
-		liveResourceKeys:   set.New[any](),
+		keyToPendingUpdate: map[model.Key]*list.Element{},
+		liveResourceKeys:   set.New[model.Key](),
 	}
 	d.cond = sync.NewCond(&d.lock)
 	return d
@@ -152,12 +151,11 @@ func (d *DedupeBuffer) OnUpdates(updates []api.Update) {
 
 	queueWasEmpty := d.pendingUpdates.Len() == 0
 	for _, u := range updates {
-		key := dedupeKey(u.Key)
 		if d.liveKeysNotSeenSinceReconnect != nil {
-			d.liveKeysNotSeenSinceReconnect.Discard(key)
+			d.liveKeysNotSeenSinceReconnect.Discard(u.Key)
 		}
 
-		d.queueUpdate(key, u)
+		d.queueUpdate(u.Key, u)
 	}
 	queueNowEmpty := d.pendingUpdates.Len() == 0
 	if queueWasEmpty && !queueNowEmpty {
@@ -169,7 +167,7 @@ func (d *DedupeBuffer) OnUpdates(updates []api.Update) {
 	}
 }
 
-func (d *DedupeBuffer) queueUpdate(key any, u api.Update) {
+func (d *DedupeBuffer) queueUpdate(key model.Key, u api.Update) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
 
 	if u.Value != nil {
@@ -236,7 +234,7 @@ func (d *DedupeBuffer) Stop() {
 }
 
 type updateWithKey struct {
-	key    any
+	key    model.Key
 	update api.Update
 }
 
@@ -289,7 +287,7 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 				// https://github.com/golang/go/issues/20135
 				// Opportunistically free the map when it's empty. This can
 				// free a good amount of RAM after loading a large snapshot.
-				d.keyToPendingUpdate = map[any]*list.Element{}
+				d.keyToPendingUpdate = map[model.Key]*list.Element{}
 				d.peakPendingUpdatesLen = 0
 			}
 			// Update liveResourceKeys now, before we drop the lock.  Once we drop
@@ -358,25 +356,9 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 		"resources not seen during the resync.",
 		d.liveKeysNotSeenSinceReconnect.Len())
 	for key := range d.liveKeysNotSeenSinceReconnect.All() {
-		var parsedKey model.Key
-		switch k := key.(type) {
-		case model.Key:
-			// Comparable key type stored directly; use as-is.
-			parsedKey = k
-		case string:
-			// Non-comparable key type was stored as a string; parse it back.
-			parsedKey = model.KeyFromDefaultPath(k)
-			if parsedKey == nil {
-				// Not clear how this could happen since these keys came from the
-				// set that we'd already parsed and passed downstream!
-				log.WithField("key", key).Panic("Failed to parse key during reconnection to Typha.")
-			}
-		default:
-			log.WithField("key", key).Panicf("Unexpected key type in liveKeysNotSeenSinceReconnect: %T", key)
-		}
 		d.queueUpdate(key, api.Update{
 			KVPair: model.KVPair{
-				Key:   parsedKey,
+				Key:   key,
 				Value: nil,
 			},
 			UpdateType: api.UpdateTypeKVDeleted,
@@ -385,18 +367,3 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 }
 
 var _ api.SyncerCallbacks = (*DedupeBuffer)(nil)
-
-// dedupeKey returns a map-safe key for deduplication. For comparable model.Key
-// types (the vast majority), the key struct itself is returned — this avoids
-// allocating a string encoding. For non-comparable types (e.g. those embedding
-// net.IP / net.IPNet slices), we fall back to the string-encoded path.
-func dedupeKey(k model.Key) any {
-	if reflect.TypeOf(k).Comparable() {
-		return k
-	}
-	s, err := model.KeyToDefaultPath(k)
-	if err != nil {
-		log.WithError(err).WithField("key", k).Panic("Failed to serialize non-comparable key")
-	}
-	return s
-}
