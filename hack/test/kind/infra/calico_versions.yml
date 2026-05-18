@@ -10,6 +10,8 @@ components:
     version: test-build
   cni-windows:
     version: test-build
+  cni-plugins:
+    version: test-build
   calico:
     version: test-build
   whisker:

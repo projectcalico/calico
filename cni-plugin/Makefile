@@ -35,7 +35,6 @@ clean: clean-windows
 	rm -f *.created
 	rm -rf bin pkg/install/install.test
 	rm -rf config/ dist/
-	rm -rf containernetworking-plugins .containernetworking-plugins-*
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*
 
 clean-windows: clean-windows-builder
@@ -81,46 +80,30 @@ bin/LICENSE: ../LICENSE.md
 ###############################################################################
 # Supplementary CNI binaries required by unit tests and the Windows image.
 ###############################################################################
-# These are the files that we need to copy from the containernetworking-plugins project to our image.
-CN_FILES := host-local portmap loopback tuning
+# Linux plugin binaries (host-local, portmap, loopback, tuning, flannel) are
+# built by the third_party/cni-plugins component and consumed here for unit
+# tests. The Windows flannel.exe is built locally below — the Windows image
+# bundles the plugins directly, not via an init container.
+CNI_PLUGINS_DIR = $(REPO_ROOT)/third_party/cni-plugins
+CNI_PLUGINS_BIN = $(CNI_PLUGINS_DIR)/bin/$(ARCH)
 
-CONTAINERNETWORKING_PLUGINS_CLONED=.containernetworking-plugins-$(CNI_VERSION).cloned
+$(CNI_PLUGINS_BIN)/host-local $(CNI_PLUGINS_BIN)/loopback $(CNI_PLUGINS_BIN)/portmap $(CNI_PLUGINS_BIN)/tuning $(CNI_PLUGINS_BIN)/flannel &:
+	$(MAKE) -C $(CNI_PLUGINS_DIR) build ARCH=$(ARCH)
 
-$(CONTAINERNETWORKING_PLUGINS_CLONED):
-	rm -rf containernetworking-plugins .containernetworking-plugins-*.cloned
-	@$(foreach file,$(CN_FILES),find bin -name $(file) -type f -delete;)
-	git clone --single-branch --branch $(CNI_VERSION) https://github.com/projectcalico/containernetworking-plugins.git
-	touch $@
-
-CN_FLAGS=-ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
-
-$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning  &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/containernetworking/plugins --rm $(CALICO_BUILD) \
-		/bin/sh -xe -c ' \
-			GOFLAGS='-buildvcs=false' CGO_ENABLED=0 GOARCH=$(ARCH) ./build_linux.sh $(CN_FLAGS)'
-	-mkdir -p $(BIN)
-	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN);)
+$(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CNI_PLUGINS_BIN)/host-local $(CNI_PLUGINS_BIN)/loopback $(CNI_PLUGINS_BIN)/portmap $(CNI_PLUGINS_BIN)/tuning
+	mkdir -p $(BIN)
+	cp $(CNI_PLUGINS_BIN)/host-local $(BIN)/host-local
+	cp $(CNI_PLUGINS_BIN)/loopback   $(BIN)/loopback
+	cp $(CNI_PLUGINS_BIN)/portmap    $(BIN)/portmap
+	cp $(CNI_PLUGINS_BIN)/tuning     $(BIN)/tuning
 
 FLANNEL_CNI_PLUGIN_CLONED=.flannel-cni-plugin-$(FLANNEL_VERSION).cloned
 
 $(FLANNEL_CNI_PLUGIN_CLONED):
 	rm -rf flannel-cni-plugin .flannel-cni-plugin-*.cloned
-	-rm -rf $(BIN)/flannel $(WINDOWS_BIN)/flannel.exe
+	-rm -rf $(WINDOWS_BIN)/flannel.exe
 	git clone --single-branch --branch $(FLANNEL_VERSION) https://github.com/projectcalico/flannel-cni-plugin.git
 	touch $@
-
-$(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
-	docker run \
-		$(EXTRA_DOCKER_ARGS) \
-		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
-		/bin/sh -xe -c ' \
-			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_linux'
-	-mkdir -p $(BIN)
-	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
 
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 	docker run \
@@ -131,8 +114,7 @@ $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
 	-mkdir -p $(WINDOWS_BIN)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH).exe $(WINDOWS_BIN)/flannel.exe
 
-.PHONY: build-cni-bins build-win-cni-bins
-build-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning
+.PHONY: build-win-cni-bins
 build-win-cni-bins: $(WINDOWS_BIN)/flannel.exe
 
 ###############################################################################
@@ -218,7 +200,7 @@ ut-datastore:
 	$(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 			cd  /go/src/$(PACKAGE_NAME) && \
 			mkdir -p report && \
-			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,containernetworking-plugins,flannel-cni-plugin $(GINKGO_ARGS)'
+			ginkgo -cover -r --junit-report=$(JUNIT_REPORT_NAME) --output-dir=report/ -skip-package pkg/install,flannel-cni-plugin $(GINKGO_ARGS)'
 
 ###############################################################################
 # Install test
