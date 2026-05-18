@@ -310,6 +310,11 @@ def provide_felix_config():
         except etcdv3.KeyNotFound:
             cluster_info = {}
             ci_mod_revision = 0
+        if cluster_info is None:
+            # Existing etcd entry has corrupt JSON.  Treat as empty so we
+            # rebuild from scratch, but keep ci_mod_revision so the put()
+            # below overwrites under CAS.
+            cluster_info = {}
         rewrite_cluster_info = False
         LOG.info(
             "Read ClusterInformation %s mod_revision %r",
@@ -356,6 +361,10 @@ def provide_felix_config():
         except etcdv3.KeyNotFound:
             felix_config = {}
             fc_mod_revision = 0
+        if felix_config is None:
+            # Existing etcd entry has corrupt JSON.  Same treatment as
+            # cluster_info above.
+            felix_config = {}
         rewrite_felix_config = False
         LOG.info(
             "Read FelixConfiguration %s mod_revision %r",
