@@ -106,8 +106,6 @@ class Scope:
         ports=None,
         security_groups=None,
         include_security_groups_for_ports=False,
-        clean_live_migrations=False,
-        clean_workload_endpoints=False,
     ):
         self.db = db
         self.driver = driver
@@ -117,8 +115,6 @@ class Scope:
         self.ports = set(ports or [])
         self.security_groups = set(security_groups or [])
         self.include_security_groups_for_ports = include_security_groups_for_ports
-        self.clean_live_migrations = clean_live_migrations
-        self.clean_workload_endpoints = clean_workload_endpoints
 
     def all(self):
         return not (self.networks or self.subnets or self.ports or self.security_groups)
@@ -193,8 +189,6 @@ class Scope:
             "ports": sorted(self.ports),
             "security_groups": sorted(self.security_groups),
             "include_sgs_for_ports": self.include_security_groups_for_ports,
-            "clean_live_migrations": self.clean_live_migrations,
-            "clean_workload_endpoints": self.clean_workload_endpoints,
         }
 
     def expand(self):

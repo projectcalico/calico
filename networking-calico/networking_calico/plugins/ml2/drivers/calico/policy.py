@@ -55,7 +55,7 @@ class PolicySyncer(ResourceSyncer):
             )
         return dict((SG_NAME_PREFIX + sg["id"], sg) for sg in sgs)
 
-    def get_from_etcd(self, scope, neutron_map):
+    def get_from_etcd(self, scope):
         if scope.all():
             return {
                 name: (spec, revision)
@@ -65,13 +65,11 @@ class PolicySyncer(ResourceSyncer):
                 if name.startswith(SG_NAME_PREFIX)
             }
 
-        neutron_ids_read = {sg["id"] for sg in neutron_map.values()}
-        names_for_missing_scope_ids = {
-            SG_NAME_PREFIX + sgid for sgid in scope.ids() - neutron_ids_read
-        }
-        names = set(neutron_map) | names_for_missing_scope_ids
+        # Narrow scope: read just the etcd entries whose names we can compute
+        # directly from scope.ids().
         etcd_map = {}
-        for name in names:
+        for sgid in scope.ids():
+            name = SG_NAME_PREFIX + sgid
             try:
                 etcd_map[name] = datamodel_v3.get_namespaced(
                     self.resource_kind, self.namespace, name

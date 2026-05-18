@@ -92,14 +92,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         dest="ports",
         metavar="ID",
-        help=(
-            "Resync this port.  Note: a narrow --port resync cannot by itself "
-            "delete a stale WorkloadEndpoint for a port that no longer exists "
-            "in Neutron, because the WEP etcd key includes the port's host "
-            "and device_id which aren't recoverable from the port ID alone.  "
-            "Use --clean-workload-endpoints (or a full resync) to clean those "
-            "up."
-        ),
+        help="Resync this port.",
     )
     parser.add_argument(
         "--security-group",
@@ -117,31 +110,6 @@ def _build_parser() -> argparse.ArgumentParser:
             "they belong to.  Off by default because the port -> SG "
             "binding is via labels, so port-only resync is usually "
             "sufficient."
-        ),
-    )
-    parser.add_argument(
-        "--clean-live-migrations",
-        action="store_true",
-        help=(
-            "When resyncing ports, also delete any LiveMigration "
-            "resources in etcd that match an in-scope port (by "
-            "device_id and port_id) but aren't the LM expected for "
-            "that port's current migrating_to state.  Reads all "
-            "LiveMigration resources from etcd; only worthwhile if "
-            "you are seeing stale LMs."
-        ),
-    )
-    parser.add_argument(
-        "--clean-workload-endpoints",
-        action="store_true",
-        help=(
-            "When resyncing ports, also delete any WorkloadEndpoint "
-            "resources in etcd whose trailing port_id segment matches "
-            "an in-scope port but whose host or device_id no longer "
-            "matches the port's current binding (or the port no "
-            "longer exists in Neutron).  Reads all WorkloadEndpoint "
-            "resources from etcd; only worthwhile if you are seeing "
-            "stale WEPs."
         ),
     )
     parser.add_argument(
@@ -213,8 +181,6 @@ def main(argv=None) -> int:
         ports=args.ports,
         security_groups=args.security_groups,
         include_security_groups_for_ports=args.include_sgs_for_ports,
-        clean_live_migrations=args.clean_live_migrations,
-        clean_workload_endpoints=args.clean_workload_endpoints,
     ).run()
 
     if args.output:

@@ -2237,13 +2237,12 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
 
-    def test_narrow_resync_no_wep_cleanup_without_flag(self):
-        """Without --clean-workload-endpoints, a stale WEP for an in-scope
-        port stays in etcd, because a narrow --port resync can't synthesise
-        the WEP key from port_id alone."""
+    def test_narrow_resync_cleans_stale_wep(self):
+        """Narrow port resync deletes a stale WEP at an old binding host:
+        the etcd scan finds all WEPs whose trailing port_id matches an
+        in-scope port, and the compare loop deletes any that aren't bound
+        to the port's current host."""
         self._do_initial_resync()
-        # Inject a stale WEP under a different host than the port's
-        # current binding.
         stale_host = "old-source-host"
         stale_key = self._ep_key(stale_host)
         self.etcd_data[stale_key] = json.dumps(
@@ -2258,31 +2257,6 @@ class TestLiveMigration(TestPluginEtcdBase):
             }
         )
         result = self._trigger_resync(ports=[self.port["id"]])
-        self.assertTrue(result.ok)
-        self.assertNotIn(stale_key, self.recent_deletes)
-
-    def test_narrow_resync_cleans_stale_wep_when_flagged(self):
-        """With --clean-workload-endpoints, a stale WEP for an in-scope
-        port is deleted."""
-        self._do_initial_resync()
-        # Inject a stale WEP under a different host than the port's
-        # current binding.
-        stale_host = "old-source-host"
-        stale_key = self._ep_key(stale_host)
-        self.etcd_data[stale_key] = json.dumps(
-            {
-                "apiVersion": "projectcalico.org/v3",
-                "kind": "WorkloadEndpoint",
-                "metadata": {
-                    "name": stale_key.rsplit("/", 1)[-1],
-                    "namespace": self.namespace,
-                },
-                "spec": {},
-            }
-        )
-        result = self._trigger_resync(
-            ports=[self.port["id"]], clean_workload_endpoints=True
-        )
         self.assertTrue(result.ok)
         self.assertIn(stale_key, self.recent_deletes)
         # The current WEP (correctly bound) is NOT deleted.
@@ -2366,31 +2340,12 @@ class TestLiveMigration(TestPluginEtcdBase):
         # No update was claimed in the structured result.
         self.assertEqual(result.phases["endpoints"]["updated"], 0)
 
-    def test_narrow_resync_no_lm_cleanup_without_flag(self):
-        """Without --clean-live-migrations, stale LMs for in-scope ports stay."""
-        self._do_initial_resync()
-        # Inject a stale LM for this port (matching device+port id but
-        # under a different host than the current/expected one).
-        stale_host = "old-dest-host"
-        stale_key = self._lm_key(stale_host)
-        self.etcd_data[stale_key] = json.dumps(
-            {
-                "apiVersion": "projectcalico.org/v3",
-                "kind": "LiveMigration",
-                "metadata": {
-                    "name": stale_key.rsplit("/", 1)[-1],
-                    "namespace": self.namespace,
-                },
-                "spec": {},
-            }
-        )
-        result = self._trigger_resync(ports=[self.port["id"]])
-        self.assertTrue(result.ok)
-        self.assertEqual(result.phases["endpoints"]["lm_deleted"], 0)
-        self.assertNotIn(stale_key, self.recent_deletes)
-
-    def test_narrow_resync_cleans_stale_lm_when_flagged(self):
-        """With --clean-live-migrations, stale LMs for in-scope ports are deleted."""
+    def test_narrow_resync_cleans_stale_lm(self):
+        """Narrow port resync deletes stale LMs for in-scope ports: the
+        etcd scan filters LMs by trailing port_id, and the compare loop
+        deletes those whose dest host doesn't match the port's current
+        migrating_to state.
+        """
         self._do_initial_resync()
         # Inject a stale LM for this port (matching device+port id
         # but under a different host).  The current port has no
@@ -2409,15 +2364,14 @@ class TestLiveMigration(TestPluginEtcdBase):
                 "spec": {},
             }
         )
-        result = self._trigger_resync(
-            ports=[self.port["id"]], clean_live_migrations=True
-        )
+        result = self._trigger_resync(ports=[self.port["id"]])
         self.assertTrue(result.ok)
         self.assertEqual(result.phases["endpoints"]["lm_deleted"], 1)
         self.assertIn(stale_key, self.recent_deletes)
 
-    def test_narrow_resync_keeps_current_lm_when_flagged(self):
-        """The LM for the port's current migrating_to host is not deleted."""
+    def test_narrow_resync_keeps_current_lm(self):
+        """The LM for the port's current migrating_to host is kept; only
+        stale LMs at other dest hosts are deleted."""
         self._do_initial_resync()
         # Port is migrating to DEST_HOST.
         self.osdb_ports[0]["binding:profile"] = {
@@ -2437,9 +2391,7 @@ class TestLiveMigration(TestPluginEtcdBase):
                 "spec": {},
             }
         )
-        result = self._trigger_resync(
-            ports=[self.port["id"]], clean_live_migrations=True
-        )
+        result = self._trigger_resync(ports=[self.port["id"]])
         self.assertTrue(result.ok)
         # The new LM (for DEST_HOST) was written, the stale one deleted.
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)

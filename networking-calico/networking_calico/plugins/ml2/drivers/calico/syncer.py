@@ -99,17 +99,22 @@ class ResourceSyncer(object):
         resources and deleting etcd resources whose Neutron counterpart is gone).
 
         Alternatively, ``scope.ids()`` is a set of specific Neutron resource IDs, in
-        which case the reconcile is restricted to just those resources: we read only
-        their Neutron data (in one filtered query) and only their etcd entries (one read
-        per name).  The decision tree per resource is the same:
+        which case the reconcile is restricted to just those resources.  The decision
+        tree per resource is the same:
 
           * in Neutron, in etcd, data matches  -> no-op (correct)
           * in Neutron, in etcd, data differs  -> update
           * in Neutron, not in etcd            -> create
           * not in Neutron, in etcd            -> delete
 
-        For the narrow case, deletes are only implemented to the extent that etcd keys
-        can be deterministically inferred from the resource IDs.
+        Read order is etcd-first.  This gives natural CAS-based protection against
+        a concurrent dynamic update happening between our two reads: any etcd write
+        that lands between get_from_etcd and get_from_neutron leaves the etcd key at
+        a newer mod_revision than the one we recorded, so the in-neutron-only-create
+        and in-etcd-only-delete branches' CAS operations fail harmlessly.  Reading
+        Neutron first would expose both the delete (a concurrent create makes us
+        think the etcd entry is orphan) and the update (a concurrent edit makes us
+        clobber the newer etcd value with stale data) to that race.
 
         Returns a structured summary dict of what happened: per-phase timings
         (etcd_read, neutron_read, compare, create) plus item counts (etcd_items,
@@ -120,39 +125,39 @@ class ResourceSyncer(object):
         resync_start = time.monotonic()
 
         LOG.info(
-            "Starting resync for %s (scope=%s); getting data from neutron...",
+            "Starting resync for %s (scope=%s); getting data from etcd...",
             self.resource_kind,
             scope,
         )
 
-        # Read Neutron state first.  Narrow scope that expanded to no IDs (e.g.
+        # Short-circuit: narrow scope that expanded to no IDs (e.g.
         # `calico-resync --port <pid>` without --include-sgs-for-ports leaves the
-        # SG scope empty) means there are no Neutron rows to fetch — skip the
-        # call and avoid passing an empty list to SQLAlchemy's column.in_()
-        # (well defined in 1.4+, but older versions matched all rows).  The
-        # rest of resync runs through naturally on an empty neutron_map.
+        # SG scope empty) means nothing to read or compare.
         if not scope.all() and not scope.ids():
+            etcd_map = {}
             neutron_map = {}
+            t_etcd_read = t_neutron_read = resync_start
         else:
+            etcd_map = self.get_from_etcd(scope)
+            t_etcd_read = time.monotonic()
+
             with self.txn_from_context(context, "get-all-" + self.resource_kind):
                 neutron_map = self.get_from_neutron(context, scope)
-        t_neutron_read = time.monotonic()
+            t_neutron_read = time.monotonic()
 
-        # Read etcd state.  When the scope is not "all", this means the etcd data
-        # corresponding to the Neutron resources that we just read, and possibly - when
-        # etcd keys can be directly inferred from scope IDs - the etcd data for any IDs
-        # that are in scope but not found in Neutron.
-        etcd_map = self.get_from_etcd(scope, neutron_map)
-        t_etcd_read = time.monotonic()
+            # Resource-specific post-processing of etcd_map now that we have
+            # neutron_map (e.g. the WEP syncer uses this to relabel
+            # destination-side WEPs).  The default implementation is a no-op.
+            etcd_map = self.post_process_etcd_map(scope, etcd_map, neutron_map)
 
         LOG.info(
-            "Resync for %s: %d items from neutron in %.3fs, "
-            "%d items from etcd in %.3fs, comparing...",
+            "Resync for %s: %d items from etcd in %.3fs, "
+            "%d items from neutron in %.3fs, comparing...",
             self.resource_kind,
-            len(neutron_map),
-            t_neutron_read - resync_start,
             len(etcd_map),
-            t_etcd_read - t_neutron_read,
+            t_etcd_read - resync_start,
+            len(neutron_map),
+            t_neutron_read - t_etcd_read,
         )
 
         n_correct = 0
@@ -271,9 +276,9 @@ class ResourceSyncer(object):
         t_end = time.monotonic()
 
         summary = {
-            "etcd_read_ms": int((t_etcd_read - t_neutron_read) * 1000),
-            "neutron_read_ms": int((t_neutron_read - resync_start) * 1000),
-            "compare_ms": int((t_compare - t_etcd_read) * 1000),
+            "etcd_read_ms": int((t_etcd_read - resync_start) * 1000),
+            "neutron_read_ms": int((t_neutron_read - t_etcd_read) * 1000),
+            "compare_ms": int((t_compare - t_neutron_read) * 1000),
             "create_ms": int((t_end - t_compare) * 1000),
             "etcd_items": len(etcd_map),
             "neutron_items": len(neutron_map),
@@ -284,14 +289,14 @@ class ResourceSyncer(object):
         }
         LOG.info(
             "Resync for %s done in %.3fs: "
-            "neutron_read=%.3fs etcd_read=%.3fs compare=%.3fs create=%.3fs "
+            "etcd_read=%.3fs neutron_read=%.3fs compare=%.3fs create=%.3fs "
             "| %d etcd items, %d neutron items "
             "| %d correct, %d updated, %d deleted, %d created",
             self.resource_kind,
             t_end - resync_start,
-            t_neutron_read - resync_start,
-            t_etcd_read - t_neutron_read,
-            t_compare - t_etcd_read,
+            t_etcd_read - resync_start,
+            t_neutron_read - t_etcd_read,
+            t_compare - t_neutron_read,
             t_end - t_compare,
             len(etcd_map),
             len(neutron_map),
@@ -301,6 +306,14 @@ class ResourceSyncer(object):
             n_created,
         )
         return summary
+
+    def post_process_etcd_map(self, scope, etcd_map, neutron_map):
+        """Optional hook for subclasses to refine etcd_map once neutron_map is
+        known.  Default is a no-op.  WorkloadEndpointSyncer uses this to relabel
+        destination-side WEPs that the etcd read didn't know to distinguish
+        from source-side WEPs.
+        """
+        return etcd_map
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.

@@ -51,7 +51,7 @@ class SubnetSyncer(ResourceSyncer):
             if subnet["enable_dhcp"]
         )
 
-    def get_from_etcd(self, scope, neutron_map):
+    def get_from_etcd(self, scope):
         if scope.all():
             return {
                 name: (spec, revision)
@@ -60,14 +60,11 @@ class SubnetSyncer(ResourceSyncer):
                 )
             }
 
-        neutron_ids_read = {subnet["id"] for subnet in neutron_map.values()}
-        names_for_missing_scope_ids = {
-            datamodel_v2.key_for_subnet(subnet_id, self.region_string)
-            for subnet_id in scope.ids() - neutron_ids_read
-        }
-        names = set(neutron_map) | names_for_missing_scope_ids
+        # Narrow scope: read just the etcd keys we can compute directly from
+        # scope.ids().
         etcd_map = {}
-        for name in names:
+        for sid in scope.ids():
+            name = datamodel_v2.key_for_subnet(sid, self.region_string)
             try:
                 etcd_map[name] = etcdv3.get(name)
             except etcdv3.KeyNotFound:
