@@ -165,7 +165,17 @@ class ResourceSyncer(object):
         n_deleted = 0
         n_created = 0
 
-        for name in set(etcd_map) | set(neutron_map):
+        # Process "lm <name>" entries before everything else so that, when a
+        # mid-migration port is being created from scratch in etcd, Felix
+        # sees the LiveMigration resource before the destination
+        # WorkloadEndpoint -- matching the ordering the dynamic postcommit
+        # path uses on migration start.  The key is a no-op for resource
+        # kinds that don't have "lm " prefixed names; the secondary sort by
+        # name keeps the order deterministic across runs.
+        def _iter_order(n):
+            return (0 if n.startswith("lm ") else 1, n)
+
+        for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
             in_etcd = name in etcd_map
             in_neutron = name in neutron_map
 
