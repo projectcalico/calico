@@ -12,6 +12,8 @@
       version: v3.31.0
     calico:
       version: v3.31.0
+    cni-plugins:
+      version: v3.31.0
     cni-windows:
       version: v3.31.0
     envoy-gateway:
