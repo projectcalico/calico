@@ -26,10 +26,10 @@ func TestNodeFromDeleteObj(t *testing.T) {
 	node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}
 
 	tests := []struct {
-		name    string
-		obj     any
-		want    *v1.Node
-		wantOk  bool
+		name   string
+		obj    any
+		want   *v1.Node
+		wantOk bool
 	}{
 		{"direct node", node, node, true},
 		{"tombstone with node", cache.DeletedFinalStateUnknown{Key: "n1", Obj: node}, node, true},
@@ -51,10 +51,10 @@ func TestPodFromDeleteObj(t *testing.T) {
 	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p1"}}
 
 	tests := []struct {
-		name    string
-		obj     any
-		want    *v1.Pod
-		wantOk  bool
+		name   string
+		obj    any
+		want   *v1.Pod
+		wantOk bool
 	}{
 		{"direct pod", pod, pod, true},
 		{"tombstone with pod", cache.DeletedFinalStateUnknown{Key: "p1", Obj: pod}, pod, true},
