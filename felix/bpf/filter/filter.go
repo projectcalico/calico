@@ -221,7 +221,15 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 
 		switch class {
 		case bpfClassMisc:
-			return fmt.Errorf("misc class: %+v", cbpf)
+			switch op {
+			case bpfTAX:
+				b.Mov64(asm.R2, asm.R1) // X = A
+				continue
+			case bpfTXA:
+				b.Mov64(asm.R1, asm.R2) // A = X
+				continue
+			}
+			return fmt.Errorf("misc class: %+v op %d", cbpf, op)
 		case bpfClassRet:
 			// K is the return value and hit should be snap length, 0 otherwise.
 			// https://github.com/the-tcpdump-group/libpcap/blob/aa4fd0d411239f5cc98f0ae14018d3ad91a5ee15/gencode.c#L822
@@ -258,6 +266,14 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 			case bpfModeIMM:
 				// eBPF has only 64bit imm instructions
 				b.LoadImm64(asm.R1, int64(K))
+
+				continue
+			case bpfModeMEM:
+				// Load from scratch memory M[K] to A
+				if K >= 16 {
+					return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+				}
+				b.Load32(asm.R1, asm.R10, asm.FieldOffset{Offset: -int16((K+1)*4), Field: fmt.Sprintf("M[%d]", K)})
 				continue
 			}
 		case bpfClassLdx:
@@ -279,7 +295,117 @@ func cBPF2eBPF(b *asm.Block, pcap []pcap.BPFInstruction, linkType layers.LinkTyp
 					b.Mov64(asm.R1 /* A */, asm.R3 /* tmp */)                                               // Restore A from tmp
 				}
 				continue
+			} else {
+				switch bpfMode(code) {
+				case bpfModeIMM:
+					// eBPF has only 64bit imm instructions
+					b.LoadImm64(asm.R2, int64(K)) // X = K
+					continue
+				case bpfModeMEM:
+					// Load from scratch memory M[K] to X
+					if K >= 16 {
+						return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+					}
+					b.Load32(asm.R2, asm.R10, asm.FieldOffset{Offset: -int16((K+1)*4), Field: fmt.Sprintf("M[%d]", K)})
+					continue
+				}
 			}
+		case bpfClassSt:
+			// Store A to scratch memory M[K]
+			// We use stack slots (R10 + offset) to emulate scratch memory
+			// Classic BPF has 16 scratch memory slots (M[0] through M[15])
+			// Each slot is 32 bits, so we store at offset -(K+1)*4
+			if K >= 16 {
+				return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+			}
+			b.StoreStack32(asm.R1, -int16((K+1)*4))
+			continue
+		case bpfClassStx:
+			// Store X to scratch memory M[K]
+			if K >= 16 {
+				return fmt.Errorf("scratch memory index out of range: M[%d]", K)
+			}
+			b.StoreStack32(asm.R2, -int16((K+1)*4))
+			continue
+		case bpfClassAlu:
+			// Classic BPF ALU operations on A register
+			// src can be either K (immediate) or X (register R2)
+			switch op {
+			case bpfAluAdd:
+				if src == bpfX {
+					b.Add64(asm.R1, asm.R2) // A += X
+				} else {
+					b.AddImm64(asm.R1, K) // A += K
+				}
+				continue
+			case bpfAluSub:
+				if src == bpfX {
+					b.Instr(asm.Sub64, asm.R1, asm.R2, 0, 0, "") // A -= X
+				} else {
+					b.Instr(asm.SubImm64, asm.R1, 0, 0, K, "") // A -= K
+				}
+				continue
+			case bpfAluMul:
+				if src == bpfX {
+					b.Instr(asm.Mul64, asm.R1, asm.R2, 0, 0, "") // A *= X
+				} else {
+					b.Instr(asm.MulImm64, asm.R1, 0, 0, K, "") // A *= K
+				}
+				continue
+			case bpfAluDiv:
+				if src == bpfX {
+					b.Instr(asm.Div64, asm.R1, asm.R2, 0, 0, "") // A /= X
+				} else {
+					b.Instr(asm.DivImm64, asm.R1, 0, 0, K, "") // A /= K
+				}
+				continue
+			case bpfAluOr:
+				if src == bpfX {
+					b.Instr(asm.Or64, asm.R1, asm.R2, 0, 0, "") // A |= X
+				} else {
+					b.OrImm64(asm.R1, K) // A |= K
+				}
+				continue
+			case bpfAluAnd:
+				if src == bpfX {
+					b.Instr(asm.And64, asm.R1, asm.R2, 0, 0, "") // A &= X
+				} else {
+					b.AndImm64(asm.R1, K) // A &= K
+				}
+				continue
+			case bpfAluLsh:
+				if src == bpfX {
+					b.Instr(asm.ShiftL64, asm.R1, asm.R2, 0, 0, "") // A <<= X
+				} else {
+					b.ShiftLImm64(asm.R1, K) // A <<= K
+				}
+				continue
+			case bpfAluRsh:
+				if src == bpfX {
+					b.Instr(asm.ShiftR64, asm.R1, asm.R2, 0, 0, "") // A >>= X
+				} else {
+					b.ShiftRImm64(asm.R1, K) // A >>= K
+				}
+				continue
+			case bpfAluNeg:
+				b.Instr(asm.Negate64, asm.R1, 0, 0, 0, "") // A = -A
+				continue
+			case bpfAluMod:
+				if src == bpfX {
+					b.Instr(asm.Mod64, asm.R1, asm.R2, 0, 0, "") // A %= X
+				} else {
+					b.Instr(asm.ModImm64, asm.R1, 0, 0, K, "") // A %= K
+				}
+				continue
+			case bpfAluXor:
+				if src == bpfX {
+					b.Instr(asm.XOR64, asm.R1, asm.R2, 0, 0, "") // A ^= X
+				} else {
+					b.Instr(asm.XORImm64, asm.R1, 0, 0, K, "") // A ^= K
+				}
+				continue
+			}
+			return fmt.Errorf("unsupported ALU operation: %+v op 0x%x", cbpf, op)
 		case bpfClassJmp:
 
 			var srcR asm.Reg
@@ -346,6 +472,9 @@ var jumpOpNegate = map[asm.OpCode]asm.OpCode{
 const (
 	bpfClassLd   uint8 = 0x0
 	bpfClassLdx  uint8 = 0x1
+	bpfClassSt   uint8 = 0x2
+	bpfClassStx  uint8 = 0x3
+	bpfClassAlu  uint8 = 0x4
 	bpfClassJmp  uint8 = 0x5
 	bpfClassRet  uint8 = 0x6
 	bpfClassMisc uint8 = 0x7
@@ -379,6 +508,20 @@ const (
 	bpfModeMSH uint8 = 0xa0
 )
 
+const (
+	bpfAluAdd uint8 = 0x00
+	bpfAluSub uint8 = 0x10
+	bpfAluMul uint8 = 0x20
+	bpfAluDiv uint8 = 0x30
+	bpfAluOr  uint8 = 0x40
+	bpfAluAnd uint8 = 0x50
+	bpfAluLsh uint8 = 0x60
+	bpfAluRsh uint8 = 0x70
+	bpfAluNeg uint8 = 0x80
+	bpfAluMod uint8 = 0x90
+	bpfAluXor uint8 = 0xa0
+)
+
 var (
 	_ = bpfModeIMM
 	_ = bpfModeMEM
@@ -391,6 +534,11 @@ func bpfMode(code uint8) uint8 {
 func bpfOp(code uint8) uint8 {
 	return code & 0xf0
 }
+
+const (
+	bpfTAX uint8 = 0x00
+	bpfTXA uint8 = 0x80
+)
 
 const (
 	bpfK uint8 = 0
