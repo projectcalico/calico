@@ -49,6 +49,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:

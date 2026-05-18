@@ -1675,6 +1675,7 @@ KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/calico:$(KIND_TEST_BUILD_TAG) \
+	calico/cni-plugins:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
@@ -1688,6 +1689,7 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
@@ -1741,6 +1743,11 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	echo "test-signer:latest-$(ARCH)" > $@
+
+# cni-plugins ships upstream CNI plugin binaries as an init image used by
+# the calico-node DaemonSet. See third_party/cni-plugins/README.md.
+$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
 # Envoy components: the third_party/envoy-* sub-makes use their own marker
 # names (.envoy-<comp>.created-$(ARCH)). The sub-make handles fetching
