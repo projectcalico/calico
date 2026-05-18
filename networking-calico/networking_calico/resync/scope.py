@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from neutron.db import models_v2
 from neutron_lib import context as ctx
 
 from oslo_log import log
@@ -217,35 +218,33 @@ class Scope:
                 self.all_port_ids.add(port["id"])
         self.all_subnet_ids |= network_subnet_ids
 
-        # Resync of a subnet includes its ports.  Ports don't have a subnet_id field
-        # directly; we have to go via fixed_ips.  We only need to do this for subnets
-        # that weren't already covered by the network expansion above; for those we know
-        # we already added all their ports.  Narrow the get_ports query down to the
-        # remaining subnets' networks (a port is always on exactly one network) so we
-        # don't drag in every port in OpenStack.
+        # Resync of a subnet includes its ports.  Query IPAllocation directly
+        # rather than going via port["fixed_ips"]: the port dict's fixed_ips
+        # field is populated from a join and can be out of date, and the
+        # driver elsewhere (WorkloadEndpointSyncer.get_fixed_ips_for_port)
+        # explicitly re-queries IPAllocation for the same reason.  We only
+        # need to do this for subnets that weren't already covered by the
+        # network expansion above; for those we already added all their ports.
         remaining_subnet_ids = self.subnets - network_subnet_ids
         if remaining_subnet_ids:
-            subnet_network_ids = {
-                s["network_id"]
-                for s in self.db.get_subnets(
-                    self.admin_context, filters={"id": list(remaining_subnet_ids)}
-                )
-            }
-            if subnet_network_ids:
-                for port in self.db.get_ports(
-                    self.admin_context, filters={"network_id": list(subnet_network_ids)}
+            with _txn_from_context(self.admin_context, "expand-subnet-ports"):
+                for allocation in (
+                    self.admin_context.session.query(models_v2.IPAllocation)
+                    .filter(models_v2.IPAllocation.subnet_id.in_(remaining_subnet_ids))
+                    .all()
                 ):
-                    for fixed_ip in port.get("fixed_ips", []) or []:
-                        if fixed_ip.get("subnet_id") in remaining_subnet_ids:
-                            self.all_port_ids.add(port["id"])
-                            break
+                    self.all_port_ids.add(allocation.port_id)
 
+        # include-sgs-for-ports: read security-group bindings authoritatively
+        # via _get_port_security_group_bindings rather than relying on
+        # port["security_groups"], which is also populated by a join and can
+        # be stale -- the driver's get_security_groups_for_port goes through
+        # the same binding query for the same reason.
         if self.include_security_groups_for_ports and self.all_port_ids:
-            for port in self.db.get_ports(
-                self.admin_context, filters={"id": list(self.all_port_ids)}
+            for binding in self.db._get_port_security_group_bindings(
+                self.admin_context, filters={"port_id": list(self.all_port_ids)}
             ):
-                for sg_id in port.get("security_groups", []) or []:
-                    self.all_sg_ids.add(sg_id)
+                self.all_sg_ids.add(binding["security_group_id"])
 
     def subnet_scope(self):
         if self.all():
