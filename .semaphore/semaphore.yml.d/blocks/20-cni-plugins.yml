@@ -1,4 +1,3 @@
-blocks:
 - name: CNI plugins image
   run:
     when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
