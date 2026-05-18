@@ -13,7 +13,6 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.6
 	github.com/aws/aws-sdk-go-v2/config v1.32.16
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.22
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.297.1
 	github.com/aws/smithy-go v1.25.0
 	github.com/bits-and-blooms/bitset v1.24.4
 	github.com/buger/jsonparser v1.1.2
@@ -125,6 +124,7 @@ require (
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.297.1 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
