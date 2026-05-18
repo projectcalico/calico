@@ -12,6 +12,7 @@ a few seconds when QoS policies are applied to networks and ports.
 import json
 import logging
 import os
+import subprocess
 import time
 import unittest
 
@@ -564,6 +565,173 @@ class QoSResponsivenessTest(unittest.TestCase):
             policy = self.conn.network.find_qos_policy(full_name)
             if policy:
                 self.conn.network.delete_qos_policy(policy.id)
+
+
+class QoSResyncTest(QoSResponsivenessTest):
+    """Verify that the OpenStack periodic resync preserves qosControls.
+
+    Reproduces the scenario behind a customer report (Calico 3.30.7) in
+    which the periodic resync was silently stripping qosControls from
+    the WorkloadEndpoint, removing the corresponding TC qdisc.
+
+    DevStack's ``bootstrap.sh`` sets ``CALICO_RESYNC_INTERVAL_SECS=0``,
+    so the rest of this test module runs with resync disabled.  This
+    class flips the setting on for its duration (via setUpClass /
+    tearDownClass, with a Neutron restart at each end), and lexicographic
+    ordering puts it after QoSResponsivenessTest so a teardown failure
+    can't affect the other tests.
+    """
+
+    NEUTRON_CONF = "/etc/neutron/neutron.conf"
+    NEUTRON_SERVICE = "devstack@q-svc.service"
+    RESYNC_INTERVAL_SECS = 5
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._set_resync_interval(cls.RESYNC_INTERVAL_SECS)
+        cls._restart_neutron()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls._set_resync_interval(0)
+            cls._restart_neutron()
+        finally:
+            super().tearDownClass()
+
+    @classmethod
+    def _set_resync_interval(cls, secs):
+        logger.info(
+            f"Setting [calico]resync_interval_secs = {secs} in {cls.NEUTRON_CONF}"
+        )
+        subprocess.run(
+            [
+                "sudo",
+                "crudini",
+                "--set",
+                cls.NEUTRON_CONF,
+                "calico",
+                "resync_interval_secs",
+                str(secs),
+            ],
+            check=True,
+        )
+
+    @classmethod
+    def _restart_neutron(cls):
+        logger.info(f"Restarting {cls.NEUTRON_SERVICE}")
+        subprocess.run(
+            ["sudo", "systemctl", "restart", cls.NEUTRON_SERVICE],
+            check=True,
+        )
+        # Wait for the Neutron API to come back, otherwise the test's
+        # next OpenStack call will hit a connection error.
+        retry_until_success(
+            lambda: list(cls.conn.network.networks()),
+            retries=30,
+            wait_time=2,
+            context_string="waiting for Neutron API after restart",
+        )
+        logger.info("Neutron API responsive again")
+
+    def test_resync_preserves_qos_controls(self):
+        # Create a VM with a port-level QoS policy whose rules cover all
+        # the qosControls fields we expect a resync to round-trip.  We
+        # use port-level (not network-level) QoS because the customer's
+        # report is for that path.
+        state = {
+            "port_qos_name": "A",
+            "port_qos_rules": list(self.qos_rules),
+            "net_qos_name": None,
+            "net_qos_rules": [],
+        }
+        port_id = self._create_initial_state(state)
+
+        # Sanity-check the immediate-write path produced the expected
+        # qosControls (this is what update_port_postcommit wrote).
+        self._verify_wep_qos(port_id, state)
+
+        # Sleep long enough for at least two resync cycles to fire, then
+        # re-verify.  On the customer's broken setup the second resync
+        # would have rewritten the WEP without qosControls; here we
+        # require that the WEP is unchanged.
+        wait = self.RESYNC_INTERVAL_SECS * 3
+        logger.info(f"Sleeping {wait}s for periodic resync to fire")
+        time.sleep(wait)
+
+        logger.info("Re-verify WEP qosControls after resync")
+        self._verify_wep_qos(port_id, state)
+
+
+class GaleraQoSResyncTest(QoSResyncTest):
+    """Long-running variant for reproducing the Galera causality-gap bug.
+
+    Run this only against a Galera-backed Neutron DB (see
+    ``pxc_setup.sh`` for the Percona XtraDB Cluster that bootstrap.sh
+    stands up before DevStack runs).  The test creates a VM with a
+    port-level QoS policy, then loops:
+
+      1. Touch a rule in the attached policy.  Even a no-op-value
+         ``update_qos_bandwidth_limit_rule`` issues a DB UPDATE that
+         needs Galera replication.
+      2. Sleep long enough for at least one periodic resync cycle to
+         fire.
+      3. Verify the WEP's ``qosControls`` still match the original
+         rule's controls.
+
+    On vanilla single-node MariaDB every iteration passes.  On Galera,
+    if the suspected causality-gap bug fires, the resync's transaction-
+    less read of the rules table can miss the most recent write on a
+    different node, ``add_port_qos`` produces an empty qos dict, and the
+    WEP is rewritten with ``qosControls`` stripped.  ``_verify_wep_qos``
+    then fails on the affected iteration.
+    """
+
+    ITERATIONS = int(os.environ.get("CALICO_GALERA_ITERATIONS", "100"))
+
+    def test_resync_under_galera_churn(self):
+        rule = self.qos_rules[0]
+        state = {
+            "port_qos_name": "A",
+            "port_qos_rules": [rule],
+            "net_qos_name": None,
+            "net_qos_rules": [],
+        }
+        port_id = self._create_initial_state(state)
+        self._verify_wep_qos(port_id, state)
+
+        policy = self.conn.network.find_qos_policy("test-qos-policyA")
+        rule_id = policy.rules[0]["id"]
+        rule_args = {
+            "max_kbps": rule["rule"]["max_kbps"],
+            "max_burst_kbps": rule["rule"]["max_burst_kbps"],
+            "direction": rule["rule"]["direction"],
+        }
+
+        for i in range(self.ITERATIONS):
+            logger.info(f"Galera churn iteration {i+1}/{self.ITERATIONS}")
+            # Delete and recreate the rule.  An in-place UPDATE only
+            # touches one row's values, and a lagged Galera read still
+            # sees *a* rule (just an older revision).  Delete+create
+            # produces a brief "zero rules" intermediate state that a
+            # lagged read can observe -- which is exactly the empty
+            # result that add_port_qos's rule query needs to see to
+            # produce the empty-qosControls symptom the customer reported.
+            self.conn.network.delete_qos_bandwidth_limit_rule(rule_id, policy.id)
+            new_rule = self.conn.network.create_qos_bandwidth_limit_rule(
+                policy.id, **rule_args
+            )
+            rule_id = new_rule.id
+            time.sleep(self.RESYNC_INTERVAL_SECS * 1.5)
+            try:
+                self._verify_wep_qos(port_id, state)
+            except AssertionError:
+                logger.error(
+                    "qosControls divergence on iteration "
+                    f"{i+1}/{self.ITERATIONS} — Galera causality bug reproduced"
+                )
+                raise
 
 
 if __name__ == "__main__":
