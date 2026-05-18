@@ -197,6 +197,25 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		svc.Annotations = map[string]string{}
 
+		// spec.loadBalancerIP should trigger management in RequestedServicesOnly mode
+		svc.Spec.LoadBalancerIP = "10.0.0.1"
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeTrue())
+		svc.Spec.LoadBalancerIP = ""
+
+		// spec.externalIPs should trigger management in RequestedServicesOnly mode
+		svc.Spec.ExternalIPs = []string{"10.0.0.2"}
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeTrue())
+
+		// spec.externalIPs with non-calico LoadBalancerClass should not be managed
+		loadBalancerClass = "not-calico"
+		svc.Spec.LoadBalancerClass = &loadBalancerClass
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeFalse())
+		svc.Spec.LoadBalancerClass = nil
+		svc.Spec.ExternalIPs = nil
+
 		svc.Spec.Type = v1.ServiceTypeClusterIP
 		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
 		Expect(managed).To(BeFalse())
@@ -450,6 +469,83 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 
 		_, v6cidr, _ := net.ParseCIDR(ipv6Pool.Spec.CIDR)
 		Expect(ipv6Pools).To(Equal([]cnet.IPNet{{IPNet: *v6cidr}}))
+	})
+
+	It("should fall back to spec fields when annotation is absent", func() {
+		// No annotation, no spec fields → nil IPs
+		svc.Annotations = nil
+		loadBalancerIPs, _, _, err := c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(BeNil())
+
+		// spec.loadBalancerIP set, no annotation → use spec IP
+		svc.Spec.LoadBalancerIP = "10.0.0.1"
+		loadBalancerIPs, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.1")}))
+		svc.Spec.LoadBalancerIP = ""
+
+		// spec.externalIPs set, no annotation → use spec IPs
+		svc.Spec.ExternalIPs = []string{"10.0.0.2"}
+		loadBalancerIPs, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.2")}))
+		svc.Spec.ExternalIPs = nil
+
+		// Both spec.loadBalancerIP and spec.externalIPs set (different IPs, one v4 each)
+		svc.Spec.LoadBalancerIP = "10.0.0.1"
+		svc.Spec.ExternalIPs = []string{"10.0.0.2"}
+		_, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("at most one IPv4"))
+		svc.Spec.LoadBalancerIP = ""
+		svc.Spec.ExternalIPs = nil
+
+		// spec.loadBalancerIP and spec.externalIPs with same IP → deduplication
+		svc.Spec.LoadBalancerIP = "10.0.0.1"
+		svc.Spec.ExternalIPs = []string{"10.0.0.1"}
+		loadBalancerIPs, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(HaveLen(1))
+		Expect(loadBalancerIPs[0].String()).To(Equal("10.0.0.1"))
+		svc.Spec.LoadBalancerIP = ""
+		svc.Spec.ExternalIPs = nil
+
+		// Dual-stack via spec fields: one v4 loadBalancerIP + one v6 externalIP
+		svc.Spec.LoadBalancerIP = "10.0.0.1"
+		svc.Spec.ExternalIPs = []string{"ff06::c3"}
+		loadBalancerIPs, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(HaveLen(2))
+		svc.Spec.LoadBalancerIP = ""
+		svc.Spec.ExternalIPs = nil
+
+		// Annotation takes precedence over spec fields
+		svc.Annotations = map[string]string{
+			annotationLoadBalancerIP: "[\"10.0.0.4\"]",
+		}
+		svc.Spec.LoadBalancerIP = "10.0.0.99"
+		svc.Spec.ExternalIPs = []string{"10.0.0.100"}
+		loadBalancerIPs, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(loadBalancerIPs).To(Equal([]cnet.IP{*cnet.ParseIP("10.0.0.4")}))
+		svc.Annotations = nil
+		svc.Spec.LoadBalancerIP = ""
+		svc.Spec.ExternalIPs = nil
+
+		// Invalid spec.loadBalancerIP
+		svc.Spec.LoadBalancerIP = "not-an-ip"
+		_, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.loadBalancerIP"))
+		svc.Spec.LoadBalancerIP = ""
+
+		// Invalid spec.externalIPs entry
+		svc.Spec.ExternalIPs = []string{"also-not-an-ip"}
+		_, _, _, err = c.requestedLoadBalancerIPs(&svc)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.externalIPs"))
+		svc.Spec.ExternalIPs = nil
 	})
 
 	It("should remove Calico ips from service status", func() {
