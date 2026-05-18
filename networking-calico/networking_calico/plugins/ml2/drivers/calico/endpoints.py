@@ -114,6 +114,20 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         else:
             ports = self.db.get_ports(context, filters={"id": list(scope.ids())})
 
+        # neutron_map keys carry one of three prefixes:
+        #
+        # * "wep <name>"      - source-side WorkloadEndpoint for the port at its
+        #                       current binding:host_id.  Value is the port dict.
+        # * "dest-wep <name>" - destination-side WorkloadEndpoint for a port
+        #                       that's mid-migration (binding:profile
+        #                       migrating_to set).  Value is (port, dest_host) -
+        #                       carrying dest_host as scope-defined data rather
+        #                       than baking it into a port-dict copy means a
+        #                       reread inside the update path can refetch the
+        #                       port without losing the destination binding.
+        # * "lm <name>"       - LiveMigration resource, paired with the
+        #                       dest-side WEP.  Value is (port, dest_host) for
+        #                       the same reason as dest-wep.
         neutron_map = {}
         for port in ports:
             if not _port_is_endpoint_port(port):
@@ -127,11 +141,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             # mech_calico.py's update_port_postcommit / status handling.
             dest_host = port.get("binding:profile", {}).get("migrating_to")
             if dest_host:
-                dest_port = port.copy()
-                dest_port["binding:host_id"] = dest_host
-                dest_wep_name = endpoint_name(dest_port)
-                neutron_map["wep " + dest_wep_name] = dest_port
-                neutron_map["lm " + dest_wep_name] = (port, dest_port)
+                # Compute the dest-side WEP name using a transient copy with
+                # the dest host overlaid.  We don't keep the copy - the
+                # neutron_map value is (port, dest_host) so the dest_host
+                # survives a reread inside the update path.
+                dest_wep_name = endpoint_name({**port, "binding:host_id": dest_host})
+                neutron_map["dest-wep " + dest_wep_name] = (port, dest_host)
+                neutron_map["lm " + dest_wep_name] = (port, dest_host)
 
         return neutron_map
 
@@ -151,6 +167,17 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                     )
                 }
             )
+            # Rekey any WEPs whose name corresponds to a dest-wep entry in
+            # neutron_map, so the compare loop sees both sides of the dest WEP
+            # under the same key.  Etcd has no source/dest distinction; the
+            # rekey lets the compare branch on the dest-wep prefix and apply
+            # the dest_host overlay when computing write_data.
+            for name in list(neutron_map):
+                if name.startswith("dest-wep "):
+                    wep_name = remove_prefix(name, "dest-wep ")
+                    src_key = "wep " + wep_name
+                    if src_key in etcd_map:
+                        etcd_map[name] = etcd_map.pop(src_key)
             return etcd_map
 
         live_migrations_without_host = {}
@@ -172,6 +199,18 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                         endpoint_name_without_host(wep_name), []
                     ):
                         etcd_map["lm " + etcd_name] = (spec, revision)
+                    etcd_map[name] = datamodel_v3.get_namespaced(
+                        "WorkloadEndpoint",
+                        self.namespace,
+                        wep_name,
+                        with_labels_and_annotations=True,
+                    )
+                elif name.startswith("dest-wep "):
+                    # The matching "wep <source-name>" entry above already
+                    # triggered any clean_live_migrations LM scan for this
+                    # port, so no need to repeat it here -- just fetch the
+                    # dest WEP from etcd under the same dest-wep key.
+                    wep_name = remove_prefix(name, "dest-wep ")
                     etcd_map[name] = datamodel_v3.get_namespaced(
                         "WorkloadEndpoint",
                         self.namespace,
@@ -206,7 +245,14 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             ):
                 for escaped_pid in escaped_port_ids:
                     if name.endswith("-" + escaped_pid):
-                        etcd_map["wep " + name] = (spec, revision)
+                        # Use the dest-wep prefix only if a corresponding
+                        # dest-wep entry exists in neutron_map; otherwise
+                        # treat it as a source-side WEP (which may be stale
+                        # -- the compare loop will then delete it).
+                        if "dest-wep " + name in neutron_map:
+                            etcd_map["dest-wep " + name] = (spec, revision)
+                        else:
+                            etcd_map["wep " + name] = (spec, revision)
                         break
 
         return etcd_map
@@ -220,16 +266,30 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     # 1. For endpoints we need to read, compare and write labels and annotations as well
     # as spec.
     #
-    # 2. This syncer writes LiveMigration resources as well as WorkloadEndpoints.  These
-    # are distinguished by a "wep " or "lm " prefix on the name.
+    # 2. This syncer writes LiveMigration resources as well as WorkloadEndpoints, and
+    # distinguishes source- and dest-side WEPs of a live migration.  These all share
+    # the WorkloadEndpoint etcd kind and key shape; the "wep ", "dest-wep " and "lm "
+    # prefixes on the neutron_map / etcd_map keys are what disambiguate them inside
+    # the resync.
+
+    @staticmethod
+    def _wep_etcd_name(name):
+        """If `name` is a "wep " or "dest-wep " entry, return the bare WEP
+        etcd name (i.e. without prefix); otherwise return None."""
+        if name.startswith("wep "):
+            return remove_prefix(name, "wep ")
+        if name.startswith("dest-wep "):
+            return remove_prefix(name, "dest-wep ")
+        return None
 
     def create_in_etcd(self, name, write_data):
-        if name.startswith("wep "):
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
             spec, labels, annotations = write_data
             return datamodel_v3.put(
                 "WorkloadEndpoint",
                 self.namespace,
-                remove_prefix(name, "wep "),
+                wep_name,
                 spec,
                 labels=labels,
                 annotations=annotations,
@@ -251,12 +311,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         return ok
 
     def update_in_etcd(self, name, write_data, mod_revision=etcdv3.MUST_UPDATE):
-        if name.startswith("wep "):
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
             spec, labels, annotations = write_data
             return datamodel_v3.put(
                 "WorkloadEndpoint",
                 self.namespace,
-                remove_prefix(name, "wep "),
+                wep_name,
                 spec,
                 labels=labels,
                 annotations=annotations,
@@ -276,11 +337,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         return ok
 
     def delete_from_etcd(self, name, mod_revision):
-        if name.startswith("wep "):
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
             return datamodel_v3.delete(
                 "WorkloadEndpoint",
                 self.namespace,
-                remove_prefix(name, "wep "),
+                wep_name,
                 mod_revision=mod_revision,
             )
 
@@ -297,19 +359,41 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
     def neutron_to_etcd_write_data(self, name, value, context, reread=False):
         if name.startswith("lm "):
-            port, dest_port = value
+            port, dest_host = value
             return self.neutron_to_live_migration_etcd_write_data(
-                port, dest_port, context, reread
+                port, dest_host, context, reread
             )
-        else:
-            return self.neutron_to_port_etcd_write_data(value, context, reread)
+        if name.startswith("dest-wep "):
+            port, dest_host = value
+            return self.neutron_to_port_etcd_write_data(
+                port, context, reread, dest_host=dest_host
+            )
+        # "wep " - plain source-side WEP.
+        return self.neutron_to_port_etcd_write_data(value, context, reread)
 
-    def neutron_to_port_etcd_write_data(self, port, context, reread):
+    def neutron_to_port_etcd_write_data(self, port, context, reread, dest_host=None):
+        """Build the etcd write-data tuple for a WEP from a Neutron port.
+
+        If ``dest_host`` is given, this is the destination-side WEP of a live
+        migration; on reread we additionally verify the migration is still in
+        progress to that host, and overlay ``dest_host`` onto the (possibly
+        rereaded) port so endpoint_spec/labels/annotations see the dest
+        binding.  A reread that finds the port has stopped migrating to
+        ``dest_host`` raises ResourceGone, letting the resync skip the entry
+        -- the next pass sees no matching dest-wep in neutron_map and the
+        in-etcd-only branch deletes the orphan dest WEP.
+        """
         if reread:
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
+            if dest_host is not None:
+                current_dest = port.get("binding:profile", {}).get("migrating_to")
+                if current_dest != dest_host:
+                    raise ResourceGone()
+        if dest_host is not None:
+            port = {**port, "binding:host_id": dest_host}
         port_extra = self.get_extra_port_information(context, port)
         return (
             endpoint_spec(port, port_extra),
@@ -318,13 +402,25 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         )
 
     def neutron_to_live_migration_etcd_write_data(
-        self, port, dest_port, context, reread
+        self, port, dest_host, context, reread
     ):
+        """Build the etcd write-data dict for a LiveMigration resource.
+
+        ``dest_host`` is the scope-defined destination host; reconstructing
+        the dest_port copy here (rather than carrying a stale fork in the
+        neutron_map value) means a reread is always safe -- the dest_host
+        survives, and an interrupted migration is detected and skipped via
+        ResourceGone.
+        """
         if reread:
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
+            current_dest = port.get("binding:profile", {}).get("migrating_to")
+            if current_dest != dest_host:
+                raise ResourceGone()
+        dest_port = {**port, "binding:host_id": dest_host}
         return live_migration_spec(self.namespace, port, dest_port)
 
     def write_endpoint(self, port, context, must_update=False, reread=True):
