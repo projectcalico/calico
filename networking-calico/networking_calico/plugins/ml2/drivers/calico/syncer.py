@@ -170,65 +170,32 @@ class ResourceSyncer(object):
             in_neutron = name in neutron_map
 
             if in_neutron and in_etcd:
-                # Compare using a write_data derived from our cached Neutron
-                # read.  In steady state most resources match and we never go
-                # past this branch, so we save the per-resource get_port call
-                # that reread=True would cost.
+                # Compare and update if different.  reread=False because we
+                # just read this name from Neutron, and etcd-first ordering
+                # means our Neutron read is at least as fresh as our etcd
+                # read; the CAS on mod_revision protects against any etcd
+                # change since.
                 data, mod_revision = etcd_map[name]
-                with self.txn_from_context(context, "compare-" + self.resource_kind):
-                    cached_write_data = self.neutron_to_etcd_write_data(
+                with self.txn_from_context(context, "update-" + self.resource_kind):
+                    write_data = self.neutron_to_etcd_write_data(
                         name, neutron_map[name], context, reread=False
                     )
-                if self.etcd_write_data_matches_existing(cached_write_data, data):
+                if self.etcd_write_data_matches_existing(write_data, data):
                     LOG.debug("etcd data good for %s %s", self.resource_kind, name)
                     n_correct += 1
                 else:
-                    # Mismatch.  A concurrent dynamic update may have changed
-                    # Neutron between get_from_neutron and now; if so, our
-                    # cached_write_data is stale and writing it would clobber
-                    # the newer etcd value.  Etcd's CAS catches concurrent etcd
-                    # changes but not Neutron-only ones, so reread Neutron in a
-                    # fresh txn before doing the actual write.
                     LOG.warning(
                         "etcd rewrite needed for %s %s", self.resource_kind, name
                     )
-                    try:
-                        with self.txn_from_context(
-                            context, "update-" + self.resource_kind
-                        ):
-                            write_data = self.neutron_to_etcd_write_data(
-                                name, neutron_map[name], context, reread=True
-                            )
-                    except ResourceGone:
-                        # Port was deleted between our read and this update.
-                        # The next resync will see it as etcd-only and delete
-                        # the entry; skip for now.
-                        LOG.warning(
-                            "Neutron resource gone for %s %s during update;"
-                            " next resync will delete the etcd entry",
-                            self.resource_kind,
-                            name,
-                        )
-                        continue
-                    if self.etcd_write_data_matches_existing(write_data, data):
-                        # Cached read was stale; fresh read matches etcd.
-                        # No write needed.
-                        LOG.debug(
-                            "etcd data good for %s %s after reread",
-                            self.resource_kind,
-                            name,
-                        )
-                        n_correct += 1
+                    if self.update_in_etcd(name, write_data, mod_revision):
+                        n_updated += 1
                     else:
-                        if self.update_in_etcd(name, write_data, mod_revision):
-                            n_updated += 1
-                        else:
-                            LOG.warning(
-                                "failed etcd write for %s %s; presume"
-                                " data updated by another writer",
-                                self.resource_kind,
-                                name,
-                            )
+                        LOG.warning(
+                            "failed etcd write for %s %s; presume"
+                            " data updated by another writer",
+                            self.resource_kind,
+                            name,
+                        )
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so
                 # we don't race with a concurrent dynamic delete.
