@@ -725,7 +725,6 @@ blocks:
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
-  blocks:
   - name: CNI plugins image
     run:
       when: >-
