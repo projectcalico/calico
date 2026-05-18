@@ -3995,6 +3995,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			kvpRes.Value.(*model.IPAMConfig).MaxBlocksPerHost = 1000
+			kvpRes.Value.(*model.IPAMConfig).IPCooldownSeconds = 120
 
 			kvpRes, err = c.Update(ctx, kvpRes)
 			Expect(err).NotTo(HaveOccurred())
@@ -4005,6 +4006,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
+			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.IPCooldownSeconds).To(Equal(int32(120)))
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 		})
 

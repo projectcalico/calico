@@ -627,7 +627,9 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, node *interna
 			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
 			allocAttr, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
 			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				_, isResourceDoesNotExist := err.(cerrors.ErrorResourceDoesNotExist)
+				_, isIPInCooldown := err.(cerrors.ErrorIPInCooldown)
+				if !isResourceDoesNotExist && !isIPInCooldown {
 					logCtx.WithError(err).Error("Failed to query attributes")
 					return err
 				}
