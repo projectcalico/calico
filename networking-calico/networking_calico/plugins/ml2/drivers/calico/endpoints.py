@@ -236,15 +236,19 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 mod_revision=0,
             )
 
-        # LiveMigration case.
-        self._lm_counts["created"] += 1
-        return datamodel_v3.put(
+        # LiveMigration case.  Increment the per-LM counter only on a
+        # successful create; a CAS conflict (return False) means another
+        # writer beat us and the resource was not created by this pass.
+        ok = datamodel_v3.put(
             "LiveMigration",
             self.namespace,
             remove_prefix(name, "lm "),
             write_data,
             mod_revision=0,
         )
+        if ok:
+            self._lm_counts["created"] += 1
+        return ok
 
     def update_in_etcd(self, name, write_data, mod_revision=etcdv3.MUST_UPDATE):
         if name.startswith("wep "):
@@ -259,15 +263,17 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 mod_revision=mod_revision,
             )
 
-        # LiveMigration case.
-        self._lm_counts["updated"] += 1
-        return datamodel_v3.put(
+        # LiveMigration case.  Counter increment is conditional on success.
+        ok = datamodel_v3.put(
             "LiveMigration",
             self.namespace,
             remove_prefix(name, "lm "),
             write_data,
             mod_revision=mod_revision,
         )
+        if ok:
+            self._lm_counts["updated"] += 1
+        return ok
 
     def delete_from_etcd(self, name, mod_revision):
         if name.startswith("wep "):
@@ -278,14 +284,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 mod_revision=mod_revision,
             )
 
-        # LiveMigration case.
-        self._lm_counts["deleted"] += 1
-        return datamodel_v3.delete(
+        # LiveMigration case.  Counter increment is conditional on success.
+        ok = datamodel_v3.delete(
             "LiveMigration",
             self.namespace,
             remove_prefix(name, "lm "),
             mod_revision=mod_revision,
         )
+        if ok:
+            self._lm_counts["deleted"] += 1
+        return ok
 
     def neutron_to_etcd_write_data(self, name, value, context, reread=False):
         if name.startswith("lm "):

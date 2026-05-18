@@ -215,14 +215,15 @@ class ResourceSyncer(object):
                         )
                         n_correct += 1
                     else:
-                        if not self.update_in_etcd(name, write_data, mod_revision):
+                        if self.update_in_etcd(name, write_data, mod_revision):
+                            n_updated += 1
+                        else:
                             LOG.warning(
                                 "failed etcd write for %s %s; presume"
                                 " data updated by another writer",
                                 self.resource_kind,
                                 name,
                             )
-                        n_updated += 1
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so
                 # we don't race with a concurrent dynamic delete.
@@ -231,14 +232,15 @@ class ResourceSyncer(object):
                         write_data = self.neutron_to_etcd_write_data(
                             name, neutron_map[name], context, reread=True
                         )
-                        if not self.create_in_etcd(name, write_data):
+                        if self.create_in_etcd(name, write_data):
+                            n_created += 1
+                        else:
                             LOG.warning(
                                 "failed etcd write for %s %s; presume"
                                 " data created by another writer",
                                 self.resource_kind,
                                 name,
                             )
-                        n_created += 1
                     except ResourceGone:
                         LOG.warning(
                             "Neutron resource gone for %s %s; presume"
@@ -250,14 +252,15 @@ class ResourceSyncer(object):
                 # In etcd but not in Neutron: delete.
                 _, mod_revision = etcd_map[name]
                 LOG.warning("etcd deletion needed for %s %s", self.resource_kind, name)
-                if not self.delete_from_etcd(name, mod_revision):
+                if self.delete_from_etcd(name, mod_revision):
+                    n_deleted += 1
+                else:
                     LOG.warning(
                         "failed etcd delete for %s %s; presume"
                         " data updated by another writer",
                         self.resource_kind,
                         name,
                     )
-                n_deleted += 1
             # else: name was in scope but neither side has it -- nothing to do.
         t_compare = time.monotonic()
 
