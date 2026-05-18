@@ -442,23 +442,32 @@ class TestPluginEtcdBase(_TestEtcdBase):
         context._plugin_context.to_dict.return_value = {}
         return context
 
-    def _trigger_resync(self, **scope_kwargs):
+    def _trigger_resync(self, expect_ok=True, **scope_kwargs):
         """Drive a resync.
 
         ``scope_kwargs`` accepts ``networks=``, ``subnets=``, ``ports=`` and
         ``security_groups=`` (lists of IDs) plus ``include_security_groups_for_ports``.
         Returns the ResyncResult.
 
+        Asserts ``result.ok`` by default so that a resync that silently flips
+        ``ok=False`` (e.g. because an unexpected exception in ``Scope.run`` was
+        caught and reported in ``result.error``) doesn't pass a test whose only
+        assertions happen to match the no-op output.  Negative tests can opt
+        out with ``expect_ok=False``.
+
         If the driver has been initialised (post _post_fork_init) we reuse its syncers
         so the same primed project cache is in play.  Otherwise we let the runner build
         fresh syncers against the mocked DB and Keystone.
         """
-        return resync.Scope(
+        result = resync.Scope(
             self.db,
             driver=self.driver if hasattr(self.driver, "endpoint_syncer") else None,
             admin_context=mech_calico.ctx.get_admin_context(),
             **scope_kwargs,
         ).run()
+        if expect_ok:
+            self.assertTrue(result.ok, "resync failed: %s" % result.error)
+        return result
 
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data."""
