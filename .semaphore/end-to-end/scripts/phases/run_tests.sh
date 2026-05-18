@@ -95,7 +95,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
         KUBECONFIG=/kubeconfig \
         E2E_TEST_CONFIG='${E2E_TEST_CONFIG}' \
         E2E_OUTPUT_DIR=report \
-        E2E_JUNIT_REPORT=junit.xml" \
+        E2E_JUNIT_REPORT=junit.xml \
+        LABEL_FILTER='${LABEL_FILTER:-}'" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.

@@ -1,0 +1,71 @@
+name: E2E Recommendations
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # Marker used to find and update the recommendation comment.
+  COMMENT_MARKER: "<!-- e2e-recommend -->"
+
+jobs:
+  recommend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get changed files
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} --name-only > /tmp/changed-files.txt
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+
+      - name: Generate recommendations
+        run: python3 .github/scripts/generate-e2e-recommendations.py
+
+      - name: Find existing recommendation comment
+        id: find-comment
+        run: |
+          comment_id=$(gh api \
+            "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            --jq "[.[] | select(.body | contains(\"$COMMENT_MARKER\"))] | first | .id // empty")
+          echo "comment_id=${comment_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update recommendation comment
+        run: |
+          HEADER="${COMMENT_MARKER}
+          **E2E Testing**
+
+          Project maintainers can use the \`/e2e\` command to run e2e tests against this PR. Do this when you are confident the PR is ready to go.
+
+          "
+
+          BODY=$(cat /tmp/recommendation-body.md)
+          FULL="${HEADER}${BODY}"
+
+          # Write to file and use python to JSON-encode for the API.
+          echo "$FULL" > /tmp/full-comment.md
+          COMMENT_ID="${{ steps.find-comment.outputs.comment_id }}"
+
+          if [ -n "${COMMENT_ID}" ]; then
+            gh api \
+              --method PATCH \
+              "repos/${{ github.repository }}/issues/comments/${COMMENT_ID}" \
+              --input - <<EOF
+          {"body": $(python3 -c "import json; print(json.dumps(open('/tmp/full-comment.md').read()))")}
+          EOF
+          else
+            gh api \
+              --method POST \
+              "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+              --input - <<EOF
+          {"body": $(python3 -c "import json; print(json.dumps(open('/tmp/full-comment.md').read()))")}
+          EOF
+          fi
