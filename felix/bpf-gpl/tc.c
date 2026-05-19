@@ -1274,8 +1274,18 @@ nat_encap:
 	 *
 	 * ICMP does not have ports, but there is little to no worries about a
 	 * possible out-of-order processing in relation to the related flow.
+	 *
+	 * If a VXLAN source-port range is configured (both ends non-zero), map
+	 * the hash into [VXLAN_PORT_MIN, VXLAN_PORT_MAX]. Otherwise leave the
+	 * hash as-is and let the kernel/peer accept any value as the wire
+	 * source port.
 	 */
 	__u16 vxlan_src_port = STATE->sport ^ STATE->dport;
+
+	if (VXLAN_PORT_MIN != 0 && VXLAN_PORT_MAX != 0 && VXLAN_PORT_MAX >= VXLAN_PORT_MIN) {
+		__u16 range = (__u16)(VXLAN_PORT_MAX - VXLAN_PORT_MIN) + 1;
+		vxlan_src_port = VXLAN_PORT_MIN + (vxlan_src_port % range);
+	}
 
 	if (vxlan_encap(ctx, &STATE->ip_src, &STATE->ip_dst, vxlan_src_port)) {
 		deny_reason(ctx, CALI_REASON_ENCAP_FAIL);

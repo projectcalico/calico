@@ -59,6 +59,8 @@ type AttachPoint struct {
 	SkipEgressRedirect            bool
 	TunnelMTU                     uint16
 	VXLANPort                     uint16
+	VXLANPortMin                  uint16
+	VXLANPortMax                  uint16
 	WgPort                        uint16
 	Wg6Port                       uint16
 	ExtToServiceConnmark          uint32
@@ -538,6 +540,8 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 	globalData := &libbpf.TcGlobalData{
 		ExtToSvcMark:  ap.ExtToServiceConnmark,
 		VxlanPort:     ap.VXLANPort,
+		VxlanPortMin:  ap.VXLANPortMin,
+		VxlanPortMax:  ap.VXLANPortMax,
 		Tmtu:          ap.TunnelMTU,
 		PSNatStart:    ap.PSNATStart,
 		PSNatLen:      ap.PSNATEnd,

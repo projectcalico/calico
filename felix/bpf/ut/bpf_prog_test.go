@@ -891,6 +891,8 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				globals := libbpf.TcGlobalData{
 					Tmtu:          natTunnelMTU,
 					VxlanPort:     testVxlanPort,
+					VxlanPortMin:  topts.vxlanPortMin,
+					VxlanPortMax:  topts.vxlanPortMax,
 					PSNatStart:    uint16(topts.psnaStart),
 					PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
 					Flags:         libbpf.GlobalsNoDSRCidrs,
@@ -1053,6 +1055,8 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 			globals := libbpf.TcGlobalData{
 				Tmtu:          natTunnelMTU,
 				VxlanPort:     testVxlanPort,
+				VxlanPortMin:  topts.vxlanPortMin,
+				VxlanPortMax:  topts.vxlanPortMax,
 				PSNatStart:    uint16(topts.psnaStart),
 				PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
 				Flags:         libbpf.GlobalsNoDSRCidrs,
@@ -1303,6 +1307,8 @@ type testOpts struct {
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	vxlanPortMin                  uint16
+	vxlanPortMax                  uint16
 }
 
 type testOption func(opts *testOpts)
@@ -1397,6 +1403,13 @@ func withDescription(desc string) testOption {
 func withWorkloadSrcSpoofingConfigured() testOption {
 	return func(o *testOpts) {
 		o.workloadSrcSpoofingConfigured = true
+	}
+}
+
+func withVXLANPortRange(min, max uint16) testOption {
+	return func(o *testOpts) {
+		o.vxlanPortMin = min
+		o.vxlanPortMax = max
 	}
 }
 
