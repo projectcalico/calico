@@ -357,6 +357,8 @@ type Config struct {
 	// Optional: VXLAN encap is now determined by the existing IP pools (Encapsulation struct)
 	VXLANEnabled         *bool  `config:"*bool;"`
 	VXLANPort            int    `config:"int;4789"`
+	VXLANPortMin         int    `config:"int(0:65535);0"`
+	VXLANPortMax         int    `config:"int(0:65535);0"`
 	VXLANVNI             int    `config:"int;4096"`
 	VXLANMTU             int    `config:"int;0"`
 	VXLANMTUV6           int    `config:"int;0"`
@@ -1012,6 +1014,15 @@ func (config *Config) Validate() (err error) {
 				" they _all_ must be" +
 				" - except that either TyphaCN or TyphaURISAN may be left unset")
 		}
+	}
+
+	// VXLAN source-port range: either both ends are unset (use kernel/dataplane default)
+	// or both ends are set with min <= max.
+	if (config.VXLANPortMin == 0) != (config.VXLANPortMax == 0) {
+		err = errors.New("VXLANPortMin and VXLANPortMax must both be set or both be unset")
+	} else if config.VXLANPortMin != 0 && config.VXLANPortMin > config.VXLANPortMax {
+		err = fmt.Errorf("VXLANPortMin (%d) must be <= VXLANPortMax (%d)",
+			config.VXLANPortMin, config.VXLANPortMax)
 	}
 
 	if err != nil {

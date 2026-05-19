@@ -2553,6 +2553,36 @@ The UDP port number to use for VXLAN traffic.
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `4789` |
 
+### `VXLANPortMax` (config file) / `vxlanPortMax` (YAML)
+
+The upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. See VXLANPortMin.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANPortMax` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanPortMax` (YAML) `VXLANPortMax` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
+
+### `VXLANPortMin` (config file) / `vxlanPortMin` (YAML)
+
+The lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+VXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel
+device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].
+If unset (or zero), the kernel/dataplane default is used.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_VXLANPortMin` |
+| Encoding (env var/config file) | Integer: [0,65535] |
+| Default value (above encoding) | `0` |
+| `FelixConfiguration` field | `vxlanPortMin` (YAML) `VXLANPortMin` (Go API) |
+| `FelixConfiguration` schema | Integer: [0,65535] |
+| Default value (YAML) | `0` |
+
 ### `VXLANVNI` (config file) / `vxlanVNI` (YAML)
 
 The VXLAN VNI to use for VXLAN traffic. You may need to change this if the default value is
