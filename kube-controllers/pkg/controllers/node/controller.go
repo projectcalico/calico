@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -104,17 +105,25 @@ func NewNodeController(ctx context.Context,
 	// respective informers.
 	nodeHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
+			node, ok := nodeFromDeleteObj(obj)
+			if !ok {
+				return
+			}
 			// Call all of the registered node deletion funcs.
 			for _, f := range nodeDeletionFuncs {
-				f(obj.(*v1.Node))
+				f(node)
 			}
 		},
 	}
 	podHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
+			pod, ok := podFromDeleteObj(obj)
+			if !ok {
+				return
+			}
 			// Call all of the registered pod deletion funcs.
 			for _, f := range podDeletionFuncs {
-				f(obj.(*v1.Pod))
+				f(pod)
 			}
 		},
 	}
@@ -145,6 +154,45 @@ func NewNodeController(ctx context.Context,
 	}
 
 	return nc
+}
+
+// nodeFromDeleteObj extracts a *v1.Node from an informer delete event object,
+// unwrapping the cache.DeletedFinalStateUnknown tombstone the informer may
+// deliver when its watch state is lost. Returns ok=false (and logs) if the
+// object is not a Node, so callers can skip the delete instead of panicking.
+func nodeFromDeleteObj(obj any) (*v1.Node, bool) {
+	if node, ok := obj.(*v1.Node); ok {
+		return node, true
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		log.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in node delete event")
+		return nil, false
+	}
+	node, ok := tombstone.Obj.(*v1.Node)
+	if !ok {
+		log.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-Node object")
+		return nil, false
+	}
+	return node, true
+}
+
+// podFromDeleteObj is the pod counterpart to nodeFromDeleteObj.
+func podFromDeleteObj(obj any) (*v1.Pod, bool) {
+	if pod, ok := obj.(*v1.Pod); ok {
+		return pod, true
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		log.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in pod delete event")
+		return nil, false
+	}
+	pod, ok := tombstone.Obj.(*v1.Pod)
+	if !ok {
+		log.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-Pod object")
+		return nil, false
+	}
+	return pod, true
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
