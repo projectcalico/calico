@@ -149,6 +149,35 @@ func MakeSingleIP(addr ip.Addr) CIDROrIPOnlyIPSetMember {
 	}
 }
 
+// MakeSingleIPv4 / MakeSingleIPv6 are specialised constructors used
+// in hot label-index paths where the address type is known statically
+// at the call site. They avoid the ip.Addr interface boxing that
+// MakeSingleIP would otherwise perform on the argument.
+func MakeSingleIPv4(addr ip.V4Addr) CIDROrIPOnlyIPSetMember {
+	return ipAddrIPSetMember[ip.V4Addr]{addr: addr}
+}
+
+func MakeSingleIPv6(addr ip.V6Addr) CIDROrIPOnlyIPSetMember {
+	return ipAddrIPSetMember[ip.V6Addr]{addr: addr}
+}
+
+// MakeIPPortProtoV4 / MakeIPPortProtoV6 are the specialised versions of
+// MakeIPPortProto for callers that already know the address type. They
+// avoid the ip.Addr interface boxing.
+func MakeIPPortProtoV4(addr ip.V4Addr, port uint16, proto Protocol) IPSetMember {
+	if port == 0 && proto == ProtocolNone {
+		return MakeSingleIPv4(addr)
+	}
+	return ipPortProtoIPSetMember[ip.V4Addr]{addr: addr, port: port, proto: proto}
+}
+
+func MakeIPPortProtoV6(addr ip.V6Addr, port uint16, proto Protocol) IPSetMember {
+	if port == 0 && proto == ProtocolNone {
+		return MakeSingleIPv6(addr)
+	}
+	return ipPortProtoIPSetMember[ip.V6Addr]{addr: addr, port: port, proto: proto}
+}
+
 type ipAddrIPSetMember[AddrType ip.Addr] struct {
 	addr AddrType
 }
