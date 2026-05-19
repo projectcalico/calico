@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,23 +44,29 @@ var _ = describe.CalicoDescribe(
 	"BGPPeer",
 	func() {
 		// Define variables common across all tests.
-		var err error
-		var cli ctrlclient.Client
-		var checker conncheck.ConnectionTester
-		var server1 conncheck.Server
-		var client1 conncheck.Client
-		var restoreBGPConfig func()
-		var bgpStatus *BGPStatusMonitor
+		var (
+			err              error
+			cli              ctrlclient.Client
+			checker          conncheck.ConnectionTester
+			server1          conncheck.Server
+			client1          conncheck.Client
+			restoreBGPConfig func() = func() {}
+			bgpStatus        *BGPStatusMonitor
+		)
 
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("bgppeer")
 
 		ginkgo.BeforeEach(func() {
-			// Create a connection tester for the test.
-			checker = conncheck.NewConnectionTester(f)
-
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
+
+			if felixProgramsClusterRoutes(cli) {
+				ginkgo.Skip("Skipping test since it needs BGP to be responsible for cluster routing")
+			}
+
+			// Create a connection tester for the test.
+			checker = conncheck.NewConnectionTester(f)
 
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
@@ -73,7 +79,6 @@ var _ = describe.CalicoDescribe(
 			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
 			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
 			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
-			requireNonVXLANCluster(cli)
 
 			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)
