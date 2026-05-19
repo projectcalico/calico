@@ -3285,6 +3285,20 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"vxlanPortMin": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax]. If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"vxlanPortMax": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VXLANPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing VXLAN-encapsulated traffic. See VXLANPortMin. [Default: 0 (unset)]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"vxlanVNI": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is in use on your system. [Default: 4096]",
