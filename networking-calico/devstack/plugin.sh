@@ -122,12 +122,6 @@ EOF
                         iniset $NEUTRON_CONF calico etcd_compaction_min_revisions $CALICO_ETCD_COMPACTION_MIN_REVISIONS
                     fi
 
-                    # If CALICO_RESYNC_INTERVAL_SECS is defined, set that as the value of the
-                    # resync_interval_secs setting.
-                    if test -n "$CALICO_RESYNC_INTERVAL_SECS"; then
-                        iniset $NEUTRON_CONF calico resync_interval_secs $CALICO_RESYNC_INTERVAL_SECS
-                    fi
-
                     # Give Neutron the admin role so that it can look up
                     # project name and parent_id fields in the Keystone DB.
                     openstack role add admin --user neutron --project service --user-domain Default --project-domain Default
