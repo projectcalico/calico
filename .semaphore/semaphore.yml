@@ -2351,6 +2351,9 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Envoy Gateway
     run:
       when: >-
