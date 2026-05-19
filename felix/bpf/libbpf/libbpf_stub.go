@@ -197,6 +197,8 @@ const (
 	GlobalsEgressPacketRateConfigured    uint32 = 12345
 	GlobalsWorkloadSrcSpoofingConfigured uint32 = 12345
 	GlobalsUDPGSOLinearize               uint32 = 12345
+	GlobalsIngressConnLimitConfigured    uint32 = 12345
+	GlobalsEgressConnLimitConfigured     uint32 = 12345
 	AttachTypeTcxIngress                 uint32 = 12345
 	AttachTypeTcxEgress                  uint32 = 12345
 	AttachTypeXDP                        uint32 = 12345
