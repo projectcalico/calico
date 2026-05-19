@@ -34,6 +34,7 @@ func NewFakeCalicoClient() *FakeCalicoClient {
 	nc := fakeNodeClient{
 		nodes: make(map[string]*internalapi.Node),
 	}
+	be := newFakeBackend()
 	ipamClient := fakeIPAMClient{
 		affinitiesReleased: make(map[string]bool),
 		handlesReleased:    make(map[string]bool),
@@ -41,6 +42,7 @@ func NewFakeCalicoClient() *FakeCalicoClient {
 	return &FakeCalicoClient{
 		nodeClient: &nc,
 		ipamClient: &ipamClient,
+		backend:    be,
 	}
 }
 
@@ -48,6 +50,9 @@ func NewFakeCalicoClient() *FakeCalicoClient {
 type FakeCalicoClient struct {
 	nodeClient clientv3.NodeInterface
 	ipamClient ipam.Interface
+	// backend is exposed via Backend() and is the source of truth for
+	// IPAMHandle CAS operations exercised by the handle reconciler.
+	backend *fakeBackend
 }
 
 // Expose helpers for tests to introspect/drive the fake IPAM client.
@@ -77,6 +82,28 @@ func (f *FakeCalicoClient) IPAMUpgradeNodeNames() []string {
 		return out
 	}
 	return nil
+}
+
+// SeedHandle inserts a handle directly into the fake datastore, simulating a
+// pre-existing handle. Used to exercise handle GC paths (orphan, skewed,
+// stuck-deleted) in tests. Returns the KVPair as it lives in the fake backend
+// (with Revision populated) so callers can drive the syncer dispatch path
+// via IPAMController.handleHandleUpdate or directly seed c.allHandles.
+func (f *FakeCalicoClient) SeedHandle(handleID string, blocks map[string]int, deleted bool) *model.KVPair {
+	return f.backend.seedHandle(handleID, blocks, deleted)
+}
+
+// GetHandle returns a snapshot of the handle with the given ID, or nil if it
+// does not exist in the fake backend.
+func (f *FakeCalicoClient) GetHandle(handleID string) *model.IPAMHandle {
+	return f.backend.getHandle(handleID)
+}
+
+// HandleKVP returns the live KVPair for a handle (with Revision), or nil.
+// Mainly useful in tests that drive the syncer dispatch path: feed the
+// returned KVPair into IPAMController.handleHandleUpdate.
+func (f *FakeCalicoClient) HandleKVP(handleID string) *model.KVPair {
+	return f.backend.handleKVP(handleID)
 }
 
 // SetReleaseHostAffinityError configures the fake IPAM client to return the given
@@ -118,7 +145,7 @@ func (f *FakeCalicoClient) Tiers() clientv3.TierInterface {
 }
 
 func (f *FakeCalicoClient) Backend() bapi.Client {
-	return nil
+	return f.backend
 }
 
 // Nodes returns an interface for managing node resources.
