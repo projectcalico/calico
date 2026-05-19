@@ -39,10 +39,6 @@ var arrCapForSize = [adaptiveSetArrayLimit + 1]int{
 // datastructures).  When embedding, the object must not be copied and then
 // mutated.
 type Adaptive[T comparable] struct {
-	// size is either the number of elements in the set, or sizeStoredInMap
-	// if the set is backed by a map.
-	size int
-
 	// p holds different types depending on size.
 	// if size == 0, p is nil.
 	// if size is in the range [1, adaptiveSetArrayLimit], p is a pointer to
@@ -51,6 +47,10 @@ type Adaptive[T comparable] struct {
 	//   slice is recomputed on demand, based on the size of set.
 	// if size == sizeStoredInMap, p is a pointer to a map[T]v
 	p unsafe.Pointer
+
+	// size is either the number of elements in the set, or sizeStoredInMap
+	// if the set is backed by a map.
+	size int8
 }
 
 func NewAdaptive[T comparable]() *Adaptive[T] {
@@ -73,7 +73,7 @@ func (a *Adaptive[T]) Len() int {
 	if a.size == sizeStoredInMap {
 		return len(*(*map[T]v)(a.p))
 	}
-	return a.size
+	return int(a.size)
 }
 
 func (a *Adaptive[T]) Add(item T) {
@@ -166,7 +166,7 @@ func (a *Adaptive[T]) Discard(item T) {
 				s = append(s, t)
 			}
 			a.p = unsafe.Pointer(&s[0])
-			a.size = len(m)
+			a.size = int8(len(m))
 		}
 	default:
 		// Handles sizes 2, 3, ..., adaptiveSetArrayLimit. Stored in an array.
