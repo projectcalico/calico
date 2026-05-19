@@ -2097,33 +2097,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		return state, xdpErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	return state, errors.Join(err4, err6)
@@ -2775,33 +2753,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	if errors.Join(err4, err6) != nil {
@@ -2908,10 +2864,12 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
+	// d.hostIP may be nil when the local node's IP isn't known yet (e.g.
+	// the Node resource was deleted or its IP was patched out). The
+	// attach pipeline handles a nil HostIPv*: globalData.HostIPv* stays
+	// at zero, and the BPF datapath drops the few features that need
+	// HOST_IP (VXLAN encap source) with CALI_REASON_NO_HOST_IP. Re-attach
+	// is triggered when host IP becomes known via updateHostIP.
 
 	indices := state.v4
 	if d.ipFamily == proto.IPVersion_IPV6 {
@@ -3085,11 +3043,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
-
+	// See wepApplyPolicyToDirection for why nil hostIP is allowed here.
 	ap = d.configureTCAttachPoint(polDirection, ap, true)
 
 	ip, err := d.getInterfaceIP(ifaceName)
