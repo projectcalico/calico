@@ -476,7 +476,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.osdb_ports = [lib.port1, lib.port2]
 
         # Drive the one-shot resync.
-        self.simulate_neutron_workers("uuid-start-two-ports")
+        self.do_post_fork_actions("uuid-start-two-ports")
 
         ep_deadbeef_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
@@ -1177,7 +1177,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Allow the etcd transport's resync thread to run. The last thing it
         # does is write the Felix config, so let it run three reads.
 
-        self.simulate_neutron_workers("uuid-start-no-ports")
+        self.do_post_fork_actions("uuid-start-no-ports")
 
         self.assertEtcdWrites(self.initial_etcd3_writes)
 
@@ -1217,7 +1217,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Allow the etcd transport's resync thread to run.  Expect the usual
         # writes.
-        self.simulate_neutron_workers("uuid-subnet-hooks")
+        self.do_post_fork_actions("uuid-subnet-hooks")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1589,7 +1589,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
     def test_startup_resync_disabled(self):
         """With startup_resync=never, nothing is written."""
         lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
-        self.simulate_neutron_workers()
+        self.do_post_fork_actions()
         self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
@@ -1630,7 +1630,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             )
         }
-        self.simulate_neutron_workers("uuid-profile-prefixing")
+        self.do_post_fork_actions("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1678,7 +1678,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             ),
         }
-        self.simulate_neutron_workers("uuid-profile-prefixing")
+        self.do_post_fork_actions("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1739,7 +1739,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        self.simulate_neutron_workers("uuid-old-data")
+        self.do_post_fork_actions("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1763,9 +1763,8 @@ class TestNarrowResync(TestPluginEtcdBase):
         """Set up a couple of ports and run a full resync to populate etcd."""
         self.osdb_networks = [lib.network1, lib.network2]
         self.osdb_ports = [lib.port1, lib.port2]
-        self.simulate_neutron_workers(uuid)
-        # Clear writes so the per-test assertions see only the narrow
-        # resync's effect.
+        self.do_post_fork_actions(uuid)
+        # Clear writes so the per-test assertions see only the narrow resync's effect.
         self.recent_writes = {}
         self.recent_deletes = set()
 
@@ -1863,7 +1862,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.port = copy.deepcopy(lib.port1)
         self.osdb_networks = [lib.network1]
         self.osdb_ports = [self.port]
-        self.simulate_neutron_workers("uuid-lm-test")
+        self.do_post_fork_actions("uuid-lm-test")
         # Clear initial writes.
         self.recent_writes = {}
         self.recent_deletes = set()
@@ -2241,8 +2240,6 @@ class TestLiveMigration(TestPluginEtcdBase):
         }
         result = self._trigger_resync(ports=[self.port["id"]])
         self.assertTrue(result.ok)
-        self.assertEqual(result.phases["endpoints"]["lm_created"], 1)
-        self.assertEqual(result.phases["endpoints"]["lm_deleted"], 0)
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
 
@@ -2280,10 +2277,9 @@ class TestLiveMigration(TestPluginEtcdBase):
         migrating_to state.
         """
         self._do_initial_resync()
-        # Inject a stale LM for this port (matching device+port id
-        # but under a different host).  The current port has no
-        # migrating_to, so any LM matching its device+port id is
-        # stale.
+        # Inject a stale LM for this port (matching device+port id but under a different
+        # host).  The current port has no migrating_to, so any LM matching its
+        # device+port id is stale.
         stale_host = "old-dest-host"
         stale_key = self._lm_key(stale_host)
         self.etcd_data[stale_key] = json.dumps(
@@ -2299,7 +2295,6 @@ class TestLiveMigration(TestPluginEtcdBase):
         )
         result = self._trigger_resync(ports=[self.port["id"]])
         self.assertTrue(result.ok)
-        self.assertEqual(result.phases["endpoints"]["lm_deleted"], 1)
         self.assertIn(stale_key, self.recent_deletes)
 
     def test_narrow_resync_keeps_current_lm(self):
@@ -2335,16 +2330,16 @@ class TestLiveMigration(TestPluginEtcdBase):
     def test_resync_no_op_when_lm_already_correct(self):
         """Full resync no-ops when LM and dest WEP already match Neutron."""
         self._do_initial_resync()
-        # Drive the postcommit path to write a correct LM and dest WEP into
-        # etcd, then leave Neutron in the migrating state.
+        # Drive the postcommit path to write a correct LM and dest WEP into etcd, then
+        # leave Neutron in the migrating state.
         self._pre_migrate()
         self.recent_writes = {}
         self.recent_deletes = set()
 
         self._trigger_resync()
 
-        # The LM and dest WEP already match Neutron, so the compare loop
-        # should leave them alone and not touch the source WEP either.
+        # The LM and dest WEP already match Neutron, so the compare loop should leave
+        # them alone and not touch the source WEP either.
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_writes)
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
@@ -2440,7 +2435,7 @@ class TestPluginEtcdRegion(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        self.simulate_neutron_workers("uuid-old-data")
+        self.do_post_fork_actions("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[

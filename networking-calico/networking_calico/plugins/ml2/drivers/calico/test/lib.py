@@ -20,13 +20,10 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 Common code for Neutron driver UT.
 """
 import contextlib
-import inspect
 import logging
 import sys
 
 import eventlet
-import eventlet.queue
-
 import mock
 
 # When you're working on a test and need to see logging - both from the test
@@ -469,53 +466,17 @@ class Lib(object):
         to (i) control when those expire, and (ii) allow time to appear to pass
         (to the code under test) without actually having to wait for that time.
         """
-        # Reset the simulated time (in seconds) that has passed since the
-        # beginning of the test.
-        self.current_time = 0
-
-        # Make time.time() return current_time.
-        self.old_time = sys.modules["time"].time
-        sys.modules["time"].time = lambda: self.current_time
-
-        # Reset the dict of current sleepers.  In each dict entry, the key is
-        # an eventlet.Queue object and the value is the time at which the sleep
-        # should complete.
-        self.sleepers = {}
-
         # Reset the list of spawned eventlet threads.
         self.threads = []
 
-        # Replacement for eventlet.sleep: sleep for some simulated passage of
-        # time (as directed by simulated_time_advance), instead of for real
-        # elapsed time.
-        def simulated_time_sleep(secs=None):
+        # Replacement for eventlet.sleep.  For the testing that uses this Lib class we
+        # only expect calls with no arg, i.e. to yield to other green threads.
+        def simulated_sleep(secs=None):
+            assert secs is None
             if secs is None:
                 # Thread just wants to yield to any other waiting thread.
-                self.give_way()
+                self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
                 return
-            # Create a new queue.
-            queue = eventlet.Queue(1)
-            queue.stack = inspect.stack()[1][3]
-
-            # Add it to the dict of sleepers, together with the waking up time.
-            self.sleepers[queue] = self.current_time + secs
-
-            _log.info(
-                "T=%s: %s: Start sleep for %ss until T=%s",
-                self.current_time,
-                queue.stack,
-                secs,
-                self.sleepers[queue],
-            )
-
-            # Do a zero time real sleep, to allow other threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Block until something is posted to the queue.
-            queue.get(True)
-
-            # Wake up.
-            return None
 
         # Replacement for eventlet.spawn: track spawned threads so that we can
         # kill them all when a test case ends.
@@ -533,14 +494,14 @@ class Lib(object):
 
         def simulated_spawn_after(secs, fn, *args, **kwargs):
             def sleep_then_run():
-                simulated_time_sleep(secs)
+                simulated_sleep(secs)
                 fn(*args, **kwargs)
 
             return simulated_spawn(sleep_then_run)
 
         # Hook sleeping.
         self.real_eventlet_sleep = eventlet.sleep
-        eventlet.sleep = simulated_time_sleep
+        eventlet.sleep = simulated_sleep
 
         # Similarly hook spawning.
         self.real_eventlet_spawn = eventlet.spawn
@@ -574,7 +535,6 @@ class Lib(object):
 
     # Tear down after each test case.
     def tearDown(self):
-
         _log.info("Clean up remaining green threads...")
 
         for thread in self.threads:
@@ -589,78 +549,40 @@ class Lib(object):
         self.sys_exit_p.stop()
 
     def tearDown_eventlet(self):
-
         # Restore the real eventlet.sleep and eventlet.spawn.
         eventlet.sleep = self.real_eventlet_sleep
         eventlet.spawn = self.real_eventlet_spawn
         eventlet.spawn_after = self.real_eventlet_spawn_after
 
-        # Repair time.time()
-        sys.modules["time"].time = self.old_time
+    def do_post_fork_actions(self, uuid_str=None):
+        """Simulate the post-fork actions that Neutron runs in production.
 
-    # Method for the test code to call when it wants to advance the simulated
-    # time.
-    def simulated_time_advance(self, secs):
+        In production the Neutron server comprises (at least) three processes:
 
-        while secs > 0:
-            _log.info("T=%s: Want to advance by %s", self.current_time, secs)
+        - an "API worker" process, responsible for Neutron API requests, i.e. dynamic
+          CRUD of ports and other networking resources
 
-            # Determine the time to advance to in this iteration: either the
-            # full time that we've been asked for, or the time at which the
-            # next sleeper should wake up, whichever of those is earlier.
-            wake_up_time = self.current_time + secs
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] < wake_up_time:
-                    # This sleeper will wake up before the time that we've been
-                    # asked to advance to.
-                    wake_up_time = self.sleepers[queue]
+        - an "RPC worker" process, which is designed for RPC between the Neutron server
+          and compute node agents, but which we use for other work that is not driven
+          from the Neutron API, including port and agent status reporting and periodic
+          etcd compaction
 
-            # Advance to the determined time.
-            secs -= wake_up_time - self.current_time
-            self.current_time = wake_up_time
-            _log.info("T=%s", self.current_time)
+        - a "Calico resync" process, whose purpose is to sync from the Neutron DB to the
+          Calico datastore following Neutron server startup.
 
-            # Wake up all sleepers that should now wake up.
-            queues_to_wake = []
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] <= self.current_time:
-                    _log.info(
-                        "T=%s >= %s: %s: Wake up!",
-                        self.current_time,
-                        self.sleepers[queue],
-                        queue.stack,
-                    )
-                    queues_to_wake.append(queue)
-            for queue in queues_to_wake:
-                del self.sleepers[queue]
-                queue.put_nowait(TIMEOUT_VALUE)
+        In UT there is only one process, and we want to get the effects of all those in
+        the one UT process, which means:
 
-            # Allow woken (and possibly other) threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        - Do the same startup preparations - DB connection etc. - that the API worker
+          process would do.  These are all coded in ``_post_fork_init()``.  This allows
+          tests to later call driver entrypoints like ``update_port_postcommit()``,
+          similarly as production Neutron would.
 
-    def give_way(self):
-        """give_way
+        - Spawn the threads for "other work" (as above) as the RPC worker process would
+          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
 
-        Method for test code to call when it wants to allow other eventlet
-        threads to run.
-        """
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-    def simulate_neutron_workers(self, uuid_str=None):
-        """Simulate the post-fork init that Neutron triggers in production.
-
-        Replaces the old ``give_way() + simulated_time_advance(31)`` idiom
-        which used to drive ``_post_fork_init`` via a backstop
-        ``eventlet.spawn_after`` in ``__init__``.  Now ``_post_fork_init`` is
-        only called from ``post_fork_initialize`` (the Neutron AFTER_INIT
-        callback), so tests have to drive it explicitly.
-
-        We simulate AFTER_INIT firing for both:
-
-        * a non-API worker (so ``_post_fork_init`` runs with
-          ``voting=True``, creating the elector and master-only threads), and
-        * the ``CalicoStartupResyncWorker`` (so the one-shot resync runs,
-          if ``startup_resync`` is ``always``).
+        - Do the startup resync that the Calico resync process would do.  This is coded
+          in ``_do_startup_resync()``.
 
         ``uuid_str`` controls the UUID generated during init (used for
         ClusterInformation's clusterGUID).

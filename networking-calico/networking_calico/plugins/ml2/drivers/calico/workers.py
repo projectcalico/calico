@@ -16,10 +16,10 @@
 """Neutron BaseWorker subclasses that the Calico mech driver returns from
 ``get_workers()``.
 
-Each subclass corresponds to one OS process forked by neutron-server, with one
-specific job.  The subclass itself is essentially a marker: the actual work is
-driven by the mech driver's ``post_fork_initialize`` callback, which dispatches
-based on the trigger's class.
+Each subclass corresponds to one OS process forked by neutron-server, with one specific
+job.  The subclass itself is essentially a marker: the actual work is driven by the mech
+driver's ``post_fork_initialize`` callback, which dispatches based on the trigger's
+class.
 """
 
 import threading
@@ -43,9 +43,9 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
     ``calico-resync`` CLI uses.  The worker process then idles for the lifetime of
     neutron-server.
 
-    Failures are logged loudly but not retried; an operator can drive a retry by
-    running ``calico-resync`` with no scope flags (which means resync everything)
-    or by restarting neutron-server.
+    Failures are logged loudly but not retried; an operator can drive a retry by running
+    ``calico-resync`` with no scope flags (which means resync everything) or by
+    restarting neutron-server.
 
     The "do the work, then idle in wait()" pattern is intentional.  Neutron's worker
     supervisor expects long-running services and may respawn a worker that exits
@@ -61,18 +61,17 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
 
     def __init__(self, *args, **kwargs):
         super(CalicoStartupResyncWorker, self).__init__(*args, **kwargs)
-        # Create the stop event here, not in start(), because oslo_service can
-        # call wait() / stop() on the worker independently of start() - e.g.
-        # during fork-and-supervise teardown if start() hasn't run in this
-        # process yet.  Having _stop_event exist from __init__ makes wait()
-        # and stop() safe to call in any order.
+        # Create the stop event here, not in start(), because oslo_service can call
+        # wait() / stop() on the worker independently of start() - e.g. during
+        # fork-and-supervise teardown if start() hasn't run in this process yet.  Having
+        # _stop_event exist from __init__ makes wait() and stop() safe to call in any
+        # order.
         self._stop_event = threading.Event()
-        # Record whether eventlet has hijacked the underlying thread
-        # primitives.  threading.Event remains correct either way (it picks
-        # up whichever lock _thread provides), but logging this once gives
-        # us a tripwire for when neutron-server's eventlet monkey-patching
-        # changes - notably the planned eventlet removal, after which this
-        # should flip from True to False without any code change needed here.
+        # Record whether eventlet has hijacked the underlying thread primitives.
+        # threading.Event remains correct either way (it picks up whichever lock _thread
+        # provides), but logging this once gives us a tripwire for when neutron-server's
+        # eventlet monkey-patching changes - notably the planned eventlet removal, after
+        # which this should flip from True to False without any code change needed here.
         LOG.info(
             "CalicoStartupResyncWorker: eventlet thread monkey-patch = %s",
             eventlet.patcher.is_monkey_patched("thread"),
@@ -82,9 +81,9 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
         super(CalicoStartupResyncWorker, self).start(name, desc)
 
     def wait(self):
-        # Block until stop() is called.  The mech driver's post-fork callback
-        # ran the actual work; this just keeps the process alive so the
-        # neutron-server supervisor doesn't respawn us.
+        # Block until stop() is called.  The mech driver's post-fork callback ran the
+        # actual work; this just keeps the process alive so the neutron-server
+        # supervisor doesn't respawn us.
         self._stop_event.wait()
 
     def stop(self):

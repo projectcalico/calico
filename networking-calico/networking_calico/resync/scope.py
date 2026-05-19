@@ -218,13 +218,13 @@ class Scope:
                 self.all_port_ids.add(port["id"])
         self.all_subnet_ids |= network_subnet_ids
 
-        # Resync of a subnet includes its ports.  Query IPAllocation directly
-        # rather than going via port["fixed_ips"]: the port dict's fixed_ips
-        # field is populated from a join and can be out of date, and the
-        # driver elsewhere (WorkloadEndpointSyncer.get_fixed_ips_for_port)
-        # explicitly re-queries IPAllocation for the same reason.  We only
-        # need to do this for subnets that weren't already covered by the
-        # network expansion above; for those we already added all their ports.
+        # Resync of a subnet includes its ports.  Query IPAllocation directly rather
+        # than going via port["fixed_ips"]: the port dict's fixed_ips field is populated
+        # from a join and can be out of date, and the driver elsewhere
+        # (WorkloadEndpointSyncer.get_fixed_ips_for_port) explicitly re-queries
+        # IPAllocation for the same reason.  We only need to do this for subnets that
+        # weren't already covered by the network expansion above; for those we already
+        # added all their ports.
         remaining_subnet_ids = self.subnets - network_subnet_ids
         if remaining_subnet_ids:
             with _txn_from_context(self.admin_context, "expand-subnet-ports"):
@@ -235,11 +235,11 @@ class Scope:
                 ):
                     self.all_port_ids.add(allocation.port_id)
 
-        # include-sgs-for-ports: read security-group bindings authoritatively
-        # via _get_port_security_group_bindings rather than relying on
-        # port["security_groups"], which is also populated by a join and can
-        # be stale -- the driver's get_security_groups_for_port goes through
-        # the same binding query for the same reason.
+        # include-sgs-for-ports: read security-group bindings authoritatively via
+        # _get_port_security_group_bindings rather than relying on
+        # port["security_groups"], which is also populated by a join and can be stale --
+        # the driver's get_security_groups_for_port goes through the same binding query
+        # for the same reason.
         if self.include_security_groups_for_ports and self.all_port_ids:
             for binding in self.db._get_port_security_group_bindings(
                 self.admin_context, filters={"port_id": list(self.all_port_ids)}
@@ -296,6 +296,9 @@ def provide_felix_config():
 
     rewrite_cluster_info = True
     while rewrite_cluster_info:
+        # Get existing global ClusterInformation.  We will add to this, rather than
+        # trampling on anything that may already be there, and will also take care to
+        # avoid an overlapping write with some other orchestrator.
         try:
             cluster_info, ci_mod_revision = datamodel_v3.get(
                 "ClusterInformation", "default"
@@ -304,9 +307,8 @@ def provide_felix_config():
             cluster_info = {}
             ci_mod_revision = 0
         if cluster_info is None:
-            # Existing etcd entry has corrupt JSON.  Treat as empty so we
-            # rebuild from scratch, but keep ci_mod_revision so the put()
-            # below overwrites under CAS.
+            # Existing etcd entry has corrupt JSON.  Treat as empty so we rebuild from
+            # scratch, but keep ci_mod_revision so the put() below overwrites under CAS.
             cluster_info = {}
         rewrite_cluster_info = False
         LOG.info(
@@ -315,10 +317,12 @@ def provide_felix_config():
             ci_mod_revision,
         )
 
+        # Generate a cluster GUID if there isn't one already.
         if not cluster_info.get(datamodel_v3.CLUSTER_GUID):
             cluster_info[datamodel_v3.CLUSTER_GUID] = uuid.uuid4().hex
             rewrite_cluster_info = True
 
+        # Add "openstack" to the cluster type, unless there already.
         cluster_type = cluster_info.get(datamodel_v3.CLUSTER_TYPE, "")
         if cluster_type:
             if "openstack" not in cluster_type:
@@ -328,10 +332,20 @@ def provide_felix_config():
             cluster_info[datamodel_v3.CLUSTER_TYPE] = "openstack"
             rewrite_cluster_info = True
 
+        # Note, we don't touch the Calico version field here, as we don't know it.
+        # (With other orchestrators, it is calico/node's responsibility to set the
+        # Calico version.  But we don't run calico/node in Calico for OpenStack.)
+
+        # Set the datastore to ready, if the datastore readiness state isn't already set
+        # at all.  This field is intentionally tri-state, i.e. it can be explicitly
+        # True, explicitly False, or not set.  If it has been set explicitly to False,
+        # that is probably because another orchestrator is doing an upgrade or wants for
+        # some other reason to suspend processing of the Calico datastore.
         if datamodel_v3.DATASTORE_READY not in cluster_info:
             cluster_info[datamodel_v3.DATASTORE_READY] = True
             rewrite_cluster_info = True
 
+        # Rewrite ClusterInformation, if we changed anything above.
         if rewrite_cluster_info:
             LOG.info("New ClusterInformation: %s", cluster_info)
             if datamodel_v3.put(
@@ -343,10 +357,14 @@ def provide_felix_config():
             ):
                 rewrite_cluster_info = False
             else:
+                # Short sleep to avoid a tight loop.
                 time.sleep(1)
 
     rewrite_felix_config = True
     while rewrite_felix_config:
+        # Get existing global FelixConfiguration.  We will add to this, rather than
+        # trampling on anything that may already be there, and will also take care to
+        # avoid an overlapping write with some other orchestrator.
         try:
             felix_config, fc_mod_revision = datamodel_v3.get(
                 "FelixConfiguration", "default"
@@ -355,8 +373,8 @@ def provide_felix_config():
             felix_config = {}
             fc_mod_revision = 0
         if felix_config is None:
-            # Existing etcd entry has corrupt JSON.  Same treatment as
-            # cluster_info above.
+            # Existing etcd entry has corrupt JSON.  Same treatment as cluster_info
+            # above.
             felix_config = {}
         rewrite_felix_config = False
         LOG.info(
@@ -365,10 +383,12 @@ def provide_felix_config():
             fc_mod_revision,
         )
 
+        # Enable endpoint reporting.
         if not felix_config.get(datamodel_v3.ENDPOINT_REPORTING_ENABLED, False):
             felix_config[datamodel_v3.ENDPOINT_REPORTING_ENABLED] = True
             rewrite_felix_config = True
 
+        # Ensure that interface prefixes include 'tap'.
         interface_prefix = felix_config.get(datamodel_v3.INTERFACE_PREFIX)
         prefixes = interface_prefix.split(",") if interface_prefix else []
         if "tap" not in prefixes:
@@ -376,6 +396,7 @@ def provide_felix_config():
             felix_config[datamodel_v3.INTERFACE_PREFIX] = ",".join(prefixes)
             rewrite_felix_config = True
 
+        # Rewrite FelixConfiguration, if we changed anything above.
         if rewrite_felix_config:
             LOG.info("New FelixConfiguration: %s", felix_config)
             if datamodel_v3.put(
@@ -387,6 +408,7 @@ def provide_felix_config():
             ):
                 rewrite_felix_config = False
             else:
+                # Short sleep to avoid a tight loop.
                 time.sleep(1)
 
 

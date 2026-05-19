@@ -23,9 +23,9 @@ It does the minimum required to make the resync usable out-of-process:
 3. Initialise the Neutron plugin registry so ``directory.get_plugin()`` returns the
    configured core plugin.
 4. Build a :class:`Scope` from the CLI flags.
-5. Run the resync and write the JSON result to stdout (or to the file
-   given by ``--output``, which is preferable for tooling that doesn't
-   want to compete with oslo.log noise on stdout).
+5. Run the resync and write the JSON result to stdout (or to the file given by
+   ``--output``, which is preferable for tooling that doesn't want to compete with
+   oslo.log noise on stdout).
 
 Exit codes
 ----------
@@ -138,21 +138,20 @@ def main(argv=None) -> int:
     # Register options before parsing config so cfg.CONF.calico exists.
     calico_config.register_options(cfg.CONF)
 
-    # Register Neutron's core options (base_mac, etc) before init() — it
-    # validates cfg.CONF.base_mac immediately but does NOT register the
-    # core opts itself.  In neutron-server this happens earlier in startup;
-    # as a standalone CLI we have to do it ourselves.
+    # Register Neutron's core options (base_mac, etc) before init() — it validates
+    # cfg.CONF.base_mac immediately but does NOT register the core opts itself.  In
+    # neutron-server this happens earlier in startup; as a standalone CLI we have to do
+    # it ourselves.
     common_config.register_common_config_options()
 
-    # Register the [keystone_authtoken] options that make_keystone_client
-    # reads (username, password, auth_url, etc).  In neutron-server these
-    # are registered as a side-effect of keystonemiddleware loading the
-    # auth plugin on the first request; the CLI has no such trigger so we
-    # force-register them here.  We register the v3password plugin's
-    # options because make_keystone_client is hardcoded to build a
-    # v3.Password client — any deployment that calico-resync supports is
-    # therefore using v3password fields in [keystone_authtoken], whether
-    # or not auth_type is set explicitly.
+    # Register the [keystone_authtoken] options that make_keystone_client reads
+    # (username, password, auth_url, etc).  In neutron-server these are registered as a
+    # side-effect of keystonemiddleware loading the auth plugin on the first request;
+    # the CLI has no such trigger so we force-register them here.  We register the
+    # v3password plugin's options because make_keystone_client is hardcoded to build a
+    # v3.Password client — any deployment that calico-resync supports is therefore using
+    # v3password fields in [keystone_authtoken], whether or not auth_type is set
+    # explicitly.
     ksa_loading.register_auth_conf_options(cfg.CONF, "keystone_authtoken")
     ksa_loading.register_session_conf_options(cfg.CONF, "keystone_authtoken")
     v3password_loader = ksa_loading.get_plugin_loader("password")
@@ -161,12 +160,11 @@ def main(argv=None) -> int:
         group="keystone_authtoken",
     )
 
-    # Parse oslo.config (and configure logging) from --config-file.  To
-    # route logs anywhere other than wherever neutron.conf would naturally
-    # send them (typically stderr/journald, which mixes badly with the
-    # JSON result on stdout), layer in an additional --config-file with
-    # [DEFAULT] log_file = ... and use_stderr = False, the same way
-    # neutron-dhcp-agent reads neutron.conf + dhcp_agent.ini.
+    # Parse oslo.config (and configure logging) from --config-file.  To route logs
+    # anywhere other than wherever neutron.conf would naturally send them (typically
+    # stderr/journald, which mixes badly with the JSON result on stdout), layer in an
+    # additional --config-file with [DEFAULT] log_file = ... and use_stderr = False, the
+    # same way neutron-dhcp-agent reads neutron.conf + dhcp_agent.ini.
     common_config.init(["--config-file=%s" % path for path in config_files])
     common_config.setup_logging()
 

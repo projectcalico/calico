@@ -80,10 +80,9 @@ def put(
     key = _build_key(resource_kind, namespace, name)
     value = None
     try:
-        # Get the existing resource so we can persist its metadata.
-        # _get_with_metadata returns value=None if the existing JSON is
-        # corrupt — the `if value is None` branch below then rebuilds
-        # the structure from scratch, same as KeyNotFound.
+        # Get the existing resource so we can persist its metadata. _get_with_metadata
+        # returns value=None if the existing JSON is corrupt — the `if value is None`
+        # branch below then rebuilds the structure from scratch, same as KeyNotFound.
         value, _ = _get_with_metadata(resource_kind, namespace, name)
     except etcdv3.KeyNotFound:
         pass
@@ -142,9 +141,9 @@ def get(resource_kind, name):
     - mod_revision is the etcdv3 revision at which the resource was last
       modified.
 
-    Raises etcdv3.KeyNotFound if there is no resource with that kind and name.
-    If the existing etcd value is not valid JSON, returns (None, mod_revision)
-    so the caller can overwrite it via a CAS write at that mod_revision.
+    Raises etcdv3.KeyNotFound if there is no resource with that kind and name.  If the
+    existing etcd value is not valid JSON, returns (None, mod_revision) so the caller
+    can overwrite it via a CAS write at that mod_revision.
     """
     value, mod_revision = _get_with_metadata(resource_kind, NOT_NAMESPACED, name)
     spec = value["spec"] if value is not None else None
@@ -334,14 +333,13 @@ def _build_key(resource_kind, namespace, name):
 
 
 def _get_with_metadata(resource_kind, namespace, name):
-    # Note: 'with_metadata' here means including the Calico data model
-    # metadata, as well as the etcdv3 mod_revision.
+    # Note: 'with_metadata' here means including the Calico data model metadata, as well
+    # as the etcdv3 mod_revision.
     #
-    # On invalid JSON, returns (None, mod_revision) rather than raising
-    # ValueError, so resync (and other callers) can repair a corrupt
-    # etcd entry — using the mod_revision in a CAS write — instead of
-    # aborting.  Mirrors the spec=None behaviour of get_all().  Callers
-    # are responsible for handling a None value.
+    # On invalid JSON, returns (None, mod_revision) rather than raising ValueError, so
+    # resync (and other callers) can repair a corrupt etcd entry — using the
+    # mod_revision in a CAS write — instead of aborting.  Mirrors the spec=None
+    # behaviour of get_all().  Callers are responsible for handling a None value.
     key = _build_key(resource_kind, namespace, name)
     value_as_string, mod_revision = etcdv3.get(key)
     try:

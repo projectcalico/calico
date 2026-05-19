@@ -65,8 +65,8 @@ class PolicySyncer(ResourceSyncer):
                 if name.startswith(SG_NAME_PREFIX)
             }
 
-        # Narrow scope: read just the etcd entries whose names we can compute
-        # directly from scope.ids().
+        # Narrow scope: read just the etcd entries whose names we can compute directly
+        # from scope.ids().
         etcd_map = {}
         for sgid in scope.ids():
             name = SG_NAME_PREFIX + sgid

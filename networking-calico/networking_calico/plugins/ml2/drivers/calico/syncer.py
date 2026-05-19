@@ -130,9 +130,9 @@ class ResourceSyncer(object):
             scope,
         )
 
-        # Short-circuit: narrow scope that expanded to no IDs (e.g.
-        # `calico-resync --port <pid>` without --include-sgs-for-ports leaves the
-        # SG scope empty) means nothing to read or compare.
+        # Short-circuit: narrow scope that expanded to no IDs (e.g. `calico-resync
+        # --port <pid>` without --include-sgs-for-ports leaves the SG scope empty) means
+        # nothing to read or compare.
         if not scope.all() and not scope.ids():
             etcd_map = {}
             neutron_map = {}
@@ -145,9 +145,9 @@ class ResourceSyncer(object):
                 neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
-            # Resource-specific post-processing of etcd_map now that we have
-            # neutron_map (e.g. the WEP syncer uses this to relabel
-            # destination-side WEPs).  The default implementation is a no-op.
+            # Resource-specific post-processing of etcd_map now that we have neutron_map
+            # (e.g. the WEP syncer uses this to relabel destination-side WEPs).  The
+            # default implementation is a no-op.
             etcd_map = self.post_process_etcd_map(scope, etcd_map, neutron_map)
 
         LOG.info(
@@ -166,12 +166,11 @@ class ResourceSyncer(object):
         n_created = 0
 
         # Process "lm <name>" entries before everything else so that, when a
-        # mid-migration port is being created from scratch in etcd, Felix
-        # sees the LiveMigration resource before the destination
-        # WorkloadEndpoint -- matching the ordering the dynamic postcommit
-        # path uses on migration start.  The key is a no-op for resource
-        # kinds that don't have "lm " prefixed names; the secondary sort by
-        # name keeps the order deterministic across runs.
+        # mid-migration port is being created from scratch in etcd, Felix sees the
+        # LiveMigration resource before the destination WorkloadEndpoint -- matching the
+        # ordering the dynamic postcommit path uses on migration start.  The key is a
+        # no-op for resource kinds that don't have "lm " prefixed names; the secondary
+        # sort by name keeps the order deterministic across runs.
         def _iter_order(n):
             return (0 if n.startswith("lm ") else 1, n)
 
@@ -180,11 +179,10 @@ class ResourceSyncer(object):
             in_neutron = name in neutron_map
 
             if in_neutron and in_etcd:
-                # Compare and update if different.  reread=False because we
-                # just read this name from Neutron, and etcd-first ordering
-                # means our Neutron read is at least as fresh as our etcd
-                # read; the CAS on mod_revision protects against any etcd
-                # change since.
+                # Compare and update if different.  reread=False because we just read
+                # this name from Neutron, and etcd-first ordering means our Neutron read
+                # is at least as fresh as our etcd read; the CAS on mod_revision
+                # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
                 with self.txn_from_context(context, "update-" + self.resource_kind):
                     write_data = self.neutron_to_etcd_write_data(
@@ -207,8 +205,8 @@ class ResourceSyncer(object):
                             name,
                         )
             elif in_neutron:
-                # In Neutron but not in etcd: create.  reread=True so
-                # we don't race with a concurrent dynamic delete.
+                # In Neutron but not in etcd: create.  reread=True so we don't race with
+                # a concurrent dynamic delete.
                 with self.txn_from_context(context, "create-" + self.resource_kind):
                     try:
                         write_data = self.neutron_to_etcd_write_data(
@@ -246,8 +244,8 @@ class ResourceSyncer(object):
             # else: name was in scope but neither side has it -- nothing to do.
         t_compare = time.monotonic()
 
-        # Delete any legacy etcd data for this kind of resource.  Only
-        # makes sense in the all-scope path.
+        # Delete any legacy etcd data for this kind of resource.  Only makes sense in
+        # the all-scope path.
         if scope.all():
             self.delete_legacy_etcd_data()
         t_end = time.monotonic()
@@ -285,10 +283,10 @@ class ResourceSyncer(object):
         return summary
 
     def post_process_etcd_map(self, scope, etcd_map, neutron_map):
-        """Optional hook for subclasses to refine etcd_map once neutron_map is
-        known.  Default is a no-op.  WorkloadEndpointSyncer uses this to relabel
-        destination-side WEPs that the etcd read didn't know to distinguish
-        from source-side WEPs.
+        """Optional hook for subclasses to refine etcd_map once neutron_map is known.
+        Default is a no-op.  WorkloadEndpointSyncer uses this to relabel
+        destination-side WEPs that the etcd read didn't know to distinguish from
+        source-side WEPs.
         """
         return etcd_map
 

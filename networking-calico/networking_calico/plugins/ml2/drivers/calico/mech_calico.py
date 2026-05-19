@@ -329,9 +329,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def initialize(self):
         """Called once by ML2 in the parent process, before any forks.
 
-        We use this hook to subscribe to Neutron's process-AFTER_INIT callback
-        so that we get a chance to run code in each worker process we own (see
-        ``get_workers``) once it has been forked.
+        We use this hook to subscribe to Neutron's process-AFTER_INIT callback so that
+        we get a chance to run code in each worker process we own (see ``get_workers``)
+        once it has been forked.
         """
         super(CalicoMechanismDriver, self).initialize()
         registry.subscribe(
@@ -344,14 +344,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def get_workers(self):
         """Workers that neutron-server should fork on our behalf.
 
-        Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of
-        which becomes one OS process.  Today we ask for a single worker that
-        runs the one-shot resync.
+        Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
+        becomes one OS process.  Today we ask for a single worker that runs the
+        one-shot resync.
 
-        ``[calico] startup_resync = never`` suppresses the worker entirely so
-        the operator can take responsibility for resync (typically by running
-        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on
-        exactly one neutron-server in the deployment).
+        ``[calico] startup_resync = never`` suppresses the worker entirely so the
+        operator can take responsibility for resync (typically by running
+        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
+        one neutron-server in the deployment).
         """
         if cfg.CONF.calico.startup_resync == "never":
             return []
@@ -360,22 +360,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def post_fork_initialize(self, resource, event, trigger, payload=None):
         """Per-worker-process initialisation, fired by Neutron after fork.
 
-        ``trigger`` is the worker instance (its bound ``start`` method, in
-        practice).  We dispatch on the worker's class so each worker process
-        runs only the code it's responsible for:
+        ``trigger`` is the worker instance (its bound ``start`` method, in practice).
+        We dispatch on the worker's class so each worker process runs only the code
+        it's responsible for:
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.wsgi.WorkerService`` -> connection state only,
-          ``voting=False``.  Per PR #11580, API workers must never be elected
-          master, because their primary job is to serve API requests quickly:
-          getting tied up running the master-only background threads (status
-          watcher, port-status writers, periodic compaction) would hurt API
-          response latency, and the resync work specifically now lives in
-          ``CalicoStartupResyncWorker`` anyway.
+        * ``neutron.wsgi.WorkerService`` -> connection state only, ``voting=False``.
+          Per PR #11580, API workers must never be elected master, because their
+          primary job is to serve API requests quickly: getting tied up running the
+          master-only background threads (status watcher, port-status writers,
+          periodic compaction) would hurt API response latency, and the resync work
+          specifically now lives in ``CalicoStartupResyncWorker`` anyway.
 
-        * Anything else (RPC / state-report / similar) -> connection state
-          plus the elector and master-only background threads.
+        * Anything else (RPC / state-report / similar) -> connection state plus the
+          elector and master-only background threads.
         """
         trigger_cls = _trigger_class(trigger)
         if trigger_cls is CalicoStartupResyncWorker:
@@ -398,11 +397,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         the fork (as would happen in __init__()) then the workers
         would share sockets incorrectly.
         """
-        # The self._init_lock semaphore mediates if two or more eventlet
-        # threads call _post_fork_init at the same time, within the same
-        # Neutron server fork.  This shouldn't normally happen now that
-        # ``post_fork_initialize`` drives the call from a single AFTER_INIT
-        # event, but the lock is cheap insurance against future call sites.
+        # The self._init_lock semaphore mediates if two or more eventlet threads call
+        # _post_fork_init at the same time, within the same Neutron server fork.  This
+        # shouldn't normally happen now that ``post_fork_initialize`` drives the call
+        # from a single AFTER_INIT event, but the lock is cheap insurance against future
+        # call sites.
         with self._init_lock:
             current_pid = os.getpid()
             if self._my_pid == current_pid:
@@ -1235,12 +1234,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("RESYNC")
         LOG.info("One-shot resync starting")
 
-        # (Re)init the DB.  The resync worker is its own OS process and doesn't
-        # share connection state with the API/RPC forks.  Scope.run() builds
-        # its own subnet/policy/endpoint syncers from the DB plus its
-        # module-level _txn_from_context helper; we don't need to set the
-        # driver's syncer attributes here because nothing else in this worker
-        # process uses them.
+        # (Re)init the DB.  The resync worker is its own OS process and doesn't share
+        # connection state with the API/RPC forks.  Scope.run() builds its own
+        # subnet/policy/endpoint syncers from the DB plus its module-level
+        # _txn_from_context helper; we don't need to set the driver's syncer attributes
+        # here because nothing else in this worker process uses them.
         self.db = None
         self._get_db()
 
