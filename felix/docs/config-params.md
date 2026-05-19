@@ -2264,6 +2264,24 @@ tunnel IPs).
 | Default value (YAML) | `262144` |
 | Notes | Required. | 
 
+### `BPFOverlayIPOnDevice` (config file) / `bpfOverlayIPOnDevice` (YAML)
+
+If enabled (the default), Felix assigns an IP address to overlay tunnel devices
+(IPIP/VXLAN) in BPF mode and uses it as the encapsulation source IP. When disabled, BPF programs use
+the node IP directly for encapsulation without requiring a separate tunnel device IP. This option has
+no effect on WireGuard tunnels, which always use a tunnel device IP. Defaults to true to preserve the
+legacy behaviour for clusters upgraded from earlier releases; set to false to opt in to the streamlined
+no-tunnel-IP behaviour.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFOverlayIPOnDevice` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `true` |
+| `FelixConfiguration` field | `bpfOverlayIPOnDevice` (YAML) `BPFOverlayIPOnDevice` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `true` |
+
 ### `BPFPSNATPorts` (config file) / `bpfPSNATPorts` (YAML)
 
 Sets the range from which we randomly pick a port if there is a source port

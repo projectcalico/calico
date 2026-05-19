@@ -191,6 +191,7 @@ type Config struct {
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
+	BPFOverlayIPOnDevice               bool              `config:"bool;true"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
 	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`

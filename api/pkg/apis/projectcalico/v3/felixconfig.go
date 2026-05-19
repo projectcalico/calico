@@ -696,6 +696,14 @@ type FelixConfigurationSpec struct {
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
 
+	// BPFOverlayIPOnDevice, if enabled (the default), Felix assigns an IP address to overlay tunnel devices
+	// (IPIP/VXLAN) in BPF mode and uses it as the encapsulation source IP.  When disabled, BPF programs use
+	// the node IP directly for encapsulation without requiring a separate tunnel device IP.  This option has
+	// no effect on WireGuard tunnels, which always use a tunnel device IP.  Defaults to true to preserve the
+	// legacy behaviour for clusters upgraded from earlier releases; set to false to opt in to the streamlined
+	// no-tunnel-IP behaviour.  [Default: true]
+	BPFOverlayIPOnDevice *bool `json:"bpfOverlayIPOnDevice,omitempty" validate:"omitempty"`
+
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
