@@ -187,9 +187,10 @@ func collectDiags(opts *diagOpts) error {
 }
 
 // isBPFEnabled reports whether the BPF dataplane is turned on in the cluster's
-// default FelixConfiguration. If we can't tell (no client, lookup error, field
-// unset), we fall back to assuming it is on — better to collect noisy-but-empty
-// BPF diags than to silently drop them on a real BPF cluster.
+// default FelixConfiguration. If the field is unset, BPF defaults to off and
+// we skip the BPF section. If we can't tell at all (no client, lookup error),
+// fall back to assuming it is on — better to collect noisy-but-empty BPF
+// diags than to silently drop them on a real BPF cluster we couldn't query.
 func isBPFEnabled(calicoClient clientv3.Interface) bool {
 	if calicoClient == nil {
 		return true
@@ -846,45 +847,43 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 	}
 	common.ExecAllCmdsWriteToFile(cmds)
 
-	if !bpfEnabled {
-		return
-	}
+	if bpfEnabled {
+		output, err := common.ExecCmd(fmt.Sprintf(
+			"kubectl exec -n %s -t %s -c calico-node -- bpftool map list",
+			namespace,
+			podName,
+		))
+		if err != nil {
+			fmt.Printf("Could not retrieve eBPF maps: %s\n", err)
+		} else {
+			bpfMaps := strings.Split(strings.TrimSpace(output.String()), "\n")
+			log.Debugf("eBPF maps: %s\n", bpfMaps)
 
-	output, err := common.ExecCmd(fmt.Sprintf(
-		"kubectl exec -n %s -t %s -c calico-node -- bpftool map list",
-		namespace,
-		podName,
-	))
-	if err != nil {
-		fmt.Printf("Could not retrieve eBPF maps: %s\n", err)
-	} else {
-		bpfMaps := strings.Split(strings.TrimSpace(output.String()), "\n")
-		log.Debugf("eBPF maps: %s\n", bpfMaps)
+			// Output looks like this:
+			//
+			// 35: lru_hash  name cali_v4_srmsg  flags 0x0
+			//	key 16B  value 8B  max_entries 510000  memlock 12242944B
+			//	pids calico-node(28576)
 
-		// Output looks like this:
-		//
-		// 35: lru_hash  name cali_v4_srmsg  flags 0x0
-		//	key 16B  value 8B  max_entries 510000  memlock 12242944B
-		//	pids calico-node(28576)
-
-		bpfInfoLineRe := regexp.MustCompile(`^(\d+):.*name (cali\w+)`)
-		var bpfDumpCmds []common.Cmd
-		for _, line := range bpfMaps {
-			if m := bpfInfoLineRe.FindStringSubmatch(line); m != nil {
-				id := m[1]
-				name := m[2]
-				bpfDumpCmds = append(bpfDumpCmds, common.Cmd{
-					Info:     fmt.Sprintf("Collect eBPF map %s:%s for node %s", id, name, nodeName),
-					CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map dump id %s", namespace, podName, id),
-					FilePath: fmt.Sprintf("%s/bpf-maps/%s-id_%s.txt", curNodeDir, name, id),
-				})
+			bpfInfoLineRe := regexp.MustCompile(`^(\d+):.*name (cali\w+)`)
+			var bpfDumpCmds []common.Cmd
+			for _, line := range bpfMaps {
+				if m := bpfInfoLineRe.FindStringSubmatch(line); m != nil {
+					id := m[1]
+					name := m[2]
+					bpfDumpCmds = append(bpfDumpCmds, common.Cmd{
+						Info:     fmt.Sprintf("Collect eBPF map %s:%s for node %s", id, name, nodeName),
+						CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map dump id %s", namespace, podName, id),
+						FilePath: fmt.Sprintf("%s/bpf-maps/%s-id_%s.txt", curNodeDir, name, id),
+					})
+				}
 			}
+			common.ExecAllCmdsWriteToFile(bpfDumpCmds)
 		}
-		common.ExecAllCmdsWriteToFile(bpfDumpCmds)
 	}
 
 	// Collect all of the CNI logs
-	output, err = common.ExecCmd(fmt.Sprintf(
+	output, err := common.ExecCmd(fmt.Sprintf(
 		"kubectl exec -n %s -t %s -c calico-node -- ls /var/log/calico/cni",
 		namespace,
 		podName,
