@@ -1488,6 +1488,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.VXLANPortMin != nil {
+		in, out := &in.VXLANPortMin, &out.VXLANPortMin
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANPortMax != nil {
+		in, out := &in.VXLANPortMax, &out.VXLANPortMax
+		*out = new(int)
+		**out = **in
+	}
 	if in.VXLANVNI != nil {
 		in, out := &in.VXLANVNI, &out.VXLANVNI
 		*out = new(int)

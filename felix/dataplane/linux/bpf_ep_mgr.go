@@ -309,6 +309,8 @@ type bpfEndpointManager struct {
 	epToHostAction          string
 	vxlanMTU                int
 	vxlanPort               uint16
+	vxlanPortMin            uint16
+	vxlanPortMax            uint16
 	wgPort                  uint16
 	wg6Port                 uint16
 	dsrEnabled              bool
@@ -538,6 +540,8 @@ func NewBPFEndpointManager(
 		epToHostAction:          config.RulesConfig.EndpointToHostAction,
 		vxlanMTU:                config.VXLANMTU,
 		vxlanPort:               uint16(config.VXLANPort),
+		vxlanPortMin:            uint16(config.VXLANPortMin),
+		vxlanPortMax:            uint16(config.VXLANPortMax),
 		overlayTunnelID:         uint32(config.RulesConfig.VXLANVNI),
 		wgPort:                  uint16(config.Wireguard.ListeningPort),
 		wg6Port:                 uint16(config.Wireguard.ListeningPortV6),
@@ -3313,6 +3317,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.DSROptoutCIDRs = m.dsrOptoutCidrs
 	ap.LogLevel, ap.LogFilter = m.apLogFilter(ap, ifaceName)
 	ap.VXLANPort = m.vxlanPort
+	ap.VXLANPortMin = m.vxlanPortMin
+	ap.VXLANPortMax = m.vxlanPortMax
 	ap.PSNATStart = m.psnatPorts.MinPort
 	ap.PSNATEnd = m.psnatPorts.MaxPort
 	ap.TunnelMTU = uint16(m.vxlanMTU)

@@ -53,11 +53,13 @@ type vxlanManager struct {
 	myVTEP     *proto.VXLANTunnelEndpointUpdate
 
 	// VXLAN configuration.
-	vxlanDevice string
-	vxlanID     int
-	vxlanPort   int
-	ipVersion   uint8
-	mtu         int
+	vxlanDevice  string
+	vxlanID      int
+	vxlanPort    int
+	vxlanPortMin int
+	vxlanPortMax int
+	ipVersion    uint8
+	mtu          int
 
 	// Indicates if configuration has changed since the last apply.
 	vtepsDirty        bool
@@ -132,6 +134,8 @@ func newVXLANManagerWithShims(
 		vxlanDevice:       deviceName,
 		vxlanID:           dpConfig.RulesConfig.VXLANVNI,
 		vxlanPort:         dpConfig.RulesConfig.VXLANPort,
+		vxlanPortMin:      dpConfig.VXLANPortMin,
+		vxlanPortMax:      dpConfig.VXLANPortMax,
 		ipVersion:         ipVersion,
 		mtu:               mtu,
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
@@ -329,6 +333,8 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 	vxlan := &netlink.Vxlan{
 		LinkAttrs: la,
 		Port:      m.vxlanPort,
+		PortLow:   m.vxlanPortMin,
+		PortHigh:  m.vxlanPortMax,
 	}
 
 	if m.dpConfig.BPFEnabled {
@@ -381,6 +387,16 @@ func vxlanLinksIncompat(l1, l2 netlink.Link) string {
 
 	if v1.Port > 0 && v2.Port > 0 && v1.Port != v2.Port {
 		return fmt.Sprintf("port: %v vs %v", v1.Port, v2.Port)
+	}
+
+	// Source-port range: only flag a mismatch when at least one side has it
+	// configured (non-zero). A zero range means "kernel default", and we
+	// don't want to fight the kernel echoing a default range back to us.
+	if (v1.PortLow != 0 || v1.PortHigh != 0) && (v2.PortLow != 0 || v2.PortHigh != 0) {
+		if v1.PortLow != v2.PortLow || v1.PortHigh != v2.PortHigh {
+			return fmt.Sprintf("source port range: [%d,%d] vs [%d,%d]",
+				v1.PortLow, v1.PortHigh, v2.PortLow, v2.PortHigh)
+		}
 	}
 
 	if v1.GBP != v2.GBP {
