@@ -359,6 +359,10 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
 
+	// Hoisted buffer: each endpoint that contributes to this new IP
+	// set reuses the same backing array. The contribution is consumed
+	// in-place inside this closure and not retained.
+	var contribBuf []ipsetmember.IPSetMember
 	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
@@ -368,8 +372,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 			return
 		}
 		counterSelectorEvalsTrue.Inc()
-		contrib := idx.CalculateEndpointContribution(epData, newIPSetData)
-		if len(contrib) == 0 {
+		contribBuf = idx.AppendEndpointContribution(contribBuf[:0], epData, newIPSetData)
+		if len(contribBuf) == 0 {
 			return
 		}
 		if log.GetLevel() >= log.DebugLevel {
@@ -377,7 +381,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 			logCxt.Debug("Endpoint contributes to IP set")
 		}
 		epData.AddMatchingIPSetID(ipSetID)
-		for _, member := range contrib {
+		for _, member := range contribBuf {
 			refCount := newIPSetData.memberToRefCount[member]
 			if refCount == 0 {
 				if log.GetLevel() >= log.DebugLevel {
@@ -545,6 +549,10 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 	// below if the match is still correct.
 	epData.ClearMatchingIPSetIDs()
 
+	// Hoisted buffer: contributions are consumed in-place inside the
+	// loop body, so we reuse one backing array across every matching
+	// IP set this endpoint contributes to.
+	var contribBuf []ipsetmember.IPSetMember
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
 	for ipSetID := range idx.selectorCandidatesIdx.AllPotentialMatches(epData) {
@@ -565,8 +573,8 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			//
 			// This reference counting also allows us to tolerate duplicate members in the
 			// input data.
-			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
-			for _, newMember := range newIPSetContribution {
+			contribBuf = idx.AppendEndpointContribution(contribBuf[:0], epData, ipSetData)
+			for _, newMember := range contribBuf {
 				newRefCount := ipSetData.memberToRefCount[newMember] + 1
 				if newRefCount == 1 {
 					// New member in the IP set.
@@ -686,16 +694,18 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	idx.discardParentIfEmpty(parentID)
 }
 
-// CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
-// If the IP set represents a named port then the returned members will have a named port component.
-// Returns nil if the endpoint doesn't contribute to the IP set.
-func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) []ipsetmember.IPSetMember {
+// AppendEndpointContribution appends the given endpoint's contribution
+// to the given IP set to buf and returns the resulting slice. If the
+// IP set represents a named port the appended members carry the named
+// port component, otherwise they are CIDR-or-IP only. Pass buf[:0] to
+// reuse an existing backing array in a tight loop, or nil when each
+// result needs its own backing array (e.g. when storing per-IP-set
+// contributions in a map).
+func (idx *SelectorAndNamedPortIndex) AppendEndpointContribution(buf []ipsetmember.IPSetMember, d *endpointData, ipSetData *ipSetData) []ipsetmember.IPSetMember {
 	if ipSetData.namedPortProtocol != ipsetmember.ProtocolNone {
-		// Named-port IP set: emit per (matching port × address) pair.
-		return d.AppendIPPortMembers(nil, ipSetData.namedPort, ipSetData.namedPortProtocol)
+		return d.AppendIPPortMembers(buf, ipSetData.namedPort, ipSetData.namedPortProtocol)
 	}
-	// Non-named-port match: emit one CIDROrIP member per address.
-	return d.AppendCIDROrIPMembers(nil)
+	return d.AppendCIDROrIPMembers(buf)
 }
 
 // RecalcCachedContributions uses the cached set of matching IP set IDs in the endpoint
@@ -710,7 +720,9 @@ func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpoint
 		if ipSetData == nil {
 			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
-		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
+		// Each entry needs its own backing array because the map is
+		// retained by the caller; pass nil to allocate fresh.
+		contrib[ipSetID] = idx.AppendEndpointContribution(nil, epData, ipSetData)
 	}
 	return contrib
 }
