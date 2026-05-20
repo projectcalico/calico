@@ -23,6 +23,7 @@ GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.20.2
 KINDEST_NODE_VERSION=v1.35.1
 KIND_VERSION=v0.31.0
+KO_VERSION=v0.18.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
@@ -77,8 +78,10 @@ LIBNFTNL_VER=1.2.8
 LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH ?= master
-OPERATOR_ORGANIZATION ?= tigera
+# Points at caseydavenport/operator#casey-ko-prototype for the ko prototype —
+# revert before merge.
+OPERATOR_BRANCH ?= casey-ko-prototype
+OPERATOR_ORGANIZATION ?= caseydavenport
 OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
