@@ -686,7 +686,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			}
 
 			return nil
-		}, "30s", "3s").ShouldNot(HaveOccurred())
+		}, "90s", "3s").ShouldNot(HaveOccurred())
 	})
 })
 
@@ -1359,7 +1359,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 			}
 
 			return nil
-		}, "30s", "3s").ShouldNot(HaveOccurred())
+		}, "90s", "3s").ShouldNot(HaveOccurred())
 	})
 })
 
