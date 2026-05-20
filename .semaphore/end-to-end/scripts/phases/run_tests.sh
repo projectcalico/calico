@@ -58,13 +58,20 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # image does not, so install them on the fly when using that path.
   PRE_RUN=":"
   if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
-    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
     RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
   else
-    GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
+    GO_VERSION=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_VERSION)' print)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"
     PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
   fi
+
+  # The upstream k8s e2e framework shells out to `kubectl` for any
+  # exec-into-pod step (RunHostCmd, etc.), so kubectl must be on PATH inside
+  # the runner. Fetch a K8S_VERSION-pinned binary via the repo's `make
+  # kubectl` target; it lands in hack/test/kind/ which is bind-mounted into
+  # the container, and we prepend that to PATH inside the bash -c below.
+  make kubectl
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
@@ -82,6 +89,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
     bash -c "${PRE_RUN} && \
+      export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:\$PATH && \
       git config --global --add safe.directory '*' && \
       make e2e-run \
         KUBECONFIG=/kubeconfig \

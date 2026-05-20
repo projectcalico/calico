@@ -186,10 +186,18 @@ echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
-echo "Install MetalLB controller for allocating LoadBalancer IPs"
+echo "Install MetalLB controller (L2-only) for Gateway API conformance"
+# We ship a stripped metallb v0.14.9 manifest (BGP-mode CRDs and webhooks
+# removed). The remaining install provides IPAddressPool + L2Advertisement,
+# which Gateway API conformance uses to make LB IPs reachable from the host
+# runner via ARP on the kind docker bridge. Calico has no L2 announce path
+# of its own today (see confd/pkg/backends/calico/routes.go and the
+# loadbalancer controller in kube-controllers).
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
-${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
+${kubectl} -n metallb-system rollout status deploy/controller --timeout=2m
+${kubectl} wait --for=condition=Established --timeout=2m \
+  crd/ipaddresspools.metallb.io crd/l2advertisements.metallb.io
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
@@ -233,3 +241,34 @@ wait_pod_ready calicoctl -n kube-system
 wait_pod_ready -l k8s-app -n calico-system
 
 echo "Calico is running."
+
+# Apply Calico-native LoadBalancer IP pools (80.15.0.0/24 + fdff::/64).
+# These replace the legacy metallb default BGP pool; kube-controllers'
+# loadbalancer controller now does the IPAM, and confd handles BGP
+# advertisement based on each test's BGPConfiguration.
+echo "Applying Calico LoadBalancer IP pools"
+for attempt in $(seq 1 12); do
+  if ${kubectl} apply -f ${INFRA_DIR}/calico-lb-pools.yaml; then
+    break
+  fi
+  echo "calico-lb-pools.yaml apply failed (attempt $attempt/12) — retrying in 5s..."
+  sleep 5
+done
+
+# Switch Calico's loadbalancer controller to RequestedServicesOnly so it
+# only claims Services that explicitly opt in via
+# spec.loadBalancerClass=calico or one of the projectcalico.org/* LB
+# annotations. The default AllServices mode races metallb's
+# ServiceReconciler over unclassified LB Services -- the controllers
+# each assign from their own pool and overwrite each other's status.
+# Gateway API conformance services are unclassified and need metallb's
+# L2 pool, so we want Calico to leave them alone; node k8st BGP tests
+# now set loadBalancerClass=calico explicitly (see test_base.py).
+for attempt in $(seq 1 12); do
+  if ${kubectl} patch kubecontrollersconfiguration default --type=merge \
+       --patch '{"spec":{"controllers":{"loadBalancer":{"assignIPs":"RequestedServicesOnly"}}}}'; then
+    break
+  fi
+  echo "kubecontrollersconfiguration patch failed (attempt $attempt/12) — retrying in 5s..."
+  sleep 5
+done

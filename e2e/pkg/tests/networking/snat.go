@@ -42,7 +42,7 @@ const (
 // behavior. The target must be an HTTP target pointing to an agnhost netexec
 // /clientip endpoint (created via WithHTTP("GET", "/clientip", nil)).
 // Uses ct.Connect() for all connectivity — never bypasses conncheck.
-func checkConnection(ct conncheck.ConnectionTester, client *conncheck.Client, target conncheck.Target, expected connectionResult) {
+func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, target conncheck.Target, expected connectionResult) {
 	logrus.WithFields(logrus.Fields{
 		"client":   client.Name(),
 		"target":   target.String(),

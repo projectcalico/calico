@@ -95,6 +95,17 @@ type MainTableOwnershipPolicy struct {
 	// ExclusiveRouteProtocols is a list of protocols that should only be
 	// used by Calico.
 	ExclusiveRouteProtocols []netlink.RouteProtocol
+
+	// IsWorkloadBGPPeerIface, if non-nil, reports whether the named
+	// interface belongs to a workload that is acting as a local BGP peer.
+	// BIRD installs routes on such interfaces with RTPROT_BIRD; those
+	// routes must not be cleaned up by Felix.
+	//
+	// Concurrency: this is a read-only callback so it is thread-safe.
+	// CompleteDeferredWork on all managers finishes before route table
+	// Apply goroutines are spawned, so the endpoint manager's workload
+	// endpoint maps won't be written during route reconciliation.
+	IsWorkloadBGPPeerIface func(ifaceName string) bool
 }
 
 func (d *MainTableOwnershipPolicy) IfaceShouldHaveARPEntries(ifaceName string) bool {
@@ -141,6 +152,14 @@ func (d *MainTableOwnershipPolicy) RouteIsOurs(ifaceName string, route *netlink.
 
 	if d.isWorkloadInterface(ifaceName) {
 		if d.RemoveNonCalicoWorkloadRoutes {
+			// BIRD installs routes with RTPROT_BIRD on workload interfaces
+			// that are acting as local BGP peers.  Those routes belong to
+			// BIRD, not Felix, so we must leave them alone.
+			if route.Protocol == unix.RTPROT_BIRD &&
+				d.IsWorkloadBGPPeerIface != nil &&
+				d.IsWorkloadBGPPeerIface(ifaceName) {
+				return false
+			}
 			// We're configured to assume that any route to one of our
 			// interfaces is ours, no need to check the protocol.
 			return true

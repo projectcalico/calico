@@ -2,6 +2,10 @@
 installation:
   enabled: true
 
+  # Always re-pull so clusters pick up new digests under stable tags
+  # (e.g. test-build) on `make kind-reload`.
+  imagePullPolicy: Always
+
   # Disable HA control plane.
   controlPlaneReplicas: 1
 

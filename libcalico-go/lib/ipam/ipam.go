@@ -157,7 +157,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) (*IPAMA
 // affinity of the block.
 func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair, rsvdAttr *HostReservedAttr, affinityCfg AffinityConfig) (*model.KVPair, error) {
 	// Parse out affinity data.
-	cidr := aff.Key.(model.BlockAffinityKey).CIDR
+	cidr := model.IPNetFromPrefix(aff.Key.(model.BlockAffinityKey).CIDR)
 	host := aff.Key.(model.BlockAffinityKey).Host
 	state := aff.Value.(*model.BlockAffinity).State
 	logCtx := log.WithFields(log.Fields{"host": host, "cidr": cidr})
@@ -815,7 +815,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 					// At this point, block b's Unallocated field has been reduced already.
 					// We should get the original block from datastore again.
-					blockCIDR := b.Key.(model.BlockKey).CIDR
+					blockCIDR := model.IPNetFromPrefix(b.Key.(model.BlockKey).CIDR)
 					b, err = c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get block again after update conflict")
@@ -836,7 +836,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 						// so b has uncommitted allocations relative to the datastore.
 						// Re-query before retrying so the next attempt doesn't pile new
 						// allocations on top and persist the leaked ones via updateBlock.
-						blockCIDR := b.Key.(model.BlockKey).CIDR
+						blockCIDR := model.IPNetFromPrefix(b.Key.(model.BlockKey).CIDR)
 						b, err = c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 						if err != nil {
 							logCtx.WithError(err).Warn("Failed to re-query block after ErrMaxAllocReached")
@@ -1393,7 +1393,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, handleMap map[strin
 }
 
 func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, affinityCfg AffinityConfig, affCheck bool, reservations addrFilter, maxAlloc int) ([]net.IPNet, error) {
-	blockCIDR := block.Key.(model.BlockKey).CIDR
+	blockCIDR := model.IPNetFromPrefix(block.Key.(model.BlockKey).CIDR)
 	logCtx := log.WithFields(log.Fields{string(affinityCfg.AffinityType): affinityCfg.Host, "block": blockCIDR})
 	if handleID != nil {
 		logCtx = logCtx.WithField("handle", *handleID)
@@ -1802,7 +1802,7 @@ func (c ipamClient) affinityConfigsByBlocks(ctx context.Context, pool net.IPNet)
 		k := o.Key.(model.BlockAffinityKey)
 
 		// Only add the pair to the map if the block belongs to the pool.
-		if pool.Contains(k.CIDR.IPNet.IP) {
+		if pool.Contains(k.CIDR.Addr().AsSlice()) {
 			pairs[k.CIDR.String()] = AffinityConfig{AffinityType: AffinityType(k.AffinityType), Host: k.Host}
 		}
 		log.Debugf("Block %s -> %s", k.CIDR.String(), k.Host)
@@ -2512,7 +2512,7 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 		return nil, err
 	}
 
-	blockCIDR := b.Key.(model.BlockKey).CIDR
+	blockCIDR := model.IPNetFromPrefix(b.Key.(model.BlockKey).CIDR)
 	logCtx.Infof("Host's block '%s' ", blockCIDR.String())
 	return &blockCIDR, nil
 }
