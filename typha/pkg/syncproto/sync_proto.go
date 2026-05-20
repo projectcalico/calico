@@ -242,7 +242,14 @@ type CompressionAlgorithm string
 
 const (
 	CompressionSnappy CompressionAlgorithm = "snappy"
+	CompressionZstd   CompressionAlgorithm = "zstd"
 )
+
+// AllCompressionAlgorithms lists all supported compression algorithms.
+var AllCompressionAlgorithms = []CompressionAlgorithm{
+	CompressionSnappy,
+	CompressionZstd,
+}
 
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
 // It includes a request to use a particular kind of syncer and tells the server what features are supported.
@@ -339,6 +346,29 @@ func init() {
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+}
+
+// ParseCompressionAlgorithms parses a comma-separated string of compression
+// algorithm names (e.g. "zstd,snappy") into a slice of CompressionAlgorithm.
+// Unknown algorithm names are logged as warnings and skipped.  Returns nil
+// if the input is empty or contains no valid algorithms.
+func ParseCompressionAlgorithms(s string) []CompressionAlgorithm {
+	if s == "" {
+		return nil
+	}
+	var result []CompressionAlgorithm
+	for part := range strings.SplitSeq(s, ",") {
+		name := strings.TrimSpace(strings.ToLower(part))
+		switch name {
+		case "snappy":
+			result = append(result, CompressionSnappy)
+		case "zstd":
+			result = append(result, CompressionZstd)
+		default:
+			log.WithField("algorithm", name).Warn("Unknown compression algorithm in configuration, ignoring.")
+		}
+	}
+	return result
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
