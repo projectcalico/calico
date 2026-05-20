@@ -293,7 +293,7 @@ func sendIfaceAddrsUpdate(mgr *proxyNeighManager, name string, addrs ...string) 
 }
 
 func sendHostMetadata(mgr *proxyNeighManager, hostname, ipv4Addr string) {
-	mgr.OnUpdate(&proto.HostMetadataV4V6Update{
+	mgr.OnUpdate(&proto.HostMetadataUpdate{
 		Hostname: hostname,
 		Ipv4Addr: ipv4Addr,
 	})
