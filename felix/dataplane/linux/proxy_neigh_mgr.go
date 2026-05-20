@@ -145,6 +145,14 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
+			// Set the IPMP6 filter to only deliver Neighbor Solicitations
+			var f ipv6.ICMPFilter
+			f.SetAll(true)
+			f.Accept(ipv6.ICMPTypeNeighborSolicitation)
+			if err := conn.SetICMPFilter(&f); err != nil {
+				_ = conn.Close()
+				return nil, nil, err
+			}
 			return conn, ifi.HardwareAddr, nil
 		}
 	}
@@ -272,7 +280,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			m.dirty = true
 		}
 
-	case *proto.HostMetadataV4V6Update:
+	case *proto.HostMetadataUpdate:
 		// Skip nodes that have no address for this manager's IP version —
 		// they can't host pods/VIPs in our family, so they shouldn't be in
 		// the hash ring.
@@ -287,7 +295,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		m.clusterNodes[msg.Hostname] = struct{}{}
 		m.dirty = true
 
-	case *proto.HostMetadataV4V6Remove:
+	case *proto.HostMetadataRemove:
 		if _, ok := m.clusterNodes[msg.Hostname]; ok {
 			log.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataV4V6Remove")
 			delete(m.clusterNodes, msg.Hostname)
