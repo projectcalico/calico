@@ -1703,16 +1703,16 @@ KIND_TEST_BUILD_TAG = test-build
 # localhost:5000/calico/<name>:test-build for the kind cluster.
 # Most components are provided by the combined calico/calico image, which
 # uses "calico <subcommand>" as the container command. Separate images:
-# node, whisker (TypeScript/nginx), the envoy-* sidecars, and the
-# standalone csi-node-driver-registrar built from pod2daemon.
+# node, whisker (TypeScript/nginx), and the envoy-* sidecars. The
+# standalone csi-node-driver-registrar isn't listed here because kind
+# disables CSI (kubeletVolumePluginPath: "None" in infra/values.yaml).
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/calico:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
-	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG) \
-	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG)
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1725,8 +1725,7 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
-	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
-	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1789,17 +1788,6 @@ $(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
 
 $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
-
-# pod2daemon's registrar image is built from an upstream clone (its own
-# go.mod). The clone is pinned via UPSTREAM_REGISTRAR_TAG in pod2daemon/Makefile,
-# so this stamp's only inputs are the ko config and the Makefile itself.
-$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): \
-    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)) \
-    $(REPO_ROOT)/pod2daemon/registrar.ko.yaml \
-    $(REPO_ROOT)/pod2daemon/Makefile
-	rm -f $@
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
-	echo "node-driver-registrar:latest-$(ARCH)" > $@
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
