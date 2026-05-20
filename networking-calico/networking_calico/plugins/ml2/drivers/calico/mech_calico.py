@@ -345,8 +345,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """Workers that neutron-server should fork on our behalf.
 
         Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
-        becomes one OS process.  Today we ask for a single worker that runs the
-        one-shot resync.
+        becomes one OS process.
 
         ``[calico] startup_resync = never`` suppresses the worker entirely so the
         operator can take responsibility for resync (typically by running
@@ -373,8 +372,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.wsgi.WorkerService`` -> connection state only, ``voting=False``.
-          Per PR #11580, API workers must never be elected master, because their
+        * ``neutron.wsgi.WorkerService`` -> connection state and worker threads only.
+          Per PR #11580, API workers must never run master-only jobs, because their
           primary job is to serve API requests quickly: getting tied up running the
           master-only background threads (status watcher, port-status writers,
           periodic compaction) would hurt API response latency, and the resync work
@@ -436,15 +435,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Init the DB.
         self.db = None
         self._get_db()
-
-        # Create a Keystone client.
-        authcfg = cfg.CONF.keystone_authtoken
-        LOG.debug("authcfg = %r", authcfg)
-        for key in authcfg:
-            if "password" in key:
-                LOG.debug("authcfg[%s] = %s", key, "***")
-            else:
-                LOG.debug("authcfg[%s] = %s", key, authcfg[key])
 
         # Create syncers.
         self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)

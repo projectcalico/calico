@@ -24,10 +24,10 @@ from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico import etcdv3
 
 
-class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
+class TestMechanismDriver(lib.Lib, unittest.TestCase):
 
     def setUp(self):
-        super(TestMechanismDriverVoting, self).setUp()
+        super(TestMechanismDriver, self).setUp()
 
         lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
         lib.m_oslo_config.cfg.CONF.calico.openstack_region = "no-region"
@@ -48,7 +48,7 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         # Reset global etcd client.
         etcdv3._client = None
 
-        super(TestMechanismDriverVoting, self).tearDown()
+        super(TestMechanismDriver, self).tearDown()
 
     def test_driver_init_common(self):
         self.driver._post_fork_inititialize_common()
