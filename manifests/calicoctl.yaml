@@ -24,7 +24,8 @@ spec:
     - name: calicoctl
       image: quay.io/calico/calico:master
       command:
-        - /usr/bin/calicoctl
+        - calico
+        - ctl
       args:
         - version
         - --poll=1m

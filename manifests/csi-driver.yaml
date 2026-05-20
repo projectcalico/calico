@@ -72,9 +72,9 @@ spec:
               mountPath: /var/lib/kubelet/
               mountPropagation: "Bidirectional"
         - name: csi-node-driver-registrar
-          image: quay.io/calico/calico:master
+          image: quay.io/calico/node-driver-registrar:master
           imagePullPolicy: IfNotPresent
-          command: ["/usr/bin/csi-node-driver-registrar"]
+          command: ["csi-node-driver-registrar"]
           args:
             - --v=5
             - --csi-address=$(ADDRESS)

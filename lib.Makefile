@@ -1643,8 +1643,9 @@ bin/helm: bin/.helm-updated-$(HELM_VERSION)
 # KO_DIR is intentionally NOT overrideable: the install step runs inside the
 # go-build container with the repo mounted at /go/src/github.com/projectcalico/calico,
 # and GOBIN must point at a host path that maps to that mount. Pointing KO_DIR
-# elsewhere would install into a path the host can't see.
-KO_DIR = $(REPO_ROOT)/bin
+# elsewhere would install into a path the host can't see. `override` ensures
+# the value sticks even if the caller passes KO_DIR= on the make command line.
+override KO_DIR := $(REPO_ROOT)/bin
 KO = $(KO_DIR)/ko
 
 # Pin the Go toolchain ko uses to the same version baked into calico/go-build,
@@ -1681,7 +1682,8 @@ KIND_TEST_BUILD_TAG = test-build
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
-	calico/calico:$(KIND_TEST_BUILD_TAG)
+	calico/calico:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1691,7 +1693,8 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/node/.image.created-$(ARCH) \
 	$(REPO_ROOT)/whisker/.image.created-$(ARCH) \
 	$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH) \
-	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH)
+	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1742,6 +1745,17 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/key-cert-provisioner image
 	echo "test-signer:latest-$(ARCH)" > $@
+
+# pod2daemon's registrar image is built from an upstream clone (its own
+# go.mod). The clone is pinned via UPSTREAM_REGISTRAR_TAG in pod2daemon/Makefile,
+# so this stamp's only inputs are the ko config and the Makefile itself.
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)) \
+    $(REPO_ROOT)/pod2daemon/registrar.ko.yaml \
+    $(REPO_ROOT)/pod2daemon/Makefile
+	rm -f $@
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	echo "node-driver-registrar:latest-$(ARCH)" > $@
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
