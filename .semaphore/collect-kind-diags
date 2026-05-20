@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Collect diagnostics from a kind-based e2e cluster into artifacts/kind-diags/
+# so that .semaphore/publish-artifacts uploads them for inspection.
+#
+# Intended to be called from the e2e job epilogue. Best-effort: missing
+# kubeconfig or a torn-down cluster is not an error.
+
+set -x
+
+my_dir="$(dirname "$0")"
+repo_dir="$my_dir/.."
+diags_dir="$repo_dir/artifacts/kind-diags"
+
+kubeconfig="${KUBECONFIG:-$repo_dir/hack/test/kind/kind-kubeconfig.yaml}"
+if [ ! -f "$kubeconfig" ]; then
+  echo "collect-kind-diags: no kubeconfig at $kubeconfig, skipping"
+  exit 0
+fi
+
+kubectl=(kubectl --kubeconfig="$kubeconfig")
+if ! "${kubectl[@]}" cluster-info >/dev/null 2>&1; then
+  echo "collect-kind-diags: cluster unreachable, skipping"
+  exit 0
+fi
+
+mkdir -p "$diags_dir"
+
+"${kubectl[@]}" get nodes -o wide > "$diags_dir/nodes.txt" 2>&1 || true
+"${kubectl[@]}" get pods --all-namespaces -o wide > "$diags_dir/pods.txt" 2>&1 || true
+"${kubectl[@]}" get events --all-namespaces --sort-by=.lastTimestamp > "$diags_dir/events.txt" 2>&1 || true
+"${kubectl[@]}" get apiservices > "$diags_dir/apiservices.txt" 2>&1 || true
+
+# Describe any pods that are not in Running/Completed state.
+"${kubectl[@]}" get pods --all-namespaces --no-headers 2>/dev/null \
+  | awk '$4 != "Running" && $4 != "Completed" {print $1, $2}' \
+  | while read -r ns pod; do
+      "${kubectl[@]}" -n "$ns" describe pod "$pod" \
+        > "$diags_dir/describe-${ns}-${pod}.txt" 2>&1 || true
+    done
+
+# Collect logs from the control-plane components most likely to be relevant
+# when e2e tests fail. Grabs both current and previous logs so we can see
+# what a restart killed. Missing namespaces are tolerated.
+namespaces=(
+  "calico-system"
+  "tigera-operator"
+)
+for ns in "${namespaces[@]}"; do
+  "${kubectl[@]}" -n "$ns" get pods --no-headers 2>/dev/null \
+    | awk '{print $1}' \
+    | while read -r pod; do
+        "${kubectl[@]}" -n "$ns" logs "$pod" --all-containers --prefix \
+          > "$diags_dir/logs-${ns}-${pod}.log" 2>&1 || true
+        # kubectl logs --previous exits non-zero for pods that never restarted;
+        # only keep the file when the fetch actually succeeded.
+        if ! "${kubectl[@]}" -n "$ns" logs "$pod" --all-containers --prefix --previous \
+            > "$diags_dir/logs-${ns}-${pod}.previous.log" 2>&1; then
+          rm -f "$diags_dir/logs-${ns}-${pod}.previous.log"
+        fi
+      done
+done
+
+# Compress so the upload stays small. If archiving fails (e.g. zstd missing,
+# disk full) keep the raw directory so we still get the diagnostics through
+# publish-artifacts.
+if tar --use-compress-program="zstd -3" -cf "$repo_dir/artifacts/kind-diags.tar.zstd" -C "$repo_dir/artifacts" kind-diags; then
+  rm -rf "$diags_dir"
+fi
+
+exit 0

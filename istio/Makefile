@@ -122,7 +122,8 @@ image: $(BUILD_IMAGES)
 include ../hack/rpms/nftables/image.mk
 
 .PHONY: nft-rpms-image
-nft-rpms-image:
+# `| register` so binfmt is set up before cross-arch buildx.
+nft-rpms-image: | register
 	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
 
 # istio-install-cni image

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
+
+from keystoneauth1 import session
+from keystoneauth1.identity import v3
+from keystoneclient.v3.client import Client as KeystoneClient
+
 from neutron.db import models_v2
 from neutron.db.models.l3 import FloatingIP
 from neutron.db.qos import models as qos_models
-
 from neutron_lib import exceptions as n_exc
 
 from oslo_config import cfg
@@ -75,13 +80,12 @@ NETWORK_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 
 class WorkloadEndpointSyncer(ResourceSyncer):
-
-    def __init__(self, db, txn_from_context, policy_syncer, keystone_client):
+    def __init__(self, db, txn_from_context, policy_syncer):
         super(WorkloadEndpointSyncer, self).__init__(
             db, txn_from_context, "WorkloadEndpoint"
         )
         self.policy_syncer = policy_syncer
-        self.keystone = keystone_client
+        self.keystone = make_keystone_client()
         self.proj_data_cache = {}
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
@@ -90,120 +94,256 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # penalty the first time we need to annotate a port on a cold start.
         self.cache_port_project_data()
 
-    def resync(self, context):
-        super(WorkloadEndpointSyncer, self).resync(context)
-        self._resync_live_migrations(context)
+    def get_from_neutron(self, context, scope):
+        if scope.all():
+            ports = self.db.get_ports(context)
+        else:
+            ports = self.db.get_ports(context, filters={"id": list(scope.ids())})
 
-    def _resync_live_migrations(self, context):
-        """Ensure LiveMigration resources and destination WEPs are consistent.
+        # neutron_map keys carry one of three prefixes:
+        #
+        # * "wep <name>"      - source-side WorkloadEndpoint for the port at its
+        #                       current binding:host_id.  Value is the port dict.
+        # * "dest-wep <name>" - destination-side WorkloadEndpoint for a port
+        #                       that's mid-migration (binding:profile
+        #                       migrating_to set).  Value is (port, dest_host) -
+        #                       carrying dest_host as scope-defined data rather
+        #                       than baking it into a port-dict copy means a
+        #                       reread inside the update path can refetch the
+        #                       port without losing the destination binding.
+        # * "lm <name>"       - LiveMigration resource, paired with the
+        #                       dest-side WEP.  Value is (port, dest_host) for
+        #                       the same reason as dest-wep.
+        neutron_map = {}
+        for port in ports:
+            if not _port_is_endpoint_port(port):
+                continue
+            neutron_map["wep " + endpoint_name(port)] = port
+            # binding:profile may carry migrating_to=None (or be missing entirely) after
+            # a migration completes or is cancelled.  Only generate destination-side
+            # entries when migrating_to is a truthy host string - calling endpoint_name
+            # with host_id=None would raise.  Matches the truthy-check pattern used in
+            # mech_calico.py's update_port_postcommit / status handling.
+            dest_host = port.get("binding:profile", {}).get("migrating_to")
+            if dest_host:
+                # Compute the dest-side WEP name using a transient copy with the dest
+                # host overlaid.  We don't keep the copy - the neutron_map value is
+                # (port, dest_host) so the dest_host survives a reread inside the update
+                # path.
+                dest_wep_name = endpoint_name({**port, "binding:host_id": dest_host})
+                neutron_map["dest-wep " + dest_wep_name] = (port, dest_host)
+                neutron_map["lm " + dest_wep_name] = (port, dest_host)
 
-        For each Neutron port with migrating_to set, ensure a destination WEP
-        and LiveMigration resource exist.  For each LiveMigration in etcd that
-        doesn't correspond to a migrating port, delete it.
-        """
-        LOG.info("Starting LiveMigration resync")
-        namespace = self.namespace
+        return neutron_map
 
-        # Build the set of LiveMigration names that should exist, based on
-        # Neutron ports with migrating_to set.
-        expected_lm_names = set()
-        with self.txn_from_context(context, "resync-live-migrations"):
-            for port in self.db.get_ports(context):
-                if not _port_is_endpoint_port(port):
-                    continue
-                dest_host = port.get("binding:profile", {}).get("migrating_to")
-                if dest_host is None:
-                    continue
-
-                dest_port = port.copy()
-                dest_port["binding:host_id"] = dest_host
-                dest_wep_name = endpoint_name(dest_port)
-                expected_lm_names.add(dest_wep_name)
-
-                # Ensure LiveMigration and destination WEP exist.
-                self.write_live_migration(port, dest_port)
-                self.write_endpoint(dest_port, context, reread=False)
-                LOG.info(
-                    "LiveMigration resync: ensured LM and dest WEP for %s",
-                    dest_wep_name,
+    def get_from_etcd(self, scope):
+        # Scan all WEPs and LMs from etcd.  At scale this is cheap: in our benchmarks
+        # even 3000 WEPs read in ~270ms, two orders of magnitude less than the per-port
+        # DB queries in the compare phase.  All entries are keyed "wep <name>" / "lm
+        # <name>" initially; the WEP syncer's post_process_etcd_map relabels
+        # destination-side entries once neutron_map is known.
+        etcd_map = {
+            "wep " + name: (spec, revision)
+            for name, spec, revision in datamodel_v3.get_all(
+                "WorkloadEndpoint", self.namespace, with_labels_and_annotations=True
+            )
+        }
+        etcd_map.update(
+            {
+                "lm " + name: (spec, revision)
+                for name, spec, revision in datamodel_v3.get_all(
+                    "LiveMigration", self.namespace
                 )
+            }
+        )
 
-        # Delete orphaned LiveMigration resources.
-        for name, _, mod_revision in datamodel_v3.get_all("LiveMigration", namespace):
-            if name not in expected_lm_names:
-                LOG.warning("LiveMigration resync: deleting orphaned LM %s", name)
-                self.delete_live_migration(name, mod_revision=mod_revision)
+        if scope.all():
+            return etcd_map
 
-        LOG.info("LiveMigration resync done")
+        # Narrow port scope.  WEP and LM etcd names can't be synthesised from a port_id
+        # alone (the name also encodes host and device_id), so we filter the scanned
+        # entries by trailing port_id rather than fetching by name.  This also
+        # automatically picks up any stale WEPs at old binding hosts or stale LMs from
+        # cancelled migrations, which would otherwise be invisible to a narrow resync.
+        escaped_port_ids = {pid.replace("-", "--") for pid in scope.ids()}
+
+        def _key_matches_scope(key):
+            # The "wep " / "lm " prefix can't itself match "-<escaped port_id>" (the
+            # prefixes end with a space), so endswith on the full key gives the same
+            # answer as stripping the prefix first.
+            return any(
+                key.endswith("-" + escaped_pid) for escaped_pid in escaped_port_ids
+            )
+
+        return {
+            key: value for key, value in etcd_map.items() if _key_matches_scope(key)
+        }
+
+    def post_process_etcd_map(self, scope, etcd_map, neutron_map):
+        # Rekey any WEPs whose name corresponds to a dest-wep entry in neutron_map, so
+        # the compare loop sees both sides of the dest WEP under the same key.  Etcd has
+        # no source/dest distinction; the rekey lets the compare branch on the dest-wep
+        # prefix and apply the dest_host overlay when computing write_data.
+        for name in list(neutron_map):
+            if name.startswith("dest-wep "):
+                wep_name = remove_prefix(name, "dest-wep ")
+                src_key = "wep " + wep_name
+                if src_key in etcd_map:
+                    etcd_map[name] = etcd_map.pop(src_key)
+        return etcd_map
 
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
-            datamodel_v3.delete_legacy(self.resource_kind, "")
+            datamodel_v3.delete_legacy("WorkloadEndpoint", "")
 
-    # The following methods differ from those for other resources because for
-    # endpoints we need to read, compare and write labels and annotations as
-    # well as spec.
+    # The following methods differ from those for other resources for two reasons.
+    #
+    # 1. For endpoints we need to read, compare and write labels and annotations as well
+    # as spec.
+    #
+    # 2. This syncer writes LiveMigration resources as well as WorkloadEndpoints, and
+    # distinguishes source- and dest-side WEPs of a live migration.  These all share
+    # the WorkloadEndpoint etcd kind and key shape; the "wep ", "dest-wep " and "lm "
+    # prefixes on the neutron_map / etcd_map keys are what disambiguate them inside
+    # the resync.
 
-    def get_all_from_etcd(self):
-        return datamodel_v3.get_all(
-            self.resource_kind, self.namespace, with_labels_and_annotations=True
-        )
-
-    def etcd_write_data_matches_existing(self, write_data, existing):
-        rspec, rlabels, rannotations = existing
-        wspec, wlabels, wannotations = write_data
-        return rspec == wspec and rlabels == wlabels and rannotations == wannotations
+    @staticmethod
+    def _wep_etcd_name(name):
+        """If `name` is a "wep " or "dest-wep " entry, return the bare WEP
+        etcd name (i.e. without prefix); otherwise return None."""
+        if name.startswith("wep "):
+            return remove_prefix(name, "wep ")
+        if name.startswith("dest-wep "):
+            return remove_prefix(name, "dest-wep ")
+        return None
 
     def create_in_etcd(self, name, write_data):
-        spec, labels, annotations = write_data
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            spec, labels, annotations = write_data
+            return datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                spec,
+                labels=labels,
+                annotations=annotations,
+                mod_revision=0,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.put(
-            self.resource_kind,
+            "LiveMigration",
             self.namespace,
-            name,
-            spec,
-            labels=labels,
-            annotations=annotations,
+            remove_prefix(name, "lm "),
+            write_data,
             mod_revision=0,
         )
 
     def update_in_etcd(self, name, write_data, mod_revision=etcdv3.MUST_UPDATE):
-        spec, labels, annotations = write_data
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            spec, labels, annotations = write_data
+            return datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                spec,
+                labels=labels,
+                annotations=annotations,
+                mod_revision=mod_revision,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.put(
-            self.resource_kind,
+            "LiveMigration",
             self.namespace,
-            name,
-            spec,
-            labels=labels,
-            annotations=annotations,
+            remove_prefix(name, "lm "),
+            write_data,
             mod_revision=mod_revision,
         )
 
     def delete_from_etcd(self, name, mod_revision):
+        wep_name = self._wep_etcd_name(name)
+        if wep_name is not None:
+            return datamodel_v3.delete(
+                "WorkloadEndpoint",
+                self.namespace,
+                wep_name,
+                mod_revision=mod_revision,
+            )
+
+        # LiveMigration case.
         return datamodel_v3.delete(
-            self.resource_kind, self.namespace, name, mod_revision=mod_revision
+            "LiveMigration",
+            self.namespace,
+            remove_prefix(name, "lm "),
+            mod_revision=mod_revision,
         )
 
-    def get_all_from_neutron(self, context):
-        # TODO(lukasa): We could reduce the amount of data we load from Neutron
-        # here by filtering in the get_ports call.
-        return dict(
-            (endpoint_name(port), port)
-            for port in self.db.get_ports(context)
-            if _port_is_endpoint_port(port)
-        )
+    def neutron_to_etcd_write_data(self, name, value, context, reread=False):
+        if name.startswith("lm "):
+            port, dest_host = value
+            return self.neutron_to_live_migration_etcd_write_data(
+                port, dest_host, context, reread
+            )
+        if name.startswith("dest-wep "):
+            port, dest_host = value
+            return self.neutron_to_port_etcd_write_data(
+                port, context, reread, dest_host=dest_host
+            )
+        # "wep " - plain source-side WEP.
+        return self.neutron_to_port_etcd_write_data(value, context, reread)
 
-    def neutron_to_etcd_write_data(self, port, context, reread=False):
+    def neutron_to_port_etcd_write_data(self, port, context, reread, dest_host=None):
+        """Build the etcd write-data tuple for a WEP from a Neutron port.
+
+        If ``dest_host`` is given, this is the destination-side WEP of a live migration;
+        on reread we additionally verify the migration is still in progress to that
+        host, and overlay ``dest_host`` onto the (possibly rereaded) port so
+        endpoint_spec/labels/annotations see the dest binding.  A reread that finds the
+        port has stopped migrating to ``dest_host`` raises ResourceGone, letting the
+        resync skip the entry -- the next pass sees no matching dest-wep in neutron_map
+        and the in-etcd-only branch deletes the orphan dest WEP.
+        """
         if reread:
             try:
                 port = self.db.get_port(context, port["id"])
             except n_exc.PortNotFound:
                 raise ResourceGone()
+            if dest_host is not None:
+                current_dest = port.get("binding:profile", {}).get("migrating_to")
+                if current_dest != dest_host:
+                    raise ResourceGone()
+        if dest_host is not None:
+            port = {**port, "binding:host_id": dest_host}
         port_extra = self.get_extra_port_information(context, port)
         return (
             endpoint_spec(port, port_extra),
             endpoint_labels(port, self.namespace, port_extra),
             endpoint_annotations(port),
         )
+
+    def neutron_to_live_migration_etcd_write_data(
+        self, port, dest_host, context, reread
+    ):
+        """Build the etcd write-data dict for a LiveMigration resource.
+
+        ``dest_host`` is the scope-defined destination host; reconstructing the
+        dest_port copy here (rather than carrying a stale fork in the neutron_map value)
+        means a reread is always safe -- the dest_host survives, and an interrupted
+        migration is detected and skipped via ResourceGone.
+        """
+        if reread:
+            try:
+                port = self.db.get_port(context, port["id"])
+            except n_exc.PortNotFound:
+                raise ResourceGone()
+            current_dest = port.get("binding:profile", {}).get("migrating_to")
+            if current_dest != dest_host:
+                raise ResourceGone()
+        dest_port = {**port, "binding:host_id": dest_host}
+        return live_migration_spec(self.namespace, port, dest_port)
 
     def write_endpoint(self, port, context, must_update=False, reread=True):
         if reread:
@@ -246,29 +386,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         present).
         """
         namespace = self.namespace
-        wep_id_fields = {
-            "orchestratorID": "openstack",
-            "workloadID": namespace + "/" + source_port["device_id"],
-            "endpointID": source_port["id"],
-        }
         return datamodel_v3.put(
             "LiveMigration",
             namespace,
             endpoint_name(dest_port),
-            {
-                "source": {
-                    "workloadEndpoint": dict(
-                        hostname=source_port["binding:host_id"],
-                        **wep_id_fields,
-                    ),
-                },
-                "target": {
-                    "workloadEndpoint": dict(
-                        hostname=dest_port["binding:host_id"],
-                        **wep_id_fields,
-                    ),
-                },
-            },
+            live_migration_spec(namespace, source_port, dest_port),
         )
 
     def delete_live_migration(self, name, mod_revision=None):
@@ -546,6 +668,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             LOG.exception("Failed to query Keystone DB")
 
 
+# This can be replaced by `s.removeprefix(prefix)` in Python 3.9+, but for OpenStack
+# Caracal the minimum Python version is 3.8, so we should remain compatible with that.
+def remove_prefix(s, prefix):
+    return s[len(prefix) :] if s.startswith(prefix) else s
+
+
 def endpoint_name(port):
     def escape_dashes(s):
         return s.replace("-", "--")
@@ -555,6 +683,21 @@ def endpoint_name(port):
         escape_dashes(port["device_id"]),
         escape_dashes(port["id"]),
     )
+
+
+def endpoint_name_without_host(name):
+    # The `device_id` and `id` parts of the name are UUIDs and so cannot contain
+    # "openstack".  Hence...
+    parts = name.split("-")
+    try:
+        openstack_pos = len(parts) - 1 - parts[::-1].index("openstack")
+    except ValueError:
+        # No "openstack" segment in the name.  Can happen if etcd contains a legacy or
+        # hand-edited resource with a non-standard name; return the input unchanged so
+        # the caller's dict lookup misses cleanly and the bad entry is left for an
+        # operator to deal with.
+        return name
+    return "-".join(parts[openstack_pos:])
 
 
 def endpoint_labels(port, namespace, port_extra):
@@ -673,3 +816,51 @@ def _port_is_endpoint_port(port):
     # Otherwise log and return False.
     LOG.debug("Not a VM port: %s" % port)
     return False
+
+
+def make_keystone_client():
+    """Build a Keystone v3 client from oslo.config.
+
+    Used both by mech_calico (when constructing the driver's EndpointWriter) and by the
+    resync runner (when constructing a fresh EndpointWriter for the CLI).  Tests inject
+    a mock by patching this function.
+    """
+    authcfg = cfg.CONF.keystone_authtoken
+    LOG.debug("authcfg = %r", authcfg)
+    for key in authcfg:
+        if "password" in key:
+            LOG.debug("authcfg[%s] = %s", key, "***")
+        else:
+            LOG.debug("authcfg[%s] = %s", key, authcfg[key])
+
+    auth = v3.Password(
+        user_domain_name=authcfg.user_domain_name,
+        username=authcfg.username,
+        password=authcfg.password,
+        project_domain_name=authcfg.project_domain_name,
+        project_name=authcfg.project_name,
+        auth_url=re.sub(r"/v3/?$", "", authcfg.auth_url) + "/v3",
+    )
+    return KeystoneClient(session=session.Session(auth=auth))
+
+
+def live_migration_spec(namespace, source_port, dest_port):
+    wep_id_fields = {
+        "orchestratorID": "openstack",
+        "workloadID": namespace + "/" + source_port["device_id"],
+        "endpointID": source_port["id"],
+    }
+    return {
+        "source": {
+            "workloadEndpoint": dict(
+                hostname=source_port["binding:host_id"],
+                **wep_id_fields,
+            ),
+        },
+        "target": {
+            "workloadEndpoint": dict(
+                hostname=dest_port["binding:host_id"],
+                **wep_id_fields,
+            ),
+        },
+    }
