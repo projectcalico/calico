@@ -109,16 +109,14 @@ func MakeCIDROrIPOnly(cidr ip.CIDR) CIDROrIPOnlyIPSetMember {
 // dispatch through MakeCIDROrIPOnly.
 func MakeCIDROrIPOnlyV4(cidr ip.V4CIDR) CIDROrIPOnlyIPSetMember {
 	if cidr.IsSingleAddress() {
-		v4, _ := cidr.Addr().(ip.V4Addr)
-		return MakeSingleIPv4(v4)
+		return MakeSingleIPv4(cidr.AddrV4())
 	}
 	return cidrIPSetMember[ip.V4CIDR]{cidr: cidr}
 }
 
 func MakeCIDROrIPOnlyV6(cidr ip.V6CIDR) CIDROrIPOnlyIPSetMember {
 	if cidr.IsSingleAddress() {
-		v6, _ := cidr.Addr().(ip.V6Addr)
-		return MakeSingleIPv6(v6)
+		return MakeSingleIPv6(cidr.AddrV6())
 	}
 	return cidrIPSetMember[ip.V6CIDR]{cidr: cidr}
 }
