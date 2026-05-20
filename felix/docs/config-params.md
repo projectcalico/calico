@@ -888,6 +888,23 @@ floating IPs are always programmed, regardless of this setting.)
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
+### `HostSubnetNeighResponses` (config file) / `hostSubnetNeighResponses` (YAML)
+
+Controls whether Felix automatically responds to
+ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+selected LoadBalancer VIPs that fall within the same subnet as the host
+interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+subnet are reachable from the local L2 segment without BGP.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_HostSubnetNeighResponses` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> (case insensitive) |
+| Default value (above encoding) | `PodsAndLoadBalancers` |
+| `FelixConfiguration` field | `hostSubnetNeighResponses` (YAML) `HostSubnetNeighResponses` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
+| Default value (YAML) | `PodsAndLoadBalancers` |
+
 ### `IPForwarding` (config file) / `ipForwarding` (YAML)
 
 Controls whether Felix sets the host sysctls to enable IP forwarding. IP forwarding is required
