@@ -369,12 +369,12 @@ func (d *endpointData) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ip
 		return buf
 	case shapeV4Multi:
 		for _, c := range (*epV4Multi)(unsafe.Pointer(d)).cidrsSlice() {
-			buf = append(buf, cidrV4MemberOrSingle(c))
+			buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV4(c))
 		}
 		return buf
 	case shapeV6Multi:
 		for _, c := range (*epV6Multi)(unsafe.Pointer(d)).cidrsSlice() {
-			buf = append(buf, cidrV6MemberOrSingle(c))
+			buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV6(c))
 		}
 		return buf
 	}
@@ -392,25 +392,6 @@ func (d *endpointData) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ip
 		)
 	}
 	return buf
-}
-
-// cidrV4MemberOrSingle returns the appropriate IPSetMember for a
-// V4CIDR. /32s collapse to single-IP members (matching the legacy
-// behaviour); shorter prefixes produce a CIDR member.
-func cidrV4MemberOrSingle(c ip.V4CIDR) ipsetmember.IPSetMember {
-	if c.IsSingleAddress() {
-		v4, _ := c.Addr().(ip.V4Addr)
-		return ipsetmember.MakeSingleIPv4(v4)
-	}
-	return ipsetmember.MakeCIDROrIPOnly(c)
-}
-
-func cidrV6MemberOrSingle(c ip.V6CIDR) ipsetmember.IPSetMember {
-	if c.IsSingleAddress() {
-		v6, _ := c.Addr().(ip.V6Addr)
-		return ipsetmember.MakeSingleIPv6(v6)
-	}
-	return ipsetmember.MakeCIDROrIPOnly(c)
 }
 
 // AppendIPPortMembers appends one IPSetMember per matching named-port

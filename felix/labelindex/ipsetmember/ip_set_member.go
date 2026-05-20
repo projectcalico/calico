@@ -90,22 +90,37 @@ func (m ipPortProtoIPSetMember[IPType]) PortNumber() uint16 {
 }
 
 func MakeCIDROrIPOnly(cidr ip.CIDR) CIDROrIPOnlyIPSetMember {
-	if cidr.IsSingleAddress() {
-		return MakeSingleIP(cidr.Addr())
-	}
 	switch cidr := cidr.(type) {
 	case ip.V4CIDR:
-		return cidrIPSetMember[ip.V4CIDR]{
-			cidr: cidr,
-		}
+		return MakeCIDROrIPOnlyV4(cidr)
 	case ip.V6CIDR:
-		return cidrIPSetMember[ip.V6CIDR]{
-			cidr: cidr,
-		}
+		return MakeCIDROrIPOnlyV6(cidr)
 	default:
 		logrus.WithField("cidr", cidr).Panic("Unknown CIDR type.")
 		panic("Unknown CIDR type.")
 	}
+}
+
+// MakeCIDROrIPOnlyV4 / MakeCIDROrIPOnlyV6 are the typed leaf
+// constructors used by callers that already know the CIDR family.
+// They collapse /32 v4 (or /128 v6) into the single-IP member form
+// and otherwise return a typed cidrIPSetMember that preserves the
+// prefix. Calling these directly avoids the ip.CIDR interface
+// dispatch through MakeCIDROrIPOnly.
+func MakeCIDROrIPOnlyV4(cidr ip.V4CIDR) CIDROrIPOnlyIPSetMember {
+	if cidr.IsSingleAddress() {
+		v4, _ := cidr.Addr().(ip.V4Addr)
+		return MakeSingleIPv4(v4)
+	}
+	return cidrIPSetMember[ip.V4CIDR]{cidr: cidr}
+}
+
+func MakeCIDROrIPOnlyV6(cidr ip.V6CIDR) CIDROrIPOnlyIPSetMember {
+	if cidr.IsSingleAddress() {
+		v6, _ := cidr.Addr().(ip.V6Addr)
+		return MakeSingleIPv6(v6)
+	}
+	return cidrIPSetMember[ip.V6CIDR]{cidr: cidr}
 }
 
 type CIDROrIPOnlyIPSetMember interface {
