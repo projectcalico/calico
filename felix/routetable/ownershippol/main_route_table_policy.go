@@ -100,6 +100,11 @@ type MainTableOwnershipPolicy struct {
 	// interface belongs to a workload that is acting as a local BGP peer.
 	// BIRD installs routes on such interfaces with RTPROT_BIRD; those
 	// routes must not be cleaned up by Felix.
+	//
+	// Concurrency: this is a read-only callback so it is thread-safe.
+	// CompleteDeferredWork on all managers finishes before route table
+	// Apply goroutines are spawned, so the endpoint manager's workload
+	// endpoint maps won't be written during route reconciliation.
 	IsWorkloadBGPPeerIface func(ifaceName string) bool
 }
 
