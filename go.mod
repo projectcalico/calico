@@ -51,6 +51,10 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
+	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
+	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
+	github.com/mdlayher/ndp v1.1.0
+	github.com/mdlayher/packet v1.1.2 // indirect
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/natefinch/atomic v1.0.1
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
