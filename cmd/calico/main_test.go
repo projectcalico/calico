@@ -91,11 +91,25 @@ func TestDispatch(t *testing.T) {
 			wantArgs:   []string{"/usr/bin/calico"},
 		},
 		{
-			name:       "plain calico with subcommand ignores CNI_COMMAND (footgun guard)",
+			name:       "plain calico with cobra subcommand ignores CNI_COMMAND (footgun guard)",
 			args:       []string{"/usr/bin/calico", "component", "felix"},
 			cniCommand: "ADD",
 			wantMode:   modeCobra,
 			wantArgs:   []string{"/usr/bin/calico", "component", "felix"},
+		},
+		{
+			name:       "plain calico with CNI_COMMAND and netconf positional arg dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico", `{"name":"net","type":"calico"}`},
+			cniCommand: "ADD",
+			wantMode:   modeCNI,
+			wantArgs:   []string{"/opt/cni/bin/calico", `{"name":"net","type":"calico"}`},
+		},
+		{
+			name:       "plain calico with CNI_COMMAND and -t flag dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico", "-t"},
+			cniCommand: "VERSION",
+			wantMode:   modeCNI,
+			wantArgs:   []string{"/opt/cni/bin/calico", "-t"},
 		},
 		{
 			name:       "plain calico with subcommand and no CNI_COMMAND runs Cobra",

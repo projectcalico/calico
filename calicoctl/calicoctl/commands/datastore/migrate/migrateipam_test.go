@@ -17,6 +17,7 @@ package migrate
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,7 +45,7 @@ var _ = Describe("IPAM migration handling", func() {
 	BeforeEach(func() {
 		block1 = &model.KVPair{
 			Key: model.BlockKey{
-				CIDR: net.MustParseCIDR("192.168.201.0/26"),
+				CIDR: netip.MustParsePrefix("192.168.201.0/26"),
 			},
 			Value: &model.AllocationBlock{
 				CIDR:     net.MustParseCIDR("192.168.201.0/26"),
@@ -67,7 +68,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		affinity1 = &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+				CIDR:         netip.MustParsePrefix("192.168.201.0/26"),
 				Host:         nodeName,
 				AffinityType: string(ipam.AffinityTypeHost),
 			},
@@ -118,7 +119,7 @@ var _ = Describe("IPAM migration handling", func() {
 
 		// Check that the block affinity attributes were changed correctly
 		newAffinityKey := model.BlockAffinityKey{
-			CIDR:         net.MustParseCIDR("192.168.201.0/26"),
+			CIDR:         netip.MustParsePrefix("192.168.201.0/26"),
 			Host:         newNodeName,
 			AffinityType: string(ipam.AffinityTypeHost),
 		}

@@ -72,7 +72,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: v1Pool.CIDR},
+					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(v1Pool.CIDR)},
 					Value: &v1Pool,
 				},
 			})
@@ -188,7 +188,7 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: pool.CIDR},
+					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(pool.CIDR)},
 					Value: &pool,
 				},
 			})
@@ -199,7 +199,7 @@ var _ = Describe("L3RouteResolver", func() {
 			blockCIDR := net.MustParseCIDR("10.0.1.0/29")
 			l3RR.OnBlockUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.BlockKey{CIDR: blockCIDR},
+					Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
 					Value: &model.AllocationBlock{
 						CIDR:        blockCIDR,
 						Affinity:    &remoteAffinity,
@@ -245,7 +245,7 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: pool.CIDR},
+					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(pool.CIDR)},
 					Value: &pool,
 				},
 			})
@@ -256,7 +256,7 @@ var _ = Describe("L3RouteResolver", func() {
 			blockCIDR := net.MustParseCIDR("10.0.1.0/32")
 			l3RR.OnBlockUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.BlockKey{CIDR: blockCIDR},
+					Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
 					Value: &model.AllocationBlock{
 						CIDR:        blockCIDR,
 						Affinity:    &remoteAffinity,

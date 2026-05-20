@@ -365,6 +365,12 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.syncerLck.Lock()
 	p.dpSyncer.Stop()
 	p.dpSyncer = s
+	// Re-wire the trigger so that the new syncer's expand-NodePort fixup
+	// goroutine can schedule a dataplane Apply when previously-missed
+	// route lookups resolve. proxy.New() does this for the initial syncer;
+	// without it here, swapping in a fresh syncer (e.g. on a host-IP
+	// change) would silently lose that wakeup path.
+	s.SetTriggerFn(p.runner.Run)
 	p.syncerLck.Unlock()
 
 	p.forceSyncDP()

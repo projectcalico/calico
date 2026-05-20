@@ -40,10 +40,6 @@ import (
 )
 
 const (
-	// Test tier names.
-	rbacTestTier  = "e2e-rbac-test"
-	rbacOtherTier = "e2e-rbac-other"
-
 	// Impersonated user names.
 	rbacTierAdminUser    = "e2e-rbac-tier-admin"
 	rbacNoTierGetUser    = "e2e-rbac-no-tier-get"
@@ -70,22 +66,23 @@ const (
 //  2. The required verb on either the specific policy or all policies in the tier
 //     (resource: "tier.networkpolicies" / "tier.globalnetworkpolicies")
 //
-// PRECONDITIONS: The tiered RBAC webhook or Calico API server must be installed. Tiers are cluster-scoped,
-// so these tests must run serially.
+// PRECONDITIONS: The tiered RBAC webhook or Calico API server must be installed.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Tiered-RBAC"),
 	describe.WithNoTierPrefix(),
-	describe.WithSerial(),
 	"Tiered RBAC",
 	func() {
 		f := utils.NewDefaultFramework("tiered-rbac")
 
 		var (
-			adminCli ctrlclient.Client
-			ctx      context.Context
-			cancel   context.CancelFunc
+			adminCli  ctrlclient.Client
+			ctx       context.Context
+			cancel    context.CancelFunc
+			testTier  string
+			otherTier string
+			suffix    string
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
@@ -107,13 +104,17 @@ var _ = describe.CalicoDescribe(
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
+			suffix = utils.GenerateRandomName("rbac")
+			testTier = "e2e-rbac-test-" + suffix
+			otherTier = "e2e-rbac-other-" + suffix
+
 			By("Creating test tiers")
 			for _, t := range []struct {
 				name  string
 				order float64
 			}{
-				{rbacTestTier, 500},
-				{rbacOtherTier, 501},
+				{testTier, 500},
+				{otherTier, 501},
 			} {
 				tier := v3.NewTier()
 				tier.Name = t.name
@@ -136,7 +137,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources()
+			setup := buildTieredRBACResources(testTier, otherTier, suffix)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -170,7 +171,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-create"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -187,7 +188,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-no-get"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -204,7 +205,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-no-policy"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -220,7 +221,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-delete"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -238,7 +239,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-allow-update"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -262,7 +263,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-deny-update"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -290,7 +291,7 @@ var _ = describe.CalicoDescribe(
 
 				gnp := v3.NewGlobalNetworkPolicy()
 				gnp.Name = "rbac-test-allow-gnp"
-				gnp.Spec.Tier = rbacTestTier
+				gnp.Spec.Tier = testTier
 				gnp.Spec.Order = ptr.To(100.0)
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -306,7 +307,7 @@ var _ = describe.CalicoDescribe(
 
 				gnp := v3.NewGlobalNetworkPolicy()
 				gnp.Name = "rbac-test-deny-gnp"
-				gnp.Spec.Tier = rbacTestTier
+				gnp.Spec.Tier = testTier
 				gnp.Spec.Order = ptr.To(100.0)
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -325,7 +326,7 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy in the permitted tier should succeed")
 				gnp := v3.NewGlobalNetworkPolicy()
 				gnp.Name = "rbac-test-other-allowed"
-				gnp.Spec.Tier = rbacOtherTier
+				gnp.Spec.Tier = otherTier
 				gnp.Spec.Order = ptr.To(100.0)
 				gnp.Spec.Selector = "all()"
 				gnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -337,7 +338,7 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy in a non-permitted tier should be denied")
 				gnp2 := v3.NewGlobalNetworkPolicy()
 				gnp2.Name = "rbac-test-other-denied"
-				gnp2.Spec.Tier = rbacTestTier
+				gnp2.Spec.Tier = testTier
 				gnp2.Spec.Order = ptr.To(100.0)
 				gnp2.Spec.Selector = "all()"
 				gnp2.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -417,7 +418,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-read-only"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -435,7 +436,7 @@ var _ = describe.CalicoDescribe(
 				newNP := v3.NewNetworkPolicy()
 				newNP.Name = "rbac-test-read-only-create"
 				newNP.Namespace = f.Namespace.Name
-				newNP.Spec.Tier = rbacTestTier
+				newNP.Spec.Tier = testTier
 				newNP.Spec.Order = ptr.To(100.0)
 				newNP.Spec.Selector = "all()"
 				newNP.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -475,7 +476,7 @@ var _ = describe.CalicoDescribe(
 				allowed := v3.NewNetworkPolicy()
 				allowed.Name = "rbac-test-exact-allowed"
 				allowed.Namespace = f.Namespace.Name
-				allowed.Spec.Tier = rbacTestTier
+				allowed.Spec.Tier = testTier
 				allowed.Spec.Order = ptr.To(100.0)
 				allowed.Spec.Selector = "all()"
 				allowed.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -502,7 +503,7 @@ var _ = describe.CalicoDescribe(
 				other := v3.NewNetworkPolicy()
 				other.Name = "rbac-test-exact-denied"
 				other.Namespace = f.Namespace.Name
-				other.Spec.Tier = rbacTestTier
+				other.Spec.Tier = testTier
 				other.Spec.Order = ptr.To(100.0)
 				other.Spec.Selector = "all()"
 				other.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -536,7 +537,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-watch-target"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -576,7 +577,7 @@ var _ = describe.CalicoDescribe(
 				np := v3.NewNetworkPolicy()
 				np.Name = "rbac-test-watch-denied"
 				np.Namespace = f.Namespace.Name
-				np.Spec.Tier = rbacTestTier
+				np.Spec.Tier = testTier
 				np.Spec.Order = ptr.To(100.0)
 				np.Spec.Selector = "all()"
 				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -609,17 +610,16 @@ var _ = describe.CalicoDescribe(
 		// tier RBAC, which the admission webhook cannot enforce.
 		framework.Context("old-style vs new-style name disambiguation", describe.RequiresCalicoAPIServer(), func() {
 			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
-			const (
-				bareName     = "rbac-test-disambig"
-				prefixedName = rbacTestTier + ".rbac-test-disambig"
-			)
+			const bareName = "rbac-test-disambig"
 
 			It("should independently authorize bare and tier-prefixed policy names", func() {
+				prefixedName := testTier + "." + bareName
+
 				By("Creating a bare-named policy (new-style)")
 				barePolicy := v3.NewNetworkPolicy()
 				barePolicy.Name = bareName
 				barePolicy.Namespace = f.Namespace.Name
-				barePolicy.Spec.Tier = rbacTestTier
+				barePolicy.Spec.Tier = testTier
 				barePolicy.Spec.Order = ptr.To(100.0)
 				barePolicy.Spec.Selector = "all()"
 				barePolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -636,7 +636,7 @@ var _ = describe.CalicoDescribe(
 				prefixedPolicy := v3.NewNetworkPolicy()
 				prefixedPolicy.Name = prefixedName
 				prefixedPolicy.Namespace = f.Namespace.Name
-				prefixedPolicy.Spec.Tier = rbacTestTier
+				prefixedPolicy.Spec.Tier = testTier
 				prefixedPolicy.Spec.Order = ptr.To(101.0)
 				prefixedPolicy.Spec.Selector = "all()"
 				prefixedPolicy.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -693,20 +693,27 @@ type tieredRBACSetup struct {
 //   - rbacNoPolicyUser: has tier GET but NO tier policy access
 //   - rbacOtherTierUser: full access but only for a different tier
 //   - rbacReadOnlyUser: read-only access (get/list/watch) on tier policies
-func buildTieredRBACResources() tieredRBACSetup {
+//
+// testTier, otherTier, and suffix are passed in so each spec can use
+// per-run random names. That way a previous spec that crashed mid-flight
+// (e.g. the calico-apiserver briefly went unavailable) and left resources
+// behind cannot 409 the next spec's creates, and parallel specs don't
+// collide on cluster-scoped resources.
+func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
 	addRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
+		fullName := rbacResourcePrefix + name + "-" + suffix
 		setup.roles = append(setup.roles, rbacv1.ClusterRole{
-			ObjectMeta: metav1.ObjectMeta{Name: rbacResourcePrefix + name},
+			ObjectMeta: metav1.ObjectMeta{Name: fullName},
 			Rules:      rules,
 		})
 		setup.bindings = append(setup.bindings, rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: rbacResourcePrefix + name},
+			ObjectMeta: metav1.ObjectMeta{Name: fullName},
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: "rbac.authorization.k8s.io",
 				Kind:     "ClusterRole",
-				Name:     rbacResourcePrefix + name,
+				Name:     fullName,
 			},
 			Subjects: []rbacv1.Subject{
 				{
@@ -735,13 +742,13 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
 			Verbs:         []string{"create", "update", "delete", "get"},
-			ResourceNames: []string{rbacTestTier + ".*"},
+			ResourceNames: []string{testTier + ".*"},
 		},
 	))
 
@@ -752,7 +759,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
 			Verbs:         []string{"create", "update", "delete", "get"},
-			ResourceNames: []string{rbacTestTier + ".*"},
+			ResourceNames: []string{testTier + ".*"},
 		},
 	))
 
@@ -763,24 +770,24 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 	))
 
-	// Other tier admin: full access but scoped to a different tier (rbacOtherTier).
-	// Should be able to create in rbacOtherTier but denied in rbacTestTier.
+	// Other tier admin: full access but scoped to a different tier (otherTier).
+	// Should be able to create in otherTier but denied in testTier.
 	addRoleAndBinding("other-tier", rbacOtherTierUser, append(baseRules(),
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacOtherTier},
+			ResourceNames: []string{otherTier},
 		},
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
 			Verbs:         []string{"create", "update", "delete", "get"},
-			ResourceNames: []string{rbacOtherTier + ".*"},
+			ResourceNames: []string{otherTier + ".*"},
 		},
 	))
 
@@ -793,7 +800,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
@@ -819,13 +826,13 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies"},
 			Verbs:         []string{"get", "list", "watch"},
-			ResourceNames: []string{rbacTestTier + ".*"},
+			ResourceNames: []string{testTier + ".*"},
 		},
 	})
 
@@ -849,7 +856,7 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
@@ -866,13 +873,13 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier + ".rbac-test-disambig"},
+			ResourceNames: []string{testTier + ".rbac-test-disambig"},
 		},
 	))
 
@@ -888,13 +895,13 @@ func buildTieredRBACResources() tieredRBACSetup {
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tiers"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{rbacTestTier},
+			ResourceNames: []string{testTier},
 		},
 		{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
 			Verbs:         []string{"get", "list", "watch"},
-			ResourceNames: []string{rbacTestTier + ".*"},
+			ResourceNames: []string{testTier + ".*"},
 		},
 	})
 
@@ -910,15 +917,17 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Tiered-RBAC"),
-	describe.WithSerial(),
 	"Tiered RBAC with tier-prefixed names",
 	func() {
 		f := utils.NewDefaultFramework("tiered-rbac-prefixed")
 
 		var (
-			adminCli ctrlclient.Client
-			ctx      context.Context
-			cancel   context.CancelFunc
+			adminCli  ctrlclient.Client
+			ctx       context.Context
+			cancel    context.CancelFunc
+			testTier  string
+			otherTier string
+			suffix    string
 		)
 
 		BeforeEach(func() {
@@ -928,15 +937,19 @@ var _ = describe.CalicoDescribe(
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
+			suffix = utils.GenerateRandomName("rbac")
+			testTier = "e2e-rbac-test-" + suffix
+			otherTier = "e2e-rbac-other-" + suffix
+
 			By("Creating test tier")
 			tier := v3.NewTier()
-			tier.Name = rbacTestTier
+			tier.Name = testTier
 			tier.Spec.Order = ptr.To(500.0)
 			tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
 			Expect(adminCli.Create(ctx, tier)).To(Succeed())
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources()
+			setup := buildTieredRBACResources(testTier, otherTier, suffix)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -952,7 +965,7 @@ var _ = describe.CalicoDescribe(
 			var errOccurred bool
 
 			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources()
+			setup := buildTieredRBACResources(testTier, otherTier, suffix)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
 					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
@@ -968,9 +981,9 @@ var _ = describe.CalicoDescribe(
 
 			By("Cleaning up test tier")
 			tier := v3.NewTier()
-			tier.Name = rbacTestTier
+			tier.Name = testTier
 			if err := adminCli.Delete(ctx, tier); err != nil {
-				logrus.WithError(err).WithField("name", rbacTestTier).Error("Failed to delete Tier")
+				logrus.WithError(err).WithField("name", testTier).Error("Failed to delete Tier")
 				errOccurred = true
 			}
 
@@ -985,9 +998,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			np := v3.NewNetworkPolicy()
-			np.Name = rbacTestTier + "." + "rbac-test-prefixed-allow"
+			np.Name = testTier + "." + "rbac-test-prefixed-allow"
 			np.Namespace = f.Namespace.Name
-			np.Spec.Tier = rbacTestTier
+			np.Spec.Tier = testTier
 			np.Spec.Order = ptr.To(100.0)
 			np.Spec.Selector = "all()"
 			np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
@@ -1002,9 +1015,9 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			np2 := v3.NewNetworkPolicy()
-			np2.Name = rbacTestTier + "." + "rbac-test-prefixed-deny"
+			np2.Name = testTier + "." + "rbac-test-prefixed-deny"
 			np2.Namespace = f.Namespace.Name
-			np2.Spec.Tier = rbacTestTier
+			np2.Spec.Tier = testTier
 			np2.Spec.Order = ptr.To(100.0)
 			np2.Spec.Selector = "all()"
 			np2.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}

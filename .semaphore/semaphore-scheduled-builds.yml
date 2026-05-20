@@ -100,7 +100,7 @@ global_job_config:
       # cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
-          GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
           image="calico/go-build:${GO_BUILD_VER}"
           if ! docker image inspect "$image" >/dev/null 2>&1; then
             cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
@@ -127,7 +127,10 @@ global_job_config:
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
-  # Manual promotion for publishing a hashrelease.
+  # Manual promotion for publishing a hashrelease. To push per-component
+  # images at the current SHA, trigger this with BUILD_CONTAINER_IMAGES=true
+  # and PUBLISH_IMAGES=true — that replaces the previous per-merge auto-push
+  # behavior that fired the Push * promotions below on every merge.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
     parameters:
@@ -161,48 +164,34 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
-  # Have separate promotions for publishing images so we can re-run
-  # them individually if they fail, and so we can run them in parallel.
+  # Separate promotions for publishing images individually, kept as manual
+  # buttons so a single component can be re-pushed without re-running the
+  # full hashrelease. These no longer auto-fire on master/release merges —
+  # use "Publish hashrelease" with PUBLISH_IMAGES=true for the bulk push.
   - name: Push calico images
     pipeline_file: push-images/calico.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
-    auto_promote:
-      when: "branch =~ 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
+  - name: Push nftables RPM images
+    pipeline_file: push-images/nft-rpms.yml
 blocks:
   - name: Check images availability
     run:
@@ -349,8 +338,9 @@ blocks:
     # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
     # this block is just a `docker manifest inspect` + GCS upload of the
     # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
-    # arches) and, on master/release branches, pushes to Docker Hub so
-    # subsequent workflows hit the cache.
+    # arches) and uploads the image tarball to GCS for downstream consumers.
+    # Publishing to Docker Hub happens in a separate post-build promotion
+    # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     run:
       when: "true"
     dependencies: []
@@ -359,6 +349,14 @@ blocks:
         machine:
           type: f1-standard-4
           os_image: ubuntu2204
+      prologue:
+        commands:
+          - mkdir logs
+          - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      epilogue:
+        always:
+          commands:
+            - artifact push job logs --destination semaphore/logs || true
       jobs:
         - name: "Build/cache nftables RPMs"
           matrix:
@@ -369,28 +367,7 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
-            - NFT_RPMS_TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
-            - NFT_RPMS_IMAGE="calico/nftables-rpms:${NFT_RPMS_TAG}-${ARCH}"
-            - cache_path="${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst"
-            - |-
-              if docker manifest inspect "$NFT_RPMS_IMAGE" >/dev/null 2>&1; then
-                echo "Cache hit for $NFT_RPMS_IMAGE, pulling"
-                docker pull "$NFT_RPMS_IMAGE"
-              else
-                echo "Cache miss for $NFT_RPMS_IMAGE, building"
-                docker run --privileged --rm tonistiigi/binfmt --install all
-                make -C hack/rpms/nftables image ARCH="$ARCH"
-                # SEMAPHORE_GIT_BRANCH is the PR target branch on PR builds (so it
-                # equals "master" for every PR landing on master), not the source
-                # branch — gate on SEMAPHORE_GIT_PR_NUMBER being empty to detect
-                # an actual branch build before pushing.
-                if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && ( "$SEMAPHORE_GIT_BRANCH" == "master" || "$SEMAPHORE_GIT_BRANCH" == release-* ) ]]; then
-                  docker push "$NFT_RPMS_IMAGE"
-                fi
-              fi
-            - docker save "$NFT_RPMS_IMAGE" -o /tmp/nft-rpms.tar
-            - zstd -3 --rm /tmp/nft-rpms.tar
-            - gcloud storage cp /tmp/nft-rpms.tar.zst "$cache_path"
+            - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so that every downstream job can
     # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
@@ -407,7 +384,7 @@ blocks:
       jobs:
         - name: "Cache calico/go-build to GCS"
           commands:
-            - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
             - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
             - |-
               if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
@@ -858,6 +835,9 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Envoy Gateway
     run:
       when: >-
@@ -1217,6 +1197,45 @@ blocks:
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+  - name: "E2E tests: Gateway API Conformance"
+    run:
+      when: >-
+        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
+      jobs:
+        - name: "Gateway API: Conformance Tests"
+          commands:
+            # Build the runner, bring up kind+Calico, deploy Envoy Gateway,
+            # run the upstream conformance suite, emit ./report/. Each step
+            # is defined in the root Makefile so this YAML and a local
+            # invocation stay in lockstep.
+            - .semaphore/run-and-monitor gateway-conformance.log make e2e-test-gateway-conformance
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+            - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
+            # Permanent copy in GCS for upstream submission and historical
+            # comparison. Semaphore's job artifacts are GC'd after ~30 days,
+            # which isn't long enough for "go fish out the v3.30 report next
+            # year". PRs are skipped — their Semaphore artifact is plenty,
+            # and PR runs would otherwise flood the bucket.
+            - |-
+              if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
+                ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
+                sha="${SEMAPHORE_GIT_SHA:0:12}"
+                dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+                echo "Publishing conformance report to ${dst}"
+                gcloud storage cp ./report/* "${dst}" || true
+              fi
   - name: Goldmane
     run:
       when: "true"

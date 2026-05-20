@@ -244,7 +244,7 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 }
 
 func (m *migrationController) enqueue(obj any) {
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to get key for object")
 		return

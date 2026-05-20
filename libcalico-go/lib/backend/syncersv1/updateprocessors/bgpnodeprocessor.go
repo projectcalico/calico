@@ -162,7 +162,7 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 				continue
 			}
 			kvps = append(kvps, &model.KVPair{
-				Key:      model.BlockAffinityKey{Host: name, CIDR: *cidr},
+				Key:      model.BlockAffinityKey{Host: name, CIDR: model.PrefixFromIPNet(*cidr)},
 				Value:    nil,
 				Revision: kvp.Revision,
 			})
@@ -177,7 +177,7 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 			}
 
 			kvps = append(kvps, &model.KVPair{
-				Key:      model.BlockAffinityKey{Host: name, CIDR: *cidr},
+				Key:      model.BlockAffinityKey{Host: name, CIDR: model.PrefixFromIPNet(*cidr)},
 				Value:    &model.BlockAffinity{State: model.StateConfirmed},
 				Revision: kvp.Revision,
 			})
