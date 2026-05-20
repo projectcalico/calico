@@ -93,6 +93,7 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
     def reset(self):
         config.reset_service()
 
+
 class CalicoManagerWorker(worker.BaseWorker):
     """Service for doing election and compaction.
 
