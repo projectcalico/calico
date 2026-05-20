@@ -24,6 +24,7 @@ const (
 	ObjectDir    = "/usr/lib/calico/bpf"
 	CtlbPinDir   = "ctlb"
 	TcxPinDir    = DefaultBPFfsPath + "/tcx"
+	NetkitPinDir = DefaultBPFfsPath + "/netkit"
 )
 
 func GetCgroupV2Path() string {

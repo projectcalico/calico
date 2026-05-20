@@ -174,7 +174,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 ignoredInterfaces:
                   description:
                     IgnoredInterfaces indicates the network interfaces that
@@ -296,7 +296,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
@@ -322,7 +322,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceExternalIPs:
                   description: |-
                     ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
@@ -338,7 +338,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceLoadBalancerAggregation:
                   default: Enabled
                   description: |-
@@ -365,7 +365,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
               type: object
               x-kubernetes-validations:
                 - message:
@@ -12395,9 +12395,9 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
+          command: ["/usr/bin/calico-ipam", "-upgrade"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -12434,9 +12434,9 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/opt/cni/bin/install"]
+          args: ["cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -12491,7 +12491,7 @@ spec:
         - name: "ebpf-bootstrap"
           image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
-          command: ["calico-node", "-init", "-best-effort"]
+          command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
             - mountPath: /sys/fs
               name: sys-fs
@@ -12612,14 +12612,19 @@ spec:
             preStop:
               exec:
                 command:
-                  - /bin/calico-node
-                  - -shutdown
+                  - calico
+                  - component
+                  - node
+                  - shutdown
           livenessProbe:
             exec:
               command:
-                - /bin/calico-node
-                - -felix-live
-                - -bird-live
+                - calico
+                - component
+                - node
+                - health
+                - --felix-live
+                - --bird-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -12627,9 +12632,12 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /bin/calico-node
-                - -felix-ready
-                - -bird-ready
+                - calico
+                - component
+                - node
+                - health
+                - --felix-ready
+                - --bird-ready
             periodSeconds: 10
             timeoutSeconds: 10
           volumeMounts:
@@ -12752,8 +12760,9 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
+          args: ["component", "kube-controllers"]
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -12763,7 +12772,10 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -l
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -12772,7 +12784,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -r
             periodSeconds: 10
           securityContext:

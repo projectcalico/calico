@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ func RunFlannelMigrationController(kconfigfile string, nodeName, subnetEnv strin
 		"-e", fmt.Sprintf("DEBUG_WAIT_BEFORE_EXIT=%d", waitBeforeExit),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		os.Getenv("MIGRATION_CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers", "--health-port=9099")
 }
 
 type FlannelNode struct {

@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 github.com/NYTimes/gziphandler v1.1.1
 github.com/antlr4-go/antlr/v4 v4.13.0
@@ -22,9 +22,9 @@ github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
 github.com/go-logr/stdr v1.2.2
-github.com/go-openapi/jsonpointer v0.21.0
-github.com/go-openapi/jsonreference v0.20.2
-github.com/go-openapi/swag v0.23.0
+github.com/go-openapi/jsonpointer v0.21.2
+github.com/go-openapi/jsonreference v0.21.0
+github.com/go-openapi/swag v0.23.1
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/gogo/protobuf v1.3.2
@@ -42,7 +42,7 @@ github.com/json-iterator/go v1.1.12
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/kylelemons/godebug v1.1.0
 github.com/leodido/go-urn v1.4.0
-github.com/mailru/easyjson v0.7.7
+github.com/mailru/easyjson v0.9.0
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -77,14 +77,14 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.50.0
+golang.org/x/crypto v0.51.0
 golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
-golang.org/x/net v0.53.0
+golang.org/x/net v0.54.0
 golang.org/x/oauth2 v0.36.0
 golang.org/x/sync v0.20.0
-golang.org/x/sys v0.43.0
-golang.org/x/term v0.42.0
-golang.org/x/text v0.36.0
+golang.org/x/sys v0.44.0
+golang.org/x/term v0.43.0
+golang.org/x/text v0.37.0
 golang.org/x/time v0.15.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -98,20 +98,20 @@ gopkg.in/go-playground/validator.v9 v9.31.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.4
-k8s.io/apiextensions-apiserver v0.35.4
-k8s.io/apimachinery v0.35.4
-k8s.io/apiserver v0.35.4
-k8s.io/client-go v0.35.4
-k8s.io/component-base v0.35.4
-k8s.io/component-helpers v0.35.4
-k8s.io/controller-manager v0.35.4
+k8s.io/api v0.35.5
+k8s.io/apiextensions-apiserver v0.35.5
+k8s.io/apimachinery v0.35.5
+k8s.io/apiserver v0.35.5
+k8s.io/client-go v0.35.5
+k8s.io/component-base v0.35.5
+k8s.io/component-helpers v0.35.5
+k8s.io/controller-manager v0.35.5
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
-k8s.io/kms v0.35.4
+k8s.io/kms v0.35.5
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
-k8s.io/kubelet v0.35.4
-k8s.io/kubernetes v1.35.4
+k8s.io/kubelet v0.35.5
+k8s.io/kubernetes v1.35.5
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 kubevirt.io/api v1.8.2
 kubevirt.io/containerized-data-importer-api v1.64.0
@@ -122,72 +122,3 @@ sigs.k8s.io/network-policy-api v0.2.0
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.4.0
 sigs.k8s.io/yaml v1.6.0
-
-local:api/pkg/apis/projectcalico/v3
-local:api/pkg/defaults
-local:api/pkg/lib/numorstring
-local:api/pkg/openapi
-local:apiserver/cmd/apiserver
-local:apiserver/cmd/apiserver/server
-local:apiserver/pkg/apiserver
-local:apiserver/pkg/printers/projectcalico
-local:apiserver/pkg/rbac
-local:apiserver/pkg/registry/projectcalico/authorizer
-local:apiserver/pkg/registry/projectcalico/bgpconfiguration
-local:apiserver/pkg/registry/projectcalico/bgpfilter
-local:apiserver/pkg/registry/projectcalico/bgppeer
-local:apiserver/pkg/registry/projectcalico/blockaffinity
-local:apiserver/pkg/registry/projectcalico/caliconodestatus
-local:apiserver/pkg/registry/projectcalico/clusterinformation
-local:apiserver/pkg/registry/projectcalico/felixconfig
-local:apiserver/pkg/registry/projectcalico/globalnetworkset
-local:apiserver/pkg/registry/projectcalico/globalpolicy
-local:apiserver/pkg/registry/projectcalico/hostendpoint
-local:apiserver/pkg/registry/projectcalico/ipamconfig
-local:apiserver/pkg/registry/projectcalico/ippool
-local:apiserver/pkg/registry/projectcalico/ipreservation
-local:apiserver/pkg/registry/projectcalico/kubecontrollersconfig
-local:apiserver/pkg/registry/projectcalico/networkpolicy
-local:apiserver/pkg/registry/projectcalico/networkset
-local:apiserver/pkg/registry/projectcalico/profile
-local:apiserver/pkg/registry/projectcalico/rest
-local:apiserver/pkg/registry/projectcalico/server
-local:apiserver/pkg/registry/projectcalico/stagedglobalnetworkpolicy
-local:apiserver/pkg/registry/projectcalico/stagedkubernetesnetworkpolicy
-local:apiserver/pkg/registry/projectcalico/stagednetworkpolicy
-local:apiserver/pkg/registry/projectcalico/tier
-local:apiserver/pkg/registry/projectcalico/util
-local:apiserver/pkg/storage/calico
-local:apiserver/pkg/storage/etcd
-local:crypto/pkg/tls
-local:lib/std/uniquelabels
-local:lib/std/uniquestr
-local:libcalico-go/lib/apiconfig
-local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
-local:libcalico-go/lib/apis/internalapi
-local:libcalico-go/lib/backend
-local:libcalico-go/lib/backend/api
-local:libcalico-go/lib/backend/encap
-local:libcalico-go/lib/backend/etcdv3
-local:libcalico-go/lib/backend/k8s
-local:libcalico-go/lib/backend/k8s/conversion
-local:libcalico-go/lib/backend/k8s/resources
-local:libcalico-go/lib/backend/model
-local:libcalico-go/lib/backend/watchersyncer
-local:libcalico-go/lib/clientv3
-local:libcalico-go/lib/errors
-local:libcalico-go/lib/hash
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/names
-local:libcalico-go/lib/namespace
-local:libcalico-go/lib/net
-local:libcalico-go/lib/options
-local:libcalico-go/lib/resources
-local:libcalico-go/lib/selector
-local:libcalico-go/lib/selector/parser
-local:libcalico-go/lib/selector/tokenizer
-local:libcalico-go/lib/set
-local:libcalico-go/lib/validator/v3
-local:libcalico-go/lib/watch
-local:libcalico-go/lib/winutils
-local:pkg/buildinfo

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,41 +15,17 @@
 package server
 
 import (
-	"net/http"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
-// Health is for liveness and readiness probes
-type Health struct {
-	http         *http.Server
-	httpServeMux *http.ServeMux
-}
-
-// NewHealth returns a new health and instantiates the handlers.
-func NewHealth() (*Health, error) {
-	health := &Health{
-		http:         new(http.Server),
-		httpServeMux: http.NewServeMux(),
-	}
-	health.http.Addr = ":9080"
-	health.http.Handler = health.httpServeMux
-
-	// Both readiness and liveness should both be healthy. In other words, if the endpoints
-	// are accessible, the service is live and ready.
-	health.httpServeMux.HandleFunc("/health", func(resp http.ResponseWriter, req *http.Request) {
-		log.Trace("GET /health")
-
-		if _, err := resp.Write([]byte("OK")); err != nil {
-			log.WithError(err).Error("failed to write /health response")
-		}
-	})
-
-	return health, nil
-}
-
-// ListenAndServeHTTP starts to listen and serve HTTP requests
-func (h *Health) ListenAndServeHTTP() error {
-	log.Infof("Starting Health server at %s", h.http.Addr)
-	return h.http.ListenAndServe()
+// NewHealthAggregator creates a HealthAggregator for Guardian and starts
+// serving on the given port if enabled. A single "guardian" reporter is
+// registered and immediately marked live and ready — Guardian's health
+// is determined by whether the HTTP endpoint is reachable.
+func NewHealthAggregator(enabled bool, port int) *health.HealthAggregator {
+	ha := health.NewHealthAggregator()
+	ha.RegisterReporter("guardian", &health.HealthReport{Live: true, Ready: true}, 0)
+	ha.Report("guardian", &health.HealthReport{Live: true, Ready: true})
+	ha.ServeHTTP(enabled, "", port)
+	return ha
 }

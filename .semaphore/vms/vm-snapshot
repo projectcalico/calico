@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Captures VM-side diagnostic state when the batch watchdog fires before
+# SIGTERMing the batch. Best-effort: each section is independent and never
+# aborts the rest of the snapshot.
+
+# Don't 'set -e' - we want best-effort capture.
+export LC_ALL=C
+export PATH=$PATH:/usr/sbin:/sbin
+
+section() {
+  echo
+  echo "===== $* ====="
+}
+
+section "date / kernel / uptime"
+date -u
+uname -a
+uptime
+
+section "load / memory / disk"
+cat /proc/loadavg
+free -m
+df -h
+
+section "mount | grep -E 'bpf|cgroup'"
+mount | grep -E 'bpf|cgroup' || true
+
+section "docker ps -a"
+sudo docker ps -a 2>&1 || true
+
+section "docker info (container-runtime state)"
+sudo docker info 2>&1 | head -80 || true
+
+section "ps auxfww"
+ps auxfww
+
+section "find /sys/fs/bpf (depth<=3)"
+sudo find /sys/fs/bpf -mindepth 1 -maxdepth 3 -printf '%y %p\n' 2>/dev/null | head -300 || true
+
+if command -v bpftool >/dev/null 2>&1; then
+  section "bpftool prog show"
+  sudo bpftool prog show 2>&1 | head -300 || true
+  section "bpftool map show"
+  sudo bpftool map show 2>&1 | head -300 || true
+  section "bpftool link show"
+  sudo bpftool link show 2>&1 | head -200 || true
+fi
+
+section "ip link"
+ip -d link 2>&1 | head -200 || true
+
+# The wrapped batch process pid is written to test.pid by batches.sh.
+# Inspect it and any descendants for kernel-side hang state (wchan + stack).
+if [ -f "$HOME/test.pid" ]; then
+  TEST_PID=$(cat "$HOME/test.pid")
+  section "test wrapper pid=$TEST_PID descendants"
+  if [ -d "/proc/$TEST_PID" ]; then
+    # Walk the process tree under TEST_PID. pgrep -P only gives direct
+    # children, but the test process is typically docker -> bash -> bpf_ut.test
+    # so we recurse manually with ps --ppid.
+    pids=("$TEST_PID")
+    queue=("$TEST_PID")
+    while [ ${#queue[@]} -gt 0 ]; do
+      head=${queue[0]}
+      queue=("${queue[@]:1}")
+      # shellcheck disable=SC2207
+      kids=( $(ps --ppid "$head" -o pid= 2>/dev/null) )
+      for k in "${kids[@]}"; do
+        pids+=("$k")
+        queue+=("$k")
+      done
+    done
+
+    for pid in "${pids[@]}"; do
+      [ -d "/proc/$pid" ] || continue
+      cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+      state=$(awk '/^State:/{print $2,$3}' "/proc/$pid/status" 2>/dev/null)
+      wchan=$(cat "/proc/$pid/wchan" 2>/dev/null)
+      echo
+      echo "--- pid=$pid state=$state wchan=$wchan"
+      echo "    cmd: $cmd"
+      sudo cat "/proc/$pid/stack" 2>/dev/null | head -30
+    done
+  else
+    echo "/proc/$TEST_PID does not exist (process already gone)"
+  fi
+else
+  section "no \$HOME/test.pid - cannot identify wrapper pid"
+fi
+
+section "dmesg | tail -500"
+sudo dmesg --ctime 2>/dev/null | tail -500 || sudo dmesg | tail -500 || true
+
+section "tail -n 200 \$HOME/test.log"
+tail -n 200 "$HOME/test.log" 2>/dev/null || echo "(no test.log)"
+
+echo
+echo "===== END VM SNAPSHOT ====="

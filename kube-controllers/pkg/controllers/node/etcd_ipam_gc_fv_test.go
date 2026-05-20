@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
@@ -41,15 +42,29 @@ import (
 
 var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
-		etcd      *containers.Container
-		c         client.Interface
-		k8sClient *fake.Clientset
-		stopCh    chan struct{}
-		ips       *testutils.TestBlockAllocator
+		etcd         *containers.Container
+		c            client.Interface
+		k8sClient    *fake.Clientset
+		stopCh       chan struct{}
+		ips          *testutils.TestBlockAllocator
+		nodeInformer cache.SharedIndexInformer
 	)
 
 	const kNodeName = "k8snodename"
 	const cNodeName = "calinodename"
+
+	// waitForK8sNodeInCache blocks until the node informer has observed the given
+	// node. The fake clientset delivers watch events to the informer asynchronously,
+	// so a Create call returns before the store is updated. If the IPAM controller
+	// runs checkAllocations before the node lands in cache, it sees the allocation's
+	// k8s node as missing and marks the IP as a confirmed leak with no grace period.
+	waitForK8sNodeInCache := func(name string) {
+		GinkgoHelper()
+		Eventually(func() bool {
+			_, exists, err := nodeInformer.GetStore().GetByKey(name)
+			return err == nil && exists
+		}, 5*time.Second, 50*time.Millisecond).Should(BeTrue(), "k8s node %q never appeared in informer cache", name)
+	}
 
 	BeforeAll(func() {
 		// Run etcd for the Calico datastore.
@@ -78,7 +93,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		stopCh = make(chan struct{})
 
 		factory := informers.NewSharedInformerFactory(k8sClient, 0)
-		nodeInformer := factory.Core().V1().Nodes().Informer()
+		nodeInformer = factory.Core().V1().Nodes().Informer()
 		podInformer := factory.Core().V1().Pods().Informer()
 
 		dataFeed := utils.NewDataFeed(c, utils.Etcdv3)
@@ -158,6 +173,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: kNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(kNodeName)
 
 		// Create a Calico node with a reference to the K8s node.
 		cn := calicoNode(cNodeName, kNodeName, map[string]string{})
@@ -203,6 +219,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: commonNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(commonNodeName)
 
 		// Create a Calico node without a node reference. Be extra tricky, by naming the calico node the
 		// same name as the Kubernetes node. This makes sure we're really using the orchRef properly.
@@ -265,6 +282,7 @@ var _ = Describe("kube-controllers IPAM FV tests (etcd mode)", Ordered, Continue
 		kn := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: commonNodeName}}
 		_, err := k8sClient.CoreV1().Nodes().Create(context.Background(), kn, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		waitForK8sNodeInCache(commonNodeName)
 
 		// Allocate an IP address on a node that doesn't exist in Calico.
 		handleA := "handleA"

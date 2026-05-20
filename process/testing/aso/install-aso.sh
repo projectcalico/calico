@@ -48,7 +48,7 @@ ${KUBECTL} wait node "${KIND_CLUSTER_NAME}-control-plane" --for=condition=ready 
 
 # Install cert-manager
 echo; echo "Wait for cert manager to be installed ..."
-curl -sSf -L --retry 5 "https://github.com/jetstack/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml" -o cert-manager.yaml
+curl -sSf -L --retry 5 "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml" -o cert-manager.yaml
 ${KUBECTL} apply -f ./cert-manager.yaml
 ${CMCTL} check api --wait=2m
 

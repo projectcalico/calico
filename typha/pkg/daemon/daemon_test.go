@@ -74,19 +74,13 @@ var _ = Describe("Daemon", func() {
 		Expect(earlyLoggingConfigured).To(BeTrue())
 	})
 
-	It("should parse the config file path", func() {
-		d.ParseCommandLineArgs([]string{"-c", "/tmp/config.cfg"})
+	It("should set the config file path", func() {
+		d.SetConfigFilePath("/tmp/config.cfg")
 		Expect(d.ConfigFilePath).To(Equal("/tmp/config.cfg"))
 	})
 
-	It("should parse the config file path", func() {
-		d.ParseCommandLineArgs([]string{"--config", "/tmp/config.cfg"})
-		Expect(d.ConfigFilePath).To(Equal("/tmp/config.cfg"))
-	})
-
-	It("should default the config file path", func() {
-		d.ParseCommandLineArgs([]string{})
-		Expect(d.ConfigFilePath).To(Equal("/etc/calico/typha.cfg"))
+	It("should have a default config file constant", func() {
+		Expect(DefaultConfigFile).To(Equal("/etc/calico/typha.cfg"))
 	})
 
 	Describe("with a config file loaded", func() {
@@ -104,7 +98,7 @@ var _ = Describe("Daemon", func() {
 			err = configFile.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			d.ParseCommandLineArgs([]string{"-c", configFile.Name()})
+			d.SetConfigFilePath(configFile.Name())
 
 			cxt, cancelFunc = context.WithTimeout(context.Background(), 10*time.Second)
 		})

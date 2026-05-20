@@ -76,9 +76,10 @@ spec:
           effect: NoSchedule
       containers:
         - name: calico-webhooks
-          image: {{.Values.webhooks.registry}}/{{.Values.webhooks.image}}:{{ .Values.version }}
+          image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args:
+            - component
             - webhook
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key

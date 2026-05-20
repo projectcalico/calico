@@ -26,6 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	// Config fields are file paths, flags, and connection params — no inline credentials or key material.
 	log.Infof("Config: %#v", c)
 
 	// Run confd.

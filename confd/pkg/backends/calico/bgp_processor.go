@@ -25,6 +25,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -174,11 +175,14 @@ func (c *client) populateNodeConfig(pc *processorContext, config *types.BirdBGPC
 	switch logLevel {
 	case "none":
 		// DebugMode stays empty (no debug output)
+		// PeerDebugMode stays empty too
 	case "debug":
 		config.DebugMode = "all"
+		config.PeerDebugMode = "debug all;"
 	default:
 		// Default behavior for empty string or any other log level
 		config.DebugMode = "{ states }"
+		config.PeerDebugMode = "debug { states, routes, filters, events };"
 	}
 
 	// Handle router ID logic
@@ -390,6 +394,7 @@ func (c *client) processMeshPeers(pc *processorContext, config *types.BirdBGPCon
 			ASNumber:        peerAS,
 			Type:            "mesh",
 			SourceAddr:      currentNodeIP,
+			TTLSecurity:     "off", // Mesh peers always use ttl security off with multihop
 			Password:        c.getNodeMeshPassword(pc.globalBGPConfig),
 			GracefulRestart: pc.getNodeMeshRestartTime(),
 		}
@@ -455,9 +460,9 @@ func (c *client) processPeersFromPath(peerPath, peerType string, config *types.B
 	logc.Debugf("Found %d peer entries", len(kvPairs))
 
 	// Unmarshal all peers once and separate into remote and local
-	var remotePeers, localPeers []bgpPeer
+	var remotePeers, localPeers []backends.BGPPeer
 	for key, value := range kvPairs {
-		var peerData bgpPeer
+		var peerData backends.BGPPeer
 		if err := json.Unmarshal([]byte(value), &peerData); err != nil {
 			logc.WithError(err).Warnf("Failed to unmarshal peer data for key %s", key)
 			continue
@@ -491,8 +496,8 @@ func (c *client) processPeersFromPath(peerPath, peerType string, config *types.B
 	return nil
 }
 
-// buildPeerFromData constructs a BirdBGPPeer from bgpPeer data
-func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
+// buildPeerFromData constructs a BirdBGPPeer from BGPPeer data
+func (c *client) buildPeerFromData(peer *backends.BGPPeer, prefix string, config *types.BirdBGPConfig, nodeClusterID string, ipVersion int) *types.BirdBGPPeer {
 	logc := log.WithField("ipVersion", ipVersion)
 
 	peerIP := peer.PeerIP.String()
@@ -539,9 +544,9 @@ func (c *client) buildPeerFromData(peer *bgpPeer, prefix string, config *types.B
 		result.LocalASNumber = peer.LocalASNum.String()
 	}
 
-	// TTL security
+	// TTL security - store the hop count or "off"
 	if peer.TTLSecurity > 0 {
-		result.TTLSecurity = fmt.Sprintf("on;\n  multihop %d", peer.TTLSecurity)
+		result.TTLSecurity = fmt.Sprintf("%d", peer.TTLSecurity)
 	} else {
 		result.TTLSecurity = "off"
 	}

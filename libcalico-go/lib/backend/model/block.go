@@ -17,6 +17,7 @@ package model
 import (
 	"fmt"
 	"math/big"
+	"net/netip"
 	"reflect"
 	"regexp"
 	"strings"
@@ -66,15 +67,16 @@ var (
 )
 
 type BlockKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
+	CIDR netip.Prefix `json:"-" validate:"required,name"`
 }
 
 func (key BlockKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil {
+	if !key.CIDR.IsValid() {
 		return "", errors.ErrorInsufficientIdentifiers{}
 	}
-	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", key.CIDR.Version(), c)
+	cidr := key.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/ipam/v2/assignment/ipv%d/block/%s", prefixVersion(cidr), c)
 	return e, nil
 }
 
@@ -118,12 +120,12 @@ func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
-	_, cidr, err := net.ParseCIDR(cidrStr)
+	prefix, err := netip.ParsePrefix(cidrStr)
 	if err != nil {
 		log.Debugf("find an invalid cidr %s for path=%v , info=%v ", r[0][1], path, err)
 		return nil
 	}
-	return BlockKey{CIDR: *cidr}
+	return BlockKey{CIDR: prefix.Masked()}
 }
 
 type AllocationBlock struct {

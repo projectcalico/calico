@@ -262,6 +262,16 @@ func BPFAttachType() string {
 	return strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
 }
 
+// bpfProgPinDir returns the BPF program pin directory for the current
+// attach mode.  In netkit mode, workload programs are pinned under
+// NetkitPinDir; in TCX mode they use TcxPinDir.
+func bpfProgPinDir() string {
+	if infrastructure.NetkitMode() {
+		return bpfdefs.NetkitPinDir
+	}
+	return bpfdefs.TcxPinDir
+}
+
 func describeBPFTests(opts ...bpfTestOpt) bool {
 	if !BPFMode() {
 		// Non-BPF run.
@@ -905,6 +915,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				It("should recover if the BPF programs are removed", func() {
+					if infrastructure.NetkitMode() {
+						Skip("Netkit uses bpf_link; removing pins doesn't detach programs")
+					}
 					flapInterface := func() {
 						By("Flapping interface")
 						tc.Felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
@@ -928,7 +941,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 						}
 
 						// Removing the ingress program should break connectivity due to the lack of "seen" mark.
@@ -950,7 +963,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
@@ -960,7 +973,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if BPFAttachType() == "tc" {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
-							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 						}
 						// Removing the egress program doesn't stop traffic.
 
@@ -976,7 +989,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								fmt.Sprintf("to wep not loaded for %s", w[0].InterfaceName))
 						} else {
 							Eventually(func() string {
-								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfdefs.TcxPinDir, fmt.Sprintf("%s_egress", w[0].InterfaceName)))
+								out, _ := tc.Felixes[0].ExecOutput("stat", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
 								return out
 							}, "5s", "200ms").ShouldNot(ContainSubstring("No such file or directory"),
 								fmt.Sprintf("from wep not loaded for %s", w[0].InterfaceName))
@@ -1202,39 +1215,31 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// as part of this test. There can be other preamble programs
 					// from previous tests and we want to ignore those when checking that programs are cleaned up after disabling BPF.
 					getPreambleProgramIDs := func() set.Set[int] {
-						var bpfnetTCX []struct {
-							TC []struct {
-								Name string `json:"name"`
-								ID   int    `json:"prog_id"`
-							} `json:"tc"`
-						}
-
+						// bpftool net show -j puts both TC/TCX and netkit
+						// programs under the "tc" key. Older bpftool uses "id"
+						// for the program ID while newer versions use "prog_id".
+						// Parse both and take whichever is set.
 						var bpfnet []struct {
 							TC []struct {
-								Name string `json:"name"`
-								ID   int    `json:"id"`
+								Name   string `json:"name"`
+								ID     int    `json:"id"`
+								ProgID int    `json:"prog_id"`
 							} `json:"tc"`
 						}
 						out, err := tc.Felixes[0].ExecOutput("bpftool", "net", "show", "-j")
 						Expect(err).NotTo(HaveOccurred())
 						preambleIDs := set.New[int]()
-						if BPFAttachType() == "tc" {
-							err = json.Unmarshal([]byte(out), &bpfnet)
-							Expect(err).NotTo(HaveOccurred())
-							for _, entry := range bpfnet {
-								for _, prog := range entry.TC {
-									if strings.Contains(prog.Name, "cali_tc_pream") {
-										preambleIDs.Add(prog.ID)
+						err = json.Unmarshal([]byte(out), &bpfnet)
+						Expect(err).NotTo(HaveOccurred())
+						for _, entry := range bpfnet {
+							for _, prog := range entry.TC {
+								if strings.Contains(prog.Name, "cali_tc_pream") {
+									id := prog.ProgID
+									if id == 0 {
+										id = prog.ID
 									}
-								}
-							}
-						} else {
-							err = json.Unmarshal([]byte(out), &bpfnetTCX)
-							Expect(err).NotTo(HaveOccurred())
-							for _, entry := range bpfnetTCX {
-								for _, prog := range entry.TC {
-									if strings.Contains(prog.Name, "cali_tc_pream") {
-										preambleIDs.Add(prog.ID)
+									if id != 0 {
+										preambleIDs.Add(id)
 									}
 								}
 							}
@@ -1714,6 +1719,108 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
+					// With a HostEndpoint Deny policy (applyOnForward:false) on
+					// the source node, neither the pod's NAT-outgoing egress nor the
+					// SNAT'd return traffic must be evaluated against it — both are
+					// forwarded flows through the HEP, while applyOnForward:false
+					// policies must only police local-host-namespace traffic.
+					//
+					// The reply path is the more subtle case (and the original bug
+					// report): in iptables mode the reply matches
+					// nf_conntrack uniformly across protocols and is classified as
+					// forwarded ESTABLISHED; in BPF mode UDP replies were missing BPF
+					// conntrack and getting denied because HEP egress had been bypassed
+					// for the outbound NAT-out'd packet, so the host-side CT entry was
+					// never written.
+					//
+					// The egress path locks in the symmetric guarantee: the post-SNAT
+					// source IP equals the node IP, so a naive classification could
+					// mistake the forwarded pod packet for host-namespace-originated
+					// traffic and apply applyOnForward:false policy to it. The
+					// dataplane must use the SEEN+NAT_OUT mark to keep the packet
+					// classified as forwarded.
+					//
+					// The bug is in the workload-side -> host-side BPF conntrack handoff,
+					// which is independent of tunnel/DSR mode, so we only exercise the
+					// non-tunnel non-DSR matrix point to keep the test cheap.
+					if testOpts.tunnel == "none" && !testOpts.dsr {
+						It("should not block SNAT'd traffic via HEP policy", func() {
+							// Clear the parent Context's HEP egress policies — they constrain
+							// HEP forward egress to felixIP(1) only, which prevents our pod
+							// from reaching externalClient. This test only wants its own
+							// deny GNP on the source node's HEP.
+							_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "host-0-1", options2.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							_, err = calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "host-0-1-forward", options2.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+
+							// Deny both ingress and egress with applyOnForward defaulting
+							// to false. Neither rule should affect the pod's forwarded
+							// flow through the HEP.
+							denyPol := api.NewGlobalNetworkPolicy()
+							denyPol.Name = "ci-1988-hep-deny"
+							denyOrder := float64(10)
+							denyPol.Spec.Order = &denyOrder
+							denyPol.Spec.Selector = "ep-type == 'host' && node == '" + tc.Felixes[0].Name + "'"
+							denyPol.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
+							denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
+							denyPol.Spec.Egress = []api.Rule{{Action: "Deny"}}
+							_ = createPolicy(denyPol)
+
+							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny")
+							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "ci-1988-hep-deny")
+
+							// externalClient sits outside the cluster — not a felix node and not
+							// in any IP pool — so NAT-outgoing applies regardless of
+							// NATOutgoingExclusions setting. Start a listener on it.
+							//
+							// Use containerIP() so the workload's IP matches the cluster's
+							// IP family — the connectivity checker defaults to ipVersion=4
+							// and reads the workload's IP field, like hostW above.
+							extSrv := &workload.Workload{
+								C:        externalClient,
+								Name:     "ext-srv",
+								IP:       containerIP(externalClient),
+								Ports:    "8055",
+								Protocol: testOpts.protocol,
+							}
+							Expect(extSrv.Start(infra)).NotTo(HaveOccurred())
+							defer extSrv.Stop()
+
+							// Pod traffic to externalClient is SNAT'd to felixIP(0) by
+							// natOutgoing. The reply targets felixIP(0); the question is whether
+							// felix[0]'s ingress hook lets it back in despite the HEP deny.
+							cc.ExpectSNAT(w[0][0], felixIP(0), extSrv)
+							cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+							// The NAT-outgoing flow has two BPF conntrack entries on the source
+							// node: a workload-side entry keyed by the pre-SNAT 5-tuple
+							// (pod IP) and a host-side entry keyed by the post-SNAT 5-tuple
+							// (node IP). The host-side entry must exist for the reply at
+							// FROM_HEP to skip policy.
+							ctDumpArgs := []string{"calico-bpf", "conntrack", "dump", "--raw"}
+							if testOpts.ipv6 {
+								ctDumpArgs = []string{"calico-bpf", "conntrack", "-6", "dump", "--raw"}
+							}
+							ctDump, err := tc.Felixes[0].ExecOutput(ctDumpArgs...)
+							Expect(err).NotTo(HaveOccurred())
+							// BPF conntrack keys are canonicalized (smaller IP first), so each
+							// entry can appear in either A<->B or B<->A order.
+							ctEntry := func(ipA, ipB string) *regexp.Regexp {
+								qA, qB := regexp.QuoteMeta(ipA), regexp.QuoteMeta(ipB)
+								return regexp.MustCompile(fmt.Sprintf(
+									`proto=%d (?:%s:\d+ <-> %s:8055|%s:8055 <-> %s:\d+)`,
+									numericProto, qA, qB, qB, qA))
+							}
+							podToExt := ctEntry(w[0][0].IP, extSrv.IP)
+							nodeToExt := ctEntry(felixIP(0), extSrv.IP)
+							Expect(podToExt.MatchString(ctDump)).To(BeTrue(),
+								"BPF conntrack missing workload-side (pre-SNAT) entry; dump:\n"+ctDump)
+							Expect(nodeToExt.MatchString(ctDump)).To(BeTrue(),
+								"BPF conntrack missing host-side (post-SNAT) entry; dump:\n"+ctDump)
+						})
+					}
+
 					It("should handle NAT outgoing", func() {
 						By("SNATting outgoing traffic with the flag set")
 						cc.ExpectSNAT(w[0][0], felixIP(0), hostW[1])
@@ -1861,15 +1968,29 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							tcpdump1.SetLogEnabled(true)
 							tcpdump1.AddMatcher("udp-frags", regexp.MustCompile(
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-							tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							// Exclude packets with the DF flag set so incidental
+							// probe traffic (e.g., the connectivity checker) does
+							// not pollute the fragment count; pktgen sends with
+							// --ip-dnf=n so its fragments have DF=0.
+							tcpdump1.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP, "and", "ip[6] & 0x40 = 0")
 							defer tcpdump1.Stop()
 
 							tcpdump0 := w[0][0].AttachTCPDump()
 							tcpdump0.SetLogEnabled(true)
 							tcpdump0.AddMatcher("udp-pod-frags", regexp.MustCompile(
 								fmt.Sprintf("%s.* > %s.*", externalClient.IP, w[0][0].IP)))
-							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP)
+							tcpdump0.Start(infra, "-vvv", "src", "host", externalClient.IP, "and", "dst", "host", w[0][0].IP, "and", "ip[6] & 0x40 = 0")
 							defer tcpdump0.Stop()
+
+							// Wait for the new policy to be programmed and BPF
+							// dataplane to settle before sending fragmented traffic.
+							// Reset expectations first so CheckConnectivity does not
+							// re-fire the ext-client probe from above, which would
+							// land on tcpdump1 and inflate the fragment count.
+							cc.ResetExpectations()
+							cc.Expect(Some, w[0][0], w[1][0])
+							cc.CheckConnectivity()
+							cc.ResetExpectations()
 
 							// Send a packet with large payload without the DNF flag
 							// 16,000 bytes is the typical limit on the size of a
@@ -3716,28 +3837,13 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 						var tcpd *tcpdump.TCPDump
 						if testOpts.protocol == "tcp" {
-							iface := w[1][1].InterfaceName
-							srcIP := clusterIP
-							tcpdHost := tc.Felixes[1]
-							if testOpts.connTimeEnabled {
-								iface = "eth0"
-								switch testOpts.tunnel {
-								case "vxlan":
-									iface = "vxlan.calico"
-								case "wireguard":
-									iface = "wireguard.cali"
-									if testOpts.ipv6 {
-										iface = "wireguard.cali-v6"
-									}
-								case "ipip":
-									iface = "tunl0"
-								}
-								srcIP = w[0][0].IP
-								tcpdHost = tc.Felixes[0]
-							}
-							tcpd = tcpdHost.AttachTCPDump(iface)
+							tcpd = w[1][1].AttachTCPDump()
 							tcpd.SetLogEnabled(true)
 
+							srcIP := clusterIP
+							if testOpts.connTimeEnabled {
+								srcIP = w[0][0].IP
+							}
 							ipRegex := "IP"
 							if testOpts.ipv6 {
 								ipRegex = "IP6"

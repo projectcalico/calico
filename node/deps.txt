@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 github.com/BurntSushi/toml v1.6.0
 github.com/DeRuina/timberjack v1.4.1
@@ -46,9 +46,9 @@ github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
-github.com/go-openapi/jsonpointer v0.21.0
-github.com/go-openapi/jsonreference v0.20.2
-github.com/go-openapi/swag v0.23.0
+github.com/go-openapi/jsonpointer v0.21.2
+github.com/go-openapi/jsonreference v0.21.0
+github.com/go-openapi/swag v0.23.1
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/go-viper/mapstructure/v2 v2.4.0
@@ -75,7 +75,7 @@ github.com/kelseyhightower/memkv v0.1.1
 github.com/klauspost/compress v1.18.5
 github.com/leodido/go-urn v1.4.0
 github.com/lithammer/dedent v1.1.0
-github.com/mailru/easyjson v0.7.7
+github.com/mailru/easyjson v0.9.0
 github.com/mattn/go-runewidth v0.0.19
 github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
@@ -127,14 +127,14 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.50.0
+golang.org/x/crypto v0.51.0
 golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
-golang.org/x/net v0.53.0
+golang.org/x/net v0.54.0
 golang.org/x/oauth2 v0.36.0
 golang.org/x/sync v0.20.0
-golang.org/x/sys v0.43.0
-golang.org/x/term v0.42.0
-golang.org/x/text v0.36.0
+golang.org/x/sys v0.44.0
+golang.org/x/term v0.43.0
+golang.org/x/text v0.37.0
 golang.org/x/time v0.15.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -148,19 +148,19 @@ gopkg.in/go-playground/validator.v9 v9.31.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/ini.v1 v1.67.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.4
-k8s.io/apiextensions-apiserver v0.35.4
-k8s.io/apimachinery v0.35.4
-k8s.io/apiserver v0.35.4
-k8s.io/client-go v0.35.4
-k8s.io/component-base v0.35.4
-k8s.io/component-helpers v0.35.4
-k8s.io/controller-manager v0.35.4
+k8s.io/api v0.35.5
+k8s.io/apiextensions-apiserver v0.35.5
+k8s.io/apimachinery v0.35.5
+k8s.io/apiserver v0.35.5
+k8s.io/client-go v0.35.5
+k8s.io/component-base v0.35.5
+k8s.io/component-helpers v0.35.5
+k8s.io/controller-manager v0.35.5
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
-k8s.io/kubelet v0.35.4
-k8s.io/kubernetes v1.35.4
+k8s.io/kubelet v0.35.5
+k8s.io/kubernetes v1.35.5
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 kubevirt.io/api v1.8.2
 kubevirt.io/containerized-data-importer-api v1.64.0
@@ -176,9 +176,6 @@ sigs.k8s.io/yaml v1.6.0
 local:api/pkg/apis/projectcalico/v3
 local:api/pkg/defaults
 local:api/pkg/lib/numorstring
-local:app-policy/checker
-local:app-policy/policystore
-local:app-policy/types
 local:cni-plugin/internal/pkg/azure
 local:cni-plugin/internal/pkg/utils
 local:cni-plugin/internal/pkg/utils/cri
@@ -192,137 +189,12 @@ local:cni-plugin/pkg/plugin
 local:cni-plugin/pkg/types
 local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
-local:confd/pkg/backends
-local:confd/pkg/backends/calico
-local:confd/pkg/backends/types
-local:confd/pkg/config
-local:confd/pkg/log
-local:confd/pkg/resource/template
-local:confd/pkg/run
 local:crypto/pkg/tls
-local:felix/aws
-local:felix/bpf
-local:felix/bpf/allowsources
-local:felix/bpf/arp
-local:felix/bpf/asm
-local:felix/bpf/bpfdefs
-local:felix/bpf/bpfmap
-local:felix/bpf/conntrack
-local:felix/bpf/conntrack/cleanupv1
-local:felix/bpf/conntrack/timeouts
-local:felix/bpf/conntrack/v2
-local:felix/bpf/conntrack/v3
-local:felix/bpf/conntrack/v4
-local:felix/bpf/consistenthash
-local:felix/bpf/counters
-local:felix/bpf/events
-local:felix/bpf/failsafes
-local:felix/bpf/filter
-local:felix/bpf/hook
-local:felix/bpf/ifstate
-local:felix/bpf/ipfrags
-local:felix/bpf/ipsets
-local:felix/bpf/jump
-local:felix/bpf/legacy
-local:felix/bpf/libbpf
-local:felix/bpf/maps
-local:felix/bpf/nat
-local:felix/bpf/polprog
-local:felix/bpf/profiling
-local:felix/bpf/proxy
-local:felix/bpf/qos
-local:felix/bpf/ringbuf
-local:felix/bpf/routes
-local:felix/bpf/state
-local:felix/bpf/tc
-local:felix/bpf/tc/defs
-local:felix/bpf/utils
-local:felix/bpf/xdp
-local:felix/cachingmap
-local:felix/calc
-local:felix/cmd/calico-bpf/commands
-local:felix/collector
-local:felix/collector/flowlog
-local:felix/collector/goldmane
-local:felix/collector/local
-local:felix/collector/types
-local:felix/collector/types/counter
-local:felix/collector/types/endpoint
-local:felix/collector/types/metric
-local:felix/collector/types/tuple
-local:felix/collector/utils
-local:felix/config
-local:felix/conntrack
-local:felix/daemon
-local:felix/dataplane
-local:felix/dataplane/common
-local:felix/dataplane/external
-local:felix/dataplane/inactive
-local:felix/dataplane/ipsets
-local:felix/dataplane/linux
-local:felix/dataplane/linux/dataplanedefs
-local:felix/dataplane/linux/qos
-local:felix/deltatracker
-local:felix/dispatcher
-local:felix/environment
-local:felix/ethtool
-local:felix/generictables
-local:felix/idalloc
-local:felix/ifacemonitor
-local:felix/ip
-local:felix/ipsets
-local:felix/iptables
-local:felix/iptables/cmdshim
-local:felix/jitter
-local:felix/k8sutils
-local:felix/labelindex
-local:felix/labelindex/ipsetmember
-local:felix/labelindex/labelnamevalueindex
-local:felix/labelindex/labelrestrictionindex
-local:felix/linkaddrs
-local:felix/logutils
-local:felix/markbits
-local:felix/multidict
-local:felix/netlinkshim
-local:felix/netlinkshim/handlemgr
-local:felix/nfnetlink
-local:felix/nfnetlink/nfnl
-local:felix/nfnetlink/pkt
-local:felix/nftables
-local:felix/policysync
-local:felix/proto
-local:felix/proto/protoconv
-local:felix/routerule
-local:felix/routetable
-local:felix/routetable/ownershippol
-local:felix/rules
-local:felix/serviceindex
-local:felix/statusrep
-local:felix/stringutils
-local:felix/throttle
-local:felix/timeshim
-local:felix/types
-local:felix/usagerep
-local:felix/vxlanfdb
-local:felix/wireguard
-local:goldmane/pkg/client
-local:goldmane/pkg/goldmane
-local:goldmane/pkg/internal/flowcache
-local:goldmane/pkg/server
-local:goldmane/pkg/storage
-local:goldmane/pkg/stream
-local:goldmane/pkg/types
-local:goldmane/proto
-local:lib/std/chanutil
-local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
-local:libcalico-go/config
 local:libcalico-go/lib/apiconfig
 local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
 local:libcalico-go/lib/apis/internalapi
-local:libcalico-go/lib/apis/v1
-local:libcalico-go/lib/apis/v1/unversioned
 local:libcalico-go/lib/backend
 local:libcalico-go/lib/backend/api
 local:libcalico-go/lib/backend/encap
@@ -331,70 +203,27 @@ local:libcalico-go/lib/backend/k8s
 local:libcalico-go/lib/backend/k8s/conversion
 local:libcalico-go/lib/backend/k8s/resources
 local:libcalico-go/lib/backend/model
-local:libcalico-go/lib/backend/syncersv1/bgpsyncer
-local:libcalico-go/lib/backend/syncersv1/dedupebuffer
-local:libcalico-go/lib/backend/syncersv1/felixsyncer
-local:libcalico-go/lib/backend/syncersv1/nodestatussyncer
-local:libcalico-go/lib/backend/syncersv1/tunnelipsyncer
-local:libcalico-go/lib/backend/syncersv1/updateprocessors
-local:libcalico-go/lib/backend/watchersyncer
 local:libcalico-go/lib/clientv3
-local:libcalico-go/lib/consistenthash
-local:libcalico-go/lib/debugserver
-local:libcalico-go/lib/dispatcher
-local:libcalico-go/lib/epstatusfile
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
-local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/logutils
-local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/netlinkutils
 local:libcalico-go/lib/options
-local:libcalico-go/lib/packedmap
-local:libcalico-go/lib/prometheus
-local:libcalico-go/lib/readlogger
 local:libcalico-go/lib/resources
-local:libcalico-go/lib/scope
 local:libcalico-go/lib/selector
 local:libcalico-go/lib/selector/parser
 local:libcalico-go/lib/selector/tokenizer
 local:libcalico-go/lib/set
-local:libcalico-go/lib/validator/v1
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
 local:node/cmd/calico
 local:node/cmd/calico-ipam
-local:node/cmd/calico-node
-local:node/cmd/calico-node/bpf
 local:node/cmd/mountns
-local:node/pkg/allocateip
-local:node/pkg/calicoclient
-local:node/pkg/cni
-local:node/pkg/flowlogs
-local:node/pkg/health
-local:node/pkg/health/bird
-local:node/pkg/hostpathinit
-local:node/pkg/lifecycle/shutdown
-local:node/pkg/lifecycle/startup
-local:node/pkg/lifecycle/startup/autodetection
-local:node/pkg/lifecycle/startup/autodetection/ipv4
-local:node/pkg/lifecycle/utils
-local:node/pkg/nodeinit
-local:node/pkg/nodeservices
-local:node/pkg/status
-local:node/pkg/status/populators
 local:node/windows-packaging/tests
-local:pkg/buildinfo
-local:pod2daemon/binder
-local:typha/pkg/discovery
-local:typha/pkg/syncclient
-local:typha/pkg/syncclientutils
-local:typha/pkg/syncproto
-local:typha/pkg/tlsutils

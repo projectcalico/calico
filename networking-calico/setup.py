@@ -1,4 +1,5 @@
 # Copyright (c) 2013 Hewlett-Packard Development Company, L.P.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "calico-dhcp-agent = networking_calico.agent.dhcp_agent:main",
+            "calico-resync = networking_calico.resync.cli:main",
         ],
         "neutron.ml2.mechanism_drivers": [
             (

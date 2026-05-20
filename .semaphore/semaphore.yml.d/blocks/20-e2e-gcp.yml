@@ -1,6 +1,6 @@
 - name: "E2E tests on GCP kubeadm (local binary)"
   run:
-    when: "${FORCE_RUN} or change_in(['/e2e/**'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${FORCE_RUN} or change_in(['/e2e/**', '/.semaphore/end-to-end/scripts/'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   dependencies:
     - Prerequisites
   task:
@@ -34,6 +34,8 @@
         value: "e2e/config/gcp-bpf.yaml"
       - name: USE_API_SERVER
         value: "false"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
     jobs:
       - name: gcp-kubeadm - e2e local binary
         execution_time_limit:
