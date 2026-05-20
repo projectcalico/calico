@@ -94,7 +94,7 @@ func generateBenchNode(_ *rand.Rand, n int) api.Update {
 	ip := calinet.ParseIP(fmt.Sprintf("10.%d.%d.%d", n>>16&0xff, n>>8&0xff, n&0xff))
 	return api.Update{
 		KVPair: model.KVPair{
-			Key: model.HostIPKey{
+			Key: model.HostMetadataKey{
 				Hostname: fmt.Sprintf("node-%d", n),
 			},
 			Value:    ip,
