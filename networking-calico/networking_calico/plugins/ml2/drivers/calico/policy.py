@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ from neutron_lib.constants import IP_PROTOCOL_MAP
 from oslo_log import log
 
 from networking_calico import datamodel_v3
+from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -45,17 +46,41 @@ class PolicySyncer(ResourceSyncer):
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
 
+    def get_from_neutron(self, context, scope):
+        if scope.all():
+            sgs = self.db.get_security_groups(context)
+        else:
+            sgs = self.db.get_security_groups(
+                context, filters={"id": list(scope.ids())}
+            )
+        return dict((SG_NAME_PREFIX + sg["id"], sg) for sg in sgs)
+
+    def get_from_etcd(self, scope):
+        if scope.all():
+            return {
+                name: (spec, revision)
+                for name, spec, revision in datamodel_v3.get_all(
+                    self.resource_kind, self.namespace
+                )
+                if name.startswith(SG_NAME_PREFIX)
+            }
+
+        # Narrow scope: read just the etcd entries whose names we can compute directly
+        # from scope.ids().
+        etcd_map = {}
+        for sgid in scope.ids():
+            name = SG_NAME_PREFIX + sgid
+            try:
+                etcd_map[name] = datamodel_v3.get_namespaced(
+                    self.resource_kind, self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                pass
+        return etcd_map
+
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy(self.resource_kind, SG_NAME_PREFIX)
-
-    def get_all_from_etcd(self):
-        results = []
-        for r in datamodel_v3.get_all(self.resource_kind, self.namespace):
-            name, _, _ = r
-            if name.startswith(SG_NAME_PREFIX):
-                results.append(r)
-        return results
 
     def create_in_etcd(self, name, spec):
         return datamodel_v3.put(
@@ -72,13 +97,7 @@ class PolicySyncer(ResourceSyncer):
             self.resource_kind, self.namespace, name, mod_revision=mod_revision
         )
 
-    def get_all_from_neutron(self, context):
-        return dict(
-            (SG_NAME_PREFIX + sg["id"], sg)
-            for sg in self.db.get_security_groups(context)
-        )
-
-    def neutron_to_etcd_write_data(self, sg, context, reread=False):
+    def neutron_to_etcd_write_data(self, name, sg, context, reread=False):
         if reread:
             # We don't need to reread the SG row itself here, because we don't
             # use any information from it, apart from its ID as a key for the
