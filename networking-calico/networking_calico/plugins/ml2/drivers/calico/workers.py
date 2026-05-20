@@ -90,6 +90,8 @@ class CalicoStartupResyncWorker(worker.BaseWorker):
         # threading.Event.set() is idempotent.
         self._stop_event.set()
 
+    def reset(self):
+        config.reset_service()
 
 class CalicoManagerWorker(worker.BaseWorker):
     """Service for doing election and compaction.
