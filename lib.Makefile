@@ -1660,6 +1660,39 @@ helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
 
+# ko is used by component Makefiles (cmd/calico, key-cert-provisioner,
+# pod2daemon) to build OCI images directly without a Dockerfile. Pin the
+# version so CI and local builds stay reproducible. Use absolute paths so
+# the rules work when invoked from a component subdirectory.
+#
+# KO_DIR is intentionally NOT overrideable: the install step runs inside the
+# go-build container with the repo mounted at /go/src/github.com/projectcalico/calico,
+# and GOBIN must point at a host path that maps to that mount. Pointing KO_DIR
+# elsewhere would install into a path the host can't see. `override` ensures
+# the value sticks even if the caller passes KO_DIR= on the make command line.
+override KO_DIR := $(REPO_ROOT)/bin
+KO = $(KO_DIR)/ko
+
+# Pin the Go toolchain ko uses to the same version baked into calico/go-build,
+# so on-host ko builds match in-container builds. GO_BUILD_VER looks like
+# "1.26.2-llvm20.1.8-k8s1.35.4-1"; we only want the leading Go version.
+GOTOOLCHAIN ?= go$(word 1,$(subst -, ,$(GO_BUILD_VER)))
+
+# Stamp file tracks the installed ko version. `rm -f .ko-stamp-*` clears the
+# previous stamp on a version bump so the next make run reinstalls. The binary
+# itself stays at $(KO)/ko — no rename, which avoids races when concurrent
+# sub-makes (cmd/calico, pod2daemon, key-cert-provisioner) hit this rule.
+$(KO_DIR)/.ko-stamp-$(KO_VERSION):
+	rm -f $(KO_DIR)/.ko-stamp-*
+	mkdir -p $(KO_DIR)
+	$(DOCKER_GO_BUILD) sh -c "GOBIN=/go/src/github.com/projectcalico/calico/bin go install github.com/google/ko@$(KO_VERSION)"
+	touch $@
+
+.PHONY: ko
+ko: $(KO)
+	@echo "ko: $(KO)"
+$(KO): $(KO_DIR)/.ko-stamp-$(KO_VERSION)
+
 ###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
 ###############################################################################
@@ -1669,15 +1702,17 @@ KIND_TEST_BUILD_TAG = test-build
 # Locally-built Calico images. dev-build.sh re-tags each as
 # localhost:5000/calico/<name>:test-build for the kind cluster.
 # Most components are provided by the combined calico/calico image, which
-# uses "calico <subcommand>" as the container command. Only node and
-# whisker (TypeScript/nginx, not a Go binary) remain as separate images.
+# uses "calico <subcommand>" as the container command. Separate images:
+# node, whisker (TypeScript/nginx), the envoy-* sidecars, and the
+# standalone csi-node-driver-registrar built from pod2daemon.
 KIND_CALICO_IMAGES = \
 	calico/node:$(KIND_TEST_BUILD_TAG) \
 	calico/whisker:$(KIND_TEST_BUILD_TAG) \
 	calico/calico:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
-	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG) \
+	calico/node-driver-registrar:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1690,7 +1725,8 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
-	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
+	$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1753,6 +1789,17 @@ $(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
 
 $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
+
+# pod2daemon's registrar image is built from an upstream clone (its own
+# go.mod). The clone is pinned via UPSTREAM_REGISTRAR_TAG in pod2daemon/Makefile,
+# so this stamp's only inputs are the ko config and the Makefile itself.
+$(REPO_ROOT)/pod2daemon/.image.created-$(ARCH): \
+    $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/pod2daemon/.image.created-$(ARCH)) \
+    $(REPO_ROOT)/pod2daemon/registrar.ko.yaml \
+    $(REPO_ROOT)/pod2daemon/Makefile
+	rm -f $@
+	$(MAKE) -C $(REPO_ROOT)/pod2daemon image
+	echo "node-driver-registrar:latest-$(ARCH)" > $@
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with

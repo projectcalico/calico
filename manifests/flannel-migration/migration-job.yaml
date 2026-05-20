@@ -161,7 +161,7 @@ spec:
         - name: flannel-migration-controller
           image: quay.io/calico/calico:master
           command:
-            - /usr/bin/calico
+            - calico
             - component
             - kube-controllers
             - --health-port=9099
@@ -186,7 +186,7 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/calico
+                - calico
                 - health
                 - --port=9099
                 - --type=readiness

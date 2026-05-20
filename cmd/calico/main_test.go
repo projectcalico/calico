@@ -98,6 +98,13 @@ func TestDispatch(t *testing.T) {
 			wantArgs:   []string{"/usr/bin/calico", "component", "felix"},
 		},
 		{
+			name:       "calico ipam-upgrade with CNI_COMMAND set still routes to Cobra",
+			args:       []string{"/usr/bin/calico", "ipam-upgrade"},
+			cniCommand: "ADD",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/usr/bin/calico", "ipam-upgrade"},
+		},
+		{
 			name:       "plain calico with CNI_COMMAND and netconf positional arg dispatches to CNI plugin",
 			args:       []string{"/opt/cni/bin/calico", `{"name":"net","type":"calico"}`},
 			cniCommand: "ADD",

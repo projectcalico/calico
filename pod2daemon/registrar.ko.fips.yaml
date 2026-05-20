@@ -1,0 +1,25 @@
+# FIPS variant of the registrar ko build. Toggled via KO_CONFIG_PATH in
+# pod2daemon/Makefile when FIPS=true. Mirrors the legacy CGO + BoringCrypto
+# build that produced the registrar binary bundled inside calico/calico
+# (TAGS=boringcrypto,osusergo,netgo, CGO_ENABLED=1). osusergo/netgo keep the
+# binary statically linked against musl-free upstream resolvers despite CGO.
+# The fipsstrict tag is calico-internal and not used by upstream registrar.
+#
+# As with the non-FIPS config, the base image is set at build time via
+# KO_DEFAULTBASEIMAGE; the literal here is a fallback for ad-hoc `ko build`.
+defaultBaseImage: calico/base:ubi9-1777576815
+defaultPlatforms:
+  - linux/amd64
+
+builds:
+  - id: csi-node-driver-registrar
+    main: ./cmd/csi-node-driver-registrar
+    env:
+      - CGO_ENABLED=1
+      - GOEXPERIMENT=boringcrypto
+    ldflags:
+      - "-s -w"
+    flags:
+      - -trimpath
+      - -buildvcs=false
+      - -tags=osusergo,netgo

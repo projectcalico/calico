@@ -33,10 +33,22 @@ BINDIR = bin/$(ARCH)-fips
 CONTAINER_MARKER = .image.created-$(ARCH)-fips
 IMAGE_TAG = latest-fips
 VALIDARCHES=amd64
+# FIPS uses a separate ko config that flips on CGO + GOEXPERIMENT=boringcrypto
+# and the fipsstrict build tag — matches the legacy build_cgo_boring_binary macro.
+KO_CONFIG = .ko.fips.yaml
+# FIPS needs CGO, which pulls in transitive imports (gopacket/pcap) that
+# need libpcap-dev headers. Those headers exist inside calico/go-build, so
+# we run ko there. The host's docker socket is mounted so ko --local can
+# publish into the host daemon. bin/ko is amd64 ELF, fine in the container.
+KO_RUN = $(DOCKER_RUN) -v /var/run/docker.sock:/var/run/docker.sock $(CALICO_BUILD)
 else
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
 IMAGE_TAG = latest
+KO_CONFIG = .ko.yaml
+# Non-FIPS stays on the host: CGO_ENABLED=0, no libpcap needed, host
+# invocation is where the build-time win lives.
+KO_RUN =
 endif
 
 .PHONY: clean
@@ -89,15 +101,43 @@ $(BINDIR)/LICENSE: $(REPO_ROOT)/LICENSE.md
 	mkdir -p $(BINDIR)
 	cp $(REPO_ROOT)/LICENSE.md $@
 
-REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
-$(REGISTRAR_BIN):
-	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
-
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
-$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+# ko cross-compiles, layers the binary on calico/base, and loads the result
+# into the local Docker daemon. No Dockerfile, no scratch shim, no host-built
+# bin/ artifact involved. Note: the resulting image lacks the calicoctl /
+# calico-ipam symlinks the old Dockerfile created in /usr/bin — invoke as
+# `calico ctl ...` and `calico-ipam` (host CNI install path) instead.
+$(CONTAINER_MARKER): $(KO) $(SRC_FILES) $(KO_CONFIG)
+	# Use a relative path to ko so the same invocation works on the host
+	# (non-FIPS) and inside the calico/go-build container (FIPS). For the
+	# container path, unset GOOS/GOARCH/GOAMD64 first — calico/go-build sets
+	# them and ko refuses to combine them with --platform.
+	$(KO_RUN) sh -c '\
+	    unset GOOS GOARCH GOAMD64 && \
+	    GIT_DESCRIPTION=$(GIT_DESCRIPTION) DATE=$(DATE) GIT_COMMIT=$(GIT_COMMIT) \
+	    GOTOOLCHAIN=$(GOTOOLCHAIN) \
+	    KO_CONFIG_PATH=$(KO_CONFIG) \
+	    KO_DEFAULTBASEIMAGE=$(CALICO_BASE) \
+	    KO_DOCKER_REPO=$(CALICO_IMAGE) ../../bin/ko build \
+	        --local --bare \
+	        --platform=linux/$(ARCH) \
+	        --tags=$(IMAGE_TAG)-$(ARCH) \
+	        ./'
+ifeq ($(FIPS),true)
+	# Verify the produced binary actually links the BoringCrypto module.
+	# Mirrors the post-build check in build_cgo_boring_binary: extract the
+	# binary from the ko image and grep its symbol table for the
+	# _Cfunc__goboringcrypto_ symbols that GOEXPERIMENT=boringcrypto emits.
+	mkdir -p $(BINDIR)
+	cid=$$(docker create $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH)) && \
+	    docker cp $$cid:/ko-app/calico $(BINDIR)/calico-fips-verify && \
+	    docker rm $$cid >/dev/null
+	$(DOCKER_GO_BUILD) sh -c \
+	    "go tool nm $(BINDIR)/calico-fips-verify | grep -q _Cfunc__goboringcrypto_"
+	rm -f $(BINDIR)/calico-fips-verify
+endif
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 
