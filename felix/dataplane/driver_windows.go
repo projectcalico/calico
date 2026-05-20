@@ -37,7 +37,7 @@ func StartDataplaneDriver(configParams *config.Config,
 	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
+	k8sClientSet kubernetes.Interface,
 	_ *calc.LookupsCache,
 	_ ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
