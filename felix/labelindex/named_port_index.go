@@ -17,7 +17,6 @@ package labelindex
 import (
 	"iter"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -73,41 +72,6 @@ func init() {
 	)
 }
 
-// endpointData holds the data that we need to know about a particular endpoint.
-type endpointData struct {
-	labels  uniquelabels.Map
-	nets    []ip.CIDR
-	ports   []model.EndpointPort
-	parents []*npParentData
-
-	cachedMatchingIPSetIDs set.Adaptive[string]
-}
-
-func (d *endpointData) AddMatchingIPSetID(id string) {
-	d.cachedMatchingIPSetIDs.Add(id)
-}
-
-func (d *endpointData) RemoveMatchingIPSetID(id string) {
-	d.cachedMatchingIPSetIDs.Discard(id)
-}
-
-func (d *endpointData) HasParent(parent *npParentData) bool {
-	return slices.Contains(d.parents, parent)
-}
-
-func (d *endpointData) LookupNamedPorts(name string, proto ipsetmember.Protocol) []namedPortContribution {
-	var matchingPorts []namedPortContribution
-	for _, p := range d.ports {
-		if p.Name == name && proto.MatchesModelProtocol(p.Protocol) {
-			matchingPorts = append(matchingPorts, namedPortContribution{
-				protocol: ipsetmember.ProtocolFrom(p.Protocol),
-				port:     p.Port,
-			})
-		}
-	}
-	return matchingPorts
-}
-
 type ipSetData struct {
 	// The selector and named port that this IP set represents.  If the selector is nil then
 	// this IP set represents an unfiltered named port.  If namedPortProtocol == ProtocolNone then
@@ -119,86 +83,6 @@ type ipSetData struct {
 	// memberToRefCount stores a reference count for each member in the IP set.  Reference counts
 	// may be >1 if an IP address is shared by more than one endpoint.
 	memberToRefCount map[ipsetmember.IPSetMember]uint64
-}
-
-// GetHandle implements the Labels interface for endpointData.  Combines the endpoint's own labels with
-// those of its parents on the fly.  This reduces the number of allocations we need to do, and
-// it's fast in the mainline case (where there are 0-1 parents).
-func (d *endpointData) GetHandle(labelName uniquestr.Handle) (handle uniquestr.Handle, present bool) {
-	if handle, present = d.labels.GetHandle(labelName); present {
-		return
-	}
-	for _, parent := range d.parents {
-		if handle, present = parent.labels.GetHandle(labelName); present {
-			return
-		}
-	}
-	return
-}
-
-func (d *endpointData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return func(yield func(k, v uniquestr.Handle) bool) {
-		seenKeys := set.New[uniquestr.Handle]()
-		defer seenKeys.Clear()
-
-		for k, v := range d.labels.AllHandles() {
-			if !yield(k, v) {
-				return
-			}
-			seenKeys.Add(k)
-		}
-
-		for _, parent := range d.parents {
-			for k, v := range parent.labels.AllHandles() {
-				if seenKeys.Contains(k) {
-					// label is shadowed.
-					continue
-				}
-				// Non-shadowed parent label. Emit.
-				if !yield(k, v) {
-					return
-				}
-				seenKeys.Add(k)
-			}
-		}
-	}
-}
-
-func (d *endpointData) Equals(other *endpointData) bool {
-	if !d.labels.Equals(other.labels) {
-		return false
-	}
-	if len(d.ports) != len(other.ports) {
-		return false
-	}
-	if len(d.nets) != len(other.nets) {
-		return false
-	}
-	if len(d.parents) != len(other.parents) {
-		return false
-	}
-
-	for i, p := range d.ports {
-		if other.ports[i] != p {
-			return false
-		}
-	}
-	for i, c := range d.nets {
-		if other.nets[i] != c {
-			return false
-		}
-	}
-	for i, p := range d.parents {
-		// Note: this is a pointer comparison; we know that pointers will be shared.
-		if other.parents[i] != p {
-			return false
-		}
-	}
-	return true
 }
 
 // npParentData holds the data that we know about each parent (i.e. each security profile).  Since,
@@ -475,6 +359,10 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
 
+	// Hoisted buffer: each endpoint that contributes to this new IP
+	// set reuses the same backing array. The contribution is consumed
+	// in-place inside this closure and not retained.
+	var contribBuf []ipsetmember.IPSetMember
 	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
@@ -484,8 +372,8 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 			return
 		}
 		counterSelectorEvalsTrue.Inc()
-		contrib := idx.CalculateEndpointContribution(epData, newIPSetData)
-		if len(contrib) == 0 {
+		contribBuf = idx.AppendEndpointContribution(contribBuf[:0], epData, newIPSetData)
+		if len(contribBuf) == 0 {
 			return
 		}
 		if log.GetLevel() >= log.DebugLevel {
@@ -493,7 +381,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 			logCxt.Debug("Endpoint contributes to IP set")
 		}
 		epData.AddMatchingIPSetID(ipSetID)
-		for _, member := range contrib {
+		for _, member := range contribBuf {
 			refCount := newIPSetData.memberToRefCount[member]
 			if refCount == 0 {
 				if log.GetLevel() >= log.DebugLevel {
@@ -549,24 +437,19 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		}).Debug("Updating endpoint/network set")
 	}
 
-	// Calculate the new endpoint data.
-	newEndpointData := &endpointData{}
-	if labels.Len() > 0 {
-		newEndpointData.labels = labels
-	}
+	// Resolve parent IDs to parent objects so the *endpointData can hold
+	// pointer references.
+	var parents []*npParentData
 	if len(parentIDs) > 0 {
-		parents := make([]*npParentData, len(parentIDs))
+		parents = make([]*npParentData, len(parentIDs))
 		for i, pID := range parentIDs {
 			parents[i] = idx.getOrCreateParent(pID)
 		}
-		newEndpointData.parents = parents
 	}
-	if len(nets) > 0 {
-		newEndpointData.nets = nets
-	}
-	if len(ports) > 0 {
-		newEndpointData.ports = ports
-	}
+
+	// Calculate the new endpoint data, picking the most compact
+	// concrete implementation for the inputs.
+	newEndpointData := newEndpointData(labels, nets, ports, parents)
 
 	// Get the old endpoint data, so we can compare it.
 	oldEndpointData, _ := idx.endpointKVIdx.Get(id)
@@ -574,7 +457,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	if oldEndpointData != nil {
 		// Before we do the (potentially expensive) selector scan, check if there can possibly be a
 		// change.
-		if oldEndpointData.Equals(newEndpointData) {
+		if oldEndpointData.EqualTo(newEndpointData) {
 			log.Debug("Endpoint update makes no changes, skipping.")
 			return
 		}
@@ -595,17 +478,16 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	idx.endpointKVIdx.Add(id, newEndpointData)
 
 	newParentIDs := set.New[any]()
-	for _, parent := range newEndpointData.parents {
+	for parent := range newEndpointData.Parents() {
 		parent.AddEndpointID(id)
 		newParentIDs.Add(parent.id)
 	}
 	if oldEndpointData != nil {
-		for _, parent := range oldEndpointData.parents {
-			if newParentIDs.Contains(parent.id) {
-				continue
+		for parent := range oldEndpointData.Parents() {
+			if !newParentIDs.Contains(parent.id) {
+				parent.DiscardEndpointID(id)
+				idx.discardParentIfEmpty(parent.id)
 			}
-			parent.DiscardEndpointID(id)
-			idx.discardParentIfEmpty(parent.id)
 		}
 	}
 
@@ -665,8 +547,12 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 ) {
 	// Remove any previous match from the endpoint's cache.  We'll re-add it
 	// below if the match is still correct.
-	epData.cachedMatchingIPSetIDs.Clear()
+	epData.ClearMatchingIPSetIDs()
 
+	// Hoisted buffer: contributions are consumed in-place inside the
+	// loop body, so we reuse one backing array across every matching
+	// IP set this endpoint contributes to.
+	var contribBuf []ipsetmember.IPSetMember
 	// Iterate over potential new matches and incref any members that
 	// that produces.  (This may temporarily over count.)
 	for ipSetID := range idx.selectorCandidatesIdx.AllPotentialMatches(epData) {
@@ -687,8 +573,8 @@ func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
 			//
 			// This reference counting also allows us to tolerate duplicate members in the
 			// input data.
-			newIPSetContribution := idx.CalculateEndpointContribution(epData, ipSetData)
-			for _, newMember := range newIPSetContribution {
+			contribBuf = idx.AppendEndpointContribution(contribBuf[:0], epData, ipSetData)
+			for _, newMember := range contribBuf {
 				newRefCount := ipSetData.memberToRefCount[newMember] + 1
 				if newRefCount == 1 {
 					// New member in the IP set.
@@ -727,7 +613,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 	}
 
 	if log.IsLevelEnabled(log.DebugLevel) {
-		log.WithField("oldContrib", oldEndpointData.cachedMatchingIPSetIDs.String()).Debug("Old matching IP sets")
+		log.WithField("oldContrib", oldEndpointData.MatchingIPSetIDsString()).Debug("Old matching IP sets")
 	}
 	oldIPSetContributions := idx.RecalcCachedContributions(oldEndpointData)
 	for ipSetID, contributions := range oldIPSetContributions {
@@ -750,7 +636,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 
 	// Record the new endpoint data.
 	idx.endpointKVIdx.Remove(id)
-	for _, parent := range oldEndpointData.parents {
+	for parent := range oldEndpointData.Parents() {
 		parent.DiscardEndpointID(id)
 		idx.discardParentIfEmpty(parent.id)
 	}
@@ -808,51 +694,35 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 	idx.discardParentIfEmpty(parentID)
 }
 
-type namedPortContribution struct {
-	protocol ipsetmember.Protocol
-	port     uint16
-}
-
-// CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
-// If the IP set represents a named port then the returned members will have a named port component.
-// Returns nil if the endpoint doesn't contribute to the IP set.
-func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) (contrib []ipsetmember.IPSetMember) {
+// AppendEndpointContribution appends the given endpoint's contribution
+// to the given IP set to buf and returns the resulting slice. If the
+// IP set represents a named port the appended members carry the named
+// port component, otherwise they are CIDR-or-IP only. Pass buf[:0] to
+// reuse an existing backing array in a tight loop, or nil when each
+// result needs its own backing array (e.g. when storing per-IP-set
+// contributions in a map).
+func (idx *SelectorAndNamedPortIndex) AppendEndpointContribution(buf []ipsetmember.IPSetMember, d *endpointData, ipSetData *ipSetData) []ipsetmember.IPSetMember {
 	if ipSetData.namedPortProtocol != ipsetmember.ProtocolNone {
-		// This IP set represents a named port match, calculate the cross product of
-		// matching named ports by IP address.
-		members := d.LookupNamedPorts(ipSetData.namedPort, ipSetData.namedPortProtocol)
-		for _, member := range members {
-			for _, cidr := range d.nets {
-				// Named ports are always single IP addresses.
-				ipAddr := cidr.Addr()
-				contrib = append(
-					contrib,
-					ipsetmember.MakeIPPortProto(ipAddr, member.port, member.protocol),
-				)
-			}
-		}
-	} else {
-		// Non-named port match, simply return the CIDRs.
-		for _, addr := range d.nets {
-			contrib = append(contrib, ipsetmember.MakeCIDROrIPOnly(addr))
-		}
+		return d.AppendIPPortMembers(buf, ipSetData.namedPort, ipSetData.namedPortProtocol)
 	}
-	return
+	return d.AppendCIDROrIPMembers(buf)
 }
 
 // RecalcCachedContributions uses the cached set of matching IP set IDs in the endpoint
 // struct to quickly recalculate the endpoint's contribution to all IP sets.
 func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpointData) map[string][]ipsetmember.IPSetMember {
-	if epData.cachedMatchingIPSetIDs.Len() == 0 {
+	if epData.NumMatchingIPSetIDs() == 0 {
 		return nil
 	}
 	contrib := map[string][]ipsetmember.IPSetMember{}
-	for ipSetID := range epData.cachedMatchingIPSetIDs.All() {
+	for ipSetID := range epData.MatchingIPSetIDs() {
 		ipSetData := idx.ipSetDataByID[ipSetID]
 		if ipSetData == nil {
 			log.WithField("ipSetID", ipSetID).Panic("Endpoint cachedMatchingIPSetIDs refers to nonexistent IP set.")
 		}
-		contrib[ipSetID] = idx.CalculateEndpointContribution(epData, ipSetData)
+		// Each entry needs its own backing array because the map is
+		// retained by the caller; pass nil to allocate fresh.
+		contrib[ipSetID] = idx.AppendEndpointContribution(nil, epData, ipSetData)
 	}
 	return contrib
 }
