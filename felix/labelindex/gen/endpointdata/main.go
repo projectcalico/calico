@@ -14,10 +14,14 @@
 
 // Generator for the counted endpointData variants.
 //
-// Run with `go run ./felix/labelindex/gen/endpointdata` from the repo
-// root. Emits felix/labelindex/endpoint_data_impls_gen.go containing
-// the 27 concrete variant types and the newCountedEndpointData
-// dispatcher.
+// Each variant is a struct that embeds endpointData as its prefix and
+// adds fixed-size tail fields for its specific cidr/port/parent
+// shape. All methods live on *endpointData (in endpoint_data.go) and
+// access the tail via unsafe pointer arithmetic using the static
+// shapeTable that this generator also emits.
+//
+// Run with `go generate ./felix/labelindex/...` (or
+// `go run ./felix/labelindex/gen/endpointdata` from the repo root).
 package main
 
 import (
@@ -26,162 +30,109 @@ import (
 	"go/format"
 	"log"
 	"os"
-	"strings"
-	"text/template"
 )
 
 type cidrAxis struct {
-	Name        string
-	Fields      string
-	EqualToBody string
-	Init        string
-	// AppendCIDROrIPBody is the body of AppendCIDROrIPMembers for this
-	// CIDR shape. It must append to `buf` and reference `d`.
-	AppendCIDROrIPBody string
-	// AppendIPPortPerPortBody is the inner per-matching-port body of
-	// AppendIPPortMembers — emitted once per known address inside the
-	// variant's port loop. Must reference `buf`, `port`, `emit`.
-	AppendIPPortPerPortBody string
+	Name      string // "V4", "V6", "Dual"
+	Kind      string // cidr kind constant suffix, e.g. "V4"
+	Fields    string // struct field declarations
+	Init      string // constructor struct-literal body fragment
+	ExtraInit string // additional statement(s) emitted after the struct literal
+	CIDRBytes int    // bytes of cidr stored in the tail (excludes v4 which lives in UserData)
 }
 
 type portsAxis struct {
-	Name        string
-	Len         int
-	Fields      string
-	EqualToBody string
-	Init        string
-	// AppendIPPortPortLoopBody is the body of AppendIPPortMembers that
-	// iterates this variant's ports. Each matching port runs the
-	// {{.CIDR.AppendIPPortPerPortBody}} inside an "if matched" block.
-	// The template substitutes PER_PORT_BODY with the cidr axis
-	// per-port body at generation time.
-	AppendIPPortPortLoopBody string
+	Name   string // "P0", "P1", "P2"
+	N      int    // number of ports (0/1/2)
+	Fields string // field declarations (empty for N=0)
+	Init   string // constructor body fragment
 }
 
 type parentsAxis struct {
-	Name           string
-	Len            int
-	Fields         string
-	EachParentBody string
-	HasParentBody  string
-	EqualToBody    string
-	Init           string
-	// GetHandleParentScan is the body emitted inside GetHandle to walk
-	// this variant's parents looking for a matching label. Must
-	// reference `name` (the requested handle).
-	GetHandleParentScan string
+	Name   string // "N0", "N1", "N2"
+	N      int    // 0/1/2
+	Fields string // field declarations (empty for N=0)
+	Init   string // constructor body fragment
 }
 
+// V4 and Dual variants store the IPv4 address inside cache.UserData
+// rather than in the struct tail, so the tail has no v4 field. The
+// generated constructor calls v.setV4InUserData(v4) after the struct
+// literal. For V6 variants there is no v4 to stash; only the v6 field
+// lives in the tail. For Dual, v6 lives in the tail and v4 lives in
+// UserData. The CIDRBytes counts the cidr bytes that contribute to
+// the tail size (used for ports/parents offset computation).
 var cidrAxes = []cidrAxis{
 	{
-		Name:        "V4",
-		Fields:      "\tv4 [1]ip.V4Addr\n",
-		EqualToBody: "\tif d.v4 != o.v4 {\n\t\treturn false\n\t}",
-		Init:        "v4: [1]ip.V4Addr{v4},",
-		AppendCIDROrIPBody: "\tbuf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))",
-		AppendIPPortPerPortBody: "\t\tbuf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))",
+		Name:      "V4",
+		Kind:      "V4",
+		Fields:    "",
+		Init:      "",
+		ExtraInit: "v.setV4InUserData(v4)",
+		CIDRBytes: 0,
 	},
 	{
-		Name:        "V6",
-		Fields:      "\tv6 [1]ip.V6Addr\n",
-		EqualToBody: "\tif d.v6 != o.v6 {\n\t\treturn false\n\t}",
-		Init:        "v6: [1]ip.V6Addr{v6},",
-		AppendCIDROrIPBody: "\tbuf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))",
-		AppendIPPortPerPortBody: "\t\tbuf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))",
+		Name:      "V6",
+		Kind:      "V6",
+		Fields:    "\tv6 [1]ip.V6Addr\n",
+		Init:      "v6: [1]ip.V6Addr{v6},",
+		CIDRBytes: 16,
 	},
 	{
-		Name: "Dual",
-		Fields: "\tv4 [1]ip.V4Addr\n" +
-			"\tv6 [1]ip.V6Addr\n",
-		EqualToBody: "\tif d.v4 != o.v4 || d.v6 != o.v6 {\n\t\treturn false\n\t}",
-		Init:        "v4: [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},",
-		AppendCIDROrIPBody: "\tbuf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))\n" +
-			"\tbuf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))",
-		AppendIPPortPerPortBody: "\t\tbuf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))\n" +
-			"\t\tbuf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))",
+		Name:      "Dual",
+		Kind:      "Dual",
+		Fields:    "\tv6 [1]ip.V6Addr\n",
+		Init:      "v6: [1]ip.V6Addr{v6},",
+		ExtraInit: "v.setV4InUserData(v4)",
+		CIDRBytes: 16,
 	},
 }
 
 var portsAxes = []portsAxis{
-	{
-		Name:                     "Ports0",
-		Len:                      0,
-		Fields:                   "",
-		EqualToBody:              "",
-		Init:                     "",
-		AppendIPPortPortLoopBody: "\t// No ports.",
-	},
-	{
-		Name:        "Ports1",
-		Len:         1,
-		Fields:      "\tports [1]portHandle\n",
-		EqualToBody: "\tif d.ports != o.ports {\n\t\treturn false\n\t}",
-		Init:        "ports: [1]portHandle{internEndpointPort(ports[0])},",
-		AppendIPPortPortLoopBody: "\tif port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {\n" +
-			"__PER_PORT_BODY__\n" +
-			"\t}",
-	},
-	{
-		Name:        "Ports2",
-		Len:         2,
-		Fields:      "\tports [2]portHandle\n",
-		EqualToBody: "\tif d.ports != o.ports {\n\t\treturn false\n\t}",
-		Init:        "ports: [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},",
-		AppendIPPortPortLoopBody: "\tfor _, h := range d.ports {\n" +
-			"\t\tif port, emit, ok := portHandleMatches(h, name, proto); ok {\n" +
-			"__PER_PORT_BODY__\n" +
-			"\t\t}\n" +
-			"\t}",
-	},
+	{Name: "P0", N: 0, Fields: "", Init: ""},
+	{Name: "P1", N: 1, Fields: "\tports [1]portHandle\n", Init: "ports: [1]portHandle{ports[0]},"},
+	{Name: "P2", N: 2, Fields: "\tports [2]portHandle\n", Init: "ports: [2]portHandle{ports[0], ports[1]},"},
 }
 
 var parentsAxes = []parentsAxis{
-	{
-		Name:                "Parents0",
-		Len:                 0,
-		Fields:              "",
-		EachParentBody:      "\t// No parents.",
-		HasParentBody:       "\treturn false",
-		EqualToBody:         "",
-		Init:                "",
-		GetHandleParentScan: "",
-	},
-	{
-		Name:   "Parents1",
-		Len:    1,
-		Fields: "\tparents [1]*npParentData\n",
-		EachParentBody: "\tif !yield(d.parents[0]) {\n" +
-			"\t\treturn\n" +
-			"\t}",
-		HasParentBody: "\treturn d.parents[0] == parent",
-		EqualToBody:   "\tif d.parents != o.parents {\n\t\treturn false\n\t}",
-		Init:          "parents: [1]*npParentData{parents[0]},",
-		GetHandleParentScan: "\tif h, ok := d.parents[0].labels.GetHandle(name); ok {\n" +
-			"\t\treturn h, true\n" +
-			"\t}",
-	},
-	{
-		Name:   "Parents2",
-		Len:    2,
-		Fields: "\tparents [2]*npParentData\n",
-		EachParentBody: "\tfor _, p := range d.parents {\n" +
-			"\t\tif !yield(p) {\n" +
-			"\t\t\treturn\n" +
-			"\t\t}\n" +
-			"\t}",
-		HasParentBody: "\treturn d.parents[0] == parent || d.parents[1] == parent",
-		EqualToBody:   "\tif d.parents != o.parents {\n\t\treturn false\n\t}",
-		Init:          "parents: [2]*npParentData{parents[0], parents[1]},",
-		GetHandleParentScan: "\tif h, ok := d.parents[0].labels.GetHandle(name); ok {\n" +
-			"\t\treturn h, true\n" +
-			"\t}\n" +
-			"\tif h, ok := d.parents[1].labels.GetHandle(name); ok {\n" +
-			"\t\treturn h, true\n" +
-			"\t}",
-	},
+	{Name: "N0", N: 0, Fields: "", Init: ""},
+	{Name: "N1", N: 1, Fields: "\tparents [1]*npParentData\n", Init: "parents: [1]*npParentData{parents[0]},"},
+	{Name: "N2", N: 2, Fields: "\tparents [2]*npParentData\n", Init: "parents: [2]*npParentData{parents[0], parents[1]},"},
 }
 
-const header = `// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+const baseSize = 24 // sizeof(endpointData)
+
+// align8 rounds up to the next multiple of 8 if v > 0; passes 0 through.
+func align8(v int) int {
+	if v == 0 {
+		return 0
+	}
+	return (v + 7) &^ 7
+}
+
+// portsOffset returns the absolute offset of the ports field for a
+// (cidrBytes, ports) combination, or 0 when the variant has no ports.
+func portsOffset(cidrBytes int, p portsAxis) int {
+	if p.N == 0 {
+		return 0
+	}
+	return align8(baseSize + cidrBytes)
+}
+
+// parentsOffset returns the absolute offset of the parents field, or
+// 0 when the variant has no parents.
+func parentsOffset(cidrBytes int, p portsAxis, n parentsAxis) int {
+	if n.N == 0 {
+		return 0
+	}
+	end := baseSize + cidrBytes
+	if p.N > 0 {
+		end = portsOffset(cidrBytes, p) + 8*p.N
+	}
+	return align8(end)
+}
+
+const fileHeader = `// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,158 +151,229 @@ const header = `// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 package labelindex
 
 import (
-	"iter"
+	"unsafe"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-`
-
-const variantTmpl = `
-// {{.TypeName}} is the counted variant for {{.CIDR.Name}}, {{.Ports.Name}}, {{.Parents.Name}}.
-type {{.TypeName}} struct {
-	labels uniquelabels.Map
-{{.CIDR.Fields}}{{.Ports.Fields}}{{.Parents.Fields}}	cache set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *{{.TypeName}}) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-{{.Parents.GetHandleParentScan}}
-	return uniquestr.Handle{}, false
-}
-
-func (d *{{.TypeName}}) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *{{.TypeName}}) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *{{.TypeName}}) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-{{.CIDR.AppendCIDROrIPBody}}
-	return buf
-}
-
-func (d *{{.TypeName}}) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-{{.AppendIPPortBody}}
-	return buf
-}
-
-func (d *{{.TypeName}}) EachParent(yield func(*npParentData) bool) {
-{{.Parents.EachParentBody}}
-}
-
-func (d *{{.TypeName}}) HasParent(parent *npParentData) bool {
-{{.Parents.HasParentBody}}
-}
-
-func (d *{{.TypeName}}) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *{{.TypeName}}) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *{{.TypeName}}) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *{{.TypeName}}) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *{{.TypeName}}) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *{{.TypeName}}) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *{{.TypeName}}) EqualTo(other endpointData) bool {
-	o, ok := other.(*{{.TypeName}})
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-{{.CIDR.EqualToBody}}
-{{.Ports.EqualToBody}}
-{{.Parents.EqualToBody}}
-	return true
-}
 `
 
 func typeName(c cidrAxis, p portsAxis, n parentsAxis) string {
 	return "ep" + c.Name + p.Name + n.Name
 }
 
-func mustExec(t *template.Template, data any) string {
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, data); err != nil {
-		log.Fatalf("template execute: %v", err)
-	}
-	return buf.String()
+func shapeName(c cidrAxis, p portsAxis, n parentsAxis) string {
+	return "shape" + c.Name + p.Name + n.Name
 }
 
 func main() {
-	out := bytes.NewBufferString(header)
-	vt := template.Must(template.New("variant").Parse(variantTmpl))
+	out := bytes.NewBufferString(fileHeader)
 
+	// ---- shape enum ----
+	out.WriteString("\nconst (\n")
+	first := true
 	for _, c := range cidrAxes {
 		for _, p := range portsAxes {
-			// Compose the variant-specific AppendIPPortMembers body
-			// from the ports-axis port-loop template + the cidr-axis
-			// per-port emit body. For Ports0 the body has no
-			// __PER_PORT_BODY__ marker, so the replace is a no-op.
-			appendIPPortBody := strings.ReplaceAll(
-				p.AppendIPPortPortLoopBody,
-				"__PER_PORT_BODY__",
-				c.AppendIPPortPerPortBody,
-			)
 			for _, n := range parentsAxes {
-				out.WriteString(mustExec(vt, struct {
-					TypeName         string
-					CIDR             cidrAxis
-					Ports            portsAxis
-					Parents          parentsAxis
-					AppendIPPortBody string
-				}{
-					TypeName:         typeName(c, p, n),
-					CIDR:             c,
-					Ports:            p,
-					Parents:          n,
-					AppendIPPortBody: appendIPPortBody,
-				}))
+				name := shapeName(c, p, n)
+				if first {
+					fmt.Fprintf(out, "\t%s shape = iota\n", name)
+					first = false
+				} else {
+					fmt.Fprintf(out, "\t%s\n", name)
+				}
+			}
+		}
+	}
+	out.WriteString("\tshapeV4Multi\n")
+	out.WriteString("\tshapeV6Multi\n")
+	out.WriteString("\tshapeGeneral\n")
+	out.WriteString("\tnumShapes\n")
+	out.WriteString(")\n")
+
+	// ---- counted variant struct definitions ----
+	for _, c := range cidrAxes {
+		for _, p := range portsAxes {
+			for _, n := range parentsAxes {
+				name := typeName(c, p, n)
+				fmt.Fprintf(out, "\n// %s is the counted variant for %s, %s, %s.\n",
+					name, c.Name, p.Name, n.Name)
+				fmt.Fprintf(out, "type %s struct {\n", name)
+				out.WriteString("\tendpointData\n")
+				out.WriteString(c.Fields)
+				out.WriteString(p.Fields)
+				out.WriteString(n.Fields)
+				out.WriteString("}\n")
 			}
 		}
 	}
 
-	// Dispatcher: single function with nested switches.
-	out.WriteString("\nfunc newCountedEndpointData(\n")
+	// ---- epV4Multi struct definition ----
+	out.WriteString(`
+// epV4Multi is the network-set-style variant for all-IPv4 inputs with
+// any number of CIDRs (any prefix). No ports by construction. Parent
+// pointers are stored compactly via a pointer + uint32 length (no
+// slice cap, since the underlying storage is allocated once at known
+// length and never grown). The same compact pair is used for the
+// typed V4CIDR slice.
+type epV4Multi struct {
+	endpointData
+	cidrsPtr   *ip.V4CIDR
+	parentsPtr **npParentData
+	cidrsLen   uint32
+	parentsLen uint32
+}
+
+func (e *epV4Multi) cidrsSlice() []ip.V4CIDR {
+	if e.cidrsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.cidrsPtr, e.cidrsLen)
+}
+
+func (e *epV4Multi) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
+}
+
+// epV6Multi is the network-set-style variant for all-IPv6 inputs.
+// Same layout as epV4Multi but with V6CIDR storage.
+type epV6Multi struct {
+	endpointData
+	cidrsPtr   *ip.V6CIDR
+	parentsPtr **npParentData
+	cidrsLen   uint32
+	parentsLen uint32
+}
+
+func (e *epV6Multi) cidrsSlice() []ip.V6CIDR {
+	if e.cidrsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.cidrsPtr, e.cidrsLen)
+}
+
+func (e *epV6Multi) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
+}
+`)
+
+	// ---- epGeneral struct definition ----
+	out.WriteString(`
+// epGeneral is the fallback variant. It stores all three axes (nets,
+// ports, parents) using the compact (ptr, uint32 length) form rather
+// than full Go slice headers. The callers do not append in place, so
+// dropping the cap field is safe. Length fields pack together to share
+// alignment padding.
+type epGeneral struct {
+	endpointData
+	netsPtr    *ip.CIDR
+	portsPtr   *portHandle
+	parentsPtr **npParentData
+	netsLen    uint32
+	portsLen   uint32
+	parentsLen uint32
+}
+
+func (e *epGeneral) netsSlice() []ip.CIDR {
+	if e.netsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.netsPtr, e.netsLen)
+}
+
+func (e *epGeneral) portsSlice() []portHandle {
+	if e.portsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.portsPtr, e.portsLen)
+}
+
+func (e *epGeneral) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
+}
+`)
+
+	// ---- shapeTable ----
+	out.WriteString("\n// shapeTable describes every variant's tail layout. Indexed by shape.\n")
+	out.WriteString("var shapeTable = [numShapes]shapeInfo{\n")
+	for _, c := range cidrAxes {
+		for _, p := range portsAxes {
+			for _, n := range parentsAxes {
+				name := shapeName(c, p, n)
+				po := portsOffset(c.CIDRBytes, p)
+				pa := parentsOffset(c.CIDRBytes, p, n)
+				fmt.Fprintf(out, "\t%s: {cidr: cidrKind%s, portN: %d, parentN: %d, portsOff: %d, parsOff: %d},\n",
+					name, c.Kind, p.N, n.N, po, pa)
+			}
+		}
+	}
+	out.WriteString("\tshapeV4Multi: {cidr: cidrKindV4Multi},\n")
+	out.WriteString("\tshapeV6Multi: {cidr: cidrKindV6Multi},\n")
+	out.WriteString("\tshapeGeneral: {cidr: cidrKindGeneral},\n")
+	out.WriteString("}\n")
+
+	// ---- newCountedEndpointData dispatcher ----
+	out.WriteString("\n// newCountedEndpointData picks one of the 27 counted variants based\n")
+	out.WriteString("// on the shape of the inputs. The caller has already verified that\n")
+	out.WriteString("// none of the axes exceeds its counted slot count.\n")
+	out.WriteString("func newCountedEndpointData(\n")
 	out.WriteString("\tlabels uniquelabels.Map,\n")
-	out.WriteString("\tshape cidrShape,\n")
+	out.WriteString("\tkind cidrKind,\n")
 	out.WriteString("\tv4 ip.V4Addr,\n")
 	out.WriteString("\tv6 ip.V6Addr,\n")
 	out.WriteString("\tports []model.EndpointPort,\n")
 	out.WriteString("\tparents []*npParentData,\n")
-	out.WriteString(") endpointData {\n")
-	out.WriteString("\tswitch shape {\n")
+	out.WriteString(") *endpointData {\n")
+	out.WriteString("\t// Intern incoming ports once; reused by every counted variant.\n")
+	out.WriteString("\tvar interned [2]portHandle\n")
+	out.WriteString("\tfor i, p := range ports {\n")
+	out.WriteString("\t\tinterned[i] = internEndpointPort(p)\n")
+	out.WriteString("\t}\n")
+	out.WriteString("\tports2 := interned[:len(ports)]\n")
+	out.WriteString("\t_ = ports2\n")
+	out.WriteString("\tswitch kind {\n")
 	for _, c := range cidrAxes {
-		fmt.Fprintf(out, "\tcase cidrShape%s:\n", c.Name)
+		fmt.Fprintf(out, "\tcase cidrKind%s:\n", c.Kind)
 		out.WriteString("\t\tswitch len(ports) {\n")
 		for _, p := range portsAxes {
-			fmt.Fprintf(out, "\t\tcase %d:\n", p.Len)
+			fmt.Fprintf(out, "\t\tcase %d:\n", p.N)
 			out.WriteString("\t\t\tswitch len(parents) {\n")
 			for _, n := range parentsAxes {
-				fmt.Fprintf(out, "\t\t\tcase %d:\n", n.Len)
-				fmt.Fprintf(out, "\t\t\t\treturn &%s{\n", typeName(c, p, n))
-				out.WriteString("\t\t\t\t\tlabels: labels,\n")
+				fmt.Fprintf(out, "\t\t\tcase %d:\n", n.N)
+				name := typeName(c, p, n)
+				shape := shapeName(c, p, n)
+				fmt.Fprintf(out, "\t\t\t\tv := &%s{\n", name)
+				out.WriteString("\t\t\t\t\tendpointData: endpointData{labels: labels},\n")
 				if c.Init != "" {
 					fmt.Fprintf(out, "\t\t\t\t\t%s\n", c.Init)
 				}
-				if p.Init != "" {
-					fmt.Fprintf(out, "\t\t\t\t\t%s\n", p.Init)
+				// Replace `ports[` placeholders with the interned slice access.
+				init := p.Init
+				if init != "" {
+					// portsAxis.Init uses ports[i] referring to the function parameter;
+					// rewrite to use the interned values.
+					init = replacePortsRef(init)
+					fmt.Fprintf(out, "\t\t\t\t\t%s\n", init)
 				}
 				if n.Init != "" {
 					fmt.Fprintf(out, "\t\t\t\t\t%s\n", n.Init)
 				}
 				out.WriteString("\t\t\t\t}\n")
+				fmt.Fprintf(out, "\t\t\t\tv.setShape(%s)\n", shape)
+				if c.ExtraInit != "" {
+					fmt.Fprintf(out, "\t\t\t\t%s\n", c.ExtraInit)
+				}
+				out.WriteString("\t\t\t\treturn &v.endpointData\n")
 			}
 			out.WriteString("\t\t\t}\n")
 		}
@@ -361,16 +383,96 @@ func main() {
 	out.WriteString("\tpanic(\"newCountedEndpointData: unhandled shape; newEndpointData should have routed to general\")\n")
 	out.WriteString("}\n")
 
+	// ---- newEpGeneral ----
+	out.WriteString(`
+// newEpGeneral builds the slice-based fallback variant. Used when any
+// axis exceeds the counted slot count or the cidr layout is mixed
+// v4+v6 multi-CIDR.
+func newEpGeneral(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	ports []model.EndpointPort,
+	parents []*npParentData,
+) *endpointData {
+	v := &epGeneral{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		// Take ownership of the caller-supplied slice; callers do not
+		// retain it after newEndpointData returns.
+		v.netsPtr = &nets[0]
+		v.netsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	if n := len(ports); n > 0 {
+		// Intern into a fresh, exactly-sized backing array.
+		buf := make([]portHandle, n)
+		for i, p := range ports {
+			buf[i] = internEndpointPort(p)
+		}
+		v.portsPtr = &buf[0]
+		v.portsLen = uint32(n)
+	}
+	v.setShape(shapeGeneral)
+	return &v.endpointData
+}
+
+// newEpV4Multi builds the all-IPv4 network-set-style variant.
+func newEpV4Multi(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	parents []*npParentData,
+) *endpointData {
+	v := &epV4Multi{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		// Repack as a typed []ip.V4CIDR to drop the interface header
+		// per element and the boxed-CIDR heap object.
+		buf := make([]ip.V4CIDR, n)
+		for i, c := range nets {
+			buf[i] = c.(ip.V4CIDR)
+		}
+		v.cidrsPtr = &buf[0]
+		v.cidrsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	v.setShape(shapeV4Multi)
+	return &v.endpointData
+}
+
+// newEpV6Multi builds the all-IPv6 network-set-style variant.
+func newEpV6Multi(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	parents []*npParentData,
+) *endpointData {
+	v := &epV6Multi{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		buf := make([]ip.V6CIDR, n)
+		for i, c := range nets {
+			buf[i] = c.(ip.V6CIDR)
+		}
+		v.cidrsPtr = &buf[0]
+		v.cidrsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	v.setShape(shapeV6Multi)
+	return &v.endpointData
+}
+`)
+
 	formatted, err := format.Source(out.Bytes())
 	if err != nil {
 		os.Stderr.WriteString(out.String())
 		log.Fatalf("gofmt: %v", err)
 	}
 
-	// Resolve output path so the generator works when invoked from
-	// either the repo root (`go run ./felix/labelindex/gen/endpointdata/main.go`)
-	// or via `go generate ./felix/labelindex/...` (which runs from the
-	// labelindex package dir).
 	outPath := "felix/labelindex/endpoint_data_impls_gen.go"
 	if _, err := os.Stat("endpoint_data.go"); err == nil {
 		outPath = "endpoint_data_impls_gen.go"
@@ -379,4 +481,37 @@ func main() {
 		log.Fatalf("write: %v", err)
 	}
 	fmt.Printf("wrote %s (%d bytes)\n", outPath, len(formatted))
+}
+
+// replacePortsRef rewrites portsAxis.Init bodies so the `ports[i]`
+// references the locally-interned `interned[i]` instead of the raw
+// `[]model.EndpointPort` parameter passed in by the caller.
+func replacePortsRef(init string) string {
+	// Replace "ports[0]" -> "interned[0]" and "ports[1]" -> "interned[1]".
+	out := init
+	out = replaceAll(out, "ports[0]", "interned[0]")
+	out = replaceAll(out, "ports[1]", "interned[1]")
+	// The field name remains "ports", e.g. "ports: [1]portHandle{...}",
+	// so only the [i] arg sites get rewritten by the literal matches.
+	return out
+}
+
+func replaceAll(s, old, new string) string {
+	// Minimal helper to avoid importing strings just for this.
+	for {
+		i := indexOf(s, old)
+		if i < 0 {
+			return s
+		}
+		s = s[:i] + new + s[i+len(old):]
+	}
+}
+
+func indexOf(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }

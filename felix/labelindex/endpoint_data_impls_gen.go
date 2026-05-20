@@ -17,2341 +17,728 @@
 package labelindex
 
 import (
-	"iter"
+	"unsafe"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
-	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// epV4Ports0Parents0 is the counted variant for V4, Ports0, Parents0.
-type epV4Ports0Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	cache  set.Adaptive[string]
+const (
+	shapeV4P0N0 shape = iota
+	shapeV4P0N1
+	shapeV4P0N2
+	shapeV4P1N0
+	shapeV4P1N1
+	shapeV4P1N2
+	shapeV4P2N0
+	shapeV4P2N1
+	shapeV4P2N2
+	shapeV6P0N0
+	shapeV6P0N1
+	shapeV6P0N2
+	shapeV6P1N0
+	shapeV6P1N1
+	shapeV6P1N2
+	shapeV6P2N0
+	shapeV6P2N1
+	shapeV6P2N2
+	shapeDualP0N0
+	shapeDualP0N1
+	shapeDualP0N2
+	shapeDualP1N0
+	shapeDualP1N1
+	shapeDualP1N2
+	shapeDualP2N0
+	shapeDualP2N1
+	shapeDualP2N2
+	shapeV4Multi
+	shapeV6Multi
+	shapeGeneral
+	numShapes
+)
+
+// epV4P0N0 is the counted variant for V4, P0, N0.
+type epV4P0N0 struct {
+	endpointData
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports0Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports0Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports0Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports0Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports0Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV4Ports0Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV4Ports0Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV4Ports0Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports0Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports0Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports0Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports0Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports0Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports0Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports0Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-
-	return true
-}
-
-// epV4Ports0Parents1 is the counted variant for V4, Ports0, Parents1.
-type epV4Ports0Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P0N1 is the counted variant for V4, P0, N1.
+type epV4P0N1 struct {
+	endpointData
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports0Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports0Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports0Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports0Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports0Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV4Ports0Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV4Ports0Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV4Ports0Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports0Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports0Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports0Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports0Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports0Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports0Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports0Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV4Ports0Parents2 is the counted variant for V4, Ports0, Parents2.
-type epV4Ports0Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P0N2 is the counted variant for V4, P0, N2.
+type epV4P0N2 struct {
+	endpointData
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports0Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV4P1N0 is the counted variant for V4, P1, N0.
+type epV4P1N0 struct {
+	endpointData
+	ports [1]portHandle
 }
 
-func (d *epV4Ports0Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports0Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports0Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports0Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV4Ports0Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV4Ports0Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV4Ports0Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports0Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports0Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports0Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports0Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports0Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports0Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports0Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV4Ports1Parents0 is the counted variant for V4, Ports1, Parents0.
-type epV4Ports1Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	ports  [1]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports1Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports1Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports1Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports1Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports1Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV4Ports1Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV4Ports1Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV4Ports1Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports1Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports1Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports1Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports1Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports1Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports1Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports1Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epV4Ports1Parents1 is the counted variant for V4, Ports1, Parents1.
-type epV4Ports1Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P1N1 is the counted variant for V4, P1, N1.
+type epV4P1N1 struct {
+	endpointData
 	ports   [1]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports1Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports1Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports1Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports1Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports1Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV4Ports1Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV4Ports1Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV4Ports1Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports1Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports1Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports1Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports1Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports1Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports1Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports1Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV4Ports1Parents2 is the counted variant for V4, Ports1, Parents2.
-type epV4Ports1Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P1N2 is the counted variant for V4, P1, N2.
+type epV4P1N2 struct {
+	endpointData
 	ports   [1]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports1Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV4P2N0 is the counted variant for V4, P2, N0.
+type epV4P2N0 struct {
+	endpointData
+	ports [2]portHandle
 }
 
-func (d *epV4Ports1Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports1Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports1Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports1Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV4Ports1Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV4Ports1Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV4Ports1Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports1Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports1Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports1Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports1Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports1Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports1Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports1Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV4Ports2Parents0 is the counted variant for V4, Ports2, Parents0.
-type epV4Ports2Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	ports  [2]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports2Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports2Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports2Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports2Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports2Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV4Ports2Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV4Ports2Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV4Ports2Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports2Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports2Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports2Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports2Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports2Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports2Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports2Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epV4Ports2Parents1 is the counted variant for V4, Ports2, Parents1.
-type epV4Ports2Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P2N1 is the counted variant for V4, P2, N1.
+type epV4P2N1 struct {
+	endpointData
 	ports   [2]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports2Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV4Ports2Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports2Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports2Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports2Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV4Ports2Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV4Ports2Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV4Ports2Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports2Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports2Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports2Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports2Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports2Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports2Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports2Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV4Ports2Parents2 is the counted variant for V4, Ports2, Parents2.
-type epV4Ports2Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epV4P2N2 is the counted variant for V4, P2, N2.
+type epV4P2N2 struct {
+	endpointData
 	ports   [2]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV4Ports2Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV6P0N0 is the counted variant for V6, P0, N0.
+type epV6P0N0 struct {
+	endpointData
+	v6 [1]ip.V6Addr
 }
 
-func (d *epV4Ports2Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV4Ports2Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV4Ports2Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	return buf
-}
-
-func (d *epV4Ports2Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV4Ports2Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV4Ports2Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV4Ports2Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV4Ports2Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV4Ports2Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV4Ports2Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV4Ports2Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV4Ports2Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV4Ports2Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV4Ports2Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports0Parents0 is the counted variant for V6, Ports0, Parents0.
-type epV6Ports0Parents0 struct {
-	labels uniquelabels.Map
-	v6     [1]ip.V6Addr
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports0Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports0Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports0Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports0Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports0Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV6Ports0Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV6Ports0Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV6Ports0Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports0Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports0Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports0Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports0Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports0Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports0Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports0Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-
-	return true
-}
-
-// epV6Ports0Parents1 is the counted variant for V6, Ports0, Parents1.
-type epV6Ports0Parents1 struct {
-	labels  uniquelabels.Map
+// epV6P0N1 is the counted variant for V6, P0, N1.
+type epV6P0N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports0Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports0Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports0Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports0Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports0Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV6Ports0Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV6Ports0Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV6Ports0Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports0Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports0Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports0Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports0Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports0Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports0Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports0Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports0Parents2 is the counted variant for V6, Ports0, Parents2.
-type epV6Ports0Parents2 struct {
-	labels  uniquelabels.Map
+// epV6P0N2 is the counted variant for V6, P0, N2.
+type epV6P0N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports0Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV6P1N0 is the counted variant for V6, P1, N0.
+type epV6P1N0 struct {
+	endpointData
+	v6    [1]ip.V6Addr
+	ports [1]portHandle
 }
 
-func (d *epV6Ports0Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports0Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports0Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports0Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epV6Ports0Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV6Ports0Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV6Ports0Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports0Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports0Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports0Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports0Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports0Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports0Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports0Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports1Parents0 is the counted variant for V6, Ports1, Parents0.
-type epV6Ports1Parents0 struct {
-	labels uniquelabels.Map
-	v6     [1]ip.V6Addr
-	ports  [1]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports1Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports1Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports1Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports1Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports1Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV6Ports1Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV6Ports1Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV6Ports1Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports1Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports1Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports1Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports1Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports1Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports1Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports1Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epV6Ports1Parents1 is the counted variant for V6, Ports1, Parents1.
-type epV6Ports1Parents1 struct {
-	labels  uniquelabels.Map
+// epV6P1N1 is the counted variant for V6, P1, N1.
+type epV6P1N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [1]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports1Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports1Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports1Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports1Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports1Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV6Ports1Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV6Ports1Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV6Ports1Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports1Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports1Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports1Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports1Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports1Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports1Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports1Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports1Parents2 is the counted variant for V6, Ports1, Parents2.
-type epV6Ports1Parents2 struct {
-	labels  uniquelabels.Map
+// epV6P1N2 is the counted variant for V6, P1, N2.
+type epV6P1N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [1]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports1Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV6P2N0 is the counted variant for V6, P2, N0.
+type epV6P2N0 struct {
+	endpointData
+	v6    [1]ip.V6Addr
+	ports [2]portHandle
 }
 
-func (d *epV6Ports1Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports1Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports1Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports1Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epV6Ports1Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV6Ports1Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV6Ports1Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports1Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports1Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports1Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports1Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports1Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports1Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports1Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports2Parents0 is the counted variant for V6, Ports2, Parents0.
-type epV6Ports2Parents0 struct {
-	labels uniquelabels.Map
-	v6     [1]ip.V6Addr
-	ports  [2]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports2Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports2Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports2Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports2Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports2Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV6Ports2Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epV6Ports2Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epV6Ports2Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports2Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports2Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports2Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports2Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports2Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports2Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports2Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epV6Ports2Parents1 is the counted variant for V6, Ports2, Parents1.
-type epV6Ports2Parents1 struct {
-	labels  uniquelabels.Map
+// epV6P2N1 is the counted variant for V6, P2, N1.
+type epV6P2N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [2]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports2Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epV6Ports2Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports2Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports2Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports2Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV6Ports2Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epV6Ports2Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epV6Ports2Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports2Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports2Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports2Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports2Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports2Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports2Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports2Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epV6Ports2Parents2 is the counted variant for V6, Ports2, Parents2.
-type epV6Ports2Parents2 struct {
-	labels  uniquelabels.Map
+// epV6P2N2 is the counted variant for V6, P2, N2.
+type epV6P2N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [2]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epV6Ports2Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epDualP0N0 is the counted variant for Dual, P0, N0.
+type epDualP0N0 struct {
+	endpointData
+	v6 [1]ip.V6Addr
 }
 
-func (d *epV6Ports2Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epV6Ports2Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epV6Ports2Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epV6Ports2Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epV6Ports2Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epV6Ports2Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epV6Ports2Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epV6Ports2Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epV6Ports2Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epV6Ports2Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epV6Ports2Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epV6Ports2Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epV6Ports2Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epV6Ports2Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts0Parents0 is the counted variant for Dual, Ports0, Parents0.
-type epDualPorts0Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	v6     [1]ip.V6Addr
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts0Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts0Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts0Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts0Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts0Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epDualPorts0Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epDualPorts0Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epDualPorts0Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts0Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts0Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts0Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts0Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts0Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts0Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts0Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-
-	return true
-}
-
-// epDualPorts0Parents1 is the counted variant for Dual, Ports0, Parents1.
-type epDualPorts0Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP0N1 is the counted variant for Dual, P0, N1.
+type epDualP0N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts0Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts0Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts0Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts0Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts0Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epDualPorts0Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epDualPorts0Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epDualPorts0Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts0Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts0Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts0Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts0Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts0Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts0Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts0Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts0Parents2 is the counted variant for Dual, Ports0, Parents2.
-type epDualPorts0Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP0N2 is the counted variant for Dual, P0, N2.
+type epDualP0N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts0Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epDualP1N0 is the counted variant for Dual, P1, N0.
+type epDualP1N0 struct {
+	endpointData
+	v6    [1]ip.V6Addr
+	ports [1]portHandle
 }
 
-func (d *epDualPorts0Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts0Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts0Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts0Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	// No ports.
-	return buf
-}
-
-func (d *epDualPorts0Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epDualPorts0Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epDualPorts0Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts0Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts0Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts0Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts0Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts0Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts0Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts0Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts1Parents0 is the counted variant for Dual, Ports1, Parents0.
-type epDualPorts1Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	v6     [1]ip.V6Addr
-	ports  [1]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts1Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts1Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts1Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts1Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts1Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epDualPorts1Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epDualPorts1Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epDualPorts1Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts1Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts1Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts1Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts1Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts1Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts1Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts1Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epDualPorts1Parents1 is the counted variant for Dual, Ports1, Parents1.
-type epDualPorts1Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP1N1 is the counted variant for Dual, P1, N1.
+type epDualP1N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [1]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts1Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts1Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts1Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts1Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts1Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epDualPorts1Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epDualPorts1Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epDualPorts1Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts1Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts1Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts1Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts1Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts1Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts1Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts1Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts1Parents2 is the counted variant for Dual, Ports1, Parents2.
-type epDualPorts1Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP1N2 is the counted variant for Dual, P1, N2.
+type epDualP1N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [1]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts1Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epDualP2N0 is the counted variant for Dual, P2, N0.
+type epDualP2N0 struct {
+	endpointData
+	v6    [1]ip.V6Addr
+	ports [2]portHandle
 }
 
-func (d *epDualPorts1Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts1Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts1Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts1Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	if port, emit, ok := portHandleMatches(d.ports[0], name, proto); ok {
-		buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-		buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-	}
-	return buf
-}
-
-func (d *epDualPorts1Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
-	}
-}
-
-func (d *epDualPorts1Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
-}
-
-func (d *epDualPorts1Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts1Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts1Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts1Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts1Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts1Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts1Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts1Parents2)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts2Parents0 is the counted variant for Dual, Ports2, Parents0.
-type epDualPorts2Parents0 struct {
-	labels uniquelabels.Map
-	v4     [1]ip.V4Addr
-	v6     [1]ip.V6Addr
-	ports  [2]portHandle
-	cache  set.Adaptive[string]
-}
-
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts2Parents0) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts2Parents0) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts2Parents0) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts2Parents0) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts2Parents0) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epDualPorts2Parents0) EachParent(yield func(*npParentData) bool) {
-	// No parents.
-}
-
-func (d *epDualPorts2Parents0) HasParent(parent *npParentData) bool {
-	return false
-}
-
-func (d *epDualPorts2Parents0) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts2Parents0) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts2Parents0) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts2Parents0) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts2Parents0) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts2Parents0) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts2Parents0) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts2Parents0)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-
-	return true
-}
-
-// epDualPorts2Parents1 is the counted variant for Dual, Ports2, Parents1.
-type epDualPorts2Parents1 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP2N1 is the counted variant for Dual, P2, N1.
+type epDualP2N1 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [2]portHandle
 	parents [1]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts2Parents1) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
-}
-
-func (d *epDualPorts2Parents1) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
-}
-
-func (d *epDualPorts2Parents1) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
-}
-
-func (d *epDualPorts2Parents1) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
-}
-
-func (d *epDualPorts2Parents1) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
-	}
-	return buf
-}
-
-func (d *epDualPorts2Parents1) EachParent(yield func(*npParentData) bool) {
-	if !yield(d.parents[0]) {
-		return
-	}
-}
-
-func (d *epDualPorts2Parents1) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent
-}
-
-func (d *epDualPorts2Parents1) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts2Parents1) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts2Parents1) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts2Parents1) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts2Parents1) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts2Parents1) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts2Parents1) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts2Parents1)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
-}
-
-// epDualPorts2Parents2 is the counted variant for Dual, Ports2, Parents2.
-type epDualPorts2Parents2 struct {
-	labels  uniquelabels.Map
-	v4      [1]ip.V4Addr
+// epDualP2N2 is the counted variant for Dual, P2, N2.
+type epDualP2N2 struct {
+	endpointData
 	v6      [1]ip.V6Addr
 	ports   [2]portHandle
 	parents [2]*npParentData
-	cache   set.Adaptive[string]
 }
 
-// GetHandle is inlined per-variant so the hot selector-eval path
-// doesn't allocate the iter.Seq closure that a generic walker would.
-func (d *epDualPorts2Parents2) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
-	if h, ok := d.labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[0].labels.GetHandle(name); ok {
-		return h, true
-	}
-	if h, ok := d.parents[1].labels.GetHandle(name); ok {
-		return h, true
-	}
-	return uniquestr.Handle{}, false
+// epV4Multi is the network-set-style variant for all-IPv4 inputs with
+// any number of CIDRs (any prefix). No ports by construction. Parent
+// pointers are stored compactly via a pointer + uint32 length (no
+// slice cap, since the underlying storage is allocated once at known
+// length and never grown). The same compact pair is used for the
+// typed V4CIDR slice.
+type epV4Multi struct {
+	endpointData
+	cidrsPtr   *ip.V4CIDR
+	parentsPtr **npParentData
+	cidrsLen   uint32
+	parentsLen uint32
 }
 
-func (d *epDualPorts2Parents2) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return d.labels.AllHandles()
+func (e *epV4Multi) cidrsSlice() []ip.V4CIDR {
+	if e.cidrsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.cidrsPtr, e.cidrsLen)
 }
 
-func (d *epDualPorts2Parents2) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
+func (e *epV4Multi) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
 }
 
-func (d *epDualPorts2Parents2) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	buf = append(buf, ipsetmember.MakeSingleIPv4(d.v4[0]))
-	buf = append(buf, ipsetmember.MakeSingleIPv6(d.v6[0]))
-	return buf
+// epV6Multi is the network-set-style variant for all-IPv6 inputs.
+// Same layout as epV4Multi but with V6CIDR storage.
+type epV6Multi struct {
+	endpointData
+	cidrsPtr   *ip.V6CIDR
+	parentsPtr **npParentData
+	cidrsLen   uint32
+	parentsLen uint32
 }
 
-func (d *epDualPorts2Parents2) AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-	name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		if port, emit, ok := portHandleMatches(h, name, proto); ok {
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(d.v4[0], port, emit))
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(d.v6[0], port, emit))
-		}
+func (e *epV6Multi) cidrsSlice() []ip.V6CIDR {
+	if e.cidrsLen == 0 {
+		return nil
 	}
-	return buf
+	return unsafe.Slice(e.cidrsPtr, e.cidrsLen)
 }
 
-func (d *epDualPorts2Parents2) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
-		}
+func (e *epV6Multi) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
 	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
 }
 
-func (d *epDualPorts2Parents2) HasParent(parent *npParentData) bool {
-	return d.parents[0] == parent || d.parents[1] == parent
+// epGeneral is the fallback variant. It stores all three axes (nets,
+// ports, parents) using the compact (ptr, uint32 length) form rather
+// than full Go slice headers. The callers do not append in place, so
+// dropping the cap field is safe. Length fields pack together to share
+// alignment padding.
+type epGeneral struct {
+	endpointData
+	netsPtr    *ip.CIDR
+	portsPtr   *portHandle
+	parentsPtr **npParentData
+	netsLen    uint32
+	portsLen   uint32
+	parentsLen uint32
 }
 
-func (d *epDualPorts2Parents2) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epDualPorts2Parents2) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epDualPorts2Parents2) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epDualPorts2Parents2) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epDualPorts2Parents2) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epDualPorts2Parents2) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epDualPorts2Parents2) EqualTo(other endpointData) bool {
-	o, ok := other.(*epDualPorts2Parents2)
-	if !ok {
-		return false
+func (e *epGeneral) netsSlice() []ip.CIDR {
+	if e.netsLen == 0 {
+		return nil
 	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if d.v4 != o.v4 || d.v6 != o.v6 {
-		return false
-	}
-	if d.ports != o.ports {
-		return false
-	}
-	if d.parents != o.parents {
-		return false
-	}
-	return true
+	return unsafe.Slice(e.netsPtr, e.netsLen)
 }
 
+func (e *epGeneral) portsSlice() []portHandle {
+	if e.portsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.portsPtr, e.portsLen)
+}
+
+func (e *epGeneral) parentsSlice() []*npParentData {
+	if e.parentsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.parentsPtr, e.parentsLen)
+}
+
+// shapeTable describes every variant's tail layout. Indexed by shape.
+var shapeTable = [numShapes]shapeInfo{
+	shapeV4P0N0:   {cidr: cidrKindV4, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
+	shapeV4P0N1:   {cidr: cidrKindV4, portN: 0, parentN: 1, portsOff: 0, parsOff: 24},
+	shapeV4P0N2:   {cidr: cidrKindV4, portN: 0, parentN: 2, portsOff: 0, parsOff: 24},
+	shapeV4P1N0:   {cidr: cidrKindV4, portN: 1, parentN: 0, portsOff: 24, parsOff: 0},
+	shapeV4P1N1:   {cidr: cidrKindV4, portN: 1, parentN: 1, portsOff: 24, parsOff: 32},
+	shapeV4P1N2:   {cidr: cidrKindV4, portN: 1, parentN: 2, portsOff: 24, parsOff: 32},
+	shapeV4P2N0:   {cidr: cidrKindV4, portN: 2, parentN: 0, portsOff: 24, parsOff: 0},
+	shapeV4P2N1:   {cidr: cidrKindV4, portN: 2, parentN: 1, portsOff: 24, parsOff: 40},
+	shapeV4P2N2:   {cidr: cidrKindV4, portN: 2, parentN: 2, portsOff: 24, parsOff: 40},
+	shapeV6P0N0:   {cidr: cidrKindV6, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
+	shapeV6P0N1:   {cidr: cidrKindV6, portN: 0, parentN: 1, portsOff: 0, parsOff: 40},
+	shapeV6P0N2:   {cidr: cidrKindV6, portN: 0, parentN: 2, portsOff: 0, parsOff: 40},
+	shapeV6P1N0:   {cidr: cidrKindV6, portN: 1, parentN: 0, portsOff: 40, parsOff: 0},
+	shapeV6P1N1:   {cidr: cidrKindV6, portN: 1, parentN: 1, portsOff: 40, parsOff: 48},
+	shapeV6P1N2:   {cidr: cidrKindV6, portN: 1, parentN: 2, portsOff: 40, parsOff: 48},
+	shapeV6P2N0:   {cidr: cidrKindV6, portN: 2, parentN: 0, portsOff: 40, parsOff: 0},
+	shapeV6P2N1:   {cidr: cidrKindV6, portN: 2, parentN: 1, portsOff: 40, parsOff: 56},
+	shapeV6P2N2:   {cidr: cidrKindV6, portN: 2, parentN: 2, portsOff: 40, parsOff: 56},
+	shapeDualP0N0: {cidr: cidrKindDual, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
+	shapeDualP0N1: {cidr: cidrKindDual, portN: 0, parentN: 1, portsOff: 0, parsOff: 40},
+	shapeDualP0N2: {cidr: cidrKindDual, portN: 0, parentN: 2, portsOff: 0, parsOff: 40},
+	shapeDualP1N0: {cidr: cidrKindDual, portN: 1, parentN: 0, portsOff: 40, parsOff: 0},
+	shapeDualP1N1: {cidr: cidrKindDual, portN: 1, parentN: 1, portsOff: 40, parsOff: 48},
+	shapeDualP1N2: {cidr: cidrKindDual, portN: 1, parentN: 2, portsOff: 40, parsOff: 48},
+	shapeDualP2N0: {cidr: cidrKindDual, portN: 2, parentN: 0, portsOff: 40, parsOff: 0},
+	shapeDualP2N1: {cidr: cidrKindDual, portN: 2, parentN: 1, portsOff: 40, parsOff: 56},
+	shapeDualP2N2: {cidr: cidrKindDual, portN: 2, parentN: 2, portsOff: 40, parsOff: 56},
+	shapeV4Multi:  {cidr: cidrKindV4Multi},
+	shapeV6Multi:  {cidr: cidrKindV6Multi},
+	shapeGeneral:  {cidr: cidrKindGeneral},
+}
+
+// newCountedEndpointData picks one of the 27 counted variants based
+// on the shape of the inputs. The caller has already verified that
+// none of the axes exceeds its counted slot count.
 func newCountedEndpointData(
 	labels uniquelabels.Map,
-	shape cidrShape,
+	kind cidrKind,
 	v4 ip.V4Addr,
 	v6 ip.V6Addr,
 	ports []model.EndpointPort,
 	parents []*npParentData,
-) endpointData {
-	switch shape {
-	case cidrShapeV4:
+) *endpointData {
+	// Intern incoming ports once; reused by every counted variant.
+	var interned [2]portHandle
+	for i, p := range ports {
+		interned[i] = internEndpointPort(p)
+	}
+	ports2 := interned[:len(ports)]
+	_ = ports2
+	switch kind {
+	case cidrKindV4:
 		switch len(ports) {
 		case 0:
 			switch len(parents) {
 			case 0:
-				return &epV4Ports0Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4},
+				v := &epV4P0N0{
+					endpointData: endpointData{labels: labels},
 				}
+				v.setShape(shapeV4P0N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epV4Ports0Parents1{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV4P0N1{
+					endpointData: endpointData{labels: labels},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV4P0N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epV4Ports0Parents2{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV4P0N2{
+					endpointData: endpointData{labels: labels},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV4P0N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		case 1:
 			switch len(parents) {
 			case 0:
-				return &epV4Ports1Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4},
-					ports:  [1]portHandle{internEndpointPort(ports[0])},
+				v := &epV4P1N0{
+					endpointData: endpointData{labels: labels},
+					ports:        [1]portHandle{interned[0]},
 				}
+				v.setShape(shapeV4P1N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epV4Ports1Parents1{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV4P1N1{
+					endpointData: endpointData{labels: labels},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV4P1N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epV4Ports1Parents2{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV4P1N2{
+					endpointData: endpointData{labels: labels},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV4P1N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		case 2:
 			switch len(parents) {
 			case 0:
-				return &epV4Ports2Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4},
-					ports:  [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
+				v := &epV4P2N0{
+					endpointData: endpointData{labels: labels},
+					ports:        [2]portHandle{interned[0], interned[1]},
 				}
+				v.setShape(shapeV4P2N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epV4Ports2Parents1{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV4P2N1{
+					endpointData: endpointData{labels: labels},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV4P2N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epV4Ports2Parents2{
-					labels:  labels,
-					v4:      [1]ip.V4Addr{v4},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV4P2N2{
+					endpointData: endpointData{labels: labels},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV4P2N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		}
-	case cidrShapeV6:
+	case cidrKindV6:
 		switch len(ports) {
 		case 0:
 			switch len(parents) {
 			case 0:
-				return &epV6Ports0Parents0{
-					labels: labels,
-					v6:     [1]ip.V6Addr{v6},
+				v := &epV6P0N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
 				}
+				v.setShape(shapeV6P0N0)
+				return &v.endpointData
 			case 1:
-				return &epV6Ports0Parents1{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV6P0N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV6P0N1)
+				return &v.endpointData
 			case 2:
-				return &epV6Ports0Parents2{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV6P0N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV6P0N2)
+				return &v.endpointData
 			}
 		case 1:
 			switch len(parents) {
 			case 0:
-				return &epV6Ports1Parents0{
-					labels: labels,
-					v6:     [1]ip.V6Addr{v6},
-					ports:  [1]portHandle{internEndpointPort(ports[0])},
+				v := &epV6P1N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
 				}
+				v.setShape(shapeV6P1N0)
+				return &v.endpointData
 			case 1:
-				return &epV6Ports1Parents1{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV6P1N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV6P1N1)
+				return &v.endpointData
 			case 2:
-				return &epV6Ports1Parents2{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV6P1N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV6P1N2)
+				return &v.endpointData
 			}
 		case 2:
 			switch len(parents) {
 			case 0:
-				return &epV6Ports2Parents0{
-					labels: labels,
-					v6:     [1]ip.V6Addr{v6},
-					ports:  [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
+				v := &epV6P2N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
 				}
+				v.setShape(shapeV6P2N0)
+				return &v.endpointData
 			case 1:
-				return &epV6Ports2Parents1{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epV6P2N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeV6P2N1)
+				return &v.endpointData
 			case 2:
-				return &epV6Ports2Parents2{
-					labels:  labels,
-					v6:      [1]ip.V6Addr{v6},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epV6P2N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeV6P2N2)
+				return &v.endpointData
 			}
 		}
-	case cidrShapeDual:
+	case cidrKindDual:
 		switch len(ports) {
 		case 0:
 			switch len(parents) {
 			case 0:
-				return &epDualPorts0Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
+				v := &epDualP0N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
 				}
+				v.setShape(shapeDualP0N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epDualPorts0Parents1{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					parents: [1]*npParentData{parents[0]},
+				v := &epDualP0N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeDualP0N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epDualPorts0Parents2{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epDualP0N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeDualP0N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		case 1:
 			switch len(parents) {
 			case 0:
-				return &epDualPorts1Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports: [1]portHandle{internEndpointPort(ports[0])},
+				v := &epDualP1N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
 				}
+				v.setShape(shapeDualP1N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epDualPorts1Parents1{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epDualP1N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeDualP1N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epDualPorts1Parents2{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports:   [1]portHandle{internEndpointPort(ports[0])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epDualP1N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [1]portHandle{interned[0]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeDualP1N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		case 2:
 			switch len(parents) {
 			case 0:
-				return &epDualPorts2Parents0{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports: [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
+				v := &epDualP2N0{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
 				}
+				v.setShape(shapeDualP2N0)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 1:
-				return &epDualPorts2Parents1{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [1]*npParentData{parents[0]},
+				v := &epDualP2N1{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [1]*npParentData{parents[0]},
 				}
+				v.setShape(shapeDualP2N1)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			case 2:
-				return &epDualPorts2Parents2{
-					labels: labels,
-					v4:     [1]ip.V4Addr{v4}, v6: [1]ip.V6Addr{v6},
-					ports:   [2]portHandle{internEndpointPort(ports[0]), internEndpointPort(ports[1])},
-					parents: [2]*npParentData{parents[0], parents[1]},
+				v := &epDualP2N2{
+					endpointData: endpointData{labels: labels},
+					v6:           [1]ip.V6Addr{v6},
+					ports:        [2]portHandle{interned[0], interned[1]},
+					parents:      [2]*npParentData{parents[0], parents[1]},
 				}
+				v.setShape(shapeDualP2N2)
+				v.setV4InUserData(v4)
+				return &v.endpointData
 			}
 		}
 	}
 	panic("newCountedEndpointData: unhandled shape; newEndpointData should have routed to general")
+}
+
+// newEpGeneral builds the slice-based fallback variant. Used when any
+// axis exceeds the counted slot count or the cidr layout is mixed
+// v4+v6 multi-CIDR.
+func newEpGeneral(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	ports []model.EndpointPort,
+	parents []*npParentData,
+) *endpointData {
+	v := &epGeneral{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		// Take ownership of the caller-supplied slice; callers do not
+		// retain it after newEndpointData returns.
+		v.netsPtr = &nets[0]
+		v.netsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	if n := len(ports); n > 0 {
+		// Intern into a fresh, exactly-sized backing array.
+		buf := make([]portHandle, n)
+		for i, p := range ports {
+			buf[i] = internEndpointPort(p)
+		}
+		v.portsPtr = &buf[0]
+		v.portsLen = uint32(n)
+	}
+	v.setShape(shapeGeneral)
+	return &v.endpointData
+}
+
+// newEpV4Multi builds the all-IPv4 network-set-style variant.
+func newEpV4Multi(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	parents []*npParentData,
+) *endpointData {
+	v := &epV4Multi{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		// Repack as a typed []ip.V4CIDR to drop the interface header
+		// per element and the boxed-CIDR heap object.
+		buf := make([]ip.V4CIDR, n)
+		for i, c := range nets {
+			buf[i] = c.(ip.V4CIDR)
+		}
+		v.cidrsPtr = &buf[0]
+		v.cidrsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	v.setShape(shapeV4Multi)
+	return &v.endpointData
+}
+
+// newEpV6Multi builds the all-IPv6 network-set-style variant.
+func newEpV6Multi(
+	labels uniquelabels.Map,
+	nets []ip.CIDR,
+	parents []*npParentData,
+) *endpointData {
+	v := &epV6Multi{endpointData: endpointData{labels: labels}}
+	if n := len(nets); n > 0 {
+		buf := make([]ip.V6CIDR, n)
+		for i, c := range nets {
+			buf[i] = c.(ip.V6CIDR)
+		}
+		v.cidrsPtr = &buf[0]
+		v.cidrsLen = uint32(n)
+	}
+	if n := len(parents); n > 0 {
+		v.parentsPtr = &parents[0]
+		v.parentsLen = uint32(n)
+	}
+	v.setShape(shapeV6Multi)
+	return &v.endpointData
 }

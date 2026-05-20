@@ -20,6 +20,7 @@ import (
 	"iter"
 	"slices"
 	"unique"
+	"unsafe"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
@@ -29,71 +30,39 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// endpointData is a per-endpoint datum stored in the
-// SelectorAndNamedPortIndex. There is one instance per workload/host
-// endpoint/network set, so in large clusters there can be ~1M
-// instances and the per-endpoint footprint dominates label-index
-// memory. It is implemented as an interface with multiple concrete
-// implementations chosen at construction time by newEndpointData; the
-// counted variants pack the common shapes (1 v4 / 1 v6 / 1v4+1v6 CIDR,
-// 0/1/2 ports, 0/1/2 parents) into fixed-size fields and avoid the
-// per-endpoint slice header + backing-array allocations the general
-// fallback uses.
-type endpointData interface {
-	// Selector evaluation ----------------------------------------------
-	// GetHandle implements parser.Labels: combines own labels with
-	// parent labels on the fly.
-	GetHandle(labelName uniquestr.Handle) (uniquestr.Handle, bool)
-	// OwnLabelHandles implements labelnamevalueindex.Labeled.
-	OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle]
-	// AllOwnAndParentLabelHandles implements
-	// labelrestrictionindex.Labeled.
-	AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle]
-
-	// Per-endpoint data -------------------------------------------------
-	// AppendCIDROrIPMembers appends a CIDROrIPOnly IP-set member per
-	// CIDR to buf and returns the new slice. Variants emit typed
-	// members directly to avoid the ip.CIDR boxing the hot
-	// CalculateEndpointContribution path would otherwise incur.
-	AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember
-	// AppendIPPortMembers appends one IPSetMember per
-	// (matching-named-port × address) pair to buf.
-	AppendIPPortMembers(buf []ipsetmember.IPSetMember,
-		name string, proto ipsetmember.Protocol) []ipsetmember.IPSetMember
-	// EachParent calls yield once per parent pointer in stable order.
-	EachParent(yield func(*npParentData) bool)
-	// HasParent reports whether parent is one of this endpoint's
-	// parents.
-	HasParent(parent *npParentData) bool
-
-	// IP-set membership cache ------------------------------------------
-	AddMatchingIPSetID(id string)
-	RemoveMatchingIPSetID(id string)
-	NumMatchingIPSetIDs() int
-	MatchingIPSetIDs() iter.Seq[string]
-	ClearMatchingIPSetIDs()
-	MatchingIPSetIDsString() string
-
-	// Change detection --------------------------------------------------
-	// EqualTo compares this endpointData to other ignoring the
-	// matching-IP-set-IDs cache (which is derived state).
-	EqualTo(other endpointData) bool
+// endpointData is the per-endpoint datum stored in the
+// SelectorAndNamedPortIndex. In large clusters there is one instance
+// per workload/host endpoint/network set — up to ~1M instances — so
+// the per-endpoint footprint dominates label-index memory.
+//
+// It is a single concrete type so its methods can be inlined; the
+// variant-specific tail (cidrs, ports, parents) lives in a generated
+// per-shape struct that *embeds* endpointData as its prefix. Tail
+// fields are accessed via the static shapeTable + unsafe pointer
+// arithmetic. We never allocate plain endpointData values; the
+// allocated type is always one of the per-shape variants, so the GC
+// scans the parent pointers in the tail correctly. See
+// endpoint_data_impls_gen.go for the variant struct definitions and
+// the shape enum.
+type endpointData struct {
+	labels uniquelabels.Map     // 8 bytes
+	cache  set.Adaptive[string] // 16 bytes; cache.UserData[0] is the shape byte
+	// Total 24 bytes. Variants append their tail immediately after.
 }
 
 // portHandle is an interned, value-equal handle for a single
-// model.EndpointPort. Endpoints that share port tuples share storage
-// at the unique-package level, and equality on a portHandle is a
-// single pointer compare.
+// model.EndpointPort. Endpoints sharing port tuples share storage at
+// the unique-package level; equality on a portHandle is a single
+// pointer compare.
 type portHandle = unique.Handle[model.EndpointPort]
 
 func internEndpointPort(p model.EndpointPort) portHandle {
 	return unique.Make(p)
 }
 
-// portHandleMatches centralises the protocol+name match rule so every
-// implementation agrees. It is the inverse of the previous inline
-// match in LookupNamedPorts: name must match, then the original
-// MatchesModelProtocol rule applies to the protocol.
+// portHandleMatches applies the original name + protocol match rule
+// to an interned port and, if it matches, returns the port number and
+// the canonical protocol enum to emit.
 func portHandleMatches(h portHandle, name string, proto ipsetmember.Protocol) (port uint16, emitProto ipsetmember.Protocol, ok bool) {
 	p := h.Value()
 	if p.Name != name {
@@ -105,146 +74,202 @@ func portHandleMatches(h portHandle, name string, proto ipsetmember.Protocol) (p
 	return p.Port, ipsetmember.ProtocolFrom(p.Protocol), true
 }
 
-// newEndpointData picks the most compact concrete implementation that
-// can hold the given inputs. As soon as any axis exceeds its counted
-// slot count the general fallback is used (and all three axes are
-// stored as slices) to keep the variant set small.
+// shape identifies the concrete variant of endpointData. The
+// generator (gen/endpointdata) enumerates the values; do not write
+// constants by hand here. shapeGeneral is the slice-based fallback.
+type shape uint8
+
+// cidrKind says which CIDR layout a shape has.
+//
+//   - V4 / V6 / Dual: counted variants for workload-endpoint-style
+//     inputs (1 single-address /32 v4, 1 single-address /128 v6, or
+//     one of each).
+//   - V4Multi / V6Multi: network-set-style variants holding a slice of
+//     full ip.V4CIDR / ip.V6CIDR (prefix preserved). Used when every
+//     CIDR is the same family and there are no named ports.
+//   - General: fallback for mixed v4+v6 multi-CIDR inputs or anything
+//     with ports that overflows the counted axes.
+type cidrKind uint8
+
+const (
+	cidrKindV4 cidrKind = iota
+	cidrKindV6
+	cidrKindDual
+	cidrKindV4Multi
+	cidrKindV6Multi
+	cidrKindGeneral
+)
+
+// shapeInfo records what each variant looks like. The generator emits
+// the table shapeTable indexed by shape.
+type shapeInfo struct {
+	cidr     cidrKind // V4/V6/Dual/General
+	portN    uint8    // 0, 1, 2 for counted; portN is undefined for General (use slice len)
+	parentN  uint8    // 0, 1, 2 for counted; undefined for General
+	portsOff uint8    // absolute offset (from endpointData base) of the ports field; 0 if portN == 0
+	parsOff  uint8    // absolute offset of the parents field; 0 if parentN == 0
+}
+
+// cidrFieldOffset is the offset of the first variant-tail byte (the
+// cidr field) from the struct base. It's the size of endpointData and
+// the same for every counted variant (V4 / V6 / Dual put their
+// addresses there; epGeneral puts the nets slice header there).
+const cidrFieldOffset = unsafe.Sizeof(endpointData{})
+
+// tailPtr returns a pointer to the variant tail at absOff bytes from
+// the endpointData base. Inlinable; callers must guarantee that
+// absOff is a valid in-bounds offset for the variant the receiver was
+// allocated as.
+//
+//go:nosplit
+func (d *endpointData) tailPtr(absOff uintptr) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(unsafe.Pointer(d)) + absOff)
+}
+
+func (d *endpointData) shape() shape {
+	return shape(d.cache.UserData[0])
+}
+
+// setShape writes the variant tag into the cache's UserData. Only
+// called by the generated variant constructors.
+func (d *endpointData) setShape(s shape) {
+	d.cache.UserData[0] = byte(s)
+}
+
+// userDataV4Offset is the byte offset within cache.UserData where the
+// optional embedded IPv4 address lives. UserData[0] holds the shape;
+// UserData[3..6] (the last 4 bytes) holds a v4 address for V4 and
+// Dual variants. UserData[3] sits at absolute offset 20 inside
+// endpointData (cache is at offset 8, Adaptive's pad starts at
+// Adaptive offset 9, so UserData[3] is at 8+9+3 = 20), which is
+// 4-byte aligned so the read/write is a single MOV.
+const userDataV4Offset = 3
+
+// v4FromUserData reads the IPv4 address stashed in the cache's
+// UserData. Only valid when the variant's cidrKind is V4 or Dual; the
+// shape byte gates that. V4Addr is [4]byte (alignment 1), so reading
+// it from inside the UserData byte array is safe.
+func (d *endpointData) v4FromUserData() ip.V4Addr {
+	return *(*ip.V4Addr)(unsafe.Pointer(&d.cache.UserData[userDataV4Offset]))
+}
+
+// setV4InUserData writes the IPv4 address into the cache's UserData.
+// Called by the generated V4 / Dual variant constructors.
+func (d *endpointData) setV4InUserData(v4 ip.V4Addr) {
+	*(*ip.V4Addr)(unsafe.Pointer(&d.cache.UserData[userDataV4Offset])) = v4
+}
+
+// ---------------------------------------------------------------------
+// Constructor dispatch.
+// ---------------------------------------------------------------------
+
+// newEndpointData picks the most compact concrete variant that can
+// hold the given inputs.
+//
+//   - Counted V4/V6/Dual when every CIDR is a single-address /32 or
+//     /128 and the counts (CIDRs, ports, parents) fit the 1/1/0-2/0-2
+//     slot budget.
+//   - V4Multi / V6Multi for network-set-style inputs: every CIDR is
+//     the same family (any prefix), no named ports. Parents are
+//     supported.
+//   - General fallback for everything else (mixed v4+v6 multi-CIDR,
+//     or anything with ports that overflows the counted axes).
 func newEndpointData(
 	labels uniquelabels.Map,
 	nets []ip.CIDR,
 	ports []model.EndpointPort,
 	parents []*npParentData,
-) endpointData {
-	cidrShape, v4, v6 := classifyNets(nets)
-	if cidrShape == cidrShapeGeneral || len(ports) > 2 || len(parents) > 2 {
-		return newEndpointDataGeneral(labels, nets, ports, parents)
+) *endpointData {
+	kind, v4, v6 := classifyNets(nets)
+
+	// Network-set-style: same-family multi-CIDR, no ports → typed
+	// multi variant.
+	if len(ports) == 0 {
+		switch kind {
+		case cidrKindV4Multi:
+			return newEpV4Multi(labels, nets, parents)
+		case cidrKindV6Multi:
+			return newEpV6Multi(labels, nets, parents)
+		}
 	}
-	return newCountedEndpointData(labels, cidrShape, v4, v6, ports, parents)
+
+	if kind == cidrKindV4Multi || kind == cidrKindV6Multi ||
+		kind == cidrKindGeneral || len(ports) > 2 || len(parents) > 2 {
+		return newEpGeneral(labels, nets, ports, parents)
+	}
+	return newCountedEndpointData(labels, kind, v4, v6, ports, parents)
 }
 
-type cidrShape uint8
-
-const (
-	cidrShapeV4 cidrShape = iota
-	cidrShapeV6
-	cidrShapeDual
-	cidrShapeGeneral
-)
-
-// classifyNets inspects the (validated) nets slice and returns the
-// shape plus the canonical v4/v6 addresses where present. Anything
-// other than exactly one v4, exactly one v6, or one of each is
-// classified as general.
-func classifyNets(nets []ip.CIDR) (shape cidrShape, v4 ip.V4Addr, v6 ip.V6Addr) {
-	var sawV4, sawV6 bool
+// classifyNets inspects the nets slice and returns the cidr-kind plus
+// the canonical v4/v6 addresses (only meaningful for the counted
+// V4/V6/Dual cases). Decision tree:
+//
+//   - all CIDRs are single-address /32 v4 only, at most 1 → V4
+//   - all CIDRs are single-address /128 v6 only, at most 1 → V6
+//   - exactly 1 single v4 + 1 single v6 → Dual
+//   - all CIDRs are v4 (any prefix, any count) → V4Multi
+//   - all CIDRs are v6 (any prefix, any count) → V6Multi
+//   - empty or mixed families → General
+//
+// The caller then routes counted shapes to the per-shape generated
+// constructors, multi shapes to newEpV4Multi / newEpV6Multi, and
+// General to newEpGeneral.
+func classifyNets(nets []ip.CIDR) (kind cidrKind, v4 ip.V4Addr, v6 ip.V6Addr) {
+	if len(nets) == 0 {
+		return cidrKindGeneral, v4, v6
+	}
+	var v4Count, v6Count int
+	var anyMultiAddr bool
 	for _, cidr := range nets {
+		if !cidr.IsSingleAddress() {
+			anyMultiAddr = true
+		}
 		switch a := cidr.Addr().(type) {
 		case ip.V4Addr:
-			if sawV4 {
-				return cidrShapeGeneral, v4, v6
+			v4Count++
+			if v4Count == 1 {
+				v4 = a
 			}
-			sawV4 = true
-			v4 = a
 		case ip.V6Addr:
-			if sawV6 {
-				return cidrShapeGeneral, v4, v6
+			v6Count++
+			if v6Count == 1 {
+				v6 = a
 			}
-			sawV6 = true
-			v6 = a
 		default:
-			return cidrShapeGeneral, v4, v6
+			return cidrKindGeneral, v4, v6
 		}
 	}
-	switch {
-	case sawV4 && sawV6:
-		return cidrShapeDual, v4, v6
-	case sawV4:
-		return cidrShapeV4, v4, v6
-	case sawV6:
-		return cidrShapeV6, v4, v6
-	default:
-		return cidrShapeGeneral, v4, v6
-	}
-}
-
-// allOwnAndParentLabelHandles is shared by every endpointData
-// implementation. It walks the endpoint's own labels first, recording
-// keys it has emitted, then calls eachParent (a push-style iterator
-// supplied by the concrete variant) to enumerate parents without the
-// allocation that an iter.Seq closure would incur.
-func allOwnAndParentLabelHandles(
-	labels uniquelabels.Map,
-	eachParent func(yield func(*npParentData) bool),
-) iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return func(yield func(k, v uniquestr.Handle) bool) {
-		seen := set.New[uniquestr.Handle]()
-		defer seen.Clear()
-		stopped := false
-		for k, v := range labels.AllHandles() {
-			if !yield(k, v) {
-				return
-			}
-			seen.Add(k)
+	mixed := v4Count > 0 && v6Count > 0
+	if mixed {
+		// Counted Dual requires exactly 1 of each, single-address.
+		if v4Count == 1 && v6Count == 1 && !anyMultiAddr {
+			return cidrKindDual, v4, v6
 		}
-		eachParent(func(parent *npParentData) bool {
-			for k, v := range parent.labels.AllHandles() {
-				if seen.Contains(k) {
-					continue
-				}
-				if !yield(k, v) {
-					stopped = true
-					return false
-				}
-				seen.Add(k)
-			}
-			return true
-		})
-		_ = stopped
+		return cidrKindGeneral, v4, v6
 	}
+	if v4Count > 0 {
+		if v4Count == 1 && !anyMultiAddr {
+			return cidrKindV4, v4, v6
+		}
+		return cidrKindV4Multi, v4, v6
+	}
+	// v6 only
+	if v6Count == 1 && !anyMultiAddr {
+		return cidrKindV6, v4, v6
+	}
+	return cidrKindV6Multi, v4, v6
 }
 
 // ---------------------------------------------------------------------
-// General fallback implementation.
+// Selector evaluation: labels.
 // ---------------------------------------------------------------------
 
-// epGeneral is used whenever any axis (cidrs, ports, parents) exceeds
-// its counted-slot count. It stores all three axes as slices.
-type epGeneral struct {
-	labels  uniquelabels.Map
-	nets    []ip.CIDR
-	ports   []portHandle
-	parents []*npParentData
-
-	cache set.Adaptive[string]
-}
-
-func newEndpointDataGeneral(
-	labels uniquelabels.Map,
-	nets []ip.CIDR,
-	ports []model.EndpointPort,
-	parents []*npParentData,
-) *epGeneral {
-	d := &epGeneral{labels: labels}
-	if len(nets) > 0 {
-		d.nets = nets
-	}
-	if len(parents) > 0 {
-		d.parents = parents
-	}
-	if len(ports) > 0 {
-		d.ports = make([]portHandle, len(ports))
-		for i, p := range ports {
-			d.ports[i] = internEndpointPort(p)
-		}
-	}
-	return d
-}
-
-func (d *epGeneral) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
+func (d *endpointData) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
 	if h, ok := d.labels.GetHandle(name); ok {
 		return h, true
 	}
-	for _, parent := range d.parents {
+	// Walk parents inline — no closure, just a small loop.
+	for _, parent := range d.parents() {
 		if h, ok := parent.labels.GetHandle(name); ok {
 			return h, true
 		}
@@ -252,82 +277,341 @@ func (d *epGeneral) GetHandle(name uniquestr.Handle) (uniquestr.Handle, bool) {
 	return uniquestr.Handle{}, false
 }
 
-func (d *epGeneral) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+func (d *endpointData) OwnLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
 	return d.labels.AllHandles()
 }
 
-func (d *epGeneral) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
-	return allOwnAndParentLabelHandles(d.labels, d.EachParent)
+func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle, uniquestr.Handle] {
+	return func(yield func(k, v uniquestr.Handle) bool) {
+		seen := set.New[uniquestr.Handle]()
+		defer seen.Clear()
+		for k, v := range d.labels.AllHandles() {
+			if !yield(k, v) {
+				return
+			}
+			seen.Add(k)
+		}
+		for _, parent := range d.parents() {
+			for k, v := range parent.labels.AllHandles() {
+				if seen.Contains(k) {
+					continue
+				}
+				if !yield(k, v) {
+					return
+				}
+				seen.Add(k)
+			}
+		}
+	}
 }
 
-func (d *epGeneral) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	for _, c := range d.nets {
-		buf = append(buf, ipsetmember.MakeCIDROrIPOnly(c))
+// ---------------------------------------------------------------------
+// Parents.
+// ---------------------------------------------------------------------
+
+// parents returns the endpoint's parent pointers as a Go slice. For
+// counted variants the slice header points directly into the variant's
+// fixed-size parents array; for V4Multi/V6Multi/General it points at
+// the externally-allocated heap array. Either way, no allocation.
+// Used internally by methods that need a simple `for _, p := range`
+// loop.
+func (d *endpointData) parents() []*npParentData {
+	s := d.shape()
+	switch s {
+	case shapeGeneral:
+		return (*epGeneral)(unsafe.Pointer(d)).parentsSlice()
+	case shapeV4Multi:
+		return (*epV4Multi)(unsafe.Pointer(d)).parentsSlice()
+	case shapeV6Multi:
+		return (*epV6Multi)(unsafe.Pointer(d)).parentsSlice()
+	}
+	info := &shapeTable[s]
+	if info.parentN == 0 {
+		return nil
+	}
+	base := d.tailPtr(uintptr(info.parsOff))
+	return unsafe.Slice((**npParentData)(base), info.parentN)
+}
+
+// Parents returns an iter.Seq over the endpoint's parent pointers.
+// The receiver is concrete, so escape analysis can stack-allocate the
+// returned closure when the caller writes `for p := range d.Parents()`.
+func (d *endpointData) Parents() iter.Seq[*npParentData] {
+	return func(yield func(*npParentData) bool) {
+		for _, p := range d.parents() {
+			if !yield(p) {
+				return
+			}
+		}
+	}
+}
+
+func (d *endpointData) HasParent(parent *npParentData) bool {
+	return slices.Contains(d.parents(), parent)
+}
+
+// ---------------------------------------------------------------------
+// IP-set contributions.
+// ---------------------------------------------------------------------
+
+// AppendCIDROrIPMembers appends a CIDROrIPOnly IP-set member per CIDR
+// to buf and returns the new slice. Variants emit typed members
+// directly via specialised ipsetmember constructors to avoid ip.CIDR /
+// ip.Addr interface boxing in the hot CalculateEndpointContribution
+// path.
+func (d *endpointData) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
+	s := d.shape()
+	switch s {
+	case shapeGeneral:
+		for _, c := range (*epGeneral)(unsafe.Pointer(d)).netsSlice() {
+			buf = append(buf, ipsetmember.MakeCIDROrIPOnly(c))
+		}
+		return buf
+	case shapeV4Multi:
+		for _, c := range (*epV4Multi)(unsafe.Pointer(d)).cidrsSlice() {
+			buf = append(buf, cidrV4MemberOrSingle(c))
+		}
+		return buf
+	case shapeV6Multi:
+		for _, c := range (*epV6Multi)(unsafe.Pointer(d)).cidrsSlice() {
+			buf = append(buf, cidrV6MemberOrSingle(c))
+		}
+		return buf
+	}
+	switch shapeTable[s].cidr {
+	case cidrKindV4:
+		return append(buf, ipsetmember.MakeSingleIPv4(d.v4FromUserData()))
+	case cidrKindV6:
+		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
+		return append(buf, ipsetmember.MakeSingleIPv6(v6))
+	case cidrKindDual:
+		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
+		return append(buf,
+			ipsetmember.MakeSingleIPv4(d.v4FromUserData()),
+			ipsetmember.MakeSingleIPv6(v6),
+		)
 	}
 	return buf
 }
 
-func (d *epGeneral) AppendIPPortMembers(
+// cidrV4MemberOrSingle returns the appropriate IPSetMember for a
+// V4CIDR. /32s collapse to single-IP members (matching the legacy
+// behaviour); shorter prefixes produce a CIDR member.
+func cidrV4MemberOrSingle(c ip.V4CIDR) ipsetmember.IPSetMember {
+	if c.IsSingleAddress() {
+		v4, _ := c.Addr().(ip.V4Addr)
+		return ipsetmember.MakeSingleIPv4(v4)
+	}
+	return ipsetmember.MakeCIDROrIPOnly(c)
+}
+
+func cidrV6MemberOrSingle(c ip.V6CIDR) ipsetmember.IPSetMember {
+	if c.IsSingleAddress() {
+		v6, _ := c.Addr().(ip.V6Addr)
+		return ipsetmember.MakeSingleIPv6(v6)
+	}
+	return ipsetmember.MakeCIDROrIPOnly(c)
+}
+
+// AppendIPPortMembers appends one IPSetMember per matching named-port
+// × address pair to buf and returns the new slice.
+func (d *endpointData) AppendIPPortMembers(
 	buf []ipsetmember.IPSetMember,
 	name string, proto ipsetmember.Protocol,
 ) []ipsetmember.IPSetMember {
-	for _, h := range d.ports {
-		port, emit, ok := portHandleMatches(h, name, proto)
-		if !ok {
-			continue
+	s := d.shape()
+	switch s {
+	case shapeGeneral:
+		g := (*epGeneral)(unsafe.Pointer(d))
+		ports := g.portsSlice()
+		nets := g.netsSlice()
+		for _, h := range ports {
+			port, emit, ok := portHandleMatches(h, name, proto)
+			if !ok {
+				continue
+			}
+			for _, c := range nets {
+				buf = append(buf, ipsetmember.MakeIPPortProto(c.Addr(), port, emit))
+			}
 		}
-		for _, c := range d.nets {
-			buf = append(buf, ipsetmember.MakeIPPortProto(c.Addr(), port, emit))
+		return buf
+	case shapeV4Multi, shapeV6Multi:
+		// Multi variants are network-set-shaped: no ports by
+		// construction. Routing inputs with ports through General
+		// keeps these variants port-free, so emit nothing.
+		return buf
+	}
+	info := &shapeTable[s]
+	if info.portN == 0 {
+		return buf
+	}
+	ports := unsafe.Slice((*portHandle)(d.tailPtr(uintptr(info.portsOff))), info.portN)
+	switch info.cidr {
+	case cidrKindV4:
+		v4 := d.v4FromUserData()
+		for _, h := range ports {
+			port, emit, ok := portHandleMatches(h, name, proto)
+			if !ok {
+				continue
+			}
+			buf = append(buf, ipsetmember.MakeIPPortProtoV4(v4, port, emit))
+		}
+	case cidrKindV6:
+		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
+		for _, h := range ports {
+			port, emit, ok := portHandleMatches(h, name, proto)
+			if !ok {
+				continue
+			}
+			buf = append(buf, ipsetmember.MakeIPPortProtoV6(v6, port, emit))
+		}
+	case cidrKindDual:
+		v4 := d.v4FromUserData()
+		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
+		for _, h := range ports {
+			port, emit, ok := portHandleMatches(h, name, proto)
+			if !ok {
+				continue
+			}
+			buf = append(buf,
+				ipsetmember.MakeIPPortProtoV4(v4, port, emit),
+				ipsetmember.MakeIPPortProtoV6(v6, port, emit),
+			)
 		}
 	}
 	return buf
 }
 
-func (d *epGeneral) EachParent(yield func(*npParentData) bool) {
-	for _, p := range d.parents {
-		if !yield(p) {
-			return
+// ---------------------------------------------------------------------
+// IP-set membership cache (lives in d.cache, an Adaptive set).
+// UserData[0] holds the shape byte; the set's payload is untouched.
+// ---------------------------------------------------------------------
+
+func (d *endpointData) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
+func (d *endpointData) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
+func (d *endpointData) NumMatchingIPSetIDs() int           { return d.cache.Len() }
+func (d *endpointData) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
+func (d *endpointData) ClearMatchingIPSetIDs()             { d.cache.Clear() }
+func (d *endpointData) MatchingIPSetIDsString() string     { return d.cache.String() }
+
+// ---------------------------------------------------------------------
+// Equality (ignores cache, which is derived state).
+// ---------------------------------------------------------------------
+
+// EqualTo reports whether d and other carry the same labels, CIDRs,
+// ports, and parents. Endpoints with different shapes are never equal
+// (the shape is deterministic from the inputs, so semantically equal
+// endpoints must have the same shape).
+func (d *endpointData) EqualTo(other *endpointData) bool {
+	if d.shape() != other.shape() {
+		return false
+	}
+	if !d.labels.Equals(other.labels) {
+		return false
+	}
+	s := d.shape()
+	switch s {
+	case shapeGeneral:
+		g1 := (*epGeneral)(unsafe.Pointer(d))
+		g2 := (*epGeneral)(unsafe.Pointer(other))
+		n1, n2 := g1.netsSlice(), g2.netsSlice()
+		p1, p2 := g1.portsSlice(), g2.portsSlice()
+		par1, par2 := g1.parentsSlice(), g2.parentsSlice()
+		if len(n1) != len(n2) || len(p1) != len(p2) || len(par1) != len(par2) {
+			return false
 		}
+		for i, n := range n1 {
+			if n2[i] != n {
+				return false
+			}
+		}
+		for i, p := range p1 {
+			if p2[i] != p {
+				return false
+			}
+		}
+		for i, p := range par1 {
+			if par2[i] != p {
+				return false
+			}
+		}
+		return true
+	case shapeV4Multi:
+		m1 := (*epV4Multi)(unsafe.Pointer(d))
+		m2 := (*epV4Multi)(unsafe.Pointer(other))
+		c1, c2 := m1.cidrsSlice(), m2.cidrsSlice()
+		par1, par2 := m1.parentsSlice(), m2.parentsSlice()
+		if len(c1) != len(c2) || len(par1) != len(par2) {
+			return false
+		}
+		for i, c := range c1 {
+			if c2[i] != c {
+				return false
+			}
+		}
+		for i, p := range par1 {
+			if par2[i] != p {
+				return false
+			}
+		}
+		return true
+	case shapeV6Multi:
+		m1 := (*epV6Multi)(unsafe.Pointer(d))
+		m2 := (*epV6Multi)(unsafe.Pointer(other))
+		c1, c2 := m1.cidrsSlice(), m2.cidrsSlice()
+		par1, par2 := m1.parentsSlice(), m2.parentsSlice()
+		if len(c1) != len(c2) || len(par1) != len(par2) {
+			return false
+		}
+		for i, c := range c1 {
+			if c2[i] != c {
+				return false
+			}
+		}
+		for i, p := range par1 {
+			if par2[i] != p {
+				return false
+			}
+		}
+		return true
 	}
-}
-
-func (d *epGeneral) HasParent(parent *npParentData) bool {
-	return slices.Contains(d.parents, parent)
-}
-
-func (d *epGeneral) AddMatchingIPSetID(id string)       { d.cache.Add(id) }
-func (d *epGeneral) RemoveMatchingIPSetID(id string)    { d.cache.Discard(id) }
-func (d *epGeneral) NumMatchingIPSetIDs() int           { return d.cache.Len() }
-func (d *epGeneral) MatchingIPSetIDs() iter.Seq[string] { return d.cache.All() }
-func (d *epGeneral) ClearMatchingIPSetIDs()             { d.cache.Clear() }
-func (d *epGeneral) MatchingIPSetIDsString() string     { return d.cache.String() }
-
-func (d *epGeneral) EqualTo(other endpointData) bool {
-	o, ok := other.(*epGeneral)
-	if !ok {
-		return false
-	}
-	if !d.labels.Equals(o.labels) {
-		return false
-	}
-	if len(d.ports) != len(o.ports) ||
-		len(d.nets) != len(o.nets) ||
-		len(d.parents) != len(o.parents) {
-		return false
-	}
-	for i, p := range d.ports {
-		if o.ports[i] != p {
+	// Counted variants: compare the tail field-by-field. We can't
+	// memequal the tails as raw bytes because alignment padding
+	// between fields carries uninitialised garbage.
+	info := &shapeTable[s]
+	switch info.cidr {
+	case cidrKindV4:
+		if d.v4FromUserData() != other.v4FromUserData() {
+			return false
+		}
+	case cidrKindV6:
+		if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
+			return false
+		}
+	case cidrKindDual:
+		if d.v4FromUserData() != other.v4FromUserData() {
+			return false
+		}
+		if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
 			return false
 		}
 	}
-	for i, c := range d.nets {
-		if o.nets[i] != c {
-			return false
+	if info.portN > 0 {
+		p1 := unsafe.Slice((*portHandle)(d.tailPtr(uintptr(info.portsOff))), info.portN)
+		p2 := unsafe.Slice((*portHandle)(other.tailPtr(uintptr(info.portsOff))), info.portN)
+		for i, h := range p1 {
+			if p2[i] != h {
+				return false
+			}
 		}
 	}
-	for i, p := range d.parents {
-		if o.parents[i] != p {
-			return false
+	if info.parentN > 0 {
+		p1 := unsafe.Slice((**npParentData)(d.tailPtr(uintptr(info.parsOff))), info.parentN)
+		p2 := unsafe.Slice((**npParentData)(other.tailPtr(uintptr(info.parsOff))), info.parentN)
+		for i, p := range p1 {
+			if p2[i] != p {
+				return false
+			}
 		}
 	}
 	return true

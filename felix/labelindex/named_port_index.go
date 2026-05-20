@@ -129,7 +129,7 @@ func (d *npParentData) IterEndpointIDs(f func(id any) error) {
 type NamedPortMatchCallback func(ipSetID string, member ipsetmember.IPSetMember)
 
 type SelectorAndNamedPortIndex struct {
-	endpointKVIdx *labelnamevalueindex.LabelNameValueIndex[any /*endpoint IDs*/, endpointData]
+	endpointKVIdx *labelnamevalueindex.LabelNameValueIndex[any /*endpoint IDs*/, *endpointData]
 
 	parentKVIdx           *labelnamevalueindex.LabelNameValueIndex[string, *npParentData]
 	ipSetDataByID         map[string]*ipSetData
@@ -147,7 +147,7 @@ type SelectorAndNamedPortIndex struct {
 
 func NewSelectorAndNamedPortIndex(supressOverlaps bool) *SelectorAndNamedPortIndex {
 	inheritIdx := SelectorAndNamedPortIndex{
-		endpointKVIdx: labelnamevalueindex.New[any, endpointData]("endpoints"),
+		endpointKVIdx: labelnamevalueindex.New[any, *endpointData]("endpoints"),
 		parentKVIdx:   labelnamevalueindex.New[string, *npParentData]("parents"),
 		ipSetDataByID: map[string]*ipSetData{},
 		selectorCandidatesIdx: labelrestrictionindex.New(
@@ -359,7 +359,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateIPSet(ipSetID string, sel *selector.
 	idx.ipSetDataByID[ipSetID] = newIPSetData
 	idx.selectorCandidatesIdx.AddSelector(ipSetID, sel)
 
-	idx.iterEndpointCandidates(ipSetID, func(epID any, epData endpointData) {
+	idx.iterEndpointCandidates(ipSetID, func(epID any, epData *endpointData) {
 		idx.maybeReportLive()
 
 		if !sel.EvaluateLabels(epData) {
@@ -403,7 +403,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteIPSet(setID string) {
 		}).Info("Deleting IP set")
 	}
 
-	idx.iterEndpointCandidates(setID, func(epID any, epData endpointData) {
+	idx.iterEndpointCandidates(setID, func(epID any, epData *endpointData) {
 		// Make sure we don't appear non-live if there are a lot of endpoints
 		// to get through.  Note: we don't bother evaluating the selector
 		// here since it's faster to just do the cleanup unconditionally.
@@ -433,7 +433,7 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 		}).Debug("Updating endpoint/network set")
 	}
 
-	// Resolve parent IDs to parent objects so the endpointData can hold
+	// Resolve parent IDs to parent objects so the *endpointData can hold
 	// pointer references.
 	var parents []*npParentData
 	if len(parentIDs) > 0 {
@@ -474,19 +474,17 @@ func (idx *SelectorAndNamedPortIndex) UpdateEndpointOrSet(
 	idx.endpointKVIdx.Add(id, newEndpointData)
 
 	newParentIDs := set.New[any]()
-	newEndpointData.EachParent(func(parent *npParentData) bool {
+	for parent := range newEndpointData.Parents() {
 		parent.AddEndpointID(id)
 		newParentIDs.Add(parent.id)
-		return true
-	})
+	}
 	if oldEndpointData != nil {
-		oldEndpointData.EachParent(func(parent *npParentData) bool {
+		for parent := range oldEndpointData.Parents() {
 			if !newParentIDs.Contains(parent.id) {
 				parent.DiscardEndpointID(id)
 				idx.discardParentIfEmpty(parent.id)
 			}
-			return true
-		})
+		}
 	}
 
 	gaugeNumEndpoints.Set(float64(idx.endpointKVIdx.Len()))
@@ -540,7 +538,7 @@ func (idx *SelectorAndNamedPortIndex) onMemberRemoved(ipSetID string, member ips
 }
 
 func (idx *SelectorAndNamedPortIndex) scanEndpointAgainstIPSets(
-	epData endpointData,
+	epData *endpointData,
 	oldIPSetContributions map[string][]ipsetmember.IPSetMember,
 ) {
 	// Remove any previous match from the endpoint's cache.  We'll re-add it
@@ -630,11 +628,10 @@ func (idx *SelectorAndNamedPortIndex) DeleteEndpoint(id any) {
 
 	// Record the new endpoint data.
 	idx.endpointKVIdx.Remove(id)
-	oldEndpointData.EachParent(func(parent *npParentData) bool {
+	for parent := range oldEndpointData.Parents() {
 		parent.DiscardEndpointID(id)
 		idx.discardParentIfEmpty(parent.id)
-		return true
-	})
+	}
 	gaugeNumEndpoints.Set(float64(idx.endpointKVIdx.Len()))
 }
 
@@ -692,7 +689,7 @@ func (idx *SelectorAndNamedPortIndex) DeleteParentLabels(parentID string) {
 // CalculateEndpointContribution calculates the given endpoint's contribution to the given IP set.
 // If the IP set represents a named port then the returned members will have a named port component.
 // Returns nil if the endpoint doesn't contribute to the IP set.
-func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d endpointData, ipSetData *ipSetData) []ipsetmember.IPSetMember {
+func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d *endpointData, ipSetData *ipSetData) []ipsetmember.IPSetMember {
 	if ipSetData.namedPortProtocol != ipsetmember.ProtocolNone {
 		// Named-port IP set: emit per (matching port × address) pair.
 		return d.AppendIPPortMembers(nil, ipSetData.namedPort, ipSetData.namedPortProtocol)
@@ -703,7 +700,7 @@ func (idx *SelectorAndNamedPortIndex) CalculateEndpointContribution(d endpointDa
 
 // RecalcCachedContributions uses the cached set of matching IP set IDs in the endpoint
 // struct to quickly recalculate the endpoint's contribution to all IP sets.
-func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData endpointData) map[string][]ipsetmember.IPSetMember {
+func (idx *SelectorAndNamedPortIndex) RecalcCachedContributions(epData *endpointData) map[string][]ipsetmember.IPSetMember {
 	if epData.NumMatchingIPSetIDs() == 0 {
 		return nil
 	}
@@ -751,7 +748,7 @@ func (idx *SelectorAndNamedPortIndex) maybeReportLive() {
 // iterEndpointCandidates iterates over the subset of endpoints that the
 // index says _may_ match the given IP set's selector.  It may produce additional
 // non-matching endpoints (or all endpoints if no optimization is available).
-func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f func(epID any, epData endpointData)) {
+func (idx *SelectorAndNamedPortIndex) iterEndpointCandidates(ipsetID string, f func(epID any, epData *endpointData)) {
 	sel := idx.ipSetDataByID[ipsetID].selector
 	restrictions := sel.LabelRestrictions()
 	log.Debugf("Selector %s restrictions: %v", sel.String(), restrictions)
