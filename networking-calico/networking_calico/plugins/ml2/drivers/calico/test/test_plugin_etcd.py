@@ -461,9 +461,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         assertions happen to match the no-op output.  Negative tests can opt
         out with ``expect_ok=False``.
 
-        If the driver has been initialised (post _post_fork_init) we reuse its syncers
-        so the same primed project cache is in play.  Otherwise we let the runner build
-        fresh syncers against the mocked DB and Keystone.
+        If the driver has been initialised (post post_fork_initialize) we reuse its
+        syncers so the same primed project cache is in play.  Otherwise we let the
+        runner build fresh syncers against the mocked DB and Keystone.
         """
         result = resync.Scope(
             self.db,
@@ -2017,7 +2017,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_pre_live_migration(self):
         """Pre-live-migration creates destination WEP and LiveMigration."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         self._pre_migrate()
@@ -2037,7 +2036,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         self._pre_migrate()
@@ -2071,7 +2069,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_live_migration_failed(self):
         """After migration fails, dest WEP deleted, source WEP unchanged."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         self._pre_migrate()
@@ -2103,7 +2100,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_port_delete_during_migration(self):
         """Deleting port during migration cleans up both WEPs and LM."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         self._pre_migrate()
@@ -2172,7 +2168,6 @@ class TestLiveMigration(TestPluginEtcdBase):
     @mock.patch("eventlet.spawn")
     def test_vif_plug_no_notification_for_non_migration(self, _m_spawn):
         """Felix 'up' on source host does NOT trigger Nova notification."""
-        self.driver._init_and_start_endpoint_status_watcher()
         self._do_initial_resync()
         self.recent_writes = {}
         self.recent_deletes = set()
@@ -2185,7 +2180,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         # Set up the port as mid-migration in the Neutron DB (migrating_to
@@ -2202,7 +2196,6 @@ class TestLiveMigration(TestPluginEtcdBase):
 
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""
-        self.driver._post_fork_inititialize_common()
         self._do_initial_resync()
 
         # Inject a stale LiveMigration into etcd as if a migration was in

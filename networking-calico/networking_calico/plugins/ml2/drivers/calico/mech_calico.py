@@ -34,7 +34,6 @@ import time
 import eventlet
 from eventlet.queue import PriorityQueue
 
-from neutron import wsgi
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
@@ -300,7 +299,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
         qos_driver.register(self)
         # Generally initialize attributes to nil values.  They get initialized
-        # properly, as needed, in _post_fork_init().
+        # properly, as needed, in post_fork_initialize().
         self.db = None
         self.elector = None
         self._agent_update_context = None
@@ -427,7 +426,6 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
 
         return refreshed_in_time
-
 
     def _post_fork_inititialize_common(self):
         """Common post fork initialization.

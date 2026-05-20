@@ -579,12 +579,12 @@ class Lib(object):
         the one UT process, which means:
 
         - Do the same startup preparations - DB connection etc. - that the API worker
-          process would do.  These are all coded in ``_post_fork_init()``.  This allows
-          tests to later call driver entrypoints like ``update_port_postcommit()``,
-          similarly as production Neutron would.
+          process would do.  These are all coded in ``_post_fork_initialize_common()``.
+          This allows tests to later call driver entrypoints like
+          ``update_port_postcommit()``, similarly as production Neutron would.
 
         - Spawn the threads for "other work" (as above) as the RPC worker process would
-          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
+          do.  This is achieved by calling ``_post_fork_inititialize_common()``.
 
         - Do the startup resync that the Calico resync process would do.  This is coded
           in ``_do_startup_resync()``.

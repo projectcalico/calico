@@ -13,17 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Tests for CalicoMechanismDriver initialization and voting behavior.
-
-These tests validate:
-  - Only ``_post_fork_init(voting=True)`` creates an Elector.
-  - ``_post_fork_init(voting=False)`` never creates an Elector.
-  - ``post_fork_initialize`` (the AFTER_INIT callback) dispatches correctly:
-    API workers (``neutron.wsgi.WorkerService``) get ``voting=False`` so they
-    never become master (per PR #11580); ``CalicoStartupResyncWorker`` runs
-    only the one-shot resync; any other worker (RPC etc.) gets
-    ``voting=True``.
-  - A worker initialization does not override the parent elector.
+Tests for CalicoMechanismDriver initialization.
 """
 
 import unittest
@@ -61,35 +51,32 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
         super(TestMechanismDriverVoting, self).tearDown()
 
     def test_driver_init_common(self):
-        driver = mech_calico.CalicoMechanismDriver()
-        driver._post_fork_inititialize_common()
+        self.driver._post_fork_inititialize_common()
 
-        self.assertIsNotNone(driver.db)
-        self.assertIsNotNone(driver.subnet_syncer)
-        self.assertIsNotNone(driver.policy_syncer)
-        self.assertIsNotNone(driver.endpoint_syncer)
-        self.assertIsNotNone(driver._agent_update_context)
-        self.assertIsNotNone(driver.state_report_rpc)
+        self.assertIsNotNone(self.driver.db)
+        self.assertIsNotNone(self.driver.subnet_syncer)
+        self.assertIsNotNone(self.driver.policy_syncer)
+        self.assertIsNotNone(self.driver.endpoint_syncer)
+        self.assertIsNotNone(self.driver._agent_update_context)
+        self.assertIsNotNone(self.driver.state_report_rpc)
 
     @mock.patch("eventlet.spawn")
     def test_driver_init_calico_resource_syncer(self, m_spawn):
         m_spawn.return_value = True
 
-        driver = mech_calico.CalicoMechanismDriver()
-        driver._init_and_start_calico_resouce_syncer()
+        self.driver._init_and_start_calico_resouce_syncer()
 
-        self.assertTrue(driver.start_up_resync_thread)
+        self.assertTrue(self.driver.start_up_resync_thread)
 
     @mock.patch("eventlet.spawn")
     @mock.patch.object(mech_calico, "Elector")
     def test_driver_init_calico_manager(self, m_elector, m_spawn):
         m_spawn.return_value = True
 
-        driver = mech_calico.CalicoMechanismDriver()
-        driver._init_and_start_calico_manager()
+        self.driver._init_and_start_calico_manager()
 
-        self.assertTrue(driver.election_thread)
-        self.assertTrue(driver.periodic_compaction_thread)
+        self.assertTrue(self.driver.election_thread)
+        self.assertTrue(self.driver.periodic_compaction_thread)
 
         m_elector.assert_called_once()
 
@@ -97,26 +84,24 @@ class TestMechanismDriverVoting(lib.Lib, unittest.TestCase):
     def test_driver_init_calico_agent_status_watcher(self, m_spawn):
         m_spawn.return_value = True
 
-        driver = mech_calico.CalicoMechanismDriver()
-        driver._init_and_start_agent_status_watcher()
+        self.driver._init_and_start_agent_status_watcher()
 
-        self.assertTrue(driver.agent_status_watch_thread)
+        self.assertTrue(self.driver.agent_status_watch_thread)
 
     @mock.patch("eventlet.spawn")
     def test_driver_init_calico_endpoint_status_watcher(self, m_spawn):
         m_spawn.return_value = True
 
-        driver = mech_calico.CalicoMechanismDriver()
-        driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_and_start_endpoint_status_watcher()
 
-        self.assertTrue(driver.endpoint_status_watch_thread)
+        self.assertTrue(self.driver.endpoint_status_watch_thread)
         self.assertEqual(
-            len(driver.port_status_update_threads),
+            len(self.driver.port_status_update_threads),
             lib.m_oslo_config.cfg.CONF.calico.num_port_status_threads,
         )
 
         # We will also need to ensure that the required queues components
         # are also created.
-        self.assertIsNotNone(driver._port_status_cache)
-        self.assertIsNotNone(driver._port_status_queue)
-        self.assertIsNotNone(driver._port_status_queue_too_long)
+        self.assertIsNotNone(self.driver._port_status_cache)
+        self.assertIsNotNone(self.driver._port_status_queue)
+        self.assertIsNotNone(self.driver._port_status_queue_too_long)
