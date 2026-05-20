@@ -266,26 +266,35 @@ func (e *epV6Multi) parentsSlice() []*npParentData {
 
 	// ---- epGeneral struct definition ----
 	out.WriteString(`
-// epGeneral is the fallback variant. It stores all three axes (nets,
-// ports, parents) using the compact (ptr, uint32 length) form rather
-// than full Go slice headers. The callers do not append in place, so
-// dropping the cap field is safe. Length fields pack together to share
-// alignment padding.
+// epGeneral is the fallback variant. It stores cidrs as two typed
+// compact slices (v4 + v6) so iteration never has to type-switch on an
+// ip.CIDR interface and storage avoids per-element boxing. Ports and
+// parents use the same compact (ptr, uint32 length) form as the multi
+// variants. Length fields pack together to share alignment padding.
 type epGeneral struct {
 	endpointData
-	netsPtr    *ip.CIDR
+	v4cidrsPtr *ip.V4CIDR
+	v6cidrsPtr *ip.V6CIDR
 	portsPtr   *portHandle
 	parentsPtr **npParentData
-	netsLen    uint32
+	v4cidrsLen uint32
+	v6cidrsLen uint32
 	portsLen   uint32
 	parentsLen uint32
 }
 
-func (e *epGeneral) netsSlice() []ip.CIDR {
-	if e.netsLen == 0 {
+func (e *epGeneral) v4CIDRsSlice() []ip.V4CIDR {
+	if e.v4cidrsLen == 0 {
 		return nil
 	}
-	return unsafe.Slice(e.netsPtr, e.netsLen)
+	return unsafe.Slice(e.v4cidrsPtr, e.v4cidrsLen)
+}
+
+func (e *epGeneral) v6CIDRsSlice() []ip.V6CIDR {
+	if e.v6cidrsLen == 0 {
+		return nil
+	}
+	return unsafe.Slice(e.v6cidrsPtr, e.v6cidrsLen)
 }
 
 func (e *epGeneral) portsSlice() []portHandle {
@@ -385,9 +394,10 @@ func (e *epGeneral) parentsSlice() []*npParentData {
 
 	// ---- newEpGeneral ----
 	out.WriteString(`
-// newEpGeneral builds the slice-based fallback variant. Used when any
-// axis exceeds the counted slot count or the cidr layout is mixed
-// v4+v6 multi-CIDR.
+// newEpGeneral builds the fallback variant. Used when any axis
+// exceeds the counted slot count or the cidr layout is mixed v4+v6
+// multi-CIDR. CIDRs are split into typed v4 / v6 compact slices at
+// construction so all per-element access downstream is family-typed.
 func newEpGeneral(
 	labels uniquelabels.Map,
 	nets []ip.CIDR,
@@ -395,11 +405,36 @@ func newEpGeneral(
 	parents []*npParentData,
 ) *endpointData {
 	v := &epGeneral{endpointData: endpointData{labels: labels}}
-	if n := len(nets); n > 0 {
-		// Take ownership of the caller-supplied slice; callers do not
-		// retain it after newEndpointData returns.
-		v.netsPtr = &nets[0]
-		v.netsLen = uint32(n)
+	if len(nets) > 0 {
+		var v4Count, v6Count int
+		for _, c := range nets {
+			switch c.(type) {
+			case ip.V4CIDR:
+				v4Count++
+			case ip.V6CIDR:
+				v6Count++
+			}
+		}
+		if v4Count > 0 {
+			buf := make([]ip.V4CIDR, 0, v4Count)
+			for _, c := range nets {
+				if c4, ok := c.(ip.V4CIDR); ok {
+					buf = append(buf, c4)
+				}
+			}
+			v.v4cidrsPtr = &buf[0]
+			v.v4cidrsLen = uint32(v4Count)
+		}
+		if v6Count > 0 {
+			buf := make([]ip.V6CIDR, 0, v6Count)
+			for _, c := range nets {
+				if c6, ok := c.(ip.V6CIDR); ok {
+					buf = append(buf, c6)
+				}
+			}
+			v.v6cidrsPtr = &buf[0]
+			v.v6cidrsLen = uint32(v6Count)
+		}
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]

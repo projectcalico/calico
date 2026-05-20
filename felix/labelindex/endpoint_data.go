@@ -190,6 +190,8 @@ func newEndpointData(
 			return newEpV4Multi(labels, nets, parents)
 		case cidrKindV6Multi:
 			return newEpV6Multi(labels, nets, parents)
+		default:
+			// Fall through to general case.
 		}
 	}
 
@@ -306,15 +308,108 @@ func (d *endpointData) AllOwnAndParentLabelHandles() iter.Seq2[uniquestr.Handle,
 }
 
 // ---------------------------------------------------------------------
+// Shape-switched iterators.
+//
+// Each iterator is the single place that knows how to walk a given
+// data axis across every shape. The Append* and EqualTo methods below
+// are written in terms of these iterators (and the matching slice
+// helpers for parents/ports) and contain no shape switching of their
+// own.
+//
+// Receivers are concrete so escape analysis can stack-allocate the
+// returned closures at call sites that use `for x := range d.xxx()`.
+// ---------------------------------------------------------------------
+
+// v4CIDRs yields one V4CIDR per IPv4 entry on the endpoint. Counted
+// V4/Dual variants synthesize a /32 from the address in UserData/tail;
+// V4Multi and General yield their typed V4CIDR slices directly.
+func (d *endpointData) v4CIDRs() iter.Seq[ip.V4CIDR] {
+	return func(yield func(ip.V4CIDR) bool) {
+		s := d.shape()
+		switch s {
+		case shapeGeneral:
+			for _, c := range (*epGeneral)(unsafe.Pointer(d)).v4CIDRsSlice() {
+				if !yield(c) {
+					return
+				}
+			}
+			return
+		case shapeV4Multi:
+			for _, c := range (*epV4Multi)(unsafe.Pointer(d)).cidrsSlice() {
+				if !yield(c) {
+					return
+				}
+			}
+			return
+		case shapeV6Multi:
+			return
+		}
+		switch shapeTable[s].cidr {
+		case cidrKindV4, cidrKindDual:
+			yield(d.v4FromUserData().AsV4CIDR())
+		}
+	}
+}
+
+// v6CIDRs yields one V6CIDR per IPv6 entry on the endpoint. Counterpart
+// to v4CIDRs; counted V6/Dual variants synthesize /128s from the V6Addr
+// stored in the tail.
+func (d *endpointData) v6CIDRs() iter.Seq[ip.V6CIDR] {
+	return func(yield func(ip.V6CIDR) bool) {
+		s := d.shape()
+		switch s {
+		case shapeGeneral:
+			for _, c := range (*epGeneral)(unsafe.Pointer(d)).v6CIDRsSlice() {
+				if !yield(c) {
+					return
+				}
+			}
+			return
+		case shapeV6Multi:
+			for _, c := range (*epV6Multi)(unsafe.Pointer(d)).cidrsSlice() {
+				if !yield(c) {
+					return
+				}
+			}
+			return
+		case shapeV4Multi:
+			return
+		}
+		switch shapeTable[s].cidr {
+		case cidrKindV6, cidrKindDual:
+			v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
+			yield(v6.AsV6CIDR())
+		}
+	}
+}
+
+// ports returns the endpoint's interned port handles as a Go slice.
+// For counted variants the slice header points directly into the
+// variant's fixed-size ports array; for V4Multi/V6Multi the result is
+// always empty (those variants have no ports by construction). No
+// allocation.
+func (d *endpointData) ports() []portHandle {
+	s := d.shape()
+	switch s {
+	case shapeGeneral:
+		return (*epGeneral)(unsafe.Pointer(d)).portsSlice()
+	case shapeV4Multi, shapeV6Multi:
+		return nil
+	}
+	info := &shapeTable[s]
+	if info.portN == 0 {
+		return nil
+	}
+	base := d.tailPtr(uintptr(info.portsOff))
+	return unsafe.Slice((*portHandle)(base), info.portN)
+}
+
+// ---------------------------------------------------------------------
 // Parents.
 // ---------------------------------------------------------------------
 
-// parents returns the endpoint's parent pointers as a Go slice. For
-// counted variants the slice header points directly into the variant's
-// fixed-size parents array; for V4Multi/V6Multi/General it points at
-// the externally-allocated heap array. Either way, no allocation.
-// Used internally by methods that need a simple `for _, p := range`
-// loop.
+// parents returns the endpoint's parent pointers as a Go slice. See
+// the comment on ports() for the per-shape layout. No allocation.
 func (d *endpointData) parents() []*npParentData {
 	s := d.shape()
 	switch s {
@@ -355,109 +450,40 @@ func (d *endpointData) HasParent(parent *npParentData) bool {
 // ---------------------------------------------------------------------
 
 // AppendCIDROrIPMembers appends a CIDROrIPOnly IP-set member per CIDR
-// to buf and returns the new slice. Variants emit typed members
-// directly via specialised ipsetmember constructors to avoid ip.CIDR /
-// ip.Addr interface boxing in the hot CalculateEndpointContribution
-// path.
+// to buf and returns the new slice. Iteration goes through v4CIDRs /
+// v6CIDRs so the shape switch lives in those helpers, not here.
 func (d *endpointData) AppendCIDROrIPMembers(buf []ipsetmember.IPSetMember) []ipsetmember.IPSetMember {
-	s := d.shape()
-	switch s {
-	case shapeGeneral:
-		for _, c := range (*epGeneral)(unsafe.Pointer(d)).netsSlice() {
-			buf = append(buf, ipsetmember.MakeCIDROrIPOnly(c))
-		}
-		return buf
-	case shapeV4Multi:
-		for _, c := range (*epV4Multi)(unsafe.Pointer(d)).cidrsSlice() {
-			buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV4(c))
-		}
-		return buf
-	case shapeV6Multi:
-		for _, c := range (*epV6Multi)(unsafe.Pointer(d)).cidrsSlice() {
-			buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV6(c))
-		}
-		return buf
+	for c := range d.v4CIDRs() {
+		buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV4(c))
 	}
-	switch shapeTable[s].cidr {
-	case cidrKindV4:
-		return append(buf, ipsetmember.MakeSingleIPv4(d.v4FromUserData()))
-	case cidrKindV6:
-		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
-		return append(buf, ipsetmember.MakeSingleIPv6(v6))
-	case cidrKindDual:
-		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
-		return append(buf,
-			ipsetmember.MakeSingleIPv4(d.v4FromUserData()),
-			ipsetmember.MakeSingleIPv6(v6),
-		)
+	for c := range d.v6CIDRs() {
+		buf = append(buf, ipsetmember.MakeCIDROrIPOnlyV6(c))
 	}
 	return buf
 }
 
 // AppendIPPortMembers appends one IPSetMember per matching named-port
-// × address pair to buf and returns the new slice.
+// × address pair to buf and returns the new slice. The cross product
+// is expressed as nested iter.Seq loops; the only shape switching is
+// inside ports() / v4CIDRs() / v6CIDRs().
 func (d *endpointData) AppendIPPortMembers(
 	buf []ipsetmember.IPSetMember,
 	name string, proto ipsetmember.Protocol,
 ) []ipsetmember.IPSetMember {
-	s := d.shape()
-	switch s {
-	case shapeGeneral:
-		g := (*epGeneral)(unsafe.Pointer(d))
-		ports := g.portsSlice()
-		nets := g.netsSlice()
-		for _, h := range ports {
-			port, emit, ok := portHandleMatches(h, name, proto)
-			if !ok {
-				continue
-			}
-			for _, c := range nets {
-				buf = append(buf, ipsetmember.MakeIPPortProto(c.Addr(), port, emit))
-			}
-		}
-		return buf
-	case shapeV4Multi, shapeV6Multi:
-		// Multi variants are network-set-shaped: no ports by
-		// construction. Routing inputs with ports through General
-		// keeps these variants port-free, so emit nothing.
+	ports := d.ports()
+	if len(ports) == 0 {
 		return buf
 	}
-	info := &shapeTable[s]
-	if info.portN == 0 {
-		return buf
-	}
-	ports := unsafe.Slice((*portHandle)(d.tailPtr(uintptr(info.portsOff))), info.portN)
-	switch info.cidr {
-	case cidrKindV4:
-		v4 := d.v4FromUserData()
-		for _, h := range ports {
-			port, emit, ok := portHandleMatches(h, name, proto)
-			if !ok {
-				continue
-			}
-			buf = append(buf, ipsetmember.MakeIPPortProtoV4(v4, port, emit))
+	for _, h := range ports {
+		port, emit, ok := portHandleMatches(h, name, proto)
+		if !ok {
+			continue
 		}
-	case cidrKindV6:
-		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
-		for _, h := range ports {
-			port, emit, ok := portHandleMatches(h, name, proto)
-			if !ok {
-				continue
-			}
-			buf = append(buf, ipsetmember.MakeIPPortProtoV6(v6, port, emit))
+		for c := range d.v4CIDRs() {
+			buf = append(buf, ipsetmember.MakeIPPortProtoV4(c.AddrV4(), port, emit))
 		}
-	case cidrKindDual:
-		v4 := d.v4FromUserData()
-		v6 := *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset))
-		for _, h := range ports {
-			port, emit, ok := portHandleMatches(h, name, proto)
-			if !ok {
-				continue
-			}
-			buf = append(buf,
-				ipsetmember.MakeIPPortProtoV4(v4, port, emit),
-				ipsetmember.MakeIPPortProtoV6(v6, port, emit),
-			)
+		for c := range d.v6CIDRs() {
+			buf = append(buf, ipsetmember.MakeIPPortProtoV6(c.AddrV6(), port, emit))
 		}
 	}
 	return buf
@@ -483,117 +509,58 @@ func (d *endpointData) MatchingIPSetIDsString() string     { return d.cache.Stri
 // ports, and parents. Endpoints with different shapes are never equal
 // (the shape is deterministic from the inputs, so semantically equal
 // endpoints must have the same shape).
+//
+// Implementation note: same-shape endpoints have identical layout, so
+// the per-shape branches only differ in how they reach their CIDRs.
+// Ports and parents come through the shape-agnostic slice helpers.
 func (d *endpointData) EqualTo(other *endpointData) bool {
-	if d.shape() != other.shape() {
+	s := d.shape()
+	if s != other.shape() {
 		return false
 	}
 	if !d.labels.Equals(other.labels) {
 		return false
 	}
-	s := d.shape()
 	switch s {
 	case shapeGeneral:
 		g1 := (*epGeneral)(unsafe.Pointer(d))
 		g2 := (*epGeneral)(unsafe.Pointer(other))
-		n1, n2 := g1.netsSlice(), g2.netsSlice()
-		p1, p2 := g1.portsSlice(), g2.portsSlice()
-		par1, par2 := g1.parentsSlice(), g2.parentsSlice()
-		if len(n1) != len(n2) || len(p1) != len(p2) || len(par1) != len(par2) {
+		if !slices.Equal(g1.v4CIDRsSlice(), g2.v4CIDRsSlice()) ||
+			!slices.Equal(g1.v6CIDRsSlice(), g2.v6CIDRsSlice()) {
 			return false
 		}
-		for i, n := range n1 {
-			if n2[i] != n {
-				return false
-			}
-		}
-		for i, p := range p1 {
-			if p2[i] != p {
-				return false
-			}
-		}
-		for i, p := range par1 {
-			if par2[i] != p {
-				return false
-			}
-		}
-		return true
 	case shapeV4Multi:
 		m1 := (*epV4Multi)(unsafe.Pointer(d))
 		m2 := (*epV4Multi)(unsafe.Pointer(other))
-		c1, c2 := m1.cidrsSlice(), m2.cidrsSlice()
-		par1, par2 := m1.parentsSlice(), m2.parentsSlice()
-		if len(c1) != len(c2) || len(par1) != len(par2) {
+		if !slices.Equal(m1.cidrsSlice(), m2.cidrsSlice()) {
 			return false
 		}
-		for i, c := range c1 {
-			if c2[i] != c {
-				return false
-			}
-		}
-		for i, p := range par1 {
-			if par2[i] != p {
-				return false
-			}
-		}
-		return true
 	case shapeV6Multi:
 		m1 := (*epV6Multi)(unsafe.Pointer(d))
 		m2 := (*epV6Multi)(unsafe.Pointer(other))
-		c1, c2 := m1.cidrsSlice(), m2.cidrsSlice()
-		par1, par2 := m1.parentsSlice(), m2.parentsSlice()
-		if len(c1) != len(c2) || len(par1) != len(par2) {
+		if !slices.Equal(m1.cidrsSlice(), m2.cidrsSlice()) {
 			return false
 		}
-		for i, c := range c1 {
-			if c2[i] != c {
+	default:
+		// Counted variant: compare the in-tail V4Addr / V6Addr.
+		switch shapeTable[s].cidr {
+		case cidrKindV4:
+			if d.v4FromUserData() != other.v4FromUserData() {
 				return false
 			}
-		}
-		for i, p := range par1 {
-			if par2[i] != p {
+		case cidrKindV6:
+			if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
 				return false
 			}
-		}
-		return true
-	}
-	// Counted variants: compare the tail field-by-field. We can't
-	// memequal the tails as raw bytes because alignment padding
-	// between fields carries uninitialised garbage.
-	info := &shapeTable[s]
-	switch info.cidr {
-	case cidrKindV4:
-		if d.v4FromUserData() != other.v4FromUserData() {
-			return false
-		}
-	case cidrKindV6:
-		if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
-			return false
-		}
-	case cidrKindDual:
-		if d.v4FromUserData() != other.v4FromUserData() {
-			return false
-		}
-		if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
-			return false
-		}
-	}
-	if info.portN > 0 {
-		p1 := unsafe.Slice((*portHandle)(d.tailPtr(uintptr(info.portsOff))), info.portN)
-		p2 := unsafe.Slice((*portHandle)(other.tailPtr(uintptr(info.portsOff))), info.portN)
-		for i, h := range p1 {
-			if p2[i] != h {
+		case cidrKindDual:
+			if d.v4FromUserData() != other.v4FromUserData() {
+				return false
+			}
+			if *(*ip.V6Addr)(d.tailPtr(cidrFieldOffset)) != *(*ip.V6Addr)(other.tailPtr(cidrFieldOffset)) {
 				return false
 			}
 		}
 	}
-	if info.parentN > 0 {
-		p1 := unsafe.Slice((**npParentData)(d.tailPtr(uintptr(info.parsOff))), info.parentN)
-		p2 := unsafe.Slice((**npParentData)(other.tailPtr(uintptr(info.parsOff))), info.parentN)
-		for i, p := range p1 {
-			if p2[i] != p {
-				return false
-			}
-		}
-	}
-	return true
+	return slices.Equal(d.ports(), other.ports()) &&
+		slices.Equal(d.parents(), other.parents())
 }
