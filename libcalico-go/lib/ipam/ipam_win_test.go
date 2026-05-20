@@ -80,7 +80,7 @@ type testArgsClaimAff1 struct {
 var _ = testutils.E2eDatastoreDescribe("Windows: IPAM tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 	var bc bapi.Client
 	var ic Interface
-	var kc *kubernetes.Clientset
+	var kc kubernetes.Interface
 
 	BeforeEach(func() {
 		// Create a new backend client and an IPAM Client using the IP Pools Accessor.
