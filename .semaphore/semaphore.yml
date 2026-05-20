@@ -175,6 +175,10 @@ promotions:
     pipeline_file: push-images/cni-plugin.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
+  - name: Push cni-plugins images
+    pipeline_file: push-images/cni-plugins.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
     auto_promote:
@@ -1693,6 +1697,32 @@ blocks:
             - export AZURE_RESOURCE_GROUP=${RG_PREFIX}-${BACKEND}-rg
             - echo AZURE_RESOURCE_GROUP=${AZURE_RESOURCE_GROUP}
             - ../.semaphore/run-and-monitor win-fv-containerd.log ~/calico/process/testing/winfv-cni-plugin/run-win-fv.sh
+  - name: CNI plugins image
+    run:
+      when: >-
+        false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/cni-plugins
+      jobs:
+        - name: "CNI plugins: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "CNI plugins: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: confd
     run:
       when: >-
@@ -3704,11 +3734,7 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/**',
-        '/metadata.mk',
-        '/typha/pkg/discovery/*.go',
-        '/typha/pkg/syncclient/*.go',
-        '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/metadata.mk'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3719,8 +3745,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
-        '/lib/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/lib/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:
