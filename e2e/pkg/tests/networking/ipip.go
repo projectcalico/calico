@@ -17,7 +17,6 @@ package networking
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -145,13 +144,13 @@ var _ = describe.CalicoDescribe(
 			// Wait for routes to converge before checking connectivity.
 			ginkgo.By("Verifying that node routes no longer use tunl0")
 			Eventually(func() error {
-				routes := getNodeRoutes(cli, "203.0.113")
+				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {
 					return fmt.Errorf("no routes found for test IP pool")
 				}
 				for _, r := range routes {
-					if strings.Contains(r, "tunl0") {
-						return fmt.Errorf("route for test IP pool is still using tunl0: %s", r)
+					if r.Dev == "tunl0" {
+						return fmt.Errorf("route for test IP pool is still using tunl0: %s", r.Raw)
 					}
 				}
 				return nil
@@ -183,21 +182,22 @@ var _ = describe.CalicoDescribe(
 			err = cli.Update(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error updating IP pool to set IPIP to Always")
 
-			// Routes should now be using tunl0 again.
-			ginkgo.By("Verifying that node routes are using tunl0")
+			// Routes should now be using tunl0 again, and be owned by whichever
+			// programmer (Felix or BIRD) the cluster is configured to use.
+			ginkgo.By("Verifying that node routes are using tunl0 with the expected protocol owner")
+			expectedProto := expectedClusterRouteProto(cli)
 			Eventually(func() error {
-				routes := getNodeRoutes(cli, "203.0.113")
+				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {
 					return fmt.Errorf("no routes found for test IP pool")
 				}
 				for _, r := range routes {
-					if strings.Contains(r, "tunl0") {
-						// Found a route using tunl0, as expected.
+					if r.Dev == "tunl0" && r.Proto == expectedProto {
 						return nil
 					}
 				}
-				return fmt.Errorf("no routes for test IP pool are using tunl0: %v", routes)
-			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are not using tunl0")
+				return fmt.Errorf("no tunl0 route for test IP pool with proto=%s: %v", expectedProto, routes)
+			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are not using tunl0 with the expected protocol owner")
 
 			// Verify connectivity still works.
 			checker.ResetExpectations()
@@ -229,24 +229,18 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
-// getNodeRoutes execs into a calico/node pod and returns the output of "ip route show",
-// filtered to only include lines that contain the specified match string.
-func getNodeRoutes(cli ctrlclient.Client, match string) []string {
-	// Find a calico/node pod to exec into.
-	pods := corev1.PodList{}
-	err := cli.List(context.Background(), &pods, ctrlclient.MatchingLabels{"k8s-app": "calico-node"})
-	Expect(err).NotTo(HaveOccurred(), "Error querying calico/node pods")
-	Expect(pods.Items).NotTo(BeEmpty(), "No calico/node pods found")
-	p := &pods.Items[0]
-
-	out, err := conncheck.ExecInPod(p, "sh", "-c", "ip route show")
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying routes from pod %s", p.Name)
-
-	matches := []string{}
-	for s := range strings.SplitSeq(out, "\n") {
-		if strings.Contains(s, match) {
-			matches = append(matches, s)
-		}
+// expectedClusterRouteProto returns the route protocol owner that the cluster
+// is currently configured to use for IPIP and no-encap cluster routes. The
+// operator's Installation.spec.calicoNetwork.clusterRoutingMode is the source
+// of truth: "Felix" => proto 80, anything else (including unset) => BIRD's
+// proto 12.
+func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
+	inst := &v1.Installation{}
+	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, inst)).To(Succeed(), "Error querying Installation")
+	if inst.Spec.CalicoNetwork != nil &&
+		inst.Spec.CalicoNetwork.ClusterRoutingMode != nil &&
+		*inst.Spec.CalicoNetwork.ClusterRoutingMode == v1.ClusterRoutingModeFelix {
+		return RouteProtoFelix
 	}
-	return matches
+	return RouteProtoBIRD
 }
