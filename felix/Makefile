@@ -2,31 +2,31 @@ include ../metadata.mk
 
 # This Makefile builds Felix and releases it in various forms:
 #
-#				   Go install
-#					|
-#		 +-------+		v
-#		 | Felix |   +---------------------+
-#		 |  Go   |   | calico/go-build     |
-#		 |  code |   +---------------------+
-#		 +-------+	  /
-#			\	 /
-#			 \      /
-#			 go build
-#			     |
-#			     v
-#		       +------------------+
-#		       | bin/calico-felix |
-#		       +------------------+
-#			       /
-#		      .-------'
-#		    /
-#		   /
-#	    docker build
-#		  |
-#		  v
-#	   +-------------------+
-#	   | calico/felix-test |
-#	   +-------------------+
+#                                  Go install
+#                                       |
+#                +-------+              v
+#                | Felix |   +---------------------+
+#                |  Go   |   | calico/go-build     |
+#                |  code |   +---------------------+
+#                +-------+        /
+#                       \        /
+#                        \      /
+#                        go build
+#                            |
+#                            v
+#                      +------------------+
+#                      | bin/calico-felix |
+#                      +------------------+
+#                              /
+#                     .-------'
+#                   /
+#                  /
+#           docker build
+#                 |
+#                 v
+#          +-------------------+
+#          | calico/felix-test |
+#          +-------------------+
 #
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
