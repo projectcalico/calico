@@ -7184,6 +7184,17 @@ spec:
                        `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                     This option allows configuring the `<imagePrefix>` portion of the above format.
                   type: string
+                imagePullPolicy:
+                  description: |-
+                    ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                    that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                    This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                    must not be re-pulled from a remote registry.
+                  enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
+                  type: string
                 imagePullSecrets:
                   description: |-
                     ImagePullSecrets is an array of references to container registry pull secrets to use. These are
@@ -16523,6 +16534,17 @@ spec:
                         Image format:
                            `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                         This option allows configuring the `<imagePrefix>` portion of the above format.
+                      type: string
+                    imagePullPolicy:
+                      description: |-
+                        ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                        that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                        This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                        must not be re-pulled from a remote registry.
+                      enum:
+                        - Always
+                        - IfNotPresent
+                        - Never
                       type: string
                     imagePullSecrets:
                       description: |-

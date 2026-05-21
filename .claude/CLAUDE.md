@@ -262,6 +262,91 @@ Examples worth copying from: `kube-controllers/pkg/kubecontrollers/run.go` (Star
 - Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
 - Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
 
+## Documentation map
+
+This repo carries an extensive corpus of architecture and review
+guidance. **Consult it first, instead of reverse-engineering from
+the code** — it captures invariants, design rationale, and review
+criteria that are hard to recover from the source alone.
+
+Where it lives:
+
+- **`<component>/DESIGN.md`** — architecture, invariants, and
+  per-section review notes for that component. Authoritative source
+  for "what does this code promise?". A coding agent writing a PR
+  and a reviewer checking one read the same file and apply the
+  same embedded review notes.
+- **Complex components have an index.** Felix has
+  [`felix/DESIGN.md`](../felix/DESIGN.md) at its root listing
+  per-topic sub-designs under
+  [`felix/design/`](../felix/design/) with an "applies to" glob
+  per topic. A PR touching multiple globs must load every matching
+  sub-design. This pattern applies to any component that grows
+  more than one design topic.
+- **`<component>/CLAUDE.md`** (or `AGENTS.md`) — operational
+  agent guidance: build commands, test invocation, debugging,
+  in-repo conventions. **Not** for architecture. If you are looking
+  for invariants or design rationale, look for a `DESIGN.md`, not
+  here.
+- **[`.github/copilot-instructions.md`](../.github/copilot-instructions.md)**
+  and
+  **[`.github/instructions/*.instructions.md`](../.github/instructions/)**
+  — repo-wide and path-scoped Copilot configuration. The
+  path-scoped files are thin pointers to the relevant `DESIGN.md`
+  plus meta-rules (update rule, `@copilot` invocation pattern).
+  They do not restate design content.
+
+**Rules for agents reading this repo:**
+
+1. Before writing or reviewing code in a component, read that
+   component's `DESIGN.md` (or, for Felix, the topic sub-designs
+   that match the paths you're touching).
+2. Follow links. A sub-design may reference sibling docs, other
+   components' designs, or external references. Load them — a
+   design is a graph, not a single node.
+3. A PR that changes how a component works — its behaviour,
+   data model, configuration surface, or any invariant the
+   design doc records — must update the relevant `DESIGN.md` in
+   the same PR. For components with a design directory (Felix
+   uses `felix/design/`), this means updating the relevant file
+   under that directory — the sub-design covering the area —
+   and/or the index itself when the sub-design table or scope
+   changes. Exemptions: bug fix restoring documented behaviour,
+   mechanical refactor, comment or log-message edits, dependency
+   bumps. If in doubt, update the doc.
+
+## Tests required for code changes
+
+A PR that fixes a bug must include a test in the same PR that
+reproduces the bug. A PR that adds a feature must include tests
+that exercise the feature. A change without a corresponding test
+is the exception, not the default, and requires explicit
+justification (untestable interface boundary, infrastructure-only
+change).
+
+Prefer the lowest test level that meaningfully exercises the
+change:
+
+1. **Unit tests** — deterministic, fast, hermetic. Always the
+   first choice when the behaviour can be reached without real
+   infrastructure. UT failures point at the change directly.
+2. **Functional verification (FV) tests** — real binary against
+   real infrastructure (containers, dataplane, kernel). Catch
+   integration bugs UT cannot, but slower, harder to write, and
+   can flake. Use FV when the integration *is* the thing being
+   tested.
+3. **End-to-end / Kubernetes tests** — full stack against a real
+   cluster. Reserve for behaviour that genuinely requires it.
+
+Tests-only follow-ups are an anti-pattern: by the time they land,
+the change has shipped untested. A reviewer who sees "I tested it
+manually" or "tests in a follow-up PR" should push back.
+
+Per-area sub-designs carry the area-specific test conventions on
+top of this general rule (e.g.
+[`felix/design/bpf-tests.md`](../felix/design/bpf-tests.md) for
+the BPF dataplane).
+
 ## Common Development Workflows
 
 ### Making Code Changes

@@ -415,7 +415,7 @@ func NewCalculationGraph(
 	//         |
 	//      <dataplane>
 	//
-	hostIPPassthru := NewDataplanePassthru(callbacks, conf.Ipv6Support)
+	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 

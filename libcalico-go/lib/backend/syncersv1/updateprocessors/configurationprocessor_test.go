@@ -150,7 +150,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing invalid Key on ProcessDeleted")
 		_, err := cc.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: net.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 			},
 		})
 		Expect(err).To(HaveOccurred())
@@ -158,7 +158,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing invalid Key on Process")
 		_, err = cc.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: net.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 			},
 			Value: apiv3.NewFelixConfiguration(),
 		})
