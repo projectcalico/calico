@@ -125,7 +125,7 @@ for filename in $changed_go_files; do
     continue
   fi
   if [[ -z "${skipped_files[${filename}]+isset}" ]]; then
-    if goimports -d "${filename}" | grep '.'; then
+    if go tool goimports -d "${filename}" | grep '.'; then
       echo "  goimports would make changes to file:" ${filename}
       gofmt_failed=true
     fi
