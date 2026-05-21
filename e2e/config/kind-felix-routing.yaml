@@ -14,6 +14,7 @@ include:
   - Conformance && sig-network
   - RequiresCalicoAPIServer
   - Feature:BGPPeer
+  - Feature:IPIP
 
 exclude:
   labels:
@@ -25,3 +26,6 @@ exclude:
 
     - label: ExternalNode
       reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
+
+    - label: RequiresBIRDClusterRouting
+      reason: "this job runs clusterRoutingMode=Felix; BIRD-only route-ownership assertions don't hold"
