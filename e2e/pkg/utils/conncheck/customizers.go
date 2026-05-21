@@ -26,6 +26,15 @@ func UseV4IPPool(poolName string) func(*corev1.Pod) {
 	}
 }
 
+func UseV6IPPool(poolName string) func(*corev1.Pod) {
+	return func(pod *corev1.Pod) {
+		if pod.Annotations == nil {
+			pod.Annotations = map[string]string{}
+		}
+		pod.Annotations["cni.projectcalico.org/ipv6pools"] = fmt.Sprintf(`["%s"]`, poolName)
+	}
+}
+
 // WithNodeName returns a Pod customizer that pins a pod to a specific node.
 func WithNodeName(name string) func(*corev1.Pod) {
 	return func(pod *corev1.Pod) {
