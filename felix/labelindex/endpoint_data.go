@@ -112,8 +112,10 @@ type shapeInfo struct {
 
 // cidrFieldOffset is the offset of the first variant-tail byte (the
 // cidr field) from the struct base. It's the size of endpointData and
-// the same for every counted variant (V4 / V6 / Dual put their
-// addresses there; epGeneral puts the nets slice header there).
+// the same for every variant: V6/Dual counted variants put their
+// V6Addr there, V4Multi/V6Multi put cidrsPtr there, and epGeneral
+// puts v4cidrsPtr there. Computed via unsafe.Sizeof so it tracks the
+// target architecture's pointer size automatically.
 const cidrFieldOffset = unsafe.Sizeof(endpointData{})
 
 // tailPtr returns a pointer to the variant tail at absOff bytes from
@@ -138,11 +140,10 @@ func (d *endpointData) setShape(s shape) {
 
 // userDataV4Offset is the byte offset within cache.UserData where the
 // optional embedded IPv4 address lives. UserData[0] holds the shape;
-// UserData[3..6] (the last 4 bytes) holds a v4 address for V4 and
-// Dual variants. UserData[3] sits at absolute offset 20 inside
-// endpointData (cache is at offset 8, Adaptive's pad starts at
-// Adaptive offset 9, so UserData[3] is at 8+9+3 = 20), which is
-// 4-byte aligned so the read/write is a single MOV.
+// UserData[3..6] (the last 4 bytes of UserData) hold the v4 address
+// for V4 and Dual variants. V4Addr is [4]byte (alignment 1), so the
+// load/store is a single 4-byte access regardless of where UserData
+// sits inside the parent struct.
 const userDataV4Offset = 3
 
 // v4FromUserData reads the IPv4 address stashed in the cache's
@@ -157,6 +158,20 @@ func (d *endpointData) v4FromUserData() ip.V4Addr {
 // Called by the generated V4 / Dual variant constructors.
 func (d *endpointData) setV4InUserData(v4 ip.V4Addr) {
 	*(*ip.V4Addr)(unsafe.Pointer(&d.cache.UserData[userDataV4Offset])) = v4
+}
+
+// toLen32 narrows an int length to uint32, panicking on overflow. The
+// compact (ptr, uint32 length) form used by epV4Multi / epV6Multi /
+// epGeneral assumes lengths fit in 32 bits, which is far beyond any
+// realistic per-endpoint count (K8s/etcd resource size limits cap
+// these in the low-MB range). The guard is here to fail loudly if
+// that assumption ever stops holding.
+func toLen32(n int) uint32 {
+	const maxLen = 1<<32 - 1
+	if uint64(n) > maxLen {
+		panic("labelindex: slice length exceeds uint32 storage")
+	}
+	return uint32(n)
 }
 
 // ---------------------------------------------------------------------

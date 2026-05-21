@@ -345,34 +345,37 @@ func (e *epGeneral) parentsSlice() []*npParentData {
 }
 
 // shapeTable describes every variant's tail layout. Indexed by shape.
+// Field offsets are derived from the generated variant types via
+// unsafe.Offsetof so they remain correct on both 32-bit and 64-bit
+// targets.
 var shapeTable = [numShapes]shapeInfo{
-	shapeV4P0N0:   {cidr: cidrKindV4, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
-	shapeV4P0N1:   {cidr: cidrKindV4, portN: 0, parentN: 1, portsOff: 0, parsOff: 24},
-	shapeV4P0N2:   {cidr: cidrKindV4, portN: 0, parentN: 2, portsOff: 0, parsOff: 24},
-	shapeV4P1N0:   {cidr: cidrKindV4, portN: 1, parentN: 0, portsOff: 24, parsOff: 0},
-	shapeV4P1N1:   {cidr: cidrKindV4, portN: 1, parentN: 1, portsOff: 24, parsOff: 32},
-	shapeV4P1N2:   {cidr: cidrKindV4, portN: 1, parentN: 2, portsOff: 24, parsOff: 32},
-	shapeV4P2N0:   {cidr: cidrKindV4, portN: 2, parentN: 0, portsOff: 24, parsOff: 0},
-	shapeV4P2N1:   {cidr: cidrKindV4, portN: 2, parentN: 1, portsOff: 24, parsOff: 40},
-	shapeV4P2N2:   {cidr: cidrKindV4, portN: 2, parentN: 2, portsOff: 24, parsOff: 40},
-	shapeV6P0N0:   {cidr: cidrKindV6, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
-	shapeV6P0N1:   {cidr: cidrKindV6, portN: 0, parentN: 1, portsOff: 0, parsOff: 40},
-	shapeV6P0N2:   {cidr: cidrKindV6, portN: 0, parentN: 2, portsOff: 0, parsOff: 40},
-	shapeV6P1N0:   {cidr: cidrKindV6, portN: 1, parentN: 0, portsOff: 40, parsOff: 0},
-	shapeV6P1N1:   {cidr: cidrKindV6, portN: 1, parentN: 1, portsOff: 40, parsOff: 48},
-	shapeV6P1N2:   {cidr: cidrKindV6, portN: 1, parentN: 2, portsOff: 40, parsOff: 48},
-	shapeV6P2N0:   {cidr: cidrKindV6, portN: 2, parentN: 0, portsOff: 40, parsOff: 0},
-	shapeV6P2N1:   {cidr: cidrKindV6, portN: 2, parentN: 1, portsOff: 40, parsOff: 56},
-	shapeV6P2N2:   {cidr: cidrKindV6, portN: 2, parentN: 2, portsOff: 40, parsOff: 56},
-	shapeDualP0N0: {cidr: cidrKindDual, portN: 0, parentN: 0, portsOff: 0, parsOff: 0},
-	shapeDualP0N1: {cidr: cidrKindDual, portN: 0, parentN: 1, portsOff: 0, parsOff: 40},
-	shapeDualP0N2: {cidr: cidrKindDual, portN: 0, parentN: 2, portsOff: 0, parsOff: 40},
-	shapeDualP1N0: {cidr: cidrKindDual, portN: 1, parentN: 0, portsOff: 40, parsOff: 0},
-	shapeDualP1N1: {cidr: cidrKindDual, portN: 1, parentN: 1, portsOff: 40, parsOff: 48},
-	shapeDualP1N2: {cidr: cidrKindDual, portN: 1, parentN: 2, portsOff: 40, parsOff: 48},
-	shapeDualP2N0: {cidr: cidrKindDual, portN: 2, parentN: 0, portsOff: 40, parsOff: 0},
-	shapeDualP2N1: {cidr: cidrKindDual, portN: 2, parentN: 1, portsOff: 40, parsOff: 56},
-	shapeDualP2N2: {cidr: cidrKindDual, portN: 2, parentN: 2, portsOff: 40, parsOff: 56},
+	shapeV4P0N0:   {cidr: cidrKindV4, portN: 0, parentN: 0},
+	shapeV4P0N1:   {cidr: cidrKindV4, portN: 0, parentN: 1, parsOff: uint8(unsafe.Offsetof(epV4P0N1{}.parents))},
+	shapeV4P0N2:   {cidr: cidrKindV4, portN: 0, parentN: 2, parsOff: uint8(unsafe.Offsetof(epV4P0N2{}.parents))},
+	shapeV4P1N0:   {cidr: cidrKindV4, portN: 1, parentN: 0, portsOff: uint8(unsafe.Offsetof(epV4P1N0{}.ports))},
+	shapeV4P1N1:   {cidr: cidrKindV4, portN: 1, parentN: 1, portsOff: uint8(unsafe.Offsetof(epV4P1N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epV4P1N1{}.parents))},
+	shapeV4P1N2:   {cidr: cidrKindV4, portN: 1, parentN: 2, portsOff: uint8(unsafe.Offsetof(epV4P1N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epV4P1N2{}.parents))},
+	shapeV4P2N0:   {cidr: cidrKindV4, portN: 2, parentN: 0, portsOff: uint8(unsafe.Offsetof(epV4P2N0{}.ports))},
+	shapeV4P2N1:   {cidr: cidrKindV4, portN: 2, parentN: 1, portsOff: uint8(unsafe.Offsetof(epV4P2N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epV4P2N1{}.parents))},
+	shapeV4P2N2:   {cidr: cidrKindV4, portN: 2, parentN: 2, portsOff: uint8(unsafe.Offsetof(epV4P2N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epV4P2N2{}.parents))},
+	shapeV6P0N0:   {cidr: cidrKindV6, portN: 0, parentN: 0},
+	shapeV6P0N1:   {cidr: cidrKindV6, portN: 0, parentN: 1, parsOff: uint8(unsafe.Offsetof(epV6P0N1{}.parents))},
+	shapeV6P0N2:   {cidr: cidrKindV6, portN: 0, parentN: 2, parsOff: uint8(unsafe.Offsetof(epV6P0N2{}.parents))},
+	shapeV6P1N0:   {cidr: cidrKindV6, portN: 1, parentN: 0, portsOff: uint8(unsafe.Offsetof(epV6P1N0{}.ports))},
+	shapeV6P1N1:   {cidr: cidrKindV6, portN: 1, parentN: 1, portsOff: uint8(unsafe.Offsetof(epV6P1N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epV6P1N1{}.parents))},
+	shapeV6P1N2:   {cidr: cidrKindV6, portN: 1, parentN: 2, portsOff: uint8(unsafe.Offsetof(epV6P1N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epV6P1N2{}.parents))},
+	shapeV6P2N0:   {cidr: cidrKindV6, portN: 2, parentN: 0, portsOff: uint8(unsafe.Offsetof(epV6P2N0{}.ports))},
+	shapeV6P2N1:   {cidr: cidrKindV6, portN: 2, parentN: 1, portsOff: uint8(unsafe.Offsetof(epV6P2N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epV6P2N1{}.parents))},
+	shapeV6P2N2:   {cidr: cidrKindV6, portN: 2, parentN: 2, portsOff: uint8(unsafe.Offsetof(epV6P2N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epV6P2N2{}.parents))},
+	shapeDualP0N0: {cidr: cidrKindDual, portN: 0, parentN: 0},
+	shapeDualP0N1: {cidr: cidrKindDual, portN: 0, parentN: 1, parsOff: uint8(unsafe.Offsetof(epDualP0N1{}.parents))},
+	shapeDualP0N2: {cidr: cidrKindDual, portN: 0, parentN: 2, parsOff: uint8(unsafe.Offsetof(epDualP0N2{}.parents))},
+	shapeDualP1N0: {cidr: cidrKindDual, portN: 1, parentN: 0, portsOff: uint8(unsafe.Offsetof(epDualP1N0{}.ports))},
+	shapeDualP1N1: {cidr: cidrKindDual, portN: 1, parentN: 1, portsOff: uint8(unsafe.Offsetof(epDualP1N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epDualP1N1{}.parents))},
+	shapeDualP1N2: {cidr: cidrKindDual, portN: 1, parentN: 2, portsOff: uint8(unsafe.Offsetof(epDualP1N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epDualP1N2{}.parents))},
+	shapeDualP2N0: {cidr: cidrKindDual, portN: 2, parentN: 0, portsOff: uint8(unsafe.Offsetof(epDualP2N0{}.ports))},
+	shapeDualP2N1: {cidr: cidrKindDual, portN: 2, parentN: 1, portsOff: uint8(unsafe.Offsetof(epDualP2N1{}.ports)), parsOff: uint8(unsafe.Offsetof(epDualP2N1{}.parents))},
+	shapeDualP2N2: {cidr: cidrKindDual, portN: 2, parentN: 2, portsOff: uint8(unsafe.Offsetof(epDualP2N2{}.ports)), parsOff: uint8(unsafe.Offsetof(epDualP2N2{}.parents))},
 	shapeV4Multi:  {cidr: cidrKindV4Multi},
 	shapeV6Multi:  {cidr: cidrKindV6Multi},
 	shapeGeneral:  {cidr: cidrKindGeneral},
@@ -700,7 +703,7 @@ func newEpGeneral(
 				}
 			}
 			v.v4cidrsPtr = &buf[0]
-			v.v4cidrsLen = uint32(v4Count)
+			v.v4cidrsLen = toLen32(v4Count)
 		}
 		if v6Count > 0 {
 			buf := make([]ip.V6CIDR, 0, v6Count)
@@ -710,12 +713,12 @@ func newEpGeneral(
 				}
 			}
 			v.v6cidrsPtr = &buf[0]
-			v.v6cidrsLen = uint32(v6Count)
+			v.v6cidrsLen = toLen32(v6Count)
 		}
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	if n := len(ports); n > 0 {
 		// Intern into a fresh, exactly-sized backing array.
@@ -724,7 +727,7 @@ func newEpGeneral(
 			buf[i] = internEndpointPort(p)
 		}
 		v.portsPtr = &buf[0]
-		v.portsLen = uint32(n)
+		v.portsLen = toLen32(n)
 	}
 	v.setShape(shapeGeneral)
 	return &v.endpointData
@@ -745,11 +748,11 @@ func newEpV4Multi(
 			buf[i] = c.(ip.V4CIDR)
 		}
 		v.cidrsPtr = &buf[0]
-		v.cidrsLen = uint32(n)
+		v.cidrsLen = toLen32(n)
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	v.setShape(shapeV4Multi)
 	return &v.endpointData
@@ -768,11 +771,11 @@ func newEpV6Multi(
 			buf[i] = c.(ip.V6CIDR)
 		}
 		v.cidrsPtr = &buf[0]
-		v.cidrsLen = uint32(n)
+		v.cidrsLen = toLen32(n)
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	v.setShape(shapeV6Multi)
 	return &v.endpointData

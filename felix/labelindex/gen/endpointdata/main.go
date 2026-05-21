@@ -38,7 +38,6 @@ type cidrAxis struct {
 	Fields    string // struct field declarations
 	Init      string // constructor struct-literal body fragment
 	ExtraInit string // additional statement(s) emitted after the struct literal
-	CIDRBytes int    // bytes of cidr stored in the tail (excludes v4 which lives in UserData)
 }
 
 type portsAxis struct {
@@ -60,8 +59,7 @@ type parentsAxis struct {
 // generated constructor calls v.setV4InUserData(v4) after the struct
 // literal. For V6 variants there is no v4 to stash; only the v6 field
 // lives in the tail. For Dual, v6 lives in the tail and v4 lives in
-// UserData. The CIDRBytes counts the cidr bytes that contribute to
-// the tail size (used for ports/parents offset computation).
+// UserData.
 var cidrAxes = []cidrAxis{
 	{
 		Name:      "V4",
@@ -69,14 +67,12 @@ var cidrAxes = []cidrAxis{
 		Fields:    "",
 		Init:      "",
 		ExtraInit: "v.setV4InUserData(v4)",
-		CIDRBytes: 0,
 	},
 	{
-		Name:      "V6",
-		Kind:      "V6",
-		Fields:    "\tv6 [1]ip.V6Addr\n",
-		Init:      "v6: [1]ip.V6Addr{v6},",
-		CIDRBytes: 16,
+		Name:   "V6",
+		Kind:   "V6",
+		Fields: "\tv6 [1]ip.V6Addr\n",
+		Init:   "v6: [1]ip.V6Addr{v6},",
 	},
 	{
 		Name:      "Dual",
@@ -84,7 +80,6 @@ var cidrAxes = []cidrAxis{
 		Fields:    "\tv6 [1]ip.V6Addr\n",
 		Init:      "v6: [1]ip.V6Addr{v6},",
 		ExtraInit: "v.setV4InUserData(v4)",
-		CIDRBytes: 16,
 	},
 }
 
@@ -98,38 +93,6 @@ var parentsAxes = []parentsAxis{
 	{Name: "N0", N: 0, Fields: "", Init: ""},
 	{Name: "N1", N: 1, Fields: "\tparents [1]*npParentData\n", Init: "parents: [1]*npParentData{parents[0]},"},
 	{Name: "N2", N: 2, Fields: "\tparents [2]*npParentData\n", Init: "parents: [2]*npParentData{parents[0], parents[1]},"},
-}
-
-const baseSize = 24 // sizeof(endpointData)
-
-// align8 rounds up to the next multiple of 8 if v > 0; passes 0 through.
-func align8(v int) int {
-	if v == 0 {
-		return 0
-	}
-	return (v + 7) &^ 7
-}
-
-// portsOffset returns the absolute offset of the ports field for a
-// (cidrBytes, ports) combination, or 0 when the variant has no ports.
-func portsOffset(cidrBytes int, p portsAxis) int {
-	if p.N == 0 {
-		return 0
-	}
-	return align8(baseSize + cidrBytes)
-}
-
-// parentsOffset returns the absolute offset of the parents field, or
-// 0 when the variant has no parents.
-func parentsOffset(cidrBytes int, p portsAxis, n parentsAxis) int {
-	if n.N == 0 {
-		return 0
-	}
-	end := baseSize + cidrBytes
-	if p.N > 0 {
-		end = portsOffset(cidrBytes, p) + 8*p.N
-	}
-	return align8(end)
 }
 
 const fileHeader = `// Copyright (c) 2026 Tigera, Inc. All rights reserved.
@@ -313,16 +276,30 @@ func (e *epGeneral) parentsSlice() []*npParentData {
 `)
 
 	// ---- shapeTable ----
+	//
+	// Offsets are emitted as unsafe.Offsetof expressions on the
+	// generated variant types so the compiler picks the right value
+	// for the target architecture (pointer-size and struct-padding
+	// rules differ between 32-bit and 64-bit Go targets).
 	out.WriteString("\n// shapeTable describes every variant's tail layout. Indexed by shape.\n")
+	out.WriteString("// Field offsets are derived from the generated variant types via\n")
+	out.WriteString("// unsafe.Offsetof so they remain correct on both 32-bit and 64-bit\n")
+	out.WriteString("// targets.\n")
 	out.WriteString("var shapeTable = [numShapes]shapeInfo{\n")
 	for _, c := range cidrAxes {
 		for _, p := range portsAxes {
 			for _, n := range parentsAxes {
 				name := shapeName(c, p, n)
-				po := portsOffset(c.CIDRBytes, p)
-				pa := parentsOffset(c.CIDRBytes, p, n)
-				fmt.Fprintf(out, "\t%s: {cidr: cidrKind%s, portN: %d, parentN: %d, portsOff: %d, parsOff: %d},\n",
-					name, c.Kind, p.N, n.N, po, pa)
+				tname := typeName(c, p, n)
+				fmt.Fprintf(out, "\t%s: {cidr: cidrKind%s, portN: %d, parentN: %d",
+					name, c.Kind, p.N, n.N)
+				if p.N > 0 {
+					fmt.Fprintf(out, ", portsOff: uint8(unsafe.Offsetof(%s{}.ports))", tname)
+				}
+				if n.N > 0 {
+					fmt.Fprintf(out, ", parsOff: uint8(unsafe.Offsetof(%s{}.parents))", tname)
+				}
+				out.WriteString("},\n")
 			}
 		}
 	}
@@ -423,7 +400,7 @@ func newEpGeneral(
 				}
 			}
 			v.v4cidrsPtr = &buf[0]
-			v.v4cidrsLen = uint32(v4Count)
+			v.v4cidrsLen = toLen32(v4Count)
 		}
 		if v6Count > 0 {
 			buf := make([]ip.V6CIDR, 0, v6Count)
@@ -433,12 +410,12 @@ func newEpGeneral(
 				}
 			}
 			v.v6cidrsPtr = &buf[0]
-			v.v6cidrsLen = uint32(v6Count)
+			v.v6cidrsLen = toLen32(v6Count)
 		}
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	if n := len(ports); n > 0 {
 		// Intern into a fresh, exactly-sized backing array.
@@ -447,7 +424,7 @@ func newEpGeneral(
 			buf[i] = internEndpointPort(p)
 		}
 		v.portsPtr = &buf[0]
-		v.portsLen = uint32(n)
+		v.portsLen = toLen32(n)
 	}
 	v.setShape(shapeGeneral)
 	return &v.endpointData
@@ -468,11 +445,11 @@ func newEpV4Multi(
 			buf[i] = c.(ip.V4CIDR)
 		}
 		v.cidrsPtr = &buf[0]
-		v.cidrsLen = uint32(n)
+		v.cidrsLen = toLen32(n)
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	v.setShape(shapeV4Multi)
 	return &v.endpointData
@@ -491,11 +468,11 @@ func newEpV6Multi(
 			buf[i] = c.(ip.V6CIDR)
 		}
 		v.cidrsPtr = &buf[0]
-		v.cidrsLen = uint32(n)
+		v.cidrsLen = toLen32(n)
 	}
 	if n := len(parents); n > 0 {
 		v.parentsPtr = &parents[0]
-		v.parentsLen = uint32(n)
+		v.parentsLen = toLen32(n)
 	}
 	v.setShape(shapeV6Multi)
 	return &v.endpointData

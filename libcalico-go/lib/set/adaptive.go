@@ -52,12 +52,12 @@ type Adaptive[T comparable] struct {
 	// if the set is backed by a map.
 	size int8
 
-	// UserData is a 7-byte scratch area that lives in the trailing
-	// alignment pad of this struct: Adaptive[T] is 16 bytes either way
-	// because of the pointer's 8-byte alignment requirement. Naming it
-	// lets callers that embed Adaptive store opaque per-instance data
-	// (a small enum, packed offsets, etc.) without growing the
-	// containing struct.
+	// UserData is a 7-byte scratch area that lets callers embedding
+	// Adaptive stash opaque per-instance data (a small enum, packed
+	// offsets, etc.) without needing a separate field. On 64-bit
+	// targets it sits entirely in the trailing alignment pad that
+	// follows {p unsafe.Pointer; size int8}, so the struct stays 16
+	// bytes — free storage.
 	//
 	// Adaptive's own implementation must never overwrite the struct as
 	// a whole (e.g. `*a = Adaptive[T]{...}`) or memclr it; field-by-
