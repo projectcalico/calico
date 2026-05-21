@@ -1,10 +1,8 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Repository Overview
 
-Project Calico is a large monorepo providing container networking and security for Kubernetes. The codebase contains ~2000 Go files across 30+ components, supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
+Project Calico is a large monorepo providing container networking and security 
+for Kubernetes. The codebase contains ~2000 Go files across 30+ components, 
+supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
 
 **Primary language:** Go (also C/eBPF, Python, Shell, TypeScript/React)
 **Build system:** Make + Docker-based reproducible builds
@@ -21,7 +19,7 @@ Project Calico is a large monorepo providing container networking and security f
 
 ## Essential Build Commands
 
-**Prerequisites:** Docker, Make, Git, Linux environment (Ubuntu 24.04+ recommended)
+**Prerequisites:** Docker, Make, Go, Git, Linux environment (Ubuntu 24.04+ recommended)
 
 ### Building Components
 
@@ -105,9 +103,12 @@ make generate
 make protobuf               # Regenerate protobuf files
 make gen-manifests          # Update manifests/ from helm charts
 make gen-semaphore-yaml     # Regenerate .semaphore/semaphore.yml from templates
+make gen-deps-files         # Regenerate deps.txt files after adding new imports to a component; used to trigger downstream CI.
 ```
 
-**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
+**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), 
+run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix 
+config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
 
 ## Generated Files (DO NOT edit directly)
 
@@ -135,7 +136,7 @@ import (
 )
 ```
 
-A repo-scoped Claude Code PostToolUse hook (`.claude/settings.json`) re-formats `.go` files automatically after every Edit/Write/MultiEdit, and `make generate` invokes `make fix-changed` on the files it regenerates. You don't need to run anything by hand. Do not run `goimports` or `go fmt` directly — the project uses a custom 3-step pipeline (`hack/cmd/format-go-file`).
+A repo-scoped PostToolUse hook (`.claude/settings.json`) re-formats `.go` files automatically after every Edit/Write/MultiEdit.
 
 ### Copyright Headers
 
