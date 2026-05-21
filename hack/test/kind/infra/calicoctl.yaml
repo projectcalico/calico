@@ -28,7 +28,8 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: calico/calico:test-build
+      image: localhost:5000/calico/calico:test-build
+      imagePullPolicy: Always
       command:
         - calico
         - ctl

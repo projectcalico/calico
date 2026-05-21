@@ -133,7 +133,6 @@ var _ = infrastructure.DatastoreDescribe(
 			By("Creating a dual-stack local workload")
 			wl := workload.Run(tc.Felixes[0], "w0", "default", wlV4, "8088", "tcp",
 				workload.WithIPv6Address(wlV6))
-			defer wl.Stop()
 			wl.ConfigureInInfra(infra)
 
 			By("Waiting for the workload's veth to exist on the host")

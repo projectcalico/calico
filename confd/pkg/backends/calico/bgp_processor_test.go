@@ -132,7 +132,7 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 		NodeIP:   "10.0.0.2",
 	}
 
-	// Test IPv4 - no comment
+	// Test IPv4
 	routerID := os.Getenv("CALICO_ROUTER_ID")
 	if routerID == "hash" {
 		hashedID, err := template.HashToIPv4(config.NodeName)
@@ -257,7 +257,6 @@ func TestPopulateNodeConfig_BasicIPv6(t *testing.T) {
 	assert.Equal(t, "fd00::1", config.NodeIPv6)
 	assert.Equal(t, "10.0.0.1", config.RouterID) // Router ID is still IPv4
 	assert.Equal(t, "64512", config.ASNumber)
-	// IPv6 should have a comment explaining router ID is IPv4
 }
 
 func TestPopulateNodeConfig_NodeSpecificAS(t *testing.T) {
@@ -1500,8 +1499,7 @@ func TestProcessGlobalPeers_WithTTLSecurity(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, config.Peers, 1)
-	assert.Contains(t, config.Peers[0].TTLSecurity, "on")
-	assert.Contains(t, config.Peers[0].TTLSecurity, "multihop 64")
+	assert.Equal(t, "64", config.Peers[0].TTLSecurity)
 }
 
 func TestProcessNodePeers_BasicPeer(t *testing.T) {
@@ -2465,6 +2463,73 @@ func TestTruncateBGPFilterName(t *testing.T) {
 				// Should be unchanged
 				assert.Equal(t, tt.filterName, result)
 			}
+		})
+	}
+}
+
+// =============================================================================
+// Private Feature Tests
+// =============================================================================
+
+func TestPopulateNodeConfig_PeerDebugMode(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "node-1"
+	defer func() { NodeName = originalNodeName }()
+
+	tests := []struct {
+		name              string
+		logLevel          string
+		logLevelExists    bool
+		expectedDebugMode string
+		expectedPeerLog   string
+	}{
+		{
+			name:              "Log level debug",
+			logLevel:          "debug",
+			logLevelExists:    true,
+			expectedDebugMode: "all",
+			expectedPeerLog:   "debug all;",
+		},
+		{
+			name:              "Log level none",
+			logLevel:          "none",
+			logLevelExists:    true,
+			expectedDebugMode: "",
+			expectedPeerLog:   "",
+		},
+		{
+			name:              "Log level info (default behavior)",
+			logLevel:          "info",
+			logLevelExists:    true,
+			expectedDebugMode: "{ states }",
+			expectedPeerLog:   "debug { states, routes, filters, events };",
+		},
+		{
+			name:              "No log level set (default behavior)",
+			logLevelExists:    false,
+			expectedDebugMode: "{ states }",
+			expectedPeerLog:   "debug { states, routes, filters, events };",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := map[string]string{
+				"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+				"/calico/bgp/v1/global/as_num":          "64512",
+			}
+			if tt.logLevelExists {
+				cache["/calico/bgp/v1/global/loglevel"] = tt.logLevel
+			}
+
+			c := newTestClient(cache, nil)
+
+			config := &types.BirdBGPConfig{}
+			err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedDebugMode, config.DebugMode)
+			assert.Equal(t, tt.expectedPeerLog, config.PeerDebugMode)
 		})
 	}
 }

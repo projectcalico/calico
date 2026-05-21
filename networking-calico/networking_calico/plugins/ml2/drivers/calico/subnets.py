@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,28 +32,49 @@ LOG = log.getLogger(__name__)
 class SubnetSyncer(ResourceSyncer):
     """Logic for syncing Subnets.
 
-    For Subnet resources, the name is the full etcd key, and the data is the
-    etcd value as a string, i.e. not JSON-decoded into a dict.
+    For Subnet resources, the name is the full etcd key, and the data is the etcd value
+    as a string, i.e. not JSON-decoded into a dict.
     """
 
     def __init__(self, db, txn_from_context):
         super(SubnetSyncer, self).__init__(db, txn_from_context, "Subnet")
         self.region_string = calico_config.get_region_string()
 
-    def delete_legacy_etcd_data(self):
-        etcdv3.delete_prefix(datamodel_v1.SUBNET_DIR)
-
-    def get_all_from_etcd(self):
-        return etcdv3.get_prefix(datamodel_v2.subnet_dir(self.region_string))
-
-    def get_all_from_neutron(self, context):
+    def get_from_neutron(self, context, scope):
+        if scope.all():
+            subnets = self.db.get_subnets(context)
+        else:
+            subnets = self.db.get_subnets(context, filters={"id": list(scope.ids())})
         return dict(
             (datamodel_v2.key_for_subnet(subnet["id"], self.region_string), subnet)
-            for subnet in self.db.get_subnets(context)
+            for subnet in subnets
             if subnet["enable_dhcp"]
         )
 
-    def neutron_to_etcd_write_data(self, subnet, context, reread=False):
+    def get_from_etcd(self, scope):
+        if scope.all():
+            return {
+                name: (spec, revision)
+                for name, spec, revision in etcdv3.get_prefix(
+                    datamodel_v2.subnet_dir(self.region_string)
+                )
+            }
+
+        # Narrow scope: read just the etcd keys we can compute directly from
+        # scope.ids().
+        etcd_map = {}
+        for sid in scope.ids():
+            name = datamodel_v2.key_for_subnet(sid, self.region_string)
+            try:
+                etcd_map[name] = etcdv3.get(name)
+            except etcdv3.KeyNotFound:
+                pass
+        return etcd_map
+
+    def delete_legacy_etcd_data(self):
+        etcdv3.delete_prefix(datamodel_v1.SUBNET_DIR)
+
+    def neutron_to_etcd_write_data(self, name, subnet, context, reread=False):
         if reread:
             subnets = self.db.get_subnets(context, filters={"id": [subnet["id"]]})
             if len(subnets) != 1:
@@ -71,16 +92,16 @@ class SubnetSyncer(ResourceSyncer):
         return etcdv3.delete(key, mod_revision=mod_revision)
 
     @etcdv3.logging_exceptions
-    def subnet_created(self, subnet, context):
+    def write_subnet(self, subnet, context):
         """Write data to etcd to describe a DHCP-enabled subnet."""
         LOG.info("Write subnet %s %s to etcd", subnet["id"], subnet["cidr"])
-        write_data = self.neutron_to_etcd_write_data(subnet, context, reread=False)
+        write_data = self.neutron_to_etcd_write_data("", subnet, context, reread=False)
         return self.update_in_etcd(
             datamodel_v2.key_for_subnet(subnet["id"], self.region_string), write_data
         )
 
     @etcdv3.logging_exceptions
-    def subnet_deleted(self, subnet_id):
+    def delete_subnet(self, subnet_id):
         """Delete data from etcd for a subnet that is no longer wanted."""
         LOG.info("Deleting subnet %s", subnet_id)
         # Delete the etcd key for this subnet.
@@ -91,6 +112,7 @@ class SubnetSyncer(ResourceSyncer):
 
 
 def subnet_etcd_data(subnet):
+    """Translate a Neutron subnet dict to its etcd representation."""
     data = {
         "network_id": subnet["network_id"],
         "cidr": str(netaddr.IPNetwork(subnet["cidr"])),

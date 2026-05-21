@@ -62,8 +62,9 @@ var (
 			mustParseNet("fc00:fe10::1/128"),
 		},
 		Labels: uniquelabels.Make(map[string]string{
-			"projectcalico.org/namespace": "istio-ambient",
-			"istio.io/dataplane-mode":     "ambient",
+			"projectcalico.org/namespace":    "istio-ambient",
+			"projectcalico.org/orchestrator": "k8s",
+			"istio.io/dataplane-mode":        "ambient",
 		}),
 		ProfileIDs: []string{"istio-ambient"},
 	}
@@ -85,7 +86,8 @@ var (
 			mustParseNet("fc00:fe10::3/128"),
 		},
 		Labels: uniquelabels.Make(map[string]string{
-			"projectcalico.org/namespace": "istio-none",
+			"projectcalico.org/namespace":    "istio-none",
+			"projectcalico.org/orchestrator": "k8s",
 		}),
 		ProfileIDs: []string{"istio-none"},
 	}
@@ -107,7 +109,8 @@ var (
 			mustParseNet("fc00:fe10::4/128"),
 		},
 		Labels: uniquelabels.Make(map[string]string{
-			"projectcalico.org/namespace": "regular",
+			"projectcalico.org/namespace":    "regular",
+			"projectcalico.org/orchestrator": "k8s",
 		}),
 		ProfileIDs: []string{"regular"},
 	}
@@ -129,8 +132,9 @@ var (
 			mustParseNet("fc00:fe10::5/128"),
 		},
 		Labels: uniquelabels.Make(map[string]string{
-			"projectcalico.org/namespace": "regular",
-			apiv3.LabelIstioDataplaneMode: apiv3.LabelIstioDataplaneModeAmbient,
+			"projectcalico.org/namespace":    "regular",
+			"projectcalico.org/orchestrator": "k8s",
+			apiv3.LabelIstioDataplaneMode:    apiv3.LabelIstioDataplaneModeAmbient,
 		}),
 		ProfileIDs: []string{"regular"},
 	}

@@ -263,8 +263,13 @@ func (w *Workload) Start(cleanupProvider CleanupProvider) error {
 	if w.IP6 != "" {
 		wIP = wIP + "," + w.IP6
 	}
-	command := fmt.Sprintf("echo $$; exec test-workload %v '%v' '%v' '%v'",
+	var netkitArg string
+	if infrastructure.NetkitMode() {
+		netkitArg = "--netkit"
+	}
+	command := fmt.Sprintf("echo $$; exec test-workload %v %v '%v' '%v' '%v'",
 		protoArg,
+		netkitArg,
 		w.InterfaceName,
 		wIP,
 		w.Ports,

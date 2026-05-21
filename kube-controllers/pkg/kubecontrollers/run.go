@@ -215,7 +215,7 @@ func run(parentCtx context.Context, cliCfg Config) {
 	}
 
 	if runCfg.DebugProfilePort != 0 {
-		debugserver.StartDebugPprofServer("0.0.0.0", int(runCfg.DebugProfilePort))
+		debugserver.StartDebugPprofServer("localhost", int(runCfg.DebugProfilePort))
 	}
 
 	controllerCtrl.runControllers(dataFeed, runCfg)

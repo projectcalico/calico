@@ -44,10 +44,15 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 	}
 #endif
 
-	// Retrieve qos map where TBF state is kept
+	// Retrieve qos map where TBF state is kept.
+	// For netkit, skb->ifindex is the peer (container-side) ifindex, but the
+	// QoS map is keyed by the host-side ifindex.  Use host_ifindex from
+	// globals when available.
 	struct calico_qos_val *qos;
+	__u32 __qos_ifindex = ctx->globals->data.host_ifindex ?
+		ctx->globals->data.host_ifindex : ctx->skb->ifindex;
 	struct calico_qos_key key = {
-		.ifindex = ctx->skb->ifindex,
+		.ifindex = __qos_ifindex,
 #if CALI_F_INGRESS
 		.ingress = 1,
 #else // CALI_F_EGRESS

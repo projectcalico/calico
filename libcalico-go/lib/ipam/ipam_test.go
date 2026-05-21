@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"runtime"
 	"strings"
 	"time"
@@ -899,12 +900,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			cidr := "10.0.0.0/24"
 			b := newBlock(cnet.MustParseCIDR(cidr), nil)
 			blockKVP := model.KVPair{
-				Key:   model.BlockKey{CIDR: cnet.MustParseCIDR(cidr)},
+				Key:   model.BlockKey{CIDR: netip.MustParsePrefix(cidr)},
 				Value: b.AllocationBlock,
 			}
 			affKVP := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         cnet.MustParseCIDR(cidr),
+					CIDR:         netip.MustParsePrefix(cidr),
 					Host:         hostname,
 					AffinityType: "",
 				},
@@ -4162,7 +4163,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			b := newBlock(cnet.MustParseCIDR("192.168.0.0/26"), nil)
 			b.SequenceNumber = 0
 			kvp := &model.KVPair{
-				Key:   model.BlockKey{CIDR: b.CIDR},
+				Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(b.CIDR)},
 				Value: b.AllocationBlock,
 			}
 			_, err := bc.Create(context.TODO(), kvp)
@@ -4541,7 +4542,7 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 	var blocks []cnet.IPNet
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockAffinityKey)
-		blocks = append(blocks, k.CIDR)
+		blocks = append(blocks, model.IPNetFromPrefix(k.CIDR))
 	}
 	return blocks
 }

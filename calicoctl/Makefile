@@ -119,6 +119,7 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 	#   - This also provides access to calicoctl and the docker client
 	docker run --net=host --privileged \
 		   -e MY_IP=$(LOCAL_IP_ENV) \
+		   -e PYTHONDONTWRITEBYTECODE=1 \
 		   --rm -t \
 		   -v $(CERTS_PATH):/home/user/certs \
 		   -v $(CURDIR):/code \
