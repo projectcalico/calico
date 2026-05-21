@@ -33,7 +33,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 	BeforeEach(func() {
 		infra = getInfra()
 		topologyOptions := wireguardTopologyOptions(
-			"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
+			"CalicoIPAM", false, true, false, false,
 			map[string]string{
 				"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
 			},
@@ -41,13 +41,11 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 		topologyOptions.NATOutgoingEnabled = true
 		topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
-		var err error
-		client, err = infra.GetCalicoClient()
-		Expect(err).NotTo(HaveOccurred())
+		client = infra.GetCalicoClient()
 
 		for ii := range wls {
 			wls[ii] = workload.Run(
-				&topologyContainers.Felixes[ii].Container,
+				topologyContainers.Felixes[ii],
 				fmt.Sprintf("w%d", ii),
 				"default",
 				fmt.Sprintf("10.65.%d.2", ii),
@@ -123,7 +121,7 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 				topologyContainers.Stop()
 
 				topologyOptions := wireguardTopologyOptions(
-					"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
+					"CalicoIPAM", false, true, false, false,
 					map[string]string{
 						"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
 					},
@@ -132,13 +130,11 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 				topologyOptions.WithTypha = true
 				topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
-				var err error
-				client, err = infra.GetCalicoClient()
-				Expect(err).NotTo(HaveOccurred())
+				client = infra.GetCalicoClient()
 
 				for ii := range wls {
 					wls[ii] = workload.Run(
-						&topologyContainers.Felixes[ii].Container,
+						topologyContainers.Felixes[ii],
 						fmt.Sprintf("w%d", ii),
 						"default",
 						fmt.Sprintf("10.65.%d.2", ii),
@@ -270,22 +266,22 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 	Context("with EncryptHostTraffic=true", func() {
 		BeforeEach(func() {
 			topologyContainers.Stop()
-			
-topologyOptions := wireguardTopologyOptions(
-			"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
-			map[string]string{
-				"FELIX_WIREGUARDENCRYPTHOSTTRAFFIC": "true",
-			},
-		)
-		topologyOptions.NATOutgoingEnabled = true
-		topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
+
+			topologyOptions := wireguardTopologyOptions(
+				"CalicoIPAM", false, true, false, false,
+				map[string]string{
+					"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "true",
+				},
+			)
+			topologyOptions.NATOutgoingEnabled = true
+			topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 			for ii := range wls {
 				if wls[ii] != nil {
 					wls[ii].Stop()
 				}
 				wls[ii] = workload.Run(
-					&topologyContainers.Felixes[ii].Container,
+					topologyContainers.Felixes[ii],
 					fmt.Sprintf("w%d", ii),
 					"default",
 					fmt.Sprintf("10.65.%d.2", ii),
