@@ -40,6 +40,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const localImportPrefix = "github.com/projectcalico/calico/"
@@ -101,8 +102,10 @@ func pathFromClaudeHook(r *os.File) (string, error) {
 }
 
 // findRepoRoot walks up from $CLAUDE_PROJECT_DIR (if set) or the current
-// directory until it finds a go.mod, and returns that directory. The
-// containing repo has a go.mod at the root so this is unambiguous.
+// directory looking for the top-level Calico module. We can't just stop at
+// the first go.mod because the repo also has nested modules (api/,
+// lib/std/, lib/httpmachinery/) — only the root carries the goimports
+// tool dep and the coalesce-imports source we shell out to.
 func findRepoRoot() (string, error) {
 	start := os.Getenv("CLAUDE_PROJECT_DIR")
 	if start == "" {
@@ -117,15 +120,35 @@ func findRepoRoot() (string, error) {
 		return "", err
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		if isCalicoRoot(dir) {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("no go.mod found above %s", start)
+			return "", fmt.Errorf("no Calico root module found above %s", start)
 		}
 		dir = parent
 	}
+}
+
+// isCalicoRoot returns true if dir is the top-level Calico module: it has
+// a go.mod whose module path is github.com/projectcalico/calico. We don't
+// rely on the presence of hack/cmd/coalesce-imports alone because a
+// future restructure could move that, but the module path is stable.
+func isCalicoRoot(dir string) bool {
+	data, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return false
+	}
+	// modfile is overkill for one line; the module directive is always
+	// at the top in the form `module <path>`.
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if rest, ok := strings.CutPrefix(line, "module "); ok {
+			return strings.TrimSpace(rest) == "github.com/projectcalico/calico"
+		}
+	}
+	return false
 }
 
 // filterAndRelativize resolves each input path to an absolute path, drops
