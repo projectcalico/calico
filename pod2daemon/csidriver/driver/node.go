@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -33,6 +34,27 @@ import (
 	// TODO: move the object in here to a common package
 	"github.com/projectcalico/calico/pod2daemon/flexvol/creds"
 )
+
+// volumeIDPattern restricts VolumeId to a flat identifier. VolumeId is
+// concatenated into host filesystem paths in NodePublishVolume /
+// NodeUnpublishVolume; this gate prevents path traversal.
+var volumeIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+
+func validateVolumeID(volumeID string) error {
+	if volumeID == "" {
+		return status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+	if !volumeIDPattern.MatchString(volumeID) {
+		return status.Errorf(codes.InvalidArgument,
+			"invalid Volume ID %q: must match %s", volumeID, volumeIDPattern)
+	}
+	// The charset above permits '.', so reject ".." separately.
+	if strings.Contains(volumeID, "..") {
+		return status.Errorf(codes.InvalidArgument,
+			"invalid Volume ID %q: must not contain '..'", volumeID)
+	}
+	return nil
+}
 
 // Define the nodeService as per the CSI spec.
 type nodeService struct {
@@ -56,9 +78,9 @@ func (ns *nodeService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnsta
 }
 
 func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		log.Error("Volume ID not provided")
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	if err := validateVolumeID(req.VolumeId); err != nil {
+		log.WithError(err).Error("Volume ID rejected")
+		return nil, err
 	}
 
 	if len(req.TargetPath) == 0 {
@@ -95,9 +117,9 @@ func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePubli
 
 func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	// Check that the required inputs are still provided.
-	if req.VolumeId == "" {
-		log.Error("Volume ID not provided")
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	if err := validateVolumeID(req.VolumeId); err != nil {
+		log.WithError(err).Error("Volume ID rejected")
+		return nil, err
 	}
 
 	if len(req.TargetPath) == 0 {
