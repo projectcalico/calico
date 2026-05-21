@@ -2,6 +2,8 @@ module github.com/projectcalico/calico
 
 go 1.26.3
 
+tool golang.org/x/tools/cmd/goimports
+
 require (
 	cloud.google.com/go/storage v1.62.1
 	github.com/BurntSushi/toml v1.6.0
@@ -136,6 +138,7 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
 	k8s.io/cli-runtime v0.35.5 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
