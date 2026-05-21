@@ -51,7 +51,7 @@ func Run() {
 	// this path to verify the target is a directory, defeating Lchown.
 	err = os.Lchown("/var/lib/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/lib/calico/")
+		log.Panic("Unable to chown /var/lib/calico")
 	}
 
 	// Create the calico directory in /var/run/
@@ -64,7 +64,7 @@ func Run() {
 	// Lchown without trailing slash, same reason as /var/lib/calico above.
 	err = os.Lchown("/var/run/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/run/calico/")
+		log.Panic("Unable to chown /var/run/calico")
 	}
 
 	// Create the calico directory in /var/log/ and the cni log directory in /var/log/calico/
@@ -77,7 +77,7 @@ func Run() {
 	// Lchown without trailing slash, same reason as /var/lib/calico above.
 	err = os.Lchown("/var/log/calico", uid, 0)
 	if err != nil {
-		log.Panic("Unable to chown /var/log/calico/")
+		log.Panic("Unable to chown /var/log/calico")
 	}
 
 	// Change ownership of the cni log directory and all files in the cni log directory.
