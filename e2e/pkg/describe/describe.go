@@ -111,6 +111,20 @@ func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
 
+// RequiresFelixClusterRouting marks tests that require Felix (not BIRD) to be
+// programming cluster routes. Felix-programmed routes carry netlink protocol 80;
+// BIRD's carry protocol 12. Use this label on assertions that only hold in the
+// Felix-routing mode (clusterRoutingMode=Felix).
+func RequiresFelixClusterRouting() any {
+	return framework.WithLabel("RequiresFelixClusterRouting")
+}
+
+// RequiresBIRDClusterRouting marks tests that require BIRD (not Felix) to be
+// programming cluster routes. Symmetric counterpart to RequiresFelixClusterRouting.
+func RequiresBIRDClusterRouting() any {
+	return framework.WithLabel("RequiresBIRDClusterRouting")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {

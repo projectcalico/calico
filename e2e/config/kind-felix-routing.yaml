@@ -14,6 +14,7 @@ include:
   - Conformance && sig-calico
   - Conformance && sig-network
   - RequiresCalicoAPIServer
+  - Feature:IPIP
 
 exclude:
   labels:
@@ -28,3 +29,6 @@ exclude:
 
     - label: Feature:BGPPeer
       reason: "Felix routing (no BIRD) can't run BGP tests"
+
+    - label: RequiresBIRDClusterRouting
+      reason: "this job runs clusterRoutingMode=Felix; BIRD-only route-ownership assertions don't hold"
