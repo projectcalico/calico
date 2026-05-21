@@ -48,10 +48,12 @@ func validateVolumeID(volumeID string) error {
 		return status.Errorf(codes.InvalidArgument,
 			"invalid Volume ID %q: must match %s", volumeID, volumeIDPattern)
 	}
-	// The charset above permits '.', so reject ".." separately.
-	if strings.Contains(volumeID, "..") {
+	// The charset above permits '.', so reject "." and ".." separately.
+	// "." would let the FS ops target the base mount directory itself
+	// (os.RemoveAll on "<base>/." deletes the whole tree).
+	if volumeID == "." || strings.Contains(volumeID, "..") {
 		return status.Errorf(codes.InvalidArgument,
-			"invalid Volume ID %q: must not contain '..'", volumeID)
+			"invalid Volume ID %q: must not be '.' or contain '..'", volumeID)
 	}
 	return nil
 }

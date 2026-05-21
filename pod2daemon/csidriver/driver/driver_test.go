@@ -122,6 +122,7 @@ func dontCreateCredsFile(_, _ string) error { return nil }
 func TestValidateVolumeID(t *testing.T) {
 	rejected := []string{
 		"",                       // missing
+		".",                      // base-dir self-ref (RemoveAll on <base>/. deletes tree)
 		"..",                     // pure parent ref
 		"../etc/poc",             // traversal
 		"foo/bar",                // path separator

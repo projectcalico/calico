@@ -45,9 +45,11 @@ func Run() {
 		log.Panic("Unable to create directory /var/lib/calico/")
 	}
 
-	// Change ownership of /var/lib/calico/ to our non-root user.
-	// Lchown so a symlink at this path is not followed.
-	err = os.Lchown("/var/lib/calico/", uid, 0)
+	// Change ownership of /var/lib/calico to our non-root user.
+	// Lchown so a symlink at this path is not followed. No trailing slash:
+	// a trailing '/' would force the kernel to dereference any symlink at
+	// this path to verify the target is a directory, defeating Lchown.
+	err = os.Lchown("/var/lib/calico", uid, 0)
 	if err != nil {
 		log.Panic("Unable to chown /var/lib/calico/")
 	}
@@ -58,9 +60,9 @@ func Run() {
 		log.Panic("Unable to create directory /var/run/calico/")
 	}
 
-	// Change ownership of /var/run/calico/ to our non-root user.
-	// Lchown so a symlink at this path is not followed.
-	err = os.Lchown("/var/run/calico/", uid, 0)
+	// Change ownership of /var/run/calico to our non-root user.
+	// Lchown without trailing slash, same reason as /var/lib/calico above.
+	err = os.Lchown("/var/run/calico", uid, 0)
 	if err != nil {
 		log.Panic("Unable to chown /var/run/calico/")
 	}
@@ -71,9 +73,9 @@ func Run() {
 		log.Panic("Unable to create directory /var/log/calico/cni")
 	}
 
-	// Change ownership of /var/log/calico/ to our non-root user.
-	// Lchown so a symlink at this path is not followed.
-	err = os.Lchown("/var/log/calico/", uid, 0)
+	// Change ownership of /var/log/calico to our non-root user.
+	// Lchown without trailing slash, same reason as /var/lib/calico above.
+	err = os.Lchown("/var/log/calico", uid, 0)
 	if err != nil {
 		log.Panic("Unable to chown /var/log/calico/")
 	}
