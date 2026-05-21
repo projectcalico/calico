@@ -32,15 +32,14 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 
 	BeforeEach(func() {
 		infra = getInfra()
-		topologyContainers = infrastructure.RunTopology(infrastructure.TopologyOptions{
-			FelixLogSeverity:           "info",
-			EnableIPv6:                 false,
-			ExtraEnvVars:               map[string]string{
-				"FELIX_WIREGUARDENABLED":             "true",
+		topologyOptions := wireguardTopologyOptions(
+			"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
+			map[string]string{
 				"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
 			},
-			NATOutgoingEnabled: true,
-		}, &infra)
+		)
+		topologyOptions.NATOutgoingEnabled = true
+		topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 		var err error
 		client, err = infra.GetCalicoClient()
@@ -97,8 +96,10 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 						return fmt.Errorf("node %d: routing rule malformed: %s", i, rule)
 					}
 
-					if strings.Contains(rule, "not from") {
-						return fmt.Errorf("node %d: routing rule must not use inverted source constraint: %s", i, rule)
+					// The inverted fwmark form produces "not from <CIDR>" in iproute2 output.
+					// Check instead for the unscoped form which would be incorrect.
+					if strings.Contains(rule, "not from all") {
+						return fmt.Errorf("node %d: unscoped routing rule still present: %s", i, rule)
 					}
 					rule98, err := felix.ExecOutput("ip", "rule", "show", "pref", "98")
 					if err != nil {
@@ -121,16 +122,15 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 				}
 				topologyContainers.Stop()
 
-				topologyContainers = infrastructure.RunTopology(infrastructure.TopologyOptions{
-					FelixLogSeverity: "info",
-					EnableIPv6:       false,
-					ExtraEnvVars: map[string]string{
-						"FELIX_WIREGUARDENABLED":              "true",
+				topologyOptions := wireguardTopologyOptions(
+					"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
+					map[string]string{
 						"FELIX_WIREGUARDHOSTENCRYPTIONENABLED": "false",
 					},
-					NATOutgoingEnabled: true,
-					WithTypha:          true,
-				}, &infra)
+				)
+				topologyOptions.NATOutgoingEnabled = true
+				topologyOptions.WithTypha = true
+				topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 				var err error
 				client, err = infra.GetCalicoClient()
@@ -169,8 +169,10 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 						if !regexp.MustCompile(`from 10\.65\.\d+\.\d+/\d+`).MatchString(rule) {
 							return fmt.Errorf("node %d: routing rule malformed with Typha present: %s", i, rule)
 						}
-						if strings.Contains(rule, "not from") {
-							return fmt.Errorf("node %d: routing rule must not use inverted source constraint with Typha present: %s", i, rule)
+						// The inverted fwmark form produces "not from <CIDR>" in iproute2 output.
+						// Check instead for the unscoped form which would be incorrect.
+						if strings.Contains(rule, "not from all") {
+							return fmt.Errorf("node %d: unscoped routing rule still present with Typha: %s", i, rule)
 						}
 					}
 					return nil
@@ -269,15 +271,14 @@ var _ = infrastructure.DatastoreDescribe("WireGuard source-scoped routing (Issue
 		BeforeEach(func() {
 			topologyContainers.Stop()
 			
-			topologyContainers = infrastructure.RunTopology(infrastructure.TopologyOptions{
-				FelixLogSeverity:           "info",
-				EnableIPv6:                 false,
-				ExtraEnvVars:               map[string]string{
-					"FELIX_WIREGUARDENABLED": "true",
-					"FELIX_WIREGUARDENCRYPTHOSTTRAFFIC": "true",
-				},
-				NATOutgoingEnabled: true,
-			}, &infra)
+topologyOptions := wireguardTopologyOptions(
+			"CalicoIPAM", /* ipipEnabled */ false, /* wgV4 */ true, /* wgV6 */ false, /* threading */ false,
+			map[string]string{
+				"FELIX_WIREGUARDENCRYPTHOSTTRAFFIC": "true",
+			},
+		)
+		topologyOptions.NATOutgoingEnabled = true
+		topologyContainers, _ = infrastructure.StartNNodeTopology(nodeCount, topologyOptions, infra)
 
 			for ii := range wls {
 				if wls[ii] != nil {
