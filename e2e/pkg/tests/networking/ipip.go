@@ -228,19 +228,3 @@ var _ = describe.CalicoDescribe(
 			}
 		})
 	})
-
-// expectedClusterRouteProto returns the route protocol owner that the cluster
-// is currently configured to use for IPIP and no-encap cluster routes. The
-// operator's Installation.spec.calicoNetwork.clusterRoutingMode is the source
-// of truth: "Felix" => proto 80, anything else (including unset) => BIRD's
-// proto 12.
-func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
-	inst := &v1.Installation{}
-	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, inst)).To(Succeed(), "Error querying Installation")
-	if inst.Spec.CalicoNetwork != nil &&
-		inst.Spec.CalicoNetwork.ClusterRoutingMode != nil &&
-		*inst.Spec.CalicoNetwork.ClusterRoutingMode == v1.ClusterRoutingModeFelix {
-		return RouteProtoFelix
-	}
-	return RouteProtoBIRD
-}

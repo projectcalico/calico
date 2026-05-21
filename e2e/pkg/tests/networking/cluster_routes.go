@@ -235,7 +235,7 @@ func assertRouteOwnership(cli ctrlclient.Client, nodeName, dstSubstring, expecte
 		}
 		return fmt.Errorf("no route on node %s with dev=%q proto=%s found among %v",
 			nodeName, expectedDev, expectedProto, routes)
-	}, 90*time.Second, 2*time.Second).Should(Succeed())
+	}, 60*time.Second, 2*time.Second).Should(Succeed())
 }
 
 func readClusterRoutingMode(cli ctrlclient.Client) *operatorv1.ClusterRoutingMode {
