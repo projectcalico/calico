@@ -16,6 +16,9 @@ Project Calico is a large monorepo providing container networking and security f
 
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
+- **NEVER**, under any circumstances, leak customer names into code comments, commit
+  messages, or PR descriptions. This repository is public. Refer to internal ticket
+  IDs (e.g. JIRA keys) instead — they identify the issue without naming the customer.
 - **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
 - **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
