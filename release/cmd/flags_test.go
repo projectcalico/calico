@@ -298,6 +298,25 @@ func TestEnvVarPrecedence(t *testing.T) {
 	}
 }
 
+// TestHashreleasePublishFlagsRegisterOperatorGit guards against the regression
+// where the publish subcommand referenced operatorRepoFlag in its action but
+// did not register operatorGitFlags, so c.String("operator-repo") returned ""
+// and the operator dir collapsed to cfg.TmpDir.
+func TestHashreleasePublishFlagsRegisterOperatorGit(t *testing.T) {
+	flags := hashreleasePublishFlags()
+	have := map[string]bool{}
+	for _, f := range flags {
+		for _, n := range f.Names() {
+			have[n] = true
+		}
+	}
+	for _, n := range []string{operatorOrgFlagName, operatorRepoFlagName, operatorBranchFlagName} {
+		if !have[n] {
+			t.Errorf("hashreleasePublishFlags is missing --%s", n)
+		}
+	}
+}
+
 func TestInverseFlagName(t *testing.T) {
 	cases := []struct {
 		in   string
