@@ -667,10 +667,17 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// We got no new updates, we still have the same programs attached
+		// Even without HostMetadata yet, the new manager re-attaches
+		// programs (with HOST_IP=0) so that a Felix restart with a
+		// missing/cleared Node IP doesn't leave interfaces unprogrammed.
+		// The pinned attach IDs differ from the pre-restart ones.
 		attached2, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attached2).To(Equal(attached))
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attached2).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attached2[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attached2[iface].Egress))
+		}
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
@@ -700,12 +707,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		attachedNew, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		// All programs are replaced by now
+		// HostMetadataUpdate triggers another re-attach so programs pick
+		// up the real HOST_IP. attachedNew differs from both the
+		// pre-restart attach IDs and the post-restart HOST_IP=0 attach IDs.
 		// XXX down infaces are not removed yet
 		for _, iface := range []string{"hostep2", "workloadep2"} {
 			Expect(attachedNew).To(HaveKey(iface))
 			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
 			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+			Expect(attached2[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached2[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
 		}
 	})
 
