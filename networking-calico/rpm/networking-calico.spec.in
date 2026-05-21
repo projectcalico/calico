@@ -110,6 +110,19 @@ if [ $1 -ge 1 ] ; then
 fi
 
 
+%package -n calico-resync
+Group:          Applications/Engineering
+Summary:        Project Calico networking for OpenStack/Neutron
+Requires:       networking-calico
+
+%description -n calico-resync
+This package provides the calico-resync CLI tool.
+
+%files -n calico-resync
+%defattr(-,root,root,-)
+/usr/bin/calico-resync
+
+
 %package -n calico-control
 Group:          Applications/Engineering
 Summary:        Project Calico networking for OpenStack/Neutron

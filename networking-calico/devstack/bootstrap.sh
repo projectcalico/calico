@@ -156,10 +156,6 @@ GIT_BASE=https://github.com
 
 LIBVIRT_TYPE=qemu
 
-# Disable ongoing resync.  In principle this isn't needed; disable it in order to build evidence to
-# confirm that.
-CALICO_RESYNC_INTERVAL_SECS=0
-
 EOF
 
 if ! ${TEMPEST:-false}; then

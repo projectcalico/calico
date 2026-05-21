@@ -95,10 +95,11 @@ var (
 		{Name: "dnsmasq-debuginfo", Native: true},
 		{Name: "dnsmasq-utils", Native: true},
 
-		// Non-native components (i.e. 'noarch')
+		// Arch-independent (Python) components (i.e. 'noarch')
 		{Name: "calico-compute", Native: false},
 		{Name: "calico-control", Native: false},
 		{Name: "calico-dhcp-agent", Native: false},
+		{Name: "calico-resync", Native: false},
 		{Name: "networking-calico", Native: false},
 	}
 	ubuntuComponents = [...]ubuntuComponent{
@@ -106,6 +107,7 @@ var (
 		{Name: "calico-compute", ComponentName: "networking-calico"},
 		{Name: "calico-control", ComponentName: "networking-calico"},
 		{Name: "calico-dhcp-agent", ComponentName: "networking-calico"},
+		{Name: "calico-resync", ComponentName: "networking-calico"},
 		{Name: "networking-calico", ComponentName: "networking-calico"},
 		// Components filed under 'felix' on the PPA
 		{Name: "calico-common", ComponentName: "felix"},

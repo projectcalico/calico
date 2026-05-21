@@ -66,9 +66,6 @@ sed -e "s/test-build/${DEV_IMAGE_TAG}/g" \
 build/_output/bin/gen-versions -os-versions="$VERSIONS_FILE" > pkg/components/calico.go
 rm -f "$VERSIONS_FILE"
 
-# Pull every image fresh so clusters pick up new digests under stable tags.
-find . -name '*.go' | xargs sed -i 's/PullIfNotPresent/PullAlways/g'
-
 make image
 # Strip docker.io/ since Docker Hub doesn't use it.
 if [ "${DEV_IMAGE_REGISTRY}" = "docker.io" ]; then
