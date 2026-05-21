@@ -16,7 +16,6 @@ Project Calico is a large monorepo providing container networking and security f
 
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
-- **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
 - **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
 
@@ -136,7 +135,7 @@ import (
 )
 ```
 
-Run `make fix-changed` to auto-fix import ordering. Do not run `goimports` or `go fmt` directly — the project uses a custom 3-step pipeline (`hack/format-changed-files.sh`).
+A repo-scoped Claude Code PostToolUse hook (`.claude/settings.json`) re-formats `.go` files automatically after every Edit/Write/MultiEdit, and `make generate` invokes `make fix-changed` on the files it regenerates. You don't need to run anything by hand. Do not run `goimports` or `go fmt` directly — the project uses a custom 3-step pipeline (`hack/cmd/format-go-file`).
 
 ### Copyright Headers
 
@@ -355,10 +354,9 @@ the BPF dataplane).
 2. Make changes to relevant component(s)
 3. Run component-specific tests: `make -C <component> test` or `go test ./...`
 4. Run validation: `make yaml-lint` (if YAML changed)
-5. If APIs/config/CI changed: `make generate`
-6. **MANDATORY:** Run `make fix-changed` to fix formatting
-7. Commit changes (generated files must be included)
-8. Push and create PR
+5. If APIs/config/CI changed: `make generate` (formats regenerated files itself)
+6. Commit changes (generated files must be included)
+7. Push and create PR
 
 ### Updating Helm Charts and Manifests
 
