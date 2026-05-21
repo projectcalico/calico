@@ -14,6 +14,8 @@ supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
 
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
+- **NEVER**, include customer names in code comments, commit
+  messages, or PR descriptions. If you must reference, refer to the ticket only (GitHub issue number/JIRA key).
 - **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
 
