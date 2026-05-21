@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func testRetrievePodInfoFromFile(g *WithT, setup podInfoTestSetup, volumeID, credsJSON string, checkErr validateReturnError) {
@@ -109,3 +112,51 @@ func createRealTempJSONFile(name, contents string) error {
 
 // For testing file-not-exists error handling.
 func dontCreateCredsFile(_, _ string) error { return nil }
+
+// TestValidateVolumeID asserts that VolumeId values that would let a caller of
+// the CSI gRPC socket break out of NodeAgent*HomeDir are rejected before any
+// filesystem operation runs. The driver concatenates VolumeId into host paths
+// in NodePublishVolume / NodeUnpublishVolume; without this gate, traversal
+// segments would let a caller of the socket act on arbitrary host paths under
+// the root, privileged DaemonSet's mount tree.
+func TestValidateVolumeID(t *testing.T) {
+	rejected := []string{
+		"",                       // missing
+		"..",                     // pure parent ref
+		"../etc/poc",             // traversal
+		"foo/bar",                // path separator
+		"/abs/poc",               // absolute path
+		"a/b",                    // any slash
+		"valid..name",            // ".." substring
+		" leading-space",         // disallowed char
+		"with space",             // disallowed char
+		"with\nnewline",          // disallowed char
+		"with;semicolon",         // disallowed char
+		strings.Repeat("a", 129), // too long
+	}
+	for _, vid := range rejected {
+		t.Run(fmt.Sprintf("reject/%q", vid), func(t *testing.T) {
+			g := NewWithT(t)
+			err := validateVolumeID(vid)
+			g.Expect(err).To(HaveOccurred(), "expected rejection for VolumeID %q", vid)
+			g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument),
+				"VolumeID %q must be rejected as InvalidArgument", vid)
+		})
+	}
+
+	accepted := []string{
+		"csi-5136cc95849bc789e7f53a2466693a5e63189a8e99e3223706f1f7b804624e32", // kubelet inline-ephemeral shape
+		"vol_01",
+		"vol-01",
+		"vol.01",
+		"a",
+		strings.Repeat("a", 128), // exactly at max length
+	}
+	for _, vid := range accepted {
+		t.Run(fmt.Sprintf("accept/%q", vid), func(t *testing.T) {
+			g := NewWithT(t)
+			g.Expect(validateVolumeID(vid)).To(Succeed(),
+				"VolumeID %q must be accepted", vid)
+		})
+	}
+}
