@@ -141,10 +141,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 			}).Debug("received file events")
 
 			filePath := event.Name
-			// fsnotify Op is a bitmask: a single event can combine ops
-			// (e.g. Create|Write when a file is created and written in
-			// the same syscall, common on Linux for os.Create). Use Has
-			// so combined events are not silently dropped.
 			if event.Op.Has(fsnotify.Remove) {
 				w.callbacks.OnFileDeletion(filePath)
 				delete(w.lastState, filePath)
@@ -153,9 +149,6 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 				if err != nil {
 					log.WithError(err).Error("Failed to get file info on a fsnotify event.")
 				} else if !fileInfo.IsDir() {
-					// Prefer Create over Write so a Create|Write event
-					// fires exactly one callback for the same logical
-					// "file appeared" change.
 					if event.Op.Has(fsnotify.Create) {
 						w.lastState[filePath] = fileInfo
 						w.callbacks.OnFileCreation(filePath)

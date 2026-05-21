@@ -242,10 +242,6 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 	})
 
-	// runFsnotifyWatcher consumes events directly from fsnotify.Watcher.Events,
-	// so a synthetic-injection test can drive the bitmask handling
-	// deterministically without depending on which op combinations the kernel
-	// happens to emit for a given file operation.
 	driveSyntheticEvent := func(filePath string, op fsnotify.Op) {
 		watcher, err := fsnotify.NewWatcher()
 		Expect(err).NotTo(HaveOccurred())
@@ -258,9 +254,6 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 		watcher.Events <- fsnotify.Event{Name: filePath, Op: op}
 
-		// Stop the loop by closing the watcher; w.stopChan is also closed
-		// in the outer defer w.Stop(), but closing the watcher unblocks
-		// the select directly via the Errors channel close.
 		_ = watcher.Close()
 		Eventually(loopDone, "2s").Should(BeClosed())
 	}
