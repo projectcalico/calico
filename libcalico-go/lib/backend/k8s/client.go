@@ -76,12 +76,12 @@ type KubeClient struct {
 	clientsByListType map[reflect.Type]resources.K8sResourceClient
 }
 
-// NewKubeClient creates a backend client by building all necessary Kubernetes clients
-// from the provided CalicoAPIConfigSpec. This is the standard production constructor —
-// it reads kubeconfig, creates a real clientset, and builds REST/KubeVirt/CNP clients
-// from the resulting rest.Config. Use NewWithOptions instead when you want to inject
-// pre-built or fake clients.
+// NewKubeClient builds a backend client from a CalicoAPIConfigSpec. Use
+// NewWithOptions to inject pre-built clients (e.g. fakes in tests).
 func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
+	// Whether or not we are writing to projectcalico.org/v3 resources. If true, we're running in
+	// "no API server" mode where the v3 resources are backed by CRDs directly. Otherwise, we're running
+	// with the Calico API server and should instead use crd.projectcalico.org/v1 resources directly.
 	group := BackendAPIGroup(ca)
 	log.WithField("apiGroup", group).Info("Using API group for CRD backend")
 
@@ -117,35 +117,19 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	})
 }
 
-// ClientOptions provides options for creating a KubeClient. All fields except
-// ClusterNetworkPolicyClient and VMIMClientFactory are required.
+// ClientOptions provides pre-built clients for constructing a KubeClient.
+// ClientSet and RESTClient are required; the rest are optional.
 type ClientOptions struct {
-	// ClientSet is the core Kubernetes client used for nodes, services, endpoints, etc.
-	ClientSet kubernetes.Interface
-
-	// RESTClient is the CRD REST client used for Calico custom resources.
-	RESTClient rest.Interface
-
-	// Group specifies the API group backing Calico CRDs (v3 or v1).
-	Group resources.BackingAPIGroup
-
-	// UsePodCIDR indicates whether to use Kubernetes pod CIDR for IPAM instead of
-	// Calico IPAM. When false, additional IPAM resource clients are registered.
-	UsePodCIDR bool
-
-	// ClusterNetworkPolicyClient is an optional client for K8s ClusterNetworkPolicy
-	// resources. If nil, ClusterNetworkPolicy operations won't be available.
+	ClientSet                  kubernetes.Interface
+	RESTClient                 rest.Interface
+	Group                      resources.BackingAPIGroup
+	UsePodCIDR                 bool
 	ClusterNetworkPolicyClient *netpolicyclient.PolicyV1alpha2Client
-
-	// VMIMClientFactory is an optional factory for KubeVirt VirtualMachineInstanceMigration
-	// clients. If nil, LiveMigration operations won't be available.
-	VMIMClientFactory func(namespace string) resources.VMIMClient
+	VMIMClientFactory          func(namespace string) resources.VMIMClient
 }
 
-// NewWithOptions creates a backend client from pre-built clients. This allows injecting
-// fake or custom clients for testing, without needing a CalicoAPIConfigSpec or real
-// Kubernetes connection. Returns an error if required fields (ClientSet, RESTClient) are
-// missing.
+// NewWithOptions builds a backend client from pre-built clients, allowing fakes
+// to be injected for testing.
 func NewWithOptions(opts ClientOptions) (api.Client, error) {
 	if opts.ClientSet == nil {
 		return nil, fmt.Errorf("ClientSet is required")

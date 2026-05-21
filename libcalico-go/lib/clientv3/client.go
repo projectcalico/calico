@@ -71,8 +71,8 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 	return c, nil
 }
 
-// NewFromBackend creates a new client from a pre-built backend client. This allows
-// injecting a backend backed by fake k8s clients for testing.
+// NewFromBackend wraps an existing backend client (e.g. one backed by fakes
+// in tests) in a clientv3 Interface.
 func NewFromBackend(be bapi.Client) Interface {
 	return client{
 		backend:   be,
