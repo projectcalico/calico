@@ -1,10 +1,8 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Repository Overview
 
-Project Calico is a large monorepo providing container networking and security for Kubernetes. The codebase contains ~2000 Go files across 30+ components, supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
+Project Calico is a large monorepo providing container networking and security 
+for Kubernetes. The codebase contains ~2000 Go files across 30+ components, 
+supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
 
 **Primary language:** Go (also C/eBPF, Python, Shell, TypeScript/React)
 **Build system:** Make + Docker-based reproducible builds
@@ -16,13 +14,12 @@ Project Calico is a large monorepo providing container networking and security f
 
 - **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
-- **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
 - **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
 - **ALWAYS** commit generated files alongside source changes
 
 ## Essential Build Commands
 
-**Prerequisites:** Docker, Make, Git, Linux environment (Ubuntu 24.04+ recommended)
+**Prerequisites:** Docker, Make, Go, Git, Linux environment (Ubuntu 24.04+ recommended)
 
 ### Building Components
 
@@ -106,9 +103,12 @@ make generate
 make protobuf               # Regenerate protobuf files
 make gen-manifests          # Update manifests/ from helm charts
 make gen-semaphore-yaml     # Regenerate .semaphore/semaphore.yml from templates
+make gen-deps-files         # Regenerate deps.txt files after adding new imports to a component; used to trigger downstream CI.
 ```
 
-**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
+**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), 
+run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix 
+config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
 
 ## Generated Files (DO NOT edit directly)
 
@@ -136,7 +136,7 @@ import (
 )
 ```
 
-Run `make fix-changed` to auto-fix import ordering. Do not run `goimports` or `go fmt` directly — the project uses a custom 3-step pipeline (`hack/format-changed-files.sh`).
+A repo-scoped PostToolUse hook (`.claude/settings.json`) re-formats `.go` files automatically after every Edit/Write/MultiEdit.
 
 ### Copyright Headers
 
@@ -355,10 +355,9 @@ the BPF dataplane).
 2. Make changes to relevant component(s)
 3. Run component-specific tests: `make -C <component> test` or `go test ./...`
 4. Run validation: `make yaml-lint` (if YAML changed)
-5. If APIs/config/CI changed: `make generate`
-6. **MANDATORY:** Run `make fix-changed` to fix formatting
-7. Commit changes (generated files must be included)
-8. Push and create PR
+5. If APIs/config/CI changed: `make generate` (formats regenerated files itself)
+6. Commit changes (generated files must be included)
+7. Push and create PR
 
 ### Updating Helm Charts and Manifests
 
