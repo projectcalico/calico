@@ -3704,8 +3704,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
-        '/lib/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/lib/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:
