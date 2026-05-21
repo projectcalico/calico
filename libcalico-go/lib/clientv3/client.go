@@ -66,11 +66,18 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		validator.SetCRDValidationEnabled(true)
 	}
 
+	c := NewFromBackend(be).(client)
+	c.config = config
+	return c, nil
+}
+
+// NewFromBackend wraps an existing backend client (e.g. one backed by fakes
+// in tests) in a clientv3 Interface.
+func NewFromBackend(be bapi.Client) Interface {
 	return client{
-		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
-	}, nil
+	}
 }
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.

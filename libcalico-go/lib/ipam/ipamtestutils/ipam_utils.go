@@ -119,12 +119,12 @@ func (f *FakeReservations) List(ctx context.Context, opts options.ListOptions) (
 }
 
 // ApplyNode creates or updates a node in the backend for tests.
-func ApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
+func ApplyNode(c bapi.Client, kc kubernetes.Interface, host string, labels map[string]string) {
 	ExpectWithOffset(1, TryApplyNode(c, kc, host, labels)).NotTo(HaveOccurred())
 }
 
 // TryApplyNode creates or updates a node, returning any error.
-func TryApplyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) error {
+func TryApplyNode(c bapi.Client, kc kubernetes.Interface, host string, labels map[string]string) error {
 	if kc != nil {
 		n := corev1.Node{
 			TypeMeta: metav1.TypeMeta{
