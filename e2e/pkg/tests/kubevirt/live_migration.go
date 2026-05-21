@@ -32,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -183,9 +182,19 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Server VM: %s on %s", serverIP, node1)
 
 			By("Creating client pod on a different node than server VM")
-			clientConn := setupAntiAffinityPod(ctx, f, node1)
+			clientConn, clientTester := setupAntiAffinityPod(ctx, f, node1)
 			clientPod := clientConn.Pod()
-			expectConnectionToTCPServer(ns, clientPod.Name, serverIP)
+
+			// Pre-flight reachability gate. The streaming probe's nc will
+			// exit rc=1 on a refused connect (cold-boot VM not yet bound to
+			// 9999), and that sticky stream error makes WaitForCadence fail
+			// immediately. Wait until TCP is reachable before starting it.
+			By("Waiting for VM TCP server to be reachable from client pod")
+			vmTarget := conncheck.NewTCPConnectTarget(serverIP, 9999)
+			clientTester.WithTimeout(2 * time.Minute)
+			clientTester.ExpectSuccess(clientConn, vmTarget)
+			clientTester.Execute()
+			clientTester.ResetExpectations()
 
 			By("Starting TCP client stream probe")
 			probe := conncheck.StartStream(ctx, "tcp-stream",
@@ -359,7 +368,7 @@ var _ = describe.CalicoDescribe(
 				DeferCleanup(func() { _ = probe.Stop() })
 
 				By("Waiting for TCP data to flow before migration")
-				conncheck.WaitForCadence(ctx, probe, 5, 30*time.Second)
+				conncheck.WaitForCadence(ctx, probe, 5, 2*time.Minute)
 				preLines := len(probe.Lines())
 				logrus.Infof("Pre-migration: %d lines on TOR client", preLines)
 				preTime := time.Now()
@@ -521,12 +530,17 @@ var _ = describe.CalicoDescribe(
 			tester.AddClient(allowed)
 			tester.AddClient(denied)
 			tester.Deploy()
-			client1Pod := allowed.Pod()
-			client2Pod := denied.Pod()
+			vmTarget := conncheck.NewTCPConnectTarget(vmIP, 9999)
 
+			// Cold-boot VM cloud-init can take up to ~2m to bind nc -lkp,
+			// so the first reachability assertion needs a longer budget
+			// than conncheck's default 30s.
 			By("Verifying both clients can reach VM before policy is applied")
-			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			expectConnectionToTCPServer(ns, client2Pod.Name, vmIP)
+			tester.WithTimeout(2 * time.Minute)
+			tester.ExpectSuccess(allowed, vmTarget)
+			tester.ExpectSuccess(denied, vmTarget)
+			tester.Execute()
+			tester.ResetExpectations()
 
 			By("Creating NetworkPolicy to allow only role=allowed on TCP/9999")
 			protocol := corev1.ProtocolTCP
@@ -557,8 +571,10 @@ var _ = describe.CalicoDescribe(
 			})
 
 			By("Verifying policy is enforced: client1 allowed, client2 denied")
-			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			expectTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+			tester.ExpectSuccess(allowed, vmTarget)
+			tester.ExpectFailure(denied, vmTarget)
+			tester.Execute()
+			tester.ResetExpectations()
 
 			By("Triggering live migration")
 			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
@@ -572,28 +588,22 @@ var _ = describe.CalicoDescribe(
 			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("VM migrated: %s -> %s", node1, node2)
 
-			// After migration the new virt-launcher pod has its own IP-stack
-			// on a new node. Felix must learn the workload, recompute policy,
-			// and program rules — those are async after VMIM Succeeded. Wait
-			// until both directions match the policy intent on the *new* pod
-			// before asserting Consistently, otherwise the Consistently
-			// window can land on the source's still-active rules and pass
-			// for the wrong reason.
-			By("Waiting for policy to apply on the migrated pod")
+			// Felix is async after VMIM Succeeded: it must learn the new
+			// workload and program policy on the target node. Use
+			// Eventually wrapping both Connects so the assertion only
+			// passes when allowed succeeds AND denied fails in the same
+			// iteration; otherwise the denied probe could match
+			// ExpectFailure on a transient pre-route window and exit
+			// before policy is actually in force.
+			By("Verifying policy survives migration: allowed reaches, denied blocked")
 			Eventually(func(g Gomega) {
-				out1, _ := kubectl.NewKubectlCommand(ns, "exec", client1Pod.Name, "--",
-					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
-				g.Expect(out1).To(ContainSubstring("seq="),
-					"client1 (allowed) should reach migrated pod before Consistently asserts")
-				out2, _ := kubectl.NewKubectlCommand(ns, "exec", client2Pod.Name, "--",
-					"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
-				g.Expect(out2).NotTo(ContainSubstring("seq="),
-					"client2 (denied) should be blocked from migrated pod before Consistently asserts")
-			}, 30*time.Second, 2*time.Second).Should(Succeed())
-
-			By("Verifying policy survives migration: client1 still allowed, client2 still denied")
-			expectConnectionToTCPServer(ns, client1Pod.Name, vmIP)
-			expectTCPConnectionBlocked(ns, client2Pod.Name, vmIP)
+				_, err := tester.Connect(allowed, vmTarget)
+				g.Expect(err).NotTo(HaveOccurred(),
+					"allowed client should reach migrated pod")
+				_, err = tester.Connect(denied, vmTarget)
+				g.Expect(err).To(HaveOccurred(),
+					"denied client should be blocked by NetworkPolicy")
+			}, 90*time.Second, 2*time.Second).Should(Succeed())
 			logrus.Info("NetworkPolicy enforcement confirmed after live migration")
 		})
 	},

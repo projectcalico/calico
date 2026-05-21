@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -97,10 +96,14 @@ var _ = describe.CalicoDescribe(
 			// responds to ICMP. On a fresh cluster the containerDisk pull
 			// adds another ~30s. Wait here as a setup step so the assertion
 			// below runs against a warm VM at the default budget.
+			//
+			// Cadence note: tester.Connect uses ping -c 5 with conncheck's
+			// 30s exec timeout. Effective poll cadence is ~5s on success
+			// (ping returns fast) and ~30s on failure (ping waits for all
+			// 5 replies). Outer 90s budget = ~3 attempts in the worst case.
 			By("Waiting for VM guest to become reachable")
 			Eventually(func() error {
-				_, err := kubectl.NewKubectlCommand(ns, "exec", pingClient.Pod().Name, "--",
-					"sh", "-c", fmt.Sprintf("ping -c 1 -W 2 %s", originalIP)).Exec()
+				_, err := tester.Connect(pingClient, conncheck.NewPodPingTarget(sourceLauncher))
 				return err
 			}, 90*time.Second, 5*time.Second).Should(Succeed(),
 				"VM guest did not respond to ICMP within cold-start budget")

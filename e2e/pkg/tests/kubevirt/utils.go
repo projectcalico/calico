@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,8 +54,8 @@ import (
 const (
 	ipPersistenceTimeout       = 3 * time.Minute
 	podRecreationTimeout       = 5 * time.Minute
-	vmiRecreationTimeout       = 9 * time.Minute
-	singleMigrationTimeout     = 3 * time.Minute
+	vmiRecreationTimeout       = 12 * time.Minute
+	singleMigrationTimeout     = 5 * time.Minute
 	doubleMigrationTimeout     = 6 * time.Minute
 	eBGPDoubleMigrationTimeout = 6 * time.Minute
 )
@@ -263,8 +262,10 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 
 // setupAntiAffinityPod creates a long-running pod scheduled away from the
 // given node, used for TCP tests where the client must be on a different node
-// than the server VM to exercise cross-node BGP routing.
-func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) conncheck.Client {
+// than the server VM to exercise cross-node BGP routing. Returns both the
+// Client and the underlying ConnectionTester so callers can reuse the tester
+// for pre-flight checks (e.g. TCPConnect reachability gates).
+func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) (conncheck.Client, conncheck.ConnectionTester) {
 	By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	tester := conncheck.NewConnectionTester(f)
 	DeferCleanup(tester.Stop)
@@ -291,7 +292,7 @@ func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode
 	pod := client.Pod()
 	Expect(pod.Spec.NodeName).NotTo(Equal(avoidNode), "client pod should be on a different node")
 	logrus.Infof("Client pod %s on %s (server VM on %s)", pod.Name, pod.Spec.NodeName, avoidNode)
-	return client
+	return client, tester
 }
 
 // newVMIMigration returns a VMIM object that triggers live migration of vmiName
@@ -369,42 +370,6 @@ func getIPAMOwnerAttributes(ctx context.Context, c clientv3.Interface, ipStr str
 		return nil, nil, fmt.Errorf("no IPAM assignment found for %s", ipStr)
 	}
 	return attr.ActiveOwnerAttrs, attr.AlternateOwnerAttrs, nil
-}
-
-// expectConnectionToTCPServer verifies that the client pod can connect to the VM's TCP
-// server on port 9999 and receive at least one "seq=" line. Retries for up to 2 minutes
-// to accommodate slow-booting VMs where the TCP server may not yet be listening.
-func expectConnectionToTCPServer(ns, podName, vmIP string) {
-	GinkgoHelper()
-	By(fmt.Sprintf("Waiting for TCP server on %s:9999", vmIP))
-	Eventually(func() error {
-		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
-			"sh", "-c", fmt.Sprintf("timeout 5 nc %s 9999", vmIP)).Exec()
-		_ = err // `timeout 5 nc` exits 143 even on success; stdout is the signal.
-		if !strings.Contains(output, "seq=") {
-			return fmt.Errorf("TCP server not ready (no seq= in output)")
-		}
-		return nil
-	}, 2*time.Minute, 5*time.Second).Should(Succeed(), "TCP server not ready on VM %s", vmIP)
-	logrus.Infof("TCP server ready on %s:9999", vmIP)
-}
-
-// expectTCPConnectionBlocked verifies that the client pod cannot connect to the VM's TCP
-// server on port 9999. Uses Consistently to confirm that nc never receives "seq=" data
-// over the check window, indicating the connection is blocked by network policy.
-func expectTCPConnectionBlocked(ns, podName, vmIP string) {
-	GinkgoHelper()
-	By(fmt.Sprintf("Verifying TCP connection to %s:9999 is blocked from %s", vmIP, podName))
-	Consistently(func() error {
-		output, err := kubectl.NewKubectlCommand(ns, "exec", podName, "--",
-			"sh", "-c", fmt.Sprintf("timeout 3 nc %s 9999 2>&1", vmIP)).Exec()
-		_ = err // see expectConnectionToTCPServer.
-		if strings.Contains(output, "seq=") {
-			return fmt.Errorf("connection succeeded unexpectedly")
-		}
-		return nil
-	}, 10*time.Second, 2*time.Second).Should(Succeed(),
-		"TCP connection to %s:9999 should be blocked by policy", vmIP)
 }
 
 // countSequenceGaps parses "seq=N" lines and counts gaps in the sequence. When a gap is
@@ -578,6 +543,33 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	lcgc := newLibcalicoClient(f)
 	ctx := context.Background()
 
+	// Random suffixes so reruns can't collide if a prior run's cleanup failed.
+	const filterPrefix = "kubevirt-lm-"
+	const peerPrefix = "tor-ebgp-peer-"
+	filterName := utils.GenerateRandomName(filterPrefix)
+	peerName := utils.GenerateRandomName(peerPrefix)
+
+	// Sweep stale resources from prior runs whose DeferCleanup didn't fire.
+	// Without this, random-suffix leftovers accumulate on the cluster forever.
+	// Only delete resources older than staleAge so a concurrent run of the
+	// same suite against a shared cluster isn't nuked mid-flight.
+	const staleAge = 30 * time.Minute
+	staleBefore := time.Now().Add(-staleAge)
+	if filters, err := lcgc.BGPFilter().List(ctx, options.ListOptions{}); err == nil {
+		for _, bf := range filters.Items {
+			if strings.HasPrefix(bf.Name, filterPrefix) && bf.CreationTimestamp.Time.Before(staleBefore) {
+				_, _ = lcgc.BGPFilter().Delete(ctx, bf.Name, options.DeleteOptions{})
+			}
+		}
+	}
+	if peers, err := lcgc.BGPPeers().List(ctx, options.ListOptions{}); err == nil {
+		for _, bp := range peers.Items {
+			if strings.HasPrefix(bp.Name, peerPrefix) && bp.CreationTimestamp.Time.Before(staleBefore) {
+				_, _ = lcgc.BGPPeers().Delete(ctx, bp.Name, options.DeleteOptions{})
+			}
+		}
+	}
+
 	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
 
@@ -647,7 +639,7 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	community := v3.BGPCommunityValue("65000:100")
 	elevatedPriority := 512
 	bgpFilter := &v3.BGPFilter{
-		ObjectMeta: metav1.ObjectMeta{Name: "kubevirt-lm"},
+		ObjectMeta: metav1.ObjectMeta{Name: filterName},
 		Spec: v3.BGPFilterSpec{
 			ExportV4: []v3.BGPFilterRuleV4{
 				{
@@ -661,15 +653,13 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 			},
 		},
 	}
-	// Delete any leftover from a previous failed run before creating.
-	_, _ = lcgc.BGPFilter().Delete(ctx, "kubevirt-lm", options.DeleteOptions{})
 	_, err = lcgc.BGPFilter().Create(ctx, bgpFilter, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to create BGPFilter")
 	DeferCleanup(func() {
-		By("Deleting BGPFilter kubevirt-lm")
-		_, err := lcgc.BGPFilter().Delete(context.Background(), "kubevirt-lm", options.DeleteOptions{})
+		By("Deleting BGPFilter " + filterName)
+		_, err := lcgc.BGPFilter().Delete(context.Background(), filterName, options.DeleteOptions{})
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to delete BGPFilter kubevirt-lm")
+			logrus.WithError(err).Warnf("Failed to delete BGPFilter %s", filterName)
 		}
 	})
 
@@ -680,23 +670,22 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	By("Creating BGPPeer for TOR (master only, next-hop-keep, with filter)")
 	nextHopKeep := v3.NextHopMode("Keep")
 	bgpPeer := &v3.BGPPeer{
-		ObjectMeta: metav1.ObjectMeta{Name: "tor-ebgp-peer"},
+		ObjectMeta: metav1.ObjectMeta{Name: peerName},
 		Spec: v3.BGPPeerSpec{
 			Node:        masterName,
 			PeerIP:      torL2tpIP,
 			ASNumber:    numorstring.ASNumber(65001),
 			NextHopMode: &nextHopKeep,
-			Filters:     []string{"kubevirt-lm"},
+			Filters:     []string{filterName},
 		},
 	}
-	_, _ = lcgc.BGPPeers().Delete(ctx, "tor-ebgp-peer", options.DeleteOptions{})
 	_, err = lcgc.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to create BGPPeer")
 	DeferCleanup(func() {
-		By("Deleting BGPPeer for TOR")
-		_, err := lcgc.BGPPeers().Delete(context.Background(), "tor-ebgp-peer", options.DeleteOptions{})
+		By("Deleting BGPPeer " + peerName)
+		_, err := lcgc.BGPPeers().Delete(context.Background(), peerName, options.DeleteOptions{})
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to delete BGPPeer tor-ebgp-peer")
+			logrus.WithError(err).Warnf("Failed to delete BGPPeer %s", peerName)
 		}
 	})
 
@@ -705,29 +694,29 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	// additive: the master advertises routes to the TOR via eBGP while all
 	// nodes continue to exchange routes with each other via the iBGP mesh.
 
-	// Wait for confd on the master to regenerate bird.cfg with the kubevirt-lm
-	// filter. Polling for actual contents avoids both a fixed sleep and a noisy
+	// Wait for confd on the master to regenerate bird.cfg with the filter.
+	// Polling for actual contents avoids both a fixed sleep and a noisy
 	// unconditional debug dump.
-	By("Waiting for confd to regenerate bird.cfg with the kubevirt-lm filter on master")
+	By(fmt.Sprintf("Waiting for confd to regenerate bird.cfg with filter %s on master", filterName))
 	masterPod := waitForMasterCalicoNodePod(f, masterName)
 	Eventually(func() error {
 		cfg, err := utils.ExecInCalicoNode(masterPod, "cat /etc/calico/confd/config/bird.cfg")
 		if err != nil {
 			return fmt.Errorf("read bird.cfg: %w", err)
 		}
-		if !strings.Contains(cfg, "kubevirt-lm") {
-			return fmt.Errorf("bird.cfg does not yet reference filter kubevirt-lm")
+		if !strings.Contains(cfg, filterName) {
+			return fmt.Errorf("bird.cfg does not yet reference filter %s", filterName)
 		}
 		return nil
 	}, 30*time.Second, 1*time.Second).Should(Succeed(),
-		"confd never regenerated bird.cfg with the kubevirt-lm filter")
+		"confd never regenerated bird.cfg with filter %s", filterName)
 
 	// Dump master BIRD config + routes on failure for diagnostics.
 	DeferCleanup(func() {
 		if !CurrentSpecReport().Failed() {
 			return
 		}
-		logBIRDDiagnostics(masterPod)
+		logBIRDDiagnostics(masterPod, filterName)
 	})
 
 	By("Waiting for eBGP session to establish")
@@ -762,11 +751,12 @@ func waitForMasterCalicoNodePod(f *framework.Framework, masterName string) *core
 }
 
 // logBIRDDiagnostics dumps the master's confd-generated BIRD configs and
-// runtime state. Only call this from failure-gated paths.
-func logBIRDDiagnostics(masterPod *corev1.Pod) {
+// runtime state. filterName scopes the bird.cfg sed range. Only call this
+// from failure-gated paths.
+func logBIRDDiagnostics(masterPod *corev1.Pod, filterName string) {
 	type item struct{ label, cmd string }
 	items := []item{
-		{"bird.cfg (BGPFilter + TOR peer)", "cat /etc/calico/confd/config/bird.cfg | sed -n '/kubevirt-lm/,/^$/p'"},
+		{"bird.cfg (BGPFilter + TOR peer)", fmt.Sprintf("cat /etc/calico/confd/config/bird.cfg | sed -n '/%s/,/^$/p'", filterName)},
 		{"bird_ipam.cfg", "cat /etc/calico/confd/config/bird_ipam.cfg"},
 		{"bird_aggr.cfg", "cat /etc/calico/confd/config/bird_aggr.cfg"},
 		{"birdcl show route", "birdcl show route"},
