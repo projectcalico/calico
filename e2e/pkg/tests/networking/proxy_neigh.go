@@ -454,7 +454,7 @@ func deployServer(
 	namePrefix, workloadPoolName string,
 	family corev1.IPFamily,
 	extraServerOpts ...conncheck.ServerOption,
-) (*conncheck.Server, string) {
+) (conncheck.Server, string) {
 	useIPPool := conncheck.UseV4IPPool(workloadPoolName)
 	if family == corev1.IPv6Protocol {
 		useIPPool = conncheck.UseV6IPPool(workloadPoolName)
