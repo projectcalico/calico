@@ -185,4 +185,24 @@ func TestJoinUnderBase(t *testing.T) {
 			g.Expect(got).To(Equal(tc.want))
 		})
 	}
+
+	// RetrieveConfig() assembles base paths via string concatenation, so a
+	// base with a trailing slash or duplicate separator can reach here. The
+	// function must normalize base before the prefix check.
+	nonNormalized := []string{
+		"/var/run/nodeagent/mount/",
+		"/var/run/nodeagent//mount",
+		"/var/run/nodeagent/mount///",
+	}
+	for _, b := range nonNormalized {
+		t.Run(fmt.Sprintf("normalizes-base/%q", b), func(t *testing.T) {
+			g := NewWithT(t)
+			got, err := joinUnderBase(b, "csi-abc")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(got).To(Equal("/var/run/nodeagent/mount/csi-abc"))
+
+			_, err = joinUnderBase(b, "..")
+			g.Expect(err).To(HaveOccurred(), "traversal must still be rejected after normalization")
+		})
+	}
 }
