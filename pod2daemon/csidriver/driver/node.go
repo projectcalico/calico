@@ -45,16 +45,17 @@ func validateVolumeID(volumeID string) error {
 }
 
 // joinUnderBase joins name onto base and rejects results that escape base
-// after Clean. Sole path-traversal gate; every caller-supplied FS path
-// must route through it. base is normalized first so callers can pass
-// non-canonical forms (trailing slashes, duplicate separators) without
-// breaking the prefix comparison.
+// after Clean. Path-traversal gate for the VolumeId-derived path components
+// (raw VolumeId and `<VolumeId>.json`); other caller-controlled inputs such
+// as req.TargetPath are not in scope here. base is normalized first so
+// callers can pass non-canonical forms (trailing slashes, duplicate
+// separators) without breaking the prefix comparison.
 func joinUnderBase(base, name string) (string, error) {
 	base = filepath.Clean(base)
 	full := filepath.Join(base, name)
 	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
 		return "", status.Errorf(codes.InvalidArgument,
-			"invalid Volume ID %q: resolves outside %s", name, base)
+			"invalid path component %q: resolves outside %s", name, base)
 	}
 	return full, nil
 }
