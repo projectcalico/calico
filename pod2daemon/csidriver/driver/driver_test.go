@@ -113,51 +113,76 @@ func createRealTempJSONFile(name, contents string) error {
 // For testing file-not-exists error handling.
 func dontCreateCredsFile(_, _ string) error { return nil }
 
-// TestValidateVolumeID asserts that VolumeId values that would let a caller of
-// the CSI gRPC socket break out of NodeAgent*HomeDir are rejected before any
-// filesystem operation runs. The driver concatenates VolumeId into host paths
-// in NodePublishVolume / NodeUnpublishVolume; without this gate, traversal
-// segments would let a caller of the socket act on arbitrary host paths under
-// the root, privileged DaemonSet's mount tree.
+// TestValidateVolumeID covers the CSI spec requirement that VolumeId be set.
+// Format is deliberately not constrained — see the function's godoc.
+// Path-traversal protection is independently covered by TestJoinUnderBase.
 func TestValidateVolumeID(t *testing.T) {
-	rejected := []string{
-		"",                       // missing
-		".",                      // base-dir self-ref (RemoveAll on <base>/. deletes tree)
-		"..",                     // pure parent ref
-		"../etc/poc",             // traversal
-		"foo/bar",                // path separator
-		"/abs/poc",               // absolute path
-		"a/b",                    // any slash
-		"valid..name",            // ".." substring
-		" leading-space",         // disallowed char
-		"with space",             // disallowed char
-		"with\nnewline",          // disallowed char
-		"with;semicolon",         // disallowed char
-		strings.Repeat("a", 129), // too long
-	}
-	for _, vid := range rejected {
-		t.Run(fmt.Sprintf("reject/%q", vid), func(t *testing.T) {
-			g := NewWithT(t)
-			err := validateVolumeID(vid)
-			g.Expect(err).To(HaveOccurred(), "expected rejection for VolumeID %q", vid)
-			g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument),
-				"VolumeID %q must be rejected as InvalidArgument", vid)
-		})
-	}
+	t.Run("reject/empty", func(t *testing.T) {
+		g := NewWithT(t)
+		err := validateVolumeID("")
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument))
+	})
 
+	// Anything non-empty passes — kubelet's current sha256-hex shape, future
+	// shapes, weird characters, traversal segments. Safety is provided by
+	// joinUnderBase at the FS-op sites, not here.
 	accepted := []string{
-		"csi-5136cc95849bc789e7f53a2466693a5e63189a8e99e3223706f1f7b804624e32", // kubelet inline-ephemeral shape
-		"vol_01",
-		"vol-01",
-		"vol.01",
-		"a",
-		strings.Repeat("a", 128), // exactly at max length
+		"csi-5136cc95849bc789e7f53a2466693a5e63189a8e99e3223706f1f7b804624e32",
+		".",
+		"..",
+		"foo/bar",
+		"with space",
+		"with\nnewline",
+		strings.Repeat("a", 1024),
 	}
 	for _, vid := range accepted {
 		t.Run(fmt.Sprintf("accept/%q", vid), func(t *testing.T) {
 			g := NewWithT(t)
-			g.Expect(validateVolumeID(vid)).To(Succeed(),
-				"VolumeID %q must be accepted", vid)
+			g.Expect(validateVolumeID(vid)).To(Succeed())
+		})
+	}
+}
+
+// TestJoinUnderBase covers the path-traversal safety property: paths that
+// resolve outside base are rejected, paths that stay under base are returned
+// joined.
+func TestJoinUnderBase(t *testing.T) {
+	const base = "/var/run/nodeagent/mount"
+
+	rejected := []struct {
+		name string
+		in   string
+	}{
+		{"empty", ""},
+		{"dot", "."},
+		{"dotdot", ".."},
+		{"single-traversal", "../etc/poc"},
+		{"deep-traversal", "../../../../etc/poc"},
+	}
+	for _, tc := range rejected {
+		t.Run("reject/"+tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			_, err := joinUnderBase(base, tc.in)
+			g.Expect(err).To(HaveOccurred(), "expected rejection for %q", tc.in)
+			g.Expect(status.Code(err)).To(Equal(codes.InvalidArgument))
+		})
+	}
+
+	accepted := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"flat-name", "csi-abc", "/var/run/nodeagent/mount/csi-abc"},
+		{"with-suffix", "csi-abc.json", "/var/run/nodeagent/mount/csi-abc.json"},
+	}
+	for _, tc := range accepted {
+		t.Run("accept/"+tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			got, err := joinUnderBase(base, tc.in)
+			g.Expect(err).NotTo(HaveOccurred(), "unexpected rejection of %q", tc.in)
+			g.Expect(got).To(Equal(tc.want))
 		})
 	}
 }
