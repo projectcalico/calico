@@ -129,7 +129,7 @@ var _ = describe.CalicoDescribe(
 				})
 			})
 
-			framework.ConformanceIt("Felix programs the IPIP cluster route (proto 80)",
+			framework.ConformanceIt("routes should be programmed by the owner of in-cluster routing",
 				func() {
 					expectedRoutesOwner := expectedClusterRouteProto(cli)
 					assertRouteOwnership(cli, clt.Pod().Spec.NodeName,
