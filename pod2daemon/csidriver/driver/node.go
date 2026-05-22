@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -33,6 +34,27 @@ import (
 	// TODO: move the object in here to a common package
 	"github.com/projectcalico/calico/pod2daemon/flexvol/creds"
 )
+
+// validateVolumeID rejects empty per the CSI spec. Format is intentionally
+// unconstrained; path safety lives in joinUnderBase.
+func validateVolumeID(volumeID string) error {
+	if volumeID == "" {
+		return status.Error(codes.InvalidArgument, "Volume ID not provided")
+	}
+	return nil
+}
+
+// joinUnderBase joins name onto base and rejects results that escape base
+// after Clean. Sole path-traversal gate; every caller-supplied FS path
+// must route through it.
+func joinUnderBase(base, name string) (string, error) {
+	full := filepath.Join(base, name)
+	if !strings.HasPrefix(full, base+string(filepath.Separator)) {
+		return "", status.Errorf(codes.InvalidArgument,
+			"invalid Volume ID %q: resolves outside %s", name, base)
+	}
+	return full, nil
+}
 
 // Define the nodeService as per the CSI spec.
 type nodeService struct {
@@ -56,9 +78,9 @@ func (ns *nodeService) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnsta
 }
 
 func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	if req.VolumeId == "" {
-		log.Error("Volume ID not provided")
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	if err := validateVolumeID(req.VolumeId); err != nil {
+		log.WithError(err).Error("Volume ID rejected")
+		return nil, err
 	}
 
 	if len(req.TargetPath) == 0 {
@@ -95,9 +117,9 @@ func (ns *nodeService) NodePublishVolume(ctx context.Context, req *csi.NodePubli
 
 func (ns *nodeService) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	// Check that the required inputs are still provided.
-	if req.VolumeId == "" {
-		log.Error("Volume ID not provided")
-		return nil, status.Error(codes.InvalidArgument, "Volume ID not provided")
+	if err := validateVolumeID(req.VolumeId); err != nil {
+		log.WithError(err).Error("Volume ID rejected")
+		return nil, err
 	}
 
 	if len(req.TargetPath) == 0 {
@@ -191,8 +213,11 @@ func extractPodInfo(req *csi.NodePublishVolumeRequest) (*creds.Credentials, erro
 
 func (ns *nodeService) mount(destinationDir, volumeID string) error {
 	// bind destinationDir/nodeagent to /var/run/nodeagent/mount/volumeID
-	newDir := ns.config.NodeAgentWorkloadHomeDir + "/" + volumeID
-	err := os.MkdirAll(newDir, 0777)
+	newDir, err := joinUnderBase(ns.config.NodeAgentWorkloadHomeDir, volumeID)
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(newDir, 0777)
 	if err != nil {
 		log.Errorf("Mount error: failed to create directory %s: %v", newDir, err)
 		return err
@@ -264,22 +289,33 @@ func (ns *nodeService) addCredentialFile(volumeID string, podInfo *creds.Credent
 		return err
 	}
 
-	credsFileTmp := strings.Join([]string{ns.config.NodeAgentManagementHomeDir, volumeID + ".json"}, "/")
+	credsFileTmp, err := joinUnderBase(ns.config.NodeAgentManagementHomeDir, volumeID+".json")
+	if err != nil {
+		return err
+	}
 	_ = os.WriteFile(credsFileTmp, attrs, 0644)
 
 	// Move it to the right location now.
-	credsFile := strings.Join([]string{ns.config.NodeAgentCredentialsHomeDir, volumeID + ".json"}, "/")
+	credsFile, err := joinUnderBase(ns.config.NodeAgentCredentialsHomeDir, volumeID+".json")
+	if err != nil {
+		return err
+	}
 	return os.Rename(credsFileTmp, credsFile)
 }
 
 func (ns *nodeService) removeCredentialFile(volumeID string) error {
-	credsFile := strings.Join([]string{ns.config.NodeAgentCredentialsHomeDir, volumeID + ".json"}, "/")
-	err := os.Remove(credsFile)
-	return err
+	credsFile, err := joinUnderBase(ns.config.NodeAgentCredentialsHomeDir, volumeID+".json")
+	if err != nil {
+		return err
+	}
+	return os.Remove(credsFile)
 }
 
 func (ns *nodeService) retrievePodInfoFromFile(volumeID string) (*creds.Credentials, error) {
-	credsFilePath := strings.Join([]string{ns.config.NodeAgentCredentialsHomeDir, volumeID + ".json"}, "/")
+	credsFilePath, err := joinUnderBase(ns.config.NodeAgentCredentialsHomeDir, volumeID+".json")
+	if err != nil {
+		return nil, err
+	}
 
 	credsFile, err := os.Open(credsFilePath)
 	if err != nil {
@@ -316,7 +352,10 @@ func (ns *nodeService) unmount(dir, volumeID string) error {
 	}
 
 	// Delete the directory that was created.
-	delDir := strings.Join([]string{ns.config.NodeAgentWorkloadHomeDir, volumeID}, "/")
+	delDir, err := joinUnderBase(ns.config.NodeAgentWorkloadHomeDir, volumeID)
+	if err != nil {
+		return err
+	}
 	err = os.RemoveAll(delDir)
 	if err != nil {
 		log.Errorf("Unmount error: unable to remove mount directory %s: %v", delDir, err)
