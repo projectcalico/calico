@@ -11,6 +11,9 @@
 # expressed as an additive extension of base's broader sig-calico include.
 
 include:
+  - Conformance && sig-calico
+  - Conformance && sig-network
+  - RequiresCalicoAPIServer
   - Feature:IPIP
 
 exclude:
