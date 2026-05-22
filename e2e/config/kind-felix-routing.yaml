@@ -11,9 +11,6 @@
 # expressed as an additive extension of base's broader sig-calico include.
 
 include:
-  - Conformance && sig-calico
-  - Conformance && sig-network
-  - RequiresCalicoAPIServer
   - Feature:IPIP
 
 exclude:
@@ -29,6 +26,3 @@ exclude:
 
     - label: Feature:BGPPeer
       reason: "Felix routing (no BIRD) can't run BGP tests"
-
-    - label: RequiresBIRDClusterRouting
-      reason: "this job runs clusterRoutingMode=Felix; BIRD-only route-ownership assertions don't hold"

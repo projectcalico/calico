@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -181,4 +184,31 @@ func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
 		return RouteProtoFelix
 	}
 	return RouteProtoBIRD
+}
+
+// assertRouteOwnership polls the kernel routing table on nodeName until at
+// least one route matching dstSubstring carries the expected dev (if
+// non-empty) and proto. The dev field is the empty string for direct
+// next-hop (no-encap) routes since the actual device varies by cluster
+// topology — for those, dev is left unchecked and only the proto byte
+// matters.
+func assertRouteOwnership(cli ctrlclient.Client, nodeName, dstSubstring, expectedDev string, expectedProto RouteProto) {
+	ginkgo.By(fmt.Sprintf("Asserting routes for %q on node %s use dev=%q proto=%s",
+		dstSubstring, nodeName, expectedDev, expectedProto))
+	Eventually(func() error {
+		routes := GetNodeRoutes(cli, nodeName, dstSubstring)
+		if len(routes) == 0 {
+			return fmt.Errorf("no routes found containing %q on node %s", dstSubstring, nodeName)
+		}
+		for _, r := range routes {
+			if expectedDev != "" && r.Dev != expectedDev {
+				continue
+			}
+			if r.Proto == expectedProto {
+				return nil
+			}
+		}
+		return fmt.Errorf("no route on node %s with dev=%q proto=%s found among %v",
+			nodeName, expectedDev, expectedProto, routes)
+	}, 60*time.Second, 2*time.Second).Should(Succeed())
 }
