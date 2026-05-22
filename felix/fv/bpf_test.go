@@ -1719,44 +1719,56 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
-					// CI-1988: With a HostEndpoint Deny-ingress policy on the source node,
-					// the SNAT'd return traffic for pod-to-off-cluster connections must
-					// still be matched by BPF conntrack and forwarded back to the pod —
-					// i.e. it must not be evaluated against the host-endpoint policy
-					// (which would deny it as host-bound).
+					// With a HostEndpoint Deny policy (applyOnForward:false) on
+					// the source node, neither the pod's NAT-outgoing egress nor the
+					// SNAT'd return traffic must be evaluated against it — both are
+					// forwarded flows through the HEP, while applyOnForward:false
+					// policies must only police local-host-namespace traffic.
 					//
-					// applyOnForward defaults to false on the deny GNP, so pod egress
-					// (forwarded through eth0) is unaffected. Only a packet that the
-					// dataplane classifies as host-bound hits this policy. In iptables
-					// mode the reply matches nf_conntrack uniformly across protocols and
-					// is classified as forwarded ESTABLISHED. The bug report (Visa) is
-					// that in BPF mode UDP replies miss conntrack and get denied, while
-					// TCP/ICMP replies are correctly matched.
+					// The reply path is the more subtle case (and the original bug
+					// report): in iptables mode the reply matches
+					// nf_conntrack uniformly across protocols and is classified as
+					// forwarded ESTABLISHED; in BPF mode UDP replies were missing BPF
+					// conntrack and getting denied because HEP egress had been bypassed
+					// for the outbound NAT-out'd packet, so the host-side CT entry was
+					// never written.
+					//
+					// The egress path locks in the symmetric guarantee: the post-SNAT
+					// source IP equals the node IP, so a naive classification could
+					// mistake the forwarded pod packet for host-namespace-originated
+					// traffic and apply applyOnForward:false policy to it. The
+					// dataplane must use the SEEN+NAT_OUT mark to keep the packet
+					// classified as forwarded.
 					//
 					// The bug is in the workload-side -> host-side BPF conntrack handoff,
 					// which is independent of tunnel/DSR mode, so we only exercise the
 					// non-tunnel non-DSR matrix point to keep the test cheap.
 					if testOpts.tunnel == "none" && !testOpts.dsr {
-						It("should not block SNAT'd return traffic via HEP policy", func() {
+						It("should not block SNAT'd traffic via HEP policy", func() {
 							// Clear the parent Context's HEP egress policies — they constrain
 							// HEP forward egress to felixIP(1) only, which prevents our pod
 							// from reaching externalClient. This test only wants its own
-							// ingress-deny GNP on the source node's HEP.
+							// deny GNP on the source node's HEP.
 							_, err := calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "host-0-1", options2.DeleteOptions{})
 							Expect(err).NotTo(HaveOccurred())
 							_, err = calicoClient.GlobalNetworkPolicies().Delete(context.Background(), "host-0-1-forward", options2.DeleteOptions{})
 							Expect(err).NotTo(HaveOccurred())
 
+							// Deny both ingress and egress with applyOnForward defaulting
+							// to false. Neither rule should affect the pod's forwarded
+							// flow through the HEP.
 							denyPol := api.NewGlobalNetworkPolicy()
-							denyPol.Name = "ci-1988-hep-deny-ingress"
+							denyPol.Name = "ci-1988-hep-deny"
 							denyOrder := float64(10)
 							denyPol.Spec.Order = &denyOrder
 							denyPol.Spec.Selector = "ep-type == 'host' && node == '" + tc.Felixes[0].Name + "'"
-							denyPol.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
+							denyPol.Spec.Types = []api.PolicyType{api.PolicyTypeIngress, api.PolicyTypeEgress}
 							denyPol.Spec.Ingress = []api.Rule{{Action: "Deny"}}
+							denyPol.Spec.Egress = []api.Rule{{Action: "Deny"}}
 							_ = createPolicy(denyPol)
 
-							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny-ingress")
+							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny")
+							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "ci-1988-hep-deny")
 
 							// externalClient sits outside the cluster — not a felix node and not
 							// in any IP pool — so NAT-outgoing applies regardless of
