@@ -221,11 +221,29 @@ echo "Running QoS responsiveness tests..."
 cd /opt/stack/devstack
 . openrc admin admin
 
-# Install required Python packages for QoS tests
-sudo pip install openstacksdk etcd3
+# Install required Python packages for QoS tests, plus 'elasticsearch'
+# for the resync-scale benchmark's Lens push (no-op without creds, see
+# resync_scale_test.py docstring).
+sudo pip install openstacksdk etcd3 pymysql elasticsearch
 
 export ETCD_HOST=${SERVICE_HOST}
 python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
+EOF
+
+# Run resync scale benchmark.  Prints one RESYNC_SCALE_RESULT line per
+# scale; grep for that to extract the numbers.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+
+export ETCD_HOST=${SERVICE_HOST}
+# calico-resync is installed alongside calico-dhcp-agent under
+# ${DEVSTACK_VENV:-/usr/local}/bin, which is not necessarily on the
+# stack user's PATH under sudo.  Pass the absolute path explicitly.
+export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
+# Override via RESYNC_SCALES if a Semaphore run is too slow for the
+# default 100,1000,10000 ladder.
+python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
 EOF
 
 # Run Tempest tests
