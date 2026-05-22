@@ -43,6 +43,16 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
                                        neutron.conf)
     RESYNC_CALICO_RESYNC_LOG=<path>   (default /tmp/calico-resync-scale.log;
                                        where calico-resync writes its logs)
+
+One JSON document per resync iteration is also dropped into
+``artifacts/perf/benchmark_data_neutron_resync/`` so that the
+``hack/perf/cmd/send-perf-results`` tool can pick them up and publish to
+the Lens Elasticsearch cluster for long-term trend tracking.  This test
+itself does not talk to Elastic -- it just writes the files.  See
+``hack/perf/README.md`` for the convention.
+
+    RESYNC_PERF_ARTIFACTS_DIR=<path>  (default artifacts/perf; set to "" to
+                                       disable JSON-file writes)
 """
 
 import argparse
@@ -497,6 +507,90 @@ def phase_ms(result, phase):
     return int(phase_dict.get("total_ms", 0))
 
 
+# Family name for the Lens ES index that this test writes into.  The matching
+# index template lives at hack/perf/index-templates/benchmark_data_neutron_resync.json,
+# and hack/perf/cmd/send-perf-results picks up the JSON files we write below
+# and POSTs them to Elastic.
+_PERF_FAMILY = "benchmark_data_neutron_resync"
+
+# Phase names emitted by calico-resync's ResyncResult.phases dict.  Used to
+# flatten phase metrics into ``<phase>_<metric>`` ES fields.
+_SYNCER_PHASES = ("expand", "subnets", "policy", "endpoints", "felix_config")
+
+
+def _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
+    """Build one perf doc per resync iteration (1 cold + N steady).
+
+    Schema follows the perf-doc conventions: flat scalars only, no nested
+    structures.  Per-syncer-phase metrics are flattened into
+    ``<syncer_phase>_<metric>`` fields so Kibana Lens can chart them directly.
+
+    Only scenario-specific scalars belong here.  CI metadata
+    (git_commit/branch/ci_run_id/env/...) is added later by
+    hack/perf/cmd/send-perf-results, so producers don't have to know about
+    Semaphore env vars.
+    """
+    common = {
+        "test_name": "neutron_resync",
+        "scale_ports": scale,
+        "scale_networks": num_networks,
+        "scale_sgs": num_sgs,
+        "scale_hosts": num_hosts,
+    }
+
+    # iter=0 is the cold run; iter=1..N are the steady runs.
+    iterations = [(0, "cold", cold)]
+    for i, run in enumerate(steady_runs):
+        iterations.append((i + 1, "steady", run))
+
+    docs = []
+    for iter_idx, phase, (elapsed, result) in iterations:
+        doc = dict(common)
+        doc["phase"] = phase
+        doc["iter"] = iter_idx
+        doc["elapsed_ms"] = int(elapsed * 1000)
+        doc["total_ms"] = int(result.get("total_ms", 0))
+        doc["ok"] = bool(result.get("ok"))
+        error = result.get("error")
+        if error:
+            doc["error"] = error
+        # Flatten per-syncer-phase metrics into <phase>_<metric>.  Skip any
+        # non-scalar values defensively in case the syncer ever grows one.
+        phases = result.get("phases") or {}
+        for syncer_phase in _SYNCER_PHASES:
+            metrics = phases.get(syncer_phase) or {}
+            for metric, value in metrics.items():
+                if isinstance(value, (int, float, bool)):
+                    doc[f"{syncer_phase}_{metric}"] = value
+        docs.append(doc)
+
+    return docs
+
+
+def _write_perf_docs(scale, docs):
+    """Write each perf doc to its own JSON file under
+    ``$RESYNC_PERF_ARTIFACTS_DIR/<family>/``.
+
+    Default base dir is ``artifacts/perf``; set ``RESYNC_PERF_ARTIFACTS_DIR``
+    to "" to disable.  ``hack/perf/cmd/send-perf-results`` later picks
+    these up and posts them to Lens ES.
+    """
+    base = os.environ.get("RESYNC_PERF_ARTIFACTS_DIR", "artifacts/perf")
+    if not base:
+        return
+    family_dir = os.path.join(base, _PERF_FAMILY)
+    os.makedirs(family_dir, exist_ok=True)
+    for doc in docs:
+        # Filename embeds scale/phase/iter so it's grep-able and so two
+        # successive test runs don't collide.
+        name = "scale%d_%s_iter%d.json" % (scale, doc["phase"], doc["iter"])
+        path = os.path.join(family_dir, name)
+        with open(path, "w") as f:
+            json.dump(doc, f, indent=2, sort_keys=True)
+            f.write("\n")
+    LOG.info("Wrote %d perf docs to %s", len(docs), family_dir)
+
+
 def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     """Print one RESYNC_SCALE_RESULT line for grep, then a JSON dump.
 
@@ -555,6 +649,13 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     }
     print("RESYNC_SCALE_JSON " + json.dumps(dump))
     sys.stdout.flush()
+
+    # Drop per-iteration JSON files for the central send-perf-results tool
+    # to pick up.  Silently no-op if RESYNC_PERF_ARTIFACTS_DIR is "".
+    _write_perf_docs(
+        scale,
+        _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs),
+    )
 
 
 # ---------------------------------------------------------------------------
