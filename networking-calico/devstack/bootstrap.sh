@@ -221,8 +221,10 @@ echo "Running QoS responsiveness tests..."
 cd /opt/stack/devstack
 . openrc admin admin
 
-# Install required Python packages for QoS tests
-sudo pip install openstacksdk etcd3 pymysql
+# Install required Python packages for QoS tests, plus 'elasticsearch'
+# for the resync-scale benchmark's Lens push (no-op without creds, see
+# resync_scale_test.py docstring).
+sudo pip install openstacksdk etcd3 pymysql elasticsearch
 
 export ETCD_HOST=${SERVICE_HOST}
 python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v

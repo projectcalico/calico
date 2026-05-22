@@ -43,6 +43,19 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
                                        neutron.conf)
     RESYNC_CALICO_RESYNC_LOG=<path>   (default /tmp/calico-resync-scale.log;
                                        where calico-resync writes its logs)
+
+If the following Lens-ES variables are present, one document per resync
+iteration is pushed to the Lens ElasticSearch cluster for long-term trend
+tracking:
+
+    ELASTICSEARCH_URL                 (the ES endpoint, typically :9200)
+    ELASTICSEARCH_KEY                 (API key -- preferred), OR
+    ELASTICSEARCH_USER + ELASTICSEARCH_TOKEN  (basic auth)
+
+When unset (the normal local-dev case) the push is skipped silently.  A push
+failure is logged but does not fail the test -- Lens is observability, not a
+critical path.  In CI these come from Semaphore secrets attached to the
+OpenStack pipeline.
 """
 
 import argparse
@@ -497,6 +510,113 @@ def phase_ms(result, phase):
     return int(phase_dict.get("total_ms", 0))
 
 
+_ES_INDEX_PREFIX = "benchmark_data_neutron_resync"
+
+# Phase names emitted by calico-resync's ResyncResult.phases dict.  Used to
+# flatten phase metrics into ``<phase>_<metric>`` ES fields.
+_SYNCER_PHASES = ("expand", "subnets", "policy", "endpoints", "felix_config")
+
+
+def _make_es_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
+    """Build one ES doc per resync iteration (1 cold + N steady).
+
+    Schema follows recommended conventions: flat scalars only, no nested
+    structures.  Per-syncer-phase metrics are flattened into
+    ``<syncer_phase>_<metric>`` fields so Kibana Lens can chart them
+    easily.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    sha = os.environ.get("SEMAPHORE_GIT_SHA", "")
+    common = {
+        "test_name": "neutron_resync",
+        "git_commit": sha,
+        "git_branch": os.environ.get("SEMAPHORE_GIT_BRANCH", ""),
+        "code_version": sha[:12],
+        "ci_run_id": os.environ.get("SEMAPHORE_JOB_ID", ""),
+        "env": "ci" if os.environ.get("SEMAPHORE_JOB_ID") else "dev",
+        "scale_ports": scale,
+        "scale_networks": num_networks,
+        "scale_sgs": num_sgs,
+        "scale_hosts": num_hosts,
+    }
+
+    # iter=0 is the cold run; iter=1..N are the steady runs.
+    iterations = [(0, "cold", cold)]
+    for i, run in enumerate(steady_runs):
+        iterations.append((i + 1, "steady", run))
+
+    docs = []
+    for iter_idx, phase, (elapsed, result) in iterations:
+        doc = dict(common)
+        doc["@timestamp"] = now
+        doc["phase"] = phase
+        doc["iter"] = iter_idx
+        doc["elapsed_ms"] = int(elapsed * 1000)
+        doc["total_ms"] = int(result.get("total_ms", 0))
+        doc["ok"] = bool(result.get("ok"))
+        error = result.get("error")
+        if error:
+            doc["error"] = error
+        # Flatten per-syncer-phase metrics into <phase>_<metric>.  Skip any
+        # non-scalar values defensively in case the syncer ever grows one.
+        phases = result.get("phases") or {}
+        for syncer_phase in _SYNCER_PHASES:
+            metrics = phases.get(syncer_phase) or {}
+            for metric, value in metrics.items():
+                if isinstance(value, (int, float, bool)):
+                    doc[f"{syncer_phase}_{metric}"] = value
+        docs.append(doc)
+
+    return docs
+
+
+def _push_to_elasticsearch(docs):
+    """Push docs to the Lens ES cluster, fire-and-forget.
+
+    No-op if ELASTICSEARCH_URL is unset (the normal local-dev case) or if
+    the ``elasticsearch`` package isn't installed.  Push failures log a
+    warning but do not propagate -- per perf.md, "Lens is observability,
+    not a critical path".
+    """
+    url = os.environ.get("ELASTICSEARCH_URL")
+    if not url:
+        LOG.info("ELASTICSEARCH_URL unset; skipping Lens push")
+        return
+
+    try:
+        from elasticsearch import Elasticsearch
+    except ImportError:
+        LOG.warning("elasticsearch package not installed; skipping Lens push")
+        return
+
+    auth_kwargs = {}
+    api_key = os.environ.get("ELASTICSEARCH_KEY")
+    user = os.environ.get("ELASTICSEARCH_USER")
+    token = os.environ.get("ELASTICSEARCH_TOKEN")
+    if api_key:
+        auth_kwargs["api_key"] = api_key
+    elif user and token:
+        auth_kwargs["basic_auth"] = (user, token)
+    else:
+        LOG.warning(
+            "Neither ELASTICSEARCH_KEY nor ELASTICSEARCH_USER + "
+            "ELASTICSEARCH_TOKEN set; skipping Lens push"
+        )
+        return
+
+    index = "%s_%s" % (
+        _ES_INDEX_PREFIX,
+        datetime.datetime.now(datetime.timezone.utc).strftime("%Y"),
+    )
+    try:
+        es = Elasticsearch(url, **auth_kwargs)
+        for doc in docs:
+            es.index(index=index, document=doc)
+        LOG.info("Pushed %d docs to Lens ES index %s", len(docs), index)
+    except Exception:
+        LOG.exception("Failed to push to Lens ES; not failing the test")
+
+
 def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     """Print one RESYNC_SCALE_RESULT line for grep, then a JSON dump.
 
@@ -555,6 +675,12 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     }
     print("RESYNC_SCALE_JSON " + json.dumps(dump))
     sys.stdout.flush()
+
+    # Push to Lens ES for long-term trend tracking.  Silently no-op if
+    # ELASTICSEARCH_URL is unset (normal local-dev case).
+    _push_to_elasticsearch(
+        _make_es_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs)
+    )
 
 
 # ---------------------------------------------------------------------------
