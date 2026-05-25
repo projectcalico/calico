@@ -17,9 +17,8 @@ package ipsetmember
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type IPSetMember interface {
@@ -48,7 +47,7 @@ func MakeIPPortProto(addr ip.Addr, port uint16, proto Protocol) IPSetMember {
 			proto: proto,
 		}
 	default:
-		logrus.WithField("addr", addr).Panic("Unknown IP type.")
+		log.WithField("addr", addr).Panic("Unknown IP type.")
 		panic("Unknown IP type.")
 	}
 }
@@ -68,7 +67,7 @@ func (m ipPortProtoIPSetMember[IPType]) ToProtobufFormat() string {
 	case ProtocolSCTP:
 		return fmt.Sprintf("%s,sctp:%d", m.CIDR().Addr(), m.PortNumber())
 	default:
-		logrus.WithField("member", m).Panic("protocol can't be ProtocolNone in a ipPortProtoIPSetMember")
+		log.WithField("member", m).Panic("protocol can't be ProtocolNone in a ipPortProtoIPSetMember")
 		panic("protocol can't be ProtocolNone in a ipPortProtoIPSetMember")
 	}
 }
@@ -103,7 +102,7 @@ func MakeCIDROrIPOnly(cidr ip.CIDR) CIDROrIPOnlyIPSetMember {
 			cidr: cidr,
 		}
 	default:
-		logrus.WithField("cidr", cidr).Panic("Unknown CIDR type.")
+		log.WithField("cidr", cidr).Panic("Unknown CIDR type.")
 		panic("Unknown CIDR type.")
 	}
 }
@@ -144,7 +143,7 @@ func MakeSingleIP(addr ip.Addr) CIDROrIPOnlyIPSetMember {
 			addr: addr,
 		}
 	default:
-		logrus.WithField("cidr", addr).Panic("Unknown CIDR type.")
+		log.WithField("cidr", addr).Panic("Unknown CIDR type.")
 		panic("Unknown CIDR type.")
 	}
 }
