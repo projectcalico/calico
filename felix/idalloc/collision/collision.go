@@ -20,7 +20,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/idalloc"
 )
@@ -33,7 +33,7 @@ type checkpoint struct {
 func main() {
 	fmt.Println("Finding collision in the ID allocator hash function (this will take a while)...")
 
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 
 	alloc := idalloc.New()
 	hash := func(id string) uint64 {

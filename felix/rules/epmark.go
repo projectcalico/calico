@@ -19,7 +19,7 @@ import (
 	"hash/fnv"
 	"io"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/markbits"
 )

@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 

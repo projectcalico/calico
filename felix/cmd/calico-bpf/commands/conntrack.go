@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/felix/bpf"

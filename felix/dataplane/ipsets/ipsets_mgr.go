@@ -15,7 +15,7 @@
 package ipsets
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -44,7 +44,7 @@ type UpdateListener = ipsets.UpdateListener
 type IPSetsManager struct {
 	dataplanes []IPSetsDataplane
 	maxSize    int
-	lg         *log.Entry
+	lg         log.Logger
 }
 
 func NewIPSetsManager(name string, ipsets_ IPSetsDataplane, maxIPSetSize int) *IPSetsManager {

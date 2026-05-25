@@ -17,7 +17,7 @@ package config
 import (
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"gopkg.in/ini.v1"
 )
 

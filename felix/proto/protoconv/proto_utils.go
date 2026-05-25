@@ -15,7 +15,7 @@
 package protoconv
 
 import (
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -36,7 +36,7 @@ func WorkloadEndpointIDToWorkloadEndpointKey(id *proto.WorkloadEndpointID, hostn
 		WorkloadID:     id.WorkloadId,
 		EndpointID:     id.EndpointId,
 	}
-	logrus.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
+	log.WithField("key", key).Debug("Generating WorkloadEndpointKey from WorkloadEndpointID")
 	return key
 }
 

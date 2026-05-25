@@ -21,7 +21,7 @@ import (
 	maps0 "maps"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -30,7 +30,7 @@ import (
 type Map struct {
 	sync.Mutex
 	maps.MapParameters
-	logCxt *logrus.Entry
+	logCxt log.Logger
 
 	Contents map[string]string
 
@@ -220,14 +220,14 @@ func (*Map) ErrIsNotExists(err error) bool {
 
 func NewMockMap(params maps.MapParameters) *Map {
 	if params.KeySize <= 0 {
-		logrus.WithField("params", params).Panic("KeySize should be >0")
+		log.WithField("params", params).Panic("KeySize should be >0")
 	}
 	if params.ValueSize <= 0 {
-		logrus.WithField("params", params).Panic("ValueSize should be >0")
+		log.WithField("params", params).Panic("ValueSize should be >0")
 	}
 	m := &Map{
 		MapParameters: params,
-		logCxt: logrus.WithFields(logrus.Fields{
+		logCxt: log.WithFields(log.Fields{
 			"name":      params.Name,
 			"mapType":   params.Type,
 			"keySize":   params.KeySize,

@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	googleproto "google.golang.org/protobuf/proto"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -94,7 +93,7 @@ type bpfRouteManager struct {
 	routesUpdateCB  func(routes.KeyInterface, routes.ValueInterface)
 	routesDeleteCB  func(routes.KeyInterface)
 
-	opReporter logutils.OpRecorder
+	opReporter log.OpRecorder
 
 	wgEnabled         bool
 	ipFamily          proto.IPVersion
@@ -103,7 +102,7 @@ type bpfRouteManager struct {
 }
 
 func newBPFRouteManager(config *Config, maps *bpfmap.IPMaps, ipFamily proto.IPVersion,
-	opReporter logutils.OpRecorder,
+	opReporter log.OpRecorder,
 ) *bpfRouteManager {
 	// Record the external node CIDRs and pre-mark them as dirty.  These can only change with a config update,
 	// which would restart Felix.

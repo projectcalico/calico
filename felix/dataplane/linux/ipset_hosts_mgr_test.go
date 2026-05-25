@@ -17,7 +17,7 @@ package intdataplane
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -48,7 +48,7 @@ var _ = Describe("IPSet all-hosts manager", func() {
 	})
 
 	allHostsSet := func() set.Set[string] {
-		logrus.Info(ipSets.Members)
+		log.Info(ipSets.Members)
 		Expect(ipSets.Members).To(HaveLen(1))
 		return ipSets.Members["all-hosts-net"]
 	}
@@ -157,7 +157,7 @@ var _ = Describe("IPSet all-hosts manager - IPv6", func() {
 	})
 
 	allHostsSet := func() set.Set[string] {
-		logrus.Info(ipSets.Members)
+		log.Info(ipSets.Members)
 		Expect(ipSets.Members).To(HaveLen(1))
 		return ipSets.Members["all-hosts-net"]
 	}

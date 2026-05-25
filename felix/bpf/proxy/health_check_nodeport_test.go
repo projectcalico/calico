@@ -268,6 +268,6 @@ func (s *mockDummySyncer) SetTriggerFn(_ func()) {
 func (*mockDummySyncer) Stop() {}
 
 func (*mockDummySyncer) Apply(state proxy.DPSyncerState) error {
-	log("state = %+v\n", state)
+	tracef("state = %+v\n", state)
 	return nil
 }
