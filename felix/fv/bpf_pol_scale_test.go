@@ -22,12 +22,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/infrastructure/bpfpolprog"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -55,7 +55,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 		topologyOptions.EnableIPv6 = false
 		topologyOptions.ExtraEnvVars["FELIX_BPFLogLevel"] = "off"
 		topologyOptions.ExtraEnvVars["FELIX_BPFMapSizeIPSets"] = "10000000"
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()
 		_ = felixPID

@@ -15,13 +15,13 @@
 package intdataplane
 
 import (
-	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // wireguardManager manages the dataplane resources that are used for wireguard encrypted traffic. This includes:
@@ -50,7 +50,7 @@ func newWireguardManager(
 	ipVersion uint8,
 ) *wireguardManager {
 	if ipVersion != 4 && ipVersion != 6 {
-		logrus.Panicf("Unknown IP version: %d", ipVersion)
+		log.Panicf("Unknown IP version: %d", ipVersion)
 	}
 	return &wireguardManager{
 		wireguardRouteTable: wireguardRouteTable,
@@ -60,7 +60,7 @@ func newWireguardManager(
 }
 
 func (m *wireguardManager) OnUpdate(protoBufMsg any) {
-	logCtx := logrus.WithField("ipVersion", m.ipVersion)
+	logCtx := log.WithField("ipVersion", m.ipVersion)
 	logCtx.WithField("msg", protoBufMsg).Debug("Received message")
 	switch msg := protoBufMsg.(type) {
 	case *proto.HostMetadataUpdate:
@@ -72,7 +72,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 			addrStr = msg.Ipv6Addr
 		}
 		if addrStr == "" {
-			logCtx.WithFields(logrus.Fields{
+			logCtx.WithFields(log.Fields{
 				"hostname":  msg.Hostname,
 				"ipVersion": m.ipVersion,
 			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
@@ -80,7 +80,7 @@ func (m *wireguardManager) OnUpdate(protoBufMsg any) {
 		}
 		addr := ip.FromIPOrCIDRString(addrStr)
 		if addr == nil || addr.Version() != m.ipVersion {
-			logCtx.WithFields(logrus.Fields{
+			logCtx.WithFields(log.Fields{
 				"hostname":  msg.Hostname,
 				"address":   addrStr,
 				"ipVersion": m.ipVersion,

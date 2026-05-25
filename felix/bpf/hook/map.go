@@ -24,12 +24,11 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 

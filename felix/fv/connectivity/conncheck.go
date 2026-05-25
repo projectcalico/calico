@@ -30,7 +30,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
-	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
