@@ -16,11 +16,11 @@ package calc
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -60,19 +60,19 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 	switch key := update.Key.(type) {
 	case model.IPPoolKey:
 		if update.Value == nil {
-			logrus.WithField("update", update).Debug("Passing-through IPPool deletion")
+			log.WithField("update", update).Debug("Passing-through IPPool deletion")
 			h.callbacks.OnIPPoolRemove(key)
 		} else {
-			logrus.WithField("update", update).Debug("Passing-through IPPool update")
+			log.WithField("update", update).Debug("Passing-through IPPool update")
 			pool := update.Value.(*model.IPPool)
 			h.callbacks.OnIPPoolUpdate(key, pool)
 		}
 	case model.WireguardKey:
 		if update.Value == nil {
-			logrus.WithField("update", update).Debug("Passing-through Wireguard deletion")
+			log.WithField("update", update).Debug("Passing-through Wireguard deletion")
 			h.callbacks.OnWireguardRemove(key.NodeName)
 		} else {
-			logrus.WithField("update", update).Debug("Passing-through Wireguard update")
+			log.WithField("update", update).Debug("Passing-through Wireguard update")
 			wg := update.Value.(*model.Wireguard)
 			h.callbacks.OnWireguardUpdate(key.NodeName, wg)
 		}
@@ -80,12 +80,12 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		switch key.Kind {
 		case v3.KindBGPConfiguration:
 			if key.Name == "default" {
-				logrus.WithField("update", update).Debug("Passing through global BGPConfiguration")
+				log.WithField("update", update).Debug("Passing through global BGPConfiguration")
 				bgpConfig, _ := update.Value.(*v3.BGPConfiguration)
 				h.callbacks.OnGlobalBGPConfigUpdate(bgpConfig)
 			}
 		case model.KindKubernetesService:
-			logrus.WithField("update", update).Debug("Passing through a Service")
+			log.WithField("update", update).Debug("Passing through a Service")
 			if update.Value == nil {
 				h.callbacks.OnServiceRemove(&proto.ServiceRemove{Name: key.Name, Namespace: key.Namespace})
 			} else {
@@ -94,7 +94,7 @@ func (h *DataplanePassthru) OnUpdate(update api.Update) (filterOut bool) {
 		case internalapi.KindNode:
 			h.processKindNode(key, update)
 		default:
-			logrus.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
+			log.WithField("key", key).Debugf("Ignoring v3 resource of kind %s", key.Kind)
 		}
 	}
 	return
@@ -105,7 +105,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	before := h.nodeInfo[hostname]
 
 	if update.Value == nil {
-		logrus.WithField("update", update).Debug("Passing-through Node remove")
+		log.WithField("update", update).Debug("Passing-through Node remove")
 		delete(h.nodeInfo, hostname)
 		if before != nil {
 			h.callbacks.OnHostMetadataRemove(hostname)
@@ -114,7 +114,7 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	}
 
 	node, _ := update.Value.(*internalapi.Node)
-	logrus.WithField("update", update).Debug("Passing-through Node update")
+	log.WithField("update", update).Debug("Passing-through Node update")
 
 	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
 	// Node had been deleted — there is no useful metadata to pass through. A nil
@@ -168,7 +168,7 @@ func extractNodeAddress(node *internalapi.Node, ipVersion int) string {
 			if s, ok := parseCIDR(addr); ok {
 				return s
 			}
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"ipVersion": ipVersion,
 				"address":   addr,
 			}).Warn("Ignoring Node BGP address: not a CIDR")

@@ -20,11 +20,11 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/multidict"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/hash"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"

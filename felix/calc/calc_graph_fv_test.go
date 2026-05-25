@@ -27,7 +27,6 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	googleproto "google.golang.org/protobuf/proto"
 
 	. "github.com/projectcalico/calico/felix/calc"
@@ -35,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -639,7 +639,7 @@ func testExpanders() (testExpanders []func(baseTest StateList) (desc string, map
 
 	if os.Getenv("DISABLE_TEST_EXPANSION") == "true" {
 		logOnce.Do(func() {
-			logrus.Info("Test expansion disabled")
+			log.Info("Test expansion disabled")
 		})
 		return
 	}
@@ -702,7 +702,7 @@ var _ = Describe("Calculation graph state sequencing tests:", func() {
 // deterministic test!
 var _ = Describe("Async calculation graph state sequencing tests:", func() {
 	if os.Getenv("DISABLE_ASYNC_TESTS") == "true" {
-		logrus.Info("Async tests disabled")
+		log.Info("Async tests disabled")
 		return
 	}
 	for _, test := range baseTests {
@@ -737,10 +737,10 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					done := make(chan bool, 2)
 					// Start a thread to inject the KVs.
 					go func() {
-						logrus.Info("Input injector thread started")
+						log.Info("Input injector thread started")
 						lastState := empty
 						for _, state := range test {
-							logrus.WithField("state", state).Info("Injecting next state")
+							log.WithField("state", state).Info("Injecting next state")
 							_, _ = fmt.Fprintf(GinkgoWriter, "       -> Injecting state (single update): %v\n", state)
 							kvDeltas := state.KVDeltas(lastState)
 							for _, kv := range kvDeltas {
@@ -765,11 +765,11 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					for {
 						select {
 						case <-done:
-							logrus.Info("Got done message, stopping.")
+							log.Info("Got done message, stopping.")
 							Expect(inSyncReceived).To(BeTrue(), "Timed out before we got an in-sync message")
 							break readLoop
 						case update := <-outputChan:
-							logrus.WithField("update", update).Info("Update from channel")
+							log.WithField("update", update).Info("Update from channel")
 							Expect(inSyncReceived).To(BeFalse(), "Unexpected update after in-sync")
 							mockDataplane.OnEvent(update)
 							if _, ok := update.(*proto.InSync); ok {
@@ -793,7 +793,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 })
 
 func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State) {
-	logrus.WithField("state", state.Name).Info("Doing assertions on state")
+	log.WithField("state", state.Name).Info("Doing assertions on state")
 	Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
 		"IP sets didn't match expected state after moving to state: %v",
 		state.Name)
@@ -889,7 +889,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.Encapsulation = config.Encapsulation{VXLANEnabled: true, VXLANEnabledV6: true}
 		calcGraph = NewCalculationGraph(eventBuf, lookupsCache, conf, func() {})
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
-			logrus.WithField("stats", stats).Info("Stats update")
+			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats
 			return nil
 		})
