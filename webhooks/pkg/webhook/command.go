@@ -29,7 +29,6 @@ import (
 	"time"
 
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +37,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
@@ -89,32 +88,32 @@ func NewCommand() *cobra.Command {
 
 func configureLogging() {
 	// Set up logging.
-	l, err := logrus.ParseLevel(logLevel)
+	l, err := log.ParseLevel(logLevel)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
+		log.WithError(err).Fatalf("Invalid log level: %s", logLevel)
 	}
-	logrus.SetLevel(l)
-	logutils.ConfigureFormatter("webhook")
-	logrus.SetOutput(os.Stdout)
-	logrus.Infof("Log level set to %s", logLevel)
+	log.SetLevel(l)
+	log.SetComponent("webhook")
+	log.SetOutput(os.Stdout)
+	log.Infof("Log level set to %s", logLevel)
 }
 
 func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	configureLogging()
-	logrus.Info("Starting Calico admission webhook server")
+	log.Info("Starting Calico admission webhook server")
 
 	// Create a clientset to interact with the Kubernetes API.
 	rc, err := rest.InClusterConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create in-cluster config")
+		log.WithError(err).Fatal("Failed to create in-cluster config")
 	}
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create Kubernetes clientset")
+		log.WithError(err).Fatal("Failed to create Kubernetes clientset")
 	}
 	calicoCS, err := calicoclient.NewForConfig(rc)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create Calico clientset")
+		log.WithError(err).Fatal("Failed to create Calico clientset")
 	}
 
 	// Register webhook handlers.
@@ -123,20 +122,20 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	// Create and run the server.
 	cfg, err := ctls.NewTLSConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create TLS config")
+		log.WithError(err).Fatal("Failed to create TLS config")
 	}
 	if clientCAFile != "" {
 		caCert, err := os.ReadFile(clientCAFile)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to read client CA file %q", clientCAFile)
+			log.WithError(err).Fatalf("Failed to read client CA file %q", clientCAFile)
 		}
 		certPool := x509.NewCertPool()
 		if !certPool.AppendCertsFromPEM(caCert) {
-			logrus.Fatalf("Failed to parse client CA certificate from %q: file must contain PEM-encoded certificates", clientCAFile)
+			log.Fatalf("Failed to parse client CA certificate from %q: file must contain PEM-encoded certificates", clientCAFile)
 		}
 		cfg.ClientAuth = tls.RequireAndVerifyClientCert
 		cfg.ClientCAs = certPool
-		logrus.Info("mTLS enabled: requiring and verifying client certificates")
+		log.Info("mTLS enabled: requiring and verifying client certificates")
 	}
 	server := &http.Server{
 		Addr:           fmt.Sprintf(":%d", port),
@@ -147,10 +146,10 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
-	logrus.Infof("Listening on port %d", port)
+	log.Infof("Listening on port %d", port)
 	err = server.ListenAndServeTLS(certFile, keyFile)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Failed to start webhook server on port %d", port)
+		log.WithError(err).Fatalf("Failed to start webhook server on port %d", port)
 	}
 }
 
@@ -165,7 +164,7 @@ func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
 func readyFn() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write([]byte("ok")); err != nil {
-			logrus.WithError(err).Error("Failed to write readiness response")
+			log.WithError(err).Error("Failed to write readiness response")
 		}
 	}
 }
@@ -182,7 +181,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 	// Decode the AdmissionReview request.
 	obj, gvk, err := decodeAdmissionReview(w, r)
 	if err != nil {
-		logrus.Error(err)
+		log.Error(err)
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
@@ -195,7 +194,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 	// Process the AdmissionReview request.
 	responseObj, err := processAdmissionReview(obj, gvk, handler)
 	if err != nil {
-		logrus.Error(err)
+		log.Error(err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -203,13 +202,13 @@ func handleRequest(w http.ResponseWriter, r *http.Request, handler utils.Admissi
 	// Encode and send the AdmissionReview response.
 	respBytes, err := json.Marshal(responseObj)
 	if err != nil {
-		logrus.Error(err)
+		log.Error(err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(respBytes); err != nil {
-		logrus.Error(err)
+		log.Error(err)
 	}
 }
 

@@ -34,7 +34,6 @@ import (
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/gofrs/flock"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,20 +42,20 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	log.SetComponent("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -77,15 +76,15 @@ func Main(version string) {
 
 	// Migration logic
 	if *upgradeFlag {
-		logrus.Info("migrating from host-local to calico-ipam...")
+		log.Info("migrating from host-local to calico-ipam...")
 		ctxt := context.Background()
 
 		// nodename associates IPs to this node.
 		nodename := os.Getenv("KUBERNETES_NODE_NAME")
 		if nodename == "" {
-			logrus.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
+			log.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
 		}
-		logCtxt := logrus.WithField("node", nodename)
+		logCtxt := log.WithField("node", nodename)
 
 		// calicoClient makes IPAM calls.
 		cfg, err := apiconfig.LoadClientConfig("")
@@ -152,7 +151,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
+	logger := log.WithFields(log.Fields{
 		"Workload":    epIDs.WEPName,
 		"ContainerID": epIDs.ContainerID,
 	})
@@ -179,7 +178,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		// Use VM-based handle ID for IP stability across pod recreations/migrations.
 		// Handle ID is based on namespace/vmName which remains stable across VMI recreation.
 		handleID = vmipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"pod":               epIDs.Pod,
 			"namespace":         epIDs.Namespace,
 			"vmiName":           vmiInfo.GetName(),
@@ -329,7 +328,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if conf.WindowsUseSingleNetwork {
 			// When running in single-network mode (for kube-proxy compatibility), limit the
 			// number of blocks we're allowed to create.
-			logrus.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
+			log.Info("Running in single-HNS-network mode, limiting number of IPAM blocks to 1.")
 			maxBlocks = 1
 		}
 		// Get namespace information for namespaceSelector support
@@ -420,7 +419,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v6IPs...)
 				if err != nil {
-					logrus.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
+					log.Errorf("Error releasing IPv6 addresses %+v on IPv4 address assignment failure: %s", v6IPs, err)
 				}
 			}
 		}
@@ -440,7 +439,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				defer cancel()
 				_, _, err := calicoClient.IPAM().ReleaseIPs(cleanupCtx, v4IPs...)
 				if err != nil {
-					logrus.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
+					log.Errorf("Error releasing IPv4 addresses %+v on IPv6 address assignment failure: %s", v4IPs, err)
 				}
 			}
 		}
@@ -465,7 +464,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			})
 		}
 
-		logger.WithFields(logrus.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
+		logger.WithFields(log.Fields{"result.IPs": r.IPs}).Debug("IPAM Result")
 	}
 
 	// Set routes in the result - one route per IP for normal pods.
@@ -523,28 +522,28 @@ type unlockFn func()
 // (for example permissions or missing directory) then it returns immediately.  Returns a function that unlocks the
 // lock again (or a no-op function if acquiring the lock failed).
 func acquireIPAMLockBestEffort(path string) unlockFn {
-	logrus.Info("About to acquire host-wide IPAM lock.")
+	log.Info("About to acquire host-wide IPAM lock.")
 	if path == "" {
 		path = ipamLockPath
 	}
 	err := os.MkdirAll(filepath.Dir(path), 0o777)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to make directory for IPAM lock")
+		log.WithError(err).Error("Failed to make directory for IPAM lock")
 		// Fall through, still a slight chance the file is there for us to access.
 	}
 	ipamLock := flock.New(path)
 	err = ipamLock.Lock()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
+		log.WithError(err).Error("Failed to grab IPAM lock, may contend for datastore updates")
 		return func() {}
 	}
-	logrus.Info("Acquired host-wide IPAM lock.")
+	log.Info("Acquired host-wide IPAM lock.")
 	return func() {
 		err := ipamLock.Unlock()
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
+			log.WithError(err).Warn("Failed to release IPAM lock; ignoring because process is about to exit.")
 		} else {
-			logrus.Info("Released host-wide IPAM lock.")
+			log.Info("Released host-wide IPAM lock.")
 		}
 	}
 }
@@ -557,7 +556,7 @@ var errPodNotFound = fmt.Errorf("pod not found")
 // Returns (vmiInfo, nil) if the pod is a valid virt-launcher pod.
 // Returns (nil, nil) if the pod is not a virt-launcher pod.
 // Returns (nil, error) if there was an error retrieving or validating VMI information.
-func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger *logrus.Entry) (*kubevirt.PodVMIInfo, error) {
+func getVMIInfoForPod(conf types.NetConf, epIDs *utils.WEPIdentifiers, logger log.Logger) (*kubevirt.PodVMIInfo, error) {
 	// Only check for VMI info in Kubernetes orchestrator
 	if epIDs.Orchestrator != "k8s" || epIDs.Pod == "" || epIDs.Namespace == "" {
 		return nil, nil
@@ -619,7 +618,7 @@ func getKubeVirtVMAddressPersistence(calicoClient client.Interface) bool {
 
 	ipamConfig, err := calicoClient.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).Debug("Could not retrieve IPAMConfig, defaulting to VMAddressPersistenceEnabled")
+		log.WithError(err).Debug("Could not retrieve IPAMConfig, defaulting to VMAddressPersistenceEnabled")
 		return true
 	}
 
@@ -656,7 +655,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	logger := logrus.WithFields(logrus.Fields{
+	logger := log.WithFields(log.Fields{
 		"Workload":    epIDs.WEPName,
 		"ContainerID": epIDs.ContainerID,
 	})
@@ -685,7 +684,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		handleID = vmipam.CreateVMHandleID(conf.Name, vmiInfo.GetNamespace(), vmiInfo.GetName())
 
 		// VMI deletion status is already available from embedded VMIResource
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"pod":                   epIDs.Pod,
 			"namespace":             epIDs.Namespace,
 			"vmiName":               vmiInfo.GetName(),
@@ -728,7 +727,7 @@ func cmdDel(args *skel.CmdArgs) error {
 			// Standalone VMI (no VM owner) - check VMI deletion status
 			shouldRelease = vmiInfo.IsVMIObjectDeletionInProgress()
 		}
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"shouldRelease": shouldRelease,
 			"hasVMOwner":    vmiInfo.VMOwner != nil,
 		}).Info("Processing VMI pod deletion")
@@ -798,13 +797,13 @@ func cmdDel(args *skel.CmdArgs) error {
 			// and the window is tiny (between GetAssignmentAttributes and SetOwnerAttributes).
 			err = calicoClient.IPAM().SetOwnerAttributes(ctx, ip, handleID, updates, preconditions)
 			if err != nil {
-				logger.WithError(err).WithFields(logrus.Fields{
+				logger.WithError(err).WithFields(log.Fields{
 					"ip":        ip,
 					"ownerType": ownerType,
 				}).Error("Failed to clear owner attributes")
 				return err
 			}
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"ip":        ip,
 				"ownerType": ownerType,
 			}).Info("Successfully cleared owner attributes")
@@ -826,7 +825,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 			if len(attr.ActiveOwnerAttrs) > 0 || len(attr.AlternateOwnerAttrs) > 0 {
 				anyOwnerAttributesRemain = true
-				logger.WithFields(logrus.Fields{
+				logger.WithFields(log.Fields{
 					"ip":                ip,
 					"hasActiveOwner":    len(attr.ActiveOwnerAttrs) > 0,
 					"hasAlternateOwner": len(attr.AlternateOwnerAttrs) > 0,
@@ -848,7 +847,7 @@ func cmdDel(args *skel.CmdArgs) error {
 				logger.Info("Released address using handleID")
 			}
 		} else {
-			logger.WithFields(logrus.Fields{
+			logger.WithFields(log.Fields{
 				"shouldRelease":            shouldRelease,
 				"anyOwnerAttributesRemain": anyOwnerAttributesRemain,
 			}).Info("Completed attribute cleanup - IP remains allocated to VM handle")
@@ -889,7 +888,7 @@ func cmdDel(args *skel.CmdArgs) error {
 }
 
 // getNamespace retrieves namespace object using Kubernetes clientset
-func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*corev1.Namespace, error) {
+func getNamespace(conf types.NetConf, namespace string, logger log.Logger) (*corev1.Namespace, error) {
 	if namespace == "" {
 		return nil, nil
 	}
@@ -921,7 +920,7 @@ func getNamespace(conf types.NetConf, namespace string, logger *logrus.Entry) (*
 //   - Sets AlternateOwnerAttrs (unconditionally, to handle back-to-back migrations).
 //   - Returns empty routes so CNI skips host-side route programming.
 //   - Returns (true, nil) on success, (false, error) if IPs are missing.
-func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, conf types.NetConf, logger *logrus.Entry, isMigrationTarget bool) (bool, error) {
+func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs map[string]string, conf types.NetConf, logger log.Logger, isMigrationTarget bool) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -944,7 +943,7 @@ func handleVirtLauncherPod(calicoClient client.Interface, handleID string, attrs
 		return false, nil
 	}
 
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"ipCount":           len(existingIPs),
 		"isMigrationTarget": isMigrationTarget,
 	}).Info("Found existing IPs for VM handle, reusing them")

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,9 +30,9 @@ import (
 
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
@@ -87,13 +86,13 @@ func NewEmitter(opts ...Option) *Emitter {
 	var err error
 	e.client, err = newEmitterClient(e.url, e.caCert, e.clientKey, e.clientCert, e.serverName)
 	if err != nil {
-		logrus.Fatalf("Error creating emitter client: %v", err)
+		log.Fatalf("Error creating emitter client: %v", err)
 	}
 	// Do not log the raw emitter URL — it may contain credentials in userinfo or query params.
-	logrus.WithField("url", logutils.RedactURL(e.url)).Info("Created emitter client.")
+	log.WithField("url", log.RedactURL(e.url)).Info("Created emitter client.")
 
 	if e.kcli == nil {
-		logrus.Warn("No k8s client provided, will not be able to cache state.")
+		log.Warn("No k8s client provided, will not be able to cache state.")
 	}
 
 	return e
@@ -103,13 +102,13 @@ func (e *Emitter) Run(ctx context.Context) {
 	// Start certificate file watchers for the emitter client. These goroutines
 	// will exit when ctx is cancelled.
 	if err := e.client.watchCerts(ctx); err != nil {
-		logrus.WithError(err).Fatal("Failed to start certificate watchers")
+		log.WithError(err).Fatal("Failed to start certificate watchers")
 	}
 
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
-		logrus.Errorf("Error loading cached state: %v", err)
+		log.Errorf("Error loading cached state: %v", err)
 	}
 
 	done := make(chan struct{})
@@ -120,9 +119,9 @@ func (e *Emitter) Run(ctx context.Context) {
 		defer e.queue.ShutDown()
 		select {
 		case <-ctx.Done():
-			logrus.Info("Context cancelled, shutting down emitter.")
+			log.Info("Context cancelled, shutting down emitter.")
 		case <-done:
-			logrus.Info("Emitter shutting down.")
+			log.Info("Emitter shutting down.")
 		}
 	}()
 
@@ -141,14 +140,14 @@ func (e *Emitter) Run(ctx context.Context) {
 		// Get pending work from the queue.
 		key, quit := e.queue.Get()
 		if quit {
-			logrus.Info("Emitter queue completed")
+			log.Info("Emitter queue completed")
 			return
 		}
 		e.queue.Done(key)
 
 		bucket, ok := e.buckets.get(key)
 		if !ok {
-			logrus.WithField("bucket", key).Error("Bucket not found in cache.")
+			log.WithField("bucket", key).Error("Bucket not found in cache.")
 			e.queue.Forget(key)
 			continue
 		}
@@ -156,7 +155,7 @@ func (e *Emitter) Run(ctx context.Context) {
 		// Emit the bucket.
 		if err := e.emit(bucket); err != nil {
 			// Do not log the raw emitter URL — use redactURL to mask userinfo.
-			logrus.Errorf("Error emitting flows to %s: %v", logutils.RedactURL(e.url), err)
+			log.Errorf("Error emitting flows to %s: %v", log.RedactURL(e.url), err)
 			e.retry(key)
 			continue
 		}
@@ -164,7 +163,7 @@ func (e *Emitter) Run(ctx context.Context) {
 		// Success. Remove the bucket from our internal map, and
 		// clear it from the workqueue.
 		if retries := e.queue.NumRequeues(key); retries > 0 {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"bucket":  key,
 				"retries": retries,
 			}).Info("Successfully emitted flows after retries.")
@@ -190,10 +189,10 @@ func (e *Emitter) Receive(bucket *storage.FlowCollection) {
 
 func (e *Emitter) retry(k bucketKey) {
 	if e.queue.NumRequeues(k) < maxRetries {
-		logrus.WithField("bucket", k).Debug("Queueing retry for bucket.")
+		log.WithField("bucket", k).Debug("Queueing retry for bucket.")
 		e.queue.AddRateLimited(k)
 	} else {
-		logrus.WithField("bucket", k).Error("Max retries exceeded, dropping bucket.")
+		log.WithField("bucket", k).Error("Max retries exceeded, dropping bucket.")
 		e.forget(k)
 	}
 }
@@ -211,7 +210,7 @@ func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 	// the latest timestamp we've emitted, skip it. This can happen, for example, on restart when
 	// we learn already emitted flows from the cache.
 	if bucket.EndTime <= e.latestTimestamp {
-		logrus.WithField("bucketEndTime", bucket.EndTime).Debug("Skipping already emitted flows.")
+		log.WithField("bucketEndTime", bucket.EndTime).Debug("Skipping already emitted flows.")
 		return nil
 	}
 
@@ -229,7 +228,7 @@ func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 
 	// Update our configmap with the latest published timestamp.
 	if err = e.saveState(); err != nil {
-		logrus.WithError(err).Warn("Error saving state.")
+		log.WithError(err).Warn("Error saving state.")
 	}
 	return nil
 }
@@ -277,7 +276,7 @@ func (e *Emitter) saveState() error {
 
 	// Update the timestamp in the configmap.
 	cm.Data["latestTimestamp"] = fmt.Sprintf("%d", e.latestTimestamp)
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"cm":              configMapKey,
 		"latestTimestamp": cm.Data["latestTimestamp"],
 	})
@@ -311,7 +310,7 @@ func (e *Emitter) loadCachedState() error {
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("error getting configmap: %v", err)
 	} else if errors.IsNotFound(err) {
-		logrus.WithField("cm", configMapKey).Debug("Configmap not found")
+		log.WithField("cm", configMapKey).Debug("Configmap not found")
 		return nil
 	}
 

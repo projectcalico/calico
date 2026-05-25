@@ -23,9 +23,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func ServePrometheusMetricsHTTP(gatherer prometheus.Gatherer, host string, port int) {
@@ -35,12 +35,12 @@ func ServePrometheusMetricsHTTP(gatherer prometheus.Gatherer, host string, port 
 	addr := net.JoinHostPort(host, fmt.Sprint(port))
 
 	for {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"host": host,
 			"port": port,
 		}).Info("Starting prometheus metrics endpoint")
 		err := http.ListenAndServe(addr, mux)
-		logrus.WithError(err).Error(
+		log.WithError(err).Error(
 			"Prometheus http metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
 	}
@@ -70,7 +70,7 @@ func ServePrometheusMetricsHTTPS(gatherer prometheus.Gatherer, host string, port
 	tlsConfig.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
 		tlsConfig, err := calicotls.NewMutualTLSConfig(certFile, keyFile, caFile)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to reload TLS configuration")
+			log.WithError(err).Error("Failed to reload TLS configuration")
 			return nil, err
 		}
 		// Set the client authentication type if provided.
@@ -90,14 +90,14 @@ func ServePrometheusMetricsHTTPS(gatherer prometheus.Gatherer, host string, port
 
 	// Restart server on failure.
 	for {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"host": host,
 			"port": port,
 		}).Info("Starting Prometheus metrics endpoint with TLS")
 
 		err = server.ListenAndServeTLS("", "")
 		if err != nil {
-			logrus.WithError(err).Error("Prometheus https metrics endpoint failed, restarting...")
+			log.WithError(err).Error("Prometheus https metrics endpoint failed, restarting...")
 			time.Sleep(200 * time.Millisecond)
 		}
 	}

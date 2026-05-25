@@ -27,7 +27,6 @@ import (
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -59,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
@@ -66,7 +66,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
@@ -89,29 +88,29 @@ func initKlog() {
 	var flags flag.FlagSet
 	klog.InitFlags(&flags)
 	if err := flags.Set("logtostderr", "true"); err != nil {
-		logrus.WithError(err).Fatal("Failed to set klog logging configuration")
+		log.WithError(err).Fatal("Failed to set klog logging configuration")
 	}
 }
 
 func run(parentCtx context.Context, cliCfg Config) {
-	logutils.ConfigureFormatter("kube-controllers")
+	log.SetComponent("kube-controllers")
 
 	cfg := new(config.Config)
 	if err := cfg.Parse(); err != nil {
-		logrus.WithError(err).Fatal("Failed to parse config")
+		log.WithError(err).Fatal("Failed to parse config")
 	}
-	logrus.WithField("config", cfg).Info("Loaded configuration from environment")
+	log.WithField("config", cfg).Info("Loaded configuration from environment")
 
-	logLevel, err := logrus.ParseLevel(cfg.LogLevel)
+	logLevel, err := log.ParseLevel(cfg.LogLevel)
 	if err != nil {
-		logrus.WithError(err).Warnf("error parsing logLevel: %v", cfg.LogLevel)
-		logLevel = logrus.InfoLevel
+		log.WithError(err).Warnf("error parsing logLevel: %v", cfg.LogLevel)
+		logLevel = log.InfoLevel
 	}
-	logrus.SetLevel(logLevel)
+	log.SetLevel(logLevel)
 
 	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to start")
+		log.WithError(err).Fatal("Failed to start")
 	}
 
 	stop := make(chan struct{})
@@ -131,13 +130,13 @@ func run(parentCtx context.Context, cliCfg Config) {
 		healthAggregator.ServeHTTP(true, "", cliCfg.HealthPort)
 	}
 
-	logrus.Info("Ensuring Calico datastore is initialized")
+	log.Info("Ensuring Calico datastore is initialized")
 	s.SetReady("Startup", false, "initialized to false")
 	initCtx, cancelInit := context.WithTimeout(ctx, 60*time.Second)
 	for {
 		err := libcalicoClient.EnsureInitialized(initCtx, "", "k8s")
 		if err != nil {
-			logrus.WithError(err).Info("Failed to initialize datastore")
+			log.WithError(err).Info("Failed to initialize datastore")
 			s.SetReady("Startup", false, fmt.Sprintf("Error initializing datastore: %v", err))
 		} else {
 			break
@@ -145,11 +144,11 @@ func run(parentCtx context.Context, cliCfg Config) {
 
 		select {
 		case <-initCtx.Done():
-			logrus.Fatal("Failed to initialize Calico datastore")
+			log.Fatal("Failed to initialize Calico datastore")
 		case <-time.After(5 * time.Second):
 		}
 	}
-	logrus.Info("Calico datastore is initialized")
+	log.Info("Calico datastore is initialized")
 	s.SetReady("Startup", true, "")
 	healthAggregator.Report("Startup", &health.HealthReport{Live: true, Ready: true})
 	cancelInit()
@@ -167,13 +166,13 @@ func run(parentCtx context.Context, cliCfg Config) {
 	v, ok := os.LookupEnv(config.EnvEnabledControllers)
 	if ok && strings.Contains(v, "flannelmigration") {
 		if strings.Trim(v, " ,") != "flannelmigration" {
-			logrus.WithField(config.EnvEnabledControllers, v).Fatal("flannelmigration must be the only controller running")
+			log.WithField(config.EnvEnabledControllers, v).Fatal("flannelmigration must be the only controller running")
 		}
 		flannelConfig := new(flannelmigration.Config)
 		if err := flannelConfig.Parse(); err != nil {
-			logrus.WithError(err).Fatal("Failed to parse Flannel config")
+			log.WithError(err).Fatal("Failed to parse Flannel config")
 		}
-		logrus.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
+		log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
 
 		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, k8sconfig, libcalicoClient, flannelConfig)
 		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
@@ -183,10 +182,10 @@ func run(parentCtx context.Context, cliCfg Config) {
 
 		controllerCtrl.restart = make(chan config.RunConfig)
 	} else {
-		logrus.Info("Getting initial config snapshot from datastore")
+		log.Info("Getting initial config snapshot from datastore")
 		cCtrlr := config.NewRunConfigController(ctx, *cfg, libcalicoClient.KubeControllersConfiguration())
 		runCfg = <-cCtrlr.ConfigChan()
-		logrus.Info("Got initial config snapshot")
+		log.Info("Got initial config snapshot")
 
 		controllerCtrl.restart = cCtrlr.ConfigChan()
 		controllerCtrl.initControllers(ctx, runCfg, k8sClientset, libcalicoClient, calicoClient, dataFeed, k8sconfig)
@@ -197,19 +196,19 @@ func run(parentCtx context.Context, cliCfg Config) {
 	}
 
 	if runCfg.HealthEnabled {
-		logrus.Info("Starting status report routine")
+		log.Info("Starting status report routine")
 		go runHealthChecks(ctx, s, healthAggregator, k8sClientset, libcalicoClient)
 	}
 
-	logrus.SetLevel(runCfg.LogLevelScreen)
+	log.SetLevel(runCfg.LogLevelScreen)
 
 	if runCfg.PrometheusPort != 0 {
-		logrus.Infof("Starting Prometheus metrics server on port %d", runCfg.PrometheusPort)
+		log.Infof("Starting Prometheus metrics server on port %d", runCfg.PrometheusPort)
 		go func() {
 			mux := http.NewServeMux()
 			mux.Handle("/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%d", runCfg.PrometheusPort), mux); err != nil {
-				logrus.WithError(err).Fatal("Failed to serve prometheus metrics")
+				log.WithError(err).Fatal("Failed to serve prometheus metrics")
 			}
 		}()
 	}
@@ -243,7 +242,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAgg
 		healthCtx, cancel := context.WithTimeout(ctx, timeout)
 		err := calicoClient.EnsureInitialized(healthCtx, "", "k8s")
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to verify datastore")
+			log.WithError(err).Errorf("Failed to verify datastore")
 			s.SetReady("CalicoDatastore", false, fmt.Sprintf("Error verifying datastore: %v", err))
 			ha.Report("CalicoDatastore", &health.HealthReport{Live: true, Ready: false, Detail: err.Error()})
 		} else {
@@ -257,7 +256,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAgg
 		result := k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do(healthCtx).StatusCode(&healthStatus)
 		cancel()
 		if healthStatus != http.StatusOK {
-			logrus.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
+			log.WithError(result.Error()).WithField("status", healthStatus).Errorf("Received bad status code from apiserver")
 			s.SetReady("KubeAPIServer", false, fmt.Sprintf("Error reaching apiserver: %v with http status code: %d", result.Error(), healthStatus))
 			ha.Report("KubeAPIServer", &health.HealthReport{Live: true, Ready: false, Detail: fmt.Sprintf("status %d", healthStatus)})
 		} else {
@@ -267,7 +266,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAgg
 
 		if !s.GetReadiness() {
 			timeout = min(2*timeout, maxTimeout)
-			logrus.Infof("Health check is not ready, retrying in 2 seconds with new timeout: %s", timeout)
+			log.Infof("Health check is not ready, retrying in 2 seconds with new timeout: %s", timeout)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -279,7 +278,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAgg
 
 func startCompactor(ctx context.Context, interval time.Duration) {
 	if interval.Nanoseconds() == 0 {
-		logrus.Info("Disabling periodic etcdv3 compaction")
+		log.Info("Disabling periodic etcdv3 compaction")
 		return
 	}
 
@@ -291,12 +290,12 @@ func startCompactor(ctx context.Context, interval time.Duration) {
 		}
 		etcdClient, err := newEtcdV3Client()
 		if err != nil {
-			logrus.WithError(err).Error("Failed to start etcd compaction routine, retry in 1m")
+			log.WithError(err).Error("Failed to start etcd compaction routine, retry in 1m")
 			time.Sleep(1 * time.Minute)
 			continue
 		}
 
-		logrus.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
+		log.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
 		etcd3.StartCompactorPerEndpoint(etcdClient, interval)
 		break
 	}
@@ -344,7 +343,7 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 	}
 
 	if apiCfg.Spec.EtcdEndpoints != "" && apiCfg.Spec.EtcdDiscoverySrv != "" {
-		logrus.Warning("Multiple etcd endpoint discovery methods specified in etcdv3 API config")
+		log.Warning("Multiple etcd endpoint discovery methods specified in etcdv3 API config")
 		return nil, fmt.Errorf("multiple discovery or bootstrap options specified, use either \"etcdEndpoints\" or \"etcdDiscoverySrv\"")
 	}
 
@@ -362,7 +361,7 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 	}
 
 	if len(etcdLocation) == 0 {
-		logrus.Warning("No etcd endpoints specified in etcdv3 API config")
+		log.Warning("No etcd endpoints specified in etcdv3 API config")
 		return nil, fmt.Errorf("no etcd endpoints specified")
 	}
 
@@ -490,27 +489,27 @@ func (cc *controllerControl) initControllers(
 
 		dynClient, err := dynamic.NewForConfig(k8sconfig)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create dynamic client for migration controller")
+			log.WithError(err).Fatal("Failed to create dynamic client for migration controller")
 		}
 		apiregCS, err := apiregclient.NewForConfig(k8sconfig)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create apiregistration client for migration controller")
+			log.WithError(err).Fatal("Failed to create apiregistration client for migration controller")
 		}
 
 		migrationScheme := k8sruntime.NewScheme()
 		if err := apiv3.AddToScheme(migrationScheme); err != nil {
-			logrus.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
+			log.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
 		}
 		if err := dsmigration.AddToScheme(migrationScheme); err != nil {
-			logrus.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
+			log.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
 		}
 		rtClient, err := rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
+			log.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
 		}
 		crdClient, err := apiextclient.NewForConfig(k8sconfig)
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create apiextensions client for migration controller")
+			log.WithError(err).Fatal("Failed to create apiextensions client for migration controller")
 		}
 
 		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
@@ -527,7 +526,7 @@ func (cc *controllerControl) initControllers(
 	}
 
 	if err := podInformer.SetTransform(converter.PodTransformer(cfg.Controllers.WorkloadEndpoint != nil)); err != nil {
-		logrus.WithError(err).Fatal("Failed to set transform on pod informer")
+		log.WithError(err).Fatal("Failed to set transform on pod informer")
 	}
 }
 
@@ -548,12 +547,12 @@ func (cc *controllerControl) registerInformers(infs ...cache.SharedIndexInformer
 
 func (cc *controllerControl) runControllers(dataFeed *utils.DataFeed, cfg config.RunConfig) {
 	for _, inf := range cc.informers {
-		logrus.WithField("informer", inf).Info("Starting informer")
+		log.WithField("informer", inf).Info("Starting informer")
 		go inf.Run(cc.stop)
 	}
 
 	for controllerType, c := range cc.controllers {
-		logrus.WithField("ControllerType", controllerType).Info("Starting controller")
+		log.WithField("ControllerType", controllerType).Info("Starting controller")
 		go c.Run(cc.stop)
 	}
 
@@ -561,9 +560,9 @@ func (cc *controllerControl) runControllers(dataFeed *utils.DataFeed, cfg config
 
 	select {
 	case <-cc.ctx.Done():
-		logrus.Warn("context cancelled")
+		log.Warn("context cancelled")
 	case <-cc.restart:
-		logrus.Warn("configuration changed; restarting")
+		log.Warn("configuration changed; restarting")
 	}
 	close(cc.stop)
 }

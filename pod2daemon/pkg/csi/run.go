@@ -17,9 +17,7 @@ package csi
 import (
 	"os"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pod2daemon/csidriver/driver"
 )
 
@@ -33,24 +31,24 @@ type Config struct {
 // Run starts the CSI driver. It loads configuration from the standard config file,
 // applies any overrides from cfg, and blocks serving gRPC.
 func Run(cfg Config) {
-	logrus.SetOutput(os.Stdout)
-	logutils.ConfigureFormatter("csi-driver")
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetOutput(os.Stdout)
+	log.SetComponent("csi-driver")
+	log.SetLevel(log.WarnLevel)
 
 	driverCfg, err := driver.RetrieveConfig()
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to retrieve CSI driver config")
+		log.WithError(err).Fatal("Failed to retrieve CSI driver config")
 	}
 
 	if cfg.LogLevel != "" {
 		driverCfg.LogLevel = cfg.LogLevel
 	}
 
-	level, err := logrus.ParseLevel(driverCfg.LogLevel)
+	level, err := log.ParseLevel(driverCfg.LogLevel)
 	if err != nil {
-		logrus.WithError(err).WithField("logLevel", driverCfg.LogLevel).Fatal("Could not parse the log level")
+		log.WithError(err).WithField("logLevel", driverCfg.LogLevel).Fatal("Could not parse the log level")
 	}
-	logrus.SetLevel(level)
+	log.SetLevel(level)
 
 	driverCfg.NodeID = cfg.NodeID
 
@@ -60,6 +58,6 @@ func Run(cfg Config) {
 
 	d := driver.NewDriver(driverCfg)
 	if err := d.Run(); err != nil {
-		logrus.WithError(err).Fatal("CSI driver failed")
+		log.WithError(err).Fatal("CSI driver failed")
 	}
 }

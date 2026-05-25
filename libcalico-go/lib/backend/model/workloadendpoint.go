@@ -20,8 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"

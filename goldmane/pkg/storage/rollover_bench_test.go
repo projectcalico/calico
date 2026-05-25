@@ -19,10 +19,9 @@ import (
 	"testing"
 	"unique"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func buildDiachronicFlow(numWindows int) *DiachronicFlow {
@@ -46,7 +45,7 @@ func buildDiachronicFlow(numWindows int) *DiachronicFlow {
 }
 
 func BenchmarkRollover(b *testing.B) {
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetLevel(log.WarnLevel)
 
 	for _, numWindows := range []int{50, 242} {
 		limiter := int64(15)

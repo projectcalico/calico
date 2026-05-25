@@ -31,8 +31,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
@@ -64,24 +63,24 @@ func readMetadata() map[string]string {
 	if len(embeddedMetadata) > 0 {
 		m, err := parseMetadata(embeddedMetadata)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to parse embedded metadata.mk; release flag defaults will be empty")
+			log.WithError(err).Warn("Failed to parse embedded metadata.mk; release flag defaults will be empty")
 			return map[string]string{}
 		}
 		return m
 	}
 	root, err := command.GitDir()
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to locate git root for metadata.mk; release flag defaults will be empty")
+		log.WithError(err).Warn("Failed to locate git root for metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
 	}
 	data, err := os.ReadFile(filepath.Join(root, "metadata.mk"))
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to read metadata.mk; release flag defaults will be empty")
+		log.WithError(err).Warn("Failed to read metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
 	}
 	m, err := parseMetadata(data)
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to parse metadata.mk; release flag defaults will be empty")
+		log.WithError(err).Warn("Failed to parse metadata.mk; release flag defaults will be empty")
 		return map[string]string{}
 	}
 	return m

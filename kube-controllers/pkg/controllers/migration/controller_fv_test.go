@@ -38,7 +38,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -68,7 +68,7 @@ func expectNoError(err error) {
 // full cluster.
 func init() {
 	logrus.SetFormatter(&logutils.Formatter{})
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestMain(m *testing.M) {

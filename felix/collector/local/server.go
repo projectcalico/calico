@@ -23,11 +23,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -102,7 +102,7 @@ func (s *FlowServer) Run() error {
 	var err error
 	err = ensureLocalSocketDirExists(s.dir)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create local socket")
+		log.WithError(err).Error("Failed to create local socket")
 		return err
 	}
 	addr := s.Address()
@@ -110,21 +110,21 @@ func (s *FlowServer) Run() error {
 	// Try to clean up socket if it exists. Simply continue with any error. It might work fine to use the same socket.
 	err = cleanupLocalSocket(addr)
 	if err != nil {
-		logrus.WithError(err).WithField("address", addr).Debug("Failed to clean up local socket")
+		log.WithError(err).WithField("address", addr).Debug("Failed to clean up local socket")
 	}
 
 	s.once.Do(func() {
 		var l net.Listener
 		l, err = net.Listen("unix", addr)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to listen on local socket")
+			log.WithError(err).Error("Failed to listen on local socket")
 			return
 		}
-		logrus.WithField("address", addr).Info("Running local server")
+		log.WithField("address", addr).Info("Running local server")
 		go func() {
 			err = s.grpcServer.Serve(l)
 			if err != nil {
-				logrus.WithError(err).Error("Failed to start listening on local socket")
+				log.WithError(err).Error("Failed to start listening on local socket")
 				return
 			}
 		}()
@@ -140,11 +140,11 @@ func (s *FlowServer) Watch(
 ) {
 	infiniteLoop := num < 0
 	var count int
-	logrus.Debug("Starting to watch local socket")
+	log.Debug("Starting to watch local socket")
 	for {
 		if ctx.Err() != nil ||
 			(!infiniteLoop && count >= num) {
-			logrus.Debug("Stopped watching local socket")
+			log.Debug("Stopped watching local socket")
 			return
 		}
 
@@ -160,7 +160,7 @@ func (s *FlowServer) Watch(
 func (s *FlowServer) Stop() {
 	addr := s.Address()
 	if err := cleanupLocalSocket(addr); err != nil {
-		logrus.WithError(err).WithField("address", addr).Errorf("Failed to clean up local socket")
+		log.WithError(err).WithField("address", addr).Errorf("Failed to clean up local socket")
 	}
 	s.grpcServer.Stop()
 }
@@ -182,15 +182,15 @@ func (s *FlowServer) Address() string {
 }
 
 func ensureLocalSocketDirExists(dir string) error {
-	logrus.Debug("Checking if local socket directory exists.")
+	log.Debug("Checking if local socket directory exists.")
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		logrus.WithField("directory", dir).Debug("Local socket directory does not exist")
+		log.WithField("directory", dir).Debug("Local socket directory does not exist")
 		err := os.MkdirAll(dir, 0o600)
 		if err != nil {
-			logrus.WithError(err).WithField("directory", dir).Error("Failed to create local socket directory")
+			log.WithError(err).WithField("directory", dir).Error("Failed to create local socket directory")
 			return err
 		}
-		logrus.WithField("directory", dir).Debug("Created local socket directory")
+		log.WithField("directory", dir).Debug("Created local socket directory")
 	}
 	return nil
 }

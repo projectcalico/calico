@@ -19,9 +19,9 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	log "github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )

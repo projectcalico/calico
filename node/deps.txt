@@ -81,7 +81,6 @@ github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
 github.com/mdlayher/socket v0.5.1
-github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -186,6 +185,7 @@ local:cni-plugin/pkg/types
 local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
 local:crypto/pkg/tls
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
@@ -205,7 +205,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

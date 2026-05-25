@@ -14,10 +14,10 @@
 
 package tunnel
 
-import "github.com/sirupsen/logrus"
+import "github.com/projectcalico/calico/lib/std/log"
 
 type logrusWriter struct {
-	log *logrus.Entry
+	log log.Logger
 }
 
 func (l *logrusWriter) Write(p []byte) (n int, err error) {

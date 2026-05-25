@@ -20,12 +20,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -42,13 +41,13 @@ func NewCommand() *cobra.Command {
 
 			cfg, err := config.NewCalicoConfig()
 			if err != nil {
-				logrus.WithError(err).Fatal("Failed to load Guardian configuration")
+				log.WithError(err).Fatal("Failed to load Guardian configuration")
 			}
 
 			// Log config with VoltronURL userinfo redacted.
 			sanitized := cfg.Config
-			sanitized.VoltronURL = logutils.RedactURL(sanitized.VoltronURL)
-			logrus.Infof("Starting Calico Guardian %s", sanitized.String())
+			sanitized.VoltronURL = log.RedactURL(sanitized.VoltronURL)
+			log.Infof("Starting Calico Guardian %s", sanitized.String())
 			daemon.Run(shutdownContext(), cfg.Config, cfg.Targets())
 		},
 	}
@@ -64,7 +63,7 @@ func shutdownContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-signalChan
-		logrus.Debug("Shutdown signal received, shutting down.")
+		log.Debug("Shutdown signal received, shutting down.")
 		cancel()
 	}()
 
