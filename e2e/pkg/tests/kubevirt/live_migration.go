@@ -168,6 +168,9 @@ var _ = describe.CalicoDescribe(
 		// consecutive cross-node live migrations on a 3-worker cluster (server VM hops,
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
+			if isKINDCluster(f) {
+				Skip("TCP stream iBGP test requires a real cluster, not KinD")
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
@@ -266,6 +269,9 @@ var _ = describe.CalicoDescribe(
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
 		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
+				if isKINDCluster(f) {
+					Skip("eBGP external client test requires a physical TOR node, skipping on KinD")
+				}
 				tor := externalnode.NewClient()
 				if tor == nil {
 					// The RequiresExternalNode label gates whether this test runs at
@@ -474,6 +480,9 @@ var _ = describe.CalicoDescribe(
 		// keep applying after the VM live-migrates to a different node, both for an
 		// allowed and a denied client.
 		It("should enforce NetworkPolicy after live migration", func() {
+			if isKINDCluster(f) {
+				Skip("NetworkPolicy test requires a real VM with a TCP server; KinD simulation mode has no guest OS")
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
