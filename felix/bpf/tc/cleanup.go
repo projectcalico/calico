@@ -22,12 +22,12 @@ import (
 	"slices"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 

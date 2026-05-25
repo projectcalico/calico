@@ -26,11 +26,11 @@ import (
 	"strings"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
 	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (

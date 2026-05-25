@@ -17,10 +17,9 @@ package collector
 import (
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	extdataplane "github.com/projectcalico/calico/felix/dataplane/external"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // dataplaneInfoReader reads dataplane information.

@@ -21,11 +21,11 @@ import (
 	"time"
 	"unsafe"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../bpf-gpl/libbpf/src -I${SRCDIR}/../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../bpf-gpl -Werror

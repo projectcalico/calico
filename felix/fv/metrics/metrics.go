@@ -29,8 +29,9 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
 
@@ -91,7 +92,10 @@ func GetRawMetrics(ip string, port int, caFile, certFile, keyFile string) (out s
 				return "", errors.New("failed to add CA data to pool")
 			}
 			transport.TLSClientConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
-				log.WithField("caFile", caFile),
+				// typha/pkg/tlsutils still takes *logrus.Entry; this is the only
+				// remaining direct logrus use in felix until libcalico-go/typha
+				// migrate to lib/std/log too.
+				logrus.WithField("caFile", caFile),
 				transport.TLSClientConfig.RootCAs,
 				"",
 				"",
