@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -230,7 +231,7 @@ func NewBGPStatusMonitor(cli ctrlclient.Client) *BGPStatusMonitor {
 		for _, name := range m.nodeNames {
 			status := &v3.CalicoNodeStatus{ObjectMeta: metav1.ObjectMeta{Name: name}}
 			if err := cli.Delete(context.Background(), status); err != nil {
-				logrus.WithError(err).Warnf("Failed to delete CalicoNodeStatus %s", name)
+				log.WithError(err).Warnf("Failed to delete CalicoNodeStatus %s", name)
 			}
 		}
 	})
@@ -245,22 +246,22 @@ func (m *BGPStatusMonitor) Log() {
 		status := &v3.CalicoNodeStatus{}
 		err := m.cli.Get(context.Background(), ctrlclient.ObjectKey{Name: name}, status)
 		if err != nil {
-			logrus.WithError(err).Warnf("Failed to get CalicoNodeStatus for %s", name)
+			log.WithError(err).Warnf("Failed to get CalicoNodeStatus for %s", name)
 			continue
 		}
 
 		bgp := status.Status.BGP
-		logrus.Infof("[BGP] Node %s: established_v4=%d not_established_v4=%d established_v6=%d not_established_v6=%d last_updated=%s",
+		log.Infof("[BGP] Node %s: established_v4=%d not_established_v4=%d established_v6=%d not_established_v6=%d last_updated=%s",
 			name,
 			bgp.NumberEstablishedV4, bgp.NumberNotEstablishedV4,
 			bgp.NumberEstablishedV6, bgp.NumberNotEstablishedV6,
 			status.Status.LastUpdated.Time,
 		)
 		for _, peer := range bgp.PeersV4 {
-			logrus.Infof("[BGP]   Node %s peer %s type=%s state=%s since=%s", name, peer.PeerIP, peer.Type, peer.State, peer.Since)
+			log.Infof("[BGP]   Node %s peer %s type=%s state=%s since=%s", name, peer.PeerIP, peer.Type, peer.State, peer.Since)
 		}
 		for _, route := range status.Status.Routes.RoutesV4 {
-			logrus.Infof("[BGP]   Node %s route: %s via %s type=%s", name, route.Destination, route.Gateway, route.Type)
+			log.Infof("[BGP]   Node %s route: %s via %s type=%s", name, route.Destination, route.Gateway, route.Type)
 		}
 	}
 }

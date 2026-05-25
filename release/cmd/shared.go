@@ -26,6 +26,7 @@ import (
 	"github.com/snowzach/rotatefilehook"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/slack"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -49,7 +50,7 @@ func logPrettifier(f *runtime.Frame) (string, string) {
 // configureLogging sets up logging to both stdout and a file.
 func configureLogging(filename string) {
 	if debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 
 	logrus.SetFormatter(&logrus.TextFormatter{
@@ -115,7 +116,7 @@ func withSummary(cfg *Config, step string, action SummaryAction) cli.ActionFunc 
 		}
 		outputDir := outputs.SummaryOutputDir(cfg.RepoRootDir)
 		if err := outputs.WriteSummary(outputDir, ver, step, summary); err != nil {
-			logrus.WithError(err).Warn("Failed to write summary file")
+			log.WithError(err).Warn("Failed to write summary file")
 		}
 		return actionErr
 	}

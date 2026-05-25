@@ -17,8 +17,7 @@ package infrastructure
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
 
@@ -53,7 +52,7 @@ func miniStackStrace() string {
 // Run executes registered functions in reverse order and clears the stack.
 // Panics from cleanup functions are allowed to propagate to the caller.
 func (c *cleanupStack) Run() {
-	logrus.Info("Running cleanup stack...")
+	log.Info("Running cleanup stack...")
 	c.mu.Lock()
 	fns := c.fns
 	c.fns = nil
@@ -72,7 +71,7 @@ func runCleanupStack(fs []annotatedFunc) {
 	// to fail.  By deferring the first function and then recursing, we get
 	// both of those properties.
 	defer func() {
-		logCtx := logrus.WithField("registeredAt", fs[0].caller)
+		logCtx := log.WithField("registeredAt", fs[0].caller)
 		logCtx.Info("Running cleanup func.")
 		// We don't want to recover a panic from runCleanupStack so we call the
 		// func via callFuncLogPanic; this limits the scope of recover call.
@@ -82,7 +81,7 @@ func runCleanupStack(fs []annotatedFunc) {
 	runCleanupStack(fs[1:])
 }
 
-func callFuncLogPanic(logCtx *logrus.Entry, theFunc func()) {
+func callFuncLogPanic(logCtx log.Logger, theFunc func()) {
 	defer func() {
 		if x := recover(); x != nil {
 			logCtx.WithField("panic", x).Warn("Cleanup func panicked.")

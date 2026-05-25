@@ -8,11 +8,10 @@ import (
 	"testing"
 	"unique"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -32,11 +31,11 @@ const (
 func setupBenchmark(b *testing.B) func() {
 	// Set up logrus to use b.Logf via custom writer
 	writer := &logrusWriter{b}
-	logrus.SetOutput(writer)
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetOutput(writer)
+	log.SetLevel(log.WarnLevel)
 
 	return func() {
-		logrus.SetOutput(os.Stderr)
+		log.SetOutput(os.Stderr)
 	}
 }
 

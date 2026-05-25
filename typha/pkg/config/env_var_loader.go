@@ -17,9 +17,7 @@ package config
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // LoadConfigFromEnvironment extracts raw config parameters (identified by
@@ -39,7 +37,7 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		if strings.HasPrefix(key, "typha_") {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			if logutils.IsSensitiveParam(paramName) {
+			if log.IsSensitiveParam(paramName) {
 				log.Infof("Found typha environment variable: %s=<redacted>", paramName)
 			} else {
 				log.Infof("Found typha environment variable: %s=%q", paramName, value)

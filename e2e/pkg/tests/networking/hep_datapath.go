@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // hepScenario defines a single host endpoint datapath test scenario.
@@ -226,11 +226,11 @@ var _ = describe.CalicoDescribe(
 			nodeNames = allNames[:2]
 			nodeIPs = nodesInfo.GetIPv4s()[:2]
 			calicoNames = nodesInfo.GetCalicoNames()[:2]
-			logrus.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
+			log.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
 			encapIface = detectEncapInterface(cli)
-			logrus.Infof("Encap interface: %q", encapIface)
+			log.Infof("Encap interface: %q", encapIface)
 		})
 
 		// hepInterfaceName returns the interface name to use for the HEP based on
@@ -278,7 +278,7 @@ var _ = describe.CalicoDescribe(
 				policyApplies = s.aofTruePolicyApplies
 			}
 
-			logrus.Infof("HEP scenario %s: AOF=%v policyApplies=%v srcPod=%d dstPod=%d access=%s dir=%s",
+			log.Infof("HEP scenario %s: AOF=%v policyApplies=%v srcPod=%d dstPod=%d access=%s dir=%s",
 				s.name, applyOnForward, policyApplies, s.srcPod, s.dstPod, s.accessType, s.policyDirection)
 
 			ct := conncheck.NewConnectionTester(f)

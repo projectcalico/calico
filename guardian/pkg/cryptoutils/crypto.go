@@ -20,7 +20,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // GenerateFingerprint returns the sha256 hash for a x509 certificate printed as a hex number

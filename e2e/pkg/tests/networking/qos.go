@@ -22,13 +22,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/iperfcheck"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Tests for Calico QoS bandwidth limiting. Verifies that ingress and egress
@@ -76,7 +76,7 @@ var _ = describe.CalicoDescribe(
 			By("Running iperf3 to measure baseline throughput")
 			baseline, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline throughput")
-			logrus.Infof("Baseline throughput (bps): %.0f", baseline.AverageRate)
+			log.Infof("Baseline throughput (bps): %.0f", baseline.AverageRate)
 
 			// The baseline should be much higher than the 10Mbit limit we'll configure.
 			Expect(baseline.AverageRate).To(BeNumerically(">=", 10_000_000.0*5), "baseline throughput too low to meaningfully test bandwidth limiting")
@@ -99,7 +99,7 @@ var _ = describe.CalicoDescribe(
 			By("Running iperf3 to measure ingress-limited throughput")
 			ingressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithReverse(), iperfcheck.WithRetries(5, 5*time.Second))
 			Expect(err).NotTo(HaveOccurred(), "failed to measure ingress-limited throughput")
-			logrus.Infof("Ingress-limited throughput (bps): %.0f", ingressResult.AverageRate)
+			log.Infof("Ingress-limited throughput (bps): %.0f", ingressResult.AverageRate)
 
 			// Expect the limited rate to be within 50% of the desired 10Mbit rate.
 			// We use a wide tolerance because kind environments can be noisy.
@@ -124,7 +124,7 @@ var _ = describe.CalicoDescribe(
 			By("Running iperf3 to measure egress-limited throughput")
 			egressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
 			Expect(err).NotTo(HaveOccurred(), "failed to measure egress-limited throughput")
-			logrus.Infof("Egress-limited throughput (bps): %.0f", egressResult.AverageRate)
+			log.Infof("Egress-limited throughput (bps): %.0f", egressResult.AverageRate)
 
 			Expect(egressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "egress-limited rate too far below target")
 			Expect(egressResult.AverageRate).To(BeNumerically("<=", 10_000_000.0*2.0), "egress-limited rate too far above target")
@@ -150,14 +150,14 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithRetries(5, 5*time.Second),
 			)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure ingress throughput with both limits")
-			logrus.Infof("Both-limited ingress throughput (bps): %.0f", bothIngressResult.AverageRate)
+			log.Infof("Both-limited ingress throughput (bps): %.0f", bothIngressResult.AverageRate)
 			Expect(bothIngressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "combined ingress rate too far below target")
 			Expect(bothIngressResult.AverageRate).To(BeNumerically("<=", 10_000_000.0*2.0), "combined ingress rate too far above target")
 
 			By("Running iperf3 to measure egress throughput with both limits applied")
 			bothEgressResult, err := tester.MeasureBandwidth(client, server, iperfcheck.WithRetries(5, 5*time.Second))
 			Expect(err).NotTo(HaveOccurred(), "failed to measure egress throughput with both limits")
-			logrus.Infof("Both-limited egress throughput (bps): %.0f", bothEgressResult.AverageRate)
+			log.Infof("Both-limited egress throughput (bps): %.0f", bothEgressResult.AverageRate)
 			Expect(bothEgressResult.AverageRate).To(BeNumerically(">=", 10_000_000.0*0.5), "combined egress rate too far below target")
 			Expect(bothEgressResult.AverageRate).To(BeNumerically("<=", 10_000_000.0*2.0), "combined egress rate too far above target")
 		})
@@ -198,7 +198,7 @@ var _ = describe.CalicoDescribe(
 				iperfcheck.WithRetries(5, 5*time.Second),
 			)
 			Expect(err).NotTo(HaveOccurred(), "failed to measure baseline UDP throughput")
-			logrus.Infof("Baseline UDP throughput (bps): %.0f", baseline.AverageRate)
+			log.Infof("Baseline UDP throughput (bps): %.0f", baseline.AverageRate)
 			Expect(baseline.AverageRate).To(BeNumerically(">=", 100_000_000.0*0.8), "baseline UDP throughput too low for packet rate test")
 
 			// --- Ingress packet rate limit ---
@@ -225,7 +225,7 @@ var _ = describe.CalicoDescribe(
 
 			By("Running iperf3 to measure ingress-packet-rate-limited throughput")
 			ingressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Ingress packet-rate-limited throughput (bps): %.0f", ingressResult.AverageRate)
+			log.Infof("Ingress packet-rate-limited throughput (bps): %.0f", ingressResult.AverageRate)
 			Expect(ingressResult.AverageRate).To(BeNumerically("<=", maxRate), "ingress packet rate limit not effective")
 
 			// --- Egress packet rate limit ---
@@ -248,7 +248,7 @@ var _ = describe.CalicoDescribe(
 
 			By("Running iperf3 to measure egress-packet-rate-limited throughput")
 			egressResult := measureWithRateRetry(tester, clientPeer, server, maxRate, udpOpts...)
-			logrus.Infof("Egress packet-rate-limited throughput (bps): %.0f", egressResult.AverageRate)
+			log.Infof("Egress packet-rate-limited throughput (bps): %.0f", egressResult.AverageRate)
 			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate), "egress packet rate limit not effective")
 		})
 	})
@@ -267,7 +267,7 @@ func measureWithRateRetry(
 	if result.AverageRate <= maxRate {
 		return result
 	}
-	logrus.Infof("Rate %.0f bps exceeds limit %.0f bps, retrying in case rules weren't programmed yet", result.AverageRate, maxRate)
+	log.Infof("Rate %.0f bps exceeds limit %.0f bps, retrying in case rules weren't programmed yet", result.AverageRate, maxRate)
 	time.Sleep(5 * time.Second)
 	result, err = tester.MeasureBandwidth(client, server, opts...)
 	Expect(err).NotTo(HaveOccurred(), "failed to measure bandwidth on retry")

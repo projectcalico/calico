@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -27,6 +26,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // TryCreateInformers attempts to create SharedIndexInformers for KubeVirt

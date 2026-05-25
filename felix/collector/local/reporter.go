@@ -20,11 +20,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -78,10 +77,10 @@ func (l *LocalSocketReporter) mayStartClient() {
 	defer l.clientLock.Unlock()
 	l.client, err = client.NewFlowClient(SocketAddress, "", "", "")
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to create local socket client")
+		log.WithError(err).Warn("Failed to create local socket client")
 		return
 	}
-	logrus.Info("Created local socket client")
+	log.Info("Created local socket client")
 	ctx, cancel := context.WithCancel(context.Background())
 	l.clientCancel = cancel
 	l.client.Connect(ctx)
@@ -97,14 +96,14 @@ func (l *LocalSocketReporter) mayStopClient() {
 	defer l.clientLock.Unlock()
 	l.clientCancel()
 	l.client = nil
-	logrus.Info("Destroyed local socket client")
+	log.Info("Destroyed local socket client")
 }
 
 func (n *LocalSocketReporter) Report(logSlice any) error {
 	switch logs := logSlice.(type) {
 	case []*flowlog.FlowLog:
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithField("num", len(logs)).Debug("Dispatching flow logs to local socket")
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithField("num", len(logs)).Debug("Dispatching flow logs to local socket")
 		}
 		for _, l := range logs {
 			n.clientLock.RLock()
@@ -114,7 +113,7 @@ func (n *LocalSocketReporter) Report(logSlice any) error {
 			n.clientLock.RUnlock()
 		}
 	default:
-		logrus.Panic("Unexpected kind of log dispatcher")
+		log.Panic("Unexpected kind of log dispatcher")
 	}
 	return nil
 }

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // create builds the server pod and (optionally) its service. The caller stores
@@ -141,7 +141,7 @@ func (s *PodServer) create(ctx context.Context, f *framework.Framework) (*v1.Pod
 	if err != nil {
 		return nil, nil, err
 	}
-	logrus.Infof("Created pod %v", pod.Name)
+	log.Infof("Created pod %v", pod.Name)
 
 	if !s.autoCreateSvc {
 		return pod, nil, nil
@@ -195,7 +195,7 @@ func (s *PodServer) create(ctx context.Context, f *framework.Framework) (*v1.Pod
 		} else if !kerrors.IsInvalid(err) {
 			return nil, nil, fmt.Errorf("error creating IPv6 service: %w", err)
 		}
-		logrus.WithField("svc", v4Svc.Name).Info("IPv6 not enabled, using v4 service")
+		log.WithField("svc", v4Svc.Name).Info("IPv6 not enabled, using v4 service")
 	}
 
 	return pod, v4Svc, nil

@@ -17,9 +17,9 @@ package typha
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/daemon"
 )
@@ -34,7 +34,7 @@ func NewCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			t := daemon.New()
 			if err := t.Run(context.Background(), configFile); err != nil {
-				logrus.WithError(err).Fatal("Typha exited with error")
+				log.WithError(err).Fatal("Typha exited with error")
 			}
 		},
 	}

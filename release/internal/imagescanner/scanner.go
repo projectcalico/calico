@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -70,7 +70,7 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 		return fmt.Errorf("invalid image scanner configuration")
 	}
 	if len(images) == 0 {
-		logrus.Warn("No images to send to scanner, skipping...")
+		log.Warn("No images to send to scanner, skipping...")
 		return nil
 	}
 	var bucketPath, scanType string
@@ -87,12 +87,12 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 	}
 	marshalled, err := json.Marshal(payload)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to marshal payload for image scanner")
+		log.WithError(err).Error("Failed to marshal payload for image scanner")
 		return err
 	}
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/iss/scan", i.config.APIURL), bytes.NewReader(marshalled))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create request for image scanner")
+		log.WithError(err).Error("Failed to create request for image scanner")
 		return err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", i.config.Token))
@@ -106,7 +106,7 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 		query.Add("upload", "daily")
 	}
 	req.URL.RawQuery = query.Encode()
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"images":      images,
 		"bucket_path": bucketPath,
 		"scan_type":   scanType,
@@ -121,40 +121,40 @@ func (i *Scanner) Scan(productCode string, images []string, stream string, relea
 	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to send request to image scanner")
+		log.WithError(err).Error("Failed to send request to image scanner")
 		return err
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		logrus.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
+		log.WithField("status", resp.StatusCode).Info("Image scan request sent successfully")
 		defer func() { _ = resp.Body.Close() }()
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to read response body from image scanner")
+			log.WithError(err).Error("Failed to read response body from image scanner")
 			return err
 		}
 		var result scanResult
 		if err := json.Unmarshal(body, &result); err != nil {
-			logrus.WithError(err).Error("Failed to unmarshal image scan result")
+			log.WithError(err).Error("Failed to unmarshal image scan result")
 			return fmt.Errorf("failed to unmarshal image scan result: %w", err)
 		}
-		logrus.WithField("results_link", result.ResultsLink).Debug("Image scan result URL retrieved")
+		log.WithField("results_link", result.ResultsLink).Debug("Image scan result URL retrieved")
 		if result.ResultsLink == "" {
-			logrus.Error("Image scan result URL is empty")
+			log.Error("Image scan result URL is empty")
 			return fmt.Errorf("image scanner returned an empty results link")
 		}
 		if err := writeScanResultToFile(result.ResultsLink, outputDir); err != nil {
-			logrus.WithError(err).Error("Failed to write image scan result to file")
+			log.WithError(err).Error("Failed to write image scan result to file")
 			return err
 		}
 		return nil
 	} else if resp.StatusCode == http.StatusLocked {
-		logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently processing another request")
+		log.WithField("status", resp.StatusCode).Error("Image scan service is currently processing another request")
 		return fmt.Errorf("image scan service is currently processing another request")
 	} else if resp.StatusCode >= 500 {
-		logrus.WithField("status", resp.StatusCode).Error("Image scan service is currently unavailable")
+		log.WithField("status", resp.StatusCode).Error("Image scan service is currently unavailable")
 		return fmt.Errorf("image scan service is currently unavailable")
 	}
-	logrus.WithField("status", resp.StatusCode).Error("Unexpected response from image scanner")
+	log.WithField("status", resp.StatusCode).Error("Unexpected response from image scanner")
 	return fmt.Errorf("unexpected response from image scanner: %d", resp.StatusCode)
 }
 
@@ -165,10 +165,10 @@ func writeScanResultToFile(result string, outputDir string) error {
 	}
 	outputFilePath := filepath.Join(outputDir, scanResultFileName)
 	if err := os.WriteFile(outputFilePath, []byte(result), 0o644); err != nil {
-		logrus.WithError(err).Error("Failed to create image scan result file")
+		log.WithError(err).Error("Failed to create image scan result file")
 		return err
 	}
-	logrus.WithField("file", outputFilePath).Info("Image scan result written to file")
+	log.WithField("file", outputFilePath).Info("Image scan result written to file")
 	return nil
 }
 
@@ -183,7 +183,7 @@ func RetrieveResultURL(outputDir string) (string, error) {
 	}
 	resultData, err := os.ReadFile(outputFilePath)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to read image scan result file")
+		log.WithError(err).Error("Failed to read image scan result file")
 		return "", err
 	}
 	result := strings.TrimSpace(string(resultData))

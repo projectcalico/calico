@@ -17,11 +17,11 @@ package server
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewFlowsServer(aggr *goldmane.Goldmane) *FlowsServer {
@@ -39,7 +39,7 @@ type FlowsServer struct {
 func (s *FlowsServer) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
 	proto.RegisterFlowsServer(srv, s)
-	logrus.Info("Registered FlowAPI Server")
+	log.Info("Registered FlowAPI Server")
 }
 
 func (s *FlowsServer) List(ctx context.Context, req *proto.FlowListRequest) (*proto.FlowListResult, error) {
