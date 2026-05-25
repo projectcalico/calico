@@ -316,5 +316,79 @@ var _ = describe.CalicoDescribe(
 				"Handle %s should be released after VM deletion", handleID)
 			logrus.Infof("Handle %s released after VM deletion", handleID)
 		})
+
+		// Test 5: assigning a static IP via the cni.projectcalico.org/ipAddrs annotation
+		// on the VM spec template. The annotation propagates through VMI to the
+		// virt-launcher pod, where the Calico CNI plugin honours it. After a live
+		// migration the same static IP must survive on the new pod.
+		It("should assign static IP via annotation and preserve it across migration", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
+			defer cancel()
+			ns := f.Namespace.Name
+			vmName := "e2e-static-ip"
+
+			// Pick a static IP from the cluster's IPPool.
+			lcgc := newLibcalicoClient(f)
+			staticIP := pickStaticIPFromPool(ctx, lcgc, 200)
+			logrus.Infof("Using static IP %s for VM %s", staticIP, vmName)
+
+			vm := &kubeVirtVM{
+				name:      vmName,
+				namespace: ns,
+				annotations: map[string]string{
+					"cni.projectcalico.org/ipAddrs": fmt.Sprintf("[%q]", staticIP),
+				},
+			}
+
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+
+			// 1. Verify the VM gets the exact static IP.
+			ip, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
+			Expect(ip).To(Equal(staticIP),
+				"VM should receive the static IP from the annotation")
+
+			// 2. Verify the IPAM handle exists for this IP.
+			handleID := vmipam.CreateVMHandleID("k8s-pod-network", ns, vmName)
+			ips, err := lcgc.IPAM().IPsByHandle(ctx, handleID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ips).To(HaveLen(1))
+			Expect(ips[0].String()).To(Equal(staticIP))
+
+			// 3. Migrate and verify the static IP survives.
+			vmim := newVMIMigration(vmName+"-mig", ns, vmName)
+			err = cli.Create(ctx, vmim)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
+			waitForMigrationSuccess(ctx, cli, vmim)
+
+			// 4. Verify IP preserved and VM moved to a different node.
+			var postIP, postNode string
+			Eventually(func() error {
+				vmi := &kubevirtv1.VirtualMachineInstance{}
+				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmName}, vmi); err != nil {
+					return err
+				}
+				if len(vmi.Status.Interfaces) == 0 || vmi.Status.Interfaces[0].IP == "" {
+					return fmt.Errorf("no IP yet")
+				}
+				if vmi.Status.NodeName == sourceNode {
+					return fmt.Errorf("VMI still on source node")
+				}
+				postIP = vmi.Status.Interfaces[0].IP
+				postNode = vmi.Status.NodeName
+				return nil
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+			Expect(postIP).To(Equal(staticIP),
+				"Static IP should survive live migration")
+			Expect(postNode).NotTo(Equal(sourceNode))
+
+			// 5. Verify IPAM handle still holds the same IP after migration.
+			postIPs, err := lcgc.IPAM().IPsByHandle(ctx, handleID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(postIPs).To(HaveLen(1))
+			Expect(postIPs[0].String()).To(Equal(staticIP))
+		})
 	},
 )
