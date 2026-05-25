@@ -27,10 +27,10 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcapgo"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
@@ -153,7 +153,7 @@ func (m *liveMigrationMonitor) executeFSM(id types.WorkloadEndpointID, input liv
 	fsm, exists := m.fsms[id]
 	if !exists {
 		fsm = &liveMigrationFSM{
-			logCtx:       logrus.WithField("id", id),
+			logCtx:       log.WithField("id", id),
 			id:           id,
 			monitor:      m,
 			currentState: liveMigrationStateBase,
@@ -236,7 +236,7 @@ func (s liveMigrationState) String() string {
 }
 
 type liveMigrationFSM struct {
-	logCtx       *logrus.Entry
+	logCtx       log.Logger
 	id           types.WorkloadEndpointID
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
@@ -298,7 +298,7 @@ func (f *liveMigrationFSM) handleInput(input liveMigrationInput) {
 	}
 
 	if next != f.currentState {
-		logCtx.WithFields(logrus.Fields{
+		logCtx.WithFields(log.Fields{
 			"migrationUID": f.migrationUID,
 			"from":         f.currentState,
 			"to":           next,
@@ -398,7 +398,7 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
 	if !exists || fsm.currentState != liveMigrationStateTimeWait {
-		logrus.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
+		log.WithField("id", id).Debug("Ignoring stale timer pop for workload not in TimeWait")
 		return
 	}
 	m.executeFSM(id, liveMigrationInputTimerPop)
@@ -407,7 +407,7 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 // detectGARP reads packets from the given handle and sends the workload ID
 // to garpC when a GARP or RARP packet is detected.  It is a one-shot
 // goroutine: it returns after the first detection or when the handle is closed.
-func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
+func detectGARP(logCtx log.Logger, id types.WorkloadEndpointID,
 	handle garpHandle, garpC chan<- types.WorkloadEndpointID) {
 	// Note: handle is NOT defer-closed here. The FSM owns the handle lifecycle via
 	// stopGARPDetection(), which closes the handle and causes packetSource.Packets() to return,
@@ -480,7 +480,7 @@ func (f *liveMigrationFSM) doIPAMOwnerSwap() {
 	namespace := parts[0]
 	podName := parts[1]
 
-	logCtx := f.logCtx.WithFields(logrus.Fields{
+	logCtx := f.logCtx.WithFields(log.Fields{
 		"namespace": namespace,
 		"pod":       podName,
 		"vmiName":   vmiName,

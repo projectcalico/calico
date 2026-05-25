@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // IPSetIDAllocator allocates unique 64-bit IDs for the given string IDs.  It ensures uniqueness by tracking

@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/ipsets"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // policyCmd represents the counters command

@@ -17,9 +17,8 @@ package calc
 import (
 	"reflect"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -105,7 +104,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				return
 			}
 
-			logrus.WithField("wep", exactID).Debug("LiveMigrationCalculator: new WEP")
+			log.WithField("wep", exactID).Debug("LiveMigrationCalculator: new WEP")
 
 			// First time we're seeing this WEP.
 			wd := &wepData{
@@ -131,7 +130,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 
 			lmc.weps[exactID] = wd
 		} else {
-			logrus.WithField("wep", exactID).Debug("LiveMigrationCalculator: WEP deleted")
+			log.WithField("wep", exactID).Debug("LiveMigrationCalculator: WEP deleted")
 			// Don't need anything here to "reset the role that we previously said"
 			// because the WEP is being deleted anyway.
 			delete(lmc.weps, exactID)
@@ -159,7 +158,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			newSourceID = extractSourceOwnerID(lm.Spec.Source)
 			newTargetID = extractTargetOwnerID(lm.Spec.Target)
 			newSelector = extractTargetSelector(lm.Spec.Target)
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"lm":       key,
 				"uid":      lm.UID,
 				"source":   newSourceID,
@@ -167,7 +166,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 				"selector": newSelector,
 			}).Info("LiveMigrationCalculator: LiveMigration created/updated")
 		} else {
-			logrus.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
+			log.WithField("lm", key).Info("LiveMigrationCalculator: LiveMigration deleted")
 			delete(lmc.liveMigrations, key)
 		}
 
@@ -209,7 +208,7 @@ func (lmc *LiveMigrationCalculator) OnUpdate(update api.Update) (_ bool) {
 			}
 		}
 	default:
-		logrus.Infof("Ignoring unexpected update: %v %#v",
+		log.Infof("Ignoring unexpected update: %v %#v",
 			reflect.TypeOf(update.Key), update)
 	}
 
@@ -223,7 +222,7 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatch(cs string, epKey mod
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"wep":      exactID,
 				"selector": cs,
 			}).Debug("LiveMigrationCalculator: selector matched WEP")
@@ -243,7 +242,7 @@ func (lmc *LiveMigrationCalculator) OnComputedSelectorMatchStopped(cs string, ep
 	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		exactID := wepOwnerIDFromKey(wepKey)
 		if wd := lmc.weps[exactID]; wd != nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"wep":      exactID,
 				"selector": cs,
 			}).Debug("LiveMigrationCalculator: selector match stopped for WEP")
@@ -484,7 +483,7 @@ func (lmc *LiveMigrationCalculator) withRoleUpdateIfNeeded(wepData *wepData, upd
 	// the same WEP are transient; avoiding a UID churn keeps the downstream
 	// state (and logs) more stable.
 	if newRole != oldRole {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"wep":  wepData.key,
 			"role": newRole,
 			"uid":  newUID,

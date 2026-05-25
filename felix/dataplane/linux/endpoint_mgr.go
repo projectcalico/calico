@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -720,7 +720,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.needToCheckDispatchChains = true
 	}
 
-	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
+	removeActiveWorkload := func(logCxt log.Logger, oldWorkload *proto.WorkloadEndpoint, id types.WorkloadEndpointID) {
 		if m.isQoSBandwidthSupported() {
 			// QoS state should be removed before the workload itself is removed
 			if oldWorkload != nil {
@@ -949,7 +949,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 }
 
 func (m *endpointManager) calculateRoutes(
-	logCxt *log.Entry,
+	logCxt log.Logger,
 	id types.WorkloadEndpointID,
 	workload *proto.WorkloadEndpoint,
 ) (
