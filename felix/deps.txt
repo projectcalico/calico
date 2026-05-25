@@ -272,7 +272,6 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -306,6 +305,8 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/std/chanutil
+local:lib/std/log
+local:lib/std/profile
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr

@@ -34,7 +34,7 @@ import (
 
 	"github.com/kardianos/osext"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"

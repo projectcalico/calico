@@ -21,7 +21,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -36,7 +36,7 @@ func BenchmarkScanner(b *testing.B) {
 func scannerBenchmark(b *testing.B, entries, batchSize int) {
 	RegisterTestingT(b)
 
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 
 	conntrack.SetMapSize(entries)
 	m := conntrack.Map()
@@ -119,7 +119,7 @@ func (ts *testScanner) Check(k conntrack.KeyInterface, v conntrack.ValueInterfac
 func TestScannerBatchIteration(t *testing.T) {
 	RegisterTestingT(t)
 
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetLevel(log.InfoLevel)
 
 	entries := 50000
 

@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -35,7 +35,7 @@ func (d *dummyGauge) Set(f float64) {
 
 func TestLabelRestrictionIndex(t *testing.T) {
 	RegisterTestingT(t)
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 
 	var optGauge, unoptGauge dummyGauge
 	idx := New[string](WithGauges[string](&optGauge, &unoptGauge))

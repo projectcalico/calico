@@ -20,7 +20,7 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/sys/unix"
 
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"

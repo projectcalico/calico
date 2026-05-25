@@ -17,7 +17,7 @@ package intdataplane
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -43,7 +43,7 @@ type hostsIPSetManager struct {
 	dpConfig   Config
 
 	// Log context
-	logCtx *logrus.Entry
+	logCtx log.Logger
 }
 
 func newHostsIPSetManager(
@@ -63,7 +63,7 @@ func newHostsIPSetManager(
 		ipVersion:          ipVersion,
 		ipSetDirty:         true,
 		dpConfig:           dpConfig,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 		}),
 	}

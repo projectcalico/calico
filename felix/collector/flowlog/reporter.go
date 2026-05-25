@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/gavv/monotime"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/metric"

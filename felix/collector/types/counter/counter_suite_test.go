@@ -20,13 +20,13 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureFormatter("test")
+	log.SetComponent("test")
 }
 
 func TestCounter(t *testing.T) {
