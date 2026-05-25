@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -36,6 +35,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	"github.com/projectcalico/calico/felix/dataplane/linux/qos"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type AttachPoint struct {
@@ -104,7 +104,7 @@ func (ap *AttachPoint) IsNetkit() bool {
 var ErrDeviceNotFound = errors.New("device not found")
 var ErrInterrupted = errors.New("dump interrupted")
 
-func (ap *AttachPoint) Log() *log.Entry {
+func (ap *AttachPoint) Log() log.Logger {
 	return log.WithFields(log.Fields{
 		"iface": ap.Iface,
 		"type":  ap.Type,

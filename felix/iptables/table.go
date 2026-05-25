@@ -27,13 +27,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -266,8 +264,8 @@ type Table struct {
 	// implementation.
 	lockProbeInterval time.Duration
 
-	logCxt               *log.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	logCxt               log.Logger
+	updateRateLimitedLog *log.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
@@ -286,7 +284,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   log.OpRecorder
 	reason       string
 }
 
@@ -312,7 +310,7 @@ type TableOptions struct {
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder log.OpRecorder
 }
 
 func NewTable(
@@ -409,9 +407,9 @@ func NewTable(
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
 		logCxt:                 log.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: log.NewRateLimitedLogger(
+			log.WithInterval(30*time.Second),
+			log.WithBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
@@ -678,10 +676,8 @@ func (t *Table) loadDataplaneState() {
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
-	logCxt := t.logCxt.WithField("chainName", "")
 	for chainName, expectedHashes := range t.chainToDataplaneHashes {
-		// Re-using one logrus.Entry to reduce allocations.
-		logCxt.Data["chainName"] = chainName
+		logCxt := t.logCxt.WithField("chainName", chainName)
 
 		if t.dirtyChains.Contains(chainName) || t.dirtyInsertAppend.Contains(chainName) {
 			// Already an update pending for this chain; no point in flagging it as
