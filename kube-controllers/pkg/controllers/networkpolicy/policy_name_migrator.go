@@ -6,13 +6,13 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -47,7 +47,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 	// Read the namespace from the service account file to determine the namespace we're running in.
 	namespace, err := os.ReadFile(winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/namespace"))
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to read service account namespace file, defaulting to 'calico-system'")
+		log.WithError(err).Warn("Failed to read service account namespace file, defaulting to 'calico-system'")
 		namespace = []byte("calico-system")
 	}
 
@@ -129,13 +129,13 @@ func (c *policyMigrator) kick() {
 }
 
 func (c *policyMigrator) Run(stop chan struct{}) {
-	logrus.Info("Starting policy migration controller")
+	log.Info("Starting policy migration controller")
 
 	// Start a goroutine to handle updates.
 	go c.run(stop)
 
 	<-stop
-	logrus.Info("Stopping policy migration controller")
+	log.Info("Stopping policy migration controller")
 }
 
 // run is the main loop for the controller, processing updates and status changes and triggering work.
@@ -143,7 +143,7 @@ func (c *policyMigrator) run(stop chan struct{}) {
 	// Wait for calico-node rollout to complete before starting migration.
 	err := c.waitForCalicoNodeRollout()
 	if err != nil {
-		logrus.Errorf("Error waiting for calico-node rollout: %v", err)
+		log.Errorf("Error waiting for calico-node rollout: %v", err)
 	}
 
 	for {
@@ -152,10 +152,10 @@ func (c *policyMigrator) run(stop chan struct{}) {
 			return
 		case status := <-c.statusUpdates:
 			c.status = status
-			logrus.Infof("Syncer status updated: %s", status.String())
+			log.Infof("Syncer status updated: %s", status.String())
 			c.kick()
 		case updates := <-c.updates:
-			logEntry := logrus.WithFields(logrus.Fields{"controller": "PolicyMigrator"})
+			logEntry := log.WithFields(log.Fields{"controller": "PolicyMigrator"})
 			utils.ProcessBatch(c.updates, updates, c.processUpdates, logEntry)
 			c.kick()
 		case <-time.After(5 * time.Minute):
@@ -165,7 +165,7 @@ func (c *policyMigrator) run(stop chan struct{}) {
 		case <-c.doWork:
 			err := c.processPendingWork()
 			if err != nil {
-				logrus.Errorf("Error processing updates: %v", err)
+				log.Errorf("Error processing updates: %v", err)
 			}
 		}
 	}
@@ -177,11 +177,11 @@ func (c *policyMigrator) processUpdates(update bapi.Update) {
 	kvp := update.KVPair
 	key, ok := kvp.Key.(model.ResourceKey)
 	if !ok {
-		logrus.Errorf("Received unexpected key type: %T", kvp.Key)
+		log.Errorf("Received unexpected key type: %T", kvp.Key)
 		return
 	}
 
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"key":  key,
 		"type": update.UpdateType.String(),
 	})
@@ -212,7 +212,7 @@ func (c *policyMigrator) processUpdates(update bapi.Update) {
 func (c *policyMigrator) processPendingWork() error {
 	// Wait for the syncer to be in sync.
 	if c.status != bapi.InSync {
-		logrus.Debug("Syncer not in sync yet, waiting...")
+		log.Debug("Syncer not in sync yet, waiting...")
 		return nil
 	}
 
@@ -222,7 +222,7 @@ func (c *policyMigrator) processPendingWork() error {
 		p := kvp.Value.(client.Object)
 		k := kvp.Key.(model.ResourceKey)
 
-		logCtx := logrus.WithFields(logrus.Fields{
+		logCtx := log.WithFields(log.Fields{
 			"namespace": p.GetNamespace(),
 			"v3name":    p.GetName(),
 			"kind":      p.GetObjectKind().GroupVersionKind().Kind,
@@ -237,7 +237,7 @@ func (c *policyMigrator) processPendingWork() error {
 			continue
 		}
 
-		logCtx.WithFields(logrus.Fields{
+		logCtx.WithFields(log.Fields{
 			"v1Name": k.Name,
 		}).Debug("Migrating policy to new name")
 
@@ -271,7 +271,7 @@ func (c *policyMigrator) processPendingWork() error {
 		}
 
 		// Successfully migrated this policy, remove from pending work.
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"namespace": p.GetNamespace(),
 			"newName":   p.GetName(),
 			"oldName":   k.Name,
@@ -286,7 +286,7 @@ func (c *policyMigrator) processPendingWork() error {
 func (c *policyMigrator) waitForCalicoNodeRollout() error {
 	if c.skipRollout {
 		// This is useful for FV tests that don't run calico-node.
-		logrus.Info("Skipping calico-node rollout wait as per configuration")
+		log.Info("Skipping calico-node rollout wait as per configuration")
 		return nil
 	}
 
@@ -298,25 +298,25 @@ func (c *policyMigrator) waitForCalicoNodeRollout() error {
 			// Rate limit checks to once every 5 seconds.
 			ds, err := c.cs.AppsV1().DaemonSets(c.namespace).Get(c.ctx, "calico-node", metav1.GetOptions{})
 			if err != nil {
-				logrus.Errorf("Error getting calico-node DaemonSet: %v", err)
+				log.Errorf("Error getting calico-node DaemonSet: %v", err)
 				continue
 			}
 			if ds.Status.ObservedGeneration != ds.Generation {
-				logrus.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"observedGeneration": ds.Status.ObservedGeneration,
 					"generation":         ds.Generation,
 				}).Info("Waiting for calico-node DaemonSet to be observed")
 				continue
 			}
 			if ds.Status.CurrentNumberScheduled != ds.Status.DesiredNumberScheduled {
-				logrus.WithFields(logrus.Fields{
+				log.WithFields(log.Fields{
 					"currentNumberScheduled": ds.Status.CurrentNumberScheduled,
 					"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
 				}).Info("Waiting for all calico-node pods to be scheduled")
 				continue
 			}
 			if ds.Status.UpdatedNumberScheduled != ds.Status.DesiredNumberScheduled {
-				logCtx := logrus.WithFields(logrus.Fields{
+				logCtx := log.WithFields(log.Fields{
 					"updatedNumberScheduled": ds.Status.UpdatedNumberScheduled,
 					"desiredNumberScheduled": ds.Status.DesiredNumberScheduled,
 				})
@@ -324,20 +324,20 @@ func (c *policyMigrator) waitForCalicoNodeRollout() error {
 				continue
 			}
 			if ds.Status.NumberUnavailable > 0 {
-				logCtx := logrus.WithFields(logrus.Fields{
+				logCtx := log.WithFields(log.Fields{
 					"numberUnavailable": ds.Status.NumberUnavailable,
 				})
 				logCtx.Info("Waiting for all calico-node pods to be available")
 				continue
 			}
 			if ds.Status.NumberMisscheduled > 0 {
-				logCtx := logrus.WithFields(logrus.Fields{
+				logCtx := log.WithFields(log.Fields{
 					"numberMisscheduled": ds.Status.NumberMisscheduled,
 				})
 				logCtx.Info("Waiting for all calico-node pods to be correctly scheduled")
 				continue
 			}
-			logrus.Info("All calico-node pods are up-to-date")
+			log.Info("All calico-node pods are up-to-date")
 			return nil
 		}
 	}
@@ -355,7 +355,7 @@ func needsMigration(p client.Object, k model.ResourceKey) bool {
 func isDefaultTier(p client.Object) bool {
 	tier, ok := names.TierFromPolicy(p)
 	if !ok {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"namespace": p.GetNamespace(),
 			"name":      p.GetName(),
 		}).Warn("Could not extract tier from policy object, assuming default")

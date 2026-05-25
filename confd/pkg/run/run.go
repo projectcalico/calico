@@ -22,13 +22,13 @@ import (
 	"path/filepath"
 	"syscall"
 
-	logrus "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
 	"github.com/projectcalico/calico/confd/pkg/backends/calico"
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
@@ -44,11 +44,11 @@ func Run(cfg *config.Config) {
 	// Create clients from config/environment.
 	cc, k8sClient, clientCfg, err := createClients(cfg)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create clients")
+		log.WithError(err).Fatal("Failed to create clients")
 	}
 
 	if err := RunWithContext(ctx, cfg, cc, k8sClient, clientCfg.Spec, &cfg.Typha, nil); err != nil {
-		logrus.Fatal(err.Error())
+		log.Fatal(err.Error())
 	}
 	os.Exit(0)
 }
@@ -66,7 +66,7 @@ func RunWithContext(
 	typhaConfig *syncclientutils.TyphaConfig,
 	storeClient backends.StoreClient,
 ) error {
-	logrus.Info("Starting calico-confd")
+	log.Info("Starting calico-confd")
 
 	if storeClient == nil {
 		var err error
@@ -105,11 +105,11 @@ func RunWithContext(
 	for {
 		select {
 		case err := <-errChan:
-			logrus.WithError(err).Error("Template processing error")
+			log.WithError(err).Error("Template processing error")
 		case <-doneChan:
 			return nil
 		case <-ctx.Done():
-			logrus.Info("Context cancelled, shutting down")
+			log.Info("Context cancelled, shutting down")
 			close(stopChan)
 			storeClient.Stop()
 			<-doneChan
@@ -133,7 +133,7 @@ func createClients(cfg *config.Config) (clientv3.Interface, kubernetes.Interface
 	cfgFile := os.Getenv("KUBECONFIG")
 	restCfg, err := winutils.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
-		logrus.WithError(err).Info("KUBECONFIG not found, attempting in-cluster config")
+		log.WithError(err).Info("KUBECONFIG not found, attempting in-cluster config")
 		restCfg, err = winutils.GetInClusterConfig()
 		if err != nil {
 			return cc, nil, clientCfg, nil
@@ -142,7 +142,7 @@ func createClients(cfg *config.Config) (clientv3.Interface, kubernetes.Interface
 
 	k8sClient, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
-		logrus.WithError(err).Warning("Failed to create K8s client")
+		log.WithError(err).Warning("Failed to create K8s client")
 		return cc, nil, clientCfg, nil
 	}
 

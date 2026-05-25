@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/app-policy/pkg/healthz"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewCommand returns a cobra command tree for the Dikastes application-layer policy engine.
@@ -40,7 +40,7 @@ func NewCommand() *cobra.Command {
 		Short: "Run the Dikastes authorization server",
 		Run: func(cmd *cobra.Command, args []string) {
 			if debug {
-				logrus.SetLevel(logrus.DebugLevel)
+				log.SetLevel(log.DebugLevel)
 			}
 			RunServer(listen, dial)
 		},
@@ -52,11 +52,11 @@ func NewCommand() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			if debug {
-				logrus.SetLevel(logrus.DebugLevel)
+				log.SetLevel(log.DebugLevel)
 			}
 			method, err := cmd.Flags().GetString("method")
 			if err != nil {
-				logrus.WithError(err).Fatal("Failed to get method flag")
+				log.WithError(err).Fatal("Failed to get method flag")
 			}
 			RunClient(dial, args[0], args[1], method)
 		},

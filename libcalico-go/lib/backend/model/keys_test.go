@@ -22,7 +22,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // interestingPaths contains seed data for the KeyFromDefaultPath fuzzer.
@@ -679,8 +680,8 @@ func benchmarkKeyFromDefaultPathImpl(b *testing.B, keyFromDefaultPath func(path 
 		}
 		benchPaths = append(benchPaths, p)
 	}
-	defer logrus.SetLevel(logrus.GetLevel())
-	logrus.SetLevel(logrus.PanicLevel)
+	defer log.SetLevel(log.GetLevel())
+	log.SetLevel(log.PanicLevel)
 
 	b.ResetTimer()
 	var key any

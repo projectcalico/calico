@@ -18,8 +18,7 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
@@ -44,7 +43,7 @@ func (v *ValidationFilter) OnStatusUpdated(status api.SyncStatus) {
 func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 	filteredUpdates := make([]api.Update, len(updates))
 	for i, update := range updates {
-		logCxt := logrus.WithFields(logrus.Fields{
+		logCxt := log.WithFields(log.Fields{
 			"key":   update.Key,
 			"value": update.Value,
 		})

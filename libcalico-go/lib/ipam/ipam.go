@@ -25,11 +25,11 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -1125,7 +1125,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 //   - []net.IPNet (len == num): Exactly num existing IPs if sufficient IPs (>= num) were found
 //   - nil, ErrInsufficientIPsByHandle: If partial/no IPs found (caller should retry)
 //   - nil, error: If the query failed
-func (c ipamClient) handleMaxAllocReached(ctx context.Context, handleID string, num int, ipVersion int, logCtx *log.Entry) ([]net.IPNet, error) {
+func (c ipamClient) handleMaxAllocReached(ctx context.Context, handleID string, num int, ipVersion int, logCtx log.Logger) ([]net.IPNet, error) {
 	logCtx.Info("MaxAlloc limit reached, checking for existing allocation")
 
 	// Query for existing IPs allocated to this handle

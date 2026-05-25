@@ -22,10 +22,10 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -46,7 +46,7 @@ type Dataplane interface {
 	CleanUpNamespace(args *skel.CmdArgs) error
 }
 
-func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
+func GetDataplane(conf types.NetConf, logger log.Logger) (Dataplane, error) {
 	name, ok := conf.DataplaneOptions["type"]
 	if !ok {
 		return getDefaultSystemDataplane(conf, logger)

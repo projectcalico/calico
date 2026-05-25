@@ -22,7 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -105,10 +105,10 @@ func FileExists(path string) (bool, error) {
 // CheckBinary searches the current PATH for a binary and returns an error if it's not found
 func CheckBinary(binaryName, neededFor string) error {
 	if path, err := exec.LookPath(binaryName); err != nil {
-		logrus.WithError(err).Errorf("Error trying to find %s in PATH (needed for %s)", binaryName, neededFor)
+		log.WithError(err).Errorf("Error trying to find %s in PATH (needed for %s)", binaryName, neededFor)
 		return fmt.Errorf("unable to find %s in PATH (needed for %s)", binaryName, neededFor)
 	} else if path == "" {
-		logrus.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
+		log.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
 		return fmt.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
 	}
 	return nil

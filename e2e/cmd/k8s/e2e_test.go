@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/sirupsen/logrus"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/test/e2e"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -28,6 +27,7 @@ import (
 
 	caliconfig "github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/testconfig"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	// Import tests.
 	_ "k8s.io/kubernetes/test/e2e/network"
@@ -46,7 +46,7 @@ func init() {
 	// Set up logging. We need to set the output for various logging systems used by the tests
 	// and libraries imported by the tests.
 	klog.SetOutput(ginkgo.GinkgoWriter)
-	logrus.SetOutput(ginkgo.GinkgoWriter)
+	log.SetOutput(ginkgo.GinkgoWriter)
 
 	// Register the standard -test.* flags so that the ginkgo CLI
 	// can pass -test.timeout, -test.count, etc. to this binary.
@@ -92,13 +92,13 @@ func applyTestConfig(path string) error {
 	}
 
 	if flags.LabelFilter != "" {
-		logrus.Infof("Test config: ginkgo.label-filter = %s", flags.LabelFilter)
+		log.Infof("Test config: ginkgo.label-filter = %s", flags.LabelFilter)
 		if err := flag.Set("ginkgo.label-filter", flags.LabelFilter); err != nil {
 			return fmt.Errorf("set ginkgo.label-filter: %w", err)
 		}
 	}
 	if skip := flags.SkipString(); skip != "" {
-		logrus.Infof("Test config: ginkgo.skip = %s", skip)
+		log.Infof("Test config: ginkgo.skip = %s", skip)
 		if err := flag.Set("ginkgo.skip", skip); err != nil {
 			return fmt.Errorf("set ginkgo.skip: %w", err)
 		}

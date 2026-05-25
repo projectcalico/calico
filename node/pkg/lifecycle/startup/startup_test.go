@@ -17,7 +17,6 @@ package startup
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -26,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -105,7 +104,7 @@ func temporarilySetEnv(k, v string) func() {
 	originalValue, hadOriginalValue := os.LookupEnv(k)
 	err := os.Setenv(k, v)
 	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error setting env var %s: %v", k, err))
-	logrus.Infof("Set env var %s=%s (was %s, hadOriginalValue=%t)", k, v, originalValue, hadOriginalValue)
+	log.Infof("Set env var %s=%s (was %s, hadOriginalValue=%t)", k, v, originalValue, hadOriginalValue)
 	return func() {
 		var err error
 		if hadOriginalValue {
@@ -114,7 +113,7 @@ func temporarilySetEnv(k, v string) func() {
 			err = os.Unsetenv(k)
 		}
 		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Error restoring env var %s: %v", k, err))
-		logrus.Infof("Restored env var %s to %s (hadOriginalValue=%t)", k, originalValue, hadOriginalValue)
+		log.Infof("Restored env var %s to %s (hadOriginalValue=%t)", k, originalValue, hadOriginalValue)
 	}
 }
 

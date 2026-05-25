@@ -20,9 +20,9 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/utils/hcn"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var mgmtIPNet *net.IPNet
@@ -44,7 +44,7 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 		`{"Type": "OutBoundNAT", "ExceptionList": ["10.96.0.0/12"]}`,
 		`{"Type": "SomethingElse"}`,
 	)
-	logger := logrus.WithField("test", "true")
+	logger := log.WithField("test", "true")
 
 	_, net1, _ := net.ParseCIDR("10.0.1.0/24")
 	_, net2, _ := net.ParseCIDR("10.0.2.0/24")

@@ -15,9 +15,8 @@
 package goldmane
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // filterHintsRequest is an internal helper used to synchronously request filter hints from the aggregator.
@@ -32,7 +31,7 @@ type filterHintsResponse struct {
 }
 
 func (a *Goldmane) Hints(req *proto.FilterHintsRequest) (*proto.FilterHintsResult, error) {
-	logrus.WithField("req", req).Debug("Received hints request")
+	log.WithField("req", req).Debug("Received hints request")
 
 	respCh := make(chan *filterHintsResponse)
 	defer close(respCh)
@@ -43,7 +42,7 @@ func (a *Goldmane) Hints(req *proto.FilterHintsRequest) (*proto.FilterHintsResul
 }
 
 func (a *Goldmane) queryFilterHints(req *proto.FilterHintsRequest) *filterHintsResponse {
-	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received filter hints request.")
+	log.WithFields(log.Fields{"req": req}).Debug("Received filter hints request.")
 
 	// Sanitize the time range, resolving any relative time values.
 	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
@@ -55,7 +54,7 @@ func (a *Goldmane) queryFilterHints(req *proto.FilterHintsRequest) *filterHintsR
 
 	values, meta, err := a.flowStore.FilterHints(req)
 	if err != nil {
-		logrus.WithError(err).Warn("Error listing filter hints")
+		log.WithError(err).Warn("Error listing filter hints")
 		return &filterHintsResponse{nil, err}
 	}
 

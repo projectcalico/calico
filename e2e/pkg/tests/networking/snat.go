@@ -21,11 +21,11 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // connectionResult represents the expected outcome of a connectivity check,
@@ -43,7 +43,7 @@ const (
 // /clientip endpoint (created via WithHTTP("GET", "/clientip", nil)).
 // Uses ct.Connect() for all connectivity — never bypasses conncheck.
 func checkConnection(ct conncheck.ConnectionTester, client conncheck.Client, target conncheck.Target, expected connectionResult) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"client":   client.Name(),
 		"target":   target.String(),
 		"expected": expected,

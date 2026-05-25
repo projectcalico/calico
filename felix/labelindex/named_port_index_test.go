@@ -27,15 +27,14 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -914,7 +913,7 @@ var (
 )
 
 func TestNamedPortIndex(t *testing.T) {
-	logutils.ConfigureLoggingForTestingT(t)
+	log.RedirectTo(t)
 	log.SetLevel(log.DebugLevel)
 
 	for _, state := range baseTests {
@@ -950,7 +949,7 @@ func TestNamedPortIndex(t *testing.T) {
 				}
 				t.Run(strings.Join(names, " THEN "),
 					func(t *testing.T) {
-						logutils.ConfigureLoggingForTestingT(t)
+						log.RedirectTo(t)
 						RegisterTestingT(t)
 						idx := NewSelectorAndNamedPortIndex(false)
 						rec := newRecorder()

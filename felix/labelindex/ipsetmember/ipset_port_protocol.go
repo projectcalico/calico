@@ -6,7 +6,8 @@ import (
 	"strings"
 
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Protocol uint8
@@ -40,7 +41,7 @@ func (p Protocol) MatchesModelProtocol(protocol numorstring.Protocol) bool {
 	case ProtocolAny:
 		return true
 	}
-	logrus.WithField("protocol", p).Panic("Unknown protocol")
+	log.WithField("protocol", p).Panic("Unknown protocol")
 	return false
 }
 

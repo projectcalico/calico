@@ -32,10 +32,10 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -56,20 +56,20 @@ const (
 // 4. OS Hostname.
 func DetermineNodename(conf types.NetConf) (nodename string) {
 	if conf.Nodename != "" {
-		logrus.Debugf("Read node name from CNI conf: %s", conf.Nodename)
+		log.Debugf("Read node name from CNI conf: %s", conf.Nodename)
 		nodename = conf.Nodename
 	} else if nff := nodenameFromFile(conf.NodenameFile); nff != "" {
-		logrus.Debugf("Read node name from file: %s", nff)
+		log.Debugf("Read node name from file: %s", nff)
 		nodename = nff
 	} else if conf.Hostname != "" {
 		nodename = conf.Hostname
-		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead")
+		log.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead")
 	} else {
 		nodename, _ = names.Hostname()
-		logrus.Debugf("Read node name from OS Hostname")
+		log.Debugf("Read node name from OS Hostname")
 	}
 
-	logrus.Debugf("Using node name %s", nodename)
+	log.Debugf("Using node name %s", nodename)
 	return
 }
 
@@ -83,10 +83,10 @@ func nodenameFromFile(filename string) string {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return empty string.
-			logrus.Infof("File %s does not exist", filename)
+			log.Infof("File %s does not exist", filename)
 			return ""
 		}
-		logrus.WithError(err).Errorf("Failed to read %s", filename)
+		log.WithError(err).Errorf("Failed to read %s", filename)
 		return ""
 	}
 	return string(data)
@@ -110,15 +110,15 @@ func MTUFromFile(filename string, conf types.NetConf) (int, error) {
 	// Handle file not existing case
 	if os.IsNotExist(err) {
 		if conf.RequireMTUFile {
-			logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist")
+			log.WithField("filename", filename).WithError(err).Errorf("File does not exist")
 			return 0, err
 		}
-		logrus.WithField("filename", filename).WithError(err).Errorf("File does not exist, skipping the error since RequireMTUFile is false")
+		log.WithField("filename", filename).WithError(err).Errorf("File does not exist, skipping the error since RequireMTUFile is false")
 		return 0, nil
 	}
 
 	// Handle other errors
-	logrus.WithError(err).Errorf("Failed to read %s", filename)
+	log.WithError(err).Errorf("Failed to read %s", filename)
 	return 0, err
 }
 
@@ -134,7 +134,7 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *internala
 
 // AddIPAM calls through to the configured IPAM plugin.
 // It also contains IPAM plugin specific logic based on the configured plugin.
-func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger log.Logger) (*cniv1.Result, error) {
 	// Check if we're configured to use the Azure IPAM plugin.
 	var an *azure.AzureNetwork
 	if conf.IPAM.Type == "azure-vnet-ipam" {
@@ -200,9 +200,9 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cni
 // DeleteIPAM calls IPAM plugin to release the IP address.
 // It also contains IPAM plugin specific logic based on the configured plugin,
 // and is the logical counterpart to AddIPAM.
-func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
+func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger log.Logger) error {
 	logger.Info("Calico CNI releasing IP address")
-	logger.WithFields(logrus.Fields{
+	logger.WithFields(log.Fields{
 		"paths": os.Getenv("CNI_PATH"),
 		"type":  conf.IPAM.Type,
 	}).Debug("Looking for IPAM plugin in paths")
@@ -221,7 +221,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 			return err
 		}
 
-		logger.WithFields(logrus.Fields{
+		logger.WithFields(log.Fields{
 			"podCidrv4": dummyPodCidrv4,
 			"podCidrv6": dummyPodCidrv6,
 		}).Info("Using dummy podCidrs to release the IPs")
@@ -301,7 +301,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 //	  }
 //	  ...
 //	}
-func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]any, getPodCIDRs func() (string, string, error)) error {
+func ReplaceHostLocalIPAMPodCIDRs(logger log.Logger, stdinData map[string]any, getPodCIDRs func() (string, string, error)) error {
 	ipamData, ok := stdinData["ipam"].(map[string]any)
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", stdinData["ipam"])
@@ -335,8 +335,8 @@ func ReplaceHostLocalIPAMPodCIDRs(logger *logrus.Entry, stdinData map[string]any
 	return nil
 }
 
-func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData any, getPodCidrs func() (string, string, error)) error {
-	logrus.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
+func replaceHostLocalIPAMPodCIDR(logger log.Logger, rawIpamData any, getPodCidrs func() (string, string, error)) error {
+	log.WithField("ipamData", rawIpamData).Debug("Examining IPAM data for usePodCidr")
 	ipamData, ok := rawIpamData.(map[string]any)
 	if !ok {
 		return fmt.Errorf("failed to parse host-local IPAM data; was expecting a dict, not: %v", rawIpamData)
@@ -388,7 +388,7 @@ func UpdateHostLocalIPAMDataForWindows(subnet string, ipamData map[string]any) e
 		return nil
 	}
 	// Checks whether the ip is valid or not
-	logrus.Info("Updating host-local IPAM configuration to reserve IPs for Windows bridge.")
+	log.Info("Updating host-local IPAM configuration to reserve IPs for Windows bridge.")
 	ip, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return err
@@ -594,8 +594,8 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 	if err := cnitypes.LoadArgs(args.Args, &k8sArgs); err != nil {
 		return nil, err
 	}
-	logrus.Debugf("Getting WEP identifiers with arguments: %s, for node %s", args.Args, nodename)
-	logrus.Debugf("Loaded k8s arguments: %v", k8sArgs)
+	log.Debugf("Getting WEP identifiers with arguments: %s, for node %s", args.Args, nodename)
+	log.Debugf("Loaded k8s arguments: %v", k8sArgs)
 
 	epIDs := WEPIdentifiers{}
 	epIDs.ContainerID = args.ContainerID
@@ -629,7 +629,7 @@ func GetIdentifiers(args *skel.CmdArgs, nodename string) (*WEPIdentifiers, error
 func GetHandleID(netName, containerID, workload string) string {
 	handleID := fmt.Sprintf("%s.%s", netName, containerID)
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"HandleID":    handleID,
 		"Network":     netName,
 		"Workload":    workload,
@@ -736,7 +736,7 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
 // CNI ADD execution. It forces the CNI_COMMAND to be DEL.
-func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
+func ReleaseIPAllocation(logger log.Logger, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
@@ -752,14 +752,14 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 // Set up logging for both Calico and libcalico using the provided log level,
 func ConfigureLogging(conf types.NetConf) {
 	if strings.EqualFold(conf.LogLevel, "debug") {
-		logrus.SetLevel(logrus.DebugLevel)
+		log.SetLevel(log.DebugLevel)
 	} else if strings.EqualFold(conf.LogLevel, "info") {
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 	} else if strings.EqualFold(conf.LogLevel, "error") {
-		logrus.SetLevel(logrus.ErrorLevel)
+		log.SetLevel(log.ErrorLevel)
 	} else {
 		// Default level
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 	}
 
 	writers := []io.Writer{os.Stderr}
@@ -768,7 +768,7 @@ func ConfigureLogging(conf types.NetConf) {
 		// Create the path for the log file if it does not exist
 		err := os.MkdirAll(filepath.Dir(conf.LogFilePath), 0o755)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(conf.LogFilePath))
+			log.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(conf.LogFilePath))
 		}
 
 		// Create file logger with log file rotation.
@@ -801,7 +801,7 @@ func ConfigureLogging(conf types.NetConf) {
 
 	mw := io.MultiWriter(writers...)
 
-	logrus.SetOutput(mw)
+	log.SetOutput(mw)
 }
 
 // ResolvePools takes an array of CIDRs or IP Pool names and resolves it to a slice of pool CIDRs.
@@ -832,7 +832,7 @@ func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 
 					if err != nil {
 						return nil, fmt.Errorf("failed to parse IP pool cidr: %s", err)
 					}
-					logrus.Infof("Resolved pool name %s to cidr %s", ipp.Name, cidr)
+					log.Infof("Resolved pool name %s to cidr %s", ipp.Name, cidr)
 				}
 			}
 

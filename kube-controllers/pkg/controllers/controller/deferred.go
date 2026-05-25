@@ -17,13 +17,13 @@ package controller
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apiextinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/externalversions"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DeferredCRDController implements Controller by watching for a CRD to become
@@ -59,7 +59,7 @@ type deferredCRDController struct {
 }
 
 func (d *deferredCRDController) Run(stop chan struct{}) {
-	logCtx := logrus.WithField("crd", d.crdName)
+	logCtx := log.WithField("crd", d.crdName)
 	logCtx.Info("Waiting for CRD to become established")
 
 	ctx, cancel := context.WithCancel(context.Background())

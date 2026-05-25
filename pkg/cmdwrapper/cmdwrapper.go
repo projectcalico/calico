@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -92,7 +92,7 @@ func runLoop(prog string, args []string, env []string) {
 	defer signal.Stop(sigCh)
 
 	for {
-		logrus.Infof("Starting %s %v", prog, args)
+		log.Infof("Starting %s %v", prog, args)
 		cmd := exec.Command(prog, args...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
@@ -101,7 +101,7 @@ func runLoop(prog string, args []string, env []string) {
 		setPdeathsig(cmd)
 
 		if err := cmd.Start(); err != nil {
-			logrus.WithError(err).Fatalf("Failed to start %s", prog)
+			log.WithError(err).Fatalf("Failed to start %s", prog)
 		}
 
 		stop := make(chan struct{})
@@ -115,11 +115,11 @@ func runLoop(prog string, args []string, env []string) {
 
 		exitCode := classifyExit(cmdWaitErr, prog)
 		if exitCode == RestartReturnCode {
-			logrus.Infof("Received exit status %d, restarting %s", exitCode, prog)
+			log.Infof("Received exit status %d, restarting %s", exitCode, prog)
 			time.Sleep(restartBackoff)
 			continue
 		}
-		logrus.Infof("Received exit status %d for %s", exitCode, prog)
+		log.Infof("Received exit status %d for %s", exitCode, prog)
 		os.Exit(exitCode)
 	}
 }
@@ -137,7 +137,7 @@ func forwardSignals(p *os.Process, sigCh <-chan os.Signal, stop <-chan struct{},
 			if err := p.Signal(s); err != nil {
 				// The child may have already exited (common during
 				// teardown), so this is not fatal.
-				logrus.WithError(err).WithField("signal", s).Debug("Failed to forward signal to wrapped process")
+				log.WithError(err).WithField("signal", s).Debug("Failed to forward signal to wrapped process")
 			}
 		case <-stop:
 			return
@@ -156,6 +156,6 @@ func classifyExit(cmdWaitErr error, prog string) int {
 	if errors.As(cmdWaitErr, &ee) {
 		return ee.ExitCode()
 	}
-	logrus.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
+	log.WithError(cmdWaitErr).Errorf("Failed to wait for %s to finish", prog)
 	return 1
 }

@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -28,9 +27,9 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 
@@ -163,7 +162,7 @@ type Goldmane struct {
 	health *health.HealthAggregator
 
 	// ratelimiter is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *log.RateLimitedLogger
 
 	// The following channels are input channels to make resuests of the main loop.
 	listRequests        chan listRequest
@@ -188,9 +187,9 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		pushIndex:           30,
 		nowFunc:             time.Now,
 		streams:             stream.NewStreamManager(),
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: log.NewRateLimitedLogger(
+			log.WithBurst(1),
+			log.WithInterval(15*time.Second),
 		),
 	}
 
@@ -201,7 +200,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 
 	// Log out some key information.
 	if a.sink != nil {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			// This is the soonest we will possible emit a flow as part of an aggregation.
 			"emissionWindowLeftBound": time.Duration(a.pushIndex-a.bucketsToAggregate) * a.bucketDuration,
 
@@ -213,7 +212,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		}).Info("Emission of aggregated flows configured")
 	}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		// This is the size of each aggregation bucket.
 		"bucketSize": a.bucketDuration,
 
@@ -284,12 +283,12 @@ func (a *Goldmane) run(startTime int64, ready chan<- struct{}) {
 		case stream := <-a.streams.Backfills():
 			a.backfill(stream)
 		case req := <-a.sinkChan:
-			logrus.WithField("sink", req.sink).Info("Setting aggregator sink")
+			log.WithField("sink", req.sink).Info("Setting aggregator sink")
 			a.sink = req.sink
 			a.flowStore.EmitFlowCollections(a.sink)
 			close(req.done)
 		case <-a.done:
-			logrus.Warn("Aggregator shutting down")
+			log.Warn("Aggregator shutting down")
 			return
 		}
 	}
@@ -313,7 +312,7 @@ func (a *Goldmane) Receive(f *types.Flow) {
 
 // Stream returns a new Stream from the stream manager.
 func (a *Goldmane) Stream(req *proto.FlowStreamRequest) (stream.Stream, error) {
-	logrus.WithField("req", req).Debug("Received stream request")
+	log.WithField("req", req).Debug("Received stream request")
 
 	if req.StartTimeGte != 0 {
 		// Sanitize the time range, resolving any relative time values.
@@ -367,7 +366,7 @@ func (a *Goldmane) queryStatistics(req *proto.StatisticsRequest) *statisticsResp
 	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
 
 	if err := a.validateTimeRange(req.StartTimeGte, req.StartTimeLt); err != nil {
-		logrus.WithField("req", req).WithError(err).Debug("Invalid time range")
+		log.WithField("req", req).WithError(err).Debug("Invalid time range")
 		return &statisticsResponse{err: err}
 	}
 	results, err := a.flowStore.Statistics(req)
@@ -379,14 +378,14 @@ func (a *Goldmane) backfill(stream stream.Stream) {
 	if stream.StartTimeGte() == 0 {
 		// If no start time is provided, we don't need to backfill any data
 		// to this stream.
-		logrus.WithField("id", stream.ID()).Debug("No start time provided, skipping backfill")
+		log.WithField("id", stream.ID()).Debug("No start time provided, skipping backfill")
 		return
 	}
 
 	// Measure the time it takes to backfill the stream.
 	start := time.Now()
 	defer func() {
-		logrus.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Debug("Backfill complete")
+		log.WithField("id", stream.ID()).WithField("duration", time.Since(start)).Debug("Backfill complete")
 		backfillLatency.Observe(float64(time.Since(start).Milliseconds()))
 	}()
 	a.flowStore.Backfill(a.streams, stream.ID(), stream.StartTimeGte())
@@ -400,18 +399,18 @@ func (a *Goldmane) normalizeTimeRange(gt, lt int64) (int64, int64) {
 	now := a.nowFunc().Unix()
 	if gt < 0 {
 		gt = now + gt
-		logrus.WithField("gte", gt).Debug("Negative start time translated to absolute time")
+		log.WithField("gte", gt).Debug("Negative start time translated to absolute time")
 	} else if gt == 0 {
 		gt = a.flowStore.BeginningOfHistory()
-		logrus.WithField("gte", gt).Debug("No start time provided, defaulting to beginning of server history")
+		log.WithField("gte", gt).Debug("No start time provided, defaulting to beginning of server history")
 	}
 
 	if lt < 0 {
 		lt = now + lt
-		logrus.WithField("lt", lt).Debug("Negative end time translated to absolute time")
+		log.WithField("lt", lt).Debug("Negative end time translated to absolute time")
 	} else if lt == 0 {
 		lt = now
-		logrus.WithField("lt", lt).Debug("No end time provided, defaulting to current time")
+		log.WithField("lt", lt).Debug("No end time provided, defaulting to current time")
 	}
 	return gt, lt
 }
@@ -447,7 +446,7 @@ func (a *Goldmane) rollover() time.Duration {
 	// If the next bucket start time is in the past, we've fallen behind and need to catch up.
 	// Schedule a rollover immediately.
 	if nextBucketStart.Before(now) {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"now":             now.Unix(),
 			"nextBucketStart": nextBucketStart.Unix(),
 		}).Warn("Falling behind, scheduling immediate rollover")
@@ -458,7 +457,7 @@ func (a *Goldmane) rollover() time.Duration {
 
 	// The time until the next rollover is the difference between the next bucket start time and now.
 	rolloverIn := nextBucketStart.Sub(now)
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"nextBucketStart": nextBucketStart.Unix(),
 		"now":             now.Unix(),
 		"rolloverIn":      rolloverIn,
@@ -484,7 +483,7 @@ batchLoop:
 			break batchLoop
 		}
 	}
-	logrus.WithField("num", numHandled).Debug("Processed flow batch")
+	log.WithField("num", numHandled).Debug("Processed flow batch")
 
 	// Set the number of unique flows in the aggregator based on the number of DiachronicFlows.
 	numUniqueFlows.Set(float64(a.flowStore.Size()))
@@ -494,7 +493,7 @@ batchLoop:
 
 func (a *Goldmane) indexFlow(flow *types.Flow) {
 	flowStart := time.Now()
-	logrus.WithField("flow", flow).Debug("Received Flow")
+	log.WithField("flow", flow).Debug("Received Flow")
 
 	// Increment the received flow counter.
 	receivedFlowCounter.Inc()

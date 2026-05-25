@@ -24,7 +24,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -131,7 +131,7 @@ var _ = describe.CalicoDescribe(
 					toDelete := v3.NewTier()
 					toDelete.Name = tierName
 					if err := adminCli.Delete(cleanupCtx, toDelete); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", tierName).Error("Failed to delete Tier")
+						log.WithError(err).WithField("name", tierName).Error("Failed to delete Tier")
 					}
 				})
 			}
@@ -146,7 +146,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := f.ClientSet.RbacV1().ClusterRoles().Delete(cleanupCtx, roleName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", roleName).Error("Failed to delete ClusterRole")
+						log.WithError(err).WithField("name", roleName).Error("Failed to delete ClusterRole")
 					}
 				})
 			}
@@ -158,7 +158,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, bindingName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", bindingName).Error("Failed to delete ClusterRoleBinding")
+						log.WithError(err).WithField("name", bindingName).Error("Failed to delete ClusterRoleBinding")
 					}
 				})
 			}
@@ -367,14 +367,14 @@ var _ = describe.CalicoDescribe(
 					restore.Name = "default"
 					restore.Spec = saved.Spec
 					if err := adminCli.Create(ctx, restore); err != nil {
-						logrus.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
+						log.WithError(err).Error("CRITICAL: failed to recreate deleted default tier")
 					}
 					return
 				}
 				if current.ResourceVersion != saved.ResourceVersion {
 					current.Spec = saved.Spec
 					if err := adminCli.Update(ctx, current); err != nil {
-						logrus.WithError(err).Warn("Failed to restore default tier")
+						log.WithError(err).Warn("Failed to restore default tier")
 					}
 				}
 			}
@@ -485,7 +485,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, allowed); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", allowed.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", allowed.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -512,7 +512,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, other); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", other.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", other.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -546,7 +546,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, np); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -586,7 +586,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 					if err := adminCli.Delete(cleanupCtx, np); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", np.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -628,7 +628,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := adminCli.Delete(cleanupCtx, barePolicy); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", barePolicy.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", barePolicy.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -645,7 +645,7 @@ var _ = describe.CalicoDescribe(
 					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cleanupCancel()
 					if err := adminCli.Delete(cleanupCtx, prefixedPolicy); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", prefixedPolicy.Name).Error("Failed to delete policy")
+						log.WithError(err).WithField("name", prefixedPolicy.Name).Error("Failed to delete policy")
 					}
 				})
 
@@ -968,13 +968,13 @@ var _ = describe.CalicoDescribe(
 			setup := buildTieredRBACResources(testTier, otherTier, suffix)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
+					log.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
 					errOccurred = true
 				}
 			}
 			for _, role := range setup.roles {
 				if err := f.ClientSet.RbacV1().ClusterRoles().Delete(ctx, role.Name, metav1.DeleteOptions{}); err != nil {
-					logrus.WithError(err).WithField("name", role.Name).Error("Failed to delete ClusterRole")
+					log.WithError(err).WithField("name", role.Name).Error("Failed to delete ClusterRole")
 					errOccurred = true
 				}
 			}
@@ -983,7 +983,7 @@ var _ = describe.CalicoDescribe(
 			tier := v3.NewTier()
 			tier.Name = testTier
 			if err := adminCli.Delete(ctx, tier); err != nil {
-				logrus.WithError(err).WithField("name", testTier).Error("Failed to delete Tier")
+				log.WithError(err).WithField("name", testTier).Error("Failed to delete Tier")
 				errOccurred = true
 			}
 

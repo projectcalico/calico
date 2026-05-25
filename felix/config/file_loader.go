@@ -17,8 +17,9 @@ package config
 import (
 	"os"
 
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/ini.v1"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func LoadConfigFile(filename string) (map[string]string, error) {
