@@ -17,10 +17,9 @@ package routetable
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -152,7 +151,7 @@ func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex 
 		// RouteTable is going to replace this route with another one.
 		if desiredRoute.ifaceIdx == ifindex {
 			// Route isn't actually moving, just a ToS/priority update?
-			logrus.WithField("ip", addr).Debug(
+			log.WithField("ip", addr).Debug(
 				"Route staying on same interface, ignoring.")
 			return
 		}
@@ -161,12 +160,12 @@ func (c *ConntrackCleanupManager) OnDataplaneRouteDeleted(cidr ip.CIDR, ifindex 
 			// We've already processed this route in a previous round so the
 			// RouteTable must be deleting a stray newly added route.
 			// Not safe to clean up conntrack entries.
-			logrus.WithField("ip", addr).Info(
+			log.WithField("ip", addr).Info(
 				"Route deleted but tracker shows we've already programmed correct route, ignoring.")
 			return
 		}
 	}
-	logrus.WithField("ip", addr).Debug("Route deleted, queueing conntrack deletion.")
+	log.WithField("ip", addr).Debug("Route deleted, queueing conntrack deletion.")
 	c.addrsToCleanUp.Add(addr)
 }
 
@@ -184,21 +183,21 @@ func (c *ConntrackCleanupManager) CIDRNeedsEarlyCleanup(cidr ip.CIDR, oldIface i
 		// route must be some sort of stray route being cleaned up after the
 		// fact.  We don't want to kill conntrack for the already-programmed
 		// good route.
-		logrus.WithField("ip", addr).Debug("Dataplane already has correct route, not cleaning up.")
+		log.WithField("ip", addr).Debug("Dataplane already has correct route, not cleaning up.")
 		return false
 	}
 	if desiredExists && desiredRoute.ifaceIdx == oldIface {
 		// Route isn't actually moving, just a ToS/priority update?
-		logrus.WithField("ip", addr).Debug("Route staying on same iface, no need to clean up.")
+		log.WithField("ip", addr).Debug("Route staying on same iface, no need to clean up.")
 		return false
 	}
 	if desiredRoute.routeClass.IsRemote() && dataplaneRoute.routeClass.IsRemote() {
 		// Moving between different kinds of tunnel, not safe to clean up, it
 		// may still be same remote workload.
-		logrus.WithField("ip", addr).Debug("Route moving from remote->remote, skipping cleanup.")
+		log.WithField("ip", addr).Debug("Route moving from remote->remote, skipping cleanup.")
 		return false
 	}
-	logrus.WithField("ip", addr).Debug("Address needs cleanup.")
+	log.WithField("ip", addr).Debug("Address needs cleanup.")
 	return true
 }
 
@@ -228,7 +227,7 @@ func (c *ConntrackCleanupManager) StartConntrackCleanupAndReset() {
 // table is very slow if there are a lot of entries.  Previously, we did the deletion synchronously
 // but that led to lengthy Apply() calls on the critical path.
 func (c *ConntrackCleanupManager) startDeletion(ipAddr ip.Addr) {
-	logrus.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
+	log.WithField("ip", ipAddr).Debug("Starting goroutine to delete conntrack entries")
 	done := make(chan struct{})
 	c.perIPDoneChans[ipAddr] = done
 	go func() {
@@ -237,7 +236,7 @@ func (c *ConntrackCleanupManager) startDeletion(ipAddr ip.Addr) {
 		}()
 		defer close(done)
 		c.conntrack.RemoveConntrackFlows(c.ipVersion, ipAddr.AsNetIP())
-		logrus.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
+		log.WithField("ip", ipAddr).Debug("Deleted conntrack entries")
 	}()
 }
 
@@ -257,12 +256,12 @@ func (c *ConntrackCleanupManager) cleanUpExpiredChan(ipAddr ip.Addr) {
 	ch := c.perIPDoneChans[ipAddr]
 	select {
 	case <-ch:
-		logrus.WithField("ip", ipAddr).Debug(
+		log.WithField("ip", ipAddr).Debug(
 			"Background goroutine finished deleting conntrack entries")
 		delete(c.perIPDoneChans, ipAddr)
 	default:
 		// Can get here if there was >1 deletion started for the same IP.
-		logrus.WithField("ip", ipAddr).Debug(
+		log.WithField("ip", ipAddr).Debug(
 			"Background goroutine yet to finish deleting conntrack entries")
 	}
 }
@@ -287,18 +286,18 @@ func (c *ConntrackCleanupManager) WaitForPendingDeletion(cidr ip.CIDR) {
 	case <-ch:
 		goto done
 	default:
-		logrus.WithField("ip", ipAddr).Info("Need to wait for pending conntrack deletion to finish...")
+		log.WithField("ip", ipAddr).Info("Need to wait for pending conntrack deletion to finish...")
 	}
 	for {
 		select {
 		case <-ch:
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"ip":          ipAddr,
 				"timeWaiting": time.Since(startTime),
 			}).Info("Done waiting for pending conntrack deletion to finish")
 			goto done
 		case <-time.After(10 * time.Second):
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"ip":          ipAddr,
 				"timeWaiting": time.Since(startTime),
 			}).Info("Still waiting for pending conntrack deletion to finish...")

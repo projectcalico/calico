@@ -20,33 +20,31 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 func main() {
-	logutils.ConfigureEarlyLogging()
+	log.SetComponent("calico-selector")
 	// We use stdout for the parseable output of the tool so we _do_ want
 	// logging to go to stderr.
-	logrus.SetOutput(os.Stderr)
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetOutput(os.Stderr)
+	log.SetLevel(log.WarnLevel)
 
 	if len(os.Args) != 3 {
-		logrus.Fatalln("Usage: calico-selector id|set-name|print-tree <selector>")
+		log.Fatal("Usage: calico-selector id|set-name|print-tree <selector>")
 		os.Exit(1)
 	}
 
 	selStr := os.Args[2]
 	sel, err := selector.Parse(selStr)
 	if err != nil {
-		logrus.Fatalln("Failed to parse selector:", err)
+		log.Fatal("Failed to parse selector:", err)
 		os.Exit(1)
 	}
-	logrus.Info("Parsed selector:", sel.String())
-	logrus.Info("Unique ID:", sel.UniqueID())
+	log.Info("Parsed selector:", sel.String())
+	log.Info("Unique ID:", sel.UniqueID())
 
 	switch os.Args[1] {
 	case "id":
@@ -57,7 +55,7 @@ func main() {
 	case "print-tree":
 		printTree(os.Stdout, "", sel.Root(), false)
 	default:
-		logrus.Fatalln("Usage: calico-selector id|set-name|print-tree <selector>")
+		log.Fatal("Usage: calico-selector id|set-name|print-tree <selector>")
 	}
 }
 
