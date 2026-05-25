@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/felix/bpf"
@@ -32,6 +31,7 @@ import (
 	v2 "github.com/projectcalico/calico/felix/bpf/conntrack/v2"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {

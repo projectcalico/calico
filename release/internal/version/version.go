@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -76,7 +76,7 @@ type Version string
 // New creates a new Version object from the given string.
 func New(version string) Version {
 	if _, err := semver.NewVersion(strings.TrimPrefix(version, "v")); err != nil {
-		logrus.WithField("version", version).WithError(err).Fatal("Failed to parse version")
+		log.WithField("version", version).WithError(err).Fatal("Failed to parse version")
 	}
 	return Version(version)
 }
@@ -160,7 +160,7 @@ func (v *Version) NextReleaseVersion() (Version, error) {
 			parts := strings.Split(ver.Prerelease(), ".")
 			minorEPver, err := strconv.Atoi(strings.Split(parts[1], "-")[0])
 			if err != nil {
-				logrus.WithError(err).Error("Failed to parse minor EP version")
+				log.WithError(err).Error("Failed to parse minor EP version")
 				return "", err
 			}
 			return New(fmt.Sprintf("v%d.%d.0-1.%d", ver.Major(), ver.Minor(), minorEPver+1)), nil
@@ -192,9 +192,9 @@ func GitVersion() Version {
 	// First, determine the git revision.
 	previousTag, err := command.GitVersion(".", true)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to determine latest git version")
+		log.WithError(err).Fatal("Failed to determine latest git version")
 	}
-	logrus.WithField("out", previousTag).Info("Current git describe")
+	log.WithField("out", previousTag).Info("Current git describe")
 	return New(previousTag)
 }
 
@@ -238,10 +238,10 @@ func DetermineReleaseVersion(v Version, devTagSuffix string) (Version, error) {
 		// This is a patch release - we need to parse the previous, and
 		// bump the patch version.
 		previousVersion := strings.Split(gitVersion, "-")[0]
-		logrus.WithField("previousVersion", previousVersion).Info("Previous version")
+		log.WithField("previousVersion", previousVersion).Info("Previous version")
 		v, err := semver.NewVersion(strings.TrimPrefix(previousVersion, "v"))
 		if err != nil {
-			logrus.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
+			log.WithField("previousVersion", previousVersion).WithError(err).Error("Failed to parse git version as semver")
 			return "", fmt.Errorf("failed to parse git version as semver: %s", err)
 		}
 		newVersion := v.IncPatch()

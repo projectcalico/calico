@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/run"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 

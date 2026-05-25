@@ -26,7 +26,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = describe.CalicoDescribe(
@@ -301,7 +301,7 @@ var _ = describe.CalicoDescribe(
 				err := cli.Delete(ctx, defaultDeny)
 				Expect(err).NotTo(HaveOccurred())
 			}()
-			logrus.Info("Applied default-deny policy.")
+			log.Info("Applied default-deny policy.")
 
 			// Verify the default deny.
 			checker.ExpectFailure(client1, server1.ClusterIP())

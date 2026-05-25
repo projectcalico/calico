@@ -18,14 +18,13 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func setupTest(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
-	logutils.RedirectLogrusToTestingT(t)
-	logutils.ConfigureFormatter("test")
+	log.SetLevel(log.DebugLevel)
+	log.RedirectTo(t)
+	log.SetComponent("test")
 	RegisterTestingT(t)
 }

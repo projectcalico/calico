@@ -21,11 +21,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -57,11 +56,11 @@ func init() {
 func setupBenchmark(b *testing.B) func() {
 	// Set up logrus to use b.Logf via custom writer
 	writer := &logrusWriter{b}
-	logrus.SetOutput(writer)
-	logrus.SetLevel(logrus.WarnLevel)
+	log.SetOutput(writer)
+	log.SetLevel(log.WarnLevel)
 
 	return func() {
-		logrus.SetOutput(os.Stderr)
+		log.SetOutput(os.Stderr)
 	}
 }
 

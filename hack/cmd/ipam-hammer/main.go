@@ -7,12 +7,12 @@ import (
 
 	"github.com/aws/smithy-go/ptr"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -30,7 +30,7 @@ func main() {
 
 	// Create a bunch of fake nodes, and assign random IPs to each.
 	numNodes := 150
-	logrus.Info("Creating nodes")
+	log.Info("Creating nodes")
 	done := make(chan error)
 	for i := range numNodes {
 		go doNode(ctx, cs, c, i, done)
@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// Now, delete the nodes! This should trigger our IPAM GC code....
-	logrus.Info("Deleting nodes")
+	log.Info("Deleting nodes")
 	for i := range numNodes {
 		n := v1.Node{ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("test-node-%d", i),

@@ -21,10 +21,11 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -101,7 +102,7 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 		}
 
 		if !masterOK && checkNodeIsMaster(f, addrs) {
-			logrus.Infof("Skip using master node %s", node.Name)
+			log.Infof("Skip using master node %s", node.Name)
 			continue
 		}
 

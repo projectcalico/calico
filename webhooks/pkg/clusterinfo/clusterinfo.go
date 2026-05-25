@@ -20,10 +20,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -45,10 +45,10 @@ type webhook struct {
 func RegisterHook(handleFn utils.HandleFn) {
 	ns, err := os.ReadFile(saNamespaceFile)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to read pod namespace")
+		log.WithError(err).Fatal("Failed to read pod namespace")
 	}
 	w := &webhook{namespace: strings.TrimSpace(string(ns))}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"path":      "/cluster-info",
 		"namespace": w.namespace,
 	}).Info("Registering ClusterInformation write-protection webhook")
@@ -62,7 +62,7 @@ func RegisterHook(handleFn utils.HandleFn) {
 // system service account. This mirrors the write protection that the Calico API server provides
 // when running in aggregated API mode.
 func (w *webhook) admit(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"uid":       ar.Request.UID,
 		"operation": ar.Request.Operation,
 		"name":      ar.Request.Name,
