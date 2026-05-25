@@ -17,10 +17,11 @@ package proxy
 import (
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // FilterEpsByTopologyAwareRouting filters a slice of Kubernetes endpoints based on topology-aware routing criteria.

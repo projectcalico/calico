@@ -30,7 +30,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -50,10 +49,10 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func newBPFTestEpMgr(
@@ -84,7 +83,7 @@ func newBPFTestEpMgr(
 		generictables.NewNoopTable(),
 		generictables.NewNoopTable(),
 		nil,
-		logutils.NewSummarizer("test"),
+		log.NewSummarizer("test"),
 		&routetable.DummyTable{},
 		&routetable.DummyTable{},
 		calc.NewLookupsCache(),
@@ -1563,9 +1562,9 @@ func BenchmarkAttachProgram(b *testing.B) {
 	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
 
-	logLevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.PanicLevel)
-	defer logrus.SetLevel(logLevel)
+	logLevel := log.GetLevel()
+	log.SetLevel(log.PanicLevel)
+	defer log.SetLevel(logLevel)
 
 	b.StartTimer()
 

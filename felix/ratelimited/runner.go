@@ -17,9 +17,8 @@ package ratelimited
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewRunner(minInterval timeshim.Duration, f func(ctx context.Context), opts ...RunnerOpt) *Runner {

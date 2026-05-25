@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	"math/bits"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type CIDRTrie struct {
@@ -49,7 +49,7 @@ func (t *CIDRTrie) Delete(cidr CIDR) {
 
 func deleteInternal(n *CIDRNode, cidr CIDR) *CIDRNode {
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
+		log.WithFields(log.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -141,7 +141,7 @@ func (t *CIDRTrie) LPM(cidr CIDR) (CIDR, any) {
 		case 6:
 			return V6CIDR{}, nil
 		default:
-			logrus.WithField("cidr", cidr).Panic("Invalid CIDR IP version")
+			log.WithField("cidr", cidr).Panic("Invalid CIDR IP version")
 		}
 	}
 	return match.cidr, match.data
@@ -153,7 +153,7 @@ func (n *CIDRNode) lookupPath(buffer []CIDRTrieEntry, cidr CIDR) []CIDRTrieEntry
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
+		log.WithFields(log.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -197,7 +197,7 @@ func (n *CIDRNode) getNode(cidr CIDR, includeIntermediates bool) *CIDRNode {
 	}
 
 	if n.cidr.Version() != cidr.Version() {
-		logrus.WithFields(logrus.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
+		log.WithFields(log.Fields{"n.cidr": n.cidr, "cidr": cidr}).Panic("Mismatched CIDR IP versions")
 	}
 
 	if !n.cidr.Contains(cidr.Addr()) {
@@ -372,7 +372,7 @@ func (t *CIDRTrie) ClosestDescendants(buf []CIDR, parent CIDR) []CIDR {
 
 func (t *CIDRTrie) Update(cidr CIDR, value any) {
 	if value == nil {
-		logrus.Panic("Can't store nil in a CIDRTrie")
+		log.Panic("Can't store nil in a CIDRTrie")
 	}
 	parentsPtr := &t.root
 	thisNode := t.root
@@ -438,7 +438,7 @@ func (t *CIDRTrie) Update(cidr CIDR, value any) {
 
 func CommonPrefix(a, b CIDR) CIDR {
 	if a.Version() != b.Version() {
-		logrus.WithFields(logrus.Fields{"a": a, "b": b}).Panic("Mismatched CIDR IP versions")
+		log.WithFields(log.Fields{"a": a, "b": b}).Panic("Mismatched CIDR IP versions")
 	}
 
 	var cidr CIDR
@@ -448,7 +448,7 @@ func CommonPrefix(a, b CIDR) CIDR {
 	case 6:
 		cidr = V6CommonPrefix(a.(V6CIDR), b.(V6CIDR))
 	default:
-		logrus.WithField("a", a).Panic("Invalid CIDR IP version")
+		log.WithField("a", a).Panic("Invalid CIDR IP version")
 	}
 
 	return cidr
