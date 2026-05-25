@@ -22,7 +22,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -36,11 +35,12 @@ import (
 	proxy "github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logrus.SetOutput(GinkgoWriter)
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetOutput(GinkgoWriter)
+	log.SetLevel(log.DebugLevel)
 }
 
 var (
@@ -108,8 +108,8 @@ var _ = Describe("BPF Syncer", func() {
 	makestep := func(step func()) func() {
 		return func() {
 			defer func() {
-				log("svcs = %+v\n", svcs)
-				log("eps = %+v\n", eps)
+				tracef("svcs = %+v\n", svcs)
+				tracef("eps = %+v\n", eps)
 			}()
 
 			step()
@@ -239,8 +239,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				tracef("key = %s\n", key)
+				tracef("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -280,8 +280,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				tracef("key = %s\n", key)
+				tracef("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -359,8 +359,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				tracef("key = %s\n", key)
+				tracef("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -642,8 +642,8 @@ var _ = Describe("BPF Syncer", func() {
 				return cnt
 			}()))
 
-			log("state.SvcMap = %+v\n", state.SvcMap)
-			log("state.EpsMap = %+v\n", state.EpsMap)
+			tracef("state.SvcMap = %+v\n", state.SvcMap)
+			tracef("state.EpsMap = %+v\n", state.EpsMap)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -702,9 +702,9 @@ var _ = Describe("BPF Syncer", func() {
 		By("adding a route should fix one missing expanded NP", makestep(func() {
 			s.SetTriggerFn(func() {
 				go func() {
-					logrus.Info("Syncer triggered")
+					log.Info("Syncer triggered")
 					err := applySyncer(&syncerMutex, s, state)
-					logrus.WithError(err).Info("Syncer result")
+					log.WithError(err).Info("Syncer result")
 				}()
 			})
 			rt.Update(
@@ -1118,8 +1118,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				tracef("key = %s\n", key)
+				tracef("val = %s\n", val)
 				return maps.IterNone
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -1173,8 +1173,8 @@ var _ = Describe("BPF Syncer", func() {
 				cnt++
 				key := conntrack.KeyFromBytes(k)
 				val := conntrack.ValueFromBytes(v)
-				log("key = %s\n", key)
-				log("val = %s\n", val)
+				tracef("key = %s\n", key)
+				tracef("val = %s\n", val)
 				return maps.IterNone
 			})
 
@@ -1414,7 +1414,7 @@ func (m *mockNATMap) Iter(iter maps.IterCallback) error {
 }
 
 func (m *mockNATMap) Update(k, v []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k, "v": v,
 	}).Debug("mockNATMap.Update()")
 
@@ -1446,7 +1446,7 @@ func (m *mockNATMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATMap) Delete(k []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k,
 	}).Debug("mockNATMap.Delete()")
 
@@ -1507,7 +1507,7 @@ func (m *mockNATBackendMap) Iter(iter maps.IterCallback) error {
 }
 
 func (m *mockNATBackendMap) Update(k, v []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k, "v": v,
 	}).Debug("mockNATBackendMap.Update()")
 
@@ -1539,7 +1539,7 @@ func (m *mockNATBackendMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockNATBackendMap) Delete(k []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k,
 	}).Debug("mockNATBackendMap.Delete()")
 
@@ -1600,7 +1600,7 @@ func (m *mockMaglevMap) Iter(iter maps.IterCallback) error {
 }
 
 func (m *mockMaglevMap) Update(k, v []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k, "v": v,
 	}).Debug("mockMaglevMap.Update()")
 
@@ -1632,7 +1632,7 @@ func (m *mockMaglevMap) Get(k []byte) ([]byte, error) {
 }
 
 func (m *mockMaglevMap) Delete(k []byte) error {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"k": k,
 	}).Debug("mockMaglevMap.Delete()")
 

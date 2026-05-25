@@ -18,12 +18,11 @@ import (
 	"fmt"
 	"sort"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/stringutils"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DispatchMappings returns a map of interface name to interface chain.

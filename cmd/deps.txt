@@ -396,7 +396,6 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -472,6 +471,8 @@ local:lib/httpmachinery/pkg/server
 local:lib/httpmachinery/pkg/server/adaptors/gorilla
 local:lib/std/chanutil
 local:lib/std/cryptoutils
+local:lib/std/log
+local:lib/std/profile
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
