@@ -22,7 +22,7 @@ import (
 	"runtime"
 	"unsafe"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/sys/unix"
 )
 

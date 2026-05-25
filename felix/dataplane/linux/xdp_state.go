@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/dataplane/common"
@@ -306,7 +306,7 @@ type xdpIPState struct {
 	newCurrentState   *xdpSystemState
 	bpfActions        *xdpBPFActions
 	cbIDs             []*common.CbID
-	logCxt            *log.Entry
+	logCxt            log.Logger
 }
 
 type ipsetIDsToMembers struct {

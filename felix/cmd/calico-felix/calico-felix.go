@@ -16,7 +16,7 @@ package main
 
 import (
 	docopt "github.com/docopt/docopt-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/daemon"
 	"github.com/projectcalico/calico/pkg/buildinfo"

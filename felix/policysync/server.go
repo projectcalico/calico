@@ -19,7 +19,7 @@ import (
 	"errors"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/felix/collector"

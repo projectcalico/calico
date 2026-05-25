@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/clock"
 
@@ -412,7 +412,7 @@ func removeWireguardForBootstrapping(
 }
 
 // getPublicKeyForNode returns the configured wireguard public key for a given node.
-func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient clientv3.NodesClient, maxRetries int, ipVersion uint8) (string, error) {
+func getPublicKeyForNode(logCtx log.Logger, nodeName string, calicoClient clientv3.NodesClient, maxRetries int, ipVersion uint8) (string, error) {
 	//nolint:staticcheck // Ignore SA1019 deprecated
 	expBackoffMgr := wait.NewExponentialBackoffManager(
 		bootstrapBackoffDuration,
@@ -459,7 +459,7 @@ func getPublicKeyForNode(logCtx *log.Entry, nodeName string, calicoClient client
 // - Public key
 // - Set of peer public keys
 func getWireguardDeviceInfo(
-	logCtx *log.Entry, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
+	logCtx log.Logger, wgIfaceName string, getWireguardHandle func() (netlinkshim.Wireguard, error),
 ) (string, set.Set[string]) {
 	wg, err := getWireguardHandle()
 	if err != nil {
@@ -633,7 +633,7 @@ func removeWireguardPublicKey(
 }
 
 // removeDevice removes the named link.
-func removeDevice(logCtx *log.Entry, name string, netlinkClient netlinkshim.Interface) error {
+func removeDevice(logCtx log.Logger, name string, netlinkClient netlinkshim.Interface) error {
 	link, err := netlinkClient.LinkByName(name)
 	if err == nil {
 		logCtx.Info("Deleting device")
