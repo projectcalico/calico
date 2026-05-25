@@ -43,8 +43,6 @@ const routeOwnerPoolPrefix = "203.0.113."
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("IPPool"),
-	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
 	"Cluster route ownership",

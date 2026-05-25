@@ -26,10 +26,10 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 )
 
@@ -171,16 +171,14 @@ func parseProto(s string) RouteProto {
 }
 
 // expectedClusterRouteProto returns the route protocol owner that the cluster
-// is currently configured to use for IPIP and no-encap cluster routes. The
-// operator's Installation.spec.calicoNetwork.clusterRoutingMode is the source
-// of truth: "Felix" => proto 80, anything else (including unset) => BIRD's
-// proto 12.
+// is currently configured to use for IPIP and no-encap cluster routes.
+// "Felix" => proto 80, anything else (including unset) => BIRD's proto 12.
 func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
-	inst := &v1.Installation{}
-	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, inst)).To(Succeed(), "Error querying Installation")
-	if inst.Spec.CalicoNetwork != nil &&
-		inst.Spec.CalicoNetwork.ClusterRoutingMode != nil &&
-		*inst.Spec.CalicoNetwork.ClusterRoutingMode == v1.ClusterRoutingModeFelix {
+	fc := v3.NewFelixConfiguration()
+	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
+		To(Succeed(), "Error querying FelixConfiguration")
+	if fc.Spec.ProgramClusterRoutes != nil &&
+		*fc.Spec.ProgramClusterRoutes == "Enabled" {
 		return RouteProtoFelix
 	}
 	return RouteProtoBIRD
