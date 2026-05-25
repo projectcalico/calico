@@ -25,7 +25,7 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -80,7 +80,7 @@ func testFSM(state liveMigrationState) (*liveMigrationFSM, *liveMigrationMonitor
 	m := newTestMonitor(testConvergenceTime)
 	id := types.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "test-pod", EndpointId: "ep"}
 	fsm := &liveMigrationFSM{
-		logCtx:       logrus.WithField("id", id),
+		logCtx:       log.WithField("id", id),
 		id:           id,
 		monitor:      m,
 		currentState: state,

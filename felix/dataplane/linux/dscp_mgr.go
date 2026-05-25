@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -42,7 +42,7 @@ type dscpManager struct {
 	ipsetsDataplane dpsets.IPSetsDataplane
 	ipSetMetadata   ipsets.IPSetMetadata
 
-	logCtx *logrus.Entry
+	logCtx log.Logger
 }
 
 func newDSCPManager(
@@ -65,7 +65,7 @@ func newDSCPManager(
 			SetID:   rules.IPSetIDDSCPEndpoints,
 			Type:    ipsets.IPSetTypeHashNet,
 		},
-		logCtx: logrus.WithField("ipVersion", ipVersion),
+		logCtx: log.WithField("ipVersion", ipVersion),
 	}
 }
 

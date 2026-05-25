@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/config"

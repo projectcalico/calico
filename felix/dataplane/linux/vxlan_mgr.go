@@ -22,13 +22,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -65,8 +64,8 @@ type vxlanManager struct {
 	dpConfig          Config
 
 	// Log context
-	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	logCtx     log.Logger
+	opRecorder log.OpRecorder
 }
 
 type vxlanMgrOption func(m *vxlanManager)
@@ -89,7 +88,7 @@ func newVXLANManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -115,7 +114,7 @@ func newVXLANManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 	nlHandle netlinkHandle,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
@@ -137,7 +136,7 @@ func newVXLANManagerWithShims(
 		externalNodeCIDRs: dpConfig.ExternalNodesCidrs,
 		vtepsDirty:        true,
 		dpConfig:          dpConfig,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"device":    deviceName,
 		}),

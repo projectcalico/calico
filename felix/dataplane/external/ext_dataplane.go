@@ -24,7 +24,7 @@ import (
 	"os"
 	"os/exec"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	pb "google.golang.org/protobuf/proto"
 
 	_ "github.com/projectcalico/calico/felix/config"

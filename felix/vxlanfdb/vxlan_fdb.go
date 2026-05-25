@@ -20,7 +20,7 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -77,7 +77,7 @@ type VXLANFDB struct {
 	ifIndex        int
 	arpEntries     *deltatracker.DeltaTracker[ip.Addr, comparableHWAddr]
 	fdbEntries     *deltatracker.DeltaTracker[comparableHWAddr, ip.Addr]
-	logCtx         *log.Entry
+	logCtx         log.Logger
 	resyncPending  bool
 	logNextSuccess bool
 	nl             *handlemgr.HandleManager

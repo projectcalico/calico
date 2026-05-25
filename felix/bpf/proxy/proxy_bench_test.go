@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -74,9 +74,9 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 
 func BenchmarkProxyUpdates(b *testing.B) {
 	RegisterTestingT(b)
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 
 	tests := []struct {
 		svcCount int

@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	lcconfig "github.com/projectcalico/calico/libcalico-go/config"
@@ -340,7 +340,7 @@ func loadFelixParamMetadata(params []*FieldInfo) ([]*FieldInfo, error) {
 		}
 		parsedDefaultJSON, err := json.Marshal(metadata.Default)
 		if err != nil {
-			logrus.WithError(err).WithField("name", metadata.Name).Error("Failed to marshal default value to JSON")
+			log.WithError(err).WithField("name", metadata.Name).Error("Failed to marshal default value to JSON")
 		}
 		pm := &FieldInfo{
 			NameConfigFile:       metadata.Name,
@@ -534,7 +534,7 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 			var enumConst any
 			err := json.Unmarshal(e.Raw, &enumConst)
 			if err != nil {
-				logrus.WithError(err).WithField("enum", e.Raw).Fatal("Failed to unmarshal enum constant.")
+				log.WithError(err).WithField("enum", e.Raw).Fatal("Failed to unmarshal enum constant.")
 			}
 			enumConsts = append(enumConsts, fmt.Sprint(enumConst))
 			parts = append(parts, fmt.Sprintf("`%s`", e.Raw))
@@ -588,7 +588,7 @@ func updateParamsWithV3Info(params []*FieldInfo, felixNameToCRDFieldInfo map[str
 		} else if pm.AllowedConfigSources != AllowedConfigSourcesLocalOnly && strings.HasPrefix(pm.NameConfigFile, "Debug") {
 			pm.Description = "Unsupported diagnostic setting, used when testing Felix.  Not exposed in `FelixConfiguration`."
 		} else if pm.AllowedConfigSources != AllowedConfigSourcesLocalOnly {
-			logrus.Panicf("No CRD info for %s.  Bug in the CRD mapping?\n", pm.NameConfigFile)
+			log.Panicf("No CRD info for %s.  Bug in the CRD mapping?\n", pm.NameConfigFile)
 		}
 	}
 	return params

@@ -22,7 +22,7 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"golang.org/x/sys/unix"
 )
 

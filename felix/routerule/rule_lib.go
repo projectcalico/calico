@@ -17,7 +17,7 @@ package routerule
 import (
 	"net"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 	"k8s.io/utils/ptr"
@@ -46,7 +46,7 @@ func (r *Rule) NetLinkRule() *netlink.Rule {
 	return r.nlRule
 }
 
-func (r *Rule) LogCxt() *log.Entry {
+func (r *Rule) LogCxt() log.Logger {
 	var src any
 	if r.nlRule.Src != nil {
 		src = r.nlRule.Src
