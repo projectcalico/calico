@@ -156,7 +156,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
-			allPoolsIPSet := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+			allPoolsIPSet := fmt.Sprintf("cali%v0network-ip-pools", ipVersion)
 			thisHostIPSet := fmt.Sprintf("cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
@@ -174,7 +174,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			allPoolsIPSet := fmt.Sprintf("@cali%v0all-ipam-pools", ipVersion)
+			allPoolsIPSet := fmt.Sprintf("@cali%v0network-ip-pools", ipVersion)
 			thisHostIPSet := fmt.Sprintf("@cali%v0this-host", ipVersion)
 			dscpIPSet := fmt.Sprintf("@cali%v0dscp-src-net", ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
