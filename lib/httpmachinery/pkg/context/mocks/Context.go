@@ -7,8 +7,9 @@ package mocks
 import (
 	"time"
 
-	"github.com/sirupsen/logrus"
 	mock "github.com/stretchr/testify/mock"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewContext creates a new instance of Context. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -182,19 +183,19 @@ func (_c *Context_Err_Call) RunAndReturn(run func() error) *Context_Err_Call {
 }
 
 // Logger provides a mock function for the type Context
-func (_mock *Context) Logger() *logrus.Entry {
+func (_mock *Context) Logger() log.Logger {
 	ret := _mock.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for Logger")
 	}
 
-	var r0 *logrus.Entry
-	if returnFunc, ok := ret.Get(0).(func() *logrus.Entry); ok {
+	var r0 log.Logger
+	if returnFunc, ok := ret.Get(0).(func() log.Logger); ok {
 		r0 = returnFunc()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*logrus.Entry)
+			r0 = ret.Get(0).(log.Logger)
 		}
 	}
 	return r0
@@ -217,12 +218,12 @@ func (_c *Context_Logger_Call) Run(run func()) *Context_Logger_Call {
 	return _c
 }
 
-func (_c *Context_Logger_Call) Return(entry *logrus.Entry) *Context_Logger_Call {
-	_c.Call.Return(entry)
+func (_c *Context_Logger_Call) Return(logger log.Logger) *Context_Logger_Call {
+	_c.Call.Return(logger)
 	return _c
 }
 
-func (_c *Context_Logger_Call) RunAndReturn(run func() *logrus.Entry) *Context_Logger_Call {
+func (_c *Context_Logger_Call) RunAndReturn(run func() log.Logger) *Context_Logger_Call {
 	_c.Call.Return(run)
 	return _c
 }

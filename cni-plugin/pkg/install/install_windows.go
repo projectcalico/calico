@@ -23,8 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -148,7 +147,7 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 
 	ipamType := getEnv("CNI_IPAM_TYPE", "calico-ipam")
 	if backend == "vxlan" && ipamType != "calico-ipam" {
-		logrus.Fatalf("Calico VXLAN requires IPAM type calico-ipam, not %s", ipamType)
+		log.Fatalf("Calico VXLAN requires IPAM type calico-ipam, not %s", ipamType)
 
 	}
 	netconf = strings.Replace(netconf, "__IPAM_TYPE__", ipamType, -1)
@@ -160,7 +159,7 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 	var winVerInt, buildNumInt, halVerInt int
 	for attempts := 10; attempts > 0; attempts-- {
 		stdout, stderr, err = winutils.Powershell("Get-ComputerInfo | select WindowsVersion, OsBuildNumber, OsHardwareAbstractionLayer")
-		logger := logrus.WithFields(logrus.Fields{"stderr": stderr, "stdout": stdout})
+		logger := log.WithFields(log.Fields{"stderr": stderr, "stdout": stdout})
 		if err != nil {
 			logger.WithError(err).Warn("Failed to interact with powershell. May retry...")
 			time.Sleep(1 * time.Second)
@@ -204,11 +203,11 @@ func replacePlatformSpecificVars(c config, netconf string) string {
 		break
 	}
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to retrieve Windows version information to determine DSR support.")
+		log.WithError(err).Fatal("Failed to retrieve Windows version information to determine DSR support.")
 	}
 
 	supportsDSR := (winVerInt == 1809 && buildNumInt >= 17763 && halVerInt >= 1432) || (winVerInt >= 1903 && buildNumInt >= 18317)
-	logrus.WithField("supportsDSR", supportsDSR).Info("Successfully determined whether DSR is supported.")
+	log.WithField("supportsDSR", supportsDSR).Info("Successfully determined whether DSR is supported.")
 	// Remove the quotes when replacing with boolean values (the quotes are in so that the template is valid JSON even before replacing)
 	if supportsDSR {
 		netconf = strings.Replace(netconf, `"__DSR_SUPPORT__"`, "true", -1)

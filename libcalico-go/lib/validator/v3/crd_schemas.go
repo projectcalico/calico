@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	calicoapi "github.com/projectcalico/api"
-	"github.com/sirupsen/logrus"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
@@ -30,6 +29,8 @@ import (
 	schemavalidation "k8s.io/apiextensions-apiserver/pkg/apiserver/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	celconfig "k8s.io/apiserver/pkg/apis/cel"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // crdSchemaRegistry holds parsed CRD schemas and their lazily compiled
@@ -118,7 +119,7 @@ func (r *crdSchemaRegistry) load() {
 				nil,
 			)
 			if err != nil {
-				logrus.WithError(err).WithField("kind", kind).Warn("Failed to convert CRD schema to internal format")
+				log.WithError(err).WithField("kind", kind).Warn("Failed to convert CRD schema to internal format")
 				continue
 			}
 
@@ -145,14 +146,14 @@ func (s *crdSchema) compile(kind string) {
 	s.compileOnce.Do(func() {
 		sv, _, err := schemavalidation.NewSchemaValidator(s.rawSchema)
 		if err != nil {
-			logrus.WithError(err).WithField("kind", kind).Warn("Failed to create schema validator from CRD")
+			log.WithError(err).WithField("kind", kind).Warn("Failed to create schema validator from CRD")
 		} else {
 			s.schemaValidator = sv
 		}
 
 		structural, err := structuralschema.NewStructural(s.rawSchema)
 		if err != nil {
-			logrus.WithError(err).WithField("kind", kind).Warn("Failed to create structural schema from CRD")
+			log.WithError(err).WithField("kind", kind).Warn("Failed to create structural schema from CRD")
 			return
 		}
 		s.structural = structural
@@ -162,7 +163,7 @@ func (s *crdSchema) compile(kind string) {
 			s.celValidator = v
 		}
 
-		logrus.WithField("kind", kind).Debug("Compiled CRD validators")
+		log.WithField("kind", kind).Debug("Compiled CRD validators")
 	})
 }
 

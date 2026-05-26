@@ -21,8 +21,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -109,7 +108,7 @@ func NewManager(opts ...Option) *OperatorManager {
 	}
 	for _, opt := range opts {
 		if err := opt(o); err != nil {
-			logrus.WithError(err).Fatal("Failed to apply option")
+			log.WithError(err).Fatal("Failed to apply option")
 		}
 	}
 	if o.productRegistry == "" {
@@ -145,18 +144,18 @@ func (o *OperatorManager) Build() error {
 			logFields["calico_dir"] = o.calicoDir
 		}
 	}
-	logrus.WithFields(logFields).Info("Building operator")
+	log.WithFields(logFields).Info("Building operator")
 	out, err := o.make("release", env)
 	if err != nil {
-		logrus.Error(out)
+		log.Error(out)
 		return fmt.Errorf("failed to build operator: %w", err)
 	}
-	logrus.WithFields(logFields).Infof("Built operator: %s", out)
+	log.WithFields(logFields).Infof("Built operator: %s", out)
 	return nil
 }
 
-func (o *OperatorManager) env() ([]string, logrus.Fields) {
-	logFields := logrus.Fields{
+func (o *OperatorManager) env() ([]string, log.Fields) {
+	logFields := log.Fields{
 		"registry": o.registry,
 		"image":    o.image,
 		"version":  o.version,
@@ -175,7 +174,7 @@ func (o *OperatorManager) env() ([]string, logrus.Fields) {
 		env = append(env, fmt.Sprintf("ARCHS=%s", archs))
 		logFields["arch"] = archs
 	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		env = append(env, "DEBUG=true")
 	}
 	return env, logFields
@@ -261,18 +260,18 @@ func (o *OperatorManager) PrePublishValidation() error {
 
 func (o *OperatorManager) Publish() error {
 	if !o.publish {
-		logrus.Warn("Skipping publishing operator")
+		log.Warn("Skipping publishing operator")
 		return nil
 	}
 
 	env, logFields := o.env()
-	logrus.WithFields(logFields).Info("Publishing operator")
+	log.WithFields(logFields).Info("Publishing operator")
 	out, err := o.make("release-publish", env)
 	if err != nil {
-		logrus.Error(out)
+		log.Error(out)
 		return fmt.Errorf("failed to publish operator: %w", err)
 	}
-	logrus.WithFields(logFields).Infof("Published operator: %s", out)
+	log.WithFields(logFields).Infof("Published operator: %s", out)
 	return nil
 }
 
@@ -294,19 +293,19 @@ func (o *OperatorManager) PreReleasePublicValidation() error {
 // It determines the latest release version, compares it with the current version, and marks the release as the latest if applicable.
 func (o *OperatorManager) ReleasePublic() error {
 	if !o.publish {
-		logrus.Warn("Skipping releasing operator to public")
+		log.Warn("Skipping releasing operator to public")
 		return nil
 	}
 	if err := o.PreReleasePublicValidation(); err != nil {
 		return err
 	}
 	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", o.version))
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		env = append(env, "DEBUG=true")
 	}
 	out, err := o.make("release-public", env)
 	if err != nil {
-		logrus.Error(out)
+		log.Error(out)
 		return fmt.Errorf("failed to release operator: %w", err)
 	}
 	return nil

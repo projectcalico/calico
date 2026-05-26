@@ -18,7 +18,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type WriteLogger struct {
@@ -26,10 +26,10 @@ type WriteLogger struct {
 }
 
 func (wl *WriteLogger) Write(p []byte) (n int, err error) {
-	logrus.WithField("len", len(p)).Debug("Writing...")
+	log.WithField("len", len(p)).Debug("Writing...")
 	start := time.Now()
 	n, err = wl.w.Write(p)
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"len":  len(p),
 		"n":    n,
 		"err":  err,

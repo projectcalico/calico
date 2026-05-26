@@ -22,16 +22,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/collector/local"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func RunFlowsCmd(num int) {
 	// Command-line tools should log to stderr to avoid confusion with the output.
-	logrus.SetOutput(os.Stderr)
+	log.SetOutput(os.Stderr)
 	StartAndWatch(num)
 	os.Exit(0)
 }
@@ -43,7 +42,7 @@ func StartAndWatch(num int) {
 	flowServer := local.NewFlowServer(local.SocketDir)
 	err := flowServer.Run()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to start local flow server")
+		log.WithError(err).Error("Failed to start local flow server")
 		return
 	}
 	defer flowServer.Stop()

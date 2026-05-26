@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	log "github.com/sirupsen/logrus"
 
 	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )

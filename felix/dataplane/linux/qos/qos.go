@@ -54,8 +54,9 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/utils"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type TokenBucketState struct {
@@ -296,7 +297,7 @@ func CreateEgressQdisc(tbs *TokenBucketState, workloadDeviceName string, ifbDevi
 	if err != nil {
 		return fmt.Errorf("list filters on dev %s: %w", workloadDeviceName, err)
 	}
-	logrus.Debugf("Cleaning up existing filters on dev %s: %+v", workloadDeviceName, filters)
+	log.Debugf("Cleaning up existing filters on dev %s: %+v", workloadDeviceName, filters)
 	for _, filter := range filters {
 		u32Filter, ok := filter.(*netlink.U32)
 		if !ok {
@@ -307,24 +308,24 @@ func CreateEgressQdisc(tbs *TokenBucketState, workloadDeviceName string, ifbDevi
 			if !ok {
 				continue
 			}
-			logrus.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
+			log.Debugf("Found U32 filter %+v with MirredAction: %+v", u32Filter, mirredAction)
 			filterLink, err := netlink.LinkByIndex(mirredAction.Ifindex)
 			if err != nil {
 				if _, ok := err.(netlink.LinkNotFoundError); ok {
 					break
 				}
-				logrus.Debugf("Failed to get link for ifindex %d on dev %s, error: %v", mirredAction.Ifindex, workloadDeviceName, err)
+				log.Debugf("Failed to get link for ifindex %d on dev %s, error: %v", mirredAction.Ifindex, workloadDeviceName, err)
 				continue
 			}
 			// Remove bandwidth plugin ifb interfaces, or old calico ifb interfaces ('bwcali' prefix but not the current ifbDeviceName)
 			if strings.HasPrefix(filterLink.Attrs().Name, "bwp") || (strings.HasPrefix(filterLink.Attrs().Name, "bwcali") && filterLink.Attrs().Name != ifbDeviceName) {
-				logrus.Debugf("Cleaning up bandwidth plugin (bwpXXXX) or old calico (bwcaliXXXX) link name %s: %+v", filterLink.Attrs().Name, filterLink)
+				log.Debugf("Cleaning up bandwidth plugin (bwpXXXX) or old calico (bwcaliXXXX) link name %s: %+v", filterLink.Attrs().Name, filterLink)
 				err := netlink.LinkDel(filterLink)
 				if err != nil {
 					if _, ok := err.(netlink.LinkNotFoundError); ok {
 						break
 					}
-					logrus.Debugf("Failed to remove 'bwp' or 'bwcali' ifb link %s, error: %v", filterLink.Attrs().Name, err)
+					log.Debugf("Failed to remove 'bwp' or 'bwcali' ifb link %s, error: %v", filterLink.Attrs().Name, err)
 					continue
 				}
 				break
@@ -424,7 +425,7 @@ func makeTBF(tbs *TokenBucketState, workloadDevice netlink.Link) (*netlink.Tbf, 
 		minburst := uint32(workloadDevice.Attrs().MTU) + 14
 		if tbs.Minburst < minburst {
 			tbs.Minburst = minburst
-			logrus.Debugf("make TBF: set minburst to %v", minburst)
+			log.Debugf("make TBF: set minburst to %v", minburst)
 		}
 	}
 
@@ -441,7 +442,7 @@ func makeTBF(tbs *TokenBucketState, workloadDevice netlink.Link) (*netlink.Tbf, 
 		Minburst: tbs.Minburst,
 	}
 
-	logrus.Debugf("make TBF qdisc %+v, limit: %v, rate %v, buffer %v, peakrate %v, minburst %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, qdisc.Peakrate, qdisc.Minburst)
+	log.Debugf("make TBF qdisc %+v, limit: %v, rate %v, buffer %v, peakrate %v, minburst %v", qdisc, qdisc.Limit, qdisc.Rate, qdisc.Buffer, qdisc.Peakrate, qdisc.Minburst)
 
 	return qdisc, nil
 }

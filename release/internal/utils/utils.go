@@ -22,8 +22,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/defaults"
 )
@@ -155,12 +154,12 @@ func imageDiscoveryDirs() []string {
 func initReleaseImages() {
 	rootDir, err := command.GitDir()
 	if err != nil {
-		logrus.Panicf("Cannot determine root git dir: %v", err)
+		log.Panicf("Cannot determine root git dir: %v", err)
 	}
 	dirs := imageDiscoveryDirs()
 	images, err := BuildReleaseImageList(rootDir, dirs...)
 	if err != nil {
-		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(dirs, ","), err)
+		log.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(dirs, ","), err)
 	}
 	releaseImages = images
 }
@@ -179,7 +178,7 @@ func buildImages(dir string, release bool) ([]string, error) {
 	}
 	out, err := command.MakeInDir(dir, []string{"-s", "build-images"}, env)
 	if err != nil {
-		logrus.Error(out)
+		log.Error(out)
 		return nil, fmt.Errorf("failed to get images for release dir %s: %w", dir, err)
 	}
 	return strings.Fields(out), nil
@@ -188,7 +187,7 @@ func buildImages(dir string, release bool) ([]string, error) {
 // BuildReleaseImageList builds a list of images to be released from the given directories.
 func BuildReleaseImageList(rootDir string, dirs ...string) ([]string, error) {
 	if len(dirs) == 0 {
-		logrus.WithField("root_dir", rootDir).Warnf("No image release dirs specified, will get images from root dir instead")
+		log.WithField("root_dir", rootDir).Warnf("No image release dirs specified, will get images from root dir instead")
 		return buildImages(rootDir, true)
 	}
 	combinedImages := []string{}

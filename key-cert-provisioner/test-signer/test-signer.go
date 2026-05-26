@@ -26,12 +26,13 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	certv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (

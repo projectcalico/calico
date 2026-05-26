@@ -11,7 +11,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // A brief note on Ubuntu/Debian/apt repo terminology:
@@ -74,7 +74,7 @@ var aptSourcesTemplate string
 // of parameters, and writes it to <suite>.sources under <rootPath>
 // For more info on the format: https://repolib.readthedocs.io/en/latest/deb822-format.html
 func (asd *aptSourcesData) writeAptSourcesFile(rootPath string) error {
-	logrus.WithField("suite", asd.Suite).Info("Generating apt .sources file")
+	log.WithField("suite", asd.Suite).Info("Generating apt .sources file")
 	sourcesFilePath := filepath.Join(rootPath, fmt.Sprintf("%s.sources", asd.Suite))
 	sourcesFile, err := os.OpenFile(sourcesFilePath, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -92,17 +92,17 @@ func (asd *aptSourcesData) writeAptSourcesFile(rootPath string) error {
 	}
 
 	if err := tmpl.Execute(sourcesFile, asd); err != nil {
-		logrus.WithField("suite", asd.Suite).WithError(err).Error("failed to write apt sources file")
+		log.WithField("suite", asd.Suite).WithError(err).Error("failed to write apt sources file")
 		return fmt.Errorf("failed to write apt sources file: %w", err)
 	}
 
-	logrus.WithField("file", sourcesFilePath).Info("Wrote apt .sources file")
+	log.WithField("file", sourcesFilePath).Info("Wrote apt .sources file")
 
 	return nil
 }
 
 func getVersionFromDebfile(debfilePath string) (string, error) {
-	logrus.WithField("debfile", debfilePath).Debug("Getting version information from debian package")
+	log.WithField("debfile", debfilePath).Debug("Getting version information from debian package")
 	cmd := exec.Command("dpkg-deb", "--show", "--showformat", "${Version}", "--", debfilePath)
 	out, err := cmd.Output()
 	if err != nil {
@@ -165,7 +165,7 @@ func getRecursiveDebsBySuite(searchPaths []string) (map[string][]string, error) 
 		return map[string][]string{}, err
 	}
 
-	logrus.Debugf("Found %d debian package files to process", len(files))
+	log.Debugf("Found %d debian package files to process", len(files))
 	for _, debFile := range files {
 		suite, err := getSuiteNameFromDebFile(debFile)
 		if err != nil {
@@ -181,7 +181,7 @@ func getRecursiveDebs(searchPaths []string) ([]string, error) {
 	// Find .deb and .ddeb files
 	var files []string
 	for _, searchPath := range searchPaths {
-		logrus.Infof("Scanning for debian packages in %s", searchPath)
+		log.Infof("Scanning for debian packages in %s", searchPath)
 		err := filepath.WalkDir(searchPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -195,7 +195,7 @@ func getRecursiveDebs(searchPaths []string) ([]string, error) {
 				return nil
 			}
 			if strings.HasSuffix(path, ".deb") || strings.HasSuffix(path, ".ddeb") {
-				logrus.Debug(fmt.Sprintf("Found debian package %s", path))
+				log.Debug(fmt.Sprintf("Found debian package %s", path))
 				files = append(files, path)
 			}
 			return nil

@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
@@ -115,7 +115,7 @@ var (
 		Value:    utils.DefaultBranch,
 		Action: func(_ context.Context, c *cli.Command, str string) error {
 			if str != utils.DefaultBranch {
-				logrus.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
+				log.Warnf("The new branch will be created from %s which is not the default branch %s", str, utils.DefaultBranch)
 			}
 			return nil
 		},
@@ -364,7 +364,7 @@ var (
 				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("missing Slack token or channel in CI environment")
 				}
-				logrus.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
+				log.Warnf("This command may require sending Slack notifications, ensure %s and %s flags are set", slackTokenFlag.Name, slackChannelFlag.Name)
 			}
 			return nil
 		},
@@ -404,10 +404,10 @@ var (
 		Sources:  cli.EnvVars("RELEASE_IMAGE_SCAN"),
 		Value:    true,
 		Action: func(_ context.Context, c *cli.Command, b bool) error {
-			logrus.WithField(imageScanFlagName, b).Info("Image scanning configuration")
+			log.WithField(imageScanFlagName, b).Info("Image scanning configuration")
 			if b && !imageScanningAPIConfig(c).Valid() {
 				if !c.Bool(ciFlag.Name) {
-					logrus.Warn("Image scanning configuration is incomplete")
+					log.Warn("Image scanning configuration is incomplete")
 				}
 				return fmt.Errorf("invalid configuration for image scanning. Either set --%s and --%s or set --%s", imageScannerAPIFlag.Name, imageScannerTokenFlag.Name, inverseFlagName(imageScanFlagName))
 			}
@@ -425,7 +425,7 @@ var (
 				if c.Bool(ciFlag.Name) {
 					return fmt.Errorf("GitHub token is required")
 				}
-				logrus.Warn("This command requires a GitHub token")
+				log.Warn("This command requires a GitHub token")
 			}
 			return nil
 		},
@@ -575,7 +575,7 @@ var (
 					return fmt.Errorf("cannot archive images without building them; use --%s flag to build images", imagesFlagName)
 				}
 				if !b && c.Bool(imagesFlagName) {
-					logrus.Warnf("Images are included but not archived; to include images in the archive set --%s", archiveImagesFlagName)
+					log.Warnf("Images are included but not archived; to include images in the archive set --%s", archiveImagesFlagName)
 				}
 				return nil
 			},

@@ -60,7 +60,6 @@ github.com/mattn/go-runewidth v0.0.19
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
 github.com/mdlayher/socket v0.5.1
-github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/mitchellh/go-wordwrap v1.0.1
 github.com/moby/spdystream v0.5.1
 github.com/moby/term v0.5.2
@@ -197,12 +196,15 @@ local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
 local:libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme
 local:libcalico-go/lib/apis/internalapi
+local:libcalico-go/lib/apis/v1
+local:libcalico-go/lib/apis/v1/unversioned
 local:libcalico-go/lib/backend
 local:libcalico-go/lib/backend/api
 local:libcalico-go/lib/backend/encap
@@ -211,6 +213,11 @@ local:libcalico-go/lib/backend/k8s
 local:libcalico-go/lib/backend/k8s/conversion
 local:libcalico-go/lib/backend/k8s/resources
 local:libcalico-go/lib/backend/model
+local:libcalico-go/lib/backend/syncersv1/bgpsyncer
+local:libcalico-go/lib/backend/syncersv1/felixsyncer
+local:libcalico-go/lib/backend/syncersv1/nodestatussyncer
+local:libcalico-go/lib/backend/syncersv1/tunnelipsyncer
+local:libcalico-go/lib/backend/syncersv1/updateprocessors
 local:libcalico-go/lib/backend/watchersyncer
 local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/debugserver
@@ -219,20 +226,33 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
+local:libcalico-go/lib/metricsserver
+local:libcalico-go/lib/multireadbuf
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/options
+local:libcalico-go/lib/prometheus
 local:libcalico-go/lib/resources
+local:libcalico-go/lib/scope
 local:libcalico-go/lib/selector
 local:libcalico-go/lib/selector/parser
 local:libcalico-go/lib/selector/tokenizer
 local:libcalico-go/lib/set
+local:libcalico-go/lib/validator/v1
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
+local:libcalico-go/lib/writelogger
 local:pkg/buildinfo
 local:pkg/cmdwrapper
+local:typha/pkg/calc
 local:typha/pkg/config
-local:typha/pkg/logutils
+local:typha/pkg/daemon
+local:typha/pkg/jitter
+local:typha/pkg/k8s
+local:typha/pkg/promutils
+local:typha/pkg/snapcache
+local:typha/pkg/syncproto
+local:typha/pkg/syncserver
+local:typha/pkg/tlsutils
