@@ -175,6 +175,11 @@ type Config struct {
 	DeviceRouteProtocol            netlink.RouteProtocol
 	RemoveExternalRoutes           bool
 	ProgramClusterRoutes           bool
+	// NoEncapEnabled indicates that at least one IP pool with no
+	// encapsulation exists. Independent of VXLAN/IPIP/Wireguard: noencap
+	// pools can coexist with encapsulated pools, in which case we still
+	// need the noEncap manager to program routes for the noencap pools.
+	NoEncapEnabled bool
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -710,31 +715,29 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
-	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
-	// program no encapsulation routes.
-	if config.ProgramClusterRoutes {
-		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.noEncapManager = newNoEncapManager(
-				routeTableV4,
-				4,
-				config,
-				dp.loopSummarizer,
-			)
-			dp.noEncapParentIfaceC = make(chan string, 1)
-			go dp.noEncapManager.monitorParentDevice(
-				context.Background(),
-				time.Second*10,
-				dp.noEncapParentIfaceC,
-			)
-			dp.RegisterManager(dp.noEncapManager)
-		}
+	// Start a noEncap manager whenever any IP pool with no encapsulation
+	// exists, so its routes get programmed even when other pools use VXLAN,
+	// IPIP, or Wireguard. The encapsulation resolver triggers a Felix
+	// restart when the noencap-pool-presence flips, so re-evaluating it here
+	// at startup is sufficient.
+	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
+		dp.noEncapManager = newNoEncapManager(
+			routeTableV4,
+			4,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.noEncapParentIfaceC = make(chan string, 1)
+		go dp.noEncapManager.monitorParentDevice(
+			context.Background(),
+			time.Second*10,
+			dp.noEncapParentIfaceC,
+		)
+		dp.RegisterManager(dp.noEncapManager)
 
-		if config.IPv6Enabled &&
-			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
-			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
+		if config.IPv6Enabled {
+			log.Info("NoEncap IP pool present, starting thread to keep IPv6 noencap routes in sync.")
 			dp.noEncapManagerV6 = newNoEncapManager(
 				routeTableV6,
 				6,

@@ -275,6 +275,7 @@ configRetry:
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
+		configParams.Encapsulation.NoEncapEnabled = encapCalculator.NoEncapEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -1436,8 +1437,8 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				return fc.config.Encapsulation
 			}()
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 {
-				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
+				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}
 		}

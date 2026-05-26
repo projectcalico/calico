@@ -566,6 +566,7 @@ message Encapsulation {
   bool ipip_enabled = 1;
   bool vxlan_enabled = 2;
   bool vxlan_enabled_v6 = 3;
+  bool no_encap_enabled = 4;
 }
 
 message ServiceAccountUpdate {
