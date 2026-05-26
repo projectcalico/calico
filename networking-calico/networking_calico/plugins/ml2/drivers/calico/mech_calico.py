@@ -26,14 +26,14 @@
 # It is implemented as a Neutron/ML2 mechanism driver.
 import contextlib
 import inspect
+import multiprocessing
 import os
 import threading
+import time
 
 import eventlet
 from eventlet.queue import PriorityQueue
-from eventlet.semaphore import Semaphore
 
-from neutron import wsgi
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
 from neutron.objects import ports as ports_object
@@ -78,10 +78,16 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     endpoint_name,
 )
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
-from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
+from networking_calico.plugins.ml2.drivers.calico.status import (
+    AgentStatusWatcher,
+    EndpointStatusWatcher,
+)
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 from networking_calico.plugins.ml2.drivers.calico.workers import (
     CalicoStartupResyncWorker,
+    CalicoManagerWorker,
+    CalicoAgentStatusWatcherWorker,
+    CalicoEndpointStatusWatcherWorker,
 )
 from networking_calico.resync import scope as resync
 
@@ -292,29 +298,19 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
         )
         qos_driver.register(self)
-        # Lock to prevent concurrent initialisation.
-        self._init_lock = Semaphore()
         # Generally initialize attributes to nil values.  They get initialized
-        # properly, as needed, in _post_fork_init().
+        # properly, as needed, in post_fork_initialize().
         self.db = None
         self.elector = None
         self._agent_update_context = None
         self._etcd_watcher = None
         self._etcd_watcher_thread = None
         self._my_pid = None
-        self._epoch = 0
-        # Mapping from (hostname, port-id) to Calico's status for a port.  The
-        # hostname is included to disambiguate between multiple copies of a
-        # port, which may exist during a migration or a re-schedule.
-        self._port_status_cache = {}
-        # Queue used to fan out port status updates to worker threads.  Notes:
-        # * we don't recreate the queue in _post_fork_init() so that we can't
-        #   possibly lose updates that had already been queued.
-        # * the queue contains tuples (priority, <status key>); we use a
-        #   higher priority for events and a lower priority for snapshot
-        #   keys, so that current data skips the queue.
-        self._port_status_queue = PriorityQueue()
-        self._port_status_queue_too_long = False
+        # Process-shared variable for checking if the current instance of
+        # neutron-server is elected as the leader or not.
+        # "d" = double. Used for storing time.time(). See
+        # https://docs.python.org/3/library/array.html#module-array
+        self._is_master = multiprocessing.Value("d", 0)
 
         # RPC client for fanning out agent state reports.
         self.state_report_rpc = None
@@ -323,6 +319,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # limiting.  Note: monotonic_time() uses its own epoch so it's only
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
+
+        # Flag for telling workers to stop. Only applicable to the
+        # calico worker processes.
+        self._stop_worker = False
 
         LOG.info("Created Calico mechanism driver %s", self)
 
@@ -345,17 +345,23 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """Workers that neutron-server should fork on our behalf.
 
         Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
-        becomes one OS process.  Today we ask for a single worker that runs the
-        one-shot resync.
+        becomes one OS process.
 
         ``[calico] startup_resync = never`` suppresses the worker entirely so the
         operator can take responsibility for resync (typically by running
         ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
         one neutron-server in the deployment).
         """
-        if cfg.CONF.calico.startup_resync == "never":
-            return []
-        return [CalicoStartupResyncWorker()]
+        services = [
+            CalicoManagerWorker(),
+            CalicoAgentStatusWatcherWorker(),
+            CalicoEndpointStatusWatcherWorker(),
+        ]
+
+        if cfg.CONF.calico.startup_resync != "never":
+            services.append(CalicoStartupResyncWorker())
+
+        return services
 
     def post_fork_initialize(self, resource, event, trigger, payload=None):
         """Per-worker-process initialisation, fired by Neutron after fork.
@@ -366,8 +372,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.wsgi.WorkerService`` -> connection state only, ``voting=False``.
-          Per PR #11580, API workers must never be elected master, because their
+        * ``neutron.wsgi.WorkerService`` -> connection state and worker threads only.
+          Per PR #11580, API workers must never run master-only jobs, because their
           primary job is to serve API requests quickly: getting tied up running the
           master-only background threads (status watcher, port-status writers,
           periodic compaction) would hurt API response latency, and the resync work
@@ -377,137 +383,146 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
           elector and master-only background threads.
         """
         trigger_cls = _trigger_class(trigger)
-        if trigger_cls is CalicoStartupResyncWorker:
-            self._do_startup_resync()
-        elif trigger_cls is wsgi.WorkerService:
-            self._post_fork_init(voting=False)
-        else:
-            self._post_fork_init(voting=True)
+        self._post_fork_inititialize_common()
 
-    @logging_exceptions(LOG)
-    def _post_fork_init(self, voting=False):
-        """_post_fork_init
+        worker_mapping = {
+            CalicoManagerWorker: self._init_and_start_calico_manager,
+            CalicoStartupResyncWorker: self._init_and_start_calico_resouce_syncer,
+            CalicoAgentStatusWatcherWorker: self._init_and_start_agent_status_watcher,
+            CalicoEndpointStatusWatcherWorker: (
+                self._init_and_start_endpoint_status_watcher
+            ),
+        }
+
+        if trigger_cls in worker_mapping:
+            self._stop_worker = False
+            worker_mapping[trigger_cls]()
+
+        LOG.info(
+            "Calico mechanism driver initialisation done for class %s",
+            trigger_cls.__name__ if trigger_cls else trigger_cls,
+        )
+
+    def is_master(self):
+        """Check whether the current instance of neutron-server is the master.
+
+        In order for a neutron-server to be considered as a master, it needs
+        to aquire the election key and actively maintain it.
+        """
+        # We were not elected. We are not the master.
+        if self._is_master.value <= 0:
+            return False
+
+        # Else, let's check if we refresh the time within timeout.
+        time_till_last_refreshed = self._is_master.value - time.time()
+        refreshed_in_time = time_till_last_refreshed < MASTER_TIMEOUT
+
+        # If not, there is something wrong with elector!!
+        if not refreshed_in_time:
+            LOG.warning(
+                "The elector hasn't refreshed the lease in "
+                f"{time_till_last_refreshed}s."
+            )
+
+        return refreshed_in_time
+
+    def _post_fork_inititialize_common(self):
+        """Common post fork initialization.
 
         Creates the connection state required for talking to the Neutron DB
-        and to etcd. This is a no-op if it has been executed before.
-
-        This is split out from __init__ to allow us to defer this
-        initialisation until after Neutron has forked off its worker
-        children.  If we initialise the DB and etcd connections before
-        the fork (as would happen in __init__()) then the workers
-        would share sockets incorrectly.
+        and to etcd.
         """
-        # The self._init_lock semaphore mediates if two or more eventlet threads call
-        # _post_fork_init at the same time, within the same Neutron server fork.  This
-        # shouldn't normally happen now that ``post_fork_initialize`` drives the call
-        # from a single AFTER_INIT event, but the lock is cheap insurance against future
-        # call sites.
-        with self._init_lock:
-            current_pid = os.getpid()
-            if self._my_pid == current_pid:
-                # We've initialised our PID and it hasn't changed since last
-                # time, nothing to do.
-                LOG.info("Calico state already initialised for PID %s", current_pid)
-                return
-            # else: either this is the first call or our PID has changed:
-            # (re)initialise.
-            TrackTask("POST_FORK_INIT")
+        # Init the DB.
+        self.db = None
+        self._get_db()
 
-            if self._my_pid is not None:
-                # This is unexpected but we can deal with it: Neutron should
-                # fork before we trigger the first call to _post_fork_init!().
-                LOG.warning(
-                    "PID changed from %s to %s; unexpected fork after "
-                    "initialisation?  Reinitialising Calico driver.",
-                    self._my_pid,
-                    current_pid,
-                )
-            else:
-                LOG.info(
-                    "Doing Calico mechanism driver initialisation in process %s",
-                    current_pid,
-                )
+        # Create syncers.
+        self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
+        self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
+        self.endpoint_syncer = WorkloadEndpointSyncer(
+            self.db, self._txn_from_context, self.policy_syncer
+        )
 
-            # (Re)init the DB.
-            self.db = None
-            self._get_db()
+        # Admin context used by (only) the thread that updates Felix agent
+        # status.
+        self._agent_update_context = ctx.get_admin_context()
 
-            # Create syncers.
-            self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
-            self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
-            self.endpoint_syncer = WorkloadEndpointSyncer(
-                self.db, self._txn_from_context, self.policy_syncer
+        # Get RPC connection for fanning out Felix state reports.
+        try:
+            state_report_topic = topics.REPORTS
+        except AttributeError:
+            # Older versions of OpenStack share the PLUGIN topic.
+            state_report_topic = topics.PLUGIN
+        self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
+
+    def _init_and_start_calico_resouce_syncer(self):
+        self.start_up_resync_thread = eventlet.spawn(self._do_startup_resync)
+
+    def _init_and_start_calico_manager(self):
+        self.elector = Elector(
+            cfg.CONF.calico.elector_name,
+            datamodel_v2.neutron_election_key(calico_config.get_region_string()),
+            self._is_master,
+            old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+            interval=MASTER_REFRESH_INTERVAL,
+            ttl=MASTER_TIMEOUT,
+        )
+
+        self.election_thread = eventlet.spawn(self.elector.run)
+        if cfg.CONF.calico.etcd_compaction_period_mins > 0:
+            self.periodic_compaction_thread = eventlet.spawn(
+                self.do_periodic_compaction
             )
 
-            # Admin context used by (only) the thread that updates Felix agent status.
-            self._agent_update_context = ctx.get_admin_context()
+    def _init_and_start_agent_status_watcher(self):
+        self.agent_status_watch_thread = eventlet.spawn(
+            self.watch_status_updates, AgentStatusWatcher
+        )
 
-            # Get RPC connection for fanning out Felix state reports.
-            try:
-                state_report_topic = topics.REPORTS
-            except AttributeError:
-                # Older versions of OpenStack share the PLUGIN topic.
-                state_report_topic = topics.PLUGIN
-            self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
+    def _init_and_start_endpoint_status_watcher(self):
+        # Mapping from (hostname, port-id) to Calico's status for a port.  The
+        # hostname is included to disambiguate between multiple copies of a
+        # port, which may exist during a migration or a re-schedule.
+        self._port_status_cache = {}
+        # Queue used to fan out port status updates to worker threads.  Notes:
+        # * the queue contains tuples (priority, <status key>); we use a
+        #   higher priority for events and a lower priority for snapshot
+        #   keys, so that current data skips the queue.
+        self._port_status_queue = PriorityQueue()
+        self._port_status_queue_too_long = False
 
-            if voting:
-                # Elector, for performing leader election.
-                self.elector = Elector(
-                    cfg.CONF.calico.elector_name,
-                    datamodel_v2.neutron_election_key(
-                        calico_config.get_region_string()
-                    ),
-                    old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-                    interval=MASTER_REFRESH_INTERVAL,
-                    ttl=MASTER_TIMEOUT,
-                )
-                LOG.info(
-                    "PID %s: Initializing Calico Elector; "
-                    "this process WILL participate in leader election.",
-                    current_pid,
-                )
+        self.endpoint_status_watch_thread = eventlet.spawn(
+            self.watch_status_updates, EndpointStatusWatcher
+        )
 
-                # Start our long-running threads.  Just in case we ever get two same
-                # threads running, use an epoch counter to tell the old thread to die.
-                # We deliberately do this last, to ensure that all of the setup above is
-                # complete before we start running.
-                self._epoch += 1
-                if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-                    eventlet.spawn(self.periodic_compaction_thread, self._epoch)
-                eventlet.spawn(self._status_updating_thread, self._epoch)
-                for _ in range(cfg.CONF.calico.num_port_status_threads):
-                    eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
-                # Note, resync runs in a dedicated worker process spawned via
-                # ``get_workers``, not here.  See ``post_fork_initialize``.
-            else:
-                LOG.info(
-                    "PID %s: Not a voting participant; "
-                    "skipping elector and leader threads.",
-                    current_pid,
-                )
-
-            self._my_pid = current_pid
-
-            LOG.info(
-                "Calico mechanism driver initialisation done in process %s", current_pid
+        self.port_status_update_threads = []
+        for _ in range(cfg.CONF.calico.num_port_status_threads):
+            self.port_status_update_threads.append(
+                eventlet.spawn(self._loop_writing_port_statuses)
             )
 
     @logging_exceptions(LOG)
-    def _status_updating_thread(self, expected_epoch):
-        """_status_updating_thread
+    def watch_status_updates(self, watcher):
+        """watch_status_updates
 
         This method acts as a status updates handler logic for the
         Calico mechanism driver. Watches for felix updates in etcd
         and passes info to Neutron database.
+
+        :param watcher: Watcher class to created to watch and update status.
         """
         TrackTask("STATUS_UPDATING")
-        LOG.info("Status updating thread started.")
-        while self._epoch == expected_epoch:
+        LOG.info("Status updating thread started for %s.", watcher.__name__)
+
+        while not self._stop_worker:
             # Only handle updates if we are the master node.
-            if self.elector.master():
+            if self.is_master():
                 if self._etcd_watcher is None:
-                    LOG.info("Became the master, starting StatusWatcher")
-                    self._etcd_watcher = StatusWatcher(self)
+                    LOG.info(
+                        "Became the master, starting %s",
+                        watcher.__name__,
+                    )
+                    self._etcd_watcher = watcher(self)
 
                     def start_etcd_watcher():
                         TrackTask("STATUS_ETCD_WATCHER")
@@ -520,21 +535,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         self._etcd_watcher_thread,
                     )
                 elif not self._etcd_watcher_thread:
-                    LOG.error("StatusWatcher %s died", self._etcd_watcher)
+                    LOG.error(
+                        "StatusWatcher %s died: %s",
+                        self._etcd_watcher,
+                        watcher.__name__,
+                    )
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
             else:
                 if self._etcd_watcher is not None:
-                    LOG.warning("No longer master, stopping StatusWatcher")
+                    LOG.warning(
+                        "No longer master, stopping StatusWatcher: %s.",
+                        watcher.__name__,
+                    )
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
                 # Short sleep interval before we check if we've become
                 # the master.
             eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
-        else:
-            LOG.warning(
-                "Unexpected: epoch changed. Handling status updates thread exiting."
-            )
 
     def on_felix_alive(self, felix_hostname, new):
         LOG.info("Felix on host %s is alive; fanning out status report", felix_hostname)
@@ -642,11 +660,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.warning("Port status update queue back to normal: %s", qsize)
 
     @logging_exceptions(LOG)
-    def _loop_writing_port_statuses(self, expected_epoch):
+    def _loop_writing_port_statuses(self):
         TrackTask("PORT_STATUS_WRITE")
-        LOG.info("Port status write thread started epoch=%s", expected_epoch)
+        LOG.info("Port status write thread started")
         admin_context = ctx.get_admin_context()
-        while self._epoch == expected_epoch:
+        while not self._stop_worker:
             # Wait for work to do.
             _, port_status_key = self._port_status_queue.get()
             # Actually do the update.  Catch all exceptions to avoid
@@ -1253,7 +1271,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 result.to_dict(),
             )
 
-    def periodic_compaction_thread(self, launch_epoch):
+    def do_periodic_compaction(self):
         """Periodic etcd compaction logic.
 
         On a fixed interval, requests etcd compaction to prevent unbounded disk usage
@@ -1262,9 +1280,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("COMPACTION")
         try:
             LOG.info("Periodic compaction thread started")
-            while self._epoch == launch_epoch:
+            while not self._stop_worker:
                 # Only do the compaction if we are the master node.
-                if self.elector.master():
+                if self.is_master():
                     LOG.info("I am master: doing periodic compaction")
 
                     try:
