@@ -86,17 +86,7 @@ func (f *formatter) init() {
 	})
 }
 
-// disableReportCallerOnce defends against init-order weirdness: another
-// package's init() (typically libcalico-go's logutils before that package
-// is migrated) may flip logrus.SetReportCaller(true) at process start,
-// which would (a) populate entry.Caller pointing at our wrapper code, and
-// (b) burn an extra stack walk per log line on top of our own. Setting it
-// to false on the first Format call wins because all init() functions have
-// completed by the time any code logs.
-var disableReportCallerOnce sync.Once
-
 func (f *formatter) Format(entry *logrus.Entry) ([]byte, error) {
-	disableReportCallerOnce.Do(func() { logrus.SetReportCaller(false) })
 	f.init()
 
 	b := entry.Buffer

@@ -21,7 +21,6 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
 	"github.com/projectcalico/calico/lib/std/log"
@@ -54,8 +53,7 @@ func NewRequestContext(req *http.Request) Context {
 		requestID = uuid.New().String()
 	}
 
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	logger = logger.WithField("requestID", requestID)
+	logger := log.WithField("requestID", requestID)
 
 	ctx := context.WithValue(req.Context(), ctxRequestIdKey, requestID)
 	ctx = context.WithValue(ctx, ctxLoggerKey, logger)
@@ -72,5 +70,5 @@ func (ctx *requestContext) Logger() log.Logger {
 func (ctx *requestContext) RequestID() string {
 	// We don't validate the type since it should be impossible to get a requestContext without this set properly. If
 	// it's not set, we want to panic since this is a developer error.
-	return ctx.Context.Value(ctxRequestIdKey).(string)
+	return ctx.Value(ctxRequestIdKey).(string)
 }
