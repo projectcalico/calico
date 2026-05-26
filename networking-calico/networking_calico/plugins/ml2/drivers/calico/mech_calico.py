@@ -306,8 +306,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._etcd_watcher = None
         self._etcd_watcher_thread = None
         self._my_pid = None
-        # Process-shared variable for checking if the current instance of
-        # neutron-server is elected as the leader or not.
+        # Variable shared across all processes that are forked for the
+        # current Neutron server. Tracks whether or not this Neutron server
+        # is the master for its OpenStack region.
         # "d" = double. Used for storing time.time(). See
         # https://docs.python.org/3/library/array.html#module-array
         self._is_master = multiprocessing.Value("d", 0)
@@ -321,7 +322,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self._last_status_queue_log_time = monotonic_time()
 
         # Flag for telling workers to stop. Only applicable to the
-        # calico worker processes.
+        # calico worker processes and currently used for unit tests
+        # only.
         self._stop_worker = False
 
         LOG.info("Created Calico mechanism driver %s", self)
@@ -372,7 +374,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.wsgi.WorkerService`` -> connection state and worker threads only.
+        * ``neutron.wsgi.WorkerService`` -> indicates an API worker process.
           Per PR #11580, API workers must never run master-only jobs, because their
           primary job is to serve API requests quickly: getting tied up running the
           master-only background threads (status watcher, port-status writers,
@@ -383,14 +385,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
           elector and master-only background threads.
         """
         trigger_cls = _trigger_class(trigger)
-        self._post_fork_inititialize_common()
+
+        # ResyncWorker is special-cased because the function can be called by CLI as
+        # well. Thus, all necessary init will happen in the _do_startup_resync
+        # function.
+        if trigger_cls is CalicoStartupResyncWorker:
+            self._init_start_calico_resource_syncer()
+            return
+
+        self._post_fork_init()
 
         worker_mapping = {
-            CalicoManagerWorker: self._init_and_start_calico_manager,
-            CalicoStartupResyncWorker: self._init_and_start_calico_resouce_syncer,
-            CalicoAgentStatusWatcherWorker: self._init_and_start_agent_status_watcher,
+            CalicoManagerWorker: self._init_start_calico_manager,
+            CalicoAgentStatusWatcherWorker: self._init_start_agent_status_watcher,
             CalicoEndpointStatusWatcherWorker: (
-                self._init_and_start_endpoint_status_watcher
+                self._init_start_endpoint_status_watcher
             ),
         }
 
@@ -409,12 +418,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         In order for a neutron-server to be considered as a master, it needs
         to aquire the election key and actively maintain it.
         """
-        # We were not elected. We are not the master.
         if self._is_master.value <= 0:
+            # We were not elected. We are not the master.
             return False
 
         # Else, let's check if we refresh the time within timeout.
-        time_till_last_refreshed = self._is_master.value - time.time()
+        time_till_last_refreshed = time.time() - self._is_master.value
         refreshed_in_time = time_till_last_refreshed < MASTER_TIMEOUT
 
         # If not, there is something wrong with elector!!
@@ -426,7 +435,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         return refreshed_in_time
 
-    def _post_fork_inititialize_common(self):
+    def _post_fork_init(self):
         """Common post fork initialization.
 
         Creates the connection state required for talking to the Neutron DB
@@ -443,6 +452,27 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self.db, self._txn_from_context, self.policy_syncer
         )
 
+    def _init_start_calico_resource_syncer(self):
+        self.start_up_resync_thread = eventlet.spawn(self._do_startup_resync)
+
+    def _init_start_calico_manager(self):
+        self.elector = Elector(
+            cfg.CONF.calico.elector_name,
+            datamodel_v2.neutron_election_key(calico_config.get_region_string()),
+            self._is_master,
+            old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+            interval=MASTER_REFRESH_INTERVAL,
+            ttl=MASTER_TIMEOUT,
+        )
+
+        self.election_thread = self.elector.start()
+
+        if cfg.CONF.calico.etcd_compaction_period_mins > 0:
+            self.periodic_compaction_thread = eventlet.spawn(
+                self.do_periodic_compaction
+            )
+
+    def _init_start_agent_status_watcher(self):
         # Admin context used by (only) the thread that updates Felix agent
         # status.
         self._agent_update_context = ctx.get_admin_context()
@@ -455,31 +485,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             state_report_topic = topics.PLUGIN
         self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
 
-    def _init_and_start_calico_resouce_syncer(self):
-        self.start_up_resync_thread = eventlet.spawn(self._do_startup_resync)
-
-    def _init_and_start_calico_manager(self):
-        self.elector = Elector(
-            cfg.CONF.calico.elector_name,
-            datamodel_v2.neutron_election_key(calico_config.get_region_string()),
-            self._is_master,
-            old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-            interval=MASTER_REFRESH_INTERVAL,
-            ttl=MASTER_TIMEOUT,
-        )
-
-        self.election_thread = eventlet.spawn(self.elector.run)
-        if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-            self.periodic_compaction_thread = eventlet.spawn(
-                self.do_periodic_compaction
-            )
-
-    def _init_and_start_agent_status_watcher(self):
         self.agent_status_watch_thread = eventlet.spawn(
             self.watch_status_updates, AgentStatusWatcher
         )
 
-    def _init_and_start_endpoint_status_watcher(self):
+    def _init_start_endpoint_status_watcher(self):
         # Mapping from (hostname, port-id) to Calico's status for a port.  The
         # hostname is included to disambiguate between multiple copies of a
         # port, which may exist during a migration or a re-schedule.

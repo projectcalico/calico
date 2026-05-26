@@ -70,7 +70,7 @@ class TestElection(unittest.TestCase):
                 interval=-1,
                 ttl=15,
             )
-            elector.run()
+            elector.start()
             self._wait_and_stop(etcdv3._client, elector)
 
         with self.assertRaises(ValueError):
@@ -82,7 +82,7 @@ class TestElection(unittest.TestCase):
                 interval=10,
                 ttl=5,
             )
-            elector.run()
+            elector.start()
             self._wait_and_stop(etcdv3._client, elector)
 
     def _wait_and_stop(self, client, elector):
@@ -116,7 +116,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
 
     def test_become_master_first_time(self):
@@ -135,7 +135,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
         client.assert_key_written("/legacy")
 
@@ -153,7 +153,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
 
     def test_become_master_multiple_attempts(self):
@@ -174,7 +174,7 @@ class TestElection(unittest.TestCase):
                 interval=5,
                 ttl=15,
             )
-            elector.run()
+            elector.start()
             self._wait_and_stop(client, elector)
 
     def test_become_master_implausible(self):
@@ -193,7 +193,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
 
     def test_initial_read_exceptions(self):
@@ -211,7 +211,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
 
     def test_exception_detail_logging(self):
@@ -228,7 +228,7 @@ class TestElection(unittest.TestCase):
                 interval=5,
                 ttl=15,
             )
-            elector.run()
+            elector.start()
             self._wait_and_stop(client, elector)
 
             # Check that Etcd3Exception detail was logged.
@@ -259,7 +259,7 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)
 
     def test_master_failure(self):
@@ -285,5 +285,5 @@ class TestElection(unittest.TestCase):
             interval=5,
             ttl=15,
         )
-        elector.run()
+        elector.start()
         self._wait_and_stop(client, elector)

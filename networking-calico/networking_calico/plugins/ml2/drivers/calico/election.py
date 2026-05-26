@@ -108,8 +108,9 @@ class Elector(object):
         self._is_master.value = 0
         self._greenlet = None
 
-    def run(self):
+    def start(self):
         self._greenlet = eventlet.spawn(self._run)
+        return self._greenlet
 
     def _run(self):
         """Main election thread run routine.

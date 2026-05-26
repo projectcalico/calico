@@ -437,11 +437,11 @@ class TestPluginEtcdBase(_TestEtcdBase):
             self.sg_default_key_v3: self.sg_default_value_v3,
         }
 
-        self.driver._post_fork_inititialize_common()
-        self.driver._init_and_start_calico_resouce_syncer()
-        self.driver._init_and_start_agent_status_watcher()
-        self.driver._init_and_start_calico_manager()
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._post_fork_init()
+        self.driver._init_start_calico_resource_syncer()
+        self.driver._init_start_agent_status_watcher()
+        self.driver._init_start_calico_manager()
+        self.driver._init_start_endpoint_status_watcher()
 
     def make_context(self):
         context = mock.MagicMock()
@@ -2590,7 +2590,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
     @mock.patch("eventlet.spawn")
     def test_on_port_status_changed(self, _m_spawn):
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_start_endpoint_status_watcher()
         self.driver._last_status_queue_log_time = monotonic_time() - 100
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
@@ -2645,7 +2645,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
 
     @mock.patch("eventlet.spawn")
     def test_loop_writing_port_statuses(self, _m_spawn):
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_start_endpoint_status_watcher()
 
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             with mock.patch.object(
@@ -2666,7 +2666,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status(self, _m_spawn):
         self.driver._get_db()
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_start_endpoint_status_watcher()
 
         mock_calls = []
 
@@ -2690,7 +2690,7 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status_fail(self, _m_spawn):
         self.driver._get_db()
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_start_endpoint_status_watcher()
 
         mock_calls = []
 

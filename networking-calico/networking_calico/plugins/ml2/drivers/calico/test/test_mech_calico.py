@@ -51,20 +51,18 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
         super(TestMechanismDriver, self).tearDown()
 
     def test_driver_init_common(self):
-        self.driver._post_fork_inititialize_common()
+        self.driver._post_fork_init()
 
         self.assertIsNotNone(self.driver.db)
         self.assertIsNotNone(self.driver.subnet_syncer)
         self.assertIsNotNone(self.driver.policy_syncer)
         self.assertIsNotNone(self.driver.endpoint_syncer)
-        self.assertIsNotNone(self.driver._agent_update_context)
-        self.assertIsNotNone(self.driver.state_report_rpc)
 
     @mock.patch("eventlet.spawn")
     def test_driver_init_calico_resource_syncer(self, m_spawn):
         m_spawn.return_value = True
 
-        self.driver._init_and_start_calico_resouce_syncer()
+        self.driver._init_start_calico_resource_syncer()
 
         self.assertTrue(self.driver.start_up_resync_thread)
 
@@ -73,18 +71,45 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
     def test_driver_init_calico_manager(self, m_elector, m_spawn):
         m_spawn.return_value = True
 
-        self.driver._init_and_start_calico_manager()
+        self.driver._init_start_calico_manager()
 
         self.assertTrue(self.driver.election_thread)
         self.assertTrue(self.driver.periodic_compaction_thread)
 
         m_elector.assert_called_once()
 
+    @mock.patch("time.time")
+    def test_is_master(self, m_time):
+        m_time.return_value = 5
+
+        self.driver._is_master = mock.MagicMock()
+        self.driver._is_master.value = 1
+
+        self.assertTrue(self.driver.is_master())
+
+    @mock.patch("time.time")
+    def test_is_not_master(self, m_time):
+        m_time.return_value = 5
+
+        self.driver._is_master = mock.MagicMock()
+        self.driver._is_master.value = 0
+
+        self.assertFalse(self.driver.is_master())
+
+    @mock.patch("time.time")
+    def test_is_not_master_timeout(self, m_time):
+        m_time.return_value = mech_calico.MASTER_TIMEOUT + 100
+
+        self.driver._is_master = mock.MagicMock()
+        self.driver._is_master.value = 1
+
+        self.assertFalse(self.driver.is_master())
+
     @mock.patch("eventlet.spawn")
     def test_driver_init_calico_agent_status_watcher(self, m_spawn):
         m_spawn.return_value = True
 
-        self.driver._init_and_start_agent_status_watcher()
+        self.driver._init_start_agent_status_watcher()
 
         self.assertTrue(self.driver.agent_status_watch_thread)
 
@@ -92,7 +117,7 @@ class TestMechanismDriver(lib.Lib, unittest.TestCase):
     def test_driver_init_calico_endpoint_status_watcher(self, m_spawn):
         m_spawn.return_value = True
 
-        self.driver._init_and_start_endpoint_status_watcher()
+        self.driver._init_start_endpoint_status_watcher()
 
         self.assertTrue(self.driver.endpoint_status_watch_thread)
         self.assertEqual(
