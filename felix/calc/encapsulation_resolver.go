@@ -29,8 +29,9 @@ import (
 )
 
 // EncapsulationResolver is a Calculation Graph component that watches IP pool updates and
-// calculates if the IPIP or VXLAN encaps should be enabled or disabled. The new Encapsulation
-// is sent to the dataplane, which restarts Felix if it changed.
+// calculates if the IPIP or VXLAN encaps should be enabled or disabled, and whether any
+// non-encapsulated (noencap) IP pool exists. The new Encapsulation is sent to the dataplane,
+// which restarts Felix if it changed.
 type EncapsulationResolver struct {
 	config    *config.Config
 	callbacks encapCallbacks
@@ -86,11 +87,13 @@ func (r *EncapsulationResolver) triggerCalculation() {
 		IPIPEnabled:    r.encapCalc.IPIPEnabled(),
 		VXLANEnabled:   r.encapCalc.VXLANEnabled(),
 		VXLANEnabledV6: r.encapCalc.VXLANEnabledV6(),
+		NoEncapEnabled: r.encapCalc.NoEncapEnabled(),
 	}
 
 	if r.config.Encapsulation.IPIPEnabled != newEncap.IPIPEnabled ||
 		r.config.Encapsulation.VXLANEnabled != newEncap.VXLANEnabled ||
-		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 {
+		r.config.Encapsulation.VXLANEnabledV6 != newEncap.VXLANEnabledV6 ||
+		r.config.Encapsulation.NoEncapEnabled != newEncap.NoEncapEnabled {
 		logrus.WithFields(logrus.Fields{
 			"oldIPIPEnabled":    r.config.Encapsulation.IPIPEnabled,
 			"newIPIPEnabled":    newEncap.IPIPEnabled,
@@ -98,6 +101,8 @@ func (r *EncapsulationResolver) triggerCalculation() {
 			"newVXLANEnabled":   newEncap.VXLANEnabled,
 			"oldVXLANEnabledV6": r.config.Encapsulation.VXLANEnabledV6,
 			"newVXLANEnabledV6": newEncap.VXLANEnabledV6,
+			"oldNoEncapEnabled": r.config.Encapsulation.NoEncapEnabled,
+			"newNoEncapEnabled": newEncap.NoEncapEnabled,
 		}).Info("EncapsulationResolver: Encapsulation changed.")
 	}
 
@@ -114,6 +119,7 @@ type EncapsulationCalculator struct {
 	ipipPools    map[string]struct{}
 	vxlanPools   map[string]struct{}
 	vxlanPoolsv6 map[string]struct{}
+	noEncapPools map[string]struct{}
 }
 
 func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPairList) *EncapsulationCalculator {
@@ -126,6 +132,7 @@ func NewEncapsulationCalculator(config *config.Config, ippoolKVPList *model.KVPa
 		ipipPools:    map[string]struct{}{},
 		vxlanPools:   map[string]struct{}{},
 		vxlanPoolsv6: map[string]struct{}{},
+		noEncapPools: map[string]struct{}{},
 	}
 
 	if ippoolKVPList != nil {
@@ -238,12 +245,19 @@ func (c *EncapsulationCalculator) updatePool(cidr string, ipipEnabled, vxlanEnab
 		delete(c.vxlanPools, cidr)
 		delete(c.vxlanPoolsv6, cidr)
 	}
+
+	if !ipipEnabled && !vxlanEnabled {
+		c.noEncapPools[cidr] = struct{}{}
+	} else {
+		delete(c.noEncapPools, cidr)
+	}
 }
 
 func (c *EncapsulationCalculator) removePool(cidr string) {
 	delete(c.ipipPools, cidr)
 	delete(c.vxlanPools, cidr)
 	delete(c.vxlanPoolsv6, cidr)
+	delete(c.noEncapPools, cidr)
 }
 
 func (c *EncapsulationCalculator) IPIPEnabled() bool {
@@ -264,4 +278,8 @@ func (c *EncapsulationCalculator) VXLANEnabled() bool {
 
 func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
 	return len(c.vxlanPoolsv6) > 0
+}
+
+func (c *EncapsulationCalculator) NoEncapEnabled() bool {
+	return len(c.noEncapPools) > 0
 }

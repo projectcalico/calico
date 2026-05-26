@@ -202,9 +202,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			pol := api.NewNetworkPolicy()
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
-			ports := []numorstring.Port{
-				numorstring.Port{PortName: sharedPortName},
-			}
+			ports := []numorstring.Port{{PortName: sharedPortName}}
 			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
 			}
@@ -375,9 +373,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.Port{PortName: sharedPortName},
-					numorstring.Port{PortName: w0PortName},
-					numorstring.Port{PortName: w1PortName},
+					{PortName: sharedPortName},
+					{PortName: w0PortName},
+					{PortName: w1PortName},
 					numorstring.SinglePort(4000),
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
@@ -627,7 +625,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		Describe("with negated ports conflicting with positive ports", func() {
 			BeforeEach(func() {
 				ports := []numorstring.Port{
-					numorstring.Port{PortName: w0PortName},
+					{PortName: w0PortName},
 					numorstring.SinglePort(w1Port),
 					numorstring.SinglePort(4000),
 				}
@@ -665,9 +663,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.Port{PortName: sharedPortName},
-					numorstring.Port{PortName: w0PortName},
-					numorstring.Port{PortName: w1PortName},
+					{PortName: sharedPortName},
+					{PortName: w0PortName},
+					{PortName: w1PortName},
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
 					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
@@ -787,7 +785,7 @@ var _ = infrastructure.DatastoreDescribe("TCP: named port with a simulated kuber
 			Protocol: &protoStruct,
 			Destination: api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.Port{PortName: "http-port"},
+					{PortName: "http-port"},
 				},
 			},
 		}
@@ -937,7 +935,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.Port{PortName: "http"}},
+					Ports: []numorstring.Port{{PortName: "http"}},
 				},
 			},
 		}
@@ -955,7 +953,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.Port{PortName: "http"}},
+					Ports: []numorstring.Port{{PortName: "http"}},
 				},
 			},
 		}
@@ -1075,7 +1073,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoTCPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.Port{PortName: "udp-port"},
+						{PortName: "udp-port"},
 					},
 				},
 			},
@@ -1084,7 +1082,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoUDPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.Port{PortName: "http-port"},
+						{PortName: "http-port"},
 					},
 				},
 			},
