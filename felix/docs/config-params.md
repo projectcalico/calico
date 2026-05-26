@@ -671,6 +671,21 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CRISocketPath` (config file) / `criSocketPath` (YAML)
+
+The path to the local container-runtime CRI socket
+(e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+small set of well-known paths at startup.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CRISocketPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `criSocketPath` (YAML) `CRISocketPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
 
 Overrides the default location where to find the cgroup hierarchy.

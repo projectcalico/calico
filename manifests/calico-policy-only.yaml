@@ -2523,6 +2523,12 @@ spec:
                     [Default: insert]
                   pattern: ^(?i)(Insert|Append)?$
                   type: string
+                criSocketPath:
+                  description: |-
+                    CRISocketPath is the path to the local container-runtime CRI socket
+                    (e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+                    small set of well-known paths at startup.
+                  type: string
                 dataplaneDriver:
                   description: |-
                     DataplaneDriver filename of the external dataplane driver to use.  Only used if UseInternalDataplaneDriver

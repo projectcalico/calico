@@ -137,6 +137,13 @@ func (c *WorkloadEndpointClient) calcCNIAnnotations(kvp *model.KVPair) map[strin
 		log.WithField("containerID", containerID).Debug("Container ID specified, including in patch")
 		annotations[conversion.AnnotationContainerID] = containerID
 	}
+
+	// Forward the pod-netns annotation (set on the v3 WEP by the CNI plugin)
+	// so that the Pod ends up with the same annotation. Felix's CTLB-skip
+	// manager reads it to resolve the netns cookie locally.
+	if netnsPath, ok := wep.Annotations[conversion.AnnotationPodNetns]; ok && netnsPath != "" {
+		annotations[conversion.AnnotationPodNetns] = netnsPath
+	}
 	return annotations
 }
 

@@ -36,6 +36,7 @@ github.com/containernetworking/plugins v1.9.1
 github.com/coreos/go-iptables v0.8.0
 github.com/coreos/go-semver v0.3.1
 github.com/coreos/go-systemd/v22 v22.7.0
+github.com/cyphar/filepath-securejoin v0.7.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/distribution/reference v0.6.0
 github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
@@ -212,6 +213,8 @@ k8s.io/client-go v0.37.0-beta.0
 k8s.io/component-base v0.37.0-beta.0
 k8s.io/component-helpers v0.37.0-beta.0
 k8s.io/controller-manager v0.37.0-beta.0
+k8s.io/cri-api v0.37.0-beta.0
+k8s.io/cri-client v0.37.0-beta.0
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kms v0.37.0-beta.0
@@ -381,6 +384,7 @@ local:felix/collector/types/tuple
 local:felix/collector/utils
 local:felix/config
 local:felix/conntrack
+local:felix/cri
 local:felix/daemon
 local:felix/dataplane
 local:felix/dataplane/common
@@ -412,6 +416,7 @@ local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
 local:felix/netlinkshim/handlemgr
+local:felix/netns
 local:felix/nfnetlink
 local:felix/nfnetlink/nfnl
 local:felix/nfnetlink/pkt
