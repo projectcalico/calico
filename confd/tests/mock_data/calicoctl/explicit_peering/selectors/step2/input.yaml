@@ -3,3 +3,4 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: node.kube-node-1
 spec:
+  programClusterRoutes: Enabled

@@ -482,14 +482,12 @@ func TestProgramClusterRoutes(t *testing.T) {
 			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
-			// Step 1: with ProgramClusterRoutes unset in BGPConfiguration, the
-			// default is Disabled (Felix programs cluster routes), so confd
-			// should render the pcr-disabled variant.
+			// Step 1: as for mesh/restart-time test oneshot test.
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh/restart-time/input.yaml")
 			t.Cleanup(cleanup)
-			d.expectOutput("mesh/restart-time/pcr-disabled")
+			d.expectOutput("mesh/restart-time")
 
-			// Step 2: explicitly disable cluster route programming; output unchanged.
+			// Step 2: update BGPConfiguration to disable cluster route programming.
 			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
 			require.NoError(t, err)
 			cfg.Spec.ProgramClusterRoutes = ptr.To("Disabled")
@@ -497,7 +495,7 @@ func TestProgramClusterRoutes(t *testing.T) {
 			require.NoError(t, err)
 			d.expectOutput("mesh/restart-time/pcr-disabled")
 
-			// Step 3: enable cluster route programming so BIRD owns the routes again.
+			// Step 3: update BGPConfiguration to enable cluster route programming.
 			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
 			require.NoError(t, err)
 			cfg.Spec.ProgramClusterRoutes = ptr.To("Enabled")
