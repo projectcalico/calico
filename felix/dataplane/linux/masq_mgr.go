@@ -20,6 +20,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
@@ -170,5 +172,5 @@ func isLoadBalancerOnly(pool *proto.IPAMPool) bool {
 		// Empty means default (Workload + Tunnel), so include in all-pools.
 		return false
 	}
-	return !slices.Contains(uses, "Workload") && !slices.Contains(uses, "Tunnel")
+	return slices.Contains(uses, string(apiv3.IPPoolAllowedUseLoadBalancer)) && len(uses) == 1
 }
