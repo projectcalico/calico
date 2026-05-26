@@ -33,14 +33,14 @@ import (
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/tier"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	logutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var testEnv *testutils.TestEnv
 
 func init() {
 	logrus.SetFormatter(&logutils.Formatter{})
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestMain(m *testing.M) {

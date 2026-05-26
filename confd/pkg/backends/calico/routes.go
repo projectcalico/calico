@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (

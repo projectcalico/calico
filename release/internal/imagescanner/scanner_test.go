@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestConfigValid(t *testing.T) {
@@ -110,7 +110,7 @@ func TestScannerScan(t *testing.T) {
 		if capturedToken != "Bearer test-token" {
 			t.Errorf("expected token 'Bearer test-token', got '%s'", capturedToken)
 		}
-		logrus.WithField("query", capturedQuery).Info("Captured query parameters")
+		log.WithField("query", capturedQuery).Info("Captured query parameters")
 		if capturedQuery.Get("scan_type") != "image" {
 			t.Errorf("expected scan_type 'image', got '%s'", capturedQuery.Get("scan_type"))
 		}
@@ -162,7 +162,7 @@ func TestScannerScan(t *testing.T) {
 		if capturedToken != "Bearer test-token" {
 			t.Errorf("expected token 'Bearer test-token', got '%s'", capturedToken)
 		}
-		logrus.WithField("query", capturedQuery).Info("Captured query parameters")
+		log.WithField("query", capturedQuery).Info("Captured query parameters")
 		if capturedQuery.Get("scan_type") != "release" {
 			t.Errorf("expected scan_type 'release', got '%s'", capturedQuery.Get("scan_type"))
 		}

@@ -15,9 +15,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/kelseyhightower/memkv"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Config struct {

@@ -18,14 +18,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type noEncapManager struct {
@@ -35,15 +34,15 @@ type noEncapManager struct {
 	routeMgr  *routeManager
 
 	// Log context
-	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	logCtx     log.Logger
+	opRecorder log.OpRecorder
 }
 
 func newNoEncapManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 ) *noEncapManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newNoEncapManagerWithSims(
@@ -59,14 +58,14 @@ func newNoEncapManagerWithSims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 	nlHandle netlinkHandle,
 ) *noEncapManager {
 
 	m := &noEncapManager{
 		hostname:  dpConfig.Hostname,
 		ipVersion: ipVersion,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 		}),
 		opRecorder: opRecorder,
@@ -103,7 +102,7 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 			addrStr = msg.Ipv6Addr
 		}
 		if addrStr == "" {
-			m.logCtx.WithFields(logrus.Fields{
+			m.logCtx.WithFields(log.Fields{
 				"hostname":  msg.Hostname,
 				"ipVersion": m.ipVersion,
 			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")

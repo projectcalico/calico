@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"time"
 
-	logrus "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 	"k8s.io/kubernetes/pkg/proxy/healthcheck"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Healthcheck interface {
@@ -50,11 +51,11 @@ func NewHealthCheck(k8s kubernetes.Interface, nodeName string, port int,
 
 	// We cannot wait for the healthz server as we cannot stop it.
 	go func() {
-		logrus.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
+		log.Infof("Starting BPF Proxy Healthz server on %s", healthzAddr)
 		for {
 			err := server.Run(context.Background()) // context is mosstly ignored inside
 			if err != nil {
-				logrus.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
+				log.WithError(err).Error("BPF Proxy Healthz server failed, restarting in 1s")
 				time.Sleep(time.Second)
 			}
 		}

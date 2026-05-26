@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ingressExpectation describes how ingress policy behaves for a scenario.
@@ -297,10 +297,10 @@ var _ = describe.CalicoDescribe(
 			nodeNames = allNames[:3]
 			nodeIPs = allIPs[:3]
 			tunnelIPs = allTunnelIPs[:3]
-			logrus.Infof("Nodes: %v IPs: %v tunnelIPs: %v", nodeNames, nodeIPs, tunnelIPs)
+			log.Infof("Nodes: %v IPs: %v tunnelIPs: %v", nodeNames, nodeIPs, tunnelIPs)
 
 			dp = utils.DetectDataplane(cli, f.ClientSet)
-			logrus.Infof("Cluster dataplane: calico=%s BPF=%v IPVS=%v VPP=%v",
+			log.Infof("Cluster dataplane: calico=%s BPF=%v IPVS=%v VPP=%v",
 				dp.Calico, dp.IsBPF(), dp.IsIPVS(), dp.IsVPP())
 		})
 
@@ -391,7 +391,7 @@ var _ = describe.CalicoDescribe(
 		// client-b (by pod label for pod-networked, by CIDR for host-networked).
 		runStandardIngressTest := func(s ingressScenario) {
 			expect := expectForDP(s)
-			logrus.Infof("Scenario %d: srcNode=%s hostNetworked=%v dest=%s dataplane=%s expect=%s",
+			log.Infof("Scenario %d: srcNode=%s hostNetworked=%v dest=%s dataplane=%s expect=%s",
 				s.num, s.srcNode, s.hostNetworked, s.dest, dp.Calico, expect)
 
 			ct := conncheck.NewConnectionTester(f)
@@ -522,7 +522,7 @@ var _ = describe.CalicoDescribe(
 		// machine outside the cluster accessed via SSH.
 		runExternalIngressTest := func(s ingressScenario) {
 			expect := expectForDP(s)
-			logrus.Infof("Scenario %d (external): dest=%s dataplane=%s expect=%s",
+			log.Infof("Scenario %d (external): dest=%s dataplane=%s expect=%s",
 				s.num, s.dest, dp.Calico, expect)
 
 			extNode := externalnode.NewClient()
@@ -531,7 +531,7 @@ var _ = describe.CalicoDescribe(
 
 			extIPs := extNode.IPs()
 			Expect(extIPs).NotTo(BeEmpty(), "could not determine external node IP addresses")
-			logrus.Infof("External node IPs: %v", extIPs)
+			log.Infof("External node IPs: %v", extIPs)
 
 			// Deploy the server on svcNode.
 			ct := conncheck.NewConnectionTester(f)
@@ -726,7 +726,7 @@ func ingressDeletePolicy(f *framework.Framework, namespace, name string) {
 	defer cancel()
 	err := f.ClientSet.NetworkingV1().NetworkPolicies(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		logrus.WithError(err).WithField("policy", name).Info("Failed to delete NetworkPolicy during cleanup")
+		log.WithError(err).WithField("policy", name).Info("Failed to delete NetworkPolicy during cleanup")
 	}
 }
 

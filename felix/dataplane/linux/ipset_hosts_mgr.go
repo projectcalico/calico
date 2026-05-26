@@ -17,12 +17,11 @@ package intdataplane
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // hostsIPSetManager manages the all-hosts IP set, which is used by some rules in our static chains.
@@ -43,7 +42,7 @@ type hostsIPSetManager struct {
 	dpConfig   Config
 
 	// Log context
-	logCtx *logrus.Entry
+	logCtx log.Logger
 }
 
 func newHostsIPSetManager(
@@ -63,7 +62,7 @@ func newHostsIPSetManager(
 		ipVersion:          ipVersion,
 		ipSetDirty:         true,
 		dpConfig:           dpConfig,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 		}),
 	}

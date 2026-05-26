@@ -47,11 +47,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // listOrStreamHandler is a handler that responds with either a json list or a server side event stream.
@@ -92,7 +91,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 
 	rsp := l.f(ctx, *params)
 	if err := rsp.ResponseWriter().WriteResponse(ctx, rsp.Status(), w); err != nil {
-		logrus.WithError(err).Error("failed to write response")
+		log.WithError(err).Error("failed to write response")
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -111,7 +110,7 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 func writeJSONResponse(w http.ResponseWriter, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
 	if err := json.NewEncoder(w).Encode(src); err != nil {
-		logrus.WithError(err).Error("Failed to encode response.")
+		log.WithError(err).Error("Failed to encode response.")
 	}
 }
 

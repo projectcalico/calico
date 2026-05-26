@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"iter"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func New[T comparable]() Typed[T] {

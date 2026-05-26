@@ -18,8 +18,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -34,7 +33,7 @@ const (
 func OwnNamespace() string {
 	data, err := os.ReadFile(winutils.GetHostPath(serviceAccountNamespaceFile))
 	if err != nil {
-		logrus.WithError(err).Debug("Failed to read service account namespace file, defaulting to calico-system")
+		log.WithError(err).Debug("Failed to read service account namespace file, defaulting to calico-system")
 		return defaultNamespace
 	}
 	ns := strings.TrimSpace(string(data))

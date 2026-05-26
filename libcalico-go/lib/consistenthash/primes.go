@@ -3,7 +3,7 @@ package consistenthash
 import (
 	"sort"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Every prime that can be represented in a uint16.
@@ -672,7 +672,7 @@ var pr = []uint16{
 // It should not be used for cryptography or anything else remotely security-related.
 func NextPrimeUint16(i int) uint16 {
 	if i > 65521 {
-		logrus.WithField("i", i).Panic("Integer has no next prime uint16")
+		log.WithField("i", i).Panic("Integer has no next prime uint16")
 	}
 	idx := sort.Search(len(pr), func(x int) bool { return int(pr[x]) >= i })
 	if idx == len(pr) {

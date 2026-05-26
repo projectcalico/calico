@@ -18,8 +18,7 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquestr"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -66,7 +65,7 @@ type values[ItemID comparable] struct {
 // To avoid the above bug, panics if the same ID is added twice.
 func (idx *LabelNameValueIndex[ItemID, Item]) Add(id ItemID, item Item) {
 	if _, ok := idx.allItems[id]; ok {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"id":    id,
 			"item":  item,
 			"index": idx.nameOfTrackedItems,
@@ -128,10 +127,10 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName uniquestr.Ha
 		// A selector such as "has(labelName)", which matches the label but
 		// not any particular value.
 		if vals, ok := idx.labelNameToValueToIDs[labelName]; !ok {
-			logrus.Debugf("Found no matches for %s with %s=<any>", idx.nameOfTrackedItems, labelName.Value())
+			log.Debugf("Found no matches for %s with %s=<any>", idx.nameOfTrackedItems, labelName.Value())
 			return NoMatchStrategy[ItemID]{}
 		} else {
-			logrus.Debugf("Found %d %s with %s=<any>", vals.count, idx.nameOfTrackedItems, labelName.Value())
+			log.Debugf("Found %d %s with %s=<any>", vals.count, idx.nameOfTrackedItems, labelName.Value())
 			return LabelNameStrategy[ItemID]{label: labelName, values: vals}
 		}
 	}
@@ -152,7 +151,7 @@ func (idx *LabelNameValueIndex[ItemID, Item]) StrategyFor(labelName uniquestr.Ha
 		// We filtered all values out!  That means that the selector cannot
 		// match anything.  If it could match something, we'd have found it
 		// in the index.
-		logrus.Debugf("No %s with %s=%v", idx.nameOfTrackedItems, labelName.Value(), uniquestr.HandleSliceStringer(r.MustHaveOneOfValues))
+		log.Debugf("No %s with %s=%v", idx.nameOfTrackedItems, labelName.Value(), uniquestr.HandleSliceStringer(r.MustHaveOneOfValues))
 		return NoMatchStrategy[ItemID]{}
 	}
 

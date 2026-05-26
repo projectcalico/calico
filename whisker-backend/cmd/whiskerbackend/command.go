@@ -17,9 +17,9 @@ package whiskerbackend
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
 
@@ -31,7 +31,7 @@ func NewCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg, err := config.NewConfig()
 			if err != nil {
-				logrus.WithError(err).Fatal("Failed to parse configuration")
+				log.WithError(err).Fatal("Failed to parse configuration")
 			}
 			Run(context.Background(), cfg)
 		},

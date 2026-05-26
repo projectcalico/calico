@@ -5,7 +5,8 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // MutateConfigAdd mutates the provided configuration such that it will be accepted by the
@@ -13,7 +14,7 @@ import (
 // configuration to pass that subnet to the IPAM plugin.
 func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 	if len(network.Subnets) == 0 {
-		logrus.Info("No Azure subnets defined - don't mutate config (add)")
+		log.Info("No Azure subnets defined - don't mutate config (add)")
 		return nil
 	}
 	var stdinData map[string]any
@@ -31,7 +32,7 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 		return err
 	}
 	// Don't log the entire stdinData here because it may contain sensitive information
-	logrus.WithField("subnet", network.Subnets[0]).Info("Updated CNI network configuration for Azure Add")
+	log.WithField("subnet", network.Subnets[0]).Info("Updated CNI network configuration for Azure Add")
 	return nil
 }
 
@@ -40,11 +41,11 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 // and subnet information in the provided network and endpoint.
 func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEndpoint) error {
 	if len(endpoint.Addresses) == 0 {
-		logrus.Info("No addresses defined - don't mutate config (delete)")
+		log.Info("No addresses defined - don't mutate config (delete)")
 		return nil
 	}
 	if len(network.Subnets) == 0 {
-		logrus.Info("No Azure subnets defined - don't mutate config (delete)")
+		log.Info("No Azure subnets defined - don't mutate config (delete)")
 		return nil
 	}
 
@@ -69,7 +70,7 @@ func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEnd
 		return err
 	}
 	// Don't log the entire stdinData here because it may contain sensitive information
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"subnet":    network.Subnets[0],
 		"ipAddress": splits[0],
 	}).Info("Updated CNI network configuration for Azure Del")

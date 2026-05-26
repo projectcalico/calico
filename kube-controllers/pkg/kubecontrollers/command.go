@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/status"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
 	"github.com/projectcalico/calico/typha/pkg/config"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
+	typhadaemon "github.com/projectcalico/calico/typha/pkg/daemon"
 )
 
 // innerEnvVar marks the inner (controller-running) process when the command
@@ -43,8 +43,8 @@ func NewCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			// Configure logging for the outer (restart-wrapper) process.
 			// The inner process reconfigures logging for itself in Run.
-			logutils.ConfigureEarlyLogging()
-			logutils.ConfigureLogging(&config.Config{
+			typhadaemon.ConfigureEarlyLogging()
+			typhadaemon.ConfigureLogging(&config.Config{
 				LogSeverityScreen:       "info",
 				DebugDisableLogDropping: true,
 			})

@@ -181,12 +181,11 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // Source code for the Sequence diagram above (http://textart.io/sequence).
@@ -390,7 +389,7 @@ type SerializedUpdate struct {
 
 var ErrBadKey = errors.New("unable to parse key")
 
-var kvRLL = logutils.NewRateLimitedLogger()
+var kvRLL = log.NewRateLimitedLogger()
 
 func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 	// Parse the key.
