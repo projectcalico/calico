@@ -5,7 +5,7 @@ table ip calico {
 			     127.0.0.1, 192.168.122.1 }
 	}
 
-	set cali40all-ipam-pools {
+	set cali40network-ip-pools {
 		type ipv4_addr
 		flags interval
 		elements = { 192.168.0.0/16 }
@@ -123,7 +123,7 @@ table ip calico {
 	}
 
 	chain nat-cali-nat-outgoing {
-		ip saddr @cali40masq-ipam-pools ip daddr != @cali40all-ipam-pools counter packets 0 bytes 0 masquerade fully-random comment "cali:JjuWIaIfSLZi41Xk;"
+		ip saddr @cali40masq-ipam-pools ip daddr != @cali40network-ip-pools counter packets 0 bytes 0 masquerade fully-random comment "cali:JjuWIaIfSLZi41Xk;"
 	}
 
 	chain mangle-cali-PREROUTING {

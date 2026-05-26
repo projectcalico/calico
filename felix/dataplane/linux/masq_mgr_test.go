@@ -59,7 +59,7 @@ var _ = Describe("Masquerade manager", func() {
 
 	It("should create its IP sets on startup", func() {
 		Expect(ipSets.Members).To(Equal(map[string]set.Set[string]{
-			"all-ipam-pools":  set.New[string](),
+			"network-ip-pools":  set.New[string](),
 			"masq-ipam-pools": set.New[string](),
 		}))
 	})
@@ -89,7 +89,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should add the pool to the all IP set", func() {
-			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should program the chain", func() {
 			Expect(natTable.UpdateCalled).To(BeTrue())
@@ -100,7 +100,7 @@ var _ = Describe("Masquerade manager", func() {
 						Action: iptables.MasqAction{},
 						Match: iptables.Match().
 							SourceIPSet("cali40masq-ipam-pools").
-							NotDestIPSet("cali40all-ipam-pools"),
+							NotDestIPSet("cali40network-ip-pools"),
 					},
 				},
 			}}})
@@ -139,7 +139,7 @@ var _ = Describe("Masquerade manager", func() {
 				Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
 			})
 			It("should add the pool to the all IP set", func() {
-				Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From(
+				Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From(
 					"10.0.0.0/16", "10.2.0.0/16")))
 			})
 			It("should program the chain", func() {
@@ -150,7 +150,7 @@ var _ = Describe("Masquerade manager", func() {
 							Action: iptables.MasqAction{},
 							Match: iptables.Match().
 								SourceIPSet("cali40masq-ipam-pools").
-								NotDestIPSet("cali40all-ipam-pools"),
+								NotDestIPSet("cali40network-ip-pools"),
 						},
 					},
 				}}})
@@ -168,7 +168,7 @@ var _ = Describe("Masquerade manager", func() {
 					Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 				})
 				It("should remove from the all IP set", func() {
-					Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From(
+					Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From(
 						"10.2.0.0/16")))
 				})
 				It("should program empty chain", func() {
@@ -190,7 +190,7 @@ var _ = Describe("Masquerade manager", func() {
 						Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 					})
 					It("all set should be empty", func() {
-						Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+						Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
 					})
 					It("should program empty chain", func() {
 						natTable.checkChains([][]*generictables.Chain{{{
@@ -220,7 +220,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 		})
 		It("should add the pool to the all IP set", func() {
-			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should program empty chain", func() {
 			natTable.checkChains([][]*generictables.Chain{{{
@@ -248,7 +248,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.40.64/27")))
 		})
 		It("should NOT add the pool to the all IP set", func() {
-			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
 		})
 
 		Describe("after removing the LoadBalancer-only pool", func() {
@@ -263,7 +263,7 @@ var _ = Describe("Masquerade manager", func() {
 				Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
 			})
 			It("all set should be empty", func() {
-				Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+				Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
 			})
 		})
 	})
@@ -286,7 +286,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
 		})
 		It("should add the pool to the all IP set since it includes Workload", func() {
-			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.1.0.0/16")))
 		})
 	})
 
@@ -313,7 +313,7 @@ var _ = Describe("Masquerade manager", func() {
 		})
 
 		It("should only add the Workload pool to the all IP set", func() {
-			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
 		})
 		It("should only add the LoadBalancer pool to the masq IP set", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.0.0/16")))
