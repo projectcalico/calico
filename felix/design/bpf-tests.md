@@ -119,6 +119,16 @@ combinations and lets `GINKGO_FOCUS` regex-match a slice of the
 matrix when triaging a failure (e.g.
 `GINKGO_FOCUS="ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false.*MyTest"`).
 
+### Infrastructure quirk: CTLB attaches globally
+
+The FV infrastructure attaches the cgroup connect-time program to
+every topology container, including the external client created by
+`infrastructure.RunExtClient`. Under `ctlbEnabled=true` the external
+client's `connect()` gets NodePort-resolved client-side, bypassing
+the receiving node's BPF nodeport-NAT-then-encap path. A test that
+needs an external client to exercise that path must restrict to
+`!ctlbEnabled` (see `fv/bpf_dual_stack_test.go` for an example).
+
 ### Review notes for this section
 
 - A behaviour that varies along an existing matrix axis must be
