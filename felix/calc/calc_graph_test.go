@@ -247,7 +247,13 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		messagesReceived = nil
 		eb.Callback = func(message any) {
 			log.WithField("message", message).Info("Received message")
-			messagesReceived = append(messagesReceived, message)
+			// Filter to HostMetadata events so the test stays focused on
+			// HostMetadata duplicate squashing, independent of whether
+			// the L3 route resolver is wired in by the calc graph.
+			switch message.(type) {
+			case *proto.HostMetadataUpdate, *proto.HostMetadataRemove:
+				messagesReceived = append(messagesReceived, message)
+			}
 		}
 		conf := config.New()
 		lookupsCache := NewLookupsCache()
