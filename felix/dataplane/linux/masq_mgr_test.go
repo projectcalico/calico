@@ -17,7 +17,6 @@ package intdataplane
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -59,8 +58,8 @@ var _ = Describe("Masquerade manager", func() {
 
 	It("should create its IP sets on startup", func() {
 		Expect(ipSets.Members).To(Equal(map[string]set.Set[string]{
-			"network-ip-pools":  set.New[string](),
-			"masq-ipam-pools": set.New[string](),
+			"network-ip-pools": set.New[string](),
+			"masq-ipam-pools":  set.New[string](),
 		}))
 	})
 
