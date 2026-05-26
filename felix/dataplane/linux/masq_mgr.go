@@ -131,11 +131,11 @@ func (d *masqManager) OnUpdate(msg any) {
 		// Exclude pools that are exclusively for LoadBalancer use from the
 		// all-ipam-pools ipset. These pools don't contain workload or tunnel
 		// addresses, so traffic destined to them should still be masqueraded.
-		if !isLoadBalancerOnly(newPool) {
+		if isLoadBalancerOnly(newPool) {
+			logCxt.Debug("Skipping LoadBalancer-only pool from all-pools IP set.")
+		} else {
 			logCxt.Debug("Adding IPAM pool to all-pools IP set.")
 			d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
-		} else {
-			logCxt.Debug("Skipping LoadBalancer-only pool from all-pools IP set.")
 		}
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
