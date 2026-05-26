@@ -129,12 +129,12 @@ func (d *masqManager) OnUpdate(msg any) {
 
 		// Update the IP sets.
 		// Exclude pools that are exclusively for LoadBalancer use from the
-		// all-ipam-pools ipset. These pools don't contain workload or tunnel
+		// network-ip-pools ipset. These pools don't contain workload or tunnel
 		// addresses, so traffic destined to them should still be masqueraded.
 		if isLoadBalancerOnly(newPool) {
-			logCxt.Debug("Skipping LoadBalancer-only pool from all-pools IP set.")
+			logCxt.Debug("Skipping LoadBalancer-only pool from network-ip-pools IP set.")
 		} else {
-			logCxt.Debug("Adding IPAM pool to all-pools IP set.")
+			logCxt.Debug("Adding IPAM pool to network-ip-pools IP set.")
 			d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
 		}
 		if newPool.Masquerade {
@@ -164,12 +164,12 @@ func (m *masqManager) CompleteDeferredWork() error {
 
 // isLoadBalancerOnly returns true if the pool's AllowedUses contains only
 // "LoadBalancer" and no workload/tunnel uses. Such pools should not be
-// included in the all-ipam-pools ipset because their CIDRs do not represent
+// included in the network-ip-pools ipset because their CIDRs do not represent
 // local workload addresses and traffic to them should still be masqueraded.
 func isLoadBalancerOnly(pool *proto.IPAMPool) bool {
 	uses := pool.GetAllowedUses()
 	if len(uses) == 0 {
-		// Empty means default (Workload + Tunnel), so include in all-pools.
+		// Empty means default (Workload + Tunnel), so include in network-ip-pools.
 		return false
 	}
 	return slices.Contains(uses, string(apiv3.IPPoolAllowedUseLoadBalancer)) && len(uses) == 1
