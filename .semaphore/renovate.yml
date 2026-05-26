@@ -26,7 +26,7 @@ blocks:
         - name: Renovate
           env_vars:
             - name: RENOVATE_REPOSITORIES
-              value: ${SEMAPHORE_GIT_REPO_SLUG}
+              value: projectcalico/calico
             - name: RENOVATE_ALLOWED_COMMANDS
               value: '["^make gen-deps-files$"]'
             - name: RENOVATE_GIT_AUTHOR
@@ -36,4 +36,4 @@ blocks:
           commands:
             - nvm install 24 && nvm use 24
             - npm install -g renovate@43
-            - renovate --platform=github --autodiscover=false --config-file=renovate.json
+            - renovate --platform=github --autodiscover=false
