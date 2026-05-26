@@ -221,12 +221,43 @@ echo "Running QoS responsiveness tests..."
 cd /opt/stack/devstack
 . openrc admin admin
 
-# Install required Python packages for QoS tests
-sudo pip install openstacksdk etcd3
+# Install required Python packages for QoS tests.
+sudo pip install openstacksdk etcd3 pymysql
 
 export ETCD_HOST=${SERVICE_HOST}
 python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
 EOF
+
+# Run resync scale benchmark.  Prints one RESYNC_SCALE_RESULT line per
+# scale; grep for that to extract the numbers.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+
+export ETCD_HOST=${SERVICE_HOST}
+
+# calico-resync is installed alongside calico-dhcp-agent under
+# ${DEVSTACK_VENV:-/usr/local}/bin, which is not necessarily on the
+# stack user's PATH under sudo.  Pass the absolute path explicitly.
+export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
+
+# Override via RESYNC_SCALES if a Semaphore run is too slow for the
+# default 100,1000,3000 ladder.  The test drops per-iteration JSON
+# files under artifacts/perf/benchmark_data_neutron_resync/; the
+# send-perf-results call below picks them up.
+mkdir -p /home/semaphore/calico/artifacts/perf
+export RESYNC_PERF_ARTIFACTS_DIR=/home/semaphore/calico/artifacts/perf
+python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
+EOF
+
+# Publish perf measurements to Lens.  No-op unless ELASTICSEARCH_URL +
+# credentials are wired in via Semaphore secrets; see hack/perf/README.md.
+(
+  cd /home/semaphore/calico && \
+  go run ./hack/perf/cmd/send-perf-results \
+     --dir artifacts/perf \
+     --templates hack/perf/index-templates
+) || true
 
 # Run Tempest tests
 sudo -u stack -H -E bash -x <<'EOF'
