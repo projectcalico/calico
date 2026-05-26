@@ -4587,6 +4587,7 @@ type Encapsulation struct {
 	IpipEnabled    bool                   `protobuf:"varint,1,opt,name=ipip_enabled,json=ipipEnabled,proto3" json:"ipip_enabled,omitempty"`
 	VxlanEnabled   bool                   `protobuf:"varint,2,opt,name=vxlan_enabled,json=vxlanEnabled,proto3" json:"vxlan_enabled,omitempty"`
 	VxlanEnabledV6 bool                   `protobuf:"varint,3,opt,name=vxlan_enabled_v6,json=vxlanEnabledV6,proto3" json:"vxlan_enabled_v6,omitempty"`
+	NoEncapEnabled bool                   `protobuf:"varint,4,opt,name=no_encap_enabled,json=noEncapEnabled,proto3" json:"no_encap_enabled,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4638,6 +4639,13 @@ func (x *Encapsulation) GetVxlanEnabled() bool {
 func (x *Encapsulation) GetVxlanEnabledV6() bool {
 	if x != nil {
 		return x.VxlanEnabledV6
+	}
+	return false
+}
+
+func (x *Encapsulation) GetNoEncapEnabled() bool {
+	if x != nil {
+		return x.NoEncapEnabled
 	}
 	return false
 }
@@ -6545,11 +6553,12 @@ const file_felixbackend_proto_rawDesc = "" +
 	"masquerade\x12\x1b\n" +
 	"\tipip_mode\x18\x03 \x01(\tR\bipipMode\x12\x1d\n" +
 	"\n" +
-	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\"\x81\x01\n" +
+	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\"\xab\x01\n" +
 	"\rEncapsulation\x12!\n" +
 	"\fipip_enabled\x18\x01 \x01(\bR\vipipEnabled\x12#\n" +
 	"\rvxlan_enabled\x18\x02 \x01(\bR\fvxlanEnabled\x12(\n" +
-	"\x10vxlan_enabled_v6\x18\x03 \x01(\bR\x0evxlanEnabledV6\"\xbb\x01\n" +
+	"\x10vxlan_enabled_v6\x18\x03 \x01(\bR\x0evxlanEnabledV6\x12(\n" +
+	"\x10no_encap_enabled\x18\x04 \x01(\bR\x0enoEncapEnabled\"\xbb\x01\n" +
 	"\x14ServiceAccountUpdate\x12'\n" +
 	"\x02id\x18\x01 \x01(\v2\x17.felix.ServiceAccountIDR\x02id\x12?\n" +
 	"\x06labels\x18\x02 \x03(\v2'.felix.ServiceAccountUpdate.LabelsEntryR\x06labels\x1a9\n" +

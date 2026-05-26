@@ -338,6 +338,7 @@ func StartDataplaneDriver(
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
 			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
+			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
