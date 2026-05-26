@@ -1838,9 +1838,6 @@ var vxlanWithIPv6Resources = vxlanWithBlock.withKVUpdates(
 		},
 	)...,
 ).withExpectedEncapsulation(
-	// v6IPPool defaults to IPIPMode/VXLANMode = Never. It would be a noencap
-	// pool, but NoEncapEnabled is gated on ProgramClusterRoutes (disabled in
-	// this test harness), so the gated result is false.
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 ).withName("VXLAN with IPv6 Resources")
 
@@ -2845,9 +2842,6 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		NatOutgoing: true,
 	},
 ).withExpectedEncapsulation(
-	// hostCoveringIPPool has no encap mode set, which makes it a noencap pool,
-	// but NoEncapEnabled is gated on ProgramClusterRoutes (disabled in this
-	// test harness), so the gated result is false.
 	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 )
 

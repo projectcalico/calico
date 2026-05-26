@@ -1437,8 +1437,7 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				return fc.config.Encapsulation
 			}()
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 ||
-				(configParams.ProgramClusterRoutesEnabled() && msg.NoEncapEnabled != encap.NoEncapEnabled) {
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
 				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}
