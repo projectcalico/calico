@@ -697,7 +697,7 @@ const rbSize = 1024 * 1024
 //
 // Prefer this helper over calling ringbuf.New directly — the ring buffer map
 // is pinned and shared across tests, so a naked reader can pick up stray
-// records (TYPE_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
+// records (EVENT_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
 func newTestRingBuf(t *testing.T) *ringbuf.RingBuffer {
 	rb, err := ringbuf.New(ringBufMap, rbSize)
 	Expect(err).NotTo(HaveOccurred())
