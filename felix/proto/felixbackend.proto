@@ -423,6 +423,8 @@ message WorkloadEndpoint {
   LiveMigrationRole live_migration_role = 17;
   string live_migration_uid = 18;
   string live_migration_vmi_name = 19;
+  string uid = 20;
+  string netns_path = 21;
 }
 
 message QoSControls {
