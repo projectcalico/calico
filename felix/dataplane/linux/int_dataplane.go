@@ -166,20 +166,17 @@ type Config struct {
 
 	MaxIPSetSize int
 
-	RouteSyncDisabled              bool
-	IptablesBackend                string
-	IPSetsRefreshInterval          time.Duration
-	RouteRefreshInterval           time.Duration
-	DeviceRouteSourceAddress       net.IP
-	DeviceRouteSourceAddressIPv6   net.IP
-	DeviceRouteProtocol            netlink.RouteProtocol
-	RemoveExternalRoutes           bool
-	ProgramClusterRoutes           bool
-	// NoEncapEnabled indicates that at least one IP pool with no
-	// encapsulation exists. Independent of VXLAN/IPIP/Wireguard: noencap
-	// pools can coexist with encapsulated pools, in which case we still
-	// need the noEncap manager to program routes for the noencap pools.
-	NoEncapEnabled bool
+	RouteSyncDisabled            bool
+	IptablesBackend              string
+	IPSetsRefreshInterval        time.Duration
+	RouteRefreshInterval         time.Duration
+	DeviceRouteSourceAddress     net.IP
+	DeviceRouteSourceAddressIPv6 net.IP
+	DeviceRouteProtocol          netlink.RouteProtocol
+	RemoveExternalRoutes         bool
+	ProgramClusterRoutes         bool
+	NoEncapEnabled               bool
+
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -715,11 +712,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
-	// Start a noEncap manager whenever any IP pool with no encapsulation
-	// exists, so its routes get programmed even when other pools use VXLAN,
-	// IPIP, or Wireguard. The encapsulation resolver triggers a Felix
-	// restart when the noencap-pool-presence flips, so re-evaluating it here
-	// at startup is sufficient.
+	// Start a noEncap manager if an IP pool with no encapsulation exists.
 	if config.ProgramClusterRoutes && config.NoEncapEnabled {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
 		dp.noEncapManager = newNoEncapManager(

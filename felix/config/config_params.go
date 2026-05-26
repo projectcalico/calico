@@ -1327,8 +1327,5 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
-	// NoEncapEnabled is true if any IP pool with no encapsulation exists.
-	// Independent of the other flags: noencap pools can coexist with
-	// encapsulated pools.
 	NoEncapEnabled bool
 }

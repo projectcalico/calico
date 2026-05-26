@@ -280,10 +280,6 @@ func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
 	return len(c.vxlanPoolsv6) > 0
 }
 
-// NoEncapEnabled returns true if any IP pool with no encapsulation (both
-// IPIPMode and VXLANMode set to Never) exists. Noencap pools can coexist
-// with encapsulated pools, so this is independent of IPIPEnabled() /
-// VXLANEnabled() / VXLANEnabledV6().
 func (c *EncapsulationCalculator) NoEncapEnabled() bool {
 	return len(c.noEncapPools) > 0
 }
