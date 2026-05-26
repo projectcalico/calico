@@ -155,7 +155,7 @@ type BGPConfigurationSpec struct {
 	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
 	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
 	// confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
+	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`

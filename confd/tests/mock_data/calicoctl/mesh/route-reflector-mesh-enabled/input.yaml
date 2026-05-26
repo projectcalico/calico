@@ -3,6 +3,7 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
+  programClusterRoutes: Enabled
   asNumber: 64532
   nodeToNodeMeshEnabled: true
 
