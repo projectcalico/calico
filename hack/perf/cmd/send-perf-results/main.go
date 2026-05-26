@@ -268,11 +268,11 @@ func esRequest(client *http.Client, method, endpoint, auth string, body []byte) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 		return fmt.Errorf("%s %s: HTTP %d: %s", method, endpoint, resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
 }
