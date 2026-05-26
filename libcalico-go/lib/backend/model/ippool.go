@@ -114,5 +114,5 @@ type IPPool struct {
 	Disabled         bool                  `json:"disabled"`
 	DisableBGPExport bool                  `json:"disableBGPExport"`
 	AssignmentMode   v3.AssignmentMode     `json:"assignment_mode"`
-	AllowedUses      []v3.IPPoolAllowedUse `json:"allowedUses,omitempty"`
+	AllowedUses      []v3.IPPoolAllowedUse `json:"allowed_uses,omitempty"`
 }
