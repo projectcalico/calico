@@ -1,6 +1,17 @@
 {{- if .Values.useV3CRDs }}
+{{- /*
+  MutatingAdmissionPolicy was promoted to admissionregistration.k8s.io/v1 in
+  Kubernetes 1.36 and v1beta1 is targeted for removal in 1.37. Prefer v1 when
+  the cluster serves it; otherwise emit v1beta1 (the source-of-truth version
+  in this chart). If neither is served the apply will fail naturally, which
+  matches what the operator would do.
+*/ -}}
+{{- $apiVersion := "admissionregistration.k8s.io/v1beta1" -}}
+{{- if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/MutatingAdmissionPolicy" -}}
+{{- $apiVersion = "admissionregistration.k8s.io/v1" -}}
+{{- end }}
 {{ range $path, $_ := .Files.Glob "admission/*" }}
 ---
-{{ $.Files.Get $path }}
+{{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
 {{- end }}
 {{- end }}
