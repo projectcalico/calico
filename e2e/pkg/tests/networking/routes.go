@@ -172,16 +172,17 @@ func parseProto(s string) RouteProto {
 
 // expectedClusterRouteProto returns the route protocol owner that the cluster
 // is currently configured to use for IPIP and no-encap cluster routes.
-// "Felix" => proto 80, anything else (including unset) => BIRD's proto 12.
+// "Disabled" => BIRD's proto 12, anything else (including unset) => Felix's
+// proto 80, matching the FelixConfiguration default of Enabled.
 func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
 	fc := v3.NewFelixConfiguration()
 	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "Error querying FelixConfiguration")
 	if fc.Spec.ProgramClusterRoutes != nil &&
-		*fc.Spec.ProgramClusterRoutes == "Enabled" {
-		return RouteProtoFelix
+		*fc.Spec.ProgramClusterRoutes == "Disabled" {
+		return RouteProtoBIRD
 	}
-	return RouteProtoBIRD
+	return RouteProtoFelix
 }
 
 // assertRouteOwnership polls the kernel routing table on nodeName until at

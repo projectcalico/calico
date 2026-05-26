@@ -927,13 +927,13 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
-	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
+	programClusterRoutes := false // Default is Disabled when ProgramClusterRoutes is unset in BGPConfiguration; Felix programs cluster routes by default.
 	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
-		programClusterRoutes = false
-		logCtx.Debug("Programming cluster routes is disabled.")
-	} else {
+		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Enabled" {
+		programClusterRoutes = true
 		logCtx.Debug("Programming cluster routes is enabled.")
+	} else {
+		logCtx.Debug("Programming cluster routes is disabled.")
 	}
 
 	for key, value := range kvPairs {
