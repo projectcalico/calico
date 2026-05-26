@@ -20,7 +20,6 @@
         "scale_sgs":        {"type": "integer"},
         "scale_hosts":      {"type": "integer"},
 
-        "elapsed_ms":       {"type": "double"},
         "total_ms":         {"type": "double"},
 
         "expand_total_ms":         {"type": "double"},
