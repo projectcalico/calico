@@ -1838,8 +1838,10 @@ var vxlanWithIPv6Resources = vxlanWithBlock.withKVUpdates(
 		},
 	)...,
 ).withExpectedEncapsulation(
-	// v6IPPool defaults to IPIPMode/VXLANMode = Never, so it is a noencap pool.
-	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: true},
+	// v6IPPool defaults to IPIPMode/VXLANMode = Never. It would be a noencap
+	// pool, but NoEncapEnabled is gated on ProgramClusterRoutes (disabled in
+	// this test harness), so the gated result is false.
+	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 ).withName("VXLAN with IPv6 Resources")
 
 // Minimal VXLAN set-up with a MAC address override for the remote node.
@@ -2843,8 +2845,10 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		NatOutgoing: true,
 	},
 ).withExpectedEncapsulation(
-	// hostCoveringIPPool has no encap mode set, so it is a noencap pool.
-	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: true},
+	// hostCoveringIPPool has no encap mode set, which makes it a noencap pool,
+	// but NoEncapEnabled is gated on ProgramClusterRoutes (disabled in this
+	// test harness), so the gated result is false.
+	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 )
 
 // we start from vxlan setup as the test framework expects vxlan enabled

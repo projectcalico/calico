@@ -34,6 +34,7 @@ var _ = Describe("EncapsulationCalculator", func() {
 	var conf *config.Config
 	BeforeEach(func() {
 		conf = config.New()
+		conf.ProgramClusterRoutes = "Enabled"
 		encapsulationCalculator = NewEncapsulationCalculator(conf, nil)
 	})
 	Context("FelixConfig not set", func() {
@@ -240,6 +241,19 @@ var _ = Describe("EncapsulationCalculator", func() {
 				nil,
 				false, true, false),
 		)
+	})
+	Describe("NoEncapEnabled gating on ProgramClusterRoutes", func() {
+		It("returns false when ProgramClusterRoutes is disabled, even with a no-encap pool", func() {
+			conf.ProgramClusterRoutes = "Disabled"
+			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(encapsulationCalculator.NoEncapEnabled()).To(BeFalse())
+		})
+		It("returns true when ProgramClusterRoutes is enabled and a no-encap pool exists", func() {
+			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(encapsulationCalculator.NoEncapEnabled()).To(BeTrue())
+		})
 	})
 	Describe("Invalid IPIPMode and/or VXLANMode", func() {
 		It("should reject unrecognised modes", func() {

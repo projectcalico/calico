@@ -287,5 +287,8 @@ func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
 }
 
 func (c *EncapsulationCalculator) NoEncapEnabled() bool {
+	if c.config == nil || !c.config.ProgramClusterRoutesEnabled() {
+		return false
+	}
 	return len(c.noEncapPools) > 0
 }
