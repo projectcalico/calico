@@ -18,6 +18,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -235,7 +237,7 @@ var _ = Describe("Masquerade manager", func() {
 				Pool: &proto.IPAMPool{
 					Cidr:        "10.20.40.64/27",
 					Masquerade:  true,
-					AllowedUses: []string{"LoadBalancer"},
+					AllowedUses: []string{string(apiv3.IPPoolAllowedUseLoadBalancer)},
 				},
 			})
 			err := masqMgr.CompleteDeferredWork()
@@ -273,7 +275,7 @@ var _ = Describe("Masquerade manager", func() {
 				Pool: &proto.IPAMPool{
 					Cidr:        "10.1.0.0/16",
 					Masquerade:  true,
-					AllowedUses: []string{"Workload", "LoadBalancer"},
+					AllowedUses: []string{string(apiv3.IPPoolAllowedUseWorkload), string(apiv3.IPPoolAllowedUseLoadBalancer)},
 				},
 			})
 			err := masqMgr.CompleteDeferredWork()
@@ -285,6 +287,36 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("should add the pool to the all IP set since it includes Workload", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
+		})
+	})
+
+	Describe("after adding a Workload pool and a LoadBalancer-only pool", func() {
+		BeforeEach(func() {
+			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+				Id: "workload-pool",
+				Pool: &proto.IPAMPool{
+					Cidr:        "10.0.0.0/16",
+					Masquerade:  false,
+					AllowedUses: []string{string(apiv3.IPPoolAllowedUseWorkload)},
+				},
+			})
+			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+				Id: "lb-pool",
+				Pool: &proto.IPAMPool{
+					Cidr:        "10.20.0.0/16",
+					Masquerade:  true,
+					AllowedUses: []string{string(apiv3.IPPoolAllowedUseLoadBalancer)},
+				},
+			})
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should only add the Workload pool to the all IP set", func() {
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		})
+		It("should only add the LoadBalancer pool to the masq IP set", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.0.0/16")))
 		})
 	})
 })
