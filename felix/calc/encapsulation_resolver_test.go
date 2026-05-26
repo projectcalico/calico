@@ -469,8 +469,10 @@ type encapResolverCallbackRecorder struct {
 func (e *encapResolverCallbackRecorder) OnEncapUpdate(encap config.Encapsulation) {
 	e.encapUpdates = append(e.encapUpdates,
 		&proto.Encapsulation{
-			IpipEnabled:  encap.IPIPEnabled,
-			VxlanEnabled: encap.VXLANEnabled,
+			IpipEnabled:    encap.IPIPEnabled,
+			VxlanEnabled:   encap.VXLANEnabled,
+			VxlanEnabledV6: encap.VXLANEnabledV6,
+			NoEncapEnabled: encap.NoEncapEnabled,
 		})
 }
 
