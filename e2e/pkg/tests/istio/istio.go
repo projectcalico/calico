@@ -24,7 +24,6 @@ import (
 	gomega "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -258,7 +258,7 @@ func enableIstioAmbientMode(ctx context.Context, cli ctrlclient.Client) {
 	defer getCancel()
 	err := cli.Get(getCtx, types.NamespacedName{Name: "default"}, existing)
 	if err == nil {
-		logrus.Info("Istio CR already exists, skipping creation and cleanup registration")
+		log.Info("Istio CR already exists, skipping creation and cleanup registration")
 	} else if apierrors.IsNotFound(err) {
 		istioObj := &operatorv1.Istio{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
@@ -293,7 +293,7 @@ func disableIstioAmbientMode(ctx context.Context, cli ctrlclient.Client) {
 		if apierrors.IsNotFound(err) {
 			return
 		}
-		logrus.WithError(err).Warn("Istio CR deletion failed")
+		log.WithError(err).Warn("Istio CR deletion failed")
 		return
 	}
 
@@ -353,14 +353,14 @@ func removeAmbientLabel(ctx context.Context, f *framework.Framework, nsName stri
 	defer cancel()
 	ns, err := f.ClientSet.CoreV1().Namespaces().Get(labelCtx, nsName, metav1.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).Warnf("Failed to get namespace %s for label removal", nsName)
+		log.WithError(err).Warnf("Failed to get namespace %s for label removal", nsName)
 		return
 	}
 
 	delete(ns.Labels, v3.LabelIstioDataplaneMode)
 	_, err = f.ClientSet.CoreV1().Namespaces().Update(labelCtx, ns, metav1.UpdateOptions{})
 	if err != nil {
-		logrus.WithError(err).Warnf("Failed to remove ambient label from namespace %s", nsName)
+		log.WithError(err).Warnf("Failed to remove ambient label from namespace %s", nsName)
 	}
 }
 

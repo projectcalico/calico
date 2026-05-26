@@ -28,13 +28,13 @@ import (
 	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -147,19 +147,19 @@ func (c *autoHostEndpointController) onStatusUpdate(s bapi.SyncStatus) {
 }
 
 func (c *autoHostEndpointController) acceptScheduledRequests(stopCh <-chan struct{}) {
-	logrus.Infof("Will run periodic HostEndpoint sync every %s", timer)
+	log.Infof("Will run periodic HostEndpoint sync every %s", timer)
 	t := time.NewTicker(timer)
 	for {
 		select {
 		case update := <-c.syncerUpdates:
 			c.handleUpdate(update)
 		case <-t.C:
-			logrus.Info("Running periodic HostEndpoint sync")
+			log.Info("Running periodic HostEndpoint sync")
 			c.syncHostEndpoints()
 		case <-c.syncChan:
 			c.syncHostEndpoints()
 		case nodeName := <-c.nodeUpdates:
-			logEntry := logrus.WithFields(logrus.Fields{"controller": "HostEndpoint", "type": "nodeUpdate"})
+			logEntry := log.WithFields(log.Fields{"controller": "HostEndpoint", "type": "nodeUpdate"})
 			utils.ProcessBatch(c.nodeUpdates, nodeName, c.syncHostEndpointsForNode, logEntry)
 		case <-stopCh:
 			return
@@ -183,7 +183,7 @@ func (c *autoHostEndpointController) handleUpdate(update any) {
 		c.syncStatus = update
 		switch update {
 		case bapi.InSync:
-			logrus.WithField("status", update).Info("Syncer is InSync, kicking sync channel")
+			log.WithField("status", update).Info("Syncer is InSync, kicking sync channel")
 			kick(c.syncChan)
 		}
 	case model.KVPair:
@@ -256,14 +256,14 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 		return
 	}
 
-	logrus.Infof("Syncing all HostEndpoints")
+	log.Infof("Syncing all HostEndpoints")
 
 	if !c.config.AutoHostEndpointConfig.AutoCreate {
 		// Create host endpoints is disabled, we need to delete all hostEndpoints that might still be left over after being created by this controller
 		for _, hep := range c.autoHEPTracker.getAllHostEndpoints() {
 			err := c.deleteHostEndpoint(hep.Name)
 			if err != nil {
-				logrus.WithError(err).Error("failed to delete host endpoint")
+				log.WithError(err).Error("failed to delete host endpoint")
 			}
 		}
 
@@ -304,7 +304,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 		// if enabled we check that the hostEndpoint is created and up to date
 		defaultHostEndpointName, err := generateAutoHostEndpointName(nodeName, "", "")
 		if err != nil {
-			logrus.WithError(err).Error("failed to generate host endpoint name")
+			log.WithError(err).Error("failed to generate host endpoint name")
 			return
 		}
 		expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
@@ -318,7 +318,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	for _, template := range c.config.AutoHostEndpointConfig.Templates {
 		nodeSelector, err := selector.Parse(template.NodeSelector)
 		if err != nil {
-			logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.GenerateName)
+			log.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.GenerateName)
 			return
 		}
 
@@ -328,8 +328,8 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				// Because we do not specify interfaceName in HostEndpoint, expectedIPs should not be empty.
 				// If expectedIPs are empty the HostEndpoint will be invalid, and we should not create it
 				// If there is an existing HostEndpoint with this name, it will be deleted further down
-				f := logrus.Fields{"template": template.GenerateName, "node": node.Name}
-				logrus.WithFields(f).Debug("template InterfaceCIDRs do not match any Node IPs")
+				f := log.Fields{"template": template.GenerateName, "node": node.Name}
+				log.WithFields(f).Debug("template InterfaceCIDRs do not match any Node IPs")
 
 				continue
 			}
@@ -338,7 +338,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 				// When interfacePattern is empty this template will always generate at most one AutoHostEndpoint
 				hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, "")
 				if err != nil {
-					logrus.WithError(err).Error("failed to generate host endpoint name")
+					log.WithError(err).Error("failed to generate host endpoint name")
 					return
 				}
 				expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
@@ -356,7 +356,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 					// Generate Host Endpoint for interface matching the InterfacePattern from the template
 					hostEndpointName, err := generateAutoHostEndpointName(node.Name, template.GenerateName, iface.Name)
 					if err != nil {
-						logrus.WithError(err).Error("failed to generate host endpoint name")
+						log.WithError(err).Error("failed to generate host endpoint name")
 						return
 					}
 
@@ -375,10 +375,10 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	// We want to delete all HostEndpoints in our HostEndpointTracker that are not part of hostEndpointsMatchingNode
 	for _, hostEndpoint := range c.autoHEPTracker.getHostEndpointsForNode(node.Name) {
 		if _, ok := hostEndpointsMatchingNode[hostEndpoint.Name]; !ok {
-			logrus.Infof("hostEndpoint %s no longer matches template", hostEndpoint.Name)
+			log.Infof("hostEndpoint %s no longer matches template", hostEndpoint.Name)
 			err := c.deleteHostEndpoint(hostEndpoint.Name)
 			if err != nil {
-				logrus.WithError(err).Error("failed to delete host endpoint")
+				log.WithError(err).Error("failed to delete host endpoint")
 			}
 		}
 	}
@@ -389,7 +389,7 @@ func (c *autoHostEndpointController) deleteHostEndpointsForNode(nodeName string)
 	for _, hep := range c.autoHEPTracker.getHostEndpointsForNode(nodeName) {
 		err := c.deleteHostEndpoint(hep.Name)
 		if err != nil {
-			logrus.WithError(err).Error("failed to delete host endpoint")
+			log.WithError(err).Error("failed to delete host endpoint")
 			break
 		}
 	}
@@ -397,7 +397,7 @@ func (c *autoHostEndpointController) deleteHostEndpointsForNode(nodeName string)
 
 // deleteHostEndpoint removes the specified HostEndpoint
 func (c *autoHostEndpointController) deleteHostEndpoint(hepName string) error {
-	logrus.Debugf("deleting hostendpoint %q", hepName)
+	log.Debugf("deleting hostendpoint %q", hepName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -407,7 +407,7 @@ func (c *autoHostEndpointController) deleteHostEndpoint(hepName string) error {
 	}
 
 	c.autoHEPTracker.deleteHostEndpoint(hepName)
-	logrus.WithField("hep.Name", hepName).Debug("deleted hostendpoint")
+	log.WithField("hep.Name", hepName).Debug("deleted hostendpoint")
 	return nil
 }
 
@@ -448,7 +448,7 @@ func hashNameIfTooLong(name string) (string, error) {
 	hasher := sha256.New()
 	_, err := hasher.Write([]byte(name))
 	if err != nil {
-		logrus.WithError(err).Error("Failed to generate hash from name")
+		log.WithError(err).Error("Failed to generate hash from name")
 		return "", err
 	}
 
@@ -484,7 +484,7 @@ func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *
 		for _, interfaceSelectorCIDR := range template.InterfaceCIDRs {
 			_, cidr, err := net.ParseCIDR(string(interfaceSelectorCIDR))
 			if err != nil {
-				logrus.WithError(err).Errorf("failed to parse interface selector cidr %s", interfaceSelectorCIDR)
+				log.WithError(err).Errorf("failed to parse interface selector cidr %s", interfaceSelectorCIDR)
 				return nil
 			}
 
@@ -559,7 +559,7 @@ func (c *autoHostEndpointController) getExpectedIPs(node *internalapi.Node) []st
 	for _, ip := range expectedIPs {
 		parsedIP, _, err := cnet.ParseCIDROrIP(ip)
 		if err != nil || parsedIP.IP == nil {
-			logrus.WithError(err).Errorf("failed to parse ip %s, removing from expectedIPs", ip)
+			log.WithError(err).Errorf("failed to parse ip %s, removing from expectedIPs", ip)
 			continue
 		}
 		validatedIPs = append(validatedIPs, ip)
@@ -574,8 +574,8 @@ func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.
 	maps.Copy(hepLabels, node.Labels)
 	for k, v := range templateLabels {
 		if _, ok := hepLabels[k]; ok {
-			f := logrus.Fields{"key": k, "nodeVal": hepLabels[k], "userVal": v}
-			logrus.WithFields(f).Warn("overwriting label from underlying Node resource")
+			f := log.Fields{"key": k, "nodeVal": hepLabels[k], "userVal": v}
+			log.WithFields(f).Warn("overwriting label from underlying Node resource")
 		}
 		hepLabels[k] = v
 	}
@@ -603,20 +603,20 @@ func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.
 // hostEndpointNeedsUpdate returns true if the current automatic HostEndpoint
 // needs to be updated.
 func (c *autoHostEndpointController) hostEndpointNeedsUpdate(current *api.HostEndpoint, expected *api.HostEndpoint) bool {
-	logrus.Debugf("checking if hostendpoint needs update\ncurrent: %#v\nexpected: %#v", current, expected)
+	log.Debugf("checking if hostendpoint needs update\ncurrent: %#v\nexpected: %#v", current, expected)
 	if !reflect.DeepEqual(current.Labels, expected.Labels) {
-		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of labels")
+		log.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of labels")
 		return true
 	}
 	if !reflect.DeepEqual(current.Spec.ExpectedIPs, expected.Spec.ExpectedIPs) {
-		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of expectedIPs")
+		log.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of expectedIPs")
 		return true
 	}
 	if current.Spec.InterfaceName != expected.Spec.InterfaceName {
-		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of interfaceName")
+		log.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of interfaceName")
 		return true
 	}
-	logrus.WithField("hep.Name", current.Name).Debug("hostendpoint does not need update")
+	log.WithField("hep.Name", current.Name).Debug("hostendpoint does not need update")
 	return false
 }
 
@@ -626,12 +626,12 @@ func (c *autoHostEndpointController) createOrUpdateHostEndpoint(expected *api.Ho
 	current := c.autoHEPTracker.getHostEndpoint(expected.Name)
 	if current == nil {
 		if err := c.createAutoHostEndpoint(expected); err != nil {
-			logrus.WithError(err).Errorf("failed to create host endpoint %s", expected.Name)
+			log.WithError(err).Errorf("failed to create host endpoint %s", expected.Name)
 		}
 		return
 	}
 	if err := c.updateHostEndpoint(current, expected); err != nil {
-		logrus.WithError(err).Errorf("failed to update host endpoint %s", expected.Name)
+		log.WithError(err).Errorf("failed to update host endpoint %s", expected.Name)
 	}
 }
 
@@ -641,11 +641,11 @@ func (c *autoHostEndpointController) createAutoHostEndpoint(hostEndpoint *api.Ho
 	defer cancel()
 	hostEndpoint, err := c.client.HostEndpoints().Create(ctx, hostEndpoint, options.SetOptions{})
 	if err != nil {
-		logrus.Warnf("could not create hostendpoint for node: %v", err)
+		log.Warnf("could not create hostendpoint for node: %v", err)
 		return err
 	}
 
-	logrus.WithField("hep.Name", hostEndpoint.Name).Debug("created hostendpoint")
+	log.WithField("hep.Name", hostEndpoint.Name).Debug("created hostendpoint")
 	c.autoHEPTracker.addHostEndpoint(hostEndpoint)
 	return nil
 }
@@ -653,7 +653,7 @@ func (c *autoHostEndpointController) createAutoHostEndpoint(hostEndpoint *api.Ho
 // updateHostEndpoint updates the current HostEndpoint so that it matches the expected HostEndpoint.
 func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoint, expected *api.HostEndpoint) error {
 	if c.hostEndpointNeedsUpdate(current, expected) {
-		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update")
+		log.WithField("hep.Name", current.Name).Debug("hostendpoint needs update")
 
 		expected.ResourceVersion = current.ResourceVersion
 		expected.CreationTimestamp = current.CreationTimestamp
@@ -667,10 +667,10 @@ func (c *autoHostEndpointController) updateHostEndpoint(current *api.HostEndpoin
 		}
 
 		c.autoHEPTracker.addHostEndpoint(hostEndpoint)
-		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint updated")
+		log.WithField("hep.Name", current.Name).Debug("hostendpoint updated")
 
 		return nil
 	}
-	logrus.WithField("hep.Name", current.Name).Debug("hostendpoint not updated")
+	log.WithField("hep.Name", current.Name).Debug("hostendpoint not updated")
 	return nil
 }

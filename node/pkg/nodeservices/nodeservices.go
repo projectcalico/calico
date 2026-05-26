@@ -21,9 +21,9 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/node/pkg/allocateip"
 	"github.com/projectcalico/calico/node/pkg/cni"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"

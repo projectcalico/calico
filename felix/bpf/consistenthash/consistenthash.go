@@ -7,8 +7,9 @@ import (
 	"hash"
 	"slices"
 
-	"github.com/sirupsen/logrus"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ConsistentHash implements ConsistentHash consistent hashing:
@@ -52,19 +53,19 @@ func (ch *ConsistentHash) AddBackend(kep k8sp.Endpoint) {
 	var b backend
 
 	if kep == nil {
-		logrus.Warn("Ignoring AddBackend for nil endpoint")
+		log.Warn("Ignoring AddBackend for nil endpoint")
 		return
 	}
 
 	name := kep.String()
 	if _, exists := ch.backendsByName[name]; exists {
-		logrus.WithField("backend", name).Info("Will not regenerate permutation for pre-existing backend")
+		log.WithField("backend", name).Info("Will not regenerate permutation for pre-existing backend")
 		return
 	}
 
 	permutation, err := ch.permutation(name)
 	if err != nil {
-		logrus.WithError(err).WithField("backend", name).Error("Failed to generate permutation for backend")
+		log.WithError(err).WithField("backend", name).Error("Failed to generate permutation for backend")
 		return
 	}
 
@@ -82,7 +83,7 @@ func (ch *ConsistentHash) Generate() []k8sp.Endpoint {
 	}
 
 	slices.Sort(ch.backendNames)
-	logrus.WithField("backends", ch.backendNames).Info("sorted backend names")
+	log.WithField("backends", ch.backendNames).Info("sorted backend names")
 
 	// Next-preference for each backend.
 	next := make([]int, len(ch.backendNames))

@@ -26,7 +26,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -337,7 +337,7 @@ func (c *connectionTester) Execute() {
 func (c *connectionTester) runConnection(ctx context.Context, exp *Expectation, results chan<- connectionResult) {
 	cmd := c.command(exp.Target)
 
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"cmd":      cmd,
 		"client":   exp.Client.ID(),
 		"target":   exp.Target.String(),
@@ -359,7 +359,7 @@ loop:
 		default:
 		}
 
-		logCtx.WithFields(logrus.Fields{
+		logCtx.WithFields(log.Fields{
 			"output": out,
 			"err":    err,
 			"actual": result,
@@ -373,7 +373,7 @@ loop:
 		}
 	}
 
-	logCtx.WithFields(logrus.Fields{
+	logCtx.WithFields(log.Fields{
 		"output": out,
 		"err":    err,
 		"actual": result,
@@ -589,7 +589,7 @@ func CreateClientPod(f *framework.Framework, namespace *v1.Namespace, baseName s
 func logDiagsForConnection(f *framework.Framework, res connectionResult) {
 	pod := res.client.Pod()
 	if pod == nil {
-		logrus.WithError(res.err).WithFields(logrus.Fields{
+		log.WithError(res.err).WithFields(log.Fields{
 			"from":   res.clientLabel(),
 			"to":     res.target.Destination(),
 			"expect": res.expected,
@@ -598,7 +598,7 @@ func logDiagsForConnection(f *framework.Framework, res connectionResult) {
 	}
 	By(fmt.Sprintf("Collecting diagnostics for connection %s -> %s", pod.Name, res.target.Destination()))
 
-	logrus.WithError(res.err).WithFields(logrus.Fields{
+	log.WithError(res.err).WithFields(log.Fields{
 		"from":   fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
 		"to":     res.target.Destination(),
 		"ns":     pod.Namespace,
@@ -613,20 +613,20 @@ func logDiagsForConnection(f *framework.Framework, res connectionResult) {
 	}
 	logs, err := e2epod.GetPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
-		logrus.WithError(err).Error("Error getting container logs")
+		log.WithError(err).Error("Error getting container logs")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s logs:\n%s", pod.Namespace, pod.Name, logs)
+	log.Infof("[DIAGS] Pod %s/%s logs:\n%s", pod.Namespace, pod.Name, logs)
 	prevLogs, err := e2epod.GetPreviousPodLogs(ctx, f.ClientSet, pod.Namespace, pod.Name, container)
 	if err != nil {
-		logrus.WithError(err).Error("Error getting prev container logs")
+		log.WithError(err).Error("Error getting prev container logs")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s logs (previous):\n%s", pod.Namespace, pod.Name, prevLogs)
+	log.Infof("[DIAGS] Pod %s/%s logs (previous):\n%s", pod.Namespace, pod.Name, prevLogs)
 
 	podDesc, err := kubectl.RunKubectl(pod.Namespace, "describe", "pod", pod.Name)
 	if err != nil {
-		logrus.WithError(err).Error("Error getting pod description")
+		log.WithError(err).Error("Error getting pod description")
 	}
-	logrus.Infof("[DIAGS] Pod %s/%s describe:\n%s", pod.Namespace, pod.Name, podDesc)
+	log.Infof("[DIAGS] Pod %s/%s describe:\n%s", pod.Namespace, pod.Name, podDesc)
 }
 
 func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
@@ -634,55 +634,55 @@ func logDiagsForNamespace(f *framework.Framework, ns *v1.Namespace) {
 	defer cancel()
 	policies, err := f.ClientSet.NetworkingV1().NetworkPolicies(f.Namespace.Name).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		logrus.WithError(err).Infof("error getting current NetworkPolicies for %s namespace", f.Namespace.Name)
+		log.WithError(err).Infof("error getting current NetworkPolicies for %s namespace", f.Namespace.Name)
 	}
-	logrus.Infof("[DIAGS] NetworkPolicies:\n\t%v", policies.Items)
+	log.Infof("[DIAGS] NetworkPolicies:\n\t%v", policies.Items)
 
 	if f.Namespace.Name != ns.Name {
 		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		policies, err := f.ClientSet.NetworkingV1().NetworkPolicies(ns.Name).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			logrus.WithError(err).Infof("error getting current NetworkPolicies for %s namespace", ns.Name)
+			log.WithError(err).Infof("error getting current NetworkPolicies for %s namespace", ns.Name)
 		}
-		logrus.Infof("[DIAGS] NetworkPolicies (pod NS):\n\t%v", policies.Items)
+		log.Infof("[DIAGS] NetworkPolicies (pod NS):\n\t%v", policies.Items)
 	}
 
 	nps := &v3.NetworkPolicyList{}
 	gnps := &v3.GlobalNetworkPolicyList{}
 	heps := &v3.HostEndpointList{}
-	logrus.Infof("Current test namespace is %s, but will get policies for all", f.Namespace.Name)
+	log.Infof("Current test namespace is %s, but will get policies for all", f.Namespace.Name)
 
 	cli, err := client.New(f.ClientConfig())
 	if err != nil {
-		logrus.WithError(err).Info("error getting calico client")
+		log.WithError(err).Info("error getting calico client")
 	} else {
 		err = cli.List(ctx, nps)
 		if err != nil {
-			logrus.WithError(err).Info("error getting current Calico NetworkPolicies")
+			log.WithError(err).Info("error getting current Calico NetworkPolicies")
 		}
 		err = cli.List(ctx, gnps)
 		if err != nil {
-			logrus.WithError(err).Info("error getting current Calico GlobalNetworkPolicies")
+			log.WithError(err).Info("error getting current Calico GlobalNetworkPolicies")
 		}
 		err = cli.List(ctx, heps)
 		if err != nil {
-			logrus.WithError(err).Info("error getting current Calico HEPs")
+			log.WithError(err).Info("error getting current Calico HEPs")
 		}
 	}
-	logrus.Infof("[DIAGS] Calico NetworkPolicies:\n\t%v", nps.Items)
-	logrus.Infof("[DIAGS] Calico GlobalNetworkPolicies:\n\t%v", gnps.Items)
-	logrus.Infof("[DIAGS] Calico HostEndpoints:\n\t%v", heps.Items)
+	log.Infof("[DIAGS] Calico NetworkPolicies:\n\t%v", nps.Items)
+	log.Infof("[DIAGS] Calico GlobalNetworkPolicies:\n\t%v", gnps.Items)
+	log.Infof("[DIAGS] Calico HostEndpoints:\n\t%v", heps.Items)
 
 	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	podsInNS, err := e2epod.GetPodsInNamespace(ctx, f.ClientSet, ns.Name, map[string]string{})
 	if err != nil {
-		logrus.WithError(err).Infof("error getting pods for %s namespace", f.Namespace.Name)
+		log.WithError(err).Infof("error getting pods for %s namespace", f.Namespace.Name)
 	}
-	logrus.Infof("[DIAGS] Pods in namespace %s:", ns.Name)
+	log.Infof("[DIAGS] Pods in namespace %s:", ns.Name)
 	for _, p := range podsInNS {
-		logrus.Infof("Namespace: %s, Pod: %s, Status: %s", ns.Name, p.Name, p.Status.String())
+		log.Infof("Namespace: %s, Pod: %s, Status: %s", ns.Name, p.Name, p.Status.String())
 	}
 
 	e2eoutput.DumpDebugInfo(context.Background(), f.ClientSet, f.Namespace.Name)
@@ -742,7 +742,7 @@ func (c *checkpointer) start() {
 				started := time.Now()
 				_, result, err := c.tester.execCommand(c.client, c.tester.command(t))
 				if err != nil {
-					logrus.WithError(err).Warn("Continuous connection attempt returned an error")
+					log.WithError(err).Warn("Continuous connection attempt returned an error")
 				}
 
 				c.results <- connectionResult{

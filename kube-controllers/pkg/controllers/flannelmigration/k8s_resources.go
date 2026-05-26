@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +35,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/drain"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // daemonset holds a collection of helper functions for Kubernetes daemonset.
@@ -573,8 +575,8 @@ func newDrainHelper(k8sClientset *kubernetes.Clientset) *drain.Helper {
 		IgnoreAllDaemonSets: true,
 		DeleteEmptyDirData:  true,
 		GracePeriodSeconds:  -1,
-		Out:                 log.StandardLogger().WriterLevel(log.InfoLevel),
-		ErrOut:              log.StandardLogger().WriterLevel(log.WarnLevel),
+		Out:                 logrus.StandardLogger().WriterLevel(logrus.InfoLevel),
+		ErrOut:              logrus.StandardLogger().WriterLevel(logrus.WarnLevel),
 	}
 }
 

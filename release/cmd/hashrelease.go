@@ -21,9 +21,9 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/ci"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
@@ -104,10 +104,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					// On CI, if the hashrelease has already been published, we exit successfully (return nil).
 					// However, on local builds, we just log a warning and continue.
 					if c.Bool(ciFlag.Name) {
-						logrus.Infof("hashrelease %s has already been published", data.Hash())
+						log.Infof("hashrelease %s has already been published", data.Hash())
 						return nil
 					} else {
-						logrus.Warnf("hashrelease %s has already been published", data.Hash())
+						log.Warnf("hashrelease %s has already been published", data.Hash())
 					}
 				}
 
@@ -185,9 +185,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// For real releases, release notes are generated prior to building the release.
 				// For hash releases, generate a set of release notes and add them to the hashrelease directory.
 				if !c.Bool(releaseNotesFlag.Name) {
-					logrus.Info("Skipping release notes generation")
+					log.Info("Skipping release notes generation")
 				} else if c.String(orgFlag.Name) != utils.ProjectCalicoOrg || c.String(repoFlag.Name) != utils.CalicoRepoName {
-					logrus.Warn("Release notes are not supported for non-Calico releases, skipping...")
+					log.Warn("Release notes are not supported for non-Calico releases, skipping...")
 				} else {
 					releaseVersion, err := version.DetermineReleaseVersion(version.New(data.ProductVersion()), c.String(devTagSuffixFlag.Name))
 					if err != nil {
@@ -230,10 +230,10 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					// On CI, we exit successfully (return nil) if the hashrelease has already been published.
 					// This is not an error scenario; we just log a warning and continue locally.
 					if c.Bool(ciFlag.Name) {
-						logrus.Infof("hashrelease %s has already been published", hashrel.Hash)
+						log.Infof("hashrelease %s has already been published", hashrel.Hash)
 						return nil
 					} else {
-						logrus.Warnf("hashrelease %s has already been published", hashrel.Hash)
+						log.Warnf("hashrelease %s has already been published", hashrel.Hash)
 					}
 				}
 
@@ -299,9 +299,9 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					// Only log error as a warning if the image scan result URL could not be retrieved
 					// as it is not an error that should stop the hashrelease process.
 					if err != nil {
-						logrus.WithError(err).Warn("Failed to retrieve image scan result URL")
+						log.WithError(err).Warn("Failed to retrieve image scan result URL")
 					} else if url == "" {
-						logrus.Warn("Image scan result URL is empty")
+						log.Warn("Image scan result URL is empty")
 					}
 					hashrel.ImageScanResultURL = url
 				}
@@ -309,7 +309,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 				// Send a slack message to notify that the hashrelease has been published.
 				if c.Bool(publishHashreleaseFlag.Name) && c.Bool(notifyFlag.Name) {
 					if _, err := tasks.AnnounceHashrelease(slackConfig(c), hashrel, ciJobURL(c)); err != nil {
-						logrus.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
+						log.WithError(err).Warn("Failed to send hashrelease announcement to Slack")
 					}
 				}
 				return nil
@@ -357,12 +357,12 @@ func validateHashreleaseBuildFlags(c *cli.Command) error {
 	} else {
 		// If building images, log a warning if no registry is specified.
 		if c.Bool(imagesFlagName) && len(c.StringSlice(registryFlag.Name)) == 0 {
-			logrus.Warn("Building images without specifying a registry will result in images being built with the default registries")
+			log.Warn("Building images without specifying a registry will result in images being built with the default registries")
 		}
 
 		// If using the default operator image and registry, log a warning.
 		if c.String(operatorRegistryFlag.Name) == "" {
-			logrus.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag)
+			log.Warnf("Local builds should specify an operator registry using %s", operatorRegistryFlag)
 		}
 	}
 
@@ -436,7 +436,7 @@ func validateCIBuildRequirements(c *cli.Command, repoRootDir string) error {
 		return nil
 	}
 	if c.Bool(imagesFlagName) {
-		logrus.Info("Building images in hashrelease, skipping images promotions check...")
+		log.Info("Building images in hashrelease, skipping images promotions check...")
 		return nil
 	}
 	orgURL := c.String(ciBaseURLFlag.Name)

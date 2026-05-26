@@ -17,10 +17,9 @@ package goldmane
 import (
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // listRequest is an internal helper used to synchronously request matching flows from the aggregator.
@@ -45,7 +44,7 @@ func (a *Goldmane) List(req *proto.FlowListRequest) (*proto.FlowListResult, erro
 }
 
 func (a *Goldmane) queryFlows(req *proto.FlowListRequest) *listResponse {
-	logrus.WithFields(logrus.Fields{"req": req}).Debug("Received flow request")
+	log.WithFields(log.Fields{"req": req}).Debug("Received flow request")
 
 	// Sanitize the time range, resolving any relative time values.
 	req.StartTimeGte, req.StartTimeLt = a.normalizeTimeRange(req.StartTimeGte, req.StartTimeLt)
@@ -57,7 +56,7 @@ func (a *Goldmane) queryFlows(req *proto.FlowListRequest) *listResponse {
 
 	flowsToReturn, meta, err := a.flowStore.List(req)
 	if err != nil {
-		logrus.WithError(err).Warn("Error listing flows")
+		log.WithError(err).Warn("Error listing flows")
 		return &listResponse{nil, err}
 	}
 

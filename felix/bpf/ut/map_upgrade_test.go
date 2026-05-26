@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/felix/bpf/maps"
@@ -29,6 +28,7 @@ import (
 	v3 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v3"
 	v4 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v4"
 	v5 "github.com/projectcalico/calico/felix/bpf/mock/multiversion/v5"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const key = 0xdeadbeef
