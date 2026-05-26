@@ -15,20 +15,18 @@
 
 """Neutron->Calico resync scale benchmark.
 
-Populates a real Neutron DB (via the REST API as admin) with N ports
-spread across F fake hosts, then runs ``calico-resync`` against it and
-times how long the resync takes.  Each scale produces one CSV-style
-``RESYNC_SCALE_RESULT`` line so the numbers can be grepped out of the
-Semaphore log.
+Populates a real Neutron DB (via the REST API as admin) with N ports spread across F
+fake hosts, then runs ``calico-resync`` against it and times how long the resync takes.
+Each scale produces one CSV-style ``RESYNC_SCALE_RESULT`` line so the numbers can be
+grepped out of the Semaphore log.
 
-Realism: nothing about Neutron, neutron-lib or SQLAlchemy is mocked.
-Ports go through the real REST API and the real ML2 bind_port flow.
-The one exception is the ``agents`` table: we INSERT fake "Calico
-per-host agent (felix)" rows directly so the Calico mech driver
-accepts ports bound to hosts other than this devstack node.
+Realism: nothing about Neutron, neutron-lib or SQLAlchemy is mocked.  Ports go through
+the real REST API and the real ML2 bind_port flow.  The one exception is the ``agents``
+table: we INSERT fake "Calico per-host agent (felix)" rows directly so the Calico mech
+driver accepts ports bound to hosts other than this devstack node.
 
-This is *not* a correctness test; it does not assert any resync output.
-It measures only.
+This is *not* a correctness test; it does not assert any resync output.  It measures
+only.
 
 Run as the ``stack`` user with the admin openrc sourced, plus:
 
@@ -46,10 +44,9 @@ Run as the ``stack`` user with the admin openrc sourced, plus:
 
 One JSON document per resync iteration is also dropped into
 ``artifacts/perf/benchmark_data_neutron_resync/`` so that the
-``hack/perf/cmd/send-perf-results`` tool can pick them up and publish to
-the Lens Elasticsearch cluster for long-term trend tracking.  This test
-itself does not talk to Elastic -- it just writes the files.  See
-``hack/perf/README.md`` for the convention.
+``hack/perf/cmd/send-perf-results`` tool can pick them up and publish to the Lens
+Elasticsearch cluster for long-term trend tracking.  This test itself does not talk to
+Elastic -- it just writes the files.  See ``hack/perf/README.md`` for conventions.
 
     RESYNC_PERF_ARTIFACTS_DIR=<path>  (default artifacts/perf; set to "" to
                                        disable JSON-file writes)
@@ -67,7 +64,6 @@ import statistics
 import subprocess
 import sys
 import tempfile
-import time
 import uuid
 from urllib.parse import urlparse
 
@@ -82,29 +78,25 @@ logging.basicConfig(
 )
 LOG = logging.getLogger("resync-scale")
 
-# Default scales to measure if RESYNC_SCALES is not set.  Stops at
-# 3000 because larger scales take longer than Semaphore CI is willing
-# to wait — 10000 ports took >12 minutes just to populate.  Override
-# via the env var to push higher when running off-CI.
+# Default scales to measure if RESYNC_SCALES is not set.  Stops at 3000 because larger
+# scales take longer than Semaphore CI is willing to wait — 10000 ports took >12 minutes
+# just to populate.  Override via the env var to push higher when running off-CI.
 DEFAULT_SCALES = "100,1000,3000"
 
-# Calico's mech driver looks for this exact agent_type in the agents
-# table when binding a port to a host.  Must match AGENT_TYPE_FELIX
-# in mech_calico.py.
+# Calico's mech driver looks for this exact agent_type in the agents table when binding
+# a port to a host.  Must match AGENT_TYPE_FELIX in mech_calico.py.
 AGENT_TYPE_FELIX = "Calico per-host agent (felix)"
 
-# How many ports to ask the Neutron API to create in one HTTP request.
-# Bulk create is supported by the v2 API and is much faster than
-# one-at-a-time.
+# How many ports to ask the Neutron API to create in one HTTP request.  Bulk create is
+# supported by the v2 API and is much faster than one-at-a-time.
 PORT_BULK_BATCH = 50
 
-# How many concurrent worker threads to use when populating resources.
-# Modest concurrency keeps the single neutron-server fork from
-# self-bottlenecking.
+# How many concurrent worker threads to use when populating resources.  Modest
+# concurrency keeps the single neutron-server fork from self-bottlenecking.
 POPULATE_WORKERS = 8
 
-# Default tag we attach to every resource we create, so the cleanup
-# pass can find them even if a previous run crashed mid-flight.
+# Default tag we attach to every resource we create, so the cleanup pass can find them
+# even if a previous run crashed mid-flight.
 TEST_TAG = "calico-resync-scale-test"
 
 
@@ -121,9 +113,8 @@ def parse_scales():
 def hosts_for_scale(num_ports):
     """How many fake hosts to spread `num_ports` across.
 
-    Override with RESYNC_HOSTS_PER_SCALE=<n>.  Default is sqrt(N),
-    which keeps the agents table bounded as we scale up the port
-    count.
+    Override with RESYNC_HOSTS_PER_SCALE=<n>.  Default is sqrt(N), which keeps the
+    agents table bounded as we scale up the port count.
     """
     override = os.environ.get("RESYNC_HOSTS_PER_SCALE", "auto")
     if override != "auto":
@@ -167,11 +158,10 @@ def insert_fake_agents(db_args, hosts):
 
     Idempotent: existing rows for (agent_type, host) are left alone.
 
-    heartbeat_timestamp is set to one day in the future, so Neutron's
-    aliveness check (`now - heartbeat <= agent_down_time`) reads them
-    as alive throughout the test without needing a refresh thread.
-    Real felix processes would heartbeat naturally; for a benchmark
-    that's just churning bind_port we don't care.
+    heartbeat_timestamp is set to one day in the future, so Neutron's aliveness check
+    (`now - heartbeat <= agent_down_time`) reads them as alive throughout the test
+    without needing a refresh thread.  Real felix processes would heartbeat naturally;
+    for a benchmark that's just churning bind_port we don't care.
     """
     conn = pymysql.connect(**db_args)
     try:
@@ -212,7 +202,7 @@ def insert_fake_agents(db_args, hosts):
 
 
 def delete_fake_agents(db_args):
-    """Drop every Calico-felix agent row.  Used by cleanup."""
+    """Drop every calico-felix agent row.  Used by cleanup."""
     conn = pymysql.connect(**db_args)
     try:
         with conn.cursor() as cur:
@@ -265,9 +255,8 @@ def bump_quotas(conn):
 def create_networks_and_subnets(conn, num_networks):
     """Create N flat networks, each with a /24 subnet.
 
-    Uses provider:network_type=local so check_segment_for_agent
-    accepts the network for the Calico agent (which only supports
-    local/flat).
+    Uses provider:network_type=local so check_segment_for_agent accepts the network for
+    the Calico agent (which only supports local/flat).
     """
     nets = []
     subs = []
@@ -278,6 +267,9 @@ def create_networks_and_subnets(conn, num_networks):
             shared=True,
         )
         nets.append(net)
+        # /24 is enough because run_one_scale picks num_networks = scale // 100,
+        # so ports-per-network stays ~100 -- well under the /24's ~250 usable IPs.
+        # Bump to a wider subnet if that ratio ever changes.
         cidr = f"10.{(i // 256) & 0xff}.{i & 0xff}.0/24"
         sub = conn.network.create_subnet(
             name=f"{TEST_TAG}-sub-{i:05d}",
@@ -294,9 +286,8 @@ def create_networks_and_subnets(conn, num_networks):
 def create_security_groups(conn, num_sgs):
     """Create N security groups (each gets the default 4 rules).
 
-    Then add 4 extra custom rules per SG (tcp/22, tcp/80, tcp/443,
-    udp/53) so the resync has non-trivial NetworkPolicy content to
-    compare.
+    Then add 4 extra custom rules per SG (tcp/22, tcp/80, tcp/443, udp/53) so the resync
+    has non-trivial NetworkPolicy content to compare.
     """
     sgs = []
     for i in range(num_sgs):
@@ -305,6 +296,7 @@ def create_security_groups(conn, num_sgs):
             description="resync scale test",
         )
         sgs.append(sg)
+
     # Add rules in parallel: ~4N rule creates.
     rule_args = []
     for sg in sgs:
@@ -337,9 +329,8 @@ def create_security_groups(conn, num_sgs):
 def create_ports(conn, num_ports, networks, subnets, sgs, hosts):
     """Create N ports spread across networks, subnets, SGs and hosts.
 
-    Uses single-port REST calls in a thread pool.  Ports go in with
-    binding:host_id set so the Calico ML2 bind_port flow runs and the
-    port reaches ACTIVE.
+    Uses single-port REST calls in a thread pool.  Ports go in with binding:host_id set
+    so the Calico ML2 bind_port flow runs and the port reaches ACTIVE.
     """
     LOG.info(
         "Populating %d ports across %d networks, %d sgs, %d hosts...",
@@ -394,7 +385,9 @@ def create_ports(conn, num_ports, networks, subnets, sgs, hosts):
 def cleanup_neutron(conn):
     """Best-effort cleanup of every resource tagged with TEST_TAG.
 
-    Order matters: ports first, then subnets+SGs+networks.
+    Order matters: ports first, then SGs and networks.  Subnets are not deleted
+    explicitly -- they cascade away when their network is deleted, which is why ports
+    (the only resource that can hold a subnet "in use") have to go first.
     """
     LOG.info("Cleaning up %s ports...", TEST_TAG)
     deleted = 0
@@ -407,19 +400,25 @@ def cleanup_neutron(conn):
                 LOG.warning("delete_port %s: %s", port.id, exc)
     LOG.info("  deleted %d ports", deleted)
 
+    deleted = 0
     for sg in conn.network.security_groups():
         if sg.name and sg.name.startswith(TEST_TAG):
             try:
                 conn.network.delete_security_group(sg.id)
+                deleted += 1
             except Exception as exc:
                 LOG.warning("delete_security_group %s: %s", sg.id, exc)
+    LOG.info("  deleted %d SGs", deleted)
 
+    deleted = 0
     for net in conn.network.networks():
         if net.name and net.name.startswith(TEST_TAG):
             try:
                 conn.network.delete_network(net.id)
+                deleted += 1
             except Exception as exc:
                 LOG.warning("delete_network %s: %s", net.id, exc)
+    LOG.info("  deleted %d networks", deleted)
 
 
 def cleanup_etcd(etcd_client):
@@ -434,17 +433,16 @@ def cleanup_etcd(etcd_client):
 
 
 def run_calico_resync(neutron_conf_path, extra_conf_path):
-    """Run calico-resync once.  Return (elapsed_seconds, result_dict).
+    """Run calico-resync once and return the parsed ResyncResult dict.
 
-    Layers a benchmark-specific config file on top of neutron.conf so
-    calico-resync's logs land in a file rather than competing with the
-    JSON result on stdout (oslo.log's neutron-server defaults can put
-    log lines on stdout in this environment).  Uses --output to direct
-    the JSON to a dedicated file for the same reason.
+    Layers a benchmark-specific config file on top of neutron.conf so calico-resync's
+    logs land in a file rather than competing with the JSON result on stdout (oslo.log's
+    neutron-server defaults can put log lines on stdout in this environment).  Uses
+    --output to direct the JSON to a dedicated file for the same reason.
 
-    elapsed_seconds is the wall-clock time of the subprocess, which is
-    a slight overestimate of result_dict['total_ms']/1000 because it
-    includes Python startup.  Both are reported.
+    Timing comes from the ResyncResult's own ``total_ms`` -- we don't bother with
+    subprocess wall-clock, which would just add ~200 ms of Python startup that isn't
+    interesting trend signal.
     """
     with tempfile.NamedTemporaryFile(
         mode="w+", suffix=".json", prefix="calico-resync-"
@@ -459,14 +457,12 @@ def run_calico_resync(neutron_conf_path, extra_conf_path):
             out_file.name,
         ]
         LOG.info("Running %s", " ".join(cmd))
-        t0 = time.monotonic()
         proc = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             check=False,
         )
-        elapsed = time.monotonic() - t0
         if proc.returncode != 0:
             LOG.error(
                 "calico-resync exited %d.  stderr:\n%s",
@@ -487,7 +483,7 @@ def run_calico_resync(neutron_conf_path, extra_conf_path):
             result = {"ok": False, "error": "non-json output", "phases": {}}
     if not result.get("ok"):
         LOG.warning("calico-resync result ok=False: %s", result.get("error"))
-    return elapsed, result
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -498,37 +494,36 @@ def run_calico_resync(neutron_conf_path, extra_conf_path):
 def phase_ms(result, phase):
     """Get total_ms for a named phase from a ResyncResult dict.
 
-    Returns 0 if the phase wasn't run (e.g. felix_config on a narrow
-    scope, or endpoints when the run errored out before reaching it)
-    or the result is malformed.
+    Returns 0 if the phase wasn't run (e.g. felix_config on a narrow scope, or endpoints
+    when the run errored out before reaching it) or the result is malformed.
     """
     phases = result.get("phases", {}) or {}
     phase_dict = phases.get(phase) or {}
     return int(phase_dict.get("total_ms", 0))
 
 
-# Family name for the Lens ES index that this test writes into.  The matching
-# index template lives at hack/perf/index-templates/benchmark_data_neutron_resync.json,
-# and hack/perf/cmd/send-perf-results picks up the JSON files we write below
-# and POSTs them to Elastic.
+# Family name for the Lens ES index that this test writes into.  The matching index
+# template lives at hack/perf/index-templates/benchmark_data_neutron_resync.json, and
+# hack/perf/cmd/send-perf-results picks up the JSON files we write below and POSTs them
+# to Elastic.
 _PERF_FAMILY = "benchmark_data_neutron_resync"
 
-# Phase names emitted by calico-resync's ResyncResult.phases dict.  Used to
-# flatten phase metrics into ``<phase>_<metric>`` ES fields.
+# Phase names emitted by calico-resync's ResyncResult.phases dict.  Used to flatten
+# phase metrics into ``<phase>_<metric>`` ES fields.
 _SYNCER_PHASES = ("expand", "subnets", "policy", "endpoints", "felix_config")
 
 
 def _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     """Build one perf doc per resync iteration (1 cold + N steady).
 
-    Schema follows the perf-doc conventions: flat scalars only, no nested
-    structures.  Per-syncer-phase metrics are flattened into
-    ``<syncer_phase>_<metric>`` fields so Kibana Lens can chart them directly.
+    Schema follows conventions as in `hack/perf/README.md`: flat scalars only, no nested
+    structures.  Per-syncer-phase metrics are flattened into ``<syncer_phase>_<metric>``
+    fields so Kibana Lens can chart them directly.
 
     Only scenario-specific scalars belong here.  CI metadata
     (git_commit/branch/ci_run_id/env/...) is added later by
-    hack/perf/cmd/send-perf-results, so producers don't have to know about
-    Semaphore env vars.
+    hack/perf/cmd/send-perf-results, so producers don't have to know about Semaphore env
+    vars.
     """
     common = {
         "test_name": "neutron_resync",
@@ -540,22 +535,22 @@ def _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
 
     # iter=0 is the cold run; iter=1..N are the steady runs.
     iterations = [(0, "cold", cold)]
-    for i, run in enumerate(steady_runs):
-        iterations.append((i + 1, "steady", run))
+    for i, result in enumerate(steady_runs):
+        iterations.append((i + 1, "steady", result))
 
     docs = []
-    for iter_idx, phase, (elapsed, result) in iterations:
+    for iter_idx, phase, result in iterations:
         doc = dict(common)
         doc["phase"] = phase
         doc["iter"] = iter_idx
-        doc["elapsed_ms"] = int(elapsed * 1000)
         doc["total_ms"] = int(result.get("total_ms", 0))
         doc["ok"] = bool(result.get("ok"))
         error = result.get("error")
         if error:
             doc["error"] = error
-        # Flatten per-syncer-phase metrics into <phase>_<metric>.  Skip any
-        # non-scalar values defensively in case the syncer ever grows one.
+
+        # Flatten per-syncer-phase metrics into <phase>_<metric>.  Skip any non-scalar
+        # values defensively in case the syncer ever grows one.
         phases = result.get("phases") or {}
         for syncer_phase in _SYNCER_PHASES:
             metrics = phases.get(syncer_phase) or {}
@@ -571,9 +566,9 @@ def _write_perf_docs(scale, docs):
     """Write each perf doc to its own JSON file under
     ``$RESYNC_PERF_ARTIFACTS_DIR/<family>/``.
 
-    Default base dir is ``artifacts/perf``; set ``RESYNC_PERF_ARTIFACTS_DIR``
-    to "" to disable.  ``hack/perf/cmd/send-perf-results`` later picks
-    these up and posts them to Lens ES.
+    Default base dir is ``artifacts/perf``; set ``RESYNC_PERF_ARTIFACTS_DIR`` to "" to
+    disable.  ``hack/perf/cmd/send-perf-results`` later picks these up and posts them to
+    Lens ES.
     """
     base = os.environ.get("RESYNC_PERF_ARTIFACTS_DIR", "artifacts/perf")
     if not base:
@@ -594,12 +589,12 @@ def _write_perf_docs(scale, docs):
 def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
     """Print one RESYNC_SCALE_RESULT line for grep, then a JSON dump.
 
-    cold is one (elapsed, result) tuple from the cold-etcd run.
-    steady_runs is a list of such tuples from the steady-state runs.
+    cold is one ResyncResult dict from the cold-etcd run.  steady_runs is a list of such
+    dicts from the steady-state runs.
     """
-    steady_totals = [int(r["total_ms"]) for _, r in steady_runs if r.get("ok")]
-    cold_elapsed, cold_result = cold
-    cold_total = int(cold_result.get("total_ms", cold_elapsed * 1000))
+    # Accumulate total_ms values only when runs succeeded.
+    steady_totals = [int(r["total_ms"]) for r in steady_runs if r.get("ok")]
+    cold_totals = [int(cold["total_ms"])] if cold.get("ok") else []
 
     def stat(values, fn):
         return int(fn(values)) if values else -1
@@ -610,23 +605,24 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
         f"networks={num_networks}",
         f"sgs={num_sgs}",
         f"hosts={num_hosts}",
-        f"cold_ms={cold_total}",
+        f"cold_ms={stat(cold_totals, max)}",
         f"steady_min_ms={stat(steady_totals, min)}",
         f"steady_med_ms={stat(steady_totals, statistics.median)}",
         f"steady_max_ms={stat(steady_totals, max)}",
-        f"cold_subnets_ms={phase_ms(cold_result, 'subnets')}",
-        f"cold_policy_ms={phase_ms(cold_result, 'policy')}",
-        f"cold_endpoints_ms={phase_ms(cold_result, 'endpoints')}",
-        f"cold_felix_config_ms={phase_ms(cold_result, 'felix_config')}",
+        f"cold_subnets_ms={phase_ms(cold, 'subnets')}",
+        f"cold_policy_ms={phase_ms(cold, 'policy')}",
+        f"cold_endpoints_ms={phase_ms(cold, 'endpoints')}",
+        f"cold_felix_config_ms={phase_ms(cold, 'felix_config')}",
     ]
-    # Pick the median *successful* run for the per-phase breakdown.
-    # Failed runs are excluded because their phase dicts are partial
-    # (e.g. no endpoints phase if the failure happened earlier), which
-    # would otherwise show up as misleading zeros in the summary line.
-    successful = [r for r in steady_runs if r[1].get("ok")]
+
+    # Pick the median *successful* run for the per-phase breakdown.  Failed runs are
+    # excluded because their phase dicts are partial (e.g. no endpoints phase if the
+    # failure happened earlier), which would otherwise show up as misleading zeros in
+    # the summary line.
+    successful = [r for r in steady_runs if r.get("ok")]
     if successful:
-        successful_sorted = sorted(successful, key=lambda t: t[1].get("total_ms", 0))
-        median_result = successful_sorted[len(successful_sorted) // 2][1]
+        successful_sorted = sorted(successful, key=lambda r: r.get("total_ms", 0))
+        median_result = successful_sorted[len(successful_sorted) // 2]
         line_fields.extend(
             [
                 f"steady_med_subnets_ms={phase_ms(median_result, 'subnets')}",
@@ -635,6 +631,7 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
                 f"steady_med_felix_config_ms={phase_ms(median_result, 'felix_config')}",
             ]
         )
+
     print("RESYNC_SCALE_RESULT " + " ".join(line_fields))
     sys.stdout.flush()
 
@@ -644,14 +641,14 @@ def summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs):
         "networks": num_networks,
         "sgs": num_sgs,
         "hosts": num_hosts,
-        "cold": cold_result,
-        "steady": [r for _, r in steady_runs],
+        "cold": cold,
+        "steady": steady_runs,
     }
     print("RESYNC_SCALE_JSON " + json.dumps(dump))
     sys.stdout.flush()
 
-    # Drop per-iteration JSON files for the central send-perf-results tool
-    # to pick up.  Silently no-op if RESYNC_PERF_ARTIFACTS_DIR is "".
+    # Drop per-iteration JSON files for the central send-perf-results tool to pick up.
+    # Silently no-op if RESYNC_PERF_ARTIFACTS_DIR is "".
     _write_perf_docs(
         scale,
         _make_perf_docs(scale, num_networks, num_sgs, num_hosts, cold, steady_runs),
@@ -735,10 +732,9 @@ def main():
 
     bump_quotas(conn)
 
-    # Write a small INI that calico-resync will read on top of
-    # neutron.conf, the same way neutron-dhcp-agent layers neutron.conf
-    # + dhcp_agent.ini.  This sends calico-resync logs to a file so
-    # they don't compete with the JSON result on stdout.
+    # Write a small INI that calico-resync will read on top of neutron.conf, the same
+    # way neutron-dhcp-agent layers neutron.conf + dhcp_agent.ini.  This sends
+    # calico-resync logs to a file so they don't compete with the JSON result on stdout.
     extra_conf = os.environ.get(
         "RESYNC_CALICO_RESYNC_CONF", "/tmp/calico-resync-scale.ini"
     )

@@ -54,10 +54,10 @@ func main() {
 	esURL := os.Getenv("ELASTICSEARCH_URL")
 	auth, authOK := buildAuthHeader()
 	if esURL == "" || !authOK {
-		// Per perf.md, "Lens is observability, not a critical path".  Missing
-		// creds in a local dev run is normal; in CI it usually means the
-		// pipeline secret wasn't attached, which a --require-creds caller can
-		// turn into a hard failure.
+		// "Lens is observability, not a critical path" -- see
+		// hack/perf/README.md.  Missing creds in a local dev run is normal;
+		// in CI it usually means the pipeline secret wasn't attached, which
+		// a --require-creds caller can turn into a hard failure.
 		msg := "ELASTICSEARCH_URL or credentials unset; skipping send"
 		if *requireCreds {
 			log.Fatalf("%s (--require-creds set)", msg)
@@ -85,15 +85,14 @@ func main() {
 	}
 
 	if err := walkAndSend(client, esURL, auth, *dir, metadata, *dryRun); err != nil {
-		// Per perf.md, we don't propagate observability failures into CI.
+		// Observability failures should not propagate into CI (see README).
 		log.Printf("warning: walkAndSend returned an error: %v", err)
 	}
 }
 
 // buildAuthHeader returns the value for the Authorization header constructed
 // from environment variables, plus a bool reporting whether credentials are
-// configured at all.  Prefers an API key over basic auth, mirroring the
-// perf.md guidance.
+// configured at all.  Prefers an API key over basic auth.
 func buildAuthHeader() (string, bool) {
 	if key := os.Getenv("ELASTICSEARCH_KEY"); key != "" {
 		return "ApiKey " + key, true
