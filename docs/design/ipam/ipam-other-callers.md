@@ -30,9 +30,9 @@ checking how the GC and `calicoctl ipam check` interpret it.
 is the operator-facing CRUD surface for IPAM state. `show`,
 `check`, and `release` are the IPAM-meaningful subcommands;
 `configure` and `split` are admin-CRUD on `IPAMConfig` /
-`IPPool`. The `check` algorithm is essentially the same
-validity heuristics the GC uses, but exposed for manual review
-without a running controller.
+`IPPool`. The `check` algorithm reuses the validity heuristics
+the GC applies, but exposed for manual review without a running
+controller.
 
 **Review notes**
 

@@ -1,6 +1,13 @@
 ---
 applyTo:
-  - "libcalico-go/lib/ipam/**, libcalico-go/lib/backend/**/ipam*, libcalico-go/lib/backend/**/block_affinity*, cni-plugin/pkg/ipamplugin/**, node/cmd/calico-ipam/**, kube-controllers/pkg/controllers/node/ipam*.go, kube-controllers/pkg/controllers/node/pool_manager.go, kube-controllers/pkg/controllers/node/ipam_allocation.go"
+  - "libcalico-go/lib/ipam/**"
+  - "libcalico-go/lib/backend/**/ipam*"
+  - "libcalico-go/lib/backend/**/block_affinity*"
+  - "cni-plugin/pkg/ipamplugin/**"
+  - "node/cmd/calico-ipam/**"
+  - "kube-controllers/pkg/controllers/node/ipam*.go"
+  - "kube-controllers/pkg/controllers/node/pool_manager.go"
+  - "kube-controllers/pkg/controllers/node/ipam_allocation.go"
 ---
 
 # IPAM
