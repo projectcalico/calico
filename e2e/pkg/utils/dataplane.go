@@ -19,12 +19,13 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CalicoDataplane is the Calico dataplane mode running on the cluster.
@@ -97,7 +98,7 @@ func DetectCalicoDataplane(cli ctrlclient.Client) CalicoDataplane {
 		default:
 			dp = DataplaneIptables
 		}
-		logrus.Infof("Detected Calico dataplane from Installation CR: %s", dp)
+		log.Infof("Detected Calico dataplane from Installation CR: %s", dp)
 		return dp
 	}
 
@@ -112,10 +113,10 @@ func DetectCalicoDataplane(cli ctrlclient.Client) CalicoDataplane {
 		} else if felixCfg.Spec.UseInternalDataplaneDriver != nil && !*felixCfg.Spec.UseInternalDataplaneDriver {
 			dp = DataplaneVPP
 		}
-		logrus.Infof("Detected Calico dataplane from FelixConfiguration: %s", dp)
+		log.Infof("Detected Calico dataplane from FelixConfiguration: %s", dp)
 		return dp
 	} else {
-		logrus.WithError(err).Info("Could not read FelixConfiguration, defaulting to iptables")
+		log.WithError(err).Info("Could not read FelixConfiguration, defaulting to iptables")
 	}
 	return DataplaneIptables
 }
@@ -131,7 +132,7 @@ func DetectKubeProxyMode(clientset kubernetes.Interface) KubeProxyMode {
 	defer cancel()
 	cm, err := clientset.CoreV1().ConfigMaps("kube-system").Get(ctx, "kube-proxy", metav1.GetOptions{})
 	if err != nil {
-		logrus.WithError(err).Info("Could not read kube-proxy ConfigMap, defaulting to iptables proxy mode")
+		log.WithError(err).Info("Could not read kube-proxy ConfigMap, defaulting to iptables proxy mode")
 		return KubeProxyIptables
 	}
 
@@ -141,25 +142,25 @@ func DetectKubeProxyMode(clientset kubernetes.Interface) KubeProxyMode {
 	}
 
 	if configData == "" {
-		logrus.Info("kube-proxy ConfigMap has no parseable config, defaulting to iptables proxy mode")
+		log.Info("kube-proxy ConfigMap has no parseable config, defaulting to iptables proxy mode")
 		return KubeProxyIptables
 	}
 
 	var cfg kubeProxyConfig
 	if err := yaml.Unmarshal([]byte(configData), &cfg); err != nil {
-		logrus.WithError(err).Info("Could not parse kube-proxy config, defaulting to iptables proxy mode")
+		log.WithError(err).Info("Could not parse kube-proxy config, defaulting to iptables proxy mode")
 		return KubeProxyIptables
 	}
 
 	switch cfg.Mode {
 	case "ipvs":
-		logrus.Info("Detected kube-proxy mode: IPVS")
+		log.Info("Detected kube-proxy mode: IPVS")
 		return KubeProxyIPVS
 	case "nftables":
-		logrus.Info("Detected kube-proxy mode: nftables")
+		log.Info("Detected kube-proxy mode: nftables")
 		return KubeProxyNftables
 	default:
-		logrus.Infof("Detected kube-proxy mode: iptables (raw value: %q)", cfg.Mode)
+		log.Infof("Detected kube-proxy mode: iptables (raw value: %q)", cfg.Mode)
 		return KubeProxyIptables
 	}
 }

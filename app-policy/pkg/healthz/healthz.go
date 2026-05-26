@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const DefaultDialPath = "/var/run/dikastes/dikastes.sock"
@@ -35,7 +35,7 @@ func Run(dialPath, check string) {
 	opts := uds.GetDialOptions()
 	conn, err := grpc.NewClient(dialPath, opts...)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to dial")
+		log.WithError(err).Fatal("Failed to dial")
 	}
 	defer func() { _ = conn.Close() }()
 	c := dikastesproto.NewHealthzClient(conn)

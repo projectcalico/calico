@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Key is used to ensure we don't have collisions with existing keys.
@@ -39,7 +40,7 @@ const (
 // without going through this package, and the constructors ensure that these values are set properly.
 type Context interface {
 	context.Context
-	Logger() *logrus.Entry
+	Logger() log.Logger
 	RequestID() string
 }
 
@@ -62,10 +63,10 @@ func NewRequestContext(req *http.Request) Context {
 	return &requestContext{Context: ctx}
 }
 
-func (ctx *requestContext) Logger() *logrus.Entry {
+func (ctx *requestContext) Logger() log.Logger {
 	// We don't validate the type since it should be impossible to get a requestContext without this set properly. If
 	// it's not set, we want to panic since this is a developer error.
-	return ctx.Value(ctxLoggerKey).(*logrus.Entry)
+	return ctx.Value(ctxLoggerKey).(log.Logger)
 }
 
 func (ctx *requestContext) RequestID() string {

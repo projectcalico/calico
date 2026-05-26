@@ -9,8 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
@@ -66,7 +65,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 	q.Add("pipeline_id", pipelineID)
 	req.URL.RawQuery = q.Encode()
 
-	logrus.WithField("url", req.URL.String()).Debug("get pipeline promotions")
+	log.WithField("url", req.URL.String()).Debug("get pipeline promotions")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -82,7 +81,7 @@ func fetchImagePromotions(orgURL, pipelineID, token string) ([]promotion, error)
 		return nil, fmt.Errorf("failed to decode response to promotions: %w", err)
 	}
 
-	logrus.WithField("promotions", promotions).Debug("fetched promotions")
+	log.WithField("promotions", promotions).Debug("fetched promotions")
 
 	imagePromotions := make([]promotion, 0)
 	for _, p := range promotions {
@@ -106,7 +105,7 @@ func getPipelineResult(orgURL, pipelineID, token string) (*pipeline, error) {
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 
-	logrus.WithField("url", req.URL.String()).Debug("get pipeline details")
+	log.WithField("url", req.URL.String()).Debug("get pipeline details")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -168,7 +167,7 @@ func gatherUniquePromotionPipelines(promotions []promotion, orgURL, token string
 			// Promotion does not exist in the set, check its status.
 			if promotion.Status != passed {
 				// If the promotion is not passed, skip checking for pipeline result and mark as failure.
-				logrus.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
+				log.WithField("promotion", name).Warnf("%q promotion did not pass, marking as failed", name)
 				promotionsSet[name] = pipeline{
 					Result: failed,
 				}
@@ -211,10 +210,10 @@ func EvaluateImagePromotions(repoRootDir, orgURL, pipelineID, token string) (boo
 		return false, err
 	}
 	if parentPipelineID == "" {
-		logrus.Info("no parent pipeline found, skipping image promotions check")
-		logrus.Warn("this hashrelease is being run with the assumption that images have been promoted successfully in a different pipeline")
+		log.Info("no parent pipeline found, skipping image promotions check")
+		log.Warn("this hashrelease is being run with the assumption that images have been promoted successfully in a different pipeline")
 		return true, nil
 	}
-	logrus.Warn("this hashrelease is being run in a pipeline that was not triggered by a promotion, assuming all image promotions passed")
+	log.Warn("this hashrelease is being run in a pipeline that was not triggered by a promotion, assuming all image promotions passed")
 	return true, nil
 }

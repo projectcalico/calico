@@ -21,9 +21,10 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"k8s.io/client-go/transport"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type strAsByteSlice []byte
@@ -138,12 +139,12 @@ func WithCertKeyPair(certPath, keyPath string) TargetOption {
 
 func MustCreateTarget(path, dest string, opts ...TargetOption) Target {
 	if path == "" {
-		logrus.Fatal("proxy target path cannot be empty")
+		log.Fatal("proxy target path cannot be empty")
 	}
 
 	destURL, err := url.Parse(dest)
 	if err != nil {
-		logrus.WithError(err).Fatalf("incorrect URL %s for path %s", dest, path)
+		log.WithError(err).Fatalf("incorrect URL %s for path %s", dest, path)
 	}
 
 	target := &Target{
@@ -153,16 +154,16 @@ func MustCreateTarget(path, dest string, opts ...TargetOption) Target {
 
 	for _, opt := range opts {
 		if err := opt(target); err != nil {
-			logrus.WithError(err).Fatalf("failed to apply option")
+			log.WithError(err).Fatalf("failed to apply option")
 		}
 	}
 
 	if target.Dest.Scheme == "https" && !target.AllowInsecureTLS && target.CAFile == "" {
-		logrus.Fatalf("target for path '%s' must specify the ca bundle if AllowInsecureTLS is false when the scheme is https", path)
+		log.Fatalf("target for path '%s' must specify the ca bundle if AllowInsecureTLS is false when the scheme is https", path)
 	}
 
 	if target.PathReplace != nil && target.PathRegexp == nil {
-		logrus.Fatalf("PathReplace specified but PathRegexp is not")
+		log.Fatalf("PathReplace specified but PathRegexp is not")
 	}
 
 	return *target

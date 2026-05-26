@@ -17,12 +17,13 @@ package discovery
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // IsOperatorManaged returns true if the cluster is managed by the Tigera operator.
@@ -33,7 +34,7 @@ func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryI
 	_, err := discoveryClient.ServerResourcesForGroupVersion("operator.tigera.io/v1")
 	if err != nil {
 		if kerrors.IsNotFound(err) {
-			logrus.WithError(err).Debug("Operator API group not found, not operator-managed")
+			log.WithError(err).Debug("Operator API group not found, not operator-managed")
 			return false, nil
 		}
 		return false, err
@@ -48,7 +49,7 @@ func IsOperatorManaged(ctx context.Context, discoveryClient discovery.DiscoveryI
 	list, err := dynamicClient.Resource(installationGVR).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
 		if kerrors.IsNotFound(err) || kerrors.IsForbidden(err) {
-			logrus.WithError(err).Debug("Unable to list Installation CRs, assuming not operator-managed")
+			log.WithError(err).Debug("Unable to list Installation CRs, assuming not operator-managed")
 			return false, nil
 		}
 		return false, err

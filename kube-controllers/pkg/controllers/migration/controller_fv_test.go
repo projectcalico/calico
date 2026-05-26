@@ -24,7 +24,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +37,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -67,8 +66,8 @@ func expectNoError(err error) {
 // (status subresources, finalizer/deletion, informers) without needing a
 // full cluster.
 func init() {
-	logrus.SetFormatter(&logutils.Formatter{})
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetComponent("")
+	log.SetLevel(log.DebugLevel)
 }
 
 func TestMain(m *testing.M) {

@@ -25,11 +25,11 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logutils.ConfigureFormatter("test")
+	log.SetComponent("test")
 }
 
 func TestDiags(t *testing.T) {

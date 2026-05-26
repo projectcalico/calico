@@ -17,8 +17,9 @@ import (
 	"context"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewNftablesDataplaneFn is a function type that creates a new nftables dataplane interface.

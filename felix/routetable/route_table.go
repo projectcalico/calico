@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -35,10 +34,10 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/std/log"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -128,7 +127,7 @@ func init() {
 //     We do that cleanup in the background to avoid holding up other route
 //     programming.
 type RouteTable struct {
-	logCxt        *log.Entry
+	logCxt        log.Logger
 	ipVersion     uint8
 	netlinkFamily int
 	// The routing table index.  This is defaulted to RT_TABLE_MAIN if not specified.
@@ -171,7 +170,7 @@ type RouteTable struct {
 
 	nl *handlemgr.HandleManager
 
-	opReporter       logutils.OpRecorder
+	opReporter       log.OpRecorder
 	livenessCallback func()
 
 	// The route deletion grace period.
@@ -265,7 +264,7 @@ func New(
 	defaultRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
-	opReporter logutils.OpRecorder,
+	opReporter log.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	opts ...Opt,
 ) *RouteTable {
@@ -279,7 +278,7 @@ func New(
 		tableIndex = unix.RT_TABLE_MAIN
 	}
 
-	var logCxt *log.Entry
+	var logCxt log.Logger
 	description := fmt.Sprintf("IPv%d:%d", ipVersion, tableIndex)
 	logCxt = log.WithFields(log.Fields{
 		"table": description,

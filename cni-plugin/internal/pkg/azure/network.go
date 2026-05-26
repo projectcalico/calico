@@ -20,7 +20,8 @@ import (
 	"os"
 
 	"github.com/natefinch/atomic"
-	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var networksDir string = "/var/run/calico/azure/networks/"
@@ -48,7 +49,7 @@ func (an *AzureNetwork) Write() error {
 	if err := atomic.WriteFile(an.filename(), r); err != nil {
 		return err
 	}
-	logrus.Infof("Stored AzureNetwork: %#v", an)
+	log.Infof("Stored AzureNetwork: %#v", an)
 	return nil
 }
 
@@ -57,7 +58,7 @@ func (an *AzureNetwork) Load() error {
 	if err != nil {
 		return nil
 	}
-	logrus.Infof("Loaded AzureNetwork: %s", bytes)
+	log.Infof("Loaded AzureNetwork: %s", bytes)
 	return json.Unmarshal(bytes, an)
 }
 

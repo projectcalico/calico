@@ -27,12 +27,12 @@ import (
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	type_v2 "github.com/envoyproxy/go-control-plane/envoy/type"
 	_type "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type authServer struct {
@@ -86,12 +86,12 @@ func (as *authServer) RegisterGRPCServices(gs *grpc.Server) {
 // Check applies the currently loaded policy to a network request and renders a policy decision.
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	hostname, _ := os.Hostname()
-	logCtx := log.WithContext(ctx).WithField("hostname", hostname)
+	logCtx := log.WithField("hostname", hostname)
 	// Do not log req.Attributes.String() or req.String(), they contain sensitive HTTP
 	// headers (Authorization, Cookie) and request bodies.
 	// Strip query string from the path — Envoy's :path pseudo-header includes it,
 	// and query parameters may carry tokens or credentials.
-	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+	if logCtx.IsLevelEnabled(log.DebugLevel) {
 		httpPath := req.GetAttributes().GetRequest().GetHttp().GetPath()
 		if i := strings.IndexByte(httpPath, '?'); i >= 0 {
 			httpPath = httpPath[:i]
@@ -165,7 +165,7 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 	})
 
 	// Do not log the full CheckRequest, it may contain sensitive HTTP headers and bodies.
-	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
+	if logCtx.IsLevelEnabled(log.DebugLevel) {
 		logCtx.WithFields(log.Fields{
 			"code": code.Code(resp.Status.Code),
 			"msg":  resp.Status.Message,

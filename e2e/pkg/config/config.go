@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type configOption struct {
@@ -144,19 +144,19 @@ func AfterReadingAllFlags() {
 	}
 	// Set logrus log level based on the LOG_LEVEL environment variable or command line flag.
 	lvl := allConfigOptions[logLevel].actualValue
-	if l, err := logrus.ParseLevel(lvl); lvl != "" && err != nil {
-		logrus.Fatalf("Failed to parse LOG_LEVEL: %v", err)
+	if l, err := log.ParseLevel(lvl); lvl != "" && err != nil {
+		log.Fatalf("Failed to parse LOG_LEVEL: %v", err)
 	} else if lvl == "" {
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 	} else {
-		logrus.SetLevel(l)
+		log.SetLevel(l)
 	}
 
 	// And log out the values of all config options.
-	logrus.Infof("Running tests with the following configuration:")
+	log.Infof("Running tests with the following configuration:")
 	for _, c := range allConfigOptions {
 		if c.actualValue != "" {
-			logrus.Infof("%s => %s", c.envVarName, c.actualValue)
+			log.Infof("%s => %s", c.envVarName, c.actualValue)
 		}
 	}
 }

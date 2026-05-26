@@ -22,13 +22,13 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -82,7 +82,7 @@ func NewController(
 	// policies by tier name without hitting the API server.
 	for _, inf := range policyInformers {
 		if err := inf.AddIndexers(cache.Indexers{tierIndex: tierKeyFunc}); err != nil {
-			logrus.WithError(err).Fatal("Failed to add tier index to policy informer")
+			log.WithError(err).Fatal("Failed to add tier index to policy informer")
 		}
 	}
 
@@ -91,7 +91,7 @@ func NewController(
 		AddFunc: func(obj any) {
 			tier, ok := obj.(*v3.Tier)
 			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier add handler")
+				log.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier add handler")
 				return
 			}
 			c.queue.Add(tier.Name)
@@ -99,7 +99,7 @@ func NewController(
 		UpdateFunc: func(oldObj, newObj any) {
 			tier, ok := newObj.(*v3.Tier)
 			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", newObj)).Error("Unexpected object type in tier update handler")
+				log.WithField("type", fmt.Sprintf("%T", newObj)).Error("Unexpected object type in tier update handler")
 				return
 			}
 			c.queue.Add(tier.Name)
@@ -107,14 +107,14 @@ func NewController(
 		DeleteFunc: func(obj any) {
 			tier, ok := obj.(*v3.Tier)
 			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
+				log.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in tier delete handler")
 				return
 			}
 			c.queue.Add(tier.Name)
 		},
 	}
 	if _, err := tierInformer.AddEventHandler(tierHandlers); err != nil {
-		logrus.WithError(err).Fatal("Failed to register event handler for Tier")
+		log.WithError(err).Fatal("Failed to register event handler for Tier")
 	}
 
 	// Watch policy resources so that when a policy is deleted, we re-reconcile the
@@ -125,7 +125,7 @@ func NewController(
 			if tierName == "" {
 				if accessor, ok := obj.(metav1.ObjectMetaAccessor); ok {
 					meta := accessor.GetObjectMeta()
-					logrus.WithFields(logrus.Fields{
+					log.WithFields(log.Fields{
 						"kind":      fmt.Sprintf("%T", obj),
 						"name":      meta.GetName(),
 						"namespace": meta.GetNamespace(),
@@ -138,7 +138,7 @@ func NewController(
 	}
 	for _, inf := range policyInformers {
 		if _, err := inf.AddEventHandler(policyHandlers); err != nil {
-			logrus.WithError(err).Fatal("Failed to register policy event handler for Tier controller")
+			log.WithError(err).Fatal("Failed to register policy event handler for Tier controller")
 		}
 	}
 
@@ -154,7 +154,7 @@ func tierNameFromPolicy(obj any) string {
 	}
 	tier, ok := names.TierFromPolicy(obj)
 	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Could not extract tier from policy object")
+		log.WithField("type", fmt.Sprintf("%T", obj)).Warn("Could not extract tier from policy object")
 	}
 	return tier
 }
@@ -163,21 +163,21 @@ func (c *TierController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 	defer c.queue.ShutDown()
 
-	logrus.Info("Starting Tier controller")
+	log.Info("Starting Tier controller")
 	syncFuncs := make([]cache.InformerSynced, len(c.allInformers))
 	for i, inf := range c.allInformers {
 		syncFuncs[i] = inf.HasSynced
 	}
 	if !cache.WaitForNamedCacheSync("tiers", stopCh, syncFuncs...) {
-		logrus.Info("Failed to sync resources, received signal for controller to shut down.")
+		log.Info("Failed to sync resources, received signal for controller to shut down.")
 		return
 	}
-	logrus.Info("Tier controller synced and ready")
+	log.Info("Tier controller synced and ready")
 
 	go c.runWorker()
 
 	<-stopCh
-	logrus.Info("Stopping Tier controller")
+	log.Info("Stopping Tier controller")
 }
 
 func (c *TierController) runWorker() {
@@ -203,17 +203,17 @@ func (c *TierController) handleErr(err error, key string) {
 		return
 	}
 	if c.queue.NumRequeues(key) < maxRetries {
-		logrus.WithError(err).WithField("name", key).Warning("Error reconciling tier, will retry")
+		log.WithError(err).WithField("name", key).Warning("Error reconciling tier, will retry")
 		c.queue.AddRateLimited(key)
 		return
 	}
 	c.queue.Forget(key)
-	logrus.WithError(err).WithField("name", key).Error("Dropping tier out of queue after max retries")
+	log.WithError(err).WithField("name", key).Error("Dropping tier out of queue after max retries")
 }
 
 // reconcile looks up the tier by name from the informer cache and reconciles it.
 func (c *TierController) reconcile(name string) error {
-	logCtx := logrus.WithField("name", name)
+	logCtx := log.WithField("name", name)
 	obj, exists, err := c.tierInformer.GetStore().GetByKey(name)
 	if err != nil {
 		return fmt.Errorf("failed to get tier from cache: %v", err)

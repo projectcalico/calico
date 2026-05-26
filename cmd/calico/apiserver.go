@@ -18,7 +18,6 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/util/feature"
@@ -26,6 +25,7 @@ import (
 	"k8s.io/component-base/logs"
 
 	"github.com/projectcalico/calico/apiserver/cmd/apiserver/server"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -44,7 +44,7 @@ func newAPIServerCommand() *cobra.Command {
 				string(features.WatchList): false,
 			})
 			if err != nil {
-				logrus.WithError(err).Error("Error setting feature gates")
+				log.WithError(err).Error("Error setting feature gates")
 				logs.FlushLogs()
 				os.Exit(1)
 			}
@@ -57,7 +57,7 @@ func newAPIServerCommand() *cobra.Command {
 
 			serverCmd, _, err := server.NewCommandStartCalicoServer(os.Stdout)
 			if err != nil {
-				logrus.WithError(err).Error("Error creating server")
+				log.WithError(err).Error("Error creating server")
 				logs.FlushLogs()
 				os.Exit(1)
 			}

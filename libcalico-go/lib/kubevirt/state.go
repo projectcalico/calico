@@ -18,8 +18,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type kvIndexers struct {
