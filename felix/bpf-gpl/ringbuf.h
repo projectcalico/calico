@@ -55,13 +55,12 @@ static CALI_BPF_INLINE void ringbuf_bump_drops_at(struct rb_drops_val *val)
 	}
 }
 
-// ringbuf_flush_drops_to emits the accumulated drop count for `val` as a
-// TYPE_LOST_EVENTS event through the ring buffer pointed to by `rb`, at
-// most once every CALI_RB_FLUSH_INTERVAL_NS.  Shared between every ring
-// buffer in this tree (cali_rb_evnt today, cali_rb_l7 from the L7 obs
-// programs) so the rate-limiting and atomic-restore semantics live in
-// one place.  Per-map wrappers handle the typed lookup that a generic
-// helper can't share (the lookup function name is macro-expanded).
+// ringbuf_flush_drops_to emits the accumulated drop count for `val` as an
+// EVENT_LOST_EVENTS event through the ring buffer pointed to by `rb`, at
+// most once every CALI_RB_FLUSH_INTERVAL_NS. Shared between ring buffers
+// so the rate-limiting and atomic-restore semantics live in one place.
+// Per-map wrappers handle the typed lookup that a generic helper can't
+// share (the lookup function name is macro-expanded).
 static CALI_BPF_INLINE void ringbuf_flush_drops_to(void *rb, struct rb_drops_val *val)
 {
 	if (!val) {
