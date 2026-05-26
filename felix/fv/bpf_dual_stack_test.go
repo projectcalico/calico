@@ -409,14 +409,16 @@ func describeBPFDualStackTests(ctlbEnabled, ipv6Dataplane bool) bool {
 			})
 		})
 
-		// External-client → NodePort exercises the BPF nodeport-NAT-then-
-		// encap path on the receiving node. With CTLB enabled, the BPF
-		// kube-proxy on the node that's missing a family's host IP fails
-		// to bring up its listeners ("proxy is not initialized") — a
-		// pre-existing fragility unrelated to this PR that would mask
-		// the encap-drop behaviour we want to codify. Restrict to the
-		// non-CTLB scope; the external-client → nodeport path itself
-		// doesn't depend on CTLB.
+		// CTLB is an intra-cluster connect-time NAT mechanism — by design
+		// it should not apply to external clients. However, the FV
+		// infrastructure attaches the connect-time hook globally, so
+		// when CTLB is enabled in the topology, the external client
+		// container ends up with the CTLB hook attached too. Its
+		// connect() calls then get NodePort-resolved at connect time,
+		// bypassing the BPF nodeport-NAT-then-encap path on the
+		// receiving node that this test exercises. Restrict to the
+		// non-CTLB scope so the external client acts as a real external
+		// client.
 		if !ctlbEnabled {
 			Context("with IPv6 host IP removed from one node only", func() {
 				var (
