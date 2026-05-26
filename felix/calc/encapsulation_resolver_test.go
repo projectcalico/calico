@@ -77,6 +77,15 @@ var _ = Describe("EncapsulationCalculator", func() {
 				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeNever)},
 				nil, nil, nil, nil,
 				false, false, false, true),
+			// An API pool with unset (zero-value) IPIPMode/VXLANMode must behave
+			// identically to one explicitly set to Never, since the v3->v1 syncer
+			// conversion maps both to encap.Never. If this case were skipped at
+			// startup but counted by the calc graph, Felix would restart with
+			// reason="encapsulation changed" on every (re)start.
+			Entry("API pool with unset encap modes (treated as Never)",
+				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPMode(""), apiv3.VXLANMode(""))},
+				nil, nil, nil, nil,
+				false, false, false, true),
 			Entry("API pool with IPIP 'Always'",
 				[]model.KVPair{*getAPIPool("192.168.1.0/24", apiv3.IPIPModeAlways, apiv3.VXLANModeNever)},
 				nil, nil, nil, nil,
@@ -233,11 +242,13 @@ var _ = Describe("EncapsulationCalculator", func() {
 		)
 	})
 	Describe("Invalid IPIPMode and/or VXLANMode", func() {
-		err := encapsulationCalculator.handlePool(*getAPIPool("192.168.11.0/24", "", ""))
-		Expect(err.Error()).To(Equal("invalid IPIPMode \"\" for 192.168.11.0/24"))
+		It("should reject unrecognised modes", func() {
+			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.11.0/24", apiv3.IPIPMode("Garbage"), apiv3.VXLANModeNever))
+			Expect(err).To(MatchError("invalid IPIPMode \"Garbage\" for 192.168.11.0/24"))
 
-		err = encapsulationCalculator.handlePool(*getAPIPool("192.168.12.0/24", apiv3.IPIPModeNever, ""))
-		Expect(err.Error()).To(Equal("invalid VXLANMode \"\" for 192.168.12.0/24"))
+			err = encapsulationCalculator.handlePool(*getAPIPool("192.168.12.0/24", apiv3.IPIPModeNever, apiv3.VXLANMode("Garbage")))
+			Expect(err).To(MatchError("invalid VXLANMode \"Garbage\" for 192.168.12.0/24"))
+		})
 	})
 })
 

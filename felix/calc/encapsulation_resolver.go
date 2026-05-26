@@ -200,26 +200,32 @@ func (c *EncapsulationCalculator) handleAPIPool(p model.KVPair) error {
 		return fmt.Errorf("failed to convert %+v to *model.IPPool", p.Value)
 	}
 
-	// Validate pool's IPIPMode
+	// Validate pool's IPIPMode. An unset value is treated as Never, matching the
+	// v3->v1 syncer conversion in libcalico-go (resources/ippool.go:IPPoolV3ToV1).
+	// Without this, an unset mode would cause this calculator (used at Felix
+	// startup) to skip the pool, while the calc graph (fed by the syncer) would
+	// count it as a no-encap pool — the disagreement would trip the
+	// "encapsulation changed" restart check in daemon.go.
 	switch pool.Spec.IPIPMode {
-	case apiv3.IPIPModeNever:
+	case apiv3.IPIPModeNever, "":
 	case apiv3.IPIPModeAlways:
 	case apiv3.IPIPModeCrossSubnet:
 	default:
 		return fmt.Errorf("invalid IPIPMode \"%v\" for %v", pool.Spec.IPIPMode, pool.Spec.CIDR)
 	}
 
-	// Validate pool's VXLANMode
+	// Validate pool's VXLANMode (unset treated as Never, see comment above).
 	switch pool.Spec.VXLANMode {
-	case apiv3.VXLANModeNever:
+	case apiv3.VXLANModeNever, "":
 	case apiv3.VXLANModeAlways:
 	case apiv3.VXLANModeCrossSubnet:
 	default:
 		return fmt.Errorf("invalid VXLANMode \"%v\" for %v", pool.Spec.VXLANMode, pool.Spec.CIDR)
 	}
 
-	poolKey := pool.Spec.CIDR
-	c.updatePool(poolKey, pool.Spec.IPIPMode != apiv3.IPIPModeNever, pool.Spec.VXLANMode != apiv3.VXLANModeNever)
+	ipipEnabled := pool.Spec.IPIPMode != "" && pool.Spec.IPIPMode != apiv3.IPIPModeNever
+	vxlanEnabled := pool.Spec.VXLANMode != "" && pool.Spec.VXLANMode != apiv3.VXLANModeNever
+	c.updatePool(pool.Spec.CIDR, ipipEnabled, vxlanEnabled)
 
 	return nil
 }
