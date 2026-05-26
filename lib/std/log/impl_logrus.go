@@ -15,6 +15,9 @@
 package log
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -58,10 +61,32 @@ func (l *logrusLogger) Warning(args ...any)                 { l.entry.Warning(ar
 func (l *logrusLogger) Warningf(format string, args ...any) { l.entry.Warningf(format, args...) }
 func (l *logrusLogger) Error(args ...any)                   { l.entry.Error(args...) }
 func (l *logrusLogger) Errorf(format string, args ...any)   { l.entry.Errorf(format, args...) }
-func (l *logrusLogger) Fatal(args ...any)                   { l.entry.Fatal(args...) }
-func (l *logrusLogger) Fatalf(format string, args ...any)   { l.entry.Fatalf(format, args...) }
-func (l *logrusLogger) Panic(args ...any)                   { l.entry.Panic(args...) }
-func (l *logrusLogger) Panicf(format string, args ...any)   { l.entry.Panicf(format, args...) }
+
+// Fatal/Panic methods split logging from termination so static analyzers
+// (notably staticcheck SA5011) can see the terminating call in the wrapper
+// body and treat callers' nil-checks as guaranteed terminators. logrus's
+// Entry.Log/Logf/Logln explicitly do not exit/panic at Fatal/Panic level,
+// leaving us to call os.Exit / panic ourselves.
+
+func (l *logrusLogger) Fatal(args ...any) {
+	l.entry.Log(logrus.FatalLevel, args...)
+	os.Exit(1)
+}
+
+func (l *logrusLogger) Fatalf(format string, args ...any) {
+	l.entry.Logf(logrus.FatalLevel, format, args...)
+	os.Exit(1)
+}
+
+func (l *logrusLogger) Panic(args ...any) {
+	l.entry.Log(logrus.PanicLevel, args...)
+	panic(fmt.Sprint(args...))
+}
+
+func (l *logrusLogger) Panicf(format string, args ...any) {
+	l.entry.Logf(logrus.PanicLevel, format, args...)
+	panic(fmt.Sprintf(format, args...))
+}
 
 // Print/Printf/Println emit at Info level (logrus.Entry.Print* also do this).
 func (l *logrusLogger) Print(args ...any)                 { l.entry.Print(args...) }
@@ -73,8 +98,16 @@ func (l *logrusLogger) Infoln(args ...any)    { l.entry.Infoln(args...) }
 func (l *logrusLogger) Warnln(args ...any)    { l.entry.Warnln(args...) }
 func (l *logrusLogger) Warningln(args ...any) { l.entry.Warningln(args...) }
 func (l *logrusLogger) Errorln(args ...any)   { l.entry.Errorln(args...) }
-func (l *logrusLogger) Fatalln(args ...any)   { l.entry.Fatalln(args...) }
-func (l *logrusLogger) Panicln(args ...any)   { l.entry.Panicln(args...) }
+
+func (l *logrusLogger) Fatalln(args ...any) {
+	l.entry.Logln(logrus.FatalLevel, args...)
+	os.Exit(1)
+}
+
+func (l *logrusLogger) Panicln(args ...any) {
+	l.entry.Logln(logrus.PanicLevel, args...)
+	panic(fmt.Sprintln(args...))
+}
 
 func (l *logrusLogger) WithField(key string, value any) Logger {
 	return &logrusLogger{entry: l.entry.WithField(key, value)}

@@ -79,7 +79,7 @@ func (s *httpServer) ListenAndServeTLS(ctx context.Context) error {
 	}
 
 	go func() {
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 		defer close(s.serverErrs)
 
 		s.serverErrs <- s.srv.ServeTLS(ln, "", "")
@@ -101,7 +101,7 @@ func (s *httpServer) ListenAndServe(ctx context.Context) error {
 
 	s.shutdownCtx = ctx
 	go func() {
-		defer ln.Close()
+		defer func() { _ = ln.Close() }()
 		defer close(s.serverErrs)
 
 		s.serverErrs <- s.srv.Serve(ln)

@@ -30,7 +30,7 @@ func TestRotatingFileFollowsRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newRotatingFile: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if _, err := w.Write([]byte("before-rotate\n")); err != nil {
 		t.Fatalf("first Write: %v", err)
@@ -74,7 +74,7 @@ func TestRotatingFileReopensWhenDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newRotatingFile: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if _, err := w.Write([]byte("before\n")); err != nil {
 		t.Fatalf("first Write: %v", err)

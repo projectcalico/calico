@@ -15,6 +15,7 @@
 package log
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -99,10 +100,31 @@ func Warning(args ...any)                 { defaultLogger.Warning(args...) }
 func Warningf(format string, args ...any) { defaultLogger.Warningf(format, args...) }
 func Error(args ...any)                   { defaultLogger.Error(args...) }
 func Errorf(format string, args ...any)   { defaultLogger.Errorf(format, args...) }
-func Fatal(args ...any)                   { defaultLogger.Fatal(args...) }
-func Fatalf(format string, args ...any)   { defaultLogger.Fatalf(format, args...) }
-func Panic(args ...any)                   { defaultLogger.Panic(args...) }
-func Panicf(format string, args ...any)   { defaultLogger.Panicf(format, args...) }
+
+// Fatal/Panic call os.Exit / panic explicitly so static analyzers (notably
+// staticcheck SA5011) see these wrappers as non-returning. defaultLogger's
+// Fatal/Panic also terminate, so the terminator below is unreachable in
+// practice — but writing it out is what tells the analyzer.
+
+func Fatal(args ...any) {
+	defaultLogger.Fatal(args...)
+	os.Exit(1)
+}
+
+func Fatalf(format string, args ...any) {
+	defaultLogger.Fatalf(format, args...)
+	os.Exit(1)
+}
+
+func Panic(args ...any) {
+	defaultLogger.Panic(args...)
+	panic(fmt.Sprint(args...))
+}
+
+func Panicf(format string, args ...any) {
+	defaultLogger.Panicf(format, args...)
+	panic(fmt.Sprintf(format, args...))
+}
 
 // Stdlib-shaped Print* aliases (emit at Info level).
 func Print(args ...any)                 { defaultLogger.Print(args...) }
@@ -115,8 +137,16 @@ func Infoln(args ...any)    { defaultLogger.Infoln(args...) }
 func Warnln(args ...any)    { defaultLogger.Warnln(args...) }
 func Warningln(args ...any) { defaultLogger.Warningln(args...) }
 func Errorln(args ...any)   { defaultLogger.Errorln(args...) }
-func Fatalln(args ...any)   { defaultLogger.Fatalln(args...) }
-func Panicln(args ...any)   { defaultLogger.Panicln(args...) }
+
+func Fatalln(args ...any) {
+	defaultLogger.Fatalln(args...)
+	os.Exit(1)
+}
+
+func Panicln(args ...any) {
+	defaultLogger.Panicln(args...)
+	panic(fmt.Sprintln(args...))
+}
 
 // SetReportCaller is a no-op for compatibility with logrus call sites.
 // lib/std/log walks the stack itself in the formatter so logrus's own
