@@ -128,21 +128,25 @@ $(CNI_PLUGINS_IMAGE_CREATED): Dockerfile build | register
 # and either pulls + retags it (fast path) or falls through to a real build
 # followed by a push of the hash tag (slow path, after a content change).
 #
+# The push tolerates failure so PR builds from contributors who can't write
+# to the cache registry still pass; scheduled/master builds with credentials
+# warm the cache for subsequent PRs.
+#
 # Used by CI; not typically run by developers.
 .PHONY: image-content-addressed
 image-content-addressed: $(REPO_ROOT)/bin/crane
 	@echo "Probing for cached image $(CNI_PLUGINS_HASH_REF)"
 	@if $(CRANE_CMD) manifest $(CNI_PLUGINS_HASH_REF) >/dev/null 2>&1; then \
-		echo "Cache hit — pulling $(CNI_PLUGINS_HASH_REF)"; \
+		echo "Cache hit - pulling $(CNI_PLUGINS_HASH_REF)"; \
 		docker pull $(CNI_PLUGINS_HASH_REF); \
 		docker tag $(CNI_PLUGINS_HASH_REF) $(CNI_PLUGINS_IMAGE):latest-$(ARCH); \
 		$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest; \
 		touch $(CNI_PLUGINS_IMAGE_CREATED); \
 	else \
-		echo "Cache miss — building image and pushing cache tag"; \
+		echo "Cache miss - building image"; \
 		$(MAKE) image ARCH=$(ARCH); \
 		docker tag $(CNI_PLUGINS_IMAGE):latest-$(ARCH) $(CNI_PLUGINS_HASH_REF); \
-		docker push $(CNI_PLUGINS_HASH_REF); \
+		docker push $(CNI_PLUGINS_HASH_REF) || echo "Cache push skipped (no registry credentials)"; \
 	fi
 
 .PHONY: print-cni-plugins-hash
