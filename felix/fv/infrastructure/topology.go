@@ -227,8 +227,10 @@ func StartNNodeTopology(
 		opts.IPIPMode = api.IPIPModeNever
 	}
 
-	if !opts.SimulateBIRDRoutes {
-		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
+	if opts.SimulateBIRDRoutes {
+		// Tests that pre-program BIRD-style routes from the harness expect
+		// Felix to leave cluster routes alone; the Felix default is Enabled.
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 	}
 
 	// Get client.
