@@ -460,6 +460,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					IPAM:           true,
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
+					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 				},
 				Revision: pool.ResourceVersion,
 			})

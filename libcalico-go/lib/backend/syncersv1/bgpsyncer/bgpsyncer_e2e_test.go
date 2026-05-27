@@ -189,6 +189,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 					IPAM:           true,
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
+					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 				},
 				Revision: pool.ResourceVersion,
 			})
