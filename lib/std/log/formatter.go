@@ -304,8 +304,20 @@ const (
 	minimumCallerDepth = 1
 )
 
+// pcsPool reuses the uintptr slice that backs runtime.Callers, so we don't
+// allocate maxCallerDepth*8 bytes per log emission under load.
+var pcsPool = sync.Pool{
+	New: func() any {
+		s := make([]uintptr, maxCallerDepth)
+		return &s
+	},
+}
+
 func findUserCaller() *runtime.Frame {
-	pcs := make([]uintptr, maxCallerDepth)
+	pcsPtr := pcsPool.Get().(*[]uintptr)
+	pcs := *pcsPtr
+	defer pcsPool.Put(pcsPtr)
+
 	n := runtime.Callers(minimumCallerDepth, pcs)
 	if n == 0 {
 		return nil
