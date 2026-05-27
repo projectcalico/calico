@@ -36,7 +36,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
@@ -46,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -109,27 +109,27 @@ type workload interface {
 
 func (f *Felix) GetFelixPID() int {
 	if f.startupDelayed {
-		logrus.Panic("GetFelixPID() called but startup is delayed")
+		log.Panic("GetFelixPID() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		logrus.Panic("GetFelixPID() called but restart is delayed")
+		log.Panic("GetFelixPID() called but restart is delayed")
 	}
 	return f.GetSinglePID("calico-felix")
 }
 
 func (f *Felix) GetFelixPIDs() []int {
 	if f.startupDelayed {
-		logrus.Panic("GetFelixPIDs() called but startup is delayed")
+		log.Panic("GetFelixPIDs() called but startup is delayed")
 	}
 	if f.restartDelayed {
-		logrus.Panic("GetFelixPIDs() called but restart is delayed")
+		log.Panic("GetFelixPIDs() called but restart is delayed")
 	}
 	return f.GetPIDs("calico-felix")
 }
 
 func (f *Felix) TriggerDelayedStart() {
 	if !f.startupDelayed {
-		logrus.Panic("TriggerDelayedStart() called but startup wasn't delayed")
+		log.Panic("TriggerDelayedStart() called but startup wasn't delayed")
 	}
 	f.Exec("touch", "/start-trigger")
 	f.FlowServerStart()
@@ -137,7 +137,7 @@ func (f *Felix) TriggerDelayedStart() {
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
-	logrus.Info("Starting felix")
+	log.Info("Starting felix")
 	args := infra.GetDockerArgs()
 	args = append(args, "--privileged")
 
@@ -195,10 +195,10 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		if !options.TestManagesBPF {
-			logrus.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
+			log.Info("FELIX_FV_ENABLE_BPF=true, enabling BPF with env var")
 			envVars["FELIX_BPFENABLED"] = "true"
 		} else {
-			logrus.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
+			log.Info("FELIX_FV_ENABLE_BPF=true but test manages BPF state itself, not using env var")
 		}
 
 		if CreateCgroupV2 {
@@ -226,7 +226,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 		if !options.DelayFelixStart {
 			if err := flowServer.Run(); err != nil {
-				logrus.WithError(err).Panic("Failed to start local flow server")
+				log.WithError(err).Panic("Failed to start local flow server")
 			}
 		}
 	}
@@ -234,12 +234,12 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	args = append(args, "-v", fmt.Sprintf("%v:%v", logDir, nodeLogDir))
 
 	if os.Getenv("FELIX_FV_NFTABLES") == "Enabled" {
-		logrus.Info("Enabling nftables with env var")
+		log.Info("Enabling nftables with env var")
 		envVars["FELIX_NFTABLESMODE"] = "Enabled"
 	}
 
 	if strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc" {
-		logrus.Info("Enabling TC with env var")
+		log.Info("Enabling TC with env var")
 		envVars["FELIX_BPFATTACHTYPE"] = "tc"
 	}
 
@@ -334,7 +334,7 @@ func (f *Felix) Stop() {
 	if BPFMode() && !f.PanicExpected {
 		err := f.ExecMayFail("calico-bpf", "connect-time", "clean")
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to clean up BPF connect-time state")
+			log.WithError(err).Warn("Failed to clean up BPF connect-time state")
 		}
 	}
 	if CreateCgroupV2 {
@@ -360,7 +360,7 @@ func (f *Felix) Restart() {
 
 func (f *Felix) RestartWithDelayedStartup() func() {
 	if f.restartDelayed {
-		logrus.Panic("RestartWithDelayedStartup() called but restart was delayed already")
+		log.Panic("RestartWithDelayedStartup() called but restart was delayed already")
 	}
 	oldPID := f.GetFelixPID()
 	f.restartDelayed = true
@@ -373,7 +373,7 @@ func (f *Felix) RestartWithDelayedStartup() func() {
 		defer ginkgo.GinkgoRecover()
 		select {
 		case <-time.After(time.Second * 30):
-			logrus.Panic("Restart with delayed startup timed out after 30s")
+			log.Panic("Restart with delayed startup timed out after 30s")
 		case <-triggerChan:
 			return
 		}
@@ -424,18 +424,18 @@ func (f *Felix) Ready() (bool, error) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		logrus.WithError(err).Error("Forming HTTP request for readiness failed")
+		log.WithError(err).Error("Forming HTTP request for readiness failed")
 		return false, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		logrus.WithError(err).Warn("HTTP GET for readiness failed")
+		log.WithError(err).Warn("HTTP GET for readiness failed")
 		return false, err
 	}
 	ok := resp.StatusCode == http.StatusOK
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logrus.WithError(err).Warn("Failed to read response body")
+		log.WithError(err).Warn("Failed to read response body")
 		return false, err
 	}
 	_ = resp.Body.Close()
@@ -446,7 +446,7 @@ func (f *Felix) Ready() (bool, error) {
 }
 
 func (f *Felix) WaitForReady() {
-	logrus.WithField("felix", f.Name).Info("Waiting for felix to be ready")
+	log.WithField("felix", f.Name).Info("Waiting for felix to be ready")
 	startTime := time.Now()
 	timeout := "10s"
 	if BPFMode() {
@@ -456,7 +456,7 @@ func (f *Felix) WaitForReady() {
 	}
 	EventuallyWithOffset(1, f.Ready, timeout, "100ms").Should(BeTrue(),
 		"Timed out waiting for Felix to become ready.")
-	logrus.WithField("felix", f.Name).Infof("Felix is ready after %s", time.Since(startTime))
+	log.WithField("felix", f.Name).Infof("Felix is ready after %s", time.Since(startTime))
 }
 
 func BPFMode() bool {
@@ -493,7 +493,7 @@ func (f *Felix) ProgramIptablesDNAT(serviceIP, targetIP, chain string, ipv6 bool
 func (f *Felix) FlowServerStart() {
 	if f.flowServer != nil {
 		if err := f.flowServer.Run(); err != nil {
-			logrus.WithError(err).Panic("Failed to start local flow server")
+			log.WithError(err).Panic("Failed to start local flow server")
 		}
 	}
 }

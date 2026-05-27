@@ -18,11 +18,10 @@ import (
 	"maps"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
-
 	apptypes "github.com/projectcalico/calico/app-policy/types"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // PolicyStore is a data store that holds Calico policy information.

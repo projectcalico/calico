@@ -23,8 +23,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/mock"
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const zeroValue = "\x00\x00\x00\x00"
@@ -53,7 +53,7 @@ func (f *failsafeTest) Run(t *testing.T) {
 		mockMap.Contents = f.InitialMapContents
 	}
 
-	opReporter := logutils.NewSummarizer("test")
+	opReporter := log.NewSummarizer("test")
 	mgr := NewManager(mockMap, f.In, f.Out, opReporter, proto.IPVersion(f.IpFamily), keyFromSlice, makeKey)
 
 	err := mgr.CompleteDeferredWork()

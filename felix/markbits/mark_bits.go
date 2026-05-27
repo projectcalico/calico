@@ -18,7 +18,7 @@ import (
 	"errors"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // MarkBitsManager provides set of functions to manage an uint32 mark bits based on a given mark mask.

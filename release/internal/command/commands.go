@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CommandRunner runs the given command. Useful for mocking commands in unit tests.
@@ -60,7 +60,7 @@ func (r *RealCommandRunner) RunInDirToFile(dir, name string, args []string, env 
 	}
 	defer func() {
 		if cerr := f.Close(); cerr != nil {
-			logrus.WithError(cerr).Warnf("Failed to close log file %s", logPath)
+			log.WithError(cerr).Warnf("Failed to close log file %s", logPath)
 		}
 	}()
 	return r.runInDir(dir, name, args, env, f, f)
@@ -81,7 +81,7 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	// parent's stdout/stderr is gated on debug to preserve the previous
 	// quiet default for non-debug runs.
 	//
-	// We deliberately don't pipe through logrus.WriterLevel: it sits on a
+	// We deliberately don't pipe through log.WriterLevel: it sits on a
 	// synchronous io.Pipe whose scanner goroutine bails out on any line longer
 	// than bufio.MaxScanTokenSize, and after that the pipe has no reader and
 	// the next write from the child deadlocks. docker buildx progress output
@@ -89,7 +89,7 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	var outb, errb bytes.Buffer
 	stdoutWriters := []io.Writer{&outb}
 	stderrWriters := []io.Writer{&errb}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
+	if log.IsLevelEnabled(log.DebugLevel) {
 		stdoutWriters = append(stdoutWriters, os.Stdout)
 		stderrWriters = append(stderrWriters, os.Stderr)
 	}
@@ -102,7 +102,7 @@ func (r *RealCommandRunner) runInDir(dir, name string, args, env []string, extra
 	cmd.Stdout = io.MultiWriter(stdoutWriters...)
 	cmd.Stderr = io.MultiWriter(stderrWriters...)
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
 	}).Debugf("Running %s command", name)
@@ -121,7 +121,7 @@ func (r *RealCommandRunner) RunInDirNoCapture(dir, name string, args []string, e
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cmd": cmd.String(),
 		"dir": dir,
 	}).Debugf("Running %s command", name)

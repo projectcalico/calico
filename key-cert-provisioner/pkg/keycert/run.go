@@ -17,19 +17,18 @@ package keycert
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/k8s"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Run performs the certificate provisioning workflow. It creates a CSR, submits it to the
 // Kubernetes API, and waits for it to be signed. It blocks until the certificate is obtained
 // or the context is cancelled.
 func Run(ctx context.Context) {
-	logrus.SetLevel(logrus.InfoLevel)
-	logrus.SetReportCaller(true)
+	log.SetLevel(log.InfoLevel)
+	log.SetReportCaller(true)
 
 	config := cfg.GetConfigOrDie()
 	ctx, cancel := context.WithTimeout(ctx, config.TimeoutDuration)
@@ -39,28 +38,28 @@ func Run(ctx context.Context) {
 	go func() {
 		restClient, err := k8s.NewRestClient()
 		if err != nil {
-			logrus.WithError(err).Fatal("Unable to create a kubernetes rest client")
+			log.WithError(err).Fatal("Unable to create a kubernetes rest client")
 		}
 
 		csr, err := tls.CreateX509CSR(config)
 		if err != nil {
-			logrus.WithError(err).Fatal("Unable to create x509 certificate request")
+			log.WithError(err).Fatal("Unable to create x509 certificate request")
 		}
 
 		if err := k8s.SubmitCSR(ctx, config, restClient.Clientset, csr); err != nil {
-			logrus.WithError(err).Fatal("Unable to submit a CSR")
+			log.WithError(err).Fatal("Unable to submit a CSR")
 		}
 
 		if err := k8s.WatchAndWriteCSR(ctx, restClient.Clientset, config, csr); err != nil {
-			logrus.WithError(err).Fatal("Unable to watch or write a CSR")
+			log.WithError(err).Fatal("Unable to watch or write a CSR")
 		}
 		done <- true
 	}()
 
 	select {
 	case <-done:
-		logrus.Info("successfully obtained a certificate")
+		log.Info("successfully obtained a certificate")
 	case <-ctx.Done():
-		logrus.Fatal("timeout expired, exiting program with exit code 1")
+		log.Fatal("timeout expired, exiting program with exit code 1")
 	}
 }

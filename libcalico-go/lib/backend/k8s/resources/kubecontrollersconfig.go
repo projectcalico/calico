@@ -19,8 +19,9 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (

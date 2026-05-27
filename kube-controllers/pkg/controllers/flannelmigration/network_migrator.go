@@ -20,10 +20,10 @@ import (
 	"strconv"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
