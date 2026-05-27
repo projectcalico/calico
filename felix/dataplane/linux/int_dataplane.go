@@ -649,16 +649,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var routeTableV4 routetable.Interface
 	var routeTableV6 routetable.Interface
+	var mainTablePolV4 *ownershippol.MainTableOwnershipPolicy
+	var mainTablePolV6 *ownershippol.MainTableOwnershipPolicy
 
 	if !config.RouteSyncDisabled {
 		log.Debug("Route management is enabled.")
+		mainTablePolV4 = ownershippol.NewMainTable(
+			dataplanedefs.VXLANIfaceNameV4,
+			config.DeviceRouteProtocol,
+			config.RulesConfig.WorkloadIfacePrefixes,
+			config.RemoveExternalRoutes,
+		)
 		routeTableV4 = routetable.New(
-			ownershippol.NewMainTable(
-				dataplanedefs.VXLANIfaceNameV4,
-				config.DeviceRouteProtocol,
-				config.RulesConfig.WorkloadIfacePrefixes,
-				config.RemoveExternalRoutes,
-			),
+			mainTablePolV4,
 			4,
 			config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress,
@@ -672,13 +675,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 		)
 		if config.IPv6Enabled {
+			mainTablePolV6 = ownershippol.NewMainTable(
+				dataplanedefs.VXLANIfaceNameV6,
+				config.DeviceRouteProtocol,
+				config.RulesConfig.WorkloadIfacePrefixes,
+				config.RemoveExternalRoutes,
+			)
 			routeTableV6 = routetable.New(
-				ownershippol.NewMainTable(
-					dataplanedefs.VXLANIfaceNameV6,
-					config.DeviceRouteProtocol,
-					config.RulesConfig.WorkloadIfacePrefixes,
-					config.RemoveExternalRoutes,
-				),
+				mainTablePolV6,
 				6,
 				config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6,
@@ -1184,6 +1188,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
 	dp.liveMigrationMonitor.listener = epManager
+	if mainTablePolV4 != nil {
+		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
+	}
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
@@ -1374,7 +1381,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
-		dp.RegisterManager(newEndpointManager(
+		epManagerV6 := newEndpointManager(
 			&endpointManagerConfig{
 				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
 				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
@@ -1400,7 +1407,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			linkAddrsManagerV6,
 			nil, // arpTable - ARP is IPv4 only
 			nil, // arpMaps
-		))
+		)
+		dp.RegisterManager(epManagerV6)
+		if mainTablePolV6 != nil {
+			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
+		}
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))

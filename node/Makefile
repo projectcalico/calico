@@ -24,9 +24,7 @@ LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 ## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
 BUILD_DEPS = $(LIBBPF_A) \
-	     filesystem/usr/lib/calico/bpf \
-	     filesystem/etc/calico/confd/conf.d \
-	     filesystem/etc/calico/confd/templates
+	     filesystem/usr/lib/calico/bpf
 
 ## IMAGE_DEPS lists non-Go files the calico/node image depends on.
 IMAGE_DEPS = ./Dockerfile $(BUILD_DEPS)
@@ -181,15 +179,6 @@ clean-windows: clean-windows-builder
 ###############################################################################
 build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 
-# Pull in config from confd.
-filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/conf.d $@
-	chmod +w $@
-
-filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
-	chmod +w $@
-
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
@@ -279,7 +268,8 @@ image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
 # so buildkit sources it from the local daemon (avoiding `--pull=always`
 # trying to fetch it from a registry where it may not have been pushed yet).
 .PHONY: nft-rpms-image
-nft-rpms-image:
+# `| register` so binfmt is set up before cross-arch buildx.
+nft-rpms-image: | register
 	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
 
 # Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the

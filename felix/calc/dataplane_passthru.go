@@ -33,23 +33,20 @@ import (
 // with the rest of the dataplane API.
 //
 // HostMetadataUpdate is sourced from the v3 Node resource: BGP IPv4/IPv6 plus labels and ASN.
-// IPv4 falls back to the Node's address list (Internal preferred, External as backup) whenever
-// BGP doesn't supply one — mirroring the old felixnodeprocessor logic that previously fed the
-// retired HostIPKey channel. IPv6 falls back to the address list only when BGP is absent.
+// IPv4/IPv6 falls back to the Node's address list (Internal preferred, External as backup) whenever
+// BGP doesn't supply one.
 type DataplanePassthru struct {
-	ipv6Support bool
-	callbacks   passthruCallbacks
+	callbacks passthruCallbacks
 
 	// nodeInfo is the per-host info derived from a Node resource. A non-nil entry
 	// means the Node resource currently exists for that host.
 	nodeInfo map[string]*HostInfo
 }
 
-func NewDataplanePassthru(callbacks passthruCallbacks, ipv6Support bool) *DataplanePassthru {
+func NewDataplanePassthru(callbacks passthruCallbacks) *DataplanePassthru {
 	return &DataplanePassthru{
-		ipv6Support: ipv6Support,
-		callbacks:   callbacks,
-		nodeInfo:    map[string]*HostInfo{},
+		callbacks: callbacks,
+		nodeInfo:  map[string]*HostInfo{},
 	}
 }
 
@@ -132,62 +129,65 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 		return
 	}
 
-	info := &HostInfo{labels: node.Labels}
-	if bgpSpec != nil {
-		// BGP IPv4Address/IPv6Address must already be in CIDR form per the v3
-		// CRD validation (`cidrv4`/`cidrv6` tags). Bare IPs are dropped silently
-		// here so the dataplane never sees an ambiguous address.
-		if addr := bgpSpec.IPv4Address; addr != "" {
-			if s, ok := parseCIDR(addr); ok {
-				info.ip4Addr = s
-			} else {
-				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv4Address: not a CIDR")
-			}
-		}
-		if addr := bgpSpec.IPv6Address; addr != "" {
-			if s, ok := parseCIDR(addr); ok {
-				info.ip6Addr = s
-			} else {
-				logrus.WithField("addr", addr).Warn("Ignoring Node BGP IPv6Address: not a CIDR")
-			}
-		}
-		if node.Spec.BGP.ASNumber != nil {
-			info.asnumber = node.Spec.BGP.ASNumber.String()
-		}
-	}
-	// If BGP didn't supply an IPv4 address, fall back to the Node's address
-	// list. This applies whether BGP is nil or BGP is set without an
-	// IPv4Address — matching the legacy felixnodeprocessor behaviour that fed
-	// the retired HostIPKey channel.
-	if info.ip4Addr == "" {
-		ipv4, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 4)
-		if ipnet == nil {
-			ipv4, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 4)
-		}
-		if ipnet != nil {
-			ipnet.IP = ipv4.IP
-			info.ip4Addr = ipnet.String()
-		}
-	}
-	// IPv6 fallback only fires when BGP is absent, preserving the historical
-	// asymmetry: IPv4 had a backup channel (HostIPKey) but IPv6 did not, so
-	// the Address list was only consulted for IPv6 when BGP itself was nil.
-	if bgpSpec == nil && h.ipv6Support {
-		ipv6, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, 6)
-		if ipnet == nil {
-			ipv6, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, 6)
-		}
-		if ipnet != nil {
-			ipnet.IP = ipv6.IP
-			info.ip6Addr = ipnet.String()
-		}
+	info := &HostInfo{
+		labels:  node.Labels,
+		ip4Addr: extractNodeAddress(node, 4),
+		ip6Addr: extractNodeAddress(node, 6),
 	}
 
+	if node.Spec.BGP != nil && node.Spec.BGP.ASNumber != nil {
+		info.asnumber = node.Spec.BGP.ASNumber.String()
+	}
 	h.nodeInfo[hostname] = info
+
 	if before != nil && before.equals(info) {
 		return
 	}
 	h.callbacks.OnHostMetadataUpdate(hostname, info)
+}
+
+// extractNodeAddress returns the IPv4/6 host address for a Node resource, preferring
+// the BGP IPv4/6Address and falling back to the Node's InternalIP/ExternalIP.
+func extractNodeAddress(node *internalapi.Node, ipVersion int) string {
+	if node == nil {
+		return ""
+	}
+
+	bgpSpec := node.Spec.BGP
+	if bgpSpec != nil {
+		// BGP IPv4/6Address must already be in CIDR form per the v3
+		// CRD validation (`cidrv4`/`cidrv6` tags). Bare IPs are dropped silently
+		// here so the dataplane never sees an ambiguous address.
+		var addr string
+		if ipVersion == 6 {
+			addr = bgpSpec.IPv6Address
+		} else {
+			addr = bgpSpec.IPv4Address
+		}
+		if addr != "" {
+			if s, ok := parseCIDR(addr); ok {
+				return s
+			}
+			logrus.WithFields(logrus.Fields{
+				"ipVersion": ipVersion,
+				"address":   addr,
+			}).Warn("Ignoring Node BGP address: not a CIDR")
+		}
+	}
+
+	// Fallback path.
+	// If BGP didn't supply an address, fall back to the Node's address
+	// list. This applies whether BGP is nil or BGP is set without an IPv4/6Address.
+	ip, ipnet := cresources.FindNodeAddress(node, internalapi.InternalIP, ipVersion)
+	if ipnet == nil {
+		ip, ipnet = cresources.FindNodeAddress(node, internalapi.ExternalIP, ipVersion)
+	}
+	if ipnet != nil {
+		ipnet.IP = ip.IP
+		return ipnet.String()
+	}
+
+	return ""
 }
 
 // parseCIDR strictly parses a CIDR string and returns it normalized to "host

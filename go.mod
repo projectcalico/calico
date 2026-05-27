@@ -2,6 +2,8 @@ module github.com/projectcalico/calico
 
 go 1.26.3
 
+tool golang.org/x/tools/cmd/goimports
+
 require (
 	cloud.google.com/go/storage v1.62.1
 	github.com/BurntSushi/toml v1.6.0
@@ -68,7 +70,7 @@ require (
 	github.com/safchain/ethtool v0.7.0
 	github.com/shirou/gopsutil/v4 v4.26.3
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.22.0
+	github.com/slack-go/slack v0.23.1
 	github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
@@ -137,6 +139,7 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260508192327-42602be52be6 // indirect
 	k8s.io/cli-runtime v0.36.1 // indirect
 	k8s.io/cri-streaming v0.0.0 // indirect
 	k8s.io/streaming v0.36.1 // indirect
