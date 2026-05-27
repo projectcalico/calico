@@ -110,6 +110,7 @@ local:libcalico-go/lib/debugserver
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/health
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/prometheus
