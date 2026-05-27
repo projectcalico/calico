@@ -7,6 +7,13 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# Keep literal `KEY=value` form (no spaces, no `?=`); Renovate regex + operator's
+# update-envoy-gateway-resources both parse this line.
+# Renovate only bumps this version, and patch releases only. On any bump,
+# especially a minor, manually verify the Envoy Gateway compatibility
+# matrix (https://gateway.envoyproxy.io/news/releases/matrix/) and update the
+# matching envoy-proxy (ENVOYBINARY_IMAGE) and envoy-ratelimit
+# (ENVOY_RATELIMIT_VERSION) pins; Renovate does not track those.
 ENVOY_GATEWAY_VERSION=v1.7.2
 
 ##############################################################################
@@ -57,6 +64,32 @@ clean:
 	rm -f .envoy-gateway.* .*.created* .*.published* .release.*
 	rm -fr bin/ envoy-gateway/
 	-docker image rm -f $$(docker images $(ENVOY_GATEWAY_IMAGE) -a -q)
+
+##############################################################################
+# Helm-rendered manifests
+#
+# gateway_api_resources.yaml is the bundle of resources tigera/operator consumes
+# (via //go:embed). Operator's update-envoy-gateway-resources target copies this
+# file from a calico clone, keeping the helm-template recipe, the image build,
+# and the CVE patch set in lockstep at a single version pin.
+##############################################################################
+ENVOY_GATEWAY_HELM_CHART ?= oci://docker.io/envoyproxy/gateway-helm
+ENVOY_GATEWAY_PREFIX ?= tigera-gateway-api
+ENVOY_GATEWAY_NAMESPACE ?= tigera-gateway
+ENVOY_GATEWAY_RESOURCES ?= gateway_api_resources.yaml
+
+.PHONY: gen-gateway-api-resources
+gen-gateway-api-resources: bin/helm
+	echo "---" > $(ENVOY_GATEWAY_RESOURCES)
+	echo "apiVersion: v1" >> $(ENVOY_GATEWAY_RESOURCES)
+	echo "kind: Namespace" >> $(ENVOY_GATEWAY_RESOURCES)
+	echo "metadata:" >> $(ENVOY_GATEWAY_RESOURCES)
+	echo "  name: $(ENVOY_GATEWAY_NAMESPACE)" >> $(ENVOY_GATEWAY_RESOURCES)
+	bin/helm template $(ENVOY_GATEWAY_PREFIX) $(ENVOY_GATEWAY_HELM_CHART) \
+		--version $(ENVOY_GATEWAY_VERSION) \
+		-n $(ENVOY_GATEWAY_NAMESPACE) \
+		--include-crds \
+	>> $(ENVOY_GATEWAY_RESOURCES)
 
 ##############################################################################
 # Image
