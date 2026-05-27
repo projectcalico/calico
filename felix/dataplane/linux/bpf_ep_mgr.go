@@ -91,6 +91,7 @@ import (
 
 const (
 	bpfEPManagerHealthName = "BPFEndpointManager"
+	bpfHostIPHealthName    = "BPFHostIP"
 )
 
 var (
@@ -429,6 +430,14 @@ type bpfEndpointManagerDataplane struct {
 	hostIP   net.IP
 	mgr      *bpfEndpointManager
 
+	// hostIPPresent reflects whether the calc graph currently reports
+	// a host IP of this family for our Node. It is independent from
+	// hostIP, which may be a cached last-known value after the Node
+	// has been deleted; presence drives the BPFHostIP readiness
+	// reporter only.
+	hostIPPresent     bool
+	hostIPAbsentSince time.Time
+
 	ifaceToIpMap map[string]net.IP
 
 	// IP of the tunnel / overlay device
@@ -638,6 +647,16 @@ func NewBPFEndpointManager(
 		healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
 			Ready:  false,
 			Detail: "Not yet synced.",
+		})
+		healthAggregator.RegisterReporter(bpfHostIPHealthName, &health.HealthReport{
+			Ready: true,
+			Live:  false,
+		}, 0)
+		// Start out not-ready: we have not heard from the calc graph
+		// yet, so we don't know whether the local Node has a host IP.
+		healthAggregator.Report(bpfHostIPHealthName, &health.HealthReport{
+			Ready:  false,
+			Detail: "Host IP not yet known.",
 		})
 	}
 
@@ -878,41 +897,59 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
+// updateHostIP applies a host IP change received from the calc graph.
+//
+// `ipAddr` may be empty when the calc graph signals that the local
+// Node still exists but its address for this family has been removed
+// — we clear the cached host IP and mark interfaces dirty so BPF
+// programs re-attach with HOST_IP=0 (failsafes still work; VXLAN
+// encap drops with CALI_REASON_NO_HOST_IP). The Node-deleted case is
+// handled separately by the *proto.HostMetadataRemove path which
+// keeps the cached host IP so that already-established connectivity
+// survives a Felix restart while the Node is missing.
 func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
-	ip, _, err := net.ParseCIDR(ipAddr)
-	if err != nil {
-		ip = net.ParseIP(ipAddr)
+	var ip net.IP
+	if ipAddr != "" {
+		var err error
+		ip, _, err = net.ParseCIDR(ipAddr)
+		if err != nil {
+			ip = net.ParseIP(ipAddr)
+		}
+		if ip == nil {
+			logrus.WithField("ipAddr", ipAddr).Warn("Cannot parse host IP, no change applied")
+			return
+		}
 	}
-	if ip != nil {
-		if ipFamily == 4 {
-			if m.v4.hostIP.Equal(ip) {
-				return
-			}
-			m.v4.hostIP = ip
-		} else {
-			if m.v6.hostIP.Equal(ip) {
-				return
-			}
-			m.v6.hostIP = ip
-		}
-		// Should be safe without the lock since there shouldn't be any active background threads
-		// but taking it now makes us robust to refactoring.
-		m.ifacesLock.Lock()
-		for ifaceName := range m.nameToIface {
-			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-				iface.dpState.v4Readiness = ifaceNotReady
-				iface.dpState.v6Readiness = ifaceNotReady
-				return true
-			})
-		}
-		m.ifacesLock.Unlock()
-		// We use host IP as the source when routing service for the ctlb workaround. We
-		// need to update those routes, so make them all dirty.
-		for svc := range m.services {
-			m.dirtyServices.Add(svc)
-		}
+	var current net.IP
+	if ipFamily == 4 {
+		current = m.v4.hostIP
 	} else {
-		logrus.Warn("Cannot parse hostip, no change applied")
+		current = m.v6.hostIP
+	}
+	if current.Equal(ip) {
+		return
+	}
+	if ipFamily == 4 {
+		m.v4.hostIP = ip
+	} else {
+		m.v6.hostIP = ip
+	}
+	m.setHostIPPresence(ipFamily, ip != nil)
+	// Should be safe without the lock since there shouldn't be any active background threads
+	// but taking it now makes us robust to refactoring.
+	m.ifacesLock.Lock()
+	for ifaceName := range m.nameToIface {
+		m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+			iface.dpState.v4Readiness = ifaceNotReady
+			iface.dpState.v6Readiness = ifaceNotReady
+			return true
+		})
+	}
+	m.ifacesLock.Unlock()
+	// We use host IP as the source when routing service for the ctlb workaround. We
+	// need to update those routes, so make them all dirty.
+	for svc := range m.services {
+		m.dirtyServices.Add(svc)
 	}
 }
 
@@ -954,6 +991,25 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 		if m.v6 != nil {
 			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
 			m.updateHostIP(msg.Ipv6Addr, 6)
+		}
+	case *proto.HostMetadataRemove:
+		if msg.Hostname != m.hostname {
+			break
+		}
+		// Local Node metadata has gone away (Node deleted, or BGP spec
+		// removed). Deliberately keep the last-known host IP in the BPF
+		// programs: tearing through a rebuild here would race with the
+		// SIGTERM that often follows the Node delete (pod GC kills
+		// calico-node), and the pinned BPF programs survive a Felix
+		// restart so node-level connectivity is preserved. Only the
+		// readiness signal reflects the missing Node.
+		logrus.WithField("hostname", msg.Hostname).Info(
+			"Local host metadata removed (Node deleted); keeping last-known host IP in BPF programs, marking readiness degraded.")
+		if m.v4 != nil {
+			m.setHostIPPresence(4, false)
+		}
+		if m.v6 != nil {
+			m.setHostIPPresence(6, false)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
@@ -1987,6 +2043,82 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 	})
 }
 
+// setHostIPPresence records whether the calc graph currently reports a host
+// IP of the given family. It updates the BPFHostIP readiness signal but
+// does not touch the cached d.hostIP that the dataplane uses to program
+// BPF globals — the two are deliberately decoupled so that the dataplane
+// can keep using the last-known host IP after Node deletion while
+// readiness reflects the missing Node.
+func (m *bpfEndpointManager) setHostIPPresence(ipFamily int, present bool) {
+	var d *bpfEndpointManagerDataplane
+	if ipFamily == 4 {
+		d = m.v4
+	} else {
+		d = m.v6
+	}
+	if d == nil {
+		return
+	}
+	if d.hostIPPresent == present {
+		return
+	}
+	d.hostIPPresent = present
+	if present {
+		d.hostIPAbsentSince = time.Time{}
+	} else {
+		d.hostIPAbsentSince = time.Now()
+	}
+	m.reportHostIPHealth()
+}
+
+// reportHostIPHealth computes the BPFHostIP readiness signal from the
+// current per-family presence state. The rule:
+//   - IPv6 disabled: require an IPv4 host IP.
+//   - IPv6 enabled (always implies IPv4 also enabled): require at least
+//     one of IPv4 or IPv6.
+//
+// If a configured family is missing, Detail names it and records when
+// it went absent (RFC3339 UTC) so operators can correlate with their
+// own change history.
+func (m *bpfEndpointManager) reportHostIPHealth() {
+	if m.healthAggregator == nil {
+		return
+	}
+	v4Present := m.v4 != nil && m.v4.hostIPPresent
+	v6Present := m.v6 != nil && m.v6.hostIPPresent
+
+	var ready bool
+	if m.v6 == nil {
+		ready = v4Present
+	} else {
+		ready = v4Present || v6Present
+	}
+
+	var detail string
+	if !ready {
+		var parts []string
+		if m.v4 != nil && !m.v4.hostIPPresent {
+			parts = append(parts, hostIPAbsenceDetail("IPv4", m.v4.hostIPAbsentSince))
+		}
+		if m.v6 != nil && !m.v6.hostIPPresent {
+			parts = append(parts, hostIPAbsenceDetail("IPv6", m.v6.hostIPAbsentSince))
+		}
+		detail = "Host IP unknown: " + strings.Join(parts, "; ") +
+			" (BPF programs continue running with last-known host IP if any)."
+	}
+	m.healthAggregator.Report(bpfHostIPHealthName, &health.HealthReport{
+		Ready:  ready,
+		Detail: detail,
+	})
+}
+
+func hostIPAbsenceDetail(family string, since time.Time) string {
+	if since.IsZero() {
+		return family + " not yet known"
+	}
+	return family + " unknown since " + since.UTC().Format(time.RFC3339)
+}
+
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
 	var (
 		err     error
@@ -2097,33 +2229,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		return state, xdpErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	return state, errors.Join(err4, err6)
@@ -2775,33 +2885,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	if errors.Join(err4, err6) != nil {
@@ -2908,10 +2996,12 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
+	// d.hostIP may be nil when the local node's IP isn't known yet (e.g.
+	// the Node resource was deleted or its IP was patched out). The
+	// attach pipeline handles a nil HostIPv*: globalData.HostIPv* stays
+	// at zero, and the BPF datapath drops the few features that need
+	// HOST_IP (VXLAN encap source) with CALI_REASON_NO_HOST_IP. Re-attach
+	// is triggered when host IP becomes known via updateHostIP.
 
 	indices := state.v4
 	if d.ipFamily == proto.IPVersion_IPV6 {
@@ -3085,11 +3175,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
-
+	// See wepApplyPolicyToDirection for why nil hostIP is allowed here.
 	ap = d.configureTCAttachPoint(polDirection, ap, true)
 
 	ip, err := d.getInterfaceIP(ifaceName)
