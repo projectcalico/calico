@@ -69,7 +69,7 @@ assuming the field was always populated.
 
 **Review notes**
 
-- Two-phase `pending → confirmed` is intentional - it's what makes claim races resolvable. Don't optimise it away.
+- Two-phase `pending → confirmed` is intentional - it's what makes claim races resolvable. Don't optimize it away.
 - Treat `pending` affinities as if absent. https://github.com/projectcalico/calico/pull/6003, https://github.com/projectcalico/calico/issues/1712.
 - Pre-existing rows lack `AffinityType`; default to `"host"` on read.
 - The state machine is library-enforced, not CRD-enforced. New transitions must go through `ipam_block_reader_writer.go`, not a direct `Update`.
@@ -180,14 +180,14 @@ mirrored in the affinity and handle wrappers:
 
 Guarantees:
 
-- After step 1 returns success: a *filtering* reader sees the row as absent on any subsequent read. Step 1's CAS is what serialises against concurrent writers.
+- After step 1 returns success: a *filtering* reader sees the row as absent on any subsequent read. Step 1's CAS is what serializes against concurrent writers.
 - After step 2: the row is gone; watch consumers see a delete event.
 - Between steps: the row physically exists with `Deleted=true`. **Readers must filter `Deleted=true` client-side.** A reader that skips the filter sees stale rows and races the hard delete.
 
 `Deleted` is stored as `bool` in v3 CRDs and as string `"true"` /
 `"false"` in v1; `ConvertFromK8s` in
 [`ipam_affinity_v3.go`](../../../libcalico-go/lib/backend/k8s/resources/ipam_affinity_v3.go)
-normalises.
+normalizes.
 
 **Review notes**
 

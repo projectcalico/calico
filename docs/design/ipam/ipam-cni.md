@@ -79,7 +79,7 @@ inside `cni-plugin/pkg/k8s/k8s.go` before this flow - see
 
 - KubeVirt VM persistence relies on the handle ID being VM-scoped, not pod-scoped. Don't fold the two handle paths together.
 - `MaxBlocksPerHost = 1` for `WindowsUseSingleNetwork` is load-bearing - Windows can't route remote affinity blocks.
-- Pool resolution is hot path. `ResolvePools` was hand-optimised in https://github.com/projectcalico/calico/pull/9891; preserve the fast path.
+- Pool resolution is hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891; preserve the fast path.
 - Don't log `stdinData` - it may contain `K8sAuthToken` / `K8sClientKey`. See `cni-plugin/pkg/k8s/k8s.go`.
 
 ## DEL flow
@@ -164,7 +164,7 @@ Behavioural differences:
 
 - Don't relax `StrictAffinity=true` on Windows without a routing story - the local affinity blocks are the only ones Windows can program.
 - The reserved-handle name is literal and parsed elsewhere; don't rename it.
-- New IPAM behaviour added in `ipam_plugin.go` needs to be tested on Windows or explicitly scoped to Linux. The two code paths share most of the file.
+- New IPAM behavior added in `ipam_plugin.go` needs to be tested on Windows or explicitly scoped to Linux. The two code paths share most of the file.
 
 ## Dual-stack
 
@@ -192,7 +192,7 @@ the duration of the ADD (or DEL) call.
 
 What it protects against: two `calico-ipam` invocations on the
 same node racing each other. CAS on `IPAMBlock` would technically
-serialise the persisted state, but pre-allocation work (resolving
+serialize the persisted state, but pre-allocation work (resolving
 pools, choosing a block, claiming a fresh affinity) is multi-step
 and the second invocation would otherwise waste a full retry
 budget bouncing off the first. Holding the lock single-flights
@@ -208,7 +208,7 @@ landed in https://github.com/projectcalico/calico/pull/11824.
 **Review notes**
 
 - Lock first, then start the timeout. The clock starts after `acquireIPAMLockBestEffort` returns, not before.
-- The lock is best-effort: if acquisition fails (permissions, missing dir) the function logs and returns a no-op unlock so allocation proceeds. Don't promote this to a hard failure - the CAS layer is still correct, the lock is a contention optimisation.
+- The lock is best-effort: if acquisition fails (permissions, missing dir) the function logs and returns a no-op unlock so allocation proceeds. Don't promote this to a hard failure - the CAS layer is still correct, the lock is a contention optimization.
 - The lock is host-local. It doesn't protect against another node racing for the same block; the BlockAffinity two-phase claim does that.
 - Don't take the lock around the libcalico client construction or other slow setup. Hold it only across the allocation call.
 

@@ -13,7 +13,7 @@ applyTo:
 # IPAM
 
 Architecture, invariants, data model, allocation flow, GC
-behaviour, and per-section review criteria for Calico IPAM live
+behavior, and per-section review criteria for Calico IPAM live
 under [`docs/design/ipam/`](../../docs/design/ipam/), indexed by
 [`docs/design/ipam/DESIGN.md`](../../docs/design/ipam/DESIGN.md).
 IPAM is cross-component (`libcalico-go/lib/ipam`, `cni-plugin`,
@@ -38,7 +38,7 @@ invariant a sub-design records - must update the relevant file
 under `docs/design/ipam/` in the same PR.
 
 **Exemption.** No doc update is needed if the PR is exclusively
-one of: (a) a bug fix that restores behaviour the doc already
+one of: (a) a bug fix that restores behavior the doc already
 describes, (b) a mechanical refactor with no observable change,
 (c) comment / log-message edits, (d) a dependency bump. If in
 doubt, update the doc.
@@ -49,7 +49,7 @@ The Copilot automated code-review step is read-only with respect
 to the PR branch - it cannot push the doc amendment itself. When
 the review flags a missing update per the rule above, its
 comment should include a ready-to-paste `@copilot` prompt naming
-the sub-design and the new behaviour or invariant, for example:
+the sub-design and the new behavior or invariant, for example:
 
 > `@copilot update docs/design/ipam/ipam-gc.md "Reconciliation" to cover the new confirmation-pass step before releasing a suspected leaked allocation - what triggers it, what it checks, and how it interacts with the existing grace period.`
 

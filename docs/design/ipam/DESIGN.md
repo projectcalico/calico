@@ -40,7 +40,7 @@ https://github.com/projectcalico/calico/issues/6412.
 
 ### Why blocks, and why per-host affinity
 
-**Blocks** exist to amortise the datastore round-trip cost. Allocating
+**Blocks** exist to amortize the datastore round-trip cost. Allocating
 one IP per pod against a cluster-wide bitmap would put every pod
 creation on the same CAS contention point. A block batches a /26 of
 ordinals into a single object, so most allocations are CAS on one
@@ -117,7 +117,7 @@ absence as "read the code and ask"; don't assume anything goes.
   must update the relevant sub-design in this directory in the
   same PR. This index is also updated when the sub-design table,
   an `applies to` scope, or §1's architecture overview changes.
-  Exemptions: (a) a bug fix that restores behaviour the doc
+  Exemptions: (a) a bug fix that restores behavior the doc
   already describes, (b) a mechanical refactor with no observable
   change, (c) comment or log-message edits, (d) dependency bumps.
   If in doubt, update. The path-scoped

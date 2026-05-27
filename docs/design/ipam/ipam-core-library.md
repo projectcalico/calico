@@ -63,10 +63,10 @@ it owns.
 
 **Review notes**
 
-- The `pending -> confirmed` two-phase claim is intentional; don't "optimise" it away. It's what makes claim races resolvable. See https://github.com/projectcalico/calico/pull/6003, https://github.com/projectcalico/calico/pull/1712.
+- The `pending -> confirmed` two-phase claim is intentional; don't "optimize" it away. It's what makes claim races resolvable. See https://github.com/projectcalico/calico/pull/6003, https://github.com/projectcalico/calico/pull/1712.
 - Treat pending block affinities as if absent when deciding ownership or advertising routes.
 - Pre-existing blocks may lack `AffinityType`; default to `"host"` on read. https://github.com/projectcalico/calico/pull/11179 was a crash from this assumption.
-- Pool resolution is in the hot path. `ResolvePools` was hand-optimised in https://github.com/projectcalico/calico/pull/9891 - preserve the fast path.
+- Pool resolution is in the hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891 - preserve the fast path.
 - `MaxBlocksPerHost` defaults are a recurring doc/code drift point (https://github.com/projectcalico/calico/issues/9462). If you change the default in code, update the docs in the same PR.
 
 ## CAS retry and sequence numbers
@@ -151,7 +151,7 @@ Fields:
 
 **Review notes**
 
-- The default-when-missing behaviour is load-bearing. New required fields need a default plus heal-forward; don't add a field that crashes when absent.
+- The default-when-missing behavior is load-bearing. New required fields need a default plus heal-forward; don't add a field that crashes when absent.
 - `MaxBlocksPerHost > 0` only makes sense with `StrictAffinity=true`; the validator enforces this. If you relax the validator, you also need to define what "borrow blocks but cap our own" means - it currently isn't defined.
 - Operator owns `SetIPAMConfig` in production. New fields surface through the operator API too, or they're not usable.
 
@@ -177,7 +177,7 @@ and at the top of `ipam.go`. The ones callers care about:
 **Review notes**
 
 - `mustBeEmpty=true` on `ReleaseBlockAffinity` is a hard precondition. The caller verifies emptiness; the GC's two-consecutive-empty-observations check is what gates this.
-- A new release code path that catches `ErrorBadSequenceNumber` and proceeds anyway defeats the protocol. The right behaviour is to skip and re-evaluate.
+- A new release code path that catches `ErrorBadSequenceNumber` and proceeds anyway defeats the protocol. The right behavior is to skip and re-evaluate.
 - Internal sentinel errors (`noFreeBlocksError`, `errBlockClaimConflict`, `errStaleAffinity`) are not part of the public API. Don't return them to callers; translate to the exported `Err*` values.
 
 ## Keep in sync with
