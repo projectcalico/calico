@@ -44,7 +44,11 @@ func init() {
 	defer stateMu.Unlock()
 	currentFormatter = newFormatter("")
 	logrus.SetFormatter(currentFormatter)
-	logrus.SetOutput(os.Stdout)
+	// Match logrus's default. CNI plugins and other tools that emit
+	// structured output on stdout depend on this. Components that prefer
+	// stdout (e.g. those whose stdout is captured by kubelet) can call
+	// SetOutput or go through Configure.
+	logrus.SetOutput(os.Stderr)
 	// We do our own caller walking in the formatter so logrus's own
 	// detection is not needed.
 	logrus.SetReportCaller(false)
