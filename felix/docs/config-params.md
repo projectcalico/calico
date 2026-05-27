@@ -1170,18 +1170,18 @@ like Application layer policy.
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
 Controls how a cluster node gets a route to a workload on another node,
-when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.
+when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
+Felix programs that route. When ProgramClusterRoutes is Disabled, it is expected that confd and BIRD will
+program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ProgramClusterRoutes` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Disabled` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| Default value (YAML) | `Enabled` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 
