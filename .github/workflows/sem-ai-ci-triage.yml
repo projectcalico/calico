@@ -3,17 +3,14 @@
 #   SEM_AI_TRIAGE_URL   — endpoint of the triage service
 #   SEM_AI_TRIAGE_TOKEN — bearer token expected by the endpoint
 #
-# The workflow is a no-op if either secret is missing, so it is safe to
-# merge before secrets are provisioned.
+# The workflow is a no-op if either secret is missing or the triage
+# service is unreachable / errors out — it never fails noisily on a
+# transient backend issue.
 
 name: sem-ai CI triage
 
 on:
-  # Auto: fires whenever any commit status is updated. We filter to
-  # Semaphore CI failures only inside the job's `if:`.
   status: {}
-
-  # Manual: re-run an old workflow, or trigger against an arbitrary PR.
   workflow_dispatch:
     inputs:
       workflow_id:
@@ -25,20 +22,16 @@ on:
         required: true
         type: number
 
-# Coalesce concurrent runs against the same PR or commit.
 concurrency:
   group: sem-ai-ci-triage-${{ inputs.pr_number || github.event.sha || github.run_id }}
   cancel-in-progress: true
 
 permissions:
-  pull-requests: write   # upsert the triage comment
-  contents: read         # read PR metadata
+  pull-requests: write
+  contents: read
 
 jobs:
   triage:
-    # Run when:
-    #   - manually triggered, OR
-    #   - Semaphore's "ci/semaphoreci/pr: Calico" status reports failure/error.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'status' &&
@@ -101,6 +94,7 @@ jobs:
           echo "trigger: ${{ steps.resolve.outputs.source }}"
 
       - name: Call sem-ai triage service
+        id: triage
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
         run: |
           PROMPT=$(jq -n --slurpfile pr pr.json --arg wf "${{ steps.resolve.outputs.wid }}" '
@@ -122,15 +116,21 @@ jobs:
             }
           }' > req.json
 
+          # Soft-skip if the triage service is unreachable / errors out.
+          # The PoC backend is best-effort — never fail the workflow on
+          # a transient backend issue and never post a half-broken comment.
+          set +e
           HTTP=$(curl -sS --max-time 300 -o resp.json -w '%{http_code}' \
             "$SEM_AI_TRIAGE_URL" \
             -H "Authorization: Bearer $SEM_AI_TRIAGE_TOKEN" \
             -H 'Content-Type: application/json' \
             --data-binary @req.json)
-          if [[ "$HTTP" != "200" ]]; then
-            echo "::error::triage service returned HTTP $HTTP"
-            head -c 1000 resp.json
-            exit 1
+          CURL_RC=$?
+          set -e
+          if [[ $CURL_RC -ne 0 || "$HTTP" != "200" ]]; then
+            echo "::warning::triage service unreachable or errored (curl_rc=$CURL_RC, http=$HTTP) — skipping comment for this run"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           jq -r '
@@ -140,16 +140,19 @@ jobs:
           ' resp.json > triage.md
 
           if [[ ! -s triage.md ]]; then
-            echo "::error::could not extract triage text from response"
-            head -c 1000 resp.json
-            exit 1
+            echo "::warning::empty or malformed triage response — skipping comment for this run"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           echo "--- triage ---"
           cat triage.md
 
       - name: Upsert PR comment (skip on PASS)
-        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.triage.outputs.skip != 'true'
         run: |
           BODY=$(cat triage.md)
           if [[ "$BODY" == "PASS — no comment needed" ]]; then
