@@ -47,6 +47,20 @@ func envOrDefault(key, def string) string {
 }
 
 func stage(src, dst string) error {
+	// Refuse to stage in place — copyFile opens dst with O_TRUNC before
+	// reading src, so src==dst silently zeroes every plugin binary.
+	srcAbs, err := filepath.Abs(src)
+	if err != nil {
+		return fmt.Errorf("resolve src %s: %w", src, err)
+	}
+	dstAbs, err := filepath.Abs(dst)
+	if err != nil {
+		return fmt.Errorf("resolve dst %s: %w", dst, err)
+	}
+	if filepath.Clean(srcAbs) == filepath.Clean(dstAbs) {
+		return fmt.Errorf("src and dst resolve to the same path (%s)", srcAbs)
+	}
+
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", dst, err)
 	}

@@ -152,8 +152,10 @@ print-cni-plugins-hash:
 ##############################################################################
 # CI/CD
 ##############################################################################
+# Probe the cache registry for a content-addressed image first; fall through to
+# a real build (and push the cache tag) on cache miss. See image-content-addressed.
 .PHONY: ci
-ci: image
+ci: image-content-addressed
 
 .PHONY: cd
 cd: image-all cd-common
