@@ -80,8 +80,9 @@ artifacts -- useful for post-mortem when a number looks off.
 On each invocation, in order:
 
 1. **Apply index templates.**  For every `hack/perf/index-templates/<family>.json`,
-   PUT it to `/_index_template/<family>` in ES.  Idempotent upsert; committing
-   a template change propagates automatically on the next CI run.
+   PUT it to `/_index_template/<family>` in ES.  Idempotent upsert -- see
+   [When does the PUT have effect?](#when-does-the-put-have-effect) for what
+   this is and isn't buying.
 2. **Walk `artifacts/perf/<family>/*.json`** for every `<family>` subdirectory.
 3. **Augment each doc** with CI metadata (`@timestamp`, `git_commit`,
    `git_branch`, `code_version`, `ci_run_id`, `pr_number`, `env`) unless the
@@ -98,6 +99,37 @@ in genuinely unrecoverable cases.  Missing credentials, unreachable ES,
 malformed JSON, mapping conflicts -- all log a warning and continue.  A
 `--require-creds` flag flips the missing-creds case to a hard failure, for
 places that want a strict gate on the publish step.
+
+### When does the PUT have effect?
+
+Index templates in Elasticsearch apply at *index-creation* time, not to live
+indices.  Once `benchmark_data_<family>_2026` exists, its mapping is fixed;
+PUTing the template again does not modify that index.  So the PUT-every-time
+behaviour is meaningful in four narrow cases:
+
+1. **First-ever run for a family** -- creates the template before the first
+   doc lands, so the first auto-created index gets pinned types instead of
+   ES's dynamic inference.
+2. **Year rollover** -- the next `benchmark_data_<family>_<YYYY>` is
+   auto-created on the first write of the new year, using whatever template
+   is in cluster state at that moment.
+3. **Cluster rebuild or migration** -- equivalent to case (1).
+4. **Defensive replay** -- if anything ever deletes the template (master
+   failover edge cases have been known to lose entries), the next run puts
+   it back.
+
+In normal steady-state operation -- template already in place, mid-year --
+the PUT is a no-op.  We do it on every run anyway because (a) it's a single
+HTTP per family per CI job, effectively free, and (b) the self-heal property
+in case (4) is worth more than the cost.
+
+Mid-year template *edits* (adding/removing/renaming a field, changing a type)
+do not affect the live index.  An added field gets dynamic-mapping inference
+on first sight; a removed field still appears in old docs' `_source` and the
+live index's mapping; a type change risks a write rejection (mapping
+conflict) until the next year's index rolls over with the new template.  For
+type changes that need to take effect mid-year, reindex into a renamed index
+(`_2026_v2`) rather than fighting the existing mapping.
 
 ## Schema: what makes a good datapoint
 
