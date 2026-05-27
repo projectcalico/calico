@@ -20,11 +20,11 @@ import (
 
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/ip"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestConnectionAllowedCTFull(t *testing.T) {
@@ -39,14 +39,14 @@ func TestConnectionAllowedCTFull(t *testing.T) {
 
 	defer func() {
 		// Disable debug while cleaning up the maps
-		logrus.SetLevel(logrus.WarnLevel)
+		log.SetLevel(log.WarnLevel)
 		cleanUpMaps()
 	}()
 
 	// Disable debug while filling up the map
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 
 	val := conntrack.NewValueNormal(0, 0, conntrack.Leg{}, conntrack.Leg{})
 
@@ -61,7 +61,7 @@ func TestConnectionAllowedCTFull(t *testing.T) {
 	}
 
 	// re-enable debug
-	logrus.SetLevel(loglevel)
+	log.SetLevel(loglevel)
 
 	tcpSyn := &layers.TCP{
 		SrcPort:    54321,

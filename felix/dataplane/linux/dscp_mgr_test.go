@@ -17,13 +17,13 @@ package intdataplane
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -60,7 +60,7 @@ func dscpManagerTests(ipVersion uint8) func() {
 		})
 
 		dscpSet := func() set.Set[string] {
-			logrus.Info(ipSets.Members)
+			log.Info(ipSets.Members)
 			Expect(ipSets.Members).To(HaveLen(1))
 
 			return ipSets.Members["dscp-src-net"]

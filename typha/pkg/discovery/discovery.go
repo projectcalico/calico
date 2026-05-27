@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -198,15 +198,15 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	// If we get here, we need to look up the Typha service using the k8s API.
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
-		logrus.Info("Creating Kubernetes client for Typha discovery...")
+		log.Info("Creating Kubernetes client for Typha discovery...")
 		k8sConf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 		if err != nil {
-			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
+			log.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
 			return nil, err
 		}
 		d.k8sClient, err = kubernetes.NewForConfig(k8sConf)
 		if err != nil {
-			logrus.WithError(err).Error("Unable to create Kubernetes client set.")
+			log.WithError(err).Error("Unable to create Kubernetes client set.")
 			return nil, err
 		}
 	} else if d.k8sClient == nil {
@@ -214,13 +214,13 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	}
 
 	// If we get here, we need to look up the Typha service endpoints using the k8s API.
-	logrus.Info("(Re)discovering Typha endpoints using the Kubernetes API...")
+	log.Info("(Re)discovering Typha endpoints using the Kubernetes API...")
 	epClient := d.k8sClient.DiscoveryV1().EndpointSlices(d.k8sNamespace)
 	endpointSlices, err := epClient.List(context.Background(), v1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", discoveryv1.LabelServiceName, d.k8sServiceName),
 	})
 	if err != nil {
-		logrus.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
+		log.WithError(err).Error("Unable to get Typha service endpoints from Kubernetes.")
 		return nil, err
 	}
 
@@ -242,7 +242,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 			if i != len(endpointSlices.Items)-1 {
 				continue
 			}
-			logrus.Error("Didn't find any ready Typha instances.")
+			log.Error("Didn't find any ready Typha instances.")
 			return nil, ErrServiceNotReady
 		}
 
@@ -264,7 +264,7 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 
 	// return results with local endpoints first on the list
 	if candidates == 0 {
-		logrus.Error("Didn't find any ready Typha instances.")
+		log.Error("Didn't find any ready Typha instances.")
 		return nil, ErrServiceNotReady
 	}
 
@@ -273,13 +273,13 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 
 	addresses = append(local, remote...)
 
-	fields := logrus.Fields{"addresses": addresses}
+	fields := log.Fields{"addresses": addresses}
 	if d.nodeName != "" {
 		fields["local"] = local
 		fields["remote"] = remote
 	}
 
-	logrus.WithFields(fields).Info("Found ready Typha addresses.")
+	log.WithFields(fields).Info("Found ready Typha addresses.")
 
 	return addresses, nil
 }
@@ -330,24 +330,24 @@ func (d *ConnectionAttemptTracker) refreshAddrs() ([]Typha, error) {
 		d.triedCache = true
 		allKnownAddrs := d.discoverer.CachedTyphaAddrs()
 		if len(allKnownAddrs) > 0 {
-			logrus.WithField("addrs", allKnownAddrs).Debug("Using cached typha addresses.")
+			log.WithField("addrs", allKnownAddrs).Debug("Using cached typha addresses.")
 			return allKnownAddrs, nil
 		}
-		logrus.Debug("Cache was empty.")
+		log.Debug("Cache was empty.")
 	}
 
 	// Either cache was empty or this isn't the first time. Refresh the list.
 	// this is important during upgrade so that we can't get unlucky and spend
 	// a long time iterating through all the back-level typhas that are being
 	// shut down.
-	logrus.Debug("Reloading list of Typhas...")
+	log.Debug("Reloading list of Typhas...")
 	addrs, err := d.discoverer.LoadTyphaAddrs()
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload list Typha addresses: %w", err)
 	}
-	logrus.WithField("addrs", addrs).Debug("New list of Typha instances")
+	log.WithField("addrs", addrs).Debug("New list of Typha instances")
 	if len(addrs) == 0 {
-		logrus.Panic("NextAddr() called but this cluster doesn't use Typha?")
+		log.Panic("NextAddr() called but this cluster doesn't use Typha?")
 	}
 	return addrs, nil
 }
@@ -361,7 +361,7 @@ func (d *ConnectionAttemptTracker) pickNextTypha(allKnownAddrs []Typha) (out Typ
 	for _, a := range allKnownAddrs {
 		addrKey := a.dedupeKey()
 		if _, ok := d.triedAddrsLastSeen[addrKey]; ok {
-			logrus.WithField("key", addrKey).Debug("Already tried this Typha")
+			log.WithField("key", addrKey).Debug("Already tried this Typha")
 			continue
 		}
 		out = a
@@ -370,12 +370,12 @@ func (d *ConnectionAttemptTracker) pickNextTypha(allKnownAddrs []Typha) (out Typ
 	}
 	if !foundUnusedTypha {
 		// We've tried them all, reset the tracking set so we'll loop again...
-		logrus.Debug("No unused Typha address found. Resetting.")
+		log.Debug("No unused Typha address found. Resetting.")
 		clear(d.triedAddrsLastSeen)
 		// ...starting with the first in the list.
 		out = allKnownAddrs[0]
 	}
-	logrus.WithField("addr", out).Debug("Next typha to try.")
+	log.WithField("addr", out).Debug("Next typha to try.")
 	d.triedAddrsLastSeen[out.dedupeKey()] = time.Now()
 
 	return
@@ -393,7 +393,7 @@ func (d *ConnectionAttemptTracker) refreshAndGCLastSeen(addrs []Typha) {
 	}
 	for k, v := range d.triedAddrsLastSeen {
 		if time.Since(v) > 5*time.Minute {
-			logrus.WithField("addr", k).Debug("Removing stale typha address from last seen cache.")
+			log.WithField("addr", k).Debug("Removing stale typha address from last seen cache.")
 			delete(d.triedAddrsLastSeen, k)
 		}
 	}

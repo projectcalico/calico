@@ -31,7 +31,6 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/calc"
@@ -39,11 +38,12 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
+	"github.com/projectcalico/calico/lib/std/log"
+	"github.com/projectcalico/calico/lib/std/profile"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -59,7 +59,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -115,7 +114,7 @@ const (
 func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
-	logutils.ConfigureEarlyLogging()
+	configureEarlyLogging()
 
 	ctx := context.Background()
 
@@ -357,7 +356,9 @@ configRetry:
 
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
-	logutils.ConfigureLogging(configParams)
+	if err := configureLogging(configParams); err != nil {
+		log.WithError(err).Warn("Some logging destinations failed to open; continuing with the destinations that did open.")
+	}
 	// Since we may have enabled more logging, log with the build context
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
@@ -740,7 +741,10 @@ configRetry:
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
-	logutils.RegisterProfilingSignalHandlers(configParams)
+	profile.RegisterHandlers(profile.Options{
+		HeapProfilePath: configParams.DebugMemoryProfilePath,
+		CPUProfilePath:  configParams.DebugCPUProfilePath,
+	})
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
@@ -912,8 +916,8 @@ func exitWithCustomRC(rc int, message string) {
 	// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 	// all the in-flight logs get written before we exit.
 	log.WithFields(log.Fields{
-		"rc":                       rc,
-		lclogutils.FieldForceFlush: true,
+		"rc":                rc,
+		log.FieldForceFlush: true,
 	}).Info(message)
 	os.Exit(rc)
 }

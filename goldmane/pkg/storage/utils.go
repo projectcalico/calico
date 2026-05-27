@@ -15,9 +15,8 @@
 package storage
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -32,7 +31,7 @@ func GetStartTime(interval int) int64 {
 			// We found a multiple - break out of the loop.
 			break
 		}
-		logrus.WithField("start_time", startTime).Debug("Waiting for start time to align to interval")
+		log.WithField("start_time", startTime).Debug("Waiting for start time to align to interval")
 		time.Sleep(1 * time.Second)
 	}
 	return startTime

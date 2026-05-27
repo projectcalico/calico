@@ -18,17 +18,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // GetGPGPubKey takes a GPG key ID and fetches the ascii-armored GPG public key
 func GetGPGPubKey(gpgKeyID string) (string, error) {
-	logrus.Debugf("Getting ascii-armored public key for GPG key %s", gpgKeyID)
+	log.Debugf("Getting ascii-armored public key for GPG key %s", gpgKeyID)
 
 	cmdArgs := []string{"--armor", "--export", gpgKeyID}
-	logrus.Debugf("running gpg with args %s", strings.Join(cmdArgs, " "))
+	log.Debugf("running gpg with args %s", strings.Join(cmdArgs, " "))
 	gpgOut, err := command.Run("gpg", cmdArgs)
 	if err != nil {
 		return "", fmt.Errorf("exporting gpg key: %w", err)

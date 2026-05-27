@@ -19,9 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	syncapi "github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast

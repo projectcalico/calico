@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type netlinkReal struct {

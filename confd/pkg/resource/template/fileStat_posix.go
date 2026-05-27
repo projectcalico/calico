@@ -10,7 +10,7 @@ import (
 	"os"
 	"syscall"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // fileStat return a fileInfo describing the named file.

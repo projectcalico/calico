@@ -15,15 +15,14 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/cni-plugin/pkg/install"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 func main() {
 	err := install.Install(buildinfo.Version)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error installing CNI plugin")
+		log.WithError(err).Fatal("Error installing CNI plugin")
 	}
 }

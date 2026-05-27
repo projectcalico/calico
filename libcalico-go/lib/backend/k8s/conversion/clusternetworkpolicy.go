@@ -20,11 +20,11 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -39,7 +39,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		// Log and return a nil-Value KVPair rather than an error. Returning an error here
 		// would surface as a WatchError in the KDD watch converter, terminating and resyncing
 		// the watch — which loops indefinitely if the same malformed policy keeps reappearing.
-		logrus.WithError(err).WithField("policy", kcnp.Name).
+		log.WithError(err).WithField("policy", kcnp.Name).
 			Warn("Skipping malformed cluster network policy: failed to parse tier.")
 		return clusterNetworkPolicyTombstone(kcnp), nil
 	}
@@ -57,7 +57,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		nsSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
 		podSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.PodSelector, SelectorPod)
 	} else {
-		logrus.WithField("policy", kcnp.Name).
+		log.WithField("policy", kcnp.Name).
 			Warn("Skipping malformed cluster network policy: no subject selector specified.")
 		return clusterNetworkPolicyTombstone(kcnp), nil
 	}
@@ -67,7 +67,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	for _, r := range kcnp.Spec.Ingress {
 		rules, err := k8sClusterNetPolIngressRuleToCalico(r)
 		if err != nil {
-			logrus.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadIngressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
 			failClosedRule := k8sClusterNetPolHandleFailedRules(r.Action)
@@ -84,7 +84,7 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	for _, r := range kcnp.Spec.Egress {
 		rules, err := k8sClusterNetPolEgressRuleToCalico(r)
 		if err != nil {
-			logrus.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
+			log.WithError(err).Warn("dropping k8s rule that couldn't be converted.")
 			// Add rule to conversion error slice
 			errorTracker.BadEgressRule(&r, fmt.Sprintf("k8s rule couldn't be converted: %s", err))
 			failClosedRule := k8sClusterNetPolHandleFailedRules(r.Action)
@@ -175,7 +175,7 @@ func clusterNetworkPolicyTombstone(kcnp *clusternetpol.ClusterNetworkPolicy) *mo
 func k8sClusterNetPolHandleFailedRules(action clusternetpol.ClusterNetworkPolicyRuleAction) *apiv3.Rule {
 	if action == clusternetpol.ClusterNetworkPolicyRuleActionDeny ||
 		action == clusternetpol.ClusterNetworkPolicyRuleActionPass {
-		logrus.Warn("replacing failed rule with a deny-all one.")
+		log.Warn("replacing failed rule with a deny-all one.")
 		return &apiv3.Rule{
 			Action: apiv3.Deny,
 		}

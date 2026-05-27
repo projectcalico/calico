@@ -24,12 +24,12 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest/fake"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -104,7 +104,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 
 			// But we should be able to check the request...
 			url := fakeREST.Req.URL
-			logrus.Debug("URL: ", url)
+			log.Debug("URL: ", url)
 			Expect(url.Path).To(Equal("/apis/blockaffinities"))
 			Expect(url.Query()).NotTo(HaveKey("metadata.name"))
 		})
@@ -121,7 +121,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 
 			// But we should be able to check the request...
 			url := fakeREST.Req.URL
-			logrus.Debug("URL: ", url)
+			log.Debug("URL: ", url)
 			Expect(url.Path).To(Equal("/apis/blockaffinities"))
 			Expect(url.Query().Get("fieldSelector")).To(Equal("metadata.name=foo"))
 		})
@@ -192,7 +192,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 
 			// But we should be able to check the request...
 			url := fakeREST.Req.URL
-			logrus.Debug("URL: ", url)
+			log.Debug("URL: ", url)
 			Expect(url.Path).To(Equal("/apis/blockaffinities"))
 			Expect(url.Query()).NotTo(HaveKey("metadata.name"))
 		})
@@ -210,7 +210,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 
 			// But we should be able to check the request...
 			url := fakeREST.Req.URL
-			logrus.Debug("URL: ", url)
+			log.Debug("URL: ", url)
 			Expect(url.Path).To(Equal("/apis/blockaffinities"))
 
 			// TODO We can't currently use a field selector here but we'd like to!
