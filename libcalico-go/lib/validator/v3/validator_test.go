@@ -118,6 +118,9 @@ func init() {
 	iptablesBackendLegacy := api.IptablesBackend(api.IptablesBackendLegacy)
 	iptablesBackendNFTables := api.IptablesBackend(api.IptablesBackendNFTables)
 	iptablesBackendAuto := api.IptablesBackend(api.IptablesBackendAuto)
+	iptablesBackendLowerNFT := api.IptablesBackend("nft")
+	iptablesBackendUpperLegacy := api.IptablesBackend("LEGACY")
+	iptablesBackendEmpty := api.IptablesBackend("")
 	iptablesBackendbadVal := api.IptablesBackend("badVal")
 
 	// longLabelsValue is 63 and 64 chars long
@@ -786,6 +789,19 @@ func init() {
 			ObjectMeta: v1.ObjectMeta{Name: "default"},
 			Spec:       api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendbadVal},
 		}, false),
+		Entry("should reject an empty IptablesBackend value", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendEmpty},
+		}, false),
+		// CRD pattern is case-insensitive, matching API server behavior.
+		Entry("should accept a lowercase IptablesBackend value 'nft'", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendLowerNFT},
+		}, true),
+		Entry("should accept an uppercase IptablesBackend value 'LEGACY'", &api.FelixConfiguration{
+			ObjectMeta: v1.ObjectMeta{Name: "default"},
+			Spec:       api.FelixConfigurationSpec{IptablesBackend: &iptablesBackendUpperLegacy},
+		}, true),
 		Entry("should accept a valid DefaultEndpointToHostAction value", &api.FelixConfiguration{
 			ObjectMeta: v1.ObjectMeta{Name: "default"},
 			Spec:       api.FelixConfigurationSpec{DefaultEndpointToHostAction: "Drop"},
