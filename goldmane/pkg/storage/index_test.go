@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -46,9 +46,8 @@ func setupTest(t *testing.T) func() {
 
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	log.RedirectTo(t)
 	return func() {
-		logCancel()
 	}
 }
 

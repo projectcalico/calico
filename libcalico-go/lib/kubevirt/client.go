@@ -18,10 +18,11 @@ package kubevirt
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	kubevirtcorev1 "kubevirt.io/client-go/kubevirt/typed/core/v1"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewVirtClient creates a VirtClientInterface from a rest.Config.

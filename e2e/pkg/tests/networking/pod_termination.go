@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = describe.CalicoDescribe(
@@ -251,7 +251,7 @@ while :; do sleep 10; done
 			go func() {
 				deleteErr := f.ClientSet.CoreV1().Pods(ns).Delete(ctx, clientPod.Name, metav1.DeleteOptions{})
 				if deleteErr != nil {
-					logrus.WithError(deleteErr).Error("failed to delete client pod")
+					log.WithError(deleteErr).Error("failed to delete client pod")
 				}
 			}()
 
@@ -263,7 +263,7 @@ while :; do sleep 10; done
 				if err != nil {
 					return fmt.Errorf("failed to get client pod logs: %w", err)
 				}
-				logrus.Infof("Client pod logs:\n%s", logs)
+				log.Infof("Client pod logs:\n%s", logs)
 				if !strings.Contains(logs, "wget success") {
 					return fmt.Errorf("client pod logs do not contain 'wget success' yet")
 				}
@@ -346,7 +346,7 @@ while :; do sleep 10; done
 			go func() {
 				deleteErr := f.ClientSet.CoreV1().Pods(ns).Delete(ctx, serverPod.Name, metav1.DeleteOptions{})
 				if deleteErr != nil {
-					logrus.WithError(deleteErr).Error("failed to delete server pod")
+					log.WithError(deleteErr).Error("failed to delete server pod")
 				}
 			}()
 
@@ -415,7 +415,7 @@ func pingFromNewPod(ctx context.Context, f *framework.Framework, ns, podName, ip
 	if err != nil {
 		logs, logErr := e2epod.GetPodLogs(ctx, f.ClientSet, ns, pod.Name, "ping")
 		if logErr == nil {
-			logrus.Infof("Ping pod %s logs:\n%s", pod.Name, logs)
+			log.Infof("Ping pod %s logs:\n%s", pod.Name, logs)
 		}
 		return fmt.Errorf("ping to %s failed: %w", ip, err)
 	}

@@ -24,7 +24,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -129,7 +129,7 @@ var _ = describe.CalicoDescribe(
 				cfg.Spec.StrictAffinity = strict
 				err = cli.Update(ctx, cfg)
 				Expect(err).NotTo(HaveOccurred(), "failed to update StrictAffinity to %v", strict)
-				logrus.Infof("Set StrictAffinity=%v", strict)
+				log.Infof("Set StrictAffinity=%v", strict)
 			}
 
 			labels := map[string]string{strictAffinityLabelKey: strictAffinityLabelValue}
@@ -197,7 +197,7 @@ var _ = describe.CalicoDescribe(
 			Eventually(func() (int, error) {
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 2*time.Minute, 5*time.Second).Should(Equal(0), "all pods should have IPs with StrictAffinity=false")
-			logrus.Info("Phase 1 passed: all pods have IPs with StrictAffinity=false")
+			log.Info("Phase 1 passed: all pods have IPs with StrictAffinity=false")
 
 			By("Deleting the deployment before Phase 2")
 			deleteDeploymentAndWait()
@@ -223,7 +223,7 @@ var _ = describe.CalicoDescribe(
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 30*time.Second, 5*time.Second).Should(BeNumerically(">", 0),
 				"some pods should lack IPs with StrictAffinity=true and a single-block pool")
-			logrus.Info("Phase 2 passed: some pods lack IPs with StrictAffinity=true")
+			log.Info("Phase 2 passed: some pods lack IPs with StrictAffinity=true")
 
 			// --- Phase 3: StrictAffinity=false again, all pods should get IPs ---
 
@@ -234,7 +234,7 @@ var _ = describe.CalicoDescribe(
 				return countPodsWithNoIP(f, strictAffinityLabelKey, strictAffinityLabelValue)
 			}, 2*time.Minute, 5*time.Second).Should(Equal(0),
 				"all pods should have IPs after toggling StrictAffinity back to false")
-			logrus.Info("Phase 3 passed: all pods have IPs after toggling StrictAffinity back to false")
+			log.Info("Phase 3 passed: all pods have IPs after toggling StrictAffinity back to false")
 		})
 	})
 

@@ -19,7 +19,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
@@ -27,13 +26,13 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {
-	logutils.ConfigureEarlyLogging()
-	logrus.SetOutput(GinkgoWriter)
-	logrus.SetLevel(logrus.DebugLevel)
+	log.SetComponent("felix")
+	log.SetOutput(GinkgoWriter)
+	log.SetLevel(log.DebugLevel)
 }
 
 func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
@@ -77,8 +76,8 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	makestep := func(step func()) func() {
 		return func() {
 			defer func() {
-				log("svcs = %+v\n", svcs)
-				log("eps = %+v\n", eps)
+				tracef("svcs = %+v\n", svcs)
+				tracef("eps = %+v\n", eps)
 			}()
 
 			step()
@@ -285,8 +284,8 @@ func test0000SourceRange() {
 	makestep := func(step func()) func() {
 		return func() {
 			defer func() {
-				log("svcs = %+v\n", svcs)
-				log("eps = %+v\n", eps)
+				tracef("svcs = %+v\n", svcs)
+				tracef("eps = %+v\n", eps)
 			}()
 
 			step()

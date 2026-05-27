@@ -18,10 +18,10 @@ import (
 	"os"
 
 	"github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type ExtClientOpts struct {
@@ -41,7 +41,7 @@ func RunExtClientWithOpts(infra CleanupProvider, namePrefix string, opts ExtClie
 	if opts.Image != "" {
 		image = opts.Image
 	}
-	logrus.Infof("Running external client container with options %#v", opts)
+	log.Infof("Running external client container with options %#v", opts)
 	c := containers.Run(
 		namePrefix,
 		containers.RunOpts{

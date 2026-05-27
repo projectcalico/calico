@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -318,7 +318,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 
 	var lastErr error
 	for attempt := range cfg.retries {
-		logrus.Infof("iperf3 attempt %d of %d", attempt+1, cfg.retries)
+		log.Infof("iperf3 attempt %d of %d", attempt+1, cfg.retries)
 
 		// Kill any leftover iperf3 server from a previous failed attempt before
 		// starting a new one, otherwise the port will already be in use.
@@ -330,7 +330,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 		_, err := execInPod(server.pod, defaultExecTimeout, "sh", "-c", serverCmd)
 		if err != nil {
 			lastErr = fmt.Errorf("failed to start iperf3 server: %w", err)
-			logrus.WithError(lastErr).Warn("iperf3 server start failed, retrying")
+			log.WithError(lastErr).Warn("iperf3 server start failed, retrying")
 			time.Sleep(cfg.retryInterval)
 			continue
 		}
@@ -349,7 +349,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 		_, err = execInPod(server.pod, 10*time.Second, "sh", "-c", waitCmd)
 		if err != nil {
 			lastErr = fmt.Errorf("iperf3 server not listening on port %d: %w", cfg.port, err)
-			logrus.WithError(lastErr).Warn("iperf3 server readiness check failed, retrying")
+			log.WithError(lastErr).Warn("iperf3 server readiness check failed, retrying")
 			time.Sleep(cfg.retryInterval)
 			continue
 		}
@@ -376,7 +376,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 		out, err := execInPod(client.pod, timeout, "sh", "-c", clientCmd)
 		if err != nil {
 			lastErr = fmt.Errorf("iperf3 client exec failed: %w", err)
-			logrus.WithError(lastErr).Warn("iperf3 attempt failed, retrying")
+			log.WithError(lastErr).Warn("iperf3 attempt failed, retrying")
 			time.Sleep(cfg.retryInterval)
 			continue
 		}
@@ -384,7 +384,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 		result, err := parseIperf3JSON(out)
 		if err != nil || result.AverageRate == 0 {
 			lastErr = fmt.Errorf("iperf3 parse failed: %w", err)
-			logrus.WithError(lastErr).Warn("iperf3 parse failed, retrying")
+			log.WithError(lastErr).Warn("iperf3 parse failed, retrying")
 			time.Sleep(cfg.retryInterval)
 			continue
 		}
@@ -491,6 +491,6 @@ func parseIperf3JSON(output string) (*Result, error) {
 		result.PeakRate = raw.Intervals[0].Sum.BitsPerSecond
 	}
 
-	logrus.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps", result.AverageRate, result.PeakRate)
+	log.Infof("iperf3 result: rate=%.0f bps, peakRate=%.0f bps", result.AverageRate, result.PeakRate)
 	return result, nil
 }

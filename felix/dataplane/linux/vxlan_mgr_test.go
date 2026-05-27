@@ -21,17 +21,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type mockVXLANFDB struct {
@@ -40,7 +39,7 @@ type mockVXLANFDB struct {
 }
 
 func (t *mockVXLANFDB) SetVTEPs(targets []vxlanfdb.VTEP) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"targets": targets,
 	}).Debug("SetVTEPs")
 	t.currentVTEPs = targets
@@ -109,7 +108,7 @@ var _ = Describe("VXLANManager", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := log.NewSummarizer("test")
 
 		dpConfig := Config{
 			MaxIPSetSize:       5,
