@@ -7,6 +7,13 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# Keep literal `KEY=value` form (no spaces, no `?=`); Renovate regex + operator's
+# update-envoy-gateway-resources both parse this line.
+# Renovate only bumps this version, and patch releases only. On any bump,
+# especially a minor, manually verify the Envoy Gateway compatibility
+# matrix (https://gateway.envoyproxy.io/news/releases/matrix/) and update the
+# matching envoy-proxy (ENVOYBINARY_IMAGE) and envoy-ratelimit
+# (ENVOY_RATELIMIT_VERSION) pins; Renovate does not track those.
 ENVOY_GATEWAY_VERSION=v1.7.2
 
 ##############################################################################
