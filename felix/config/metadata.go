@@ -478,7 +478,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 				info.YAMLType = strings.Join(types, " or ")
 			}
 		}
-		info.Schema, info.EnumValues = v3TypesToDescription(si, prop)
+		info.Schema, info.EnumValues, info.CaseSensitive = v3TypesToDescription(si, prop)
 
 		out[info.V1Name] = info
 		out[yamlName] = info
@@ -490,7 +490,7 @@ func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 // Regex to extract enum constants from the standard enum regex. Example: ^(?i)(Drop|Accept|Return)?$
 var enumRegex = regexp.MustCompile(`^\^?(\(\?i\))?\(([\w|]+)\)\??\$?$`)
 
-func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string) {
+func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema string, enumConsts []string, caseSensitive bool) {
 	pattern := prop.Pattern
 	switch si.GoType {
 	case "*bool", "bool":
@@ -542,6 +542,11 @@ func v3TypesToDescription(si StructInfo, prop v1.JSONSchemaProps) (infoSchema st
 		sort.Strings(parts)
 		enumConsts = parts
 		infoSchema = fmt.Sprintf("One of: %s.", strings.Join(parts, ", "))
+		// OpenAPI enum constraints are enforced case-sensitively by
+		// kube-apiserver. A field-level Pattern with `(?i)` is the
+		// case-insensitive alternative; if both are present, the enum
+		// wins because both must match.
+		caseSensitive = true
 	}
 	sort.Strings(enumConsts)
 	return
@@ -577,6 +582,13 @@ func updateParamsWithV3Info(params []*FieldInfo, felixNameToCRDFieldInfo map[str
 			pm.YAMLType = info.YAMLType
 			pm.YAMLSchema = info.Schema
 			pm.YAMLEnumValues = info.EnumValues
+			if info.CaseSensitive {
+				// Felix's internal parser accepts any case via env
+				// var or config file, but the CRD enforces a
+				// case-sensitive enum, so don't advertise
+				// case-insensitivity on the canonical CR docs.
+				pm.StringSchema = stripCaseInsensitiveNote(pm.StringSchema)
+			}
 		} else if clusterInfoFields.Contains(pm.NameConfigFile) {
 			pm.UserEditable = false
 			pm.Description = "Auto-populated cluster identity information (not intended to be edited by the user), learned from the `ClusterInformation` resource."
@@ -603,6 +615,16 @@ type YAMLInfo struct {
 	V1Name      string
 	YAMLType    string
 	EnumValues  []string
+	// CaseSensitive is true when the CRD validates this field with an
+	// OpenAPI enum constraint (which kube-apiserver enforces
+	// case-sensitively).
+	CaseSensitive bool
+}
+
+var caseInsensitiveNoteRegex = regexp.MustCompile(` \(case insensitive\)$`)
+
+func stripCaseInsensitiveNote(schema string) string {
+	return caseInsensitiveNoteRegex.ReplaceAllString(schema, "")
 }
 
 var trimDefaultRegex = regexp.MustCompile(`(?i)\[default[^]]+]`)
