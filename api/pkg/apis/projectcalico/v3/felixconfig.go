@@ -50,7 +50,6 @@ const (
 	KindFelixConfigurationList = "FelixConfigurationList"
 )
 
-// +kubebuilder:validation:Enum=Legacy;NFT;Auto
 type IptablesBackend string
 
 const (
@@ -266,7 +265,7 @@ type FelixConfigurationSpec struct {
 	// Warning: changing this on a running system can leave "orphaned" rules in the "other" backend. These
 	// should be cleaned up to avoid confusing interactions.
 	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:Pattern=`^(?i)(Auto|Legacy|NFT)?$`
+	// +kubebuilder:validation:Pattern=`^(?i)(Auto|Legacy|NFT)$`
 	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty"`
 
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
