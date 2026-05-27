@@ -285,7 +285,6 @@ func Install(version string) error {
 			if fileExists(fmt.Sprintf("%s/%s", d, calicoBinName)) {
 				logrus.Infof("No writeable CNI bin directory found but %s already exists at %s and UPDATE_CNI_BINARIES=false; continuing", calicoBinName, d)
 				binsWritten = true
-				calicoBinaryOK = true
 				break
 			}
 		}
