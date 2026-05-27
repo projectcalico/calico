@@ -214,12 +214,17 @@ func (h *backgroundHook) Fire(entry *logrus.Entry) (err error) {
 		defer entry.Buffer.Truncate(0)
 	}
 
+	// Walk the stack once and stash on entry.Caller so the formatter and
+	// formatForSyslog don't each repeat the walk. We disable logrus's own
+	// SetReportCaller, so entry.Caller is otherwise nil here.
+	if entry.Caller == nil {
+		entry.Caller = findUserCaller()
+	}
+
 	if entry.Level >= logrus.DebugLevel && h.debugFileNameRE != nil {
 		var file string
 		if entry.Caller != nil {
 			file = baseName(entry.Caller.File)
-		} else if frame := findUserCaller(); frame != nil {
-			file = baseName(frame.File)
 		}
 		if file == "" || !h.debugFileNameRE.MatchString(file) {
 			return nil
