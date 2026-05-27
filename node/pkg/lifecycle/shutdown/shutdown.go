@@ -17,9 +17,9 @@ import (
 	"os"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )

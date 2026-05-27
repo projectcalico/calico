@@ -17,7 +17,7 @@ package dispatcher
 import (
 	"context"
 
-	"github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // BlockingDispatcher blocks on an input channel until stop,
@@ -34,7 +34,7 @@ type BlockingDispatcher[T any] struct {
 // Dispatcher must be started with Start(ctx). Stopped by cancelling ctx.
 func NewBlockingDispatcher[T any](input <-chan T) (*BlockingDispatcher[T], error) {
 	if input == nil {
-		logrus.Panic("No input channels passed to dispatcher")
+		log.Panic("No input channels passed to dispatcher")
 	}
 
 	return &BlockingDispatcher[T]{
@@ -48,30 +48,30 @@ func NewBlockingDispatcher[T any](input <-chan T) (*BlockingDispatcher[T], error
 // All output channels must consume messages promptly to keep dispatcher from blocking.
 func (d *BlockingDispatcher[T]) DispatchForever(ctx context.Context, outputs ...chan T) {
 	if outputs == nil || len(outputs) == 0 {
-		logrus.Panic("No output channels provided for dispatching input")
+		log.Panic("No output channels provided for dispatching input")
 	}
 
-	logrus.WithField("outputs", len(outputs)).Debug("Dispatcher running...")
+	log.WithField("outputs", len(outputs)).Debug("Dispatcher running...")
 	for {
 		// Wait for input or ctx cancellation.
 		select {
 		case <-ctx.Done():
-			logrus.Debug("Stopping dispatcher...")
+			log.Debug("Stopping dispatcher...")
 			return
 		case msg, ok := <-d.input:
 			if !ok {
-				logrus.Panic("Input channel closed unexpectedly")
+				log.Panic("Input channel closed unexpectedly")
 			}
-			logrus.WithField("message", msg).Debug("Pulled message off input chan")
+			log.WithField("message", msg).Debug("Pulled message off input chan")
 			for _, o := range outputs {
 				select {
 				case <-ctx.Done():
-					logrus.Debug("Context closed. Exiting...")
+					log.Debug("Context closed. Exiting...")
 					return
 				case o <- msg:
 				}
 			}
-			logrus.WithField("message", msg).Debug("Sent message to all outputs")
+			log.WithField("message", msg).Debug("Sent message to all outputs")
 		}
 	}
 }

@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // RestoreInputBuilder builds a byte slice for use as input to iptables-restore.

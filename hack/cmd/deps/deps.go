@@ -16,10 +16,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -71,20 +70,20 @@ var (
 func main() {
 	// We use stdout for the parseable output of the tool so we _do_ want
 	// logging to go to stderr.
-	logrus.SetOutput(os.Stderr)
+	log.SetOutput(os.Stderr)
 	flag.CommandLine.Usage = printUsageAndExit
 	flag.Parse()
-	level, err := logrus.ParseLevel(*logLevel)
+	level, err := log.ParseLevel(*logLevel)
 	if err != nil {
-		logrus.Fatalf("Failed to parse log level %q: %s", *logLevel, err)
+		log.Fatalf("Failed to parse log level %q: %s", *logLevel, err)
 	}
-	logrus.SetLevel(level)
+	log.SetLevel(level)
 
-	logutils.ConfigureFormatter("deps")
+	log.SetComponent("deps")
 
 	args := flag.Args()
 	if len(args) == 0 {
-		logrus.Warnf("Missing sub-command")
+		log.Warnf("Missing sub-command")
 		printUsageAndExit()
 	}
 
@@ -92,7 +91,7 @@ func main() {
 	var pkg string
 	if cmd != "generate-semaphore-yamls" {
 		if len(args) != 2 {
-			logrus.Warnf("Incorrect number of arguments for %s: %v", cmd, args)
+			log.Warnf("Incorrect number of arguments for %s: %v", cmd, args)
 			printUsageAndExit()
 		}
 		pkg = args[1]
@@ -202,7 +201,7 @@ func calculateDeps(packages set.Set[string]) map[string]*Deps {
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		logrus.Fatalln("Failed to calculate change_in dependencies:", err)
+		log.Fatalln("Failed to calculate change_in dependencies:", err)
 	}
 	return deps
 }
@@ -210,7 +209,7 @@ func calculateDeps(packages set.Set[string]) map[string]*Deps {
 func printSemChangeIn(pkg string, pretty bool) {
 	changeIn, err := calculateChangeIn(pkg, pretty)
 	if err != nil {
-		logrus.Fatalf("Failed to calculate change_in for package %s: %v", pkg, err)
+		log.Fatalf("Failed to calculate change_in for package %s: %v", pkg, err)
 	}
 	_, _ = fmt.Println(changeIn)
 }
@@ -244,9 +243,9 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	primaryPkg := parts[0]
 	otherPkgs := parts[1:]
 	if len(otherPkgs) == 0 {
-		logrus.Infof("Calculating deps for %s package", primaryPkg)
+		log.Infof("Calculating deps for %s package", primaryPkg)
 	} else {
-		logrus.Infof("Calculating deps for %s package; including secondary deps: %v", primaryPkg, otherPkgs)
+		log.Infof("Calculating deps for %s package; including secondary deps: %v", primaryPkg, otherPkgs)
 	}
 
 	localDirs, err := loadLocalDirs(primaryPkg, false)
@@ -342,7 +341,7 @@ func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[s
 		return nil
 	})
 	if err != nil {
-		logrus.Fatalf("Failed to filter inclusions for %s: %v", primaryPkg, err)
+		log.Fatalf("Failed to filter inclusions for %s: %v", primaryPkg, err)
 	}
 
 	return out
@@ -362,10 +361,10 @@ func formatSemList(s set.Set[string]) string {
 func printLocalDirs(pkg string, mainsOnly bool) {
 	localDirs, err := loadLocalDirs(pkg, mainsOnly)
 	if err != nil {
-		logrus.Fatalln("Failed to load local dirs:", err)
+		log.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
-	logrus.Infof("Loaded %d local dirs.", len(localDirs))
+	log.Infof("Loaded %d local dirs.", len(localDirs))
 	for _, dir := range localDirs {
 		_, _ = fmt.Println(dir)
 	}
@@ -375,7 +374,7 @@ func printCombined(pkg string) {
 	printModules(pkg)
 	localDirs, err := loadLocalDirs(pkg, true)
 	if err != nil {
-		logrus.Fatalln("Failed to load local dirs:", err)
+		log.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
 	if len(localDirs) > 0 {
@@ -391,7 +390,7 @@ func printCombined(pkg string) {
 func printTestExclusions(pkg string) {
 	localDirs, err := loadLocalDirs(pkg, false)
 	if err != nil {
-		logrus.Fatalln("Failed to load local dirs:", err)
+		log.Fatalln("Failed to load local dirs:", err)
 		os.Exit(1)
 	}
 	for _, dir := range calculateTestExclusionGlobs(pkg, localDirs) {
@@ -422,7 +421,7 @@ func calculateTestExclusionGlobs(pkg string, localDirs []string) []string {
 func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
 	packageDeps, err := loadPackageDeps(pkg, mainDepsOnly)
 	if err != nil {
-		logrus.Fatalln("Failed to load package deps:", err)
+		log.Fatalln("Failed to load package deps:", err)
 		os.Exit(1)
 	}
 	for _, pkg := range packageDeps {
@@ -441,16 +440,16 @@ func loadLocalDirs(pkg string, mainDepsOnly bool) (out []string, err error) {
 func printModules(pkg string) {
 	packageDeps, err := loadPackageDeps(pkg, false)
 	if err != nil {
-		logrus.Fatalf("Failed to load package deps for package %s: %s", pkg, err)
+		log.Fatalf("Failed to load package deps for package %s: %s", pkg, err)
 		os.Exit(1)
 	}
-	logrus.Infof("Loaded %d deps for package %q.", len(packageDeps), pkg)
+	log.Infof("Loaded %d deps for package %q.", len(packageDeps), pkg)
 	modules, err := loadGoMods()
 	if err != nil {
-		logrus.Fatalln("Failed to load go modules:", err)
+		log.Fatalln("Failed to load go modules:", err)
 		os.Exit(1)
 	}
-	logrus.Infof("Loaded %d go modules.", len(modules))
+	log.Infof("Loaded %d go modules.", len(modules))
 
 	// For ease, do the full cross product. Only takes ~100ms.
 	var mods []string
@@ -473,7 +472,7 @@ func printModules(pkg string) {
 	for _, m := range mods {
 		_, _ = fmt.Println(m)
 	}
-	logrus.Info("Done.")
+	log.Info("Done.")
 }
 
 func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
@@ -486,7 +485,7 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 			return nil, err
 		}
 		if len(pkgs) == 0 {
-			logrus.Infof("No main packages found in %s", pkg)
+			log.Infof("No main packages found in %s", pkg)
 			return nil, nil
 		}
 	}
@@ -506,7 +505,7 @@ func loadPackageDeps(pkg string, mainDepsOnly bool) ([]string, error) {
 			dep = strings.Replace(dep, "github.com/projectcalico/api/", "github.com/projectcalico/calico/api/", 1)
 		}
 		out = append(out, dep)
-		logrus.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
+		log.Debugf("Loaded package: %s", strings.TrimRight(string(line), "\n"))
 	}
 	return out, nil
 }
@@ -527,7 +526,7 @@ func findMainPackages(pkg string) ([]string, error) {
 		mainPkg = strings.TrimSpace(mainPkg)
 		pkgs = append(pkgs, mainPkg)
 	}
-	logrus.Infof("Found main packages in %s: %v", pkg, pkgs)
+	log.Infof("Found main packages in %s: %v", pkg, pkgs)
 	return pkgs, nil
 }
 
@@ -558,7 +557,7 @@ func loadGoToolJSON[Item any](args ...string) ([]Item, error) {
 			return nil, err
 		}
 		items = append(items, item)
-		logrus.Debugf("Loaded item: %+v", item)
+		log.Debugf("Loaded item: %+v", item)
 	}
 	return items, nil
 }
@@ -570,24 +569,24 @@ type templateData struct {
 }
 
 func generateSemaphoreYamls() {
-	logrus.Info("Generating semaphore YAML pipeline files")
+	log.Info("Generating semaphore YAML pipeline files")
 	semaphoreDir := ".semaphore"
 	defaultBranchStanza, err := calculateBranchStanza(semaphoreDir)
 	if err != nil {
-		logrus.Fatalf("Failed to calculate default branch stanza: %v", err)
+		log.Fatalf("Failed to calculate default branch stanza: %v", err)
 	}
-	logrus.Infof("Using default branch stanza: %q", defaultBranchStanza)
+	log.Infof("Using default branch stanza: %q", defaultBranchStanza)
 
 	// Validate change_in lines in template blocks include pipeline_file stanza.
 	if err := validateChangeInClauses(semaphoreDir); err != nil {
-		logrus.Fatalf("Template validation failed: %v", err)
+		log.Fatalf("Template validation failed: %v", err)
 	}
 
 	// Load all the template files
 	templatesDir := filepath.Join(semaphoreDir, "semaphore.yml.d")
 	templates, err := readTemplates(templatesDir)
 	if err != nil {
-		logrus.Fatalf("Failed to read templates: %v", err)
+		log.Fatalf("Failed to read templates: %v", err)
 	}
 	var globalExtraDeps []string
 	for _, t := range templates {
@@ -596,7 +595,7 @@ func generateSemaphoreYamls() {
 	blocksDir := filepath.Join(semaphoreDir, "semaphore.yml.d", "blocks")
 	blocks, err := readTemplates(blocksDir)
 	if err != nil {
-		logrus.Fatalf("Failed to read templates: %v", err)
+		log.Fatalf("Failed to read templates: %v", err)
 	}
 	// For convenience when writing blocks we add an indent here.
 	blocks = indentBlocks(blocks)
@@ -618,7 +617,7 @@ func generateSemaphoreYamls() {
 	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
 	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, false, defaultBranchStanza)
 	if err != nil {
-		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+		log.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
 
 	// Build the scheduled file, which builds all our code, but not slow
@@ -626,7 +625,7 @@ func generateSemaphoreYamls() {
 	scheduledFile := filepath.Join(semaphoreDir, "semaphore-scheduled-builds.yml")
 	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, false, defaultBranchStanza)
 	if err != nil {
-		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+		log.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
 
 	// If needed, build the third-party file, which runs weekly.
@@ -648,14 +647,14 @@ func generateSemaphoreYamls() {
 		}
 	}
 	if foundWeekly {
-		logrus.Infof("Found templates that run weekly, generating %s.", thirdPartyFile)
+		log.Infof("Found templates that run weekly, generating %s.", thirdPartyFile)
 		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, true, defaultBranchStanza)
 		if err != nil {
-			logrus.Fatalf("Failed to build semaphore YAML: %v", err)
+			log.Fatalf("Failed to build semaphore YAML: %v", err)
 		}
 	}
 
-	logrus.Info("Semaphore YAML generation complete")
+	log.Info("Semaphore YAML generation complete")
 }
 
 func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, weekly bool, defaultBranchStanza string) error {
@@ -755,7 +754,7 @@ func readTemplates(templatesDir string) ([]templateData, error) {
 func mustReadFile(path string) []byte {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		logrus.Fatalf("Failed to read %s: %v", path, err)
+		log.Fatalf("Failed to read %s: %v", path, err)
 	}
 	return b
 }
@@ -816,7 +815,7 @@ func calculateBranchStanza(semaphoreDir string) (string, error) {
 func calculateDefaultBranch(semaphoreDir string) (string, error) {
 	if branch := os.Getenv("DEFAULT_BRANCH_OVERRIDE"); branch != "" {
 		// Manual override.
-		logrus.Infof("Using DEFAULT_BRANCH_OVERRIDE for default branch: %s", branch)
+		log.Infof("Using DEFAULT_BRANCH_OVERRIDE for default branch: %s", branch)
 		return branch, nil
 	}
 
@@ -833,10 +832,10 @@ func calculateDefaultBranch(semaphoreDir string) (string, error) {
 	// through to detecting the default from the existing semaphore.yml.
 	if branch := os.Getenv("SEMAPHORE_GIT_BRANCH"); branch != "" {
 		if branch == mainBranchName || releaseBranchRegexp.MatchString(branch) {
-			logrus.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
+			log.Infof("Using SEMAPHORE_GIT_BRANCH for default branch: %s", branch)
 			return branch, nil
 		}
-		logrus.Infof("SEMAPHORE_GIT_BRANCH %q is not master or a release branch, ignoring.", branch)
+		log.Infof("SEMAPHORE_GIT_BRANCH %q is not master or a release branch, ignoring.", branch)
 	} else {
 		// Fallback to git.
 		out, err := exec.Command("git", "branch", "--show-current").Output()
@@ -846,32 +845,32 @@ func calculateDefaultBranch(semaphoreDir string) (string, error) {
 		branch := strings.TrimSpace(string(out))
 
 		if branch == mainBranchName {
-			logrus.Info("On master branch, using that for default branch.")
+			log.Info("On master branch, using that for default branch.")
 			return branch, nil
 		}
 
 		if s := releaseBranchRegexp.FindString(branch); s != "" {
 			// Explicitly on a release branch, so use that.
-			logrus.Infof("On release branch %s, using that for default branch.", s)
+			log.Infof("On release branch %s, using that for default branch.", s)
 			return s, nil
 		}
-		logrus.Infof("Branch %q is not master or a release branch.", branch)
+		log.Infof("Branch %q is not master or a release branch.", branch)
 	}
 
 	// If we're not on a release branch, this is likely to be a PR build,
 	// and the semaphore.yml should have inherited the default from whichever
 	// branch it was based on.  Check there.
-	logrus.Infof("Checking semaphore.yml for default branch.")
+	log.Infof("Checking semaphore.yml for default branch.")
 	detected, err := detectExistingDefaultBranch(filepath.Join(semaphoreDir, "semaphore.yml"))
 	if err != nil {
 		return "", fmt.Errorf("detect release branch from semaphore yaml: %w", err)
 	}
 	if detected != "" {
-		logrus.Infof("Found default branch %s in semaphore.yml, using it for default branch.", detected)
+		log.Infof("Found default branch %s in semaphore.yml, using it for default branch.", detected)
 		return detected, nil
 	}
 
-	logrus.Info("Found no default branch in semaphore.yml, assuming master.")
+	log.Info("Found no default branch in semaphore.yml, assuming master.")
 	return mainBranchName, nil
 }
 

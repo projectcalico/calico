@@ -19,9 +19,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
@@ -42,6 +42,6 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	conf types.NetConf,
 	epIDs WEPIdentifiers,
 	endpoint *internalapi.WorkloadEndpoint,
-	logger *logrus.Entry) (*cniv1.Result, error) {
+	logger log.Logger) (*cniv1.Result, error) {
 	return nil, nil
 }

@@ -15,11 +15,11 @@
 package commands
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/felix/bpf/tc"
 	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func init() {

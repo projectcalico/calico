@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // DESCRIPTION:
@@ -103,7 +103,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 			// Turn on default auto host endpoints if not already enabled.
 			if !GetAutoHEPsEnabled(originalKCC) {
-				logrus.Info("BeforeEach: auto host endpoints not previously enabled so enabling")
+				log.Info("BeforeEach: auto host endpoints not previously enabled so enabling")
 				// Enabled creation of auto host endpoints and creation of default host endpoints.
 				// Initialise nil pointer fields so we can set the values below.
 				if testKCC.Spec.Controllers.Node == nil {
@@ -118,7 +118,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 				WaitForAutoHEPs(cli, true)
 			}
 
-			logrus.Info("BeforeEach for auto host endpoint")
+			log.Info("BeforeEach for auto host endpoint")
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -135,7 +135,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 		ginkgo.AfterEach(func() {
 			// We've updated the kubecontrollersconfiguration, so we need to restore it to its original state.
 			if !reflect.DeepEqual(getHostEndpointConfig(originalKCC), getHostEndpointConfig(testKCC)) {
-				logrus.Info("AfterEach: auto host endpoints not previously enabled so disabling")
+				log.Info("AfterEach: auto host endpoints not previously enabled so disabling")
 				updateHostEndpointConfig(cli, originalKCC)
 				WaitForAutoHEPs(cli, false)
 			}
@@ -366,9 +366,9 @@ func GetAutoHEPsEnabled(kcc v3.KubeControllersConfiguration) bool {
 
 func WaitForAutoHEPs(client ctrlclient.Client, expect bool) {
 	if expect {
-		logrus.Info("Waiting for the host endpoints to be created")
+		log.Info("Waiting for the host endpoints to be created")
 	} else {
-		logrus.Info("Waiting for the host endpoints to be deleted")
+		log.Info("Waiting for the host endpoints to be deleted")
 	}
 	EventuallyWithOffset(1, func() error {
 		heps := &v3.HostEndpointList{}
