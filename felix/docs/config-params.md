@@ -882,7 +882,7 @@ floating IPs are always programmed, regardless of this setting.)
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FloatingIPs` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `floatingIPs` (YAML) `FloatingIPs` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -898,7 +898,7 @@ must be disabled.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IPForwarding` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `ipForwarding` (YAML) `IPForwarding` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -1030,7 +1030,7 @@ Configures Felix to work together with Tigera's Istio distribution.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IstioAmbientMode` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `istioAmbientMode` (YAML) `IstioAmbientMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -1106,7 +1106,7 @@ Configure which type of destinations is excluded from being masqueraded.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NATOutgoingExclusions` |
-| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>IPPoolsAndHostIPs</code>, <code>IPPoolsOnly</code> |
 | Default value (above encoding) | `IPPoolsOnly` |
 | `FelixConfiguration` field | `natOutgoingExclusions` (YAML) `NATOutgoingExclusions` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"IPPoolsAndHostIPs"</code>, <code>"IPPoolsOnly"</code>. |
@@ -1133,7 +1133,7 @@ Configures nftables support in Felix.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NFTablesMode` |
-| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Auto` |
 | `FelixConfiguration` field | `nftablesMode` (YAML) `NFTablesMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -1177,7 +1177,7 @@ Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMo
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ProgramClusterRoutes` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -1370,7 +1370,7 @@ should be cleaned up to avoid confusing interactions.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_IptablesBackend` |
-| Encoding (env var/config file) | One of: <code>auto</code>, <code>legacy</code>, <code>nft</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>auto</code>, <code>legacy</code>, <code>nft</code> |
 | Default value (above encoding) | `auto` |
 | `FelixConfiguration` field | `iptablesBackend` (YAML) `IptablesBackend` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Legacy"</code>, <code>"NFT"</code>. |
@@ -1621,7 +1621,7 @@ By default `TCX` is used where available to enable easier coexistence with 3rd p
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFAttachType` |
-| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> |
 | Default value (above encoding) | `TCX` |
 | `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"TC"</code>, <code>"TCX"</code>. |
@@ -1653,7 +1653,7 @@ is available only for services with TCP ports.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConnectTimeLoadBalancing` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>TCP</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>TCP</code> |
 | Default value (above encoding) | `TCP` |
 | `FelixConfiguration` field | `bpfConnectTimeLoadBalancing` (YAML) `BPFConnectTimeLoadBalancing` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"TCP"</code>. |
@@ -1690,7 +1690,7 @@ lru_hash and userspace cleanup is the only mode that is supported.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConntrackCleanupMode` |
-| Encoding (env var/config file) | One of: <code>Auto</code>, <code>BPFProgram</code>, <code>Userspace</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Auto</code>, <code>BPFProgram</code>, <code>Userspace</code> |
 | Default value (above encoding) | `Auto` |
 | `FelixConfiguration` field | `bpfConntrackMode` (YAML) `BPFConntrackCleanupMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"BPFProgram"</code>, <code>"Userspace"</code>. |
@@ -1705,7 +1705,7 @@ to clean up expired BPF conntrack entries.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFConntrackLogLevel` |
-| Encoding (env var/config file) | One of: <code>debug</code>, <code>off</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>debug</code>, <code>off</code> |
 | Default value (above encoding) | `off` |
 | `FelixConfiguration` field | `bpfConntrackLogLevel` (YAML) `BPFConntrackLogLevel` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Debug"</code>, <code>"Off"</code>. |
@@ -1925,7 +1925,7 @@ determines the CTLB behavior.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFHostNetworkedNATWithoutCTLB` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfHostNetworkedNATWithoutCTLB` (YAML) `BPFHostNetworkedNATWithoutCTLB` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -2304,7 +2304,7 @@ Disabled or Enabled.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFProfiling` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `bpfProfiling` (YAML) `BPFProfiling` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -2322,7 +2322,7 @@ As a result, packet‑capture tools on the host side of the workload device (for
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFRedirectToPeer` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code>, <code>L2Only</code> |
 | Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `bpfRedirectToPeer` (YAML) `BPFRedirectToPeer` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -2338,7 +2338,7 @@ Configures whether or not Felix will program Windows Firewall rules (to allow in
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_WindowsManageFirewallRules` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `windowsManageFirewallRules` (YAML) `WindowsManageFirewallRules` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -2811,7 +2811,7 @@ Configures local unix socket for reporting flow data from each node.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FlowLogsLocalReporter` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `flowLogsLocalReporter` (YAML) `FlowLogsLocalReporter` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
@@ -2827,7 +2827,7 @@ None - Felix stops evaluating pending traces.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_FlowLogsPolicyEvaluationMode` |
-| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>None</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Continuous</code>, <code>None</code> |
 | Default value (above encoding) | `Continuous` |
 | `FelixConfiguration` field | `flowLogsPolicyEvaluationMode` (YAML) `FlowLogsPolicyEvaluationMode` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Continuous"</code>, <code>"None"</code>. |
@@ -2844,7 +2844,7 @@ allows for sending workload traffic without encapsulation within the same AWS su
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_AWSSrcDstCheck` |
-| Encoding (env var/config file) | One of: <code>Disable</code>, <code>DoNothing</code>, <code>Enable</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disable</code>, <code>DoNothing</code>, <code>Enable</code> |
 | Default value (above encoding) | `DoNothing` |
 | `FelixConfiguration` field | `awsSrcDstCheck` (YAML) `AWSSrcDstCheck` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disable"</code>, <code>"DoNothing"</code>, <code>"Enable"</code>. |
