@@ -2,14 +2,14 @@
 # configure.sh - configure test environment after cluster install.
 #
 # Sets PATH to include the bz-provisioned bin dir, exports external-node
-# credentials when ENABLE_EXTERNAL_NODE=true, propagates IPAM test config,
-# and applies the optional failsafe patch.
+# credentials when external_ip and external_key files exist in BZ_LOCAL_DIR
+# (written by bz install or gkm), propagates IPAM test config, and applies
+# the optional failsafe patch.
 #
 # Required env:
 #   BZ_LOCAL_DIR
 # Optional env:
-#   ENABLE_EXTERNAL_NODE, IPAM_TEST_POOL_SUBNET, FAILSAFE_443,
-#   K8S_E2E_DOCKER_EXTRA_FLAGS
+#   IPAM_TEST_POOL_SUBNET, FAILSAFE_443, K8S_E2E_DOCKER_EXTRA_FLAGS
 #
 # Exports consumed by later phases:
 #   PATH, EXT_USER, EXT_IP, EXT_KEY, K8S_E2E_DOCKER_EXTRA_FLAGS
@@ -20,7 +20,7 @@ if [[ -z "${BZ_LOCAL_DIR}" ]]; then echo "[ERROR] BZ_LOCAL_DIR is required but n
 
 export PATH=$PATH:${BZ_LOCAL_DIR}/bin
 
-if [[ "${ENABLE_EXTERNAL_NODE}" == "true" ]]; then
+if [[ -f "${BZ_LOCAL_DIR}/external_ip" ]] && [[ -f "${BZ_LOCAL_DIR}/external_key" ]]; then
   export EXT_USER=ubuntu
   EXT_IP=$(cat "${BZ_LOCAL_DIR}/external_ip")
   export EXT_IP

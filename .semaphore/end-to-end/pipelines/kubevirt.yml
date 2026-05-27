@@ -1,0 +1,70 @@
+version: v1.0
+
+name: KubeVirt
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 12
+
+global_job_config:
+  prologue:
+    commands_file: ../scripts/global_prologue.sh
+  epilogue:
+    always:
+      commands:
+        - ~/calico/.semaphore/end-to-end/scripts/global_epilogue.sh
+  secrets:
+    - name: marvin-github-ssh-private-key
+    - name: banzai-secrets
+  env_vars:
+    - name: FUNCTIONAL_AREA
+      value: "kubevirt.yml"
+    - name: PROVISIONER
+      value: "gcp-kubeadm"
+    - name: INSTALLER
+      value: "operator"
+    - name: DATAPLANE
+      value: "Default"
+    - name: NUM_KUBEVIRT_VMS
+      value: "2"
+    - name: RUN_LOCAL_TESTS
+      value: "true"
+    - name: E2E_TEST_CONFIG
+      value: "e2e/config/gcp-kubevirt.yaml"
+    - name: BANZAI_CORE_BRANCH
+      value: "song-gkm-fix"
+    - name: USE_PRIVATE_REGISTRY
+      value: "true"
+    - name: PRIVATE_REGISTRY
+      value: "quay.io/" # Pull from quay to avoid Docker Hub rate limits
+
+blocks:
+  - name: KubeVirt e2e tests
+    dependencies: []
+    task:
+      jobs:
+        - name: KubeVirt IP persistence and live migration
+          execution_time_limit:
+            hours: 7
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable-1.35"
+
+promotions:
+  - name: Cleanup jobs
+    pipeline_file: cleanup.yml
+    auto_promote:
+      when: "result = 'stopped'"
+
+after_pipeline:
+  task:
+    jobs:
+      - name: Reports
+        commands:
+          - test-results gen-pipeline-report --force

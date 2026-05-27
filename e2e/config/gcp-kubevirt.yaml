@@ -1,0 +1,16 @@
+# gcp-kubevirt.yaml - GCP kubeadm with KubeVirt VMs.
+#
+# Used by the kubevirt.yml e2e pipeline. Runs Feature:KubeVirt tests on a
+# GCP kubeadm cluster with nested virtualization, KubeVirt, and external
+# L2TP/BGP nodes.
+
+include:
+  - Feature:KubeVirt
+
+exclude:
+  labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
