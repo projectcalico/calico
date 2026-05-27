@@ -298,10 +298,12 @@ func appendKVsAndNewLine(b *bytes.Buffer, data logrus.Fields) {
 // caller. We skip frames in logrus and in this package.
 
 const (
-	logrusPackage      = "github.com/sirupsen/logrus"
-	thisPackagePrefix  = "github.com/projectcalico/calico/lib/std/log"
-	maxCallerDepth     = 25
-	minimumCallerDepth = 1
+	logrusPackage       = "github.com/sirupsen/logrus"
+	logrusPackagePrefix = logrusPackage + "/"
+	thisPackage         = "github.com/projectcalico/calico/lib/std/log"
+	thisPackagePrefix   = thisPackage + "/"
+	maxCallerDepth      = 25
+	minimumCallerDepth  = 1
 )
 
 // pcsPool reuses the uintptr slice that backs runtime.Callers, so we don't
@@ -339,9 +341,9 @@ func findUserCaller() *runtime.Frame {
 
 func isInternalPackage(pkg string) bool {
 	return pkg == logrusPackage ||
-		strings.HasPrefix(pkg, logrusPackage+"/") ||
-		pkg == thisPackagePrefix ||
-		strings.HasPrefix(pkg, thisPackagePrefix+"/")
+		strings.HasPrefix(pkg, logrusPackagePrefix) ||
+		pkg == thisPackage ||
+		strings.HasPrefix(pkg, thisPackagePrefix)
 }
 
 // getPackageName extracts the package name from a fully qualified function name.

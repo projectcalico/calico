@@ -34,7 +34,10 @@ var (
 	configured       bool
 )
 
-var defaultLogger Logger = newLogrusLogger(logrus.NewEntry(logrus.StandardLogger()))
+// defaultLogger is typed as the concrete *logrusLogger (not Logger) so the
+// package-level wrappers below dispatch to a concrete method — inlinable by
+// the compiler — rather than through an interface call on every log.
+var defaultLogger = newLogrusLogger(logrus.NewEntry(logrus.StandardLogger()))
 
 func init() {
 	// Install the Calico formatter and direct logs to stdout. This is the
