@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/ptr"
 )
 
-func log(format string, a ...any) {
+func tracef(format string, a ...any) {
 	fmt.Fprintf(GinkgoWriter, format, a...)
 }
 
@@ -710,8 +710,8 @@ func newMockSyncer(stop chan struct{}) *mockSyncer {
 func (s *mockSyncer) Stop() {}
 
 func (s *mockSyncer) Apply(state proxy.DPSyncerState) error {
-	log("SvcMap = %+v\n", state.SvcMap)
-	log("EpsMap = %+v\n", state.EpsMap)
+	tracef("SvcMap = %+v\n", state.SvcMap)
+	tracef("EpsMap = %+v\n", state.EpsMap)
 	select {
 	case s.out <- state:
 		return <-s.in

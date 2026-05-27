@@ -15,7 +15,6 @@
 package collector
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -23,7 +22,6 @@ import (
 	"github.com/gavv/monotime"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/checker"
 	"github.com/projectcalico/calico/app-policy/policystore"
@@ -37,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	prototypes "github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -130,7 +129,6 @@ type collector struct {
 	ticker                jitter.TickerInterface
 	tickerPolicyEval      jitter.TickerInterface
 	config                *Config
-	dumpLog               *log.Logger
 	ds                    chan *proto.DataplaneStats
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
@@ -146,7 +144,6 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
 		tickerPolicyEval:      jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10),
 		config:                cfg,
-		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
@@ -973,17 +970,6 @@ func reportDataplaneStatsUpdateErrorMetrics(dataplaneErrorDelta uint32) {
 	}
 	dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
 	gaugeDataplaneStatsUpdateErrorsPerMinute.Set(float64(dataplaneStatsUpdateErrorsInLastMinute))
-}
-
-// Logrus Formatter that strips the log entry of formatting such as time, log
-// level and simply outputs *only* the message.
-type MessageOnlyFormatter struct{}
-
-func (f *MessageOnlyFormatter) Format(entry *log.Entry) ([]byte, error) {
-	b := &bytes.Buffer{}
-	b.WriteString(entry.Message)
-	b.WriteByte('\n')
-	return b.Bytes(), nil
 }
 
 // getNamespaceFromEp extracts the namespace from the endpoint. Returns an empty string if

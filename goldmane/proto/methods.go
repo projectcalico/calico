@@ -19,10 +19,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // NewFlow returns a new proto.Flow object with all fields initialized and non-nil.
@@ -42,7 +42,7 @@ func (h *PolicyHit) ToString() (string, error) {
 	tmpl := "%d|%s|%s|%s|%d"
 
 	if err := h.Validate(); err != nil {
-		logrus.WithFields(h.fields()).WithError(err).Error("Failed to validate policy hit")
+		log.WithFields(h.fields()).WithError(err).Error("Failed to validate policy hit")
 		return "", err
 	}
 
@@ -54,7 +54,7 @@ func (h *PolicyHit) ToString() (string, error) {
 		namePart, err = makeNamePart(h)
 	}
 	if err != nil {
-		logrus.WithFields(h.fields()).WithError(err).Error("Failed to generate name part")
+		log.WithFields(h.fields()).WithError(err).Error("Failed to generate name part")
 		return "", err
 	}
 
@@ -98,8 +98,8 @@ func (h *PolicyHit) Validate() error {
 	return nil
 }
 
-func (h *PolicyHit) fields() logrus.Fields {
-	return logrus.Fields{
+func (h *PolicyHit) fields() log.Fields {
+	return log.Fields{
 		"PolicyIndex": h.PolicyIndex,
 		"Tier":        h.Tier,
 		"Name":        h.Name,
@@ -113,7 +113,7 @@ func (h *PolicyHit) fields() logrus.Fields {
 // makeNamePart generates the name part of the policy hit string based on the policy kind.
 // The name part has the format "<kind>:[<ns>/]<name>".
 func makeNamePart(h *PolicyHit) (string, error) {
-	logrus.WithFields(h.fields()).Debug("Generating name part from policy hit")
+	log.WithFields(h.fields()).Debug("Generating name part from policy hit")
 	var shortKind string
 	switch h.Kind {
 	case PolicyKind_GlobalNetworkPolicy:
@@ -133,7 +133,7 @@ func makeNamePart(h *PolicyHit) (string, error) {
 	case PolicyKind_Profile:
 		shortKind = types.ShortKindProfile
 	default:
-		logrus.WithFields(h.fields()).Error("Unexpected policy kind")
+		log.WithFields(h.fields()).Error("Unexpected policy kind")
 		return "", fmt.Errorf("unexpected policy kind: %v", h.Kind)
 	}
 
@@ -145,7 +145,7 @@ func makeNamePart(h *PolicyHit) (string, error) {
 		// Namespaced policies.
 		namePart = fmt.Sprintf("%s:%s/%s", shortKind, h.Namespace, h.Name)
 	}
-	logrus.WithFields(h.fields()).WithField("namePart", namePart).Debug("Generated name part")
+	log.WithFields(h.fields()).WithField("namePart", namePart).Debug("Generated name part")
 	return namePart, nil
 }
 
@@ -278,6 +278,6 @@ func HitFromString(s string) (*PolicyHit, error) {
 		RuleIndex:   ruleIdx,
 		Kind:        kind,
 	}
-	logrus.WithField("orig", s).WithFields(hit.fields()).Debug("Parsed policy hit")
+	log.WithField("orig", s).WithFields(hit.fields()).Debug("Parsed policy hit")
 	return hit, nil
 }

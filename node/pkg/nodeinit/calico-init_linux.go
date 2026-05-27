@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/gopacket/gopacket/layers"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/startup"
 )
 
@@ -50,7 +50,7 @@ func Run(bestEffort bool) {
 
 	err := ensureBPFFilesystem()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to mount BPF filesystem.")
+		log.WithError(err).Error("Failed to mount BPF filesystem.")
 		if !bestEffort {
 			os.Exit(2) // Using 2 just to distinguish from the usage error case.
 		}
@@ -58,7 +58,7 @@ func Run(bestEffort bool) {
 
 	err = ensureCgroupV2Filesystem()
 	if err != nil {
-		logrus.WithError(err).Error("Failed to mount cgroup2 filesystem.")
+		log.WithError(err).Error("Failed to mount cgroup2 filesystem.")
 		if !bestEffort {
 			os.Exit(3)
 		}
@@ -68,7 +68,7 @@ func Run(bestEffort bool) {
 	if serviceAddr != "" && endpointAddrs != "" {
 		_, err = initBPFNetwork(serviceAddr, endpointAddrs)
 		if err != nil {
-			logrus.WithError(err).Error("Failed to initialize BPF network.")
+			log.WithError(err).Error("Failed to initialize BPF network.")
 			if !bestEffort {
 				os.Exit(4)
 			}
@@ -77,7 +77,7 @@ func Run(bestEffort bool) {
 }
 
 func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
-	logrus.Info("Initializing BPF network.")
+	log.Info("Initializing BPF network.")
 
 	servicesIPPort, err := parseCommaSeparatedIPPorts(serviceAddr)
 	if err != nil {
@@ -92,7 +92,7 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 
 	bpfMaps, err := bpfmap.CreateBPFMaps(hasIPv6)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to create bpf maps.")
+		log.WithError(err).Error("Failed to create bpf maps.")
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 			countIPv6++
 		}
 		if err != nil {
-			logrus.WithError(err).Error("Failed to add IP set entry in the backend map.")
+			log.WithError(err).Error("Failed to add IP set entry in the backend map.")
 			return nil, err
 		}
 	}
@@ -119,19 +119,19 @@ func initBPFNetwork(serviceAddr, endpointAddrs string) (*bpfmap.Maps, error) {
 			err = updateFrontendMap(bpfMaps.V6.FrontendMap, bpfnat.NewNATKeyV6Intf, bpfnat.NewNATValueV6, service, id, uint32(countIPv6))
 		}
 		if err != nil {
-			logrus.WithError(err).Error("Failed to add IP set entry in the frontend map.")
+			log.WithError(err).Error("Failed to add IP set entry in the frontend map.")
 			return nil, err
 		}
 	}
-	logrus.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
+	log.Infof("Included kubernetes service (%s) and endpoints (%s) in the Nat Maps.", serviceAddr, endpointAddrs)
 
 	// Activate the connect-time load balancer.
 	err = bpfnat.InstallConnectTimeLoadBalancer(hasIPv4, hasIPv6, "", "debug", 60*time.Second, true, bpfMaps.CommonMaps.CTLBProgramsMaps)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to attach connect-time load balancer.")
+		log.WithError(err).Error("Failed to attach connect-time load balancer.")
 		return nil, err
 	}
-	logrus.Info("Connect-time load balancer enabled.")
+	log.Info("Connect-time load balancer enabled.")
 
 	return bpfMaps, nil
 }
@@ -214,7 +214,7 @@ func hasIPv4AndIPv6(addrs []IPPort) (bool, bool) {
 
 func ensureBPFFilesystem() error {
 	// Check if the BPF filesystem is mounted at the expected location.
-	logrus.Info("Checking if BPF filesystem is mounted.")
+	log.Info("Checking if BPF filesystem is mounted.")
 	mounts, err := os.Open("/proc/mounts")
 	if err != nil {
 		return fmt.Errorf("failed to open /proc/mounts: %w", err)
@@ -226,7 +226,7 @@ func ensureBPFFilesystem() error {
 		fs := parts[2]
 
 		if mountPoint == bpfdefs.DefaultBPFfsPath && fs == "bpf" {
-			logrus.Info("BPF filesystem is mounted.")
+			log.Info("BPF filesystem is mounted.")
 			return nil
 		}
 	}
@@ -235,12 +235,12 @@ func ensureBPFFilesystem() error {
 	}
 
 	// If we get here, the BPF filesystem is not mounted.  Try to mount it.
-	logrus.Info("BPF filesystem is not mounted. Trying to mount it...")
+	log.Info("BPF filesystem is not mounted. Trying to mount it...")
 	err = syscall.Mount(bpfdefs.DefaultBPFfsPath, bpfdefs.DefaultBPFfsPath, "bpf", 0, "")
 	if err != nil {
 		return fmt.Errorf("failed to mount BPF filesystem: %w", err)
 	}
-	logrus.Info("Mounted BPF filesystem.")
+	log.Info("Mounted BPF filesystem.")
 	return nil
 }
 
@@ -249,7 +249,7 @@ func ensureBPFFilesystem() error {
 // This is needed by felix to attach CTLB programs and implement k8s services correctly.
 func ensureCgroupV2Filesystem() error {
 	// Check if the Cgroup2 filesystem is mounted at the expected location.
-	logrus.Info("Checking if cgroup2 filesystem is mounted.")
+	log.Info("Checking if cgroup2 filesystem is mounted.")
 	mountInfoFile := "/nodeproc/1/mountinfo"
 	mounts, err := os.Open(mountInfoFile)
 	if err != nil {
@@ -268,7 +268,7 @@ func ensureCgroupV2Filesystem() error {
 			fsType := strings.Split(extraInfo[1], " ")[0] // fsType is the first string after -
 
 			if mountPoint == cgroupV2Path && fsType == "cgroup2" {
-				logrus.Info("Cgroup2 filesystem is mounted.")
+				log.Info("Cgroup2 filesystem is mounted.")
 				return nil
 			}
 		}
@@ -278,21 +278,21 @@ func ensureCgroupV2Filesystem() error {
 	}
 
 	// If we get here, the Cgroup2 filesystem is not mounted.  Try to mount it.
-	logrus.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
+	log.Info("Cgroup2 filesystem is not mounted. Trying to mount it...")
 
 	err = os.MkdirAll(cgroupV2Path, 0700)
 	if err != nil {
 		return fmt.Errorf("failed to prepare mount point: %v. err: %w", cgroupV2Path, err)
 	}
-	logrus.Infof("Mount point %s is ready for mounting root cgroup2 fs", cgroupV2Path)
+	log.Infof("Mount point %s is ready for mounting root cgroup2 fs", cgroupV2Path)
 
 	mountCmd := exec.Command("mountns", cgroupV2Path)
 	out, err := mountCmd.Output()
-	logrus.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
+	log.Debugf("Executed %v. err:%v out:\n%s", mountCmd, err, out)
 	if err != nil {
 		return fmt.Errorf("failed to mount cgroup2 filesystem: %w", err)
 	}
 
-	logrus.Infof("Mounted root cgroup2 filesystem.")
+	log.Infof("Mounted root cgroup2 filesystem.")
 	return nil
 }

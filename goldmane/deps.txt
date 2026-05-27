@@ -100,6 +100,7 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
@@ -109,7 +110,6 @@ local:libcalico-go/lib/backend/model
 local:libcalico-go/lib/debugserver
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/health
-local:libcalico-go/lib/logutils
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/prometheus

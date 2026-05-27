@@ -103,7 +103,6 @@ github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
 github.com/mdlayher/socket v0.5.1
-github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/mitchellh/go-wordwrap v1.0.1
 github.com/moby/spdystream v0.5.1
 github.com/moby/term v0.5.2
@@ -396,7 +395,6 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -472,6 +470,8 @@ local:lib/httpmachinery/pkg/server
 local:lib/httpmachinery/pkg/server/adaptors/gorilla
 local:lib/std/chanutil
 local:lib/std/cryptoutils
+local:lib/std/log
+local:lib/std/profile
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
@@ -506,7 +506,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/multireadbuf
 local:libcalico-go/lib/names
@@ -560,7 +559,6 @@ local:typha/pkg/daemon
 local:typha/pkg/discovery
 local:typha/pkg/jitter
 local:typha/pkg/k8s
-local:typha/pkg/logutils
 local:typha/pkg/promutils
 local:typha/pkg/snapcache
 local:typha/pkg/syncclient

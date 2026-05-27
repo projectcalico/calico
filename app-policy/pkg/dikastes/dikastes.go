@@ -28,7 +28,6 @@ import (
 	"time"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/app-policy/checker"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/proto"
 	"github.com/projectcalico/calico/app-policy/syncher"
 	"github.com/projectcalico/calico/app-policy/uds"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -50,20 +50,20 @@ func RunServer(listenPath, dialTarget string) {
 	_, err := os.Stat(listenPath)
 	if !os.IsNotExist(err) {
 		if err := os.Remove(listenPath); err != nil {
-			logrus.WithFields(logrus.Fields{
+			log.WithFields(log.Fields{
 				"listen": listenPath,
 			}).WithError(err).Fatal("File exists and unable to remove.")
 		}
 	}
 	lis, err := net.Listen("unix", listenPath)
 	if err != nil {
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"listen": listenPath,
 		}).WithError(err).Fatal("Unable to listen.")
 	}
 	defer func() { _ = lis.Close() }()
 	if err := os.Chmod(listenPath, 0o777); err != nil {
-		logrus.WithError(err).Fatal("Unable to set write permission on socket.")
+		log.WithError(err).Fatal("Unable to set write permission on socket.")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -82,7 +82,7 @@ func RunServer(listenPath, dialTarget string) {
 
 	go func() {
 		if err := gs.Serve(lis); err != nil {
-			logrus.WithError(err).Fatal("Failed to serve")
+			log.WithError(err).Fatal("Failed to serve")
 		}
 	}()
 
@@ -95,11 +95,11 @@ func RunServer(listenPath, dialTarget string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				if err = httpServer.Shutdown(ctx); err != nil {
-					logrus.WithError(err).Fatal("Error while shutting down HTTP server")
+					log.WithError(err).Fatal("Error while shutting down HTTP server")
 				}
 			}()
 		} else {
-			logrus.WithError(err).Fatal("Failed to start HTTP server")
+			log.WithError(err).Fatal("Failed to start HTTP server")
 		}
 	}
 
@@ -108,9 +108,9 @@ func RunServer(listenPath, dialTarget string) {
 
 	select {
 	case sig := <-sigChan:
-		logrus.Infof("Got signal: %v", sig)
+		log.Infof("Got signal: %v", sig)
 	case <-th.TermChan:
-		logrus.Info("Received HTTP termination request")
+		log.Info("Received HTTP termination request")
 	}
 
 	gs.GracefulStop()
@@ -121,7 +121,7 @@ func RunClient(dialTarget, namespace, account, method string) {
 	opts := uds.GetDialOptions()
 	conn, err := grpc.NewClient(dialTarget, opts...)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to dial")
+		log.WithError(err).Fatal("Failed to dial")
 	}
 	defer func() { _ = conn.Close() }()
 	client := authz.NewAuthorizationClient(conn)
@@ -141,9 +141,9 @@ func RunClient(dialTarget, namespace, account, method string) {
 	}
 	resp, err := client.Check(context.Background(), &req)
 	if err != nil {
-		logrus.WithError(err).Fatal("Check failed")
+		log.WithError(err).Fatal("Check failed")
 	}
-	logrus.Infof("Check response:\n %v", resp)
+	log.Infof("Check response:\n %v", resp)
 }
 
 // NewCheckServer creates the ext_authz check server with the default set of check providers
@@ -163,7 +163,7 @@ type HTTPTerminationHandler struct {
 func (h *HTTPTerminationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.TermChan <- true
 	if _, err := io.WriteString(w, "terminating Dikastes\n"); err != nil {
-		logrus.WithError(err).Fatal("Error writing HTTP response")
+		log.WithError(err).Fatal("Error writing HTTP response")
 	}
 }
 
@@ -188,9 +188,9 @@ func (h *HTTPTerminationHandler) RunHTTPServer(addr string, port string) (*http.
 	httpServerWg := &sync.WaitGroup{}
 
 	httpServerWg.Go(func() {
-		logrus.Infof("starting HTTP server on %v", httpServer.Addr)
+		log.Infof("starting HTTP server on %v", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
-			logrus.WithError(err).Fatal("HTTP server closed unexpectedly")
+			log.WithError(err).Fatal("HTTP server closed unexpectedly")
 		}
 	})
 	return httpServer, httpServerWg, nil

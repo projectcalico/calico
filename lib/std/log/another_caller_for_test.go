@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package log
 
-import (
-	"github.com/sirupsen/logrus"
-)
+import "github.com/sirupsen/logrus"
 
-// debugFromAnotherFile calls Debug on the logger; it's in another file to test filename filtering!
-func debugFromAnotherFile(logger *logrus.Logger, msg string) {
-	logger.Debug(msg)
+// debugFromAnotherCaller emits a debug log from a different source file so the
+// background hook's debug-filename regex filter can be exercised.
+func debugFromAnotherCaller(lg *logrus.Logger, msg string) {
+	lg.Debug(msg)
 }
