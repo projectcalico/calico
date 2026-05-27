@@ -35,6 +35,36 @@ var _ = Describe("Masquerade manager", func() {
 		ruleRenderer rules.RuleRenderer
 	)
 
+	masqChain := func() [][]*generictables.Chain {
+		return [][]*generictables.Chain{{{
+			Name: "cali-nat-outgoing",
+			Rules: []generictables.Rule{
+				{
+					Action: iptables.MasqAction{},
+					Match: iptables.Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools"),
+				},
+			},
+		}}}
+	}
+	emptyChain := func() [][]*generictables.Chain {
+		return [][]*generictables.Chain{{{
+			Name:  "cali-nat-outgoing",
+			Rules: nil,
+		}}}
+	}
+
+	addPool := func(id, cidr string, masq bool) {
+		masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
+			Id: id,
+			Pool: &proto.IPAMPool{
+				Cidr:       cidr,
+				Masquerade: masq,
+			},
+		})
+	}
+
 	BeforeEach(func() {
 		ipSets = dpsets.NewMockIPSets()
 		natTable = newMockTable("nat")
@@ -64,167 +94,91 @@ var _ = Describe("Masquerade manager", func() {
 
 	Describe("after adding a masq pool", func() {
 		BeforeEach(func() {
-			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
-				Id: "pool-1",
-				Pool: &proto.IPAMPool{
-					Cidr:       "10.0.0.0/16",
-					Masquerade: true,
-				},
-			})
+			addPool("pool-1", "10.0.0.0/16", true)
 			// This one should be ignored due to wrong IP version.
-			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
-				Id: "pool-1v6",
-				Pool: &proto.IPAMPool{
-					Cidr:       "feed:beef::/96",
-					Masquerade: true,
-				},
-			})
-			err := masqMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			addPool("pool-1v6", "feed:beef::/96", true)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 		})
 
-		It("should add the pool to the masq IP set", func() {
+		It("should populate the IP sets and program the chain", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
-		})
-		It("should add the pool to the all IP set", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
-		})
-		It("should program the chain", func() {
 			Expect(natTable.UpdateCalled).To(BeTrue())
-			natTable.checkChains([][]*generictables.Chain{{{
-				Name: "cali-nat-outgoing",
-				Rules: []generictables.Rule{
-					{
-						Action: iptables.MasqAction{},
-						Match: iptables.Match().
-							SourceIPSet("cali40masq-ipam-pools").
-							NotDestIPSet("cali40all-ipam-pools"),
-					},
-				},
-			}}})
+			natTable.checkChains(masqChain())
 		})
+
 		It("an extra CompleteDeferredWork should be a no-op", func() {
 			natTable.UpdateCalled = false
-			err := masqMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 			Expect(natTable.UpdateCalled).To(BeFalse())
 		})
+
 		It("an unrelated update shouldn't trigger work", func() {
 			natTable.UpdateCalled = false
 			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
 				Hostname: "foo",
 				Ipv4Addr: "10.0.0.17",
 			})
-			err := masqMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 			Expect(natTable.UpdateCalled).To(BeFalse())
-		})
-
-		Describe("after adding a non-masq pool", func() {
-			BeforeEach(func() {
-				masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
-					Id: "pool-2",
-					Pool: &proto.IPAMPool{
-						Cidr:       "10.2.0.0/16",
-						Masquerade: false,
-					},
-				})
-				err := masqMgr.CompleteDeferredWork()
-				Expect(err).ToNot(HaveOccurred())
-			})
-
-			It("should not add the pool to the masq IP set", func() {
-				Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
-			})
-			It("should add the pool to the all IP set", func() {
-				Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From(
-					"10.0.0.0/16", "10.2.0.0/16")))
-			})
-			It("should program the chain", func() {
-				natTable.checkChains([][]*generictables.Chain{{{
-					Name: "cali-nat-outgoing",
-					Rules: []generictables.Rule{
-						{
-							Action: iptables.MasqAction{},
-							Match: iptables.Match().
-								SourceIPSet("cali40masq-ipam-pools").
-								NotDestIPSet("cali40all-ipam-pools"),
-						},
-					},
-				}}})
-			})
-
-			Describe("after removing masq pool", func() {
-				BeforeEach(func() {
-					masqMgr.OnUpdate(&proto.IPAMPoolRemove{
-						Id: "pool-1",
-					})
-					err := masqMgr.CompleteDeferredWork()
-					Expect(err).ToNot(HaveOccurred())
-				})
-				It("should remove from the masq IP set", func() {
-					Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-				})
-				It("should remove from the all IP set", func() {
-					Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From(
-						"10.2.0.0/16")))
-				})
-				It("should program empty chain", func() {
-					natTable.checkChains([][]*generictables.Chain{{{
-						Name:  "cali-nat-outgoing",
-						Rules: nil,
-					}}})
-				})
-
-				Describe("after removing the non-masq pool", func() {
-					BeforeEach(func() {
-						masqMgr.OnUpdate(&proto.IPAMPoolRemove{
-							Id: "pool-2",
-						})
-						err := masqMgr.CompleteDeferredWork()
-						Expect(err).ToNot(HaveOccurred())
-					})
-					It("masq set should be empty", func() {
-						Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-					})
-					It("all set should be empty", func() {
-						Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
-					})
-					It("should program empty chain", func() {
-						natTable.checkChains([][]*generictables.Chain{{{
-							Name:  "cali-nat-outgoing",
-							Rules: nil,
-						}}})
-					})
-				})
-			})
 		})
 	})
 
 	Describe("after adding a non-masq pool", func() {
 		BeforeEach(func() {
-			masqMgr.OnUpdate(&proto.IPAMPoolUpdate{
-				Id: "pool-1",
-				Pool: &proto.IPAMPool{
-					Cidr:       "10.0.0.0/16",
-					Masquerade: false,
-				},
-			})
-			err := masqMgr.CompleteDeferredWork()
-			Expect(err).ToNot(HaveOccurred())
+			addPool("pool-1", "10.0.0.0/16", false)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 		})
 
-		It("should not add the pool to the masq IP set", func() {
+		It("should populate only the all-pools IP set and program an empty chain", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-		})
-		It("should add the pool to the all IP set", func() {
 			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			natTable.checkChains(emptyChain())
 		})
-		It("should program empty chain", func() {
-			natTable.checkChains([][]*generictables.Chain{{{
-				Name:  "cali-nat-outgoing",
-				Rules: nil,
-			}}})
+	})
+
+	Describe("after adding both a masq and a non-masq pool", func() {
+		BeforeEach(func() {
+			addPool("pool-1", "10.0.0.0/16", true)
+			addPool("pool-2", "10.2.0.0/16", false)
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+		})
+
+		It("should populate the IP sets and program the chain", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.0.0.0/16", "10.2.0.0/16")))
+			natTable.checkChains(masqChain())
+		})
+	})
+
+	Describe("after adding both pools then removing the masq pool", func() {
+		BeforeEach(func() {
+			addPool("pool-1", "10.0.0.0/16", true)
+			addPool("pool-2", "10.2.0.0/16", false)
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+		})
+
+		It("should leave only the non-masq pool in the all-pools set and program an empty chain", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.From("10.2.0.0/16")))
+			natTable.checkChains(emptyChain())
+		})
+	})
+
+	Describe("after adding both pools then removing both", func() {
+		BeforeEach(func() {
+			addPool("pool-1", "10.0.0.0/16", true)
+			addPool("pool-2", "10.2.0.0/16", false)
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-2"})
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+		})
+
+		It("should empty both IP sets and program an empty chain", func() {
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+			Expect(ipSets.Members["all-ipam-pools"]).To(Equal(set.New[string]()))
+			natTable.checkChains(emptyChain())
 		})
 	})
 })
