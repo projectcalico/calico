@@ -22,6 +22,10 @@ on:
         required: true
         type: number
 
+# SHA-keyed for status events: a force-push gets a new SHA and runs in a
+# separate group, so the old SHA's run is not cancelled. Acceptable here —
+# Semaphore typically fires one status per (SHA, context), so the race is
+# rare and a stale comment would be overwritten on the next failure anyway.
 concurrency:
   group: sem-ai-ci-triage-${{ inputs.pr_number || github.event.sha || github.run_id }}
   cancel-in-progress: true
@@ -133,11 +137,15 @@ jobs:
             exit 0
           fi
 
+          # Tolerate non-JSON / unexpected payloads — fall through to the
+          # empty-file skip below rather than aborting the step.
+          set +e
           jq -r '
             .result.artifacts[0].parts[0].text //
             .result.message.parts[0].text //
             empty
           ' resp.json > triage.md
+          set -e
 
           if [[ ! -s triage.md ]]; then
             echo "::warning::empty or malformed triage response — skipping comment for this run"
@@ -165,7 +173,7 @@ jobs:
           PR=${{ steps.resolve.outputs.pr }}
 
           EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq "[.[] | select(.body | startswith(\"$MARKER\"))][0].id")
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][0].id")
 
           PAYLOAD=$(jq -n --arg b "$FULL_BODY" '{body: $b}')
 
