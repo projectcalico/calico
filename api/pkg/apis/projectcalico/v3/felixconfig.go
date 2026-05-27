@@ -96,11 +96,11 @@ const (
 )
 
 // +kubebuilder:validation:Enum=Disabled;PodsAndLoadBalancers
-type HostSubnetNeighResponsesMode string
+type LocalSubnetL2ReachabilityMode string
 
 const (
-	HostSubnetNeighResponsesDisabled             HostSubnetNeighResponsesMode = "Disabled"
-	HostSubnetNeighResponsesPodsAndLoadBalancers HostSubnetNeighResponsesMode = "PodsAndLoadBalancers"
+	LocalSubnetL2ReachabilityDisabled             LocalSubnetL2ReachabilityMode = "Disabled"
+	LocalSubnetL2ReachabilityPodsAndLoadBalancers LocalSubnetL2ReachabilityMode = "PodsAndLoadBalancers"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -1112,13 +1112,13 @@ type FelixConfigurationSpec struct {
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
 
-	// HostSubnetNeighResponses controls whether Felix automatically responds to
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
 	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
 	// selected LoadBalancer VIPs that fall within the same subnet as the host
 	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-	// subnet are reachable from the local L2 segment without BGP. [Default: PodsAndLoadBalancers]
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
 	// +optional
-	HostSubnetNeighResponses *HostSubnetNeighResponsesMode `json:"hostSubnetNeighResponses,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
+	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
 
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional

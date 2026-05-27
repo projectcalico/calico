@@ -888,23 +888,6 @@ floating IPs are always programmed, regardless of this setting.)
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Disabled` |
 
-### `HostSubnetNeighResponses` (config file) / `hostSubnetNeighResponses` (YAML)
-
-Controls whether Felix automatically responds to
-ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
-selected LoadBalancer VIPs that fall within the same subnet as the host
-interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-subnet are reachable from the local L2 segment without BGP.
-
-| Detail |   |
-| --- | --- |
-| Environment variable | `FELIX_HostSubnetNeighResponses` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> (case insensitive) |
-| Default value (above encoding) | `PodsAndLoadBalancers` |
-| `FelixConfiguration` field | `hostSubnetNeighResponses` (YAML) `HostSubnetNeighResponses` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
-| Default value (YAML) | `PodsAndLoadBalancers` |
-
 ### `IPForwarding` (config file) / `ipForwarding` (YAML)
 
 Controls whether Felix sets the host sysctls to enable IP forwarding. IP forwarding is required
@@ -1082,6 +1065,23 @@ reverting to normal priority.
 | `FelixConfiguration` field | `liveMigrationRouteConvergenceTime` (YAML) `LiveMigrationRouteConvergenceTime` (Go API) |
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `30s` |
+
+### `LocalSubnetL2Reachability` (config file) / `localSubnetL2Reachability` (YAML)
+
+Controls whether Felix automatically responds to
+ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+selected LoadBalancer VIPs that fall within the same subnet as the host
+interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+subnet are reachable from the local L2 segment without BGP.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LocalSubnetL2Reachability` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> (case insensitive) |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `localSubnetL2Reachability` (YAML) `LocalSubnetL2Reachability` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
+| Default value (YAML) | `Disabled` |
 
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 

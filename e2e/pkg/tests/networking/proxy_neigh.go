@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
-// proxy_neigh.go exercises the HostSubnetNeighResponses Felix feature
+// proxy_neigh.go exercises the LocalSubnetL2Reachability Felix feature
 // (a.k.a. proxy ARP/NDP). The feature lets Felix answer ARP (IPv4) and NDP
 // (IPv6) requests on host interfaces for pod IPs and LoadBalancer VIPs that
 // fall within the same L2 subnet as the host's interface. Without it, an
@@ -70,7 +70,7 @@ import (
 //
 // The extL2 container shares the L2 segment with the cluster nodes. It has no
 // /32 or /128 route to the test pool, so it must ARP/NDP for any address in
-// that pool — which is precisely what HostSubnetNeighResponses answers.
+// that pool — which is precisely what LocalSubnetL2Reachability answers.
 
 const (
 	// CIDRs we carve out of the kind network for the two test pools. We use
@@ -96,7 +96,7 @@ type proxyNeighEnv struct {
 }
 
 // setupProxyNeighEnv creates two IPPools (workload + LoadBalancer) in the
-// host's L2 subnet for the requested family, sets HostSubnetNeighResponses to
+// host's L2 subnet for the requested family, sets LocalSubnetL2Reachability to
 // PodsAndLoadBalancers, and spawns a docker container on the kind network.
 // All cleanup is registered via DeferCleanup so the caller doesn't need to
 // track restoration separately.
@@ -162,8 +162,8 @@ func setupProxyNeighEnv(f *framework.Framework, family corev1.IPFamily) *proxyNe
 	})
 	DeferCleanup(deleteIPPoolIfExists, cli, env.lbPoolName)
 
-	By("Ensuring HostSubnetNeighResponses=PodsAndLoadBalancers in default FelixConfiguration")
-	DeferCleanup(setHostSubnetNeighResponses(cli, v3.HostSubnetNeighResponsesPodsAndLoadBalancers))
+	By("Ensuring LocalSubnetL2Reachability=PodsAndLoadBalancers in default FelixConfiguration")
+	DeferCleanup(setLocalSubnetL2Reachability(cli, v3.LocalSubnetL2ReachabilityPodsAndLoadBalancers))
 
 	By("Spawning an L2-adjacent docker container on the kind network")
 	env.extL2, err = newExtL2Peer(utils.GenerateRandomName("proxy-neigh-extl2"), kindNetwork)
@@ -180,12 +180,12 @@ func setupProxyNeighEnv(f *framework.Framework, family corev1.IPFamily) *proxyNe
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("HostSubnetNeighResponses"),
+	describe.WithFeature("LocalSubnetL2Reachability"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
 	describe.RequiresKindNetwork(),
 	describe.RequiresNoEncap(),
-	"HostSubnetNeighResponses (proxy ARP)",
+	"LocalSubnetL2Reachability (proxy ARP)",
 	func() {
 		f := utils.NewDefaultFramework("proxy-arp")
 		var env *proxyNeighEnv
@@ -244,12 +244,12 @@ var _ = describe.CalicoDescribe(
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("HostSubnetNeighResponses"),
+	describe.WithFeature("LocalSubnetL2Reachability"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
 	describe.RequiresKindNetwork(),
 	describe.RequiresNoEncap(),
-	"HostSubnetNeighResponses (proxy NDP)",
+	"LocalSubnetL2Reachability (proxy NDP)",
 	func() {
 		f := utils.NewDefaultFramework("proxy-ndp")
 		var env *proxyNeighEnv
@@ -401,10 +401,10 @@ func deleteIPPoolIfExists(cli ctrlclient.Client, name string) {
 	}
 }
 
-// setHostSubnetNeighResponses mutates the default FelixConfiguration to put
-// HostSubnetNeighResponses into the requested mode and returns a function
+// setLocalSubnetL2Reachability mutates the default FelixConfiguration to put
+// LocalSubnetL2Reachability into the requested mode and returns a function
 // that restores the original value. The restore function is idempotent.
-func setHostSubnetNeighResponses(cli ctrlclient.Client, mode v3.HostSubnetNeighResponsesMode) func() {
+func setLocalSubnetL2Reachability(cli ctrlclient.Client, mode v3.LocalSubnetL2ReachabilityMode) func() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -412,13 +412,13 @@ func setHostSubnetNeighResponses(cli ctrlclient.Client, mode v3.HostSubnetNeighR
 	err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "fetching default FelixConfiguration")
 
-	var original *v3.HostSubnetNeighResponsesMode
-	if cfg.Spec.HostSubnetNeighResponses != nil {
-		v := *cfg.Spec.HostSubnetNeighResponses
+	var original *v3.LocalSubnetL2ReachabilityMode
+	if cfg.Spec.LocalSubnetL2Reachability != nil {
+		v := *cfg.Spec.LocalSubnetL2Reachability
 		original = &v
 	}
 
-	cfg.Spec.HostSubnetNeighResponses = ptr.To(mode)
+	cfg.Spec.LocalSubnetL2Reachability = ptr.To(mode)
 	err = cli.Update(ctx, cfg)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "updating FelixConfiguration to %s", mode)
 
@@ -437,9 +437,9 @@ func setHostSubnetNeighResponses(cli ctrlclient.Client, mode v3.HostSubnetNeighR
 			if err := cli.Get(rctx, ctrlclient.ObjectKey{Name: "default"}, cur); err != nil {
 				return err
 			}
-			cur.Spec.HostSubnetNeighResponses = original
+			cur.Spec.LocalSubnetL2Reachability = original
 			return cli.Update(rctx, cur)
-		}, "20s", "2s").Should(Succeed(), "restoring original HostSubnetNeighResponses")
+		}, "20s", "2s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
 	}
 }
 

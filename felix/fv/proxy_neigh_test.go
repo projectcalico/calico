@@ -40,7 +40,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-// proxy_neigh_test.go exercises the HostSubnetNeighResponses Felix feature
+// proxy_neigh_test.go exercises the LocalSubnetL2Reachability Felix feature
 // (proxy ARP / NDP) end-to-end through the calc graph, complementing the
 // integration coverage in e2e/pkg/tests/networking/proxy_neigh.go.
 //
@@ -93,7 +93,7 @@ const (
 )
 
 var _ = infrastructure.DatastoreDescribe(
-	"_BPF-SAFE_ _PROXY-NEIGH_ HostSubnetNeighResponses (proxy ARP)",
+	"_BPF-SAFE_ _PROXY-NEIGH_ LocalSubnetL2Reachability (proxy ARP)",
 	[]apiconfig.DatastoreType{apiconfig.Kubernetes},
 	func(getInfra infrastructure.InfraFactory) {
 
@@ -131,7 +131,8 @@ var _ = infrastructure.DatastoreDescribe(
 			// active from Felix's first calc-graph flush.
 			fc := api.NewFelixConfiguration()
 			fc.Name = "default"
-			fc.Spec.HostSubnetNeighResponses = new(api.HostSubnetNeighResponsesPodsAndLoadBalancers)
+			mode := api.LocalSubnetL2ReachabilityPodsAndLoadBalancers
+			fc.Spec.LocalSubnetL2Reachability = &mode
 
 			// Three nodes so the rendezvous-hash node selection for LB
 			// VIPs has actual choice. UseIPPools=false because we create

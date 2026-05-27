@@ -1098,9 +1098,6 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.HealthTimeoutOverride
           elementRelationship: atomic
-    - name: hostSubnetNeighResponses
-      type:
-        scalar: string
     - name: interfaceExclude
       type:
         scalar: string
@@ -1179,6 +1176,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: liveMigrationRouteConvergenceTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: localSubnetL2Reachability
+      type:
+        scalar: string
     - name: logActionRateLimit
       type:
         scalar: string

@@ -2051,9 +2051,9 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(FloatingIPType)
 		**out = **in
 	}
-	if in.HostSubnetNeighResponses != nil {
-		in, out := &in.HostSubnetNeighResponses, &out.HostSubnetNeighResponses
-		*out = new(HostSubnetNeighResponsesMode)
+	if in.LocalSubnetL2Reachability != nil {
+		in, out := &in.LocalSubnetL2Reachability, &out.LocalSubnetL2Reachability
+		*out = new(LocalSubnetL2ReachabilityMode)
 		**out = **in
 	}
 	if in.WindowsManageFirewallRules != nil {
