@@ -1837,6 +1837,8 @@ var vxlanWithIPv6Resources = vxlanWithBlock.withKVUpdates(
 			Dst:        "feed:beef::/64",
 		},
 	)...,
+).withExpectedEncapsulation(
+	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 ).withName("VXLAN with IPv6 Resources")
 
 // Minimal VXLAN set-up with a MAC address override for the remote node.
@@ -2840,7 +2842,7 @@ var hostInIPPool = vxlanWithBlock.withKVUpdates(
 		NatOutgoing: true,
 	},
 ).withExpectedEncapsulation(
-	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false},
+	&proto.Encapsulation{IpipEnabled: false, VxlanEnabled: true, VxlanEnabledV6: false, NoEncapEnabled: false},
 )
 
 // we start from vxlan setup as the test framework expects vxlan enabled

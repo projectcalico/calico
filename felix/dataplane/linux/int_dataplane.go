@@ -166,15 +166,17 @@ type Config struct {
 
 	MaxIPSetSize int
 
-	RouteSyncDisabled              bool
-	IptablesBackend                string
-	IPSetsRefreshInterval          time.Duration
-	RouteRefreshInterval           time.Duration
-	DeviceRouteSourceAddress       net.IP
-	DeviceRouteSourceAddressIPv6   net.IP
-	DeviceRouteProtocol            netlink.RouteProtocol
-	RemoveExternalRoutes           bool
-	ProgramClusterRoutes           bool
+	RouteSyncDisabled            bool
+	IptablesBackend              string
+	IPSetsRefreshInterval        time.Duration
+	RouteRefreshInterval         time.Duration
+	DeviceRouteSourceAddress     net.IP
+	DeviceRouteSourceAddressIPv6 net.IP
+	DeviceRouteProtocol          netlink.RouteProtocol
+	RemoveExternalRoutes         bool
+	ProgramClusterRoutes         bool
+	NoEncapEnabled               bool
+
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -271,7 +273,7 @@ type Config struct {
 
 	LookPathOverride func(file string) (string, error)
 
-	KubeClientSet *kubernetes.Clientset
+	KubeClientSet kubernetes.Interface
 
 	FeatureDetectOverrides map[string]string
 	FeatureGates           map[string]string
@@ -710,31 +712,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
-	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
-	// program no encapsulation routes.
-	if config.ProgramClusterRoutes {
-		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.noEncapManager = newNoEncapManager(
-				routeTableV4,
-				4,
-				config,
-				dp.loopSummarizer,
-			)
-			dp.noEncapParentIfaceC = make(chan string, 1)
-			go dp.noEncapManager.monitorParentDevice(
-				context.Background(),
-				time.Second*10,
-				dp.noEncapParentIfaceC,
-			)
-			dp.RegisterManager(dp.noEncapManager)
-		}
+	// Start a noEncap manager if an IP pool with no encapsulation exists.
+	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
+		dp.noEncapManager = newNoEncapManager(
+			routeTableV4,
+			4,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.noEncapParentIfaceC = make(chan string, 1)
+		go dp.noEncapManager.monitorParentDevice(
+			context.Background(),
+			time.Second*10,
+			dp.noEncapParentIfaceC,
+		)
+		dp.RegisterManager(dp.noEncapManager)
 
-		if config.IPv6Enabled &&
-			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
-			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
+		if config.IPv6Enabled {
+			log.Info("NoEncap IP pool present, starting thread to keep IPv6 noencap routes in sync.")
 			dp.noEncapManagerV6 = newNoEncapManager(
 				routeTableV6,
 				6,

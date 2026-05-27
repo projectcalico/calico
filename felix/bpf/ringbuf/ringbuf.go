@@ -44,7 +44,7 @@ const (
 	MapName = "cali_rb_evnt"
 
 	// DropsMapName is the name of the shared array that tracks dropped events.
-	// The BPF side emits drops as TYPE_LOST_EVENTS events through the ring buffer.
+	// The BPF side emits drops as EVENT_LOST_EVENTS events through the ring buffer.
 	DropsMapName = "cali_rb_drops"
 )
 

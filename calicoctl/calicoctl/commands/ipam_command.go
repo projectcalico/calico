@@ -76,7 +76,7 @@ func newIPAMCheckCommand() *cobra.Command {
 			}
 			bc := client.(accessor).Backend()
 
-			var kubeClient *kubernetes.Clientset
+			var kubeClient kubernetes.Interface
 			if kc, ok := bc.(*k8s.KubeClient); ok {
 				kubeClient = kc.ClientSet
 			} else {
