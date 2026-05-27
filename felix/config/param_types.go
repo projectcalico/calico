@@ -718,7 +718,7 @@ func (p *OneofListParam) SchemaDescription() string {
 		values = append(values, fmt.Sprintf("`%s`", v))
 	}
 	sort.Strings(values)
-	return "One of: " + strings.Join(values, ", ") + " (case insensitive)"
+	return "One of: " + strings.Join(values, ", ")
 }
 
 type CIDRListParam struct {
