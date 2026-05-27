@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 
-	log "github.com/sirupsen/logrus"
 	certv1 "k8s.io/api/certificates/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/cfg"
 	"github.com/projectcalico/calico/key-cert-provisioner/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // WatchAndWriteCSR Watches the CSR resource for updates and writes results to the certificate location (which should be mounted as an emptyDir)

@@ -16,7 +16,6 @@ package client
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +25,8 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // New returns a new controller-runtime client configured to use the projectcalico.org/v3 API group.
@@ -49,13 +50,13 @@ func New(cfg *rest.Config) (client.Client, error) {
 
 	if available {
 		// API is available, we can return the calicoclient
-		logrus.Infof("Using API server client for projectcalico.org/v3 API")
+		log.Infof("Using API server client for projectcalico.org/v3 API")
 		return c, nil
 	}
 
 	// If the projectcalico.org/v3 apigroup is not found,
 	// then we can assume that the API server is not present and default to calicoctl.
-	logrus.Infof("projectcalico.org/v3 API not available, falling back to calicoctl exec client")
+	log.Infof("projectcalico.org/v3 API not available, falling back to calicoctl exec client")
 	return NewCalicoctlExecClient(c)
 }
 

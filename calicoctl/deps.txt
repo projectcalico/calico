@@ -134,6 +134,7 @@ local:kube-controllers/pkg/config
 local:kube-controllers/pkg/controllers/loadbalancer
 local:kube-controllers/pkg/controllers/utils
 local:kube-controllers/pkg/converter
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/config

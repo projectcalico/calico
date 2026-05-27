@@ -24,7 +24,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -88,7 +88,7 @@ var _ = describe.CalicoDescribe(
 			kcc := v3.NewKubeControllersConfiguration()
 			err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, kcc)
 			Expect(err).NotTo(HaveOccurred(), "failed to get KubeControllersConfiguration")
-			logrus.Infof("KubeControllersConfiguration before modification: %+v", kcc.Spec)
+			log.Infof("KubeControllersConfiguration before modification: %+v", kcc.Spec)
 
 			// Save original value for restoration. Initialize the Node controller
 			// config if it's nil (it's enabled by default but may not be explicit).
@@ -142,7 +142,7 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to auto-assign IP")
 			Expect(v4s.PartialFulfillmentError()).NotTo(HaveOccurred(), "partial fulfillment error on IP assignment")
 			Expect(v4s.IPs).To(HaveLen(1), "expected exactly one IP to be assigned")
-			logrus.Infof("Allocated fake IP: %v", v4s.IPs[0])
+			log.Infof("Allocated fake IP: %v", v4s.IPs[0])
 
 			// Ensure cleanup in case GC doesn't release it.
 			DeferCleanup(func() {

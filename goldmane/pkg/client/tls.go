@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/credentials"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // ClientCredentials returns the transport credentials for a Goldmane gRPC client, configured to
@@ -38,7 +38,7 @@ func ClientCredentials(cert, key, ca string) (credentials.TransportCredentials, 
 
 func tlsConfig(cert, key, caFile string) (*tls.Config, error) {
 	// Load client cert.
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cert": cert,
 		"key":  key,
 	}).Debug("Loading client cert and key")
@@ -48,7 +48,7 @@ func tlsConfig(cert, key, caFile string) (*tls.Config, error) {
 	}
 
 	// Load CA cert.
-	logrus.WithField("ca", caFile).Debug("Loading CA cert")
+	log.WithField("ca", caFile).Debug("Loading CA cert")
 	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CA: %s", err)

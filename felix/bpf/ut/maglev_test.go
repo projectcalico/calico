@@ -23,7 +23,6 @@ import (
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -37,6 +36,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Important note to the delevoper:
@@ -2133,8 +2133,8 @@ func TestMaglevNormalSYNRetryForcePolicy(t *testing.T) {
 
 func withLogLevelWarnDo(f func()) {
 	// Disable debug while filling up maps.
-	loglevel := logrus.GetLevel()
-	logrus.SetLevel(logrus.WarnLevel)
-	defer logrus.SetLevel(loglevel)
+	loglevel := log.GetLevel()
+	log.SetLevel(log.WarnLevel)
+	defer log.SetLevel(loglevel)
 	f()
 }

@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -113,6 +114,15 @@ func isCobraSubcommand(s string) bool {
 func main() {
 	mode, newArgs := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
 	os.Args = newArgs
+
+	switch mode {
+	case modeCNIIPAM, modeCNI:
+		// CNI plugins emit their result JSON on stdout; any log line on
+		// stdout corrupts the parser. Redirect before either handler can
+		// log. ConfigureLogging inside the handlers may later replace
+		// this with a file/multi-writer once netconf is parsed.
+		log.SetOutput(os.Stderr)
+	}
 
 	switch mode {
 	case modeCNIIPAM:

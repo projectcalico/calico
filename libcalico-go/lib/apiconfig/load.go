@@ -22,8 +22,9 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)
