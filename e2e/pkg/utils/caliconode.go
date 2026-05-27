@@ -21,11 +21,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // GetCalicoNodePodOnNode returns the calico-node pod running on the given node.
@@ -36,7 +37,7 @@ func GetCalicoNodePodOnNode(clientset kubernetes.Interface, nodeName string) *co
 		LabelSelector: "k8s-app=calico-node",
 	})
 	if err != nil {
-		logrus.WithError(err).Error("Failed to list calico-node pods")
+		log.WithError(err).Error("Failed to list calico-node pods")
 		return nil
 	}
 	for i := range podList.Items {
@@ -54,20 +55,20 @@ func GetCalicoNodePodOnNode(clientset kubernetes.Interface, nodeName string) *co
 func GetPodInterfaceName(clientset kubernetes.Interface, workloadPod *corev1.Pod) string {
 	calicoNodePod := GetCalicoNodePodOnNode(clientset, workloadPod.Spec.NodeName)
 	if calicoNodePod == nil {
-		logrus.WithField("node", workloadPod.Spec.NodeName).Error("calico-node pod not found on node")
+		log.WithField("node", workloadPod.Spec.NodeName).Error("calico-node pod not found on node")
 		return ""
 	}
 
 	podIP := workloadPod.Status.PodIP
 	if podIP == "" {
-		logrus.WithField("pod", workloadPod.Name).Error("Workload pod has no IP")
+		log.WithField("pod", workloadPod.Name).Error("Workload pod has no IP")
 		return ""
 	}
 
 	cmd := fmt.Sprintf("ip route get %s", podIP)
 	out, err := ExecInCalicoNode(calicoNodePod, cmd)
 	if err != nil {
-		logrus.WithError(err).WithField("cmd", cmd).Error("Failed to exec ip route get in calico-node pod")
+		log.WithError(err).WithField("cmd", cmd).Error("Failed to exec ip route get in calico-node pod")
 		return ""
 	}
 
@@ -78,7 +79,7 @@ func GetPodInterfaceName(clientset kubernetes.Interface, workloadPod *corev1.Pod
 			return fields[i+1]
 		}
 	}
-	logrus.WithField("output", out).Error("Could not parse interface name from ip route get output")
+	log.WithField("output", out).Error("Could not parse interface name from ip route get output")
 	return ""
 }
 
@@ -88,12 +89,12 @@ func GetPodInterfaceIndex(calicoNodePod *corev1.Pod, intfName string) int {
 	cmd := fmt.Sprintf("cat /sys/class/net/%s/ifindex", intfName)
 	out, err := ExecInCalicoNode(calicoNodePod, cmd)
 	if err != nil {
-		logrus.WithError(err).WithField("cmd", cmd).Error("Failed to read interface index")
+		log.WithError(err).WithField("cmd", cmd).Error("Failed to read interface index")
 		return 0
 	}
 	idx, err := strconv.Atoi(strings.TrimSpace(out))
 	if err != nil {
-		logrus.WithError(err).WithField("output", out).Error("Failed to parse interface index")
+		log.WithError(err).WithField("output", out).Error("Failed to parse interface index")
 		return 0
 	}
 	return idx

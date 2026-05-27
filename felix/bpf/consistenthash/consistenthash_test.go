@@ -6,9 +6,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	types "github.com/projectcalico/calico/felix/bpf/consistenthash/test"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var testM = 71
@@ -33,7 +33,7 @@ var _ = Describe("BPF ConsistentHash UTs", func() {
 		mag.backendsByName[e.String()] = backend{permutation: permutation, endpoint: e}
 		mag.backendNames = append(mag.backendNames, e.String())
 
-		logrus.Infof("Appending backend name %s to backends. Num backends: %d", e.String(), len(mag.backendNames))
+		log.Infof("Appending backend name %s to backends. Num backends: %d", e.String(), len(mag.backendNames))
 		return e
 	}
 

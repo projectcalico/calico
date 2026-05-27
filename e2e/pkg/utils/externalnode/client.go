@@ -11,10 +11,10 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type Client struct {
@@ -30,7 +30,7 @@ type Client struct {
 // it will parse information from a predefined list of environment variables.
 func NewClient() *Client {
 	if config.ExtNodeIP() == "" || config.ExtNodeSSHKey() == "" || config.ExtNodeUsername() == "" {
-		logrus.Debug("External node details unavailable")
+		log.Debug("External node details unavailable")
 		return nil
 	}
 	client := &Client{
@@ -77,14 +77,14 @@ func (e *Client) IPs() []string {
 			"|", "grep", "-v", "inet6", // throw out the ipv6 ones
 			"|", "grep", "-v", "127.0.0.1", // throw out the loopback
 		)
-		logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
+		log.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
 		out, err := command.Output()
 		if err != nil {
-			logrus.WithError(err).Info("Setting external node intIPs failed")
+			log.WithError(err).Info("Setting external node intIPs failed")
 			return nil
 		}
 		outstr := strings.TrimSpace(string(out))
-		logrus.Infof("Output: %q", outstr)
+		log.Infof("Output: %q", outstr)
 		// outstr will look something like:
 		// inet 172.16.101.163/24 brd 172.16.101.255 scope global dynamic eth0
 		re := regexp.MustCompile("inet ([0-9.]+)")
@@ -92,7 +92,7 @@ func (e *Client) IPs() []string {
 		for _, i := range re.FindAllStringSubmatch(outstr, -1) {
 			ips = append(ips, i[1])
 		}
-		logrus.Infof("Setting external node intIPs=%v", ips)
+		log.Infof("Setting external node intIPs=%v", ips)
 		e.intIPs = ips
 	}
 	return e.intIPs
@@ -121,13 +121,13 @@ func (e *Client) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, e
 		dest,
 		"--",
 		shell, opt, fmt.Sprintf(`"%s"`, cmd))
-	logrus.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
+	log.Infof("Running '%s %s'", command.Path, strings.Join(command.Args[1:], " "))
 	out, err := command.Output()
 	outstr := strings.TrimSpace(string(out))
-	logrus.Infof("Output: %q", outstr)
+	log.Infof("Output: %q", outstr)
 	if err != nil {
 		err := err.(*exec.ExitError)
-		logrus.Infof("Stderr: %s", string(err.Stderr))
+		log.Infof("Stderr: %s", string(err.Stderr))
 	}
 	return outstr, err
 }

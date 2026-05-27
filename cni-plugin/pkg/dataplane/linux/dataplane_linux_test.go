@@ -24,10 +24,10 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestIsNetkitUnsupported(t *testing.T) {
@@ -110,7 +110,7 @@ func TestAddWorkloadLinkIntegration(t *testing.T) {
 				mtu:        wantMTU,
 				queues:     1,
 				deviceType: tc.request,
-				logger:     logrus.NewEntry(logrus.New()),
+				logger:     log.New(""),
 			}
 			const hostName = "host0"
 			const contName = "eth0"

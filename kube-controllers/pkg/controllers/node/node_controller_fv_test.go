@@ -25,13 +25,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	backend "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -879,7 +879,7 @@ func expectLabels(c client.Interface, labels map[string]string, node string) err
 	}
 	if !reflect.DeepEqual(cn.Labels, labels) {
 		s := fmt.Sprintf("Labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", labels, cn.Labels)
-		logrus.Warn(s)
+		log.Warn(s)
 		return errors.New(s)
 	}
 	return nil
@@ -892,7 +892,7 @@ func assertNumBlocks(bc backend.Client, num int) error {
 	}
 	if len(blocks.KVPairs) != num {
 		for _, kvp := range blocks.KVPairs {
-			logrus.Infof("[TEST] found block: %+v", kvp.Value.(*model.AllocationBlock))
+			log.Infof("[TEST] found block: %+v", kvp.Value.(*model.AllocationBlock))
 		}
 		return fmt.Errorf("Expected %d blocks, found %d", num, len(blocks.KVPairs))
 	}

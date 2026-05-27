@@ -22,8 +22,9 @@ import (
 	"github.com/docopt/docopt-go"
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const usage = `pktgen: generates packets for Felix FV testing.

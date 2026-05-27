@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -70,10 +70,10 @@ type OperatorConfig struct {
 func (c OperatorConfig) GitVersion() (string, error) {
 	tag, err := command.GitVersion(c.Dir, true)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to determine operator git version")
+		log.WithError(err).Error("Failed to determine operator git version")
 		return "", err
 	}
-	logrus.WithField("out", tag).Info("Current git describe")
+	log.WithField("out", tag).Info("Current git describe")
 	return tag, nil
 }
 
@@ -211,7 +211,7 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		Components: components,
 	}
 
-	logrus.WithField("file", pinnedVersionPath).Info("Creating pinned version file")
+	log.WithField("file", pinnedVersionPath).Info("Creating pinned version file")
 	pinnedVersionFile, err := os.Create(pinnedVersionPath)
 	if err != nil {
 		return fmt.Errorf("cannot create pinned version file: %w", err)
@@ -252,12 +252,12 @@ func RetrievePinnedOperator(outputDir string) (registry.Component, error) {
 func LoadHashrelease(repoRootDir, outputDir, hashreleaseSrcBaseDir string, latest bool) (*hashreleaseserver.Hashrelease, error) {
 	productBranch, err := utils.GitBranch(repoRootDir)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get current branch")
+		log.WithError(err).Error("Failed to get current branch")
 		return nil, err
 	}
 	pinnedVersion, err := retrievePinnedVersion(outputDir)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get pinned version")
+		log.WithError(err).Fatal("Failed to get pinned version")
 	}
 	return &hashreleaseserver.Hashrelease{
 		Name:           pinnedVersion.ReleaseName,

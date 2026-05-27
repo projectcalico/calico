@@ -19,7 +19,7 @@ import (
 	"errors"
 	"net"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // GetDefaultIPv4Pool detects host interfaces and selects default IP pool without overlapping

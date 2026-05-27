@@ -19,10 +19,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // MapMember represents a member of an nftables map.
@@ -56,10 +55,10 @@ func (n netNet) Key() []string {
 	// can only represent the set as a concatenation of IP addresses. Conveniently, the only
 	// current use of this type is for WorkloadEndpoint IP addresses which are always /32 or /128.
 	if n.net1.Version() == 4 && n.net1.Prefix() != 32 || n.net1.Version() == 6 && n.net1.Prefix() != 128 {
-		logrus.WithField("cidr", n.net1).Panic("Unexpected CIDR prefix")
+		log.WithField("cidr", n.net1).Panic("Unexpected CIDR prefix")
 	}
 	if n.net2.Version() == 4 && n.net2.Prefix() != 32 || n.net2.Version() == 6 && n.net2.Prefix() != 128 {
-		logrus.WithField("cidr", n.net2).Panic("Unexpected CIDR prefix")
+		log.WithField("cidr", n.net2).Panic("Unexpected CIDR prefix")
 	}
 	return []string{n.net1.Addr().String(), n.net2.Addr().String()}
 }
@@ -114,7 +113,7 @@ func (p v6IPPortMember) String() string {
 }
 
 func UnknownMember(k []string) SetMember {
-	logrus.WithField("key", k).Warn("Unknown member type")
+	log.WithField("key", k).Warn("Unknown member type")
 	return unknownMember{
 		concat: strings.Join(k, " . "),
 	}
@@ -134,7 +133,7 @@ func (u unknownMember) String() string {
 }
 
 func UnknownMapMember(k, v []string) MapMember {
-	logrus.WithField("key", k).Warn("Unknown member type")
+	log.WithField("key", k).Warn("Unknown member type")
 	return unknownMapMember{
 		kConcat: strings.Join(k, " . "),
 		vConcat: strings.Join(v, " . "),

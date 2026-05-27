@@ -20,7 +20,7 @@ import (
 	"net"
 	"os/exec"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // For TCP/UDP, each conntrack entry holds two copies of the tuple

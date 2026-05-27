@@ -18,9 +18,9 @@ import (
 	"fmt"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -73,7 +73,7 @@ func (p PolicyID) KindShortName() string {
 	case model.KindKubernetesClusterNetworkPolicy:
 		return ShortKindKubernetesClusterNetworkPolicy
 	default:
-		logrus.Warnf("Unrecognized policy kind %q when generating short name", p.Kind)
+		log.Warnf("Unrecognized policy kind %q when generating short name", p.Kind)
 		return p.Kind
 	}
 }
