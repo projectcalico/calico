@@ -187,6 +187,8 @@ type Config struct {
 
 	FloatingIPsEnabled bool
 
+	LocalSubnetL2Reachability string
+
 	Wireguard wireguard.Config
 
 	NetlinkTimeout time.Duration
@@ -381,6 +383,7 @@ type InternalDataplane struct {
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
+	proxyNeighManagers      []*proxyNeighManager
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -744,6 +747,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.noEncapParentIfaceCV6,
 			)
 			dp.RegisterManager(dp.noEncapManagerV6)
+		}
+	}
+
+	// Register the proxy neighbor managers when enabled. They listen on raw sockets
+	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
+	// within the same subnet as a host physical interface.
+	if config.LocalSubnetL2Reachability == "PodsAndLoadBalancers" {
+		proxyNeighMgr4 := newProxyNeighManager(config, 4)
+		dp.RegisterManager(proxyNeighMgr4)
+		dp.proxyNeighManagers = append(dp.proxyNeighManagers, proxyNeighMgr4)
+		if config.IPv6Enabled {
+			proxyNeighMgr6 := newProxyNeighManager(config, 6)
+			dp.RegisterManager(proxyNeighMgr6)
+			dp.proxyNeighManagers = append(dp.proxyNeighManagers, proxyNeighMgr6)
 		}
 	}
 
