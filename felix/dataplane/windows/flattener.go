@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/bits-and-blooms/bitset"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/felix/dataplane/windows/policysets"
 	"github.com/projectcalico/calico/felix/iputils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func flattenTiers(tiers [][]*hns.ACLPolicy) []*hns.ACLPolicy {

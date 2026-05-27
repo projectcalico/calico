@@ -21,7 +21,8 @@ import (
 
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // eventSize must match sizeof(struct tuple) in ringbuf_events.c:

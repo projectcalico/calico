@@ -18,8 +18,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -55,7 +54,7 @@ func WorkloadEndpointKeyToStatusFilename(key *model.WorkloadEndpointKey) string 
 	parts[fieldWorkloadID] = escape(key.WorkloadID)
 	parts[fieldEndpointID] = escape(key.EndpointID)
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"parts": parts,
 	}).Debug("Generating filename from WorkloadEndpointKey")
 

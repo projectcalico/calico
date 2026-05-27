@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/netlinkshim"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -61,7 +61,7 @@ type Metrics struct {
 	hostname           string
 	newWireguardClient func() (netlinkshim.Wireguard, error)
 	wireguardClient    netlinkshim.Wireguard
-	logCtx             *logrus.Entry
+	logCtx             log.Logger
 
 	rateLimitInterval time.Duration
 
@@ -92,7 +92,7 @@ func (collector *Metrics) maybeRefresh() []prometheus.Metric {
 	defer collector.lock.Unlock()
 	var metrics []prometheus.Metric
 	if ct := collectCallTime.Sub(collector.lastCollectionTime); ct < collector.rateLimitInterval {
-		collector.logCtx.WithFields(logrus.Fields{
+		collector.logCtx.WithFields(log.Fields{
 			"since":              ct.String(),
 			"ratelimit_interval": collector.rateLimitInterval.String(),
 		}).Debug("refreshStats disallowed due to rate limit")
@@ -100,7 +100,7 @@ func (collector *Metrics) maybeRefresh() []prometheus.Metric {
 	} else {
 		metrics = make([]prometheus.Metric, 0, len(collector.cachedMetrics))
 		devices := collector.getDevices()
-		collector.logCtx.WithFields(logrus.Fields{
+		collector.logCtx.WithFields(log.Fields{
 			"count": len(devices),
 			"dev":   devices,
 		}).Debug("collect device metrics enumerated devices")
@@ -116,7 +116,7 @@ func (collector *Metrics) maybeRefresh() []prometheus.Metric {
 func MustNewWireguardMetrics() *Metrics {
 	wg, err := NewWireguardMetrics()
 	if err != nil {
-		logrus.Panic(err)
+		log.Panic(err)
 	}
 	return wg
 }
@@ -130,11 +130,11 @@ func NewWireguardMetrics() (*Metrics, error) {
 }
 
 func NewWireguardMetricsWithShims(hostname string, newWireguardClient func() (netlinkshim.Wireguard, error), rateLimitInterval time.Duration) *Metrics {
-	logrus.WithField("hostname", hostname).Debug("created wireguard collector for host")
+	log.WithField("hostname", hostname).Debug("created wireguard collector for host")
 	return &Metrics{
 		hostname:           hostname,
 		newWireguardClient: newWireguardClient,
-		logCtx: logrus.WithFields(logrus.Fields{
+		logCtx: log.WithFields(log.Fields{
 			"prometheus_collector": "wireguard",
 		}),
 
@@ -180,7 +180,7 @@ func (collector *Metrics) appendDeviceMetrics(devices []*wgtypes.Device, m []pro
 	for _, device := range devices {
 		l := collector.defaultLabelValues(device.PublicKey.String(), deviceMetaLabelValues(device))
 
-		collector.logCtx.WithFields(logrus.Fields{
+		collector.logCtx.WithFields(log.Fields{
 			"dev":    device.Name,
 			"labels": l,
 		}).Debug("iterate device")
@@ -199,17 +199,17 @@ func (collector *Metrics) appendDeviceMetrics(devices []*wgtypes.Device, m []pro
 func (collector *Metrics) appendDevicePeerMetrics(devices []*wgtypes.Device, m []prometheus.Metric) []prometheus.Metric {
 	collector.logCtx.Debug("collecting wg peer(s) metrics")
 
-	collector.logCtx.WithFields(logrus.Fields{
+	collector.logCtx.WithFields(log.Fields{
 		"count": len(devices),
 	}).Debug("enumerated wireguard devices")
 
 	for _, device := range devices {
-		logCtx := collector.logCtx.WithFields(logrus.Fields{
+		logCtx := collector.logCtx.WithFields(log.Fields{
 			"key":  device.PublicKey,
 			"name": device.Name,
 		})
 		for _, peer := range device.Peers {
-			logCtx.WithFields(logrus.Fields{
+			logCtx.WithFields(log.Fields{
 				"peer_key":      peer.PublicKey,
 				"peer_endpoint": peer.Endpoint,
 			}).Debug("collect peer metrics")
@@ -218,7 +218,7 @@ func (collector *Metrics) appendDevicePeerMetrics(devices []*wgtypes.Device, m [
 
 			hs := float64(peer.LastHandshakeTime.Unix())
 
-			collector.logCtx.WithFields(logrus.Fields{
+			collector.logCtx.WithFields(log.Fields{
 				"rx_bytes_total": peer.ReceiveBytes,
 				"tx_bytes_total": peer.TransmitBytes,
 				"handshake_ts":   hs,

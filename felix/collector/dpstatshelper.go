@@ -15,8 +15,6 @@
 package collector
 
 import (
-	log "github.com/sirupsen/logrus"
-
 	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
@@ -25,6 +23,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 

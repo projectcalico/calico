@@ -21,11 +21,11 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"github.com/projectcalico/calico/felix/proto"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func TestWrapPayloadWithEnvelopeMainline(t *testing.T) {
-	logutils.ConfigureLoggingForTestingT(t)
+	log.RedirectTo(t)
 	msg := &proto.ConfigUpdate{
 		Config: map[string]string{
 			"key1": "value1",
@@ -46,7 +46,7 @@ func TestWrapPayloadWithEnvelopeMainline(t *testing.T) {
 }
 
 func TestAllPayloadTypes(t *testing.T) {
-	logutils.ConfigureLoggingForTestingT(t)
+	log.RedirectTo(t)
 	env := &proto.ToDataplane{}
 	payload := env.ProtoReflect().Descriptor().Oneofs().ByName("payload")
 	t.Log("Number of payload types:", payload.Fields().Len())
@@ -80,7 +80,7 @@ func TestAllPayloadTypes(t *testing.T) {
 }
 
 func BenchmarkWrapPayloadWithEnvelope(b *testing.B) {
-	logutils.ConfigureLoggingForTestingTB(b)
+	log.RedirectTo(b)
 	msg := &proto.ConfigUpdate{
 		Config: map[string]string{
 			"key1": "value1",

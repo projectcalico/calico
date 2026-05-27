@@ -24,20 +24,18 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/timeshim"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -161,13 +159,13 @@ type Wireguard struct {
 
 	// Callback function used to notify of public key updates for the local nodeData
 	statusCallback func(publicKey wgtypes.Key) error
-	opRecorder     logutils.OpRecorder
+	opRecorder     log.OpRecorder
 
 	// The write proc sys function.
 	writeProcSys func(path, value string) error
 
-	logCtx            *log.Entry
-	rateLimitedLogger *lclogutils.RateLimitedLogger
+	logCtx            log.Logger
+	rateLimitedLogger log.Logger
 }
 
 func New(
@@ -177,7 +175,7 @@ func New(
 	netlinkTimeout time.Duration,
 	deviceRouteProtocol netlink.RouteProtocol,
 	statusCallback func(publicKey wgtypes.Key) error,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 ) *Wireguard {
 	return NewWithShims(
@@ -212,7 +210,7 @@ func NewWithShims(
 	deviceRouteProtocol netlink.RouteProtocol,
 	statusCallback func(publicKey wgtypes.Key) error,
 	writeProcSys func(path, value string) error,
-	opRecorder logutils.OpRecorder,
+	opRecorder log.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 ) *Wireguard {
 	logCtx := log.WithField("ipVersion", ipVersion)
@@ -299,7 +297,7 @@ func NewWithShims(
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 		logCtx:               logCtx,
-		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
+		rateLimitedLogger:    log.NewRateLimitedLogger(log.WithInterval(4*time.Hour)).WithField("ipVersion", ipVersion),
 	}
 }
 

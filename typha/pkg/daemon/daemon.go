@@ -27,8 +27,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
@@ -44,7 +44,6 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
@@ -56,7 +55,7 @@ const DefaultConfigFile = "/etc/calico/typha.cfg"
 // entry point, or call Run() directly for programmatic use. The lifecycle is broken out
 // into several individual methods for ease of testing.
 type TyphaDaemon struct {
-	BuildInfoLogCxt *log.Entry
+	BuildInfoLogCxt log.Logger
 	ConfigFilePath  string
 	DatastoreClient DatastoreClient
 	ConfigParams    *config.Config
@@ -109,8 +108,8 @@ func New() *TyphaDaemon {
 			}
 			return ClientV3Shim{client.(RealClientV3), config}, nil
 		},
-		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
-		ConfigureLogging:      logutils.ConfigureLogging,
+		ConfigureEarlyLogging: ConfigureEarlyLogging,
+		ConfigureLogging:      ConfigureLogging,
 		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
 	}
 }

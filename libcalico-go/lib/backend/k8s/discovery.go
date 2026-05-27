@@ -18,9 +18,8 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	v1scheme "github.com/projectcalico/calico/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -40,10 +39,10 @@ func BackendAPIGroup(cfg *apiconfig.CalicoAPIConfigSpec) resources.BackingAPIGro
 // explicit configuration (if specified), or by auto-discovery of the API groups supported by the API server.
 func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
 	if cfg != nil && cfg.CalicoAPIGroup != "" && cfg.DatastoreType == apiconfig.Kubernetes {
-		logrus.WithField("apiGroup", cfg.CalicoAPIGroup).Info("Using explicitly configured Calico API group")
+		log.WithField("apiGroup", cfg.CalicoAPIGroup).Info("Using explicitly configured Calico API group")
 		return strings.EqualFold(cfg.CalicoAPIGroup, apiv3.GroupVersionCurrent)
 	}
-	logrus.Info("No explicit Calico API group configured, attempting to auto-discover")
+	log.Info("No explicit Calico API group configured, attempting to auto-discover")
 
 	// Try to perform auto-discovery of the API group, by contacting the API server.
 	// If we can't contact the API server, we default to not using v3 CRDs.
@@ -68,7 +67,7 @@ func UsingV3CRDs(cfg *apiconfig.CalicoAPIConfigSpec) bool {
 		}
 	}
 
-	logrus.WithFields(log.Fields{
+	log.WithFields(log.Fields{
 		"v3present": v3present,
 		"v1present": v1present,
 	}).Info("Auto-discovered Calico API groups")

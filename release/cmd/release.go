@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
@@ -76,8 +77,8 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					return fmt.Errorf("failed to generate release notes: %w", err)
 				}
 
-				logrus.WithField("file", filePath).Info("Generated release notes")
-				logrus.Info("Please review for accuracy, and format appropriately before releasing.")
+				log.WithField("file", filePath).Info("Generated release notes")
+				log.Info("Please review for accuracy, and format appropriately before releasing.")
 				return nil
 			},
 		},
@@ -375,7 +376,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 			cmd := exec.Command(filepath.Join(cfg.RepoRootDir, "bin", "gotestsum"), args...)
 			cmd.Dir = postreleaseDir
 			var errb strings.Builder
-			if logrus.IsLevelEnabled(logrus.DebugLevel) {
+			if log.IsLevelEnabled(log.DebugLevel) {
 				// If debug level is enabled, also write to stdout.
 				cmd.Stdout = io.MultiWriter(os.Stdout, logrus.StandardLogger().Out)
 				cmd.Stderr = io.MultiWriter(os.Stderr, &errb)
@@ -420,7 +421,7 @@ func logTestCmdSecure(dir, name string, args []string) {
 		}
 		i++
 	}
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"cmd": name + sb.String(),
 		"dir": dir,
 	}).Info("Running tests")

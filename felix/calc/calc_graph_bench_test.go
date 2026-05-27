@@ -26,9 +26,9 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
@@ -78,8 +78,8 @@ func benchInitialSnap(
 	netSetsAndPols int,
 ) {
 	RegisterTestingT(b)
-	defer logrus.SetLevel(logrus.GetLevel())
-	logrus.SetLevel(logrus.ErrorLevel)
+	defer log.SetLevel(log.GetLevel())
+	log.SetLevel(log.ErrorLevel)
 
 	epUpdates := makeEndpointUpdates(numEndpoints, "remotehost")
 	localUpdates := makeEndpointUpdates(numLocalEndpoints, "localhost")
@@ -92,7 +92,7 @@ func benchInitialSnap(
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		runtime.GC()
-		logrus.SetLevel(logrus.ErrorLevel)
+		log.SetLevel(log.ErrorLevel)
 
 		conf := config.New()
 		conf.FelixHostname = "localhost"
@@ -103,7 +103,7 @@ func benchInitialSnap(
 		}
 		cg = NewCalculationGraph(es, nil, conf, func() {})
 
-		logrus.SetLevel(logrus.WarnLevel)
+		log.SetLevel(log.WarnLevel)
 		b.StartTimer()
 		b.ReportAllocs()
 		startTime := time.Now()
@@ -432,8 +432,8 @@ const (
 
 func benchIsolatedCustomers(b *testing.B, numCustomers, podsPerNamespace, numLocalEps int) {
 	RegisterTestingT(b)
-	defer logrus.SetLevel(logrus.GetLevel())
-	logrus.SetLevel(logrus.ErrorLevel)
+	defer log.SetLevel(log.GetLevel())
+	log.SetLevel(log.ErrorLevel)
 
 	nsUpdates := makeCustomerNamespaceUpdates(numCustomers)
 	polUpdates := makeCustomerPolicies(numCustomers)
@@ -443,7 +443,7 @@ func benchIsolatedCustomers(b *testing.B, numCustomers, podsPerNamespace, numLoc
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		runtime.GC()
-		logrus.SetLevel(logrus.ErrorLevel)
+		log.SetLevel(log.ErrorLevel)
 
 		conf := config.New()
 		conf.FelixHostname = "localhost"
@@ -454,7 +454,7 @@ func benchIsolatedCustomers(b *testing.B, numCustomers, podsPerNamespace, numLoc
 		}
 		cg = NewCalculationGraph(es, nil, conf, func() {})
 
-		logrus.SetLevel(logrus.WarnLevel)
+		log.SetLevel(log.WarnLevel)
 		b.StartTimer()
 		b.ReportAllocs()
 		startTime := time.Now()

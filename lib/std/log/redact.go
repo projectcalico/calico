@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils
+package log
 
 import (
 	"net/url"
 	"strings"
 )
 
-// sensitiveSubstrings are substrings that, when found in a lowercased
-// config parameter name, indicate the value may contain credentials.
+// sensitiveSubstrings are substrings that, when found in a lowercased config
+// parameter name, indicate the value may contain credentials.
 var sensitiveSubstrings = []string{
 	"password", "passwd", "passphrase",
 	"token", "bearer",
@@ -31,14 +31,14 @@ var sensitiveSubstrings = []string{
 	"private",
 }
 
-// sensitiveSuffixes are suffixes that indicate inline key/cert material
-// (as opposed to file paths like "keyfile" or "certpath").
+// sensitiveSuffixes are suffixes that indicate inline key/cert material (as
+// opposed to file paths like "keyfile" or "certpath").
 var sensitiveSuffixes = []string{"key", "cert", "kubeconfig", "kubeconfiginline"}
 
-// IsSensitiveParam reports whether a configuration parameter name suggests
-// its value may contain credentials or key material.  Parameters whose names
-// end in "file" or "path" are assumed to be file-system paths (not inline
-// secrets) and are excluded.
+// IsSensitiveParam reports whether a configuration parameter name suggests its
+// value may contain credentials or key material. Parameters whose names end
+// in "file" or "path" are assumed to be filesystem paths (not inline secrets)
+// and are excluded.
 func IsSensitiveParam(name string) bool {
 	lower := strings.ToLower(name)
 	if strings.HasSuffix(lower, "file") || strings.HasSuffix(lower, "path") {
@@ -61,7 +61,7 @@ func IsSensitiveParam(name string) bool {
 // userinfo password while preserving the scheme, host, port, and path.
 // Query strings and fragments are stripped because they may carry credentials
 // (e.g. ?token=, ?X-Amz-Signature=) that url.Redacted() does not handle.
-// If the URL cannot be parsed, it returns "<invalid-url>".
+// Returns "<invalid-url>" if the URL cannot be parsed.
 func RedactURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {

@@ -7,11 +7,10 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	fvtests "github.com/projectcalico/calico/typha/fv-tests"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
@@ -36,7 +35,7 @@ func TestReconnection(t *testing.T) {
 	Eventually(recorder.KVs).Should(Equal(h0ConfigUpdates))
 
 	// Push client off h[0], it should consistently connect to h[1]
-	h[0].Server.TerminateRandomConnection(logrus.WithField("disconnection", 1), "test")
+	h[0].Server.TerminateRandomConnection(log.WithField("disconnection", 1), "test")
 	waitForConnection(t, h[1].Server, clientStoppedC)
 
 	// Keys that are common to both h[0] and h[1] get converted from "new" to "update".
@@ -44,7 +43,7 @@ func TestReconnection(t *testing.T) {
 	Eventually(recorder.KVs).Should(Equal(h1ConfigUpdates))
 
 	// And so on...
-	h[1].Server.TerminateRandomConnection(logrus.WithField("disconnection", 2), "test")
+	h[1].Server.TerminateRandomConnection(log.WithField("disconnection", 2), "test")
 	waitForConnection(t, h[0].Server, clientStoppedC)
 	// Keys that are common to both h[0] and h[1] get converted from "new" to "update".
 	tweakUpdateTypes(h0ConfigUpdates, h1ConfigUpdates)
@@ -68,7 +67,7 @@ func TestReconnectionNewServerNotInSync(t *testing.T) {
 	Eventually(recorder.KVs).Should(Equal(h0ConfigUpdates))
 
 	// Push client off h[0], it should consistently connect to h[1]
-	h[0].Server.TerminateRandomConnection(logrus.WithField("disconnection", 1), "test")
+	h[0].Server.TerminateRandomConnection(log.WithField("disconnection", 1), "test")
 	waitForConnection(t, h[1].Server, clientStoppedC)
 
 	// Since h[1] is not in sync and h[0] has a key that's not present on h[1]
@@ -81,7 +80,7 @@ func TestReconnectionNewServerNotInSync(t *testing.T) {
 	Consistently(recorder.Status).Should(Equal(api.ResyncInProgress))
 
 	// Reconnect to h[0], should get back to being in-sync.
-	h[1].Server.TerminateRandomConnection(logrus.WithField("disconnection", 2), "test")
+	h[1].Server.TerminateRandomConnection(log.WithField("disconnection", 2), "test")
 	waitForConnection(t, h[0].Server, clientStoppedC)
 	// Keys that are common to both h[0] and h[1] get converted from "new" to "update".
 	tweakUpdateTypes(h0ConfigUpdates, h0Withh1Overlay)
@@ -89,7 +88,7 @@ func TestReconnectionNewServerNotInSync(t *testing.T) {
 	Eventually(recorder.KVs).Should(Equal(h0ConfigUpdates))
 
 	// Push client off h[0], it should consistently connect to h[1]
-	h[0].Server.TerminateRandomConnection(logrus.WithField("disconnection", 1), "test")
+	h[0].Server.TerminateRandomConnection(log.WithField("disconnection", 1), "test")
 	waitForConnection(t, h[1].Server, clientStoppedC)
 	tweakUpdateTypes(h0Withh1Overlay, h0ConfigUpdates)
 	Eventually(recorder.KVs).Should(Equal(h0Withh1Overlay))
@@ -115,7 +114,7 @@ func setUpReconnectionTest(t *testing.T) (
 	chan struct{},
 ) {
 	RegisterTestingT(t)
-	logutils.RedirectLogrusToTestingT(t)
+	log.RedirectTo(t)
 
 	var h [2]*ServerHarness
 	for i := range 2 {
