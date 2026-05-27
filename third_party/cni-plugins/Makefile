@@ -39,7 +39,11 @@ BIN = bin/$(ARCH)
 
 CN_FLAGS = -ldflags "-X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=$(GIT_VERSION)"
 
+# Pre-create the host-side module cache before docker mounts it. Without this,
+# Docker creates the path as root if it doesn't exist, leaving user 1001 inside
+# the container unable to write to /go/pkg/mod (e.g. fresh CI workers).
 $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNETWORKING_PLUGINS_CLONED)
+	mkdir -p $(GOMOD_CACHE)
 	docker run \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/containernetworking-plugins:/go/src/github.com/containernetworking/plugins:z \
@@ -49,6 +53,7 @@ $(BIN)/host-local $(BIN)/loopback $(BIN)/portmap $(BIN)/tuning &: $(CONTAINERNET
 	@$(foreach file,$(CN_FILES),cp containernetworking-plugins/bin/$(file) $(BIN)/$(file);)
 
 $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
+	mkdir -p $(GOMOD_CACHE)
 	docker run \
 		$(EXTRA_DOCKER_ARGS) \
 		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
