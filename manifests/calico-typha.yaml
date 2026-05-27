@@ -309,6 +309,7 @@ spec:
                   type: array
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
+                  default: Disabled
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
                     when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
@@ -3174,6 +3175,7 @@ spec:
                     like Application layer policy. [Default: Empty]
                   type: string
                 programClusterRoutes:
+                  default: Enabled
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
                     when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,

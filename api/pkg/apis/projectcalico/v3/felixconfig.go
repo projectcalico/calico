@@ -600,6 +600,7 @@ type FelixConfigurationSpec struct {
 	// program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.
 	// [Default: Enabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +kubebuilder:default=Enabled
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required

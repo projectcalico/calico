@@ -157,6 +157,7 @@ type BGPConfigurationSpec struct {
 	// confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
 	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
 	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// +kubebuilder:default=Disabled
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
