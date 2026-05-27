@@ -40,10 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SEM_AI_TRIAGE_URL:   ${{ secrets.SEM_AI_TRIAGE_URL }}
+      SEM_AI_TRIAGE_URL: ${{ secrets.SEM_AI_TRIAGE_URL }}
       SEM_AI_TRIAGE_TOKEN: ${{ secrets.SEM_AI_TRIAGE_TOKEN }}
-      GH_TOKEN:            ${{ github.token }}
-      REPO:                ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
     steps:
       - name: Skip if secrets are not configured
         id: gate
