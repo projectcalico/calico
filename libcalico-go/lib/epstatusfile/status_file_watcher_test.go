@@ -242,6 +242,52 @@ var _ = Describe("Workload endpoint status file watcher test", func() {
 
 	})
 
+	driveSyntheticEvent := func(filePath string, op fsnotify.Op) {
+		watcher, err := fsnotify.NewWatcher()
+		Expect(err).NotTo(HaveOccurred())
+
+		loopDone := make(chan struct{})
+		go func() {
+			defer close(loopDone)
+			_ = w.runFsnotifyWatcher(watcher)
+		}()
+
+		watcher.Events <- fsnotify.Event{Name: filePath, Op: op}
+
+		_ = watcher.Close()
+		Eventually(loopDone, "2s").Should(BeClosed())
+	}
+
+	It("should fire OnFileCreation on a combined Create|Write event", func() {
+		filePath := filepath.Join(statusDir, "pod-create-write")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Create|fsnotify.Write)
+		Expect(r.Events()[filePath]).To(Equal([]string{"create"}))
+	})
+
+	It("should fire OnFileUpdate on a combined Write|Chmod event", func() {
+		filePath := filepath.Join(statusDir, "pod-write-chmod")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Write|fsnotify.Chmod)
+		Expect(r.Events()[filePath]).To(Equal([]string{"update"}))
+	})
+
+	It("should fire OnFileDeletion on a combined Remove|Rename event", func() {
+		filePath := filepath.Join(statusDir, "pod-remove-rename")
+		driveSyntheticEvent(filePath, fsnotify.Remove|fsnotify.Rename)
+		Expect(r.Events()[filePath]).To(Equal([]string{"delete"}))
+	})
+
+	It("should not fire any callback on a Chmod-only event", func() {
+		filePath := filepath.Join(statusDir, "pod-chmod-only")
+		Expect(os.WriteFile(filePath, []byte("name: pod1"), 0644)).To(Succeed())
+
+		driveSyntheticEvent(filePath, fsnotify.Chmod)
+		Expect(r.Events()[filePath]).To(BeNil())
+	})
+
 	It("should receive events when fsnotify fails", func() {
 		w.Start()
 		defer w.Stop()

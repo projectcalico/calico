@@ -41,12 +41,28 @@ struct rb_drops_val {
 
 CALI_MAP_V1(cali_rb_drops, BPF_MAP_TYPE_ARRAY, __u32, struct rb_drops_val, 1, 0)
 
-// ringbuf_flush_drops emits accumulated drop count as a TYPE_LOST_EVENTS
-// event through the ring buffer, at most once every CALI_RB_FLUSH_INTERVAL_NS.
-static CALI_BPF_INLINE void ringbuf_flush_drops(void)
+// ringbuf_bump_drops_at increments the drop counter for the given drops-map
+// value pointer.  Centralised so any future change to the synchronisation
+// primitive (e.g. swapping __sync builtins for explicit-ordering atomics)
+// touches one site for every ring buffer that consumes this header.
+// NULL-tolerant: BPF map lookups can in principle return NULL even for
+// single-entry array maps, and the caller would otherwise have to repeat
+// the guard.
+static CALI_BPF_INLINE void ringbuf_bump_drops_at(struct rb_drops_val *val)
 {
-	__u32 key = 0;
-	struct rb_drops_val *val = cali_rb_drops_lookup_elem(&key);
+	if (val) {
+		__sync_fetch_and_add(&val->count, 1);
+	}
+}
+
+// ringbuf_flush_drops_to emits the accumulated drop count for `val` as an
+// EVENT_LOST_EVENTS event through the ring buffer pointed to by `rb`, at
+// most once every CALI_RB_FLUSH_INTERVAL_NS. Shared between ring buffers
+// so the rate-limiting and atomic-restore semantics live in one place.
+// Per-map wrappers handle the typed lookup that a generic helper can't
+// share (the lookup function name is macro-expanded).
+static CALI_BPF_INLINE void ringbuf_flush_drops_to(void *rb, struct rb_drops_val *val)
+{
 	if (!val) {
 		return;
 	}
@@ -72,7 +88,7 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 		},
 		.count = dropped,
 	};
-	if (bpf_ringbuf_output(&cali_rb_evnt, &evt, sizeof(evt), 0) != 0) {
+	if (bpf_ringbuf_output(rb, &evt, sizeof(evt), 0) != 0) {
 		/* Ring still full — restore the counter so drops are not lost.
 		 * Concurrent increments between unlock and here are preserved:
 		 * the restore adds back the original amount on top of any new
@@ -87,6 +103,13 @@ static CALI_BPF_INLINE void ringbuf_flush_drops(void)
 	val->last_flush_ts = now;
 }
 
+// Per-map wrapper for the shared event ring buffer.
+static CALI_BPF_INLINE void ringbuf_flush_drops(void)
+{
+	__u32 key = 0;
+	ringbuf_flush_drops_to(&cali_rb_evnt, cali_rb_drops_lookup_elem(&key));
+}
+
 // Submit helper — drop-in replacement for perf_commit_event().
 // Unlike perf_commit_event, does not require a program context pointer.
 // On failure (ring buffer full), increments the shared drop counter.
@@ -96,10 +119,7 @@ static CALI_BPF_INLINE int ringbuf_submit_event(void *data, __u64 size)
 	int err = bpf_ringbuf_output(&cali_rb_evnt, data, size, 0);
 	if (err != 0) {
 		__u32 key = 0;
-		struct rb_drops_val *val = cali_rb_drops_lookup_elem(&key);
-		if (val) {
-			__sync_fetch_and_add(&val->count, 1);
-		}
+		ringbuf_bump_drops_at(cali_rb_drops_lookup_elem(&key));
 	} else {
 		ringbuf_flush_drops();
 	}

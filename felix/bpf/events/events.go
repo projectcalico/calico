@@ -139,7 +139,7 @@ func (r *ringBufferEventsReader) Next() (Event, error) {
 		return Event{}, err
 	}
 
-	// The BPF side emits TYPE_LOST_EVENTS with a u64 count payload when
+	// The BPF side emits EVENT_LOST_EVENTS with a u64 count payload when
 	// accumulated drops are flushed. Convert to ErrLostEvents so callers
 	// (bpfEventPoller) handle it the same way as the old perf lost records.
 	if evt.typ == TypeLostEvents {
