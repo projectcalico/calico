@@ -66,6 +66,17 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
                 group="ml2",
             )
 
+        # Calico's QoS support requires Neutron's 'qos' service plugin to be loaded.
+        # Add to whatever the operator has configured rather than forcing the whole
+        # list, since deployments often need other service plugins (segments, trunk,
+        # log, etc.).  Neutron loads core_plugin first and then iterates
+        # cfg.CONF.service_plugins to load the rest, so an override here is honoured for
+        # the subsequent load.
+        LOG.info("Add 'qos' to service_plugins, if not already present")
+        existing_service_plugins = cfg.CONF.service_plugins or []
+        if "qos" not in existing_service_plugins:
+            cfg.CONF.set_override("service_plugins", existing_service_plugins + ["qos"])
+
         # This is a bit of a hack to get the models_v2.Port attributes setup in such
         # a way as to avoid tracebacks in the neutron-server log.
         #

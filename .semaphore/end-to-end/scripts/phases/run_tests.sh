@@ -58,10 +58,10 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # image does not, so install them on the fly when using that path.
   PRE_RUN=":"
   if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
-    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
     RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
   else
-    GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
+    GO_VERSION=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_VERSION)' print)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"
     PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
   fi

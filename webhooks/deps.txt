@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/beorn7/perks v1.0.1
@@ -55,12 +55,12 @@ go.opentelemetry.io/proto/otlp v1.10.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
 golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
-golang.org/x/net v0.53.0
+golang.org/x/net v0.54.0
 golang.org/x/oauth2 v0.36.0
 golang.org/x/sync v0.20.0
-golang.org/x/sys v0.43.0
-golang.org/x/term v0.42.0
-golang.org/x/text v0.36.0
+golang.org/x/sys v0.44.0
+golang.org/x/term v0.43.0
+golang.org/x/text v0.37.0
 golang.org/x/time v0.15.0
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7
 google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9
@@ -70,11 +70,11 @@ google.golang.org/protobuf v1.36.11
 gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.4
-k8s.io/apimachinery v0.35.4
-k8s.io/apiserver v0.35.4
-k8s.io/client-go v0.35.4
-k8s.io/component-base v0.35.4
+k8s.io/api v0.35.5
+k8s.io/apimachinery v0.35.5
+k8s.io/apiserver v0.35.5
+k8s.io/client-go v0.35.5
+k8s.io/component-base v0.35.5
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912

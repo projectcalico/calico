@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 cloud.google.com/go v0.123.0
 cloud.google.com/go/auth v0.19.0
@@ -51,7 +51,7 @@ github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.67.5
 github.com/prometheus/procfs v0.20.1
 github.com/sirupsen/logrus v1.9.4
-github.com/slack-go/slack v0.22.0
+github.com/slack-go/slack v0.23.1
 github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 github.com/spiffe/go-spiffe/v2 v2.6.0
 github.com/urfave/cli v1.22.16
@@ -68,12 +68,12 @@ go.opentelemetry.io/otel/sdk/metric v1.43.0
 go.opentelemetry.io/otel/trace v1.43.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.50.0
-golang.org/x/net v0.53.0
+golang.org/x/crypto v0.51.0
+golang.org/x/net v0.54.0
 golang.org/x/oauth2 v0.36.0
 golang.org/x/sync v0.20.0
-golang.org/x/sys v0.43.0
-golang.org/x/text v0.36.0
+golang.org/x/sys v0.44.0
+golang.org/x/text v0.37.0
 golang.org/x/time v0.15.0
 google.golang.org/api v0.274.0
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7

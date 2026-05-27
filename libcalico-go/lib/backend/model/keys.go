@@ -17,6 +17,7 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"reflect"
 	"strings"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/namespace"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 const (
@@ -562,11 +562,11 @@ func OldKeyFromDefaultPath(path string) Key {
 		log.Debugf("Path is a pool: %v", path)
 		mungedCIDR := m[1]
 		cidr := strings.Replace(mungedCIDR, "-", "/", 1)
-		_, c, err := net.ParseCIDR(cidr)
+		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
 			log.WithError(err).Warningf("Failed to parse CIDR %s", cidr)
 		} else {
-			return IPPoolKey{CIDR: *c}
+			return IPPoolKey{CIDR: prefix.Masked()}
 		}
 	} else if m := matchGlobalConfig.FindStringSubmatch(path); m != nil {
 		log.Debugf("Path is a global felix config: %v", path)

@@ -1947,7 +1947,7 @@ var _ = Describe("Static", func() {
 				Comment: []string{"MarkSeenMASQ Mark"},
 			},
 			{
-				Match:   iptables.Match().MarkMatchesWithMask(0x3800000, 0x3f00000),
+				Match:   iptables.Match().MarkMatchesWithMask(0x1800000, 0x1f00000),
 				Action:  iptables.ReturnAction{},
 				Comment: []string{"MarkSeenNATOutgoing Mark"},
 			},

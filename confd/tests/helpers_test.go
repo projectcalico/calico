@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,7 +54,6 @@ import (
 	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
@@ -665,7 +665,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		for _, a := range standardBlockAffinities {
 			_, err := bc.Apply(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: netip.MustParsePrefix(a.cidr),
 					Host: a.host,
 				},
 				Value: &model.BlockAffinity{
@@ -677,7 +677,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		return func() {
 			for _, a := range standardBlockAffinities {
 				_, _ = bc.Delete(ctx, model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: netip.MustParsePrefix(a.cidr),
 					Host: a.host,
 				}, "")
 			}
@@ -716,14 +716,6 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 			}
 		}
 	}
-}
-
-func mustParseCIDR(s string) cnet.IPNet {
-	_, cidr, err := cnet.ParseCIDR(s)
-	if err != nil {
-		panic(fmt.Sprintf("parsing CIDR %q: %v", s, err))
-	}
-	return *cidr
 }
 
 // oneshotTestCase defines a single oneshot confd template rendering test.

@@ -127,6 +127,14 @@ endif
 endif
 endif
 
+# Optional cap on go build/test package parallelism. Appended to GOFLAGS so
+# it flows through every docker invocation that already passes GOFLAGS in.
+# Useful for limiting memory pressure when running multiple parallel builds
+# on a workstation (each in-flight package can fork its own compiler).
+ifneq ($(GO_BUILD_PARALLELISM),)
+GOFLAGS := $(GOFLAGS) -p=$(GO_BUILD_PARALLELISM)
+endif
+
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -308,6 +316,23 @@ else
 endif
 
 EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+
+# Optional per-build resource caps. When unset, no flags are added and the
+# container has full host access (current behaviour). Useful when running
+# multiple parallel builds on a workstation to avoid memory thrash.
+#   DOCKER_CPUS=N           Hard cap on total CPU bandwidth (any core).
+#   DOCKER_CPUSET_CPUS=0-3  Pin container to specific cores (true affinity).
+#   GOMAXPROCS=N            Cap goroutine parallelism inside each go invocation
+#                           (linker, vet, etc.); complements -p=N from GOFLAGS.
+ifneq ($(DOCKER_CPUS),)
+EXTRA_DOCKER_ARGS += --cpus=$(DOCKER_CPUS)
+endif
+ifneq ($(DOCKER_CPUSET_CPUS),)
+EXTRA_DOCKER_ARGS += --cpuset-cpus=$(DOCKER_CPUSET_CPUS)
+endif
+ifneq ($(GOMAXPROCS),)
+EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
+endif
 
 # Define go architecture flags
 GOARCH_FLAGS :=-e GOARCH=$(ARCH)

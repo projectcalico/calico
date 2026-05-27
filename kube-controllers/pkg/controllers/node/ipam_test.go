@@ -365,7 +365,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			idx := 0
 			cidr := net.MustParseCIDR("10.0.0.0/30")
 			aff := "host:cnode"
-			key := model.BlockKey{CIDR: cidr}
+			key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 			b := model.AllocationBlock{
 				CIDR:        cidr,
 				Affinity:    &aff,
@@ -584,7 +584,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Add a new block with no allocations.
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -729,7 +729,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		// Add first block with no pools established.
 		firstBlockCIDR := net.MustParseCIDR("192.168.0.0/30")
 		firstBlockAff := "host:cnode"
-		firstBlockKey := model.BlockKey{CIDR: firstBlockCIDR}
+		firstBlockKey := model.BlockKey{CIDR: model.PrefixFromIPNet(firstBlockCIDR)}
 		firstBlock := model.AllocationBlock{
 			CIDR:        firstBlockCIDR,
 			Affinity:    &firstBlockAff,
@@ -818,7 +818,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		secondBlockCIDR := net.MustParseCIDR("10.16.0.0/30")
 		secondBlockAff := "host:cnode"
-		secondBlockKey := model.BlockKey{CIDR: secondBlockCIDR}
+		secondBlockKey := model.BlockKey{CIDR: model.PrefixFromIPNet(secondBlockCIDR)}
 		secondBlock := model.AllocationBlock{
 			CIDR:        secondBlockCIDR,
 			Affinity:    &secondBlockAff,
@@ -915,7 +915,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1034,7 +1034,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1115,7 +1115,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1282,7 +1282,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1308,7 +1308,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Allocate an IPv6 address to the pod as well.
 		cidrv6 := net.MustParseCIDR("fe80::00/126")
-		key2 := model.BlockKey{CIDR: cidrv6}
+		key2 := model.BlockKey{CIDR: model.PrefixFromIPNet(cidrv6)}
 		b2 := model.AllocationBlock{
 			CIDR:        cidrv6,
 			Affinity:    &aff,
@@ -1448,7 +1448,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1529,7 +1529,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1573,7 +1573,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Add a new block with no allocations.
 		cidr2 := net.MustParseCIDR("10.0.0.4/30")
-		key2 := model.BlockKey{CIDR: cidr2}
+		key2 := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr2)}
 		b2 := model.AllocationBlock{
 			CIDR:        cidr2,
 			Affinity:    &aff,
@@ -1639,7 +1639,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		handle := "test-handle"
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -1683,7 +1683,7 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		// Add a new block with no allocations.
 		cidr2 := net.MustParseCIDR("10.0.0.4/30")
-		key2 := model.BlockKey{CIDR: cidr2}
+		key2 := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr2)}
 		b2 := model.AllocationBlock{
 			CIDR:        cidr2,
 			Affinity:    &aff,
@@ -1755,7 +1755,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			}
 			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/24", i))
 			aff := "host:cnode"
-			key := model.BlockKey{CIDR: cidr}
+			key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 			b := model.AllocationBlock{
 				CIDR:        cidr,
 				Affinity:    &aff,
@@ -1834,7 +1834,7 @@ var _ = Describe("IPAM controller UTs", func() {
 			}
 			cidr := net.MustParseCIDR(fmt.Sprintf("10.0.%d.0/31", i))
 			aff := "host:cnode"
-			key := model.BlockKey{CIDR: cidr}
+			key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 			b := model.AllocationBlock{
 				CIDR:        cidr,
 				Affinity:    &aff,
@@ -2190,7 +2190,7 @@ var _ = Describe("IPAM controller UTs", func() {
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:dead-node"
 		idx := 0
-		key := model.BlockKey{CIDR: cidr}
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
 		b := model.AllocationBlock{
 			CIDR:        cidr,
 			Affinity:    &aff,
@@ -2296,7 +2296,7 @@ var _ = Describe("IPAM controller UTs", func() {
 					},
 				},
 			}
-			kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &b}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
 			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
 		}
 
@@ -2393,7 +2393,7 @@ var _ = Describe("IPAM controller UTs", func() {
 					},
 				},
 			}
-			kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &b}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
 			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
 		}
 
@@ -2474,7 +2474,7 @@ func createBlock(pods []v1.Pod, host, cidrStr string) bapi.Update {
 		Unallocated: unalloc,
 		Attributes:  attrs,
 	}
-	kvp := model.KVPair{Key: model.BlockKey{CIDR: cidr}, Value: &block}
+	kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &block}
 	return bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
 }
 

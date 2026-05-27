@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
-# Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -39,6 +39,7 @@ from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
 from networking_calico.plugins.ml2.drivers.calico import status
+from networking_calico.resync import scope as resync
 
 _log = logging.getLogger(__name__)
 logging.getLogger().addHandler(logging.NullHandler())
@@ -366,9 +367,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.egress_minburst_bytes = 0
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
-        lib.m_oslo_config.cfg.CONF.calico.resync_interval_secs = (
-            mech_calico.DEFAULT_RESYNC_INTERVAL_SECS
-        )
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
@@ -443,16 +442,41 @@ class TestPluginEtcdBase(_TestEtcdBase):
         context._plugin_context.to_dict.return_value = {}
         return context
 
+    def _trigger_resync(self, expect_ok=True, **scope_kwargs):
+        """Drive a resync.
+
+        ``scope_kwargs`` accepts ``networks=``, ``subnets=``, ``ports=`` and
+        ``security_groups=`` (lists of IDs) plus ``include_security_groups_for_ports``.
+        Returns the ResyncResult.
+
+        Asserts ``result.ok`` by default so that a resync that silently flips
+        ``ok=False`` (e.g. because an unexpected exception in ``Scope.run`` was
+        caught and reported in ``result.error``) doesn't pass a test whose only
+        assertions happen to match the no-op output.  Negative tests can opt
+        out with ``expect_ok=False``.
+
+        If the driver has been initialised (post _post_fork_init) we reuse its syncers
+        so the same primed project cache is in play.  Otherwise we let the runner build
+        fresh syncers against the mocked DB and Keystone.
+        """
+        result = resync.Scope(
+            self.db,
+            driver=self.driver if hasattr(self.driver, "endpoint_syncer") else None,
+            admin_context=mech_calico.ctx.get_admin_context(),
+            **scope_kwargs,
+        ).run()
+        if expect_ok:
+            self.assertTrue(result.ok, "resync failed: %s" % result.error)
+        return result
+
     def test_start_two_ports(self):
         """Startup with two existing ports but no existing etcd data."""
         # Provide two Neutron ports.
         self.osdb_networks = [lib.network1, lib.network2]
         self.osdb_ports = [lib.port1, lib.port2]
 
-        # Allow the etcd transport's resync thread to run.
-        with lib.FixedUUID("uuid-start-two-ports"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        # Drive the one-shot resync.
+        self.do_post_fork_actions("uuid-start-two-ports")
 
         ep_deadbeef_key_v3 = (
             "/calico/resources/v3/projectcalico.org/workloadendpoints/"
@@ -551,7 +575,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # Allow it to run again, this time auditing against the etcd data that
         # was written on the first iteration.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -575,7 +599,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Do another resync - expect no changes to the etcd data.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -618,7 +642,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # resync will now discover that.
         _log.info("Resync with existing etcd data")
         self.osdb_ports[0]["binding:host_id"] = "felix-host-1"
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
 
         self.assertEtcdDeletes(set([ep_deadbeef_key_v3]))
         ep_deadbeef_key_v3 = ep_deadbeef_key_v3.replace("new--host", "felix--host--1")
@@ -869,7 +893,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Resync with all latest data - expect no etcd writes or deletes.
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set([]))
 
@@ -924,7 +948,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # cleaned up.
         self.osdb_ports = [context.original]
         _log.info("Resync with existing etcd data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(
             set(
@@ -967,7 +991,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
             {"subnet_id": "subnet-id-10.65.0--24", "ip_address": "10.65.0.188"}
         ]
         _log.info("Resync with edited data")
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
 
         ep_hello_value_v3["spec"]["ipNetworks"] = ["10.65.0.188/32"]
         ep_hello_value_v3["spec"]["ipv4Gateway"] = "10.65.0.1"
@@ -1153,9 +1177,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Allow the etcd transport's resync thread to run. The last thing it
         # does is write the Felix config, so let it run three reads.
 
-        with lib.FixedUUID("uuid-start-no-ports"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-start-no-ports")
 
         self.assertEtcdWrites(self.initial_etcd3_writes)
 
@@ -1195,9 +1217,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Allow the etcd transport's resync thread to run.  Expect the usual
         # writes.
-        with lib.FixedUUID("uuid-subnet-hooks"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-subnet-hooks")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1258,10 +1278,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
         self.driver.create_subnet_postcommit(context)
         self.assertEtcdWrites({})
 
-        # Allow the etcd transport's resync thread to run again.  Expect no
-        # change in etcd subnet data.
-        self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        # Re-run the resync.  Expect no change in etcd subnet data.
+        self._trigger_resync()
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
@@ -1291,9 +1309,8 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Do a resync where we simulate the etcd data having been lost.
         with lib.FixedUUID("uuid-subnet-hooks-2"):
-            self.give_way()
             self.etcd_data = {}
-            self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+            self._trigger_resync()
 
         expected_writes[
             "/calico/resources/v3/projectcalico.org/clusterinformations/" + "default"
@@ -1316,8 +1333,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # changed which subnets where DHCP-enabled.
         subnet1["enable_dhcp"] = True
         subnet2["enable_dhcp"] = False
-        self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites(
             {
                 "/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24": {
@@ -1337,8 +1353,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Do a resync where we simulate having missed a dynamic update that
         # changed a Calico-relevant property of a DHCP-enabled subnet.
         subnet1["gateway_ip"] = "10.65.0.2"
-        self.give_way()
-        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self._trigger_resync()
         self.assertEtcdWrites(
             {
                 "/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24": {
@@ -1571,20 +1586,11 @@ class TestPluginEtcd(TestPluginEtcdBase):
             },
         )
 
-    def test_not_master_does_not_resync(self):
-        """Test that a driver that is not master does not resync."""
-        # Initialize the state early to put the elector in place, then override
-        # it to claim that the driver is not master.
-        self.driver._post_fork_init()
-
-        with mock.patch.object(self.driver, "elector") as m_elector:
-            m_elector.master.return_value = False
-
-            # Allow the etcd transport's resync thread to run. Nothing will
-            # happen.
-            self.give_way()
-            self.simulated_time_advance(31)
-            self.assertEtcdWrites({})
+    def test_startup_resync_disabled(self):
+        """With startup_resync=never, nothing is written."""
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync = "never"
+        self.do_post_fork_actions()
+        self.assertEtcdWrites({})
 
     def assertNeutronToEtcd(self, neutron_rule, exp_etcd_rule):
         etcd_rule = policy._neutron_rule_to_etcd_rule(neutron_rule)
@@ -1624,9 +1630,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             )
         }
-        with lib.FixedUUID("uuid-profile-prefixing"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1674,9 +1678,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 }
             ),
         }
-        with lib.FixedUUID("uuid-profile-prefixing"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-profile-prefixing")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1737,9 +1739,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        with lib.FixedUUID("uuid-old-data"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[
@@ -1756,6 +1756,99 @@ class TestPluginEtcd(TestPluginEtcdBase):
         )
 
 
+class TestNarrowResync(TestPluginEtcdBase):
+    """Tests for the narrow-scope resync path (calico-resync --port etc.)."""
+
+    def _do_initial_all_resync(self, uuid="uuid-narrow-init"):
+        """Set up a couple of ports and run a full resync to populate etcd."""
+        self.osdb_networks = [lib.network1, lib.network2]
+        self.osdb_ports = [lib.port1, lib.port2]
+        self.do_post_fork_actions(uuid)
+        # Clear writes so the per-test assertions see only the narrow resync's effect.
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+    def test_port_narrow_resync_no_op_when_correct(self):
+        """Narrow resync of a port already correct in etcd writes nothing."""
+        self._do_initial_all_resync()
+        result = self._trigger_resync(ports=[lib.port1["id"]])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["endpoints"]["correct"], 1)
+        self.assertEqual(result.phases["endpoints"]["updated"], 0)
+        self.assertEqual(result.phases["endpoints"]["created"], 0)
+        self.assertEqual(self.recent_writes, {})
+
+    def test_port_narrow_resync_recreates_after_etcd_loss(self):
+        """If etcd has lost the WEP, a narrow port resync recreates it."""
+        self._do_initial_all_resync()
+        # Clobber the etcd-side state for port1 only.
+        ep_key = next(
+            k for k in self.etcd_data if "workloadendpoints" in k and "DEADBEEF" in k
+        )
+        del self.etcd_data[ep_key]
+        result = self._trigger_resync(ports=[lib.port1["id"]])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["endpoints"]["created"], 1)
+        self.assertIn(ep_key, self.recent_writes)
+
+    def test_subnet_narrow_resync_writes_only_when_changed(self):
+        """Narrow subnet resync only updates when the subnet has changed."""
+        subnet = {
+            "network_id": "net-id-1",
+            "enable_dhcp": True,
+            "id": "subnet-narrow-1",
+            "cidr": "10.99.0.0/24",
+            "gateway_ip": "10.99.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+        # First narrow resync: subnet missing in etcd, gets created.
+        result = self._trigger_resync(subnets=[subnet["id"]])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["subnets"]["created"], 1)
+        self.recent_writes = {}
+        # Second narrow resync, no change: zero writes, marked correct.
+        result = self._trigger_resync(subnets=[subnet["id"]])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["subnets"]["correct"], 1)
+        self.assertEqual(result.phases["subnets"]["updated"], 0)
+        self.assertEqual(self.recent_writes, {})
+
+    def test_subnet_narrow_resync_deletes_when_gone(self):
+        """If a subnet is gone from Neutron, narrow resync deletes from etcd."""
+        subnet = {
+            "network_id": "net-id-1",
+            "enable_dhcp": True,
+            "id": "subnet-narrow-2",
+            "cidr": "10.98.0.0/24",
+            "gateway_ip": "10.98.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+        # Populate etcd by way of an initial narrow create.
+        self._trigger_resync(subnets=[subnet["id"]])
+        self.recent_writes = {}
+        # Subnet vanishes from Neutron.
+        self.osdb_subnets = []
+        result = self._trigger_resync(subnets=[subnet["id"]])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["subnets"]["deleted"], 1)
+        # The etcd key for the deleted subnet should be in recent_deletes.
+        expected_key = "/calico/dhcp/v2/no-region/subnet/subnet-narrow-2"
+        self.assertIn(expected_key, self.recent_deletes)
+
+    def test_security_group_narrow_resync_no_op_when_correct(self):
+        """Narrow SG resync is a no-op when the NetworkPolicy is correct."""
+        self._do_initial_all_resync()
+        result = self._trigger_resync(security_groups=["SGID-default"])
+        self.assertTrue(result.ok)
+        self.assertEqual(result.phases["policy"]["correct"], 1)
+        self.assertEqual(result.phases["policy"]["updated"], 0)
+        self.assertEqual(self.recent_writes, {})
+
+
 class TestLiveMigration(TestPluginEtcdBase):
     """Tests for OpenStack live migration handling."""
 
@@ -1769,9 +1862,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.port = copy.deepcopy(lib.port1)
         self.osdb_networks = [lib.network1]
         self.osdb_ports = [self.port]
-        with lib.FixedUUID("uuid-lm-test"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-lm-test")
         # Clear initial writes.
         self.recent_writes = {}
         self.recent_deletes = set()
@@ -2080,19 +2171,6 @@ class TestLiveMigration(TestPluginEtcdBase):
         # Should NOT have called notify_port_active_direct.
         self.db.nova_notifier.notify_port_active_direct.assert_not_called()
 
-    def _trigger_resync(self):
-        """Trigger a periodic resync by advancing simulated time.
-
-        The resync thread sleeps for RESYNC_INTERVAL_SECS (default 60s)
-        between resyncs.  We advance by 61s to ensure the next resync
-        fires, and give_way to let eventlet threads run.
-        """
-        self.recent_writes = {}
-        self.recent_deletes = set()
-        with lib.FixedUUID("uuid-resync"):
-            self.simulated_time_advance(61)
-            self.give_way()
-
     def test_resync_creates_missing_live_migration(self):
         """Resync creates LiveMigration and dest WEP for migrating port."""
         self._do_initial_resync()
@@ -2154,6 +2232,159 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The stale LiveMigration should have been deleted.
         self.assertIn(stale_lm_key, self.recent_deletes)
 
+    def test_narrow_resync_creates_missing_live_migration(self):
+        """Narrow port resync writes LM and dest WEP for migrating port."""
+        self._do_initial_resync()
+        self.osdb_ports[0]["binding:profile"] = {
+            "migrating_to": self.DEST_HOST,
+        }
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+
+    def test_narrow_resync_cleans_stale_wep(self):
+        """Narrow port resync deletes a stale WEP at an old binding host:
+        the etcd scan finds all WEPs whose trailing port_id matches an
+        in-scope port, and the compare loop deletes any that aren't bound
+        to the port's current host."""
+        self._do_initial_resync()
+        stale_host = "old-source-host"
+        stale_key = self._ep_key(stale_host)
+        self.etcd_data[stale_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "WorkloadEndpoint",
+                "metadata": {
+                    "name": stale_key.rsplit("/", 1)[-1],
+                    "namespace": self.namespace,
+                },
+                "spec": {},
+            }
+        )
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        self.assertIn(stale_key, self.recent_deletes)
+        # The current WEP (correctly bound) is NOT deleted.
+        self.assertNotIn(
+            self._ep_key(self.port["binding:host_id"]), self.recent_deletes
+        )
+
+    def test_narrow_resync_cleans_stale_lm(self):
+        """Narrow port resync deletes stale LMs for in-scope ports: the
+        etcd scan filters LMs by trailing port_id, and the compare loop
+        deletes those whose dest host doesn't match the port's current
+        migrating_to state.
+        """
+        self._do_initial_resync()
+        # Inject a stale LM for this port (matching device+port id but under a different
+        # host).  The current port has no migrating_to, so any LM matching its
+        # device+port id is stale.
+        stale_host = "old-dest-host"
+        stale_key = self._lm_key(stale_host)
+        self.etcd_data[stale_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "LiveMigration",
+                "metadata": {
+                    "name": stale_key.rsplit("/", 1)[-1],
+                    "namespace": self.namespace,
+                },
+                "spec": {},
+            }
+        )
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        self.assertIn(stale_key, self.recent_deletes)
+
+    def test_narrow_resync_keeps_current_lm(self):
+        """The LM for the port's current migrating_to host is kept; only
+        stale LMs at other dest hosts are deleted."""
+        self._do_initial_resync()
+        # Port is migrating to DEST_HOST.
+        self.osdb_ports[0]["binding:profile"] = {
+            "migrating_to": self.DEST_HOST,
+        }
+        # And there's a stale LM under a different (older) dest host.
+        stale_host = "old-dest-host"
+        stale_key = self._lm_key(stale_host)
+        self.etcd_data[stale_key] = json.dumps(
+            {
+                "apiVersion": "projectcalico.org/v3",
+                "kind": "LiveMigration",
+                "metadata": {
+                    "name": stale_key.rsplit("/", 1)[-1],
+                    "namespace": self.namespace,
+                },
+                "spec": {},
+            }
+        )
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        # The new LM (for DEST_HOST) was written, the stale one deleted.
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertIn(stale_key, self.recent_deletes)
+        # The new LM is NOT in the deletes set.
+        self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
+
+    def test_resync_no_op_when_lm_already_correct(self):
+        """Full resync no-ops when LM and dest WEP already match Neutron."""
+        self._do_initial_resync()
+        # Drive the postcommit path to write a correct LM and dest WEP into etcd, then
+        # leave Neutron in the migrating state.
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # The LM and dest WEP already match Neutron, so the compare loop should leave
+        # them alone and not touch the source WEP either.
+        self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+        self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
+
+    def test_narrow_resync_no_op_when_lm_already_correct(self):
+        """Narrow resync no-ops when LM and dest WEP already match Neutron."""
+        self._do_initial_resync()
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        result = self._trigger_resync(ports=[self.port["id"]])
+        self.assertTrue(result.ok)
+        self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_writes)
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+        self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
+
+    def test_endpoint_name_without_host_with_openstack_in_host(self):
+        """endpoint_name_without_host strips host even when it contains 'openstack'.
+
+        The function relies on the leading '-openstack-' delimiter being
+        unambiguous, which holds because device_id and port id are UUIDs
+        (no 'openstack' substring) and any literal hyphens in host_id are
+        doubled by escape_dashes before being joined with single hyphens.
+        """
+        from networking_calico.plugins.ml2.drivers.calico.endpoints import (
+            endpoint_name_without_host,
+        )
+
+        expected = "openstack-vm--id-port--id"
+        cases = [
+            # Plain host_id with hyphens (typical case).
+            "felix--host--1-openstack-vm--id-port--id",
+            # host_id starts with 'openstack', e.g. 'openstack-ctrl-1'.
+            "openstack--ctrl--1-openstack-vm--id-port--id",
+            # host_id ends with 'openstack', e.g. 'host-openstack'.
+            "host--openstack-openstack-vm--id-port--id",
+            # host_id is the literal 'openstack'.
+            "openstack-openstack-vm--id-port--id",
+        ]
+        for full_name in cases:
+            self.assertEqual(endpoint_name_without_host(full_name), expected, full_name)
+
 
 class TestPluginEtcdRegion(TestPluginEtcdBase):
 
@@ -2204,9 +2435,7 @@ class TestPluginEtcdRegion(TestPluginEtcdBase):
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + "openstack/user.default.OLD": user_policy_string,
         }
-        with lib.FixedUUID("uuid-old-data"):
-            self.give_way()
-            self.simulated_time_advance(31)
+        self.do_post_fork_actions("uuid-old-data")
 
         expected_writes = copy.deepcopy(self.initial_etcd3_writes)
         expected_writes[

@@ -121,7 +121,7 @@ var _ = Describe("DataplanePassthru host metadata sourcing", func() {
 
 	BeforeEach(func() {
 		recorder = &hostMetaRecorder{}
-		passthru = NewDataplanePassthru(recorder, true)
+		passthru = NewDataplanePassthru(recorder)
 	})
 
 	It("uses BGP IPv4 when supplied", func() {
@@ -221,22 +221,6 @@ var _ = Describe("DataplanePassthru host metadata sourcing", func() {
 		Expect(recorder.updates).To(HaveLen(1))
 		Expect(recorder.updates[0].ip4Addr).To(Equal("10.0.0.5/32"))
 		Expect(recorder.updates[0].ip6Addr).To(Equal("fd00::99/64"))
-	})
-
-	It("does not populate IPv6 from Addresses when ipv6Support is off", func() {
-		passthru = NewDataplanePassthru(recorder, false)
-		passthru.OnUpdate(nodeUpdate(host, &internalapi.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: host},
-			Spec: internalapi.NodeSpec{
-				Addresses: []internalapi.NodeAddress{
-					{Address: "10.0.0.5", Type: internalapi.InternalIP},
-					{Address: "fd00::99", Type: internalapi.InternalIP},
-				},
-			},
-		}))
-		Expect(recorder.updates).To(HaveLen(1))
-		Expect(recorder.updates[0].ip4Addr).To(Equal("10.0.0.5/32"))
-		Expect(recorder.updates[0].ip6Addr).To(BeEmpty())
 	})
 
 	It("ignores Addresses without a recognised Type", func() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -545,10 +545,12 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 }
 
 // unsetRouteForSvc removes the route from the svcClusterRouteMap
-// but checks to see if it wasn't already deleted by its sibling resource
+// but checks to see if it wasn't already deleted by its sibling resource.
+// Only called from delete handlers, so it must use the deletion-handling
+// key func to unwrap any cache.DeletedFinalStateUnknown tombstone.
 func (rg *routeGenerator) unsetRouteForSvc(obj any) {
 	// generate key
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		log.WithError(err).Warn("unsetRouteForSvc: error on retrieving key for object, passing")
 		return

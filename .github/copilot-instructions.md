@@ -2,7 +2,7 @@
 
 ## Repository Overview
 
-This is the main **Project Calico** repository - an open-source container networking and security solution. Calico provides data plane choice (eBPF, standard Linux, Windows, VPP), advanced security features, and scales to power 8M+ nodes daily. The repository is a large monorepo (~2000 Go files, 33 Dockerfiles) containing multiple interconnected components.
+This is the main **Project Calico** repository - an open-source container networking and security solution. Calico provides data plane choice (eBPF, standard Linux, Windows, VPP), advanced security features, and scales to power 8M+ nodes daily. The repository is a large monorepo (~2000 Go files) containing multiple interconnected components.
 
 **Key Stats:**
 - Type: Kubernetes networking and security platform
@@ -241,6 +241,57 @@ make image                   # Build all images (slow)
 **ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) when submitting pull requests. The only mandatory section is the **Release Note** — fill it in with a one-line summary of the user-facing impact of the change. Take a broad view of "user-facing": bug fixes, new features, performance improvements, and behavioral changes all qualify. If there is genuinely no user-facing impact, write "None".
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
+
+## Documentation map
+
+Calico's docs are split by purpose. Architecture lives in
+`DESIGN.md` files; operational guidance (build, test, debug)
+lives in `CLAUDE.md` / `AGENTS.md`; path-scoped review rules
+live under `.github/instructions/*.instructions.md`. Do not look
+for architecture in `CLAUDE.md`.
+
+- `<component>/DESIGN.md` — architecture, invariants, embedded
+  per-section review notes. Read before writing or reviewing a
+  change in that component.
+- Complex components have an index: [`felix/DESIGN.md`](../felix/DESIGN.md)
+  lists per-topic sub-designs under [`felix/design/`](../felix/design/)
+  with an "applies to" glob each. A PR touching multiple globs
+  must load every matching sub-design.
+- [`.github/instructions/*.instructions.md`](instructions/) are
+  thin path-scoped pointers to `DESIGN.md` files plus meta-rules
+  (the update rule, the `@copilot` invocation pattern). They do
+  not restate design content — always read the pointed-at
+  `DESIGN.md`.
+- A PR changing how a component works — its behaviour, data
+  model, configuration surface, or any invariant the design doc
+  records — must update the relevant `DESIGN.md` in the same PR.
+  For components with a design directory (Felix uses
+  `felix/design/`), this means updating the relevant file under
+  that directory — the sub-design covering the area — and/or
+  the index itself when the sub-design table or scope changes.
+  Exemptions: bug fix restoring documented behaviour, mechanical
+  refactor, comment/log edits, dependency bump. If in doubt,
+  update the doc.
+
+## Tests required for code changes
+
+A PR that fixes a bug must include a test in the same PR that reproduces the bug. A PR that adds a feature must include tests that exercise the feature. A change without a corresponding test is the exception, not the default, and requires explicit justification (untestable interface boundary, infrastructure-only change).
+
+Prefer the lowest test level that meaningfully exercises the change:
+
+1. **Unit tests** — deterministic, fast, hermetic. Always the first choice when the behaviour can be reached without real infrastructure. UT failures point at the change directly.
+2. **Functional verification (FV) tests** — real binary against real infrastructure (containers, dataplane, kernel). Catch integration bugs UT cannot, but slower, harder to write, and can flake. Use FV when the integration *is* the thing being tested.
+3. **End-to-end / Kubernetes tests** — full stack against a real cluster. Reserve for behaviour that genuinely requires it.
+
+Tests-only follow-ups are an anti-pattern: by the time they land, the change has shipped untested. A reviewer who sees "I tested it manually" or "tests in a follow-up PR" should push back.
+
+Per-area sub-designs carry the area-specific test conventions on top of this general rule (e.g. [`felix/design/bpf-tests.md`](../felix/design/bpf-tests.md) for the BPF dataplane). This rule mirrors [`.claude/CLAUDE.md` → Tests required for code changes](../.claude/CLAUDE.md) — keep them in sync.
+
+## eBPF Dataplane Review
+
+The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/design/`](../felix/design/), with [`bpf-overview.md`](../felix/design/bpf-overview.md) as the always-pulled umbrella (packet-path mental model, fast-path cost rule, cross-cutting review rules) and topic-specific sub-designs covering each area of the dataplane. See [`felix/DESIGN.md`](../felix/DESIGN.md) for the authoritative table mapping code paths to sub-design files.
+
+Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies; for BPF, "changes how it works" specifically means a new sub-program, CT flag, mark bit, map or map field, or any change to the packet path or forwarding decision.
 
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.

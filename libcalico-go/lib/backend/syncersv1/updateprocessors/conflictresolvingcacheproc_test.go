@@ -53,7 +53,7 @@ var _ = Describe("Test the conflict resolving cache", func() {
 		Revision: "12345",
 	}
 	v1Key1 := model.GlobalBGPPeerKey{
-		PeerIP: net.MustParseIP("1.2.3.4"),
+		PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 	}
 
 	converter := &fakeconverter{}

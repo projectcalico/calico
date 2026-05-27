@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"net/netip"
 	"reflect"
 	"regexp"
 	"strings"
@@ -34,15 +35,16 @@ var (
 )
 
 type IPPoolKey struct {
-	CIDR net.IPNet `json:"-" validate:"required,name"`
+	CIDR netip.Prefix `json:"-" validate:"required,name"`
 }
 
 func (key IPPoolKey) defaultPath() (string, error) {
-	if key.CIDR.IP == nil {
+	if !key.CIDR.IsValid() {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "cidr"}
 	}
-	c := strings.Replace(key.CIDR.String(), "/", "-", 1)
-	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", key.CIDR.Version(), c)
+	cidr := key.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	e := fmt.Sprintf("/calico/v1/ipam/v%d/pool/%s", prefixVersion(cidr), c)
 	return e, nil
 }
 
@@ -67,16 +69,17 @@ func (key IPPoolKey) String() string {
 }
 
 type IPPoolListOptions struct {
-	CIDR net.IPNet
+	CIDR netip.Prefix
 }
 
 func (options IPPoolListOptions) defaultPathRoot() string {
 	k := "/calico/v1/ipam/"
-	if options.CIDR.IP == nil {
+	if !options.CIDR.IsValid() {
 		return k
 	}
-	c := strings.Replace(options.CIDR.String(), "/", "-", 1)
-	k = k + fmt.Sprintf("v%d/pool/", options.CIDR.Version()) + fmt.Sprintf("%s", c)
+	cidr := options.CIDR.Masked()
+	c := strings.Replace(cidr.String(), "/", "-", 1)
+	k = k + fmt.Sprintf("v%d/pool/", prefixVersion(cidr)) + c
 	return k
 }
 
@@ -88,16 +91,17 @@ func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 		return nil
 	}
 	cidrStr := strings.Replace(r[0][1], "-", "/", 1)
-	_, cidr, err := net.ParseCIDR(cidrStr)
+	prefix, err := netip.ParsePrefix(cidrStr)
 	if err != nil {
 		log.WithError(err).Warningf("Failed to parse CIDR %s", cidrStr)
 		return nil
 	}
-	if options.CIDR.IP != nil && !reflect.DeepEqual(*cidr, options.CIDR) {
-		log.Debugf("Didn't match cidr %s != %s", options.CIDR.String(), cidr.String())
+	prefix = prefix.Masked()
+	if options.CIDR.IsValid() && prefix != options.CIDR.Masked() {
+		log.Debugf("Didn't match cidr %s != %s", options.CIDR.String(), prefix.String())
 		return nil
 	}
-	return IPPoolKey{CIDR: *cidr}
+	return IPPoolKey{CIDR: prefix}
 }
 
 type IPPool struct {

@@ -92,7 +92,7 @@ func (c *blockAffinityClientV1) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, e
 
 		return &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR:         *cidr,
+				CIDR:         model.PrefixFromIPNet(*cidr),
 				AffinityType: affinityType,
 				Host:         kvpv3.Value.(*v3.BlockAffinity).Spec.Node,
 			},
@@ -132,7 +132,7 @@ func (c *blockAffinityClientV1) toModelV1(kvpv3 *model.KVPair) (*model.KVPair, e
 
 		return &model.KVPair{
 			Key: model.BlockAffinityKey{
-				CIDR:         *cidr,
+				CIDR:         model.PrefixFromIPNet(*cidr),
 				AffinityType: affinityType,
 				Host:         kvpv3.Value.(*internalapi.BlockAffinity).Spec.Node,
 			},
@@ -152,7 +152,7 @@ func (c *blockAffinityClientV1) parseKey(k model.Key) (name, cidr, host, affinit
 	host = k.(model.BlockAffinityKey).Host
 	affinityType = k.(model.BlockAffinityKey).AffinityType
 	cidr = fmt.Sprintf("%s", k.(model.BlockAffinityKey).CIDR)
-	cidrname := names.CIDRToName(k.(model.BlockAffinityKey).CIDR)
+	cidrname := names.CIDRToName(model.IPNetFromPrefix(k.(model.BlockAffinityKey).CIDR))
 
 	// Include the hostname as well.
 	name = fmt.Sprintf("%s-%s", host, cidrname)
@@ -310,8 +310,11 @@ func (c *blockAffinityClientV1) List(ctx context.Context, li model.ListInterface
 		if (host == "" || v1kvp.Key.(model.BlockAffinityKey).Host == host) &&
 			(affinityType == "" || v1kvp.Key.(model.BlockAffinityKey).AffinityType == affinityType) {
 			cidr := v1kvp.Key.(model.BlockAffinityKey).CIDR
-			cidrPtr := &cidr
-			if (requestedIPVersion == 0 || requestedIPVersion == cidrPtr.Version()) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
+			cidrVer := 4
+			if !cidr.Addr().Is4() {
+				cidrVer = 6
+			}
+			if (requestedIPVersion == 0 || requestedIPVersion == cidrVer) && !v1kvp.Value.(*model.BlockAffinity).Deleted {
 				// Matches the given host and IP version.
 				kvpl.KVPairs = append(kvpl.KVPairs, v1kvp)
 			}

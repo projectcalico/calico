@@ -89,7 +89,7 @@ var (
 	ipPoolCIDR = calinet.MustParseCIDR("10.0.1.0/24")
 	ipPool1    = api.Update{
 		KVPair: model.KVPair{
-			Key: model.IPPoolKey{CIDR: ipPoolCIDR},
+			Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(ipPoolCIDR)},
 			Value: &model.IPPool{
 				CIDR:          ipPoolCIDR,
 				IPIPInterface: "tunl0",
@@ -145,7 +145,7 @@ var (
 	blockAffCIDR = calinet.MustParseCIDR("10.0.1.0/26")
 	blockAff1    = api.Update{
 		KVPair: model.KVPair{
-			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, AffinityType: model.IPAMAffinityTypeHost, Host: "node1"},
+			Key:      model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(blockAffCIDR), AffinityType: model.IPAMAffinityTypeHost, Host: "node1"},
 			Value:    &model.BlockAffinity{State: model.StateConfirmed},
 			Revision: "1239",
 		},

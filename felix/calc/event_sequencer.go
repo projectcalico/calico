@@ -596,6 +596,7 @@ func (buf *EventSequencer) OnEncapUpdate(encap config.Encapsulation) {
 		"IPIPEnabled":    encap.IPIPEnabled,
 		"VXLANEnabled":   encap.VXLANEnabled,
 		"VXLANEnabledV6": encap.VXLANEnabledV6,
+		"NoEncapEnabled": encap.NoEncapEnabled,
 	}).Debug("Encapsulation update")
 	buf.pendingEncapUpdate = &encap
 }
@@ -606,6 +607,7 @@ func (buf *EventSequencer) flushEncapUpdate() {
 			IpipEnabled:    buf.pendingEncapUpdate.IPIPEnabled,
 			VxlanEnabled:   buf.pendingEncapUpdate.VXLANEnabled,
 			VxlanEnabledV6: buf.pendingEncapUpdate.VXLANEnabledV6,
+			NoEncapEnabled: buf.pendingEncapUpdate.NoEncapEnabled,
 		})
 		buf.pendingEncapUpdate = nil
 	}
@@ -657,7 +659,7 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 		"key":  key,
 		"pool": pool,
 	}).Debug("IPPool update")
-	cidr := ip.CIDRFromCalicoNet(key.CIDR)
+	cidr := ip.CIDRFromPrefix(key.CIDR)
 	buf.pendingIPPoolDeletes.Discard(cidr)
 	buf.pendingIPPoolUpdates[cidr] = pool
 }
@@ -729,7 +731,7 @@ func (buf *EventSequencer) flushHostWireguardUpdates() {
 
 func (buf *EventSequencer) OnIPPoolRemove(key model.IPPoolKey) {
 	log.WithField("key", key).Debug("IPPool removed")
-	cidr := ip.CIDRFromCalicoNet(key.CIDR)
+	cidr := ip.CIDRFromPrefix(key.CIDR)
 	delete(buf.pendingIPPoolUpdates, cidr)
 	if buf.sentIPPools.Contains(cidr) {
 		buf.pendingIPPoolDeletes.Add(cidr)
