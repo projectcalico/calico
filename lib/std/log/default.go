@@ -40,14 +40,17 @@ var (
 var defaultLogger = newLogrusLogger(logrus.NewEntry(logrus.StandardLogger()))
 
 func init() {
-	// Install the Calico formatter and direct logs to stdout. This is the
-	// state any caller sees when they import the package; Configure() can
-	// replace it.
+	// Install the Calico formatter and match logrus's default of writing
+	// to stderr. Binaries like the CNI plugin and the FV test-workload
+	// helper emit structured data on stdout, and log lines leaking there
+	// would corrupt that data. Components that need stdout (notably felix —
+	// FV tests grep felix's stdout via WatchStdoutFor) override via
+	// SetOutput or Configure.
 	stateMu.Lock()
 	defer stateMu.Unlock()
 	currentFormatter = newFormatter("")
 	logrus.SetFormatter(currentFormatter)
-	logrus.SetOutput(os.Stdout)
+	logrus.SetOutput(os.Stderr)
 	// We do our own caller walking in the formatter so logrus's own
 	// detection is not needed.
 	logrus.SetReportCaller(false)

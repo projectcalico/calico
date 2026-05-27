@@ -45,6 +45,10 @@ func init() {
 // taken from FELIX_EARLYLOGSEVERITYSCREEN (early-only) or
 // FELIX_LOGSEVERITYSCREEN (the config-owned variable). Default is Error.
 func configureEarlyLogging() {
+	// Felix logs go to stdout (preserved from libcalico-go/lib/logutils).
+	// This matters in FV tests that grep felix's stdout for specific lines
+	// (see felix/fv/containers/containers.go WatchStdoutFor).
+	log.SetOutput(os.Stdout)
 	log.SetComponent("felix")
 
 	raw := os.Getenv("FELIX_EARLYLOGSEVERITYSCREEN")
