@@ -3689,11 +3689,7 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/**',
-        '/metadata.mk',
-        '/typha/pkg/discovery/*.go',
-        '/typha/pkg/syncclient/*.go',
-        '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/metadata.mk'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -3704,8 +3700,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
-        '/lib/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/lib/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:

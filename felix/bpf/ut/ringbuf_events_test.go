@@ -119,7 +119,7 @@ func TestRingBufReaderRecovery(t *testing.T) {
 // TestRingBufFillup verifies that the ring buffer correctly handles being filled
 // to capacity. When full, bpf_ringbuf_output returns an error and the BPF program
 // returns TC_ACT_SHOT. After draining, a subsequent successful event triggers
-// ringbuf_flush_drops, emitting a TYPE_LOST_EVENTS event with the accumulated
+// ringbuf_flush_drops, emitting an EVENT_LOST_EVENTS event with the accumulated
 // drop count.
 func TestRingBufFillup(t *testing.T) {
 	if testing.Short() {
@@ -178,7 +178,7 @@ func TestRingBufFillup(t *testing.T) {
 	Expect(drained).To(Equal(eventsWritten))
 
 	// Send one more event after draining. This succeeds and triggers
-	// ringbuf_flush_drops(), which emits a TYPE_LOST_EVENTS event with the
+	// ringbuf_flush_drops(), which emits an EVENT_LOST_EVENTS event with the
 	// drop count (exactly 1 from the failed submit above).
 	// The ring order is: data event first, then lost event.
 	runBpfUnitTest(t, "ringbuf_events.c",
@@ -195,7 +195,7 @@ func TestRingBufFillup(t *testing.T) {
 	dataHdr := eventHdrFromBytes(dataEvent.Data()[0:8])
 	Expect(dataHdr.typ).To(Equal(uint32(0xdead)))
 
-	// Second: the TYPE_LOST_EVENTS event with exactly 1 drop.
+	// Second: the EVENT_LOST_EVENTS event with exactly 1 drop.
 	lostEvent := ringBufNextWithTimeout(t, rb)
 	lostData := lostEvent.Data()
 	lostHdr := eventHdrFromBytes(lostData[0:8])
