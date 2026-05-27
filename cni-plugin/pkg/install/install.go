@@ -272,6 +272,24 @@ func Install(version string) error {
 		}
 	}
 
+	// If no candidate directory was writeable but the user opted out of binary
+	// updates (UPDATE_CNI_BINARIES=false) and the calico binary is already on
+	// the host, treat that as success. This covers read-only systems that bake
+	// the CNI binaries into the OS image. See projectcalico/calico#7486.
+	if !binsWritten && !c.UpdateCNIBinaries {
+		calicoBinName := "calico"
+		if runtime.GOOS == "windows" {
+			calicoBinName = "calico.exe"
+		}
+		for _, d := range dirs {
+			if fileExists(fmt.Sprintf("%s/%s", d, calicoBinName)) {
+				logrus.Infof("No writeable CNI bin directory found but %s already exists at %s and UPDATE_CNI_BINARIES=false; continuing", calicoBinName, d)
+				binsWritten = true
+				break
+			}
+		}
+	}
+
 	// If binaries were not placed, exit
 	if !binsWritten {
 		logrus.WithError(err).Fatalf("found no writeable directory, exiting")

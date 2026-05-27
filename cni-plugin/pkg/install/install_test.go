@@ -305,6 +305,19 @@ PuB/TL+u2y+iQUyXxLy3
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should succeed on read-only bin dir when calico is pre-installed and UPDATE_CNI_BINARIES=false", func() {
+		// Pre-populate the host bin dir with a stub calico binary so the
+		// install can detect that it has nothing left to do, even though the
+		// directory is mounted read-only. Covers projectcalico/calico#7486.
+		Expect(os.WriteFile(tempDir+"/bin/calico", []byte("stub"), 0o755)).To(Succeed())
+		err := runCniContainer(
+			tempDir, false,
+			"-v", tempDir+"/secondary-bin-dir:/host/secondary-bin-dir:ro",
+			"-e", "UPDATE_CNI_BINARIES=false",
+		)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("should support CNI_CONF_NAME", func() {
 		err := runCniContainer(tempDir, true, "-e", "CNI_CONF_NAME=20-calico.conflist")
 		Expect(err).NotTo(HaveOccurred())
