@@ -162,7 +162,7 @@ type Goldmane struct {
 	health *health.HealthAggregator
 
 	// ratelimiter is used to rate limit log messages that may happen frequently.
-	rl *log.RateLimitedLogger
+	rl log.Logger
 
 	// The following channels are input channels to make resuests of the main loop.
 	listRequests        chan listRequest

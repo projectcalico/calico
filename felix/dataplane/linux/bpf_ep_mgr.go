@@ -411,7 +411,7 @@ type bpfEndpointManager struct {
 	disabledOptionalProgs   set.Typed[hook.SubProg]
 	failedOptionalProgsLock sync.Mutex
 	failedOptionalProgs     map[string]*hook.OptionalSubProgInfo // keyed by FeatureName; guarded by failedOptionalProgsLock
-	updateRateLimitedLog    *log.RateLimitedLogger
+	updateRateLimitedLog    log.Logger
 	istioDSCP               uint8
 
 	QoSMap        maps.MapWithUpdateWithFlags

@@ -134,7 +134,7 @@ func TestRateLimitedLoggerForceBypasses(t *testing.T) {
 	rl := log.NewRateLimitedLogger(log.WithInterval(time.Hour))
 	rl.Info("first")
 	rl.Info("throttled")
-	rl.Force().Info("forced")
+	log.Force(rl).Info("forced")
 	out := read()
 	if !strings.Contains(out, "first") || !strings.Contains(out, "forced") {
 		t.Fatalf("first and forced should both appear:\n%s", out)

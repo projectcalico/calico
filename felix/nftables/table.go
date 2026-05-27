@@ -242,7 +242,7 @@ type NftablesTable struct {
 	peakNftablesWriteTime time.Duration
 
 	logCxt               log.Logger
-	updateRateLimitedLog *log.RateLimitedLogger
+	updateRateLimitedLog log.Logger
 
 	gaugeNumChains prometheus.Gauge
 	gaugeNumRules  prometheus.Gauge

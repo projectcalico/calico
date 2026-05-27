@@ -32,7 +32,7 @@ type stream struct {
 	cancel context.CancelFunc
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *log.RateLimitedLogger
+	rl log.Logger
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.

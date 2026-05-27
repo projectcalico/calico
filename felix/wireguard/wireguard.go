@@ -165,7 +165,7 @@ type Wireguard struct {
 	writeProcSys func(path, value string) error
 
 	logCtx            log.Logger
-	rateLimitedLogger *log.RateLimitedLogger
+	rateLimitedLogger log.Logger
 }
 
 func New(

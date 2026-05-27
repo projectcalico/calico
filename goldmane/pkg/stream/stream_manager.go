@@ -141,7 +141,7 @@ type streamManager struct {
 	in chan storage.FlowProvider
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *log.RateLimitedLogger
+	rl log.Logger
 }
 
 func (m *streamManager) Run(ctx context.Context) {

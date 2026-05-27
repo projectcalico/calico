@@ -514,33 +514,33 @@ func (m *mockFormatter) Format(e *logrus.Entry) ([]byte, error) {
 
 // TestRateLimitedLoggerComprehensive covers the full matrix of emit methods
 // against the throttling, burst, force, and field-propagation behavior of
-// RateLimitedLogger. Equivalent to the libcalico-go DescribeTable.
+// the rate-limited logger. Equivalent to the libcalico-go DescribeTable.
 func TestRateLimitedLoggerComprehensive(t *testing.T) {
 	type entry struct {
 		name           string
 		expectedLevel  logrus.Level
 		testLevelGuard bool
-		fn             func(l *RateLimitedLogger)
+		fn             func(l Logger)
 	}
 	entries := []entry{
-		{"Debug", logrus.DebugLevel, true, func(l *RateLimitedLogger) { l.Debug("log", "now") }},
-		{"Print", logrus.InfoLevel, false, func(l *RateLimitedLogger) { l.Print("log", "now") }},
-		{"Info", logrus.InfoLevel, true, func(l *RateLimitedLogger) { l.Info("log", "now") }},
-		{"Warn", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warn("log", "now") }},
-		{"Warning", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warning("log", "now") }},
-		{"Error", logrus.ErrorLevel, true, func(l *RateLimitedLogger) { l.Error("log", "now") }},
-		{"Debugf", logrus.DebugLevel, true, func(l *RateLimitedLogger) { l.Debugf("log %s", "hello") }},
-		{"Printf", logrus.InfoLevel, false, func(l *RateLimitedLogger) { l.Printf("log %s", "hello") }},
-		{"Infof", logrus.InfoLevel, true, func(l *RateLimitedLogger) { l.Infof("log %s", "hello") }},
-		{"Warnf", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warnf("log %s", "hello") }},
-		{"Warningf", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warningf("log %s", "hello") }},
-		{"Errorf", logrus.ErrorLevel, true, func(l *RateLimitedLogger) { l.Errorf("log %s", "hello") }},
-		{"Debugln", logrus.DebugLevel, true, func(l *RateLimitedLogger) { l.Debugln("log", "now") }},
-		{"Println", logrus.InfoLevel, false, func(l *RateLimitedLogger) { l.Println("log", "now") }},
-		{"Infoln", logrus.InfoLevel, true, func(l *RateLimitedLogger) { l.Infoln("log", "now") }},
-		{"Warnln", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warnln("log", "now") }},
-		{"Warningln", logrus.WarnLevel, true, func(l *RateLimitedLogger) { l.Warningln("log", "now") }},
-		{"Errorln", logrus.ErrorLevel, true, func(l *RateLimitedLogger) { l.Errorln("log", "now") }},
+		{"Debug", logrus.DebugLevel, true, func(l Logger) { l.Debug("log", "now") }},
+		{"Print", logrus.InfoLevel, false, func(l Logger) { l.Print("log", "now") }},
+		{"Info", logrus.InfoLevel, true, func(l Logger) { l.Info("log", "now") }},
+		{"Warn", logrus.WarnLevel, true, func(l Logger) { l.Warn("log", "now") }},
+		{"Warning", logrus.WarnLevel, true, func(l Logger) { l.Warning("log", "now") }},
+		{"Error", logrus.ErrorLevel, true, func(l Logger) { l.Error("log", "now") }},
+		{"Debugf", logrus.DebugLevel, true, func(l Logger) { l.Debugf("log %s", "hello") }},
+		{"Printf", logrus.InfoLevel, false, func(l Logger) { l.Printf("log %s", "hello") }},
+		{"Infof", logrus.InfoLevel, true, func(l Logger) { l.Infof("log %s", "hello") }},
+		{"Warnf", logrus.WarnLevel, true, func(l Logger) { l.Warnf("log %s", "hello") }},
+		{"Warningf", logrus.WarnLevel, true, func(l Logger) { l.Warningf("log %s", "hello") }},
+		{"Errorf", logrus.ErrorLevel, true, func(l Logger) { l.Errorf("log %s", "hello") }},
+		{"Debugln", logrus.DebugLevel, true, func(l Logger) { l.Debugln("log", "now") }},
+		{"Println", logrus.InfoLevel, false, func(l Logger) { l.Println("log", "now") }},
+		{"Infoln", logrus.InfoLevel, true, func(l Logger) { l.Infoln("log", "now") }},
+		{"Warnln", logrus.WarnLevel, true, func(l Logger) { l.Warnln("log", "now") }},
+		{"Warningln", logrus.WarnLevel, true, func(l Logger) { l.Warningln("log", "now") }},
+		{"Errorln", logrus.ErrorLevel, true, func(l Logger) { l.Errorln("log", "now") }},
 	}
 	for _, c := range entries {
 		t.Run(c.name, func(t *testing.T) {
@@ -606,7 +606,7 @@ func TestRateLimitedLoggerComprehensive(t *testing.T) {
 			}
 
 			// Force bypasses throttling on the immediate next emit.
-			c.fn(rl.Force())
+			c.fn(Force(rl))
 			if got := counter.count.Load(); got != 3 {
 				t.Fatalf("count after Force = %d, want 3", got)
 			}

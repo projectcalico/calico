@@ -28,16 +28,14 @@ const (
 	defaultInterval = 5 * time.Minute
 )
 
-// NewRateLimitedLogger returns a RateLimitedLogger.
+// NewRateLimitedLogger returns a Logger that throttles repeated emissions
+// to at most one per interval (default 5 minutes). Derived loggers from
+// WithField/WithFields/WithError share the throttle state with their
+// parent so that adding fields does not reset the throttle. Use Force to
+// bypass the throttle for a single emit.
 //
-// The first processed log always emits. Subsequent processed logs are
-// throttled per the configured interval; logs that are throttled are
-// counted and reported on the next emitted log. Force() can be used to
-// guarantee a log is emitted at the end of a noisy loop.
-//
-// Methods are essentially the same as the Logger interface, except Panic
-// and Fatal are not exposed because they don't make sense for rate-limited
-// logging.
+// Fatal and Panic always emit — they are terminal, so the rate limit is
+// bypassed.
 //
 // Typical use:
 //
@@ -46,9 +44,9 @@ const (
 //	    logger.Infof("Checking some stuff: %s", myStuff)
 //	    done = doSomeStuff()
 //	}
-//	logger.Force().Info("Finished checking stuff")
-func NewRateLimitedLogger(opts ...RateLimitedOption) *RateLimitedLogger {
-	r := &RateLimitedLogger{
+//	log.Force(logger).Info("Finished checking stuff")
+func NewRateLimitedLogger(opts ...RateLimitedOption) Logger {
+	r := &rateLimitedLogger{
 		data: &intervalData{
 			nextLog:  time.Now(),
 			interval: defaultInterval,
@@ -61,19 +59,19 @@ func NewRateLimitedLogger(opts ...RateLimitedOption) *RateLimitedLogger {
 	return r
 }
 
-// RateLimitedOption configures a RateLimitedLogger.
-type RateLimitedOption func(*RateLimitedLogger)
+// RateLimitedOption configures the Logger returned by NewRateLimitedLogger.
+type RateLimitedOption func(*rateLimitedLogger)
 
 // WithInterval sets the minimum interval between emitted logs.
 // Default is 5 minutes.
 func WithInterval(d time.Duration) RateLimitedOption {
-	return func(r *RateLimitedLogger) { r.data.interval = d }
+	return func(r *rateLimitedLogger) { r.data.interval = d }
 }
 
 // WithBurst sets the number of logs that can be emitted in a row before
 // throttling kicks in. Default is 0 (no burst — only one log per interval).
 func WithBurst(n int) RateLimitedOption {
-	return func(r *RateLimitedLogger) {
+	return func(r *rateLimitedLogger) {
 		r.data.burst = n
 		r.data.remainingBurst = n
 	}
@@ -83,11 +81,21 @@ func WithBurst(n int) RateLimitedOption {
 // package default. Useful when the caller has a per-component Logger they
 // want the rate-limited wrapper to inherit fields from.
 func WithBaseLogger(l Logger) RateLimitedOption {
-	return func(r *RateLimitedLogger) {
+	return func(r *rateLimitedLogger) {
 		if impl, ok := l.(*logrusLogger); ok {
 			r.entry = impl.entry
 		}
 	}
+}
+
+// Force returns a Logger whose next emission bypasses the rate limit if
+// l is a rate-limited logger; otherwise it returns l unchanged. Force
+// does not bypass level filtering.
+func Force(l Logger) Logger {
+	if rl, ok := l.(*rateLimitedLogger); ok {
+		return &rateLimitedLogger{data: rl.data, entry: rl.entry, force: true}
+	}
+	return l
 }
 
 type intervalData struct {
@@ -99,16 +107,13 @@ type intervalData struct {
 	remainingBurst int
 }
 
-// RateLimitedLogger throttles repeated log calls. Derived loggers (via
-// WithField/WithFields/WithError) share the rate-limit state with their
-// parent so that adding fields does not reset the throttle.
-type RateLimitedLogger struct {
+type rateLimitedLogger struct {
 	data  *intervalData
 	force bool
 	entry *logrus.Entry
 }
 
-func (r *RateLimitedLogger) logEntry() *logrus.Entry {
+func (r *rateLimitedLogger) logEntry() *logrus.Entry {
 	now := time.Now()
 	r.data.lock.Lock()
 	defer r.data.lock.Unlock()
@@ -150,28 +155,38 @@ func (r *RateLimitedLogger) logEntry() *logrus.Entry {
 	return entry
 }
 
-// Force returns a derived logger whose next emission bypasses the rate limit.
-// Does not bypass level filtering.
-func (r *RateLimitedLogger) Force() *RateLimitedLogger {
-	return &RateLimitedLogger{data: r.data, entry: r.entry, force: true}
-}
-
 // WithError attaches an error to derived loggers.
-func (r *RateLimitedLogger) WithError(err error) *RateLimitedLogger {
-	return &RateLimitedLogger{data: r.data, entry: r.entry.WithError(err)}
+func (r *rateLimitedLogger) WithError(err error) Logger {
+	return &rateLimitedLogger{data: r.data, entry: r.entry.WithError(err)}
 }
 
 // WithField attaches a field to derived loggers.
-func (r *RateLimitedLogger) WithField(key string, value any) *RateLimitedLogger {
-	return &RateLimitedLogger{data: r.data, entry: r.entry.WithField(key, value)}
+func (r *rateLimitedLogger) WithField(key string, value any) Logger {
+	return &rateLimitedLogger{data: r.data, entry: r.entry.WithField(key, value)}
 }
 
 // WithFields attaches fields to derived loggers.
-func (r *RateLimitedLogger) WithFields(fields Fields) *RateLimitedLogger {
-	return &RateLimitedLogger{data: r.data, entry: r.entry.WithFields(logrus.Fields(fields))}
+func (r *rateLimitedLogger) WithFields(fields Fields) Logger {
+	return &rateLimitedLogger{data: r.data, entry: r.entry.WithFields(logrus.Fields(fields))}
 }
 
-func (r *RateLimitedLogger) Debug(args ...any) {
+func (r *rateLimitedLogger) Trace(args ...any) {
+	if r.level() >= logrus.TraceLevel {
+		if e := r.logEntry(); e != nil {
+			e.Trace(args...)
+		}
+	}
+}
+
+func (r *rateLimitedLogger) Tracef(format string, args ...any) {
+	if r.level() >= logrus.TraceLevel {
+		if e := r.logEntry(); e != nil {
+			e.Tracef(format, args...)
+		}
+	}
+}
+
+func (r *rateLimitedLogger) Debug(args ...any) {
 	if r.level() >= logrus.DebugLevel {
 		if e := r.logEntry(); e != nil {
 			e.Debug(args...)
@@ -179,7 +194,7 @@ func (r *RateLimitedLogger) Debug(args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Debugf(format string, args ...any) {
+func (r *rateLimitedLogger) Debugf(format string, args ...any) {
 	if r.level() >= logrus.DebugLevel {
 		if e := r.logEntry(); e != nil {
 			e.Debugf(format, args...)
@@ -187,7 +202,7 @@ func (r *RateLimitedLogger) Debugf(format string, args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Info(args ...any) {
+func (r *rateLimitedLogger) Info(args ...any) {
 	if r.level() >= logrus.InfoLevel {
 		if e := r.logEntry(); e != nil {
 			e.Info(args...)
@@ -195,7 +210,7 @@ func (r *RateLimitedLogger) Info(args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Infof(format string, args ...any) {
+func (r *rateLimitedLogger) Infof(format string, args ...any) {
 	if r.level() >= logrus.InfoLevel {
 		if e := r.logEntry(); e != nil {
 			e.Infof(format, args...)
@@ -203,7 +218,7 @@ func (r *RateLimitedLogger) Infof(format string, args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Warn(args ...any) {
+func (r *rateLimitedLogger) Warn(args ...any) {
 	if r.level() >= logrus.WarnLevel {
 		if e := r.logEntry(); e != nil {
 			e.Warn(args...)
@@ -211,7 +226,7 @@ func (r *RateLimitedLogger) Warn(args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Warnf(format string, args ...any) {
+func (r *rateLimitedLogger) Warnf(format string, args ...any) {
 	if r.level() >= logrus.WarnLevel {
 		if e := r.logEntry(); e != nil {
 			e.Warnf(format, args...)
@@ -220,12 +235,12 @@ func (r *RateLimitedLogger) Warnf(format string, args ...any) {
 }
 
 // Warning is an alias of Warn for API compatibility with logrus call sites.
-func (r *RateLimitedLogger) Warning(args ...any) { r.Warn(args...) }
+func (r *rateLimitedLogger) Warning(args ...any) { r.Warn(args...) }
 
 // Warningf is an alias of Warnf for API compatibility with logrus call sites.
-func (r *RateLimitedLogger) Warningf(format string, args ...any) { r.Warnf(format, args...) }
+func (r *rateLimitedLogger) Warningf(format string, args ...any) { r.Warnf(format, args...) }
 
-func (r *RateLimitedLogger) Error(args ...any) {
+func (r *rateLimitedLogger) Error(args ...any) {
 	if r.level() >= logrus.ErrorLevel {
 		if e := r.logEntry(); e != nil {
 			e.Error(args...)
@@ -233,7 +248,7 @@ func (r *RateLimitedLogger) Error(args ...any) {
 	}
 }
 
-func (r *RateLimitedLogger) Errorf(format string, args ...any) {
+func (r *rateLimitedLogger) Errorf(format string, args ...any) {
 	if r.level() >= logrus.ErrorLevel {
 		if e := r.logEntry(); e != nil {
 			e.Errorf(format, args...)
@@ -241,30 +256,44 @@ func (r *RateLimitedLogger) Errorf(format string, args ...any) {
 	}
 }
 
+// Fatal emits and terminates the process. Always emits — rate limiting
+// is bypassed because Fatal is terminal.
+func (r *rateLimitedLogger) Fatal(args ...any) { r.entry.Fatal(args...) }
+
+// Fatalf emits and terminates the process. Always emits.
+func (r *rateLimitedLogger) Fatalf(format string, args ...any) { r.entry.Fatalf(format, args...) }
+
+// Panic emits and panics. Always emits — rate limiting is bypassed
+// because Panic is terminal.
+func (r *rateLimitedLogger) Panic(args ...any) { r.entry.Panic(args...) }
+
+// Panicf emits and panics. Always emits.
+func (r *rateLimitedLogger) Panicf(format string, args ...any) { r.entry.Panicf(format, args...) }
+
 // Print emits at Info level without applying level filtering; useful for
 // callers that integrate with the standard library's log.Logger contract.
-func (r *RateLimitedLogger) Print(args ...any) {
+func (r *rateLimitedLogger) Print(args ...any) {
 	if e := r.logEntry(); e != nil {
 		e.Print(args...)
 	}
 }
 
 // Printf emits at Info level without applying level filtering.
-func (r *RateLimitedLogger) Printf(format string, args ...any) {
+func (r *rateLimitedLogger) Printf(format string, args ...any) {
 	if e := r.logEntry(); e != nil {
 		e.Printf(format, args...)
 	}
 }
 
 // Println emits at Info level without applying level filtering.
-func (r *RateLimitedLogger) Println(args ...any) {
+func (r *rateLimitedLogger) Println(args ...any) {
 	if e := r.logEntry(); e != nil {
 		e.Println(args...)
 	}
 }
 
 // Debugln matches logrus's Println-style emit at Debug level.
-func (r *RateLimitedLogger) Debugln(args ...any) {
+func (r *rateLimitedLogger) Debugln(args ...any) {
 	if r.level() >= logrus.DebugLevel {
 		if e := r.logEntry(); e != nil {
 			e.Debugln(args...)
@@ -273,7 +302,7 @@ func (r *RateLimitedLogger) Debugln(args ...any) {
 }
 
 // Infoln matches logrus's Println-style emit at Info level.
-func (r *RateLimitedLogger) Infoln(args ...any) {
+func (r *rateLimitedLogger) Infoln(args ...any) {
 	if r.level() >= logrus.InfoLevel {
 		if e := r.logEntry(); e != nil {
 			e.Infoln(args...)
@@ -282,7 +311,7 @@ func (r *RateLimitedLogger) Infoln(args ...any) {
 }
 
 // Warnln matches logrus's Println-style emit at Warn level.
-func (r *RateLimitedLogger) Warnln(args ...any) {
+func (r *rateLimitedLogger) Warnln(args ...any) {
 	if r.level() >= logrus.WarnLevel {
 		if e := r.logEntry(); e != nil {
 			e.Warnln(args...)
@@ -291,10 +320,10 @@ func (r *RateLimitedLogger) Warnln(args ...any) {
 }
 
 // Warningln is an alias of Warnln for API compatibility with logrus.
-func (r *RateLimitedLogger) Warningln(args ...any) { r.Warnln(args...) }
+func (r *rateLimitedLogger) Warningln(args ...any) { r.Warnln(args...) }
 
 // Errorln matches logrus's Println-style emit at Error level.
-func (r *RateLimitedLogger) Errorln(args ...any) {
+func (r *rateLimitedLogger) Errorln(args ...any) {
 	if r.level() >= logrus.ErrorLevel {
 		if e := r.logEntry(); e != nil {
 			e.Errorln(args...)
@@ -302,8 +331,24 @@ func (r *RateLimitedLogger) Errorln(args ...any) {
 	}
 }
 
+// Fatalln emits and terminates the process. Always emits.
+func (r *rateLimitedLogger) Fatalln(args ...any) { r.entry.Fatalln(args...) }
+
+// Panicln emits and panics. Always emits.
+func (r *rateLimitedLogger) Panicln(args ...any) { r.entry.Panicln(args...) }
+
+// Level returns the underlying logger's level.
+func (r *rateLimitedLogger) Level() Level {
+	return Level(r.level())
+}
+
+// IsLevelEnabled reports whether the given level would be emitted.
+func (r *rateLimitedLogger) IsLevelEnabled(level Level) bool {
+	return logrus.Level(level) <= r.level()
+}
+
 // level returns the underlying logger's level via an atomic read, mirroring
 // logrus's own non-exported helper.
-func (r *RateLimitedLogger) level() logrus.Level {
+func (r *rateLimitedLogger) level() logrus.Level {
 	return logrus.Level(atomic.LoadUint32((*uint32)(&r.entry.Logger.Level)))
 }

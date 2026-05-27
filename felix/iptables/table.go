@@ -265,7 +265,7 @@ type Table struct {
 	lockProbeInterval time.Duration
 
 	logCxt               log.Logger
-	updateRateLimitedLog *log.RateLimitedLogger
+	updateRateLimitedLog log.Logger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
