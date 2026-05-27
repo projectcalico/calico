@@ -722,6 +722,85 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 	})
 
+	It("should refresh the sequence number of an already-tracked allocation on block update", func() {
+		// Regression test: a coalesced block update that carries a new sequence
+		// number for an allocation whose (handle, IP) identity is unchanged must
+		// refresh the cached sequence number. If it doesn't, the cached value
+		// goes stale and every attempt to release the IP fails with a
+		// sequence-number conflict (ErrorBadSequenceNumber, surfaced as "update
+		// conflict"), which is not a retryable datastore conflict - so the GC
+		// spins forever and only a restart clears it.
+		c.Start(stopChan)
+
+		// A /30 block affine to "cnode" with one address allocated to a handle.
+		// The block has been written 10 times, and the address was allocated at
+		// that sequence number.
+		cidr := net.MustParseCIDR("10.0.0.0/30")
+		aff := "host:cnode"
+		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
+		idx := 0
+		handle := "test-handle"
+		b := model.AllocationBlock{
+			CIDR:           cidr,
+			Affinity:       &aff,
+			Allocations:    []*int{&idx, nil, nil, nil},
+			Unallocated:    []int{1, 2, 3},
+			SequenceNumber: 10,
+			Attributes: []model.AllocationAttribute{
+				{
+					HandleID: &handle,
+					ActiveOwnerAttrs: map[string]string{
+						ipam.AttributeNode:      "cnode",
+						ipam.AttributePod:       "test-pod",
+						ipam.AttributeNamespace: "test-namespace",
+					},
+				},
+			},
+		}
+		b.SetSequenceNumberForOrdinal(0)
+		kvp := model.KVPair{Key: key, Value: &b}
+		blockCIDR := kvp.Key.(model.BlockKey).CIDR.String()
+		id := fmt.Sprintf("%s/%s", handle, "10.0.0.0")
+		update := bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew}
+		c.onUpdate(update)
+
+		// The allocation is tracked with the original sequence number.
+		Eventually(func() uint64 {
+			done := c.pause()
+			defer done()
+			if a := c.allocationsByBlock[blockCIDR][id]; a != nil {
+				return a.sequenceNumber
+			}
+			return 0
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(uint64(10)))
+
+		// Simulate the address being released and re-allocated to the same
+		// handle in between syncs, such that the syncer only delivers the net
+		// result: the same (handle, IP) is still present, but the block has been
+		// written again and the address now carries a newer sequence number.
+		b.SequenceNumber = 11
+		b.SetSequenceNumberForOrdinal(0)
+		c.onUpdate(update)
+
+		// The cached allocation's sequence number must track the latest block.
+		Eventually(func() uint64 {
+			done := c.pause()
+			defer done()
+			if a := c.allocationsByBlock[blockCIDR][id]; a != nil {
+				return a.sequenceNumber
+			}
+			return 0
+		}, 1*time.Second, 100*time.Millisecond).Should(Equal(uint64(11)))
+
+		// And the release options derived from it must carry that sequence
+		// number, so a release uses the current value and won't conflict.
+		done := c.pause()
+		defer done()
+		opts := c.allocationsByBlock[blockCIDR][id].ReleaseOptions()
+		Expect(opts.SequenceNumber).NotTo(BeNil())
+		Expect(*opts.SequenceNumber).To(Equal(uint64(11)))
+	})
+
 	It("should maintain pool and block mappings", func() {
 		// Start the controller.
 		c.Start(stopChan)
