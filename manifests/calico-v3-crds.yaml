@@ -13227,7 +13227,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "policytypes.policy.projectcalico.org"
@@ -13289,7 +13289,7 @@ spec:
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
 # and sets the projectcalico.org/tier label to match.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "tierlabel.policy.projectcalico.org"
@@ -13332,7 +13332,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-policytypes-binding
@@ -13352,7 +13352,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-tier-label-binding
