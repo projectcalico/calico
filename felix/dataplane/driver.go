@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func StartDataplaneDriver(
 	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
+	k8sClientSet kubernetes.Interface,
 	lc *calc.LookupsCache,
 	ipamClient ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
@@ -338,6 +338,7 @@ func StartDataplaneDriver(
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
 			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
+			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
