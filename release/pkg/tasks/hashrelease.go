@@ -19,8 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -34,7 +33,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 		if ci {
 			return false, fmt.Errorf("missing hashrelease server configuration")
 		}
-		logrus.Warn("Missing hashrelease server configuration, skipping remote hashrelease check")
+		log.Warn("Missing hashrelease server configuration, skipping remote hashrelease check")
 		return false, nil
 	}
 
@@ -50,7 +49,7 @@ func HashreleasePublished(cfg *hashreleaseserver.Config, hash string, ci bool) (
 // - Additionally keep an unversioned tigera-operator.tgz at the hashrelease root for compatibility
 // - Copy ocp.tgz to manifests/ocp.tgz
 func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
-	logrus.Info("Modifying hashrelease output to match legacy format")
+	log.Info("Modifying hashrelease output to match legacy format")
 	versions, err := pinnedversion.RetrieveVersions(tmpDir)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve pinned versions: %w", err)
@@ -102,7 +101,7 @@ func ReformatHashrelease(hashreleaseOutputDir, tmpDir string) error {
 func copyIfExists(src, dst string) error {
 	if _, err := os.Stat(src); err != nil {
 		if os.IsNotExist(err) {
-			logrus.WithField("file", src).Warn("Source missing, skipping reformat copy")
+			log.WithField("file", src).Warn("Source missing, skipping reformat copy")
 			return nil
 		}
 		return fmt.Errorf("stat %s: %w", src, err)

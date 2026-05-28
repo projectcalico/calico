@@ -1,4 +1,6 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+//go:build !linux
+
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +14,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package profile
 
-import (
-	"testing"
-
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
-)
-
-func TestLogutils(t *testing.T) {
-	testutils.HookLogrusForGinkgo()
-	gomega.RegisterFailHandler(ginkgo.Fail)
-	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/logutils_suite.xml"
-	ginkgo.RunSpecs(t, "Logutils Suite", suiteConfig, reporterConfig)
-}
+// RegisterHandlers is a no-op on non-Linux platforms. SIGUSR1/SIGUSR2 are not
+// available; callers needing on-demand profiling can call DumpHeap or DumpCPU
+// directly from their own signal/RPC plumbing.
+func RegisterHandlers(opts Options) {}

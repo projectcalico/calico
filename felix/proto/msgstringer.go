@@ -17,7 +17,7 @@ package proto
 import (
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // msgStringer wraps an API message to customise how we stringify it.  For example, it truncates

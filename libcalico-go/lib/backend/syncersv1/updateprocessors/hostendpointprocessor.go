@@ -20,8 +20,8 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -79,7 +79,7 @@ func convertHostEndpointV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	qosControls, err := handleQoSControlsAnnotations(v3res.Annotations)
 	if err != nil {
 		// If QoSControls can't be parsed, log the error but keep processing the host endpoint
-		logrus.WithField("hep", v3res.Name).WithError(err).Warn("Error parsing QoSControl annotations")
+		log.WithField("hep", v3res.Name).WithError(err).Warn("Error parsing QoSControl annotations")
 	}
 
 	v1value := &model.HostEndpoint{

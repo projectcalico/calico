@@ -143,6 +143,7 @@ local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
 local:cni-plugin/tests
 local:crypto/pkg/tls
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
@@ -162,8 +163,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

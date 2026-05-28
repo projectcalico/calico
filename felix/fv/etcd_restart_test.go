@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
@@ -34,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/metrics"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/netlinkutils"
@@ -127,7 +127,7 @@ var _ = infrastructure.DatastoreDescribe("etcd connection interruption", []apico
 				// Use conntrack to identify the source port that Felix is using.
 				out, err := felix.ExecOutput("conntrack", "-L")
 				Expect(err).NotTo(HaveOccurred())
-				logrus.WithField("output", out).WithError(err).Info("Conntrack entries")
+				log.WithField("output", out).WithError(err).Info("Conntrack entries")
 				found := false
 				for line := range strings.SplitSeq(out, "\n") {
 					matches := portRegexp.FindStringSubmatch(line)

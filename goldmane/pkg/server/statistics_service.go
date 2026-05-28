@@ -15,13 +15,13 @@
 package server
 
 import (
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/projectcalico/calico/goldmane/pkg/goldmane"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 func NewStatisticsServer(aggr *goldmane.Goldmane) *Statistics {
@@ -39,13 +39,13 @@ type Statistics struct {
 func (s *Statistics) RegisterWith(srv *grpc.Server) {
 	// Register the server with the gRPC server.
 	proto.RegisterStatisticsServer(srv, s)
-	logrus.Info("Registered flow statistics server")
+	log.Info("Registered flow statistics server")
 }
 
 func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_ListServer) error {
 	responses, err := s.gm.Statistics(req)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get statistics")
+		log.WithError(err).Error("Failed to get statistics")
 		return err
 	}
 
@@ -54,14 +54,14 @@ func (s *Statistics) List(req *proto.StatisticsRequest, server proto.Statistics_
 		// with some Go proxies where trailers are not properly proxied in the case of a "trailers-only" gRPC response with
 		// no body.
 		if err := server.Send(&proto.StatisticsResult{}); err != nil {
-			logrus.WithError(err).Error("failed to send empty result")
+			log.WithError(err).Error("failed to send empty result")
 		}
 		return status.Error(codes.NotFound, "No statistics matching request")
 	}
 
 	for _, resp := range responses {
 		if err := server.Send(resp); err != nil {
-			logrus.WithError(err).Error("Failed to send statistics response")
+			log.WithError(err).Error("Failed to send statistics response")
 			return err
 		}
 	}

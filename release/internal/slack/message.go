@@ -20,8 +20,9 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 //go:embed templates/hashrelease-published.json.gotmpl
@@ -49,7 +50,7 @@ type MessageResponse struct {
 func PostHashreleaseAnnouncement(cfg *Config, msg *HashreleaseMessageData) (*MessageResponse, error) {
 	message, err := renderMessage(publishedMessageTemplateData, msg)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to render message")
+		log.WithError(err).Error("Failed to render message")
 		return nil, err
 	}
 	return sendToSlack(cfg, message)
@@ -82,7 +83,7 @@ func sendToSlack(cfg *Config, message []slack.Block) (*MessageResponse, error) {
 		return nil, fmt.Errorf("invalid or missing configuration")
 	}
 
-	client := slack.New(cfg.Token, slack.OptionDebug(logrus.IsLevelEnabled(logrus.DebugLevel)))
+	client := slack.New(cfg.Token, slack.OptionDebug(log.IsLevelEnabled(log.DebugLevel)))
 	ch, ts, err := client.PostMessage(cfg.Channel, slack.MsgOptionBlocks(message...))
 	return &MessageResponse{Channel: ch, Timestamp: ts}, err
 }

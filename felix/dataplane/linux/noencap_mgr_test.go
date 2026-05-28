@@ -21,9 +21,9 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ = Describe("NoEncap Manager", func() {
@@ -43,7 +43,7 @@ var _ = Describe("NoEncap Manager", func() {
 
 		la := netlink.NewLinkAttrs()
 		la.Name = "eth0"
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := log.NewSummarizer("test")
 
 		noencapMgr = newNoEncapManagerWithSims(
 			rt,
