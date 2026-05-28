@@ -100,8 +100,9 @@ never assigns.
 - Don't introduce a path that mutates owner attrs without going
   through `vmipam`, or the `CompareAndSwap` precondition
   protecting against the CNI racing the swap goes away.
-- Trigger-path refactors have regressed live-migration twice
-  (CORE-12537, CORE-12594); exercise the GARP and syncer paths.
+- Trigger-path refactors have regressed live-migration more than
+  once; exercise the GARP and syncer paths whenever touching the
+  monitor.
 
 ## LoadBalancer controller
 
@@ -115,7 +116,7 @@ delete.
 
 Cold-start races are the recurring failure mode: the controller
 needs full block context before assigning, or replicas can hand
-out duplicate IPs (CORE-12710).
+out duplicate IPs.
 
 **Review notes**
 

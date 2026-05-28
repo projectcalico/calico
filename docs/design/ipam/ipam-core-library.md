@@ -24,14 +24,14 @@ methods callers actually reach for:
 
 | Method | Purpose |
 |---|---|
-| `AutoAssign` | Allocate N IPs for a host. Honours pool selectors, host affinity, `StrictAffinity`, `MaxBlocksPerHost`, and per-handle caps. Returns block-masked CIDRs (not /32) so callers can program routes for the surrounding block. |
+| `AutoAssign` | Allocate N IPs for a host. Honors pool selectors, host affinity, `StrictAffinity`, `MaxBlocksPerHost`, and per-handle caps. Returns block-masked CIDRs (not /32) so callers can program routes for the surrounding block. |
 | `AssignIP` | Allocate a specific IP. Used by tunnel-address allocators and LoadBalancer IPAM. |
 | `ReleaseIPs` | Release IPs by `ReleaseOptions{Address, Handle, SequenceNumber}`. Returns already-free IPs plus IPs skipped on sequence-number mismatch. |
 | `ReleaseByHandle` | Release every IP attached to a handle ID. Used on CNI DEL and tunnel teardown. |
 | `GetAssignmentAttributes` | Read the per-allocation attribute map for an IP. Used by the GC for leak validation. |
 | `IPsByHandle` | Reverse-lookup IPs from a handle ID without scanning blocks. |
 | `ClaimAffinity` / `ReleaseHostAffinities` | Manage per-host block affinities directly. Used by the GC and `calicoctl ipam release`. |
-| `GetIPAMConfig` / `SetIPAMConfig` | Read/write the `IPAMConfig` singleton. Operator owns writes in production. |
+| `GetIPAMConfig` / `SetIPAMConfig` | Read/write the `IPAMConfig` (v1) / `IPAMConfiguration` (v3) singleton. End users and the operator both write through here; the library is the only enforcement point. |
 | `SetOwnerAttributes` | KubeVirt-only. Swap owner attributes on an existing allocation under preconditions, without releasing and re-allocating. |
 
 There is no `AssignFixedIP` - the API is `AssignIP`. The source of
@@ -45,6 +45,19 @@ truth for signatures is the interface definition.
 
 ## AutoAssign and host affinity
 
+Three invariants frame this section:
+
+- **Two-phase claim.** A new block goes
+  `pending → confirmed`. Pending affinities are treated as
+  absent for ownership and routing; only confirmed affinities
+  participate. This is what makes the claim race resolvable.
+- **`MaxBlocksPerHost` caps claims, not allocations.** Once a
+  node reaches the cap it can still fill blocks it already
+  owns. The cap is the only gate on new-block claims.
+- **`StrictAffinity=true` is the only way to suppress
+  non-affine fallback.** Anything that needs "borrow nothing"
+  semantics must set it, not invent a parallel switch.
+
 `AutoAssign` is the hot path. Entry point is `autoAssign` in
 [`ipam.go`](../../../libcalico-go/lib/ipam/ipam.go). The walk:
 
@@ -55,11 +68,11 @@ truth for signatures is the interface definition.
 5. If existing affine blocks are exhausted and `allowNewClaim=true`, `findUsableBlock` searches for an unclaimed block in the pool, or reclaims an empty affine block older than `EmptyBlockMinReclaimAge` (1 minute). Claim is two-phase: `getPendingAffinity` creates the `BlockAffinity` in `pending`, `claimAffineBlock` creates the `IPAMBlock` and transitions the affinity to `confirmed`.
 6. If `StrictAffinity=false` and the request still isn't satisfied, fall back to non-affine blocks via `randomBlockGenerator`. The generator seeds its RNG from the hostname hash so retries hit the same blocks in the same order, reducing thrash between competing hosts.
 
-`StrictAffinity=true` (Windows always, or operator-configured
-elsewhere) suppresses the non-affine fallback. `MaxBlocksPerHost`
-suppresses new-block claims but not allocation from existing affine
-blocks; a node that's already at the cap can still fill the blocks
-it owns.
+`StrictAffinity=true` suppresses the non-affine fallback (Windows
+forces it; see [ipam-cni](./ipam-cni.md#platform-differences)).
+`MaxBlocksPerHost` suppresses new-block claims but not allocation
+from existing affine blocks; a node that's already at the cap can
+still fill the blocks it owns.
 
 **Review notes**
 
@@ -70,6 +83,16 @@ it owns.
 - `MaxBlocksPerHost` defaults are a recurring doc/code drift point (https://github.com/projectcalico/calico/issues/9462). If you change the default in code, update the docs in the same PR.
 
 ## CAS retry and sequence numbers
+
+Two invariants frame this section:
+
+- **Every IPAM write is CAS.** No write bypasses
+  `backend.Client.Update`. The retry loop is bounded; on
+  non-conflict errors it surfaces, not swallows.
+- **Per-ordinal sequence numbers detect ABA.** A release that
+  doesn't match the stored sequence number is rejected. Every
+  release path must plumb the sequence number through; dropping
+  it reopens the pod-reuse race.
 
 All `IPAMBlock`, `BlockAffinity`, and `IPAMHandle` updates are CAS
 on resource version via `backend.Client.Update`. The library wraps
@@ -134,8 +157,12 @@ found - see [`./ipam-cni.md`](./ipam-cni.md).
 
 `IPAMConfig` is a singleton CR. Defaults are applied on read by
 `GetIPAMConfig` when the CR is missing, so callers can rely on
-"there is always a config". Operator owns the write path in
-production; `SetIPAMConfig` validates:
+"there is always a config". Writes come from the operator
+reconciling user-facing config and from end users editing the CR
+directly (v1 `IPAMConfig` or v3 `IPAMConfiguration`).
+`SetIPAMConfig` is the only validation point - any client that
+bypasses it can persist a config the library will then reject on
+read. The validator enforces:
 
 - `StrictAffinity=false` + `AutoAllocateBlocks=false` is rejected (would mean "never allocate anywhere", which is never what the user wants).
 - `MaxBlocksPerHost > 0` requires `StrictAffinity=true`.
@@ -144,7 +171,7 @@ Fields:
 
 | Field | Effect |
 |---|---|
-| `StrictAffinity` | Disables non-affine fallback in `AutoAssign`. Windows nodes force this to true regardless of the stored value because Windows can't route /26 affinity blocks remotely. |
+| `StrictAffinity` | Disables non-affine fallback in `AutoAssign`. Windows forces true; see [ipam-cni](./ipam-cni.md#platform-differences). |
 | `MaxBlocksPerHost` | Per-host cap on the number of affine blocks. 0 means default (20). Once a host hits the cap, `allowNewClaim` is forced false; existing blocks still fill. |
 | `AutoAllocateBlocks` | When false, `AutoAssign` will never claim a new block - only allocate from blocks the host already owns. |
 | `KubeVirtVMAddressPersistence` | Default for whether KubeVirt VM addresses survive VM restart / migration. Auto-detection is on by default. |
@@ -153,7 +180,8 @@ Fields:
 
 - The default-when-missing behavior is load-bearing. New required fields need a default plus heal-forward; don't add a field that crashes when absent.
 - `MaxBlocksPerHost > 0` only makes sense with `StrictAffinity=true`; the validator enforces this. If you relax the validator, you also need to define what "borrow blocks but cap our own" means - it currently isn't defined.
-- Operator owns `SetIPAMConfig` in production. New fields surface through the operator API too, or they're not usable.
+- `SetIPAMConfig` is the only validation point. End-user kubectl writes hit the CR directly and bypass library checks until next read - new validation rules must live in the library, not as code on a single caller.
+- A new field needs the v3 type, conversion, and operator reconciliation in addition to v1, or it isn't reachable through user-facing config.
 
 ## Error taxonomy
 
@@ -165,7 +193,7 @@ and at the top of `ipam.go`. The ones callers care about:
 |---|---|---|
 | `ErrBlockLimit` | `autoAssign` when `numBlocksOwned >= MaxBlocksPerHost` | CNI plugin (surfaces to kubelet); user-visible. |
 | `ErrNoQualifiedPool` | `determinePools` when no pool matches selectors / version / intended use | CNI plugin; user-visible. |
-| `ErrStrictAffinity` | `SetIPAMConfig` when a Windows config sets `StrictAffinity=false` explicitly | Operator / `calicoctl`. |
+| `ErrStrictAffinity` | `SetIPAMConfig` validation when the requested config conflicts with required strict affinity | Operator / `calicoctl`. |
 | `IPAMConfigConflictError` | `SetIPAMConfig` validation | Operator. |
 | `noFreeBlocksError` | Internal to the claim loop | `autoAssign` translates to `ErrBlockLimit` or surfaces via the retry loop. |
 | `errBlockClaimConflict` | Another host won the race for a block | Retry loop swallows. |

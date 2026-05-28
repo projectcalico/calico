@@ -26,12 +26,23 @@ routes by binary name.
 
 ## ADD flow
 
+Invariants:
+
+- **No partial state on failure.** Lock acquisition, the
+  allocation call, and dual-stack family pairing each have a
+  failure mode that must roll back, not leave half-applied
+  state for the next CNI invocation to trip on.
+- **Lock then clock.** The 90s allocation timeout starts
+  *after* the host-wide IPAM lock is acquired (see
+  [The IPAM lock](#the-ipam-lock)). Otherwise lock contention
+  burns the budget before any allocation work runs.
+
 `cmdAdd` in
 [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../../cni-plugin/pkg/ipamplugin/ipam_plugin.go)
 is the entry point. The walk:
 
 1. Load `NetConf` from stdin, build a libcalico client via
-   `utils.CreateClient`. Honours `KUBECONFIG`,
+   `utils.CreateClient`. Honors `KUBECONFIG`,
    `ETCD_ENDPOINTS`, `K8S_API_TOKEN`, `DATASTORE_TYPE` and
    TLS-cert envs.
 2. Extract pod identifiers from CNI args.
@@ -53,14 +64,13 @@ is the entry point. The walk:
 6. Resolve pools via `utils.ResolvePools`. Order: per-pod
    annotation > per-namespace annotation > conf default > all
    enabled pools. Names or CIDRs both accepted.
-7. Build `AutoAssignArgs`. `MaxBlocksPerHost = 1` when
-   `WindowsUseSingleNetwork` is set, `HostReservedAttrIPv4s` on
-   Windows reserves first 3 + last 1 IPs under the literal
-   handle `windows-reserved-ipam-handle`, and `Namespace` is the
-   K8s Namespace object so pool `namespaceSelector` matches.
-   - For KubeVirt with persistence, also set
-     `MaxAllocToHandlePerIPVersion = 1` so the VM-scoped handle
-     can't accumulate more than one IP per family.
+7. Build `AutoAssignArgs`. `Namespace` is the K8s Namespace
+   object so pool `namespaceSelector` matches. KubeVirt with
+   persistence sets `MaxAllocToHandlePerIPVersion = 1` so the
+   VM-scoped handle can't accumulate more than one IP per family.
+   Windows sets `WindowsUseSingleNetwork` /
+   `HostReservedAttrIPv4s` here; see
+   [Platform differences](#platform-differences).
 8. Acquire the host-wide IPAM lock - see
    [the IPAM lock section](#the-ipam-lock).
 9. Call `calicoClient.IPAM().AutoAssign(ctx, args)`. Returns
@@ -78,11 +88,22 @@ inside `cni-plugin/pkg/k8s/k8s.go` before this flow - see
 **Review notes**
 
 - KubeVirt VM persistence relies on the handle ID being VM-scoped, not pod-scoped. Don't fold the two handle paths together.
-- `MaxBlocksPerHost = 1` for `WindowsUseSingleNetwork` is load-bearing - Windows can't route remote affinity blocks.
 - Pool resolution is hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891; preserve the fast path.
 - Don't log `stdinData` - it may contain `K8sAuthToken` / `K8sClientKey`. See `cni-plugin/pkg/k8s/k8s.go`.
 
 ## DEL flow
+
+Invariants:
+
+- **DEL is idempotent.** Any subset of block, handle, or
+  allocation may already be gone. "Not found" is success.
+- **Release by both handle forms.** The primary handle
+  (`<network>.<container-id>`) plus the workload-ID handle
+  (`<namespace>.<pod>`). Skipping the second leaks IPs across
+  CRI container-ID changes and across v2.x-era allocations.
+- **KubeVirt DEL is not "release immediately."** Clear owner
+  attrs first; release only when the VM/VMI is gone and all
+  attrs are empty.
 
 `cmdDel` in the same file. Two paths.
 
@@ -143,28 +164,22 @@ not picking conflicts.
 - Per-pod overrides per-namespace overrides conf default. Don't reorder the precedence.
 - `floatingIPs` are consumed by Felix via the WEP `IPNAT` list - changes here that affect format need to land with the Felix side, not after.
 
-## Windows quirks
+## Platform differences
 
-The Linux helper at
-[`cni-plugin/pkg/ipamplugin/ipam_lock_linux.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go)
-defaults the lock to `/var/run/calico/ipam.lock`; the Windows
-helper at
-[`cni-plugin/pkg/ipamplugin/ipam_lock_windows.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)
-defaults to `c:\CalicoWindows\ipam.lock`. The binary entry point
-on Windows is `node/cmd/calico-ipam`.
+`ipam_plugin.go` is shared; the platform splits are file-level
+GOOS shims and a small set of args set differently on Windows.
 
-Behavioural differences:
-
-- `StrictAffinity` is forced true on Windows regardless of the stored `IPAMConfig` value - Windows can't route /26 affinity blocks remotely.
-- `WindowsUseSingleNetwork` collapses to `MaxBlocksPerHost = 1`.
-- `HostReservedAttrIPv4s` reserves the first 3 + last 1 IPs of each block under handle `windows-reserved-ipam-handle`.
-- Dual-stack on a single network is restricted (single-network mode is IPv4 only); see HNS limitations referenced in the core library.
-
-**Review notes**
-
-- Don't relax `StrictAffinity=true` on Windows without a routing story - the local affinity blocks are the only ones Windows can program.
-- The reserved-handle name is literal and parsed elsewhere; don't rename it.
-- New IPAM behavior added in `ipam_plugin.go` needs to be tested on Windows or explicitly scoped to Linux. The two code paths share most of the file.
+- Lock file: Linux defaults to `/var/run/calico/ipam.lock`
+  ([`ipam_lock_linux.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go));
+  Windows to `c:\CalicoWindows\ipam.lock`
+  ([`ipam_lock_windows.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)).
+- Binary: Windows enters through `node/cmd/calico-ipam`.
+- Windows forces `StrictAffinity=true` (HNS can't route remote
+  affinity blocks). `WindowsUseSingleNetwork` collapses to
+  `MaxBlocksPerHost = 1`. `HostReservedAttrIPv4s` reserves the
+  first three and last IP of each block under the literal handle
+  `windows-reserved-ipam-handle`. The reserved-handle name is
+  parsed elsewhere - don't rename it.
 
 ## Dual-stack
 

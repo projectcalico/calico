@@ -212,30 +212,34 @@ https://github.com/projectcalico/calico/pull/10855.
 
 ## crd.projectcalico.org/v1 vs projectcalico.org/v3
 
-IPAM CRDs live on the internal `crd.projectcalico.org/v1` group,
-not the public `projectcalico.org/v3`. Historical - they predate
-the v3 surface and were never promoted. The long-running promotion
-discussion is https://github.com/projectcalico/calico/issues/6412.
+IPAM CRDs exist on both `crd.projectcalico.org/v1` (internal) and
+`projectcalico.org/v3` (public). The two groups are not symmetric:
+v1 carries the storage shape every IPAM caller has used since the
+beginning, while v3 exposes a user-facing surface with a different
+name (`IPAMConfiguration` vs `IPAMConfig`) and stricter field
+validation.
 
-Boundary: code under `libcalico-go/lib/backend/k8s/resources/`
-speaks v1 directly. The library and `calicoctl` consume the
-wrapped types. New code outside the backend wrappers should not
-import v1 types - the `lib/v3` → `lib/internalapi` rename
-(https://github.com/projectcalico/calico/pull/11870) exists to
-keep that boundary clean.
+The full design of the CRD-group layout is owed its own doc; this
+section covers only the bits relevant to a reviewer touching the
+backend wrappers.
 
-Consumers can assume the four resources keep their current group /
-version; promotion would be opt-in migration, not a silent flip.
-Field shape on the v1 CRD is stable; renames go through
-`ipam_*_v1.go` / `ipam_*_v3.go` conversion. Consumers can't assume
-v1 CRDs are kubectl-friendly (users go through `calicoctl` or the
-operator) and can't assume a new model field is reachable from
-operator config without an operator-side change.
+- Backend wrappers under `libcalico-go/lib/backend/k8s/resources/`
+  speak v1. Conversion lives in `ipam_*_v1.go` / `ipam_*_v3.go`.
+- The library and `calicoctl` consume the wrapped types. New code
+  outside the backend wrappers should not import v1 types - the
+  `lib/v3` → `lib/internalapi` rename
+  (https://github.com/projectcalico/calico/pull/11870) keeps that
+  boundary clean.
+- Adding a field to v1 doesn't make it reachable through v3 or
+  the operator until the v3 type, conversion, and operator
+  reconciler are updated too. A v1-only field is invisible to
+  end-user kubectl access against the v3 group.
 
 **Review notes**
 
 - Don't leak `crd.projectcalico.org/v1` types through new public APIs.
-- New `IPAMConfig` or IPAM-CRD fields almost always need an operator-side change too (RBAC, reconciliation). https://github.com/tigera/operator/pull/4775, https://github.com/tigera/operator/pull/4776.
+- A new `IPAMConfig` / `IPAMConfiguration` field needs the v3 type and conversion updated, not just v1. Operator RBAC and reconciliation usually need to follow - https://github.com/tigera/operator/pull/4775, https://github.com/tigera/operator/pull/4776.
+- Until the dedicated CRD-group design lands, verify cross-group assumptions in code rather than inferring from this doc.
 
 ## Keep in sync with
 

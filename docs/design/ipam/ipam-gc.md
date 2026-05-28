@@ -31,6 +31,18 @@ run between full scans.
 
 ## Leak detection
 
+Invariants:
+
+- **Allocations are valid until proven leaked.** Missing
+  metadata, unknown owner type, KubeVirt-not-installed - all
+  default to valid. Tightening any of these without a real
+  reason will spuriously release live IPs.
+- **Two observations gate every release.** A candidate leak
+  must survive the grace period and re-validate immediately
+  before the release call. One observation is never enough.
+- **Tunnel IPs validate via node existence, not pods.** The
+  pod-based validity check doesn't apply.
+
 `checkAllocations` (`ipam.go:823`) walks every allocation on every
 scanned node and classifies it. The decision tree:
 
@@ -130,6 +142,13 @@ release call entirely.
 
 ## Handle reconciliation
 
+The invariant: **all-or-none per handle.** Either every IP on a
+handle is confirmed-leaked and gets released together, or the
+entire handle is skipped this sync. Mixing the two states
+desyncs the per-block `IPAMHandle` counters from the actual
+block bitmap and the controller permanently loses track of live
+IPs.
+
 `handleTracker` (`ipam_allocation.go:73`) is the per-handle view:
 handle ID => set of allocations the GC believes share it.
 `setAllocation` and `removeAllocation` keep it in sync with the
@@ -170,6 +189,16 @@ sequence-number protection for each ordinal.
 - The crash at `ipam.go:1281` (`log.Fatalf("BUG: unable to find allocation for release options")`) is reachable if released options can't be mapped back to tracked allocations.
 
 ## Empty block release
+
+Invariants:
+
+- **A node keeps at least one affinity block.** Releasing the
+  last block forces a fresh claim on the next pod and adds
+  per-pod CAS contention that the affinity model exists to
+  prevent.
+- **Two consecutive empty observations before release.** A
+  single empty sync is not enough - a pod about to allocate
+  would lose the block to the GC and trigger reclaim churn.
 
 `releaseUnusedBlocks` (`ipam.go:746`) walks `emptyBlocks` and, per
 block:
@@ -259,6 +288,40 @@ sync. One walk over all blocks; no incremental state to desync.
 - `ipam_allocations_gc_reclamations` rate is the canonical "we have a real leak somewhere" signal. Alert on it.
 - Don't switch `updateMetrics` to incremental updates without a separate consistency check. The current full-recompute is the consistency check.
 - The in-memory state maps must agree at all times. `assertConsistentState` in `ipam_test.go` is the canonical invariant check; any new map mutation needs a test that exercises it. The v3.32 memory-leak family (https://github.com/projectcalico/calico/pull/12277, /12286, /12287, /12288) all came from "added to one path, forgot another."
+
+## Testing the GC
+
+Two harnesses cover the GC and they are not interchangeable:
+
+- **`assertConsistentState`** in
+  [`kube-controllers/pkg/controllers/node/ipam_test.go`](../../../kube-controllers/pkg/controllers/node/ipam_test.go)
+  is the canonical end-of-test invariant check. It cross-walks
+  every in-memory map (`allBlocks`, `allocationsByBlock`,
+  `allocationState`, `handleTracker`, `confirmedLeaks`,
+  `nodesByBlock`, `blocksByNode`, `emptyBlocks`) and asserts
+  they agree. Every test that mutates the controller's state
+  must call it. The v3.32 memory-leak family
+  (https://github.com/projectcalico/calico/pull/12277, /12286,
+  /12287, /12288) all came from "added to one path, forgot
+  another" - the consistency check catches that class directly.
+- **[`hack/cmd/ipam-hammer/`](../../../hack/cmd/ipam-hammer/)**
+  is the race-reproduction harness for allocation and GC paths.
+  Use it before declaring a race-fix complete. Unit tests can't
+  exercise the CAS / timing windows that hammer can.
+
+**Review notes**
+
+- A new map mutation needs an `assertConsistentState` call in
+  the corresponding test. Skipping it ships a memory-leak class
+  bug.
+- A "fixes a race" PR without an `ipam-hammer` run on the
+  before/after binaries is not done. Manual reasoning is not a
+  substitute.
+- For changes to block-level invariants, extend the table tests
+  in
+  [`libcalico-go/lib/ipam/ipam_block_test.go`](../../../libcalico-go/lib/ipam/ipam_block_test.go)
+  rather than adding ad-hoc tests; the table is where reviewers
+  look first.
 
 ## Keep in sync with
 

@@ -22,21 +22,25 @@ reason.
 
 ### Data model
 
-IPAM state is stored as four CRDs under `crd.projectcalico.org/v1`,
-plus `IPReservation` for carve-outs:
+IPAM state is stored as four CRDs, plus `IPReservation` for
+carve-outs:
 
 | Resource | Role |
 |---|---|
 | `IPAMBlock` | Contiguous slice of a pool (default /26 IPv4, /122 IPv6). Holds the ordinal bitmap, per-allocation attributes, and per-ordinal sequence numbers. |
 | `BlockAffinity` | Per-host (or per-virtual-owner) claim on a block. State machine: `pending` -> `confirmed` -> `pendingDeletion`. |
 | `IPAMHandle` | Secondary index keyed by handle ID, so `ReleaseByHandle` doesn't scan blocks. Also enforces per-handle allocation caps (KubeVirt VM persistence). |
-| `IPAMConfig` | Singleton. Holds `StrictAffinity`, `MaxBlocksPerHost`, `AutoAllocateBlocks`, `KubeVirtVMAddressPersistence`. |
+| `IPAMConfig` / `IPAMConfiguration` | Singleton. Holds `StrictAffinity`, `MaxBlocksPerHost`, `AutoAllocateBlocks`, `KubeVirtVMAddressPersistence`. The v1 name is `IPAMConfig`; the v3 name is `IPAMConfiguration`. |
 | `IPReservation` | Carve-outs from the pool (tunnel addresses, externally-managed IPs). Filtered at block-skip and ordinal-skip granularity. |
 
-These resources still live on the internal `crd.projectcalico.org/v1`
-group rather than the public `projectcalico.org/v3`. The long-running
-discussion about promoting them is
-https://github.com/projectcalico/calico/issues/6412.
+The IPAM CRDs exist on both `crd.projectcalico.org/v1` and
+`projectcalico.org/v3`. The two groups are not symmetric - they
+differ in field shape, naming (`IPAMConfig` vs
+`IPAMConfiguration`), and which clients write through each. A
+separate design doc covering the CRD-group layout is owed; until
+it lands, treat any cross-group assumption as something to
+verify in code rather than infer from this doc. The promotion
+history is https://github.com/projectcalico/calico/issues/6412.
 
 ### Why blocks, and why per-host affinity
 
@@ -47,13 +51,13 @@ ordinals into a single object, so most allocations are CAS on one
 object owned by one node. Blocks also let the dataplane advertise one
 route per block, not one per pod.
 
-**Per-host affinity** turns cluster-wide CAS thrash into per-node CAS.
-A node owns its blocks; allocations are local writes. When a node
-runs out of affine blocks it can borrow ordinals from another node's
-block (unless `StrictAffinity=true`, which is required when IPs are
-statically routed per-node by downstream gear and borrowing would
-break routing). Windows nodes force `StrictAffinity=true` because
-Windows can't route /26 affinity blocks remotely.
+**Per-host affinity** turns cluster-wide CAS thrash into per-node
+CAS. A node owns its blocks; allocations are local writes. When a
+node runs out of affine blocks it can borrow ordinals from another
+node's block, unless `StrictAffinity=true`. Strict affinity is the
+mode for clusters where downstream routing is per-node and
+borrowing would strand traffic (Windows forces this; see
+[ipam-cni](./ipam-cni.md#platform-differences)).
 
 ### The three primary consumers
 
@@ -71,13 +75,10 @@ moving.
 ### Repo split
 
 - `projectcalico/calico` (OSS) - all the IPAM code described here.
-- `tigera/operator` - owns the `IPAMConfig` CR (reconciles it against
-  user-facing operator config) and the RBAC for the IPAM CRDs.
-  Operator can refuse to apply config changes when datastore state
-  looks corrupt.
-- `tigera/calico-private` (enterprise) - carries the L2 bridge /
-  VLAN, federation, and KubeVirt IPAM extensions. Mostly cherry-picks
-  from OSS; the core library lives upstream.
+- `tigera/operator` - reconciles `IPAMConfig` / `IPAMConfiguration`
+  against user-facing operator config and provisions RBAC for the
+  IPAM CRDs. End users can also edit the config CR directly (name
+  varies by API group); operator is one writer, not the only one.
 
 ## 2. Sub-design index
 
@@ -124,7 +125,55 @@ absence as "read the code and ask"; don't assume anything goes.
   [`.github/instructions/ipam.instructions.md`](../../../.github/instructions/ipam.instructions.md)
   file wires this rule into Copilot's automated review.
 
-## 4. Adding a new sub-design
+## 4. Cross-cutting review rubric
+
+The questions below are the ones that have caught real
+regressions across the IPAM subsystem. A reviewer (or an agent
+opening a PR) should be able to answer "yes" or "n/a" to each.
+"Didn't check" is a request for changes.
+
+1. **Sequence-number protection on every release path.**
+   Does the change plumb `ReleaseOptions.SequenceNumber` through
+   any new release code? Dropping it reopens the
+   pod-reuse-between-scan-and-release window. See
+   [ipam-core-library §CAS retry and sequence numbers](./ipam-core-library.md#cas-retry-and-sequence-numbers).
+2. **kube-controllers state-map updates touch every map.**
+   `allBlocks`, `allocationsByBlock`, `allocationState`,
+   `handleTracker`, `confirmedLeaks`, `nodesByBlock`,
+   `blocksByNode`, `emptyBlocks`. A new mutation path that
+   updates one but not the others is the v3.32 memory-leak
+   pattern. See [ipam-gc §Testing](./ipam-gc.md#testing-the-gc).
+3. **All-or-none per handle on release.** If one IP on a handle
+   is still valid, the entire handle is skipped. Auxiliary-state
+   reconcilers must respect this too. See
+   [ipam-gc §Handle reconciliation](./ipam-gc.md#handle-reconciliation).
+4. **KDD lookups go through labels, not client-side filters.**
+   A new "list X for host Y" query needs the hashed-hostname
+   label stamped by `UpgradeHost()`. See
+   [ipam-datastore §Host-scoped lookups](./ipam-datastore.md#host-scoped-lookups).
+5. **In-memory block consistent with what's persisted.** A
+   change that mutates the `*model.AllocationBlock` KVPair
+   before `updateBlock` returns success can persist partial
+   state via the retry loop. See
+   [ipam-core-library §CAS retry and sequence numbers](./ipam-core-library.md#cas-retry-and-sequence-numbers).
+6. **Handle-format change updated everywhere it's parsed.** GC
+   classification, `calicoctl ipam check`, and tunnel migration
+   all parse handle prefixes. New handle types need migration
+   code too. See
+   [ipam-core-library §Handle IDs](./ipam-core-library.md#handle-ids).
+7. **Operator-side change for new CRDs or RBAC verbs.** A new
+   IPAM CRD or a new verb on an existing one needs a paired
+   `tigera/operator` PR or GC paths fail closed. See
+   [ipam-datastore §crd.projectcalico.org/v1 vs projectcalico.org/v3](./ipam-datastore.md#crdprojectcalicoorgv1-vs-projectcalicoorgv3).
+8. **Upgrade path for pre-existing data.** Existing rows may
+   lack a new field (`AffinityType`, per-ordinal sequence
+   number, tunnel handle prefix). Code that assumes the field
+   is present must instead default + heal-forward.
+
+A PR that answers "no" to any of these without a written reason
+should not merge.
+
+## 5. Adding a new sub-design
 
 When a new IPAM topic earns its own doc:
 
