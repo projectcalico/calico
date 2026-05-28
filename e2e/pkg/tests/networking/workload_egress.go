@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -34,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const defaultExternalIP = "60.70.80.90"
@@ -101,7 +101,7 @@ var _ = describe.CalicoDescribe(
 				"workload egress tests require at least 2 non-master nodes with IPv4 addresses")
 			nodeNames = allNames[:2]
 			nodeIPs = allIPs[:2]
-			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
+			log.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)
 
 			// Detect BPF dataplane mode.
 			bpfMode = utils.DetectDataplane(cli, f.ClientSet).IsBPF()

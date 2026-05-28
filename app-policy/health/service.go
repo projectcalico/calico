@@ -17,9 +17,8 @@ package health
 import (
 	"context"
 
-	log "github.com/sirupsen/logrus"
-
 	dikastesproto "github.com/projectcalico/calico/app-policy/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // An implementation of the HealthzServer health check service.

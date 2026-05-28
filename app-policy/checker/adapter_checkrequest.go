@@ -19,7 +19,8 @@ import (
 	"strings"
 
 	authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
-	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // CheckRequestToFlowAdapter adapts CheckRequest to the l4 and l7 flow interfaces for use in the

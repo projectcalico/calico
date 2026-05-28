@@ -21,13 +21,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 const (
@@ -94,7 +94,7 @@ func isRetryable(err error) bool {
 type migrationWorkItem struct {
 	v1UID  types.UID
 	v3Obj  client.Object
-	logCtx *logrus.Entry
+	logCtx log.Logger
 }
 
 // migrationWorkResult holds the outcome of processing a single work item.
@@ -115,7 +115,7 @@ type migrationWorkResult struct {
 // given migrator. It lists and converts resources sequentially, then fans out
 // create/check operations to a bounded worker pool for concurrency.
 func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*MigrationResult, error) {
-	logCtx := logrus.WithField("kind", m.Kind())
+	logCtx := log.WithField("kind", m.Kind())
 	logCtx.Info("Starting migration for resource type")
 
 	result := &MigrationResult{
@@ -137,7 +137,7 @@ func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*Mi
 		// Clear UID before creation — the API server assigns a new one.
 		obj.SetUID("")
 
-		entryLog := logCtx.WithFields(logrus.Fields{
+		entryLog := logCtx.WithFields(log.Fields{
 			"v1UID":     v1UID,
 			"ownerRefs": len(obj.GetOwnerReferences()),
 			"name":      obj.GetName(),
@@ -203,7 +203,7 @@ func MigrateResourceType(ctx context.Context, m migrators.ResourceMigrator) (*Mi
 		}
 	}
 
-	logCtx.WithFields(logrus.Fields{
+	logCtx.WithFields(log.Fields{
 		"migrated":  result.Migrated,
 		"skipped":   result.Skipped,
 		"conflicts": len(result.Conflicts),
@@ -363,7 +363,7 @@ func RemapOwnerReferences(
 		return nil
 	}
 
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"uidMappings": len(uidMap),
 		"candidates":  len(objects),
 	})

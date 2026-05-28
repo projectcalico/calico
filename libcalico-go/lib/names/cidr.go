@@ -17,8 +17,7 @@ package names
 import (
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -28,7 +27,7 @@ func CIDRToName(cidr net.IPNet) string {
 	name = strings.Replace(name, ":", "-", 7)
 	name = strings.Replace(name, "/", "-", 1)
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"Name":  name,
 		"IPNet": cidr.String(),
 	}).Debug("Converted IPNet to resource name")

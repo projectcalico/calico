@@ -23,12 +23,12 @@ import (
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	calicohash "github.com/projectcalico/calico/libcalico-go/lib/hash"
 )
@@ -122,7 +122,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 	epMarkMapper EndpointMarkMapper,
 	profileIDs []string,
 ) []*generictables.Chain {
-	logrus.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
+	log.WithField("ifaceName", ifaceName).Debug("Rendering filter host endpoint chain.")
 	result := []*generictables.Chain{}
 	result = append(result,
 		// Chain for output traffic _to_ the endpoint.
@@ -222,7 +222,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleEgressChains(
 	tiers []TierPolicyGroups,
 	profileIDs []string,
 ) []*generictables.Chain {
-	logrus.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
+	log.WithField("ifaceName", ifaceName).Debug("Render host endpoint mangle egress chain.")
 	return []*generictables.Chain{
 		// Chain for output traffic _to_ the endpoint.  Note, we use RETURN here rather than
 		// ACCEPT because the mangle table is typically used, if at all, for packet
@@ -252,7 +252,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawEgressChain(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) *generictables.Chain {
-	logrus.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
+	log.WithField("ifaceName", ifaceName).Debug("Rendering raw (untracked) host endpoint egress chain.")
 	return r.endpointIptablesChain(
 		untrackedTiers,
 		nil, // We don't render profiles into the raw table.
@@ -277,7 +277,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 	ifaceName string,
 	untrackedTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	logrus.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
+	log.WithField("ifaceName", ifaceName).Debugf("Rendering raw (untracked) host endpoint chain. - untrackedTiers %+v", untrackedTiers)
 	return []*generictables.Chain{
 		// Chain for traffic _to_ the endpoint.
 		r.HostEndpointToRawEgressChain(ifaceName, untrackedTiers),
@@ -307,7 +307,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleIngressChains(
 	ifaceName string,
 	preDNATTiers []TierPolicyGroups,
 ) []*generictables.Chain {
-	logrus.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
+	log.WithField("ifaceName", ifaceName).Debug("Rendering pre-DNAT host endpoint chain.")
 	return []*generictables.Chain{
 		// Chain for traffic _from_ the endpoint.  Pre-DNAT policy does not apply to
 		// outgoing traffic through a host endpoint.
@@ -373,7 +373,7 @@ func (r *DefaultRuleRenderer) PolicyGroupToIptablesChains(group *PolicyGroup) []
 	count := -1
 	for _, pol := range group.Policies {
 		if model.KindIsStaged(pol.Kind) {
-			logrus.Debugf("Skip programming staged policy %v", pol)
+			log.Debugf("Skip programming staged policy %v", pol)
 			continue
 		}
 		count++
@@ -456,12 +456,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 	// Add QoS controls for packet rate if applicable
 	if chainType == chainTypeNormal && qosControls != nil {
-		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls packet rate rules")
+		log.WithField("qosControls", qosControls).Debug("Rendering QoS controls packet rate rules")
 		markLimitPacketRate := r.MarkScratch0
 		if dir == RuleDirIngress {
 			// Add ingress packet rate limit rules if applicable
 			if qosControls.IngressPacketRate != 0 {
-				logrus.WithFields(logrus.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "IngressPacketBurst": qosControls.IngressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
+				log.WithFields(log.Fields{"IngressPacketRate": qosControls.IngressPacketRate, "IngressPacketBurst": qosControls.IngressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering ingress packet rate limit rules")
 				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
@@ -499,7 +499,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		if dir == RuleDirEgress {
 			// Add egress packet rate limit rules if applicable
 			if qosControls.EgressPacketRate != 0 {
-				logrus.WithFields(logrus.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "EgressPacketBurst": qosControls.EgressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
+				log.WithFields(log.Fields{"EgressPacketRate": qosControls.EgressPacketRate, "EgressPacketBurst": qosControls.EgressPacketBurst, "mark": markLimitPacketRate}).Debug("Rendering egress packet rate limit rules")
 				if r.nft {
 					rules = append(rules,
 						generictables.Rule{
@@ -544,11 +544,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 
 	// Add QoS controls for number of connections if applicable
 	if chainType == chainTypeNormal && qosControls != nil {
-		logrus.WithField("qosControls", qosControls).Debug("Rendering QoS controls number of connection rules")
+		log.WithField("qosControls", qosControls).Debug("Rendering QoS controls number of connection rules")
 		if dir == RuleDirIngress {
 			// Add ingress connection limit rules if applicable
 			if qosControls.IngressMaxConnections != 0 {
-				logrus.WithFields(logrus.Fields{"IngressMaxConnections": qosControls.IngressMaxConnections}).Debug("Rendering ingress connection limit rules")
+				log.WithFields(log.Fields{"IngressMaxConnections": qosControls.IngressMaxConnections}).Debug("Rendering ingress connection limit rules")
 				rules = append(rules,
 					generictables.Rule{
 						Match:   r.NewMatch(),
@@ -561,7 +561,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		if dir == RuleDirEgress {
 			// Add egress connection limit rules if applicable
 			if qosControls.EgressMaxConnections != 0 {
-				logrus.WithFields(logrus.Fields{"EgressMaxConnections": qosControls.EgressMaxConnections}).Debug("Rendering egress connection limit rules")
+				log.WithFields(log.Fields{"EgressMaxConnections": qosControls.EgressMaxConnections}).Debug("Rendering egress connection limit rules")
 				rules = append(rules,
 					generictables.Rule{
 						Match:   r.NewMatch(),
@@ -639,7 +639,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 					// Group is too small to have its own chain.
 					for _, p := range polGroup.Policies {
 						if model.KindIsStaged(p.Kind) {
-							logrus.Debugf("Skip programming inlined staged policy %v", p)
+							log.Debugf("Skip programming inlined staged policy %v", p)
 							continue
 						}
 						chainsToJumpTo = append(chainsToJumpTo, PolicyChainName(
@@ -852,11 +852,11 @@ func (g *PolicyGroup) UniqueID() string {
 	write := func(s string) {
 		_, err := hash.Write([]byte(s))
 		if err != nil {
-			logrus.WithError(err).Panic("Failed to write to hasher")
+			log.WithError(err).Panic("Failed to write to hasher")
 		}
 		_, err = hash.Write([]byte("\n"))
 		if err != nil {
-			logrus.WithError(err).Panic("Failed to write to hasher")
+			log.WithError(err).Panic("Failed to write to hasher")
 		}
 	}
 	write(g.Selector)
