@@ -147,7 +147,7 @@ func TestTagRelease(t *testing.T) {
 			f.on("git rev-parse --abbrev-ref HEAD", "release-v3.30", nil)
 			f.on("git rev-parse HEAD", headSHA, nil)
 			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), tt.tagCommit, tt.tagErr)
-			f.on(fmt.Sprintf("git tag %s", ver), "", nil)
+			f.on(fmt.Sprintf("git tag -a -m Release %s %s", ver, ver), "", nil)
 
 			r := &CalicoManager{runner: f}
 			err := r.TagRelease(ver)
@@ -166,7 +166,7 @@ func TestTagRelease(t *testing.T) {
 			if err != nil {
 				t.Fatalf("TagRelease(%q) unexpected error: %v", ver, err)
 			}
-			if got := f.ran("git tag " + ver); got != tt.wantTag {
+			if got := f.ran("git tag -a "); got != tt.wantTag {
 				t.Errorf("git tag issued = %v, want %v (calls: %v)", got, tt.wantTag, f.calls)
 			}
 		})
