@@ -341,6 +341,9 @@ blocks:
     # arches) and uploads the image tarball to GCS for downstream consumers.
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+    #
+    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
+    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
     run:
       when: "true"
     dependencies: []
@@ -397,10 +400,16 @@ blocks:
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
-    # Always build and cache the calico image so that downstream CI blocks can
-    # load it from GCS instead of rebuilding per component. This block is the
-    # sole producer for the "calico" build-cache group — every Go component
-    # block on master restores the module + build cache populated here.
+    # Build and cache the calico image so that downstream CI blocks can load it
+    # from GCS instead of rebuilding per component. This block is the sole
+    # producer for the "calico" build-cache group — every Go component block on
+    # master restores the module + build cache populated here.
+    #
+    # cmd/calico's Go closure already covers felix/typha (registered as
+    # subcommands); the non-go paths close the gap for Felix Build/UT, which
+    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
+    # consumers use .semaphore/load-cached-images, which falls back to a local
+    # build on cache miss.
     run:
       when: "true"
     dependencies: []
