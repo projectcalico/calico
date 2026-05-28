@@ -86,6 +86,7 @@ gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
 
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:release/cmd
 local:release/internal/ci
 local:release/internal/command
