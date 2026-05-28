@@ -93,11 +93,19 @@ REGISTRAR_BIN = $(REPO_ROOT)/pod2daemon/bin/node-driver-registrar-$(ARCH)
 $(REGISTRAR_BIN):
 	$(MAKE) -C $(REPO_ROOT)/pod2daemon bin/node-driver-registrar-$(ARCH)
 
+# Standard CNI plugins (loopback, etc.) required by the install-cni init
+# container on platforms where the host does not ship its own CNI binaries
+# (e.g. RKE2 with cni: none).
+CNI_PLUGINS_DIR = $(REPO_ROOT)/cni-plugin/bin/$(ARCH)
+CNI_PLUGIN_BINS = $(CNI_PLUGINS_DIR)/loopback $(CNI_PLUGINS_DIR)/host-local $(CNI_PLUGINS_DIR)/portmap $(CNI_PLUGINS_DIR)/tuning $(CNI_PLUGINS_DIR)/flannel
+$(CNI_PLUGIN_BINS): | register
+	$(MAKE) -C $(REPO_ROOT)/cni-plugin build-cni-bins ARCH=$(ARCH)
+
 .PHONY: image image-all
 image: $(CONTAINER_MARKER)
 
-$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) | register
-	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
+$(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(ARCH) $(BINDIR)/LICENSE $(REGISTRAR_BIN) $(CNI_PLUGIN_BINS) | register
+	$(DOCKER_BUILD) --build-arg BIN_DIR=cmd/calico/$(BINDIR) --build-arg CNI_BIN_DIR=cni-plugin/bin/$(ARCH) --build-arg TARGETARCH=$(ARCH) -t $(CALICO_IMAGE):$(IMAGE_TAG)-$(ARCH) -f $(REPO_ROOT)/docker/calico/Dockerfile $(REPO_ROOT)
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 

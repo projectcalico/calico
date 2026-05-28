@@ -12,10 +12,20 @@ ARG BIN_DIR
 # The symlink has to be created in a stage that has a shell (scratch does
 # not) and the target has to resolve when BuildKit computes the COPY
 # checksum, so we stage both files together here under /shim.
-RUN mkdir -p /shim/usr/bin
+RUN mkdir -p /shim/usr/bin /shim/opt/cni/bin
 COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
 RUN ln -s calico /shim/usr/bin/calicoctl && \
     ln -s calico /shim/usr/bin/calico-ipam
+
+# Standard CNI plugins needed by the install-cni init container. Platforms
+# that set cni: none (e.g. RKE2) rely on Calico to supply loopback and
+# friends; without them every non-hostNetwork pod stays ContainerCreating.
+ARG CNI_BIN_DIR
+COPY ${CNI_BIN_DIR}/loopback    /shim/opt/cni/bin/
+COPY ${CNI_BIN_DIR}/host-local  /shim/opt/cni/bin/
+COPY ${CNI_BIN_DIR}/portmap     /shim/opt/cni/bin/
+COPY ${CNI_BIN_DIR}/tuning      /shim/opt/cni/bin/
+COPY ${CNI_BIN_DIR}/flannel     /shim/opt/cni/bin/
 
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
