@@ -16,6 +16,7 @@ installation:
   calicoNetwork:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
+    clusterRoutingMode: "BIRD"
 
     # Configure CIDRs to match kubeadm cluster.
     ipPools:
