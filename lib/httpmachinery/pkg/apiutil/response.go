@@ -162,7 +162,7 @@ func (rs *eventStreamResponseWriter[Body]) WriteResponse(ctx apicontext.Context,
 	jStream := newJSONEventStreamWriter[Body](w)
 	for item := range rs.items {
 		if err := jStream.writeData(item); err != nil {
-			ctx.Logger().WithError(err).Debug("Failed to write flow to stream.")
+			ctx.Logger().Debug("Failed to write flow to stream.", "error", err)
 			return err
 		}
 	}
