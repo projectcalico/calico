@@ -86,6 +86,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -416,14 +417,16 @@ type bpfEndpointManager struct {
 type bpfEndpointManagerDataplane struct {
 	*bpfmap.IPMaps
 	ipFamily proto.IPVersion
-	hostIP   net.IP
 	mgr      *bpfEndpointManager
 
-	// hostIPPresent reflects whether the calc graph currently reports
-	// a host IP of this family for our Node. It is independent from
-	// hostIP, which may be a cached last-known value after the Node
-	// has been deleted; presence drives the BPFHostIP readiness
-	// reporter only.
+	// lastSeenHostIP is the most recent host IP of this family we have been
+	// told about by the calc graph. We keep using it as the source of
+	// truth in BPF program globals even after the calc graph stops
+	// reporting it (Node deleted, IP patched out, parse failure), so
+	// already-established connectivity holds; hostIPPresent /
+	// hostIPAbsentSince track the calc-graph signal separately and
+	// drive the BPFHostIP readiness reporter.
+	lastSeenHostIP    net.IP
 	hostIPPresent     bool
 	hostIPAbsentSince time.Time
 
@@ -832,44 +835,48 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
-// updateHostIP applies a host IP change received from the calc graph.
+// updateOurHostIP records a host IP change for the local Node, received
+// via the calc graph. The caller passes the parsed `net.IP` (or `nil`
+// to mean "we no longer have a host IP of this family" — Node deleted,
+// address patched out, or unparseable input).
 //
-// `ipAddr` may be empty when the calc graph signals that the local
-// Node still exists but its address for this family has been removed
-// — we clear the cached host IP and mark interfaces dirty so BPF
-// programs re-attach with HOST_IP=0 (failsafes still work; VXLAN
-// encap drops with CALI_REASON_NO_HOST_IP). The Node-deleted case is
-// handled separately by the *proto.HostMetadataRemove path which
-// keeps the cached host IP so that already-established connectivity
-// survives a Felix restart while the Node is missing.
-func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
-	var ip net.IP
-	if ipAddr != "" {
-		var err error
-		ip, _, err = net.ParseCIDR(ipAddr)
-		if err != nil {
-			ip = net.ParseIP(ipAddr)
-		}
-		if ip == nil {
-			logrus.WithField("ipAddr", ipAddr).Warn("Cannot parse host IP, no change applied")
-			return
-		}
-	}
-	var current net.IP
+// The cached `lastSeenHostIP` is updated only on a non-nil change; the
+// nil case (host IP unknown) deliberately keeps the last-known value
+// so the BPF programs continue running with a usable HOST_IP for the
+// few features that need it (VXLAN encap source, RPF link-local
+// check). The BPFHostIP readiness reporter is updated either way so
+// the missing host IP is visible to operators.
+func (m *bpfEndpointManager) updateOurHostIP(ip net.IP, ipFamily int) {
+	var d *bpfEndpointManagerDataplane
 	if ipFamily == 4 {
-		current = m.v4.hostIP
+		d = m.v4
 	} else {
-		current = m.v6.hostIP
+		d = m.v6
 	}
-	if current.Equal(ip) {
+	if d == nil {
 		return
 	}
-	if ipFamily == 4 {
-		m.v4.hostIP = ip
-	} else {
-		m.v6.hostIP = ip
-	}
+	// Always refresh the BPFHostIP readiness signal — setHostIPPresence
+	// is idempotent when presence hasn't changed, so it's safe to call
+	// on every update and ensures readiness flips back to ready when
+	// the calc graph re-asserts a previously-cached IP.
 	m.setHostIPPresence(ipFamily, ip != nil)
+	if ip == nil || d.lastSeenHostIP.Equal(ip) {
+		// Either host IP is unknown (keep cached value so pinned BPF
+		// programs continue functioning) or the cache already matches
+		// the new value (nothing to re-attach). Either way, no dirty
+		// mark.
+		return
+	}
+	d.lastSeenHostIP = ip
+	m.markEverythingDirty()
+}
+
+// markEverythingDirty marks every interface and service known to the BPF
+// endpoint manager as dirty, forcing the next apply pass to rebuild the
+// attach points and service routes. Used when a change (e.g. a new host
+// IP) invalidates the program globals or the service source-IP.
+func (m *bpfEndpointManager) markEverythingDirty() {
 	// Should be safe without the lock since there shouldn't be any active background threads
 	// but taking it now makes us robust to refactoring.
 	m.ifacesLock.Lock()
@@ -886,6 +893,24 @@ func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
 	for svc := range m.services {
 		m.dirtyServices.Add(svc)
 	}
+}
+
+// parseHostIP parses a host IP address string (CIDR or bare IP). Returns
+// nil for empty strings and for unparseable inputs; parse failures are
+// logged. The caller treats both as "host IP unknown for this family".
+func parseHostIP(ipAddr string, ipFamily int) net.IP {
+	if ipAddr == "" {
+		return nil
+	}
+	ip, _, err := cnet.ParseCIDROrIP(ipAddr)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"ipAddr":   ipAddr,
+			"ipFamily": ipFamily,
+		}).Warn("Cannot parse host IP; treating as unknown")
+		return nil
+	}
+	return ip.IP
 }
 
 func (m *bpfEndpointManager) OnUpdate(msg any) {
@@ -918,12 +943,12 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 	case *proto.HostMetadataUpdate:
 		if m.v4 != nil && msg.Hostname == m.hostname {
 			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
+			m.updateOurHostIP(parseHostIP(msg.Ipv4Addr, 4), 4)
 		}
 	case *proto.HostMetadataV6Update:
 		if m.v6 != nil && msg.Hostname == m.hostname {
 			logrus.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
+			m.updateOurHostIP(parseHostIP(msg.Ipv6Addr, 6), 6)
 		}
 	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
@@ -931,30 +956,29 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 		}
 		if m.v4 != nil {
 			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
+			m.updateOurHostIP(parseHostIP(msg.Ipv4Addr, 4), 4)
 		}
 		if m.v6 != nil {
 			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
+			m.updateOurHostIP(parseHostIP(msg.Ipv6Addr, 6), 6)
 		}
 	case *proto.HostMetadataRemove:
 		if msg.Hostname != m.hostname {
 			break
 		}
 		// Local Node metadata has gone away (Node deleted, or BGP spec
-		// removed). Deliberately keep the last-known host IP in the BPF
-		// programs: tearing through a rebuild here would race with the
-		// SIGTERM that often follows the Node delete (pod GC kills
-		// calico-node), and the pinned BPF programs survive a Felix
-		// restart so node-level connectivity is preserved. Only the
-		// readiness signal reflects the missing Node.
+		// removed). Treated identically to the empty-IP case in
+		// HostMetadataUpdate: updateOurHostIP keeps the cached
+		// last-known host IP so pinned BPF programs continue running,
+		// and the BPFHostIP readiness reporter goes degraded so the
+		// missing Node is visible to operators.
 		logrus.WithField("hostname", msg.Hostname).Info(
-			"Local host metadata removed (Node deleted); keeping last-known host IP in BPF programs, marking readiness degraded.")
+			"Local host metadata removed; keeping last-known host IP in BPF programs, marking readiness degraded.")
 		if m.v4 != nil {
-			m.setHostIPPresence(4, false)
+			m.updateOurHostIP(nil, 4)
 		}
 		if m.v6 != nil {
-			m.setHostIPPresence(6, false)
+			m.updateOurHostIP(nil, 6)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
@@ -1867,7 +1891,7 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 
 // setHostIPPresence records whether the calc graph currently reports a host
 // IP of the given family. It updates the BPFHostIP readiness signal but
-// does not touch the cached d.hostIP that the dataplane uses to program
+// does not touch the cached d.lastSeenHostIP that the dataplane uses to program
 // BPF globals — the two are deliberately decoupled so that the dataplane
 // can keep using the last-known host IP after Node deletion while
 // readiness reflects the missing Node.
@@ -2753,15 +2777,15 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 		ip, err := d.getInterfaceIP(ifaceName)
 		if err != nil {
 			logrus.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
-			ap.IntfIPv6 = d.hostIP
+			ap.IntfIPv6 = d.lastSeenHostIP
 		} else {
 			ap.IntfIPv6 = *ip
 		}
-		ap.HostIPv6 = d.hostIP
+		ap.HostIPv6 = d.lastSeenHostIP
 		ap.PolicyIdxV6 = policyIdx
 	} else {
 		ap.IntfIPv4 = calicoRouterIP
-		ap.HostIPv4 = d.hostIP
+		ap.HostIPv4 = d.lastSeenHostIP
 		ap.PolicyIdxV4 = policyIdx
 	}
 	ap.LogFilterIdx = filterIdx
@@ -2773,12 +2797,16 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
-	// d.hostIP may be nil when the local node's IP isn't known yet (e.g.
-	// the Node resource was deleted or its IP was patched out). The
-	// attach pipeline handles a nil HostIPv*: globalData.HostIPv* stays
-	// at zero, and the BPF datapath drops the few features that need
-	// HOST_IP (VXLAN encap source) with CALI_REASON_NO_HOST_IP. Re-attach
-	// is triggered when host IP becomes known via updateHostIP.
+	// d.lastSeenHostIP may be nil if Felix has never been told a host IP
+	// for this family (e.g. the local Node resource has no address yet
+	// at startup). The attach pipeline handles a nil HostIPv*:
+	// globalData.HostIPv* stays at zero, and the BPF datapath drops the
+	// few features that need HOST_IP (VXLAN encap source) with
+	// CALI_REASON_NO_HOST_IP. Once a host IP arrives via
+	// updateOurHostIP, all interfaces are marked dirty and re-attach.
+	// Note: when the calc graph later signals the host IP is gone
+	// (Node deleted, BGP address patched out), we deliberately keep
+	// d.lastSeenHostIP cached — see updateOurHostIP.
 
 	indices := state.v4
 	if d.ipFamily == proto.IPVersion_IPV6 {
@@ -2974,19 +3002,19 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	filterIdx := state.filterIdx[attachHook]
 
 	if d.ipFamily == proto.IPVersion_IPV6 {
-		ap.HostIPv6 = d.hostIP
+		ap.HostIPv6 = d.lastSeenHostIP
 		if ip != nil {
 			ap.IntfIPv6 = *ip
 		} else {
-			ap.IntfIPv6 = d.hostIP
+			ap.IntfIPv6 = d.lastSeenHostIP
 		}
 		ap.PolicyIdxV6 = policyIdx
 	} else {
-		ap.HostIPv4 = d.hostIP
+		ap.HostIPv4 = d.lastSeenHostIP
 		if ip != nil {
 			ap.IntfIPv4 = *ip
 		} else {
-			ap.IntfIPv4 = d.hostIP
+			ap.IntfIPv4 = d.lastSeenHostIP
 		}
 		ap.PolicyIdxV4 = policyIdx
 	}
@@ -4576,14 +4604,14 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	}
 
 	if cidr.Version() == 6 {
-		if m.v6 != nil && m.v6.hostIP != nil {
+		if m.v6 != nil && m.v6.lastSeenHostIP != nil {
 			target.GW = bpfnatGWIPv6
-			target.Src = ip.FromNetIP(m.v6.hostIP)
+			target.Src = ip.FromNetIP(m.v6.lastSeenHostIP)
 			m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, target)
 		}
-	} else if m.v4 != nil && m.v4.hostIP != nil {
+	} else if m.v4 != nil && m.v4.lastSeenHostIP != nil {
 		target.GW = bpfnatGWIP
-		target.Src = ip.FromNetIP(m.v4.hostIP)
+		target.Src = ip.FromNetIP(m.v4.lastSeenHostIP)
 		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, target)
 	}
 
