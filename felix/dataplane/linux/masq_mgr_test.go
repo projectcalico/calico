@@ -115,7 +115,7 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(natTable.UpdateCalled).To(BeFalse())
 		})
 
-		It("an unrelated update shouldn't trigger work", func() {
+		It("shouldn't trigger work after an unrelated update", func() {
 			natTable.UpdateCalled = false
 			masqMgr.OnUpdate(&proto.HostMetadataUpdate{
 				Hostname: "foo",
@@ -126,62 +126,46 @@ var _ = Describe("Masquerade manager", func() {
 		})
 	})
 
-	Describe("after adding a non-masq pool", func() {
-		BeforeEach(func() {
-			addPool("pool-1", "10.0.0.0/16", false)
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should populate only the network-pools IP set and program an empty chain, after adding a non-masq pool", func() {
+		addPool("pool-1", "10.0.0.0/16", false)
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should populate only the all-pools IP set and program an empty chain", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
-			natTable.checkChains(emptyChain())
-		})
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		natTable.checkChains(emptyChain())
 	})
 
-	Describe("after adding both a masq and a non-masq pool", func() {
-		BeforeEach(func() {
-			addPool("pool-1", "10.0.0.0/16", true)
-			addPool("pool-2", "10.2.0.0/16", false)
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should populate the IP sets and program the chain, after adding both a masq and a non-masq pool", func() {
+		addPool("pool-1", "10.0.0.0/16", true)
+		addPool("pool-2", "10.2.0.0/16", false)
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should populate the IP sets and program the chain", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16", "10.2.0.0/16")))
-			natTable.checkChains(masqChain())
-		})
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16", "10.2.0.0/16")))
+		natTable.checkChains(masqChain())
 	})
 
-	Describe("after adding both pools then removing the masq pool", func() {
-		BeforeEach(func() {
-			addPool("pool-1", "10.0.0.0/16", true)
-			addPool("pool-2", "10.2.0.0/16", false)
-			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should leave only the non-masq pool in the network-pools set and program an empty chain, after adding both pools then removing the masq pool", func() {
+		addPool("pool-1", "10.0.0.0/16", true)
+		addPool("pool-2", "10.2.0.0/16", false)
+		masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should leave only the non-masq pool in the all-pools set and program an empty chain", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.2.0.0/16")))
-			natTable.checkChains(emptyChain())
-		})
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.2.0.0/16")))
+		natTable.checkChains(emptyChain())
 	})
 
-	Describe("after adding both pools then removing both", func() {
-		BeforeEach(func() {
-			addPool("pool-1", "10.0.0.0/16", true)
-			addPool("pool-2", "10.2.0.0/16", false)
-			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
-			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-2"})
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should empty both IP sets and program an empty chain, after adding both pools then removing both", func() {
+		addPool("pool-1", "10.0.0.0/16", true)
+		addPool("pool-2", "10.2.0.0/16", false)
+		masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-1"})
+		masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "pool-2"})
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should empty both IP sets and program an empty chain", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
-			natTable.checkChains(emptyChain())
-		})
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
+		natTable.checkChains(emptyChain())
 	})
 
 	Describe("after adding a LoadBalancer-only pool", func() {
@@ -190,46 +174,35 @@ var _ = Describe("Masquerade manager", func() {
 			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 		})
 
-		It("should add the pool to the masq IP set but not the all IP set", func() {
+		It("should add the pool to the masq IP set but not the network IP set", func() {
 			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.40.64/27")))
 			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
 		})
 
-		Describe("after removing the LoadBalancer-only pool", func() {
-			BeforeEach(func() {
-				masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "lb-pool"})
-				Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-			})
-			It("should empty both IP sets", func() {
-				Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
-				Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
-			})
+		It("should empty both IP sets after removing the LoadBalancer-only pool", func() {
+			masqMgr.OnUpdate(&proto.IPAMPoolRemove{Id: "lb-pool"})
+			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
+
+			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New[string]()))
+			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.New[string]()))
 		})
 	})
 
-	Describe("after adding a pool with Workload and LoadBalancer uses", func() {
-		BeforeEach(func() {
-			addPool("mixed-pool", "10.1.0.0/16", true,
-				string(apiv3.IPPoolAllowedUseWorkload), string(apiv3.IPPoolAllowedUseLoadBalancer))
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should add the pool to both the masq and network IP sets since it includes Workload, after adding a pool with Workload and LoadBalancer uses,", func() {
+		addPool("mixed-pool", "10.1.0.0/16", true,
+			string(apiv3.IPPoolAllowedUseWorkload), string(apiv3.IPPoolAllowedUseLoadBalancer))
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should add the pool to both the masq and all IP sets since it includes Workload", func() {
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.1.0.0/16")))
-		})
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.1.0.0/16")))
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.1.0.0/16")))
 	})
 
-	Describe("after adding a Workload pool and a LoadBalancer-only pool", func() {
-		BeforeEach(func() {
-			addPool("workload-pool", "10.0.0.0/16", false, string(apiv3.IPPoolAllowedUseWorkload))
-			addPool("lb-pool", "10.20.0.0/16", true, string(apiv3.IPPoolAllowedUseLoadBalancer))
-			Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
-		})
+	It("should partition pools by their AllowedUses across the IP sets, after adding a Workload pool and a LoadBalancer-only pool", func() {
+		addPool("workload-pool", "10.0.0.0/16", false, string(apiv3.IPPoolAllowedUseWorkload))
+		addPool("lb-pool", "10.20.0.0/16", true, string(apiv3.IPPoolAllowedUseLoadBalancer))
+		Expect(masqMgr.CompleteDeferredWork()).ToNot(HaveOccurred())
 
-		It("should partition pools by their AllowedUses across the IP sets", func() {
-			Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
-			Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.0.0/16")))
-		})
+		Expect(ipSets.Members["network-ip-pools"]).To(Equal(set.From("10.0.0.0/16")))
+		Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.From("10.20.0.0/16")))
 	})
 })

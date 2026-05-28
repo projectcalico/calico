@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -48,7 +48,7 @@ type masqManager struct {
 	dirty           bool
 	ruleRenderer    rules.RuleRenderer
 
-	logCxt *log.Entry
+	logCxt *logrus.Entry
 }
 
 func newMasqManager(
@@ -80,47 +80,47 @@ func newMasqManager(
 		masqPools:       set.New[string](),
 		dirty:           true,
 		ruleRenderer:    ruleRenderer,
-		logCxt:          log.WithField("ipVersion", ipVersion),
+		logCxt:          logrus.WithField("ipVersion", ipVersion),
 	}
 }
 
-func (d *masqManager) OnUpdate(msg any) {
+func (m *masqManager) OnUpdate(msg any) {
 	var poolID string
 	var newPool *proto.IPAMPool
 
 	switch msg := msg.(type) {
 	case *proto.IPAMPoolUpdate:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool update/create")
 		poolID = msg.Id
 		newPool = msg.Pool
 	case *proto.IPAMPoolRemove:
-		d.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
+		m.logCxt.WithField("id", msg.Id).Debug("IPAM pool removed")
 		poolID = msg.Id
 	default:
 		return
 	}
 
-	logCxt := d.logCxt.WithField("id", poolID)
-	if oldPool := d.activePools[poolID]; oldPool != nil {
+	logCxt := m.logCxt.WithField("id", poolID)
+	if oldPool := m.activePools[poolID]; oldPool != nil {
 		// For simplicity (in case of an update to the CIDR, say) always
 		// remove the old values from the IP sets.  The IPSets object
 		// defers and coalesces the update so removing then adding the
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
 		if !isLoadBalancerOnly(oldPool) {
-			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
+			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
 		}
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
-			d.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
+			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDNATOutgoingMasqPools, []string{oldPool.Cidr})
 		}
-		delete(d.activePools, poolID)
-		d.masqPools.Discard(poolID)
+		delete(m.activePools, poolID)
+		m.masqPools.Discard(poolID)
 	}
 	if newPool != nil {
 		// An update/create.
 		newPoolIsV6 := strings.Contains(newPool.Cidr, ":")
-		weAreV6 := d.ipVersion == 6
+		weAreV6 := m.ipVersion == 6
 		if newPoolIsV6 != weAreV6 {
 			logCxt.Debug("Skipping IPAM pool of different version.")
 			return
@@ -134,16 +134,16 @@ func (d *masqManager) OnUpdate(msg any) {
 			logCxt.Debug("Skipping LoadBalancer-only pool from network-ip-pools IP set.")
 		} else {
 			logCxt.Debug("Adding IPAM pool to network-ip-pools IP set.")
-			d.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
+			m.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
 		}
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
-			d.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
-			d.masqPools.Add(poolID)
+			m.ipsetsDataplane.AddMembers(rules.IPSetIDNATOutgoingMasqPools, []string{newPool.Cidr})
+			m.masqPools.Add(poolID)
 		}
-		d.activePools[poolID] = newPool
+		m.activePools[poolID] = newPool
 	}
-	d.dirty = true
+	m.dirty = true
 }
 
 func (m *masqManager) CompleteDeferredWork() error {
@@ -167,9 +167,5 @@ func (m *masqManager) CompleteDeferredWork() error {
 // local workload addresses and traffic to them should still be masqueraded.
 func isLoadBalancerOnly(pool *proto.IPAMPool) bool {
 	uses := pool.GetAllowedUses()
-	if len(uses) == 0 {
-		// Empty means default (Workload + Tunnel), so include in network-ip-pools.
-		return false
-	}
 	return slices.Contains(uses, string(apiv3.IPPoolAllowedUseLoadBalancer)) && len(uses) == 1
 }
