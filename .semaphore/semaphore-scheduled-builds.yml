@@ -342,8 +342,8 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers: calico/node and the istio CNI install image. If a third
-    # consumer is added, extend the CHANGE_IN argument list below to match.
+    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
+    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
     run:
       when: "true"
     dependencies: []
@@ -405,11 +405,11 @@ blocks:
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
-    # Gated on cmd/calico's transitive Go import closure, which covers every
-    # component subcommand the unified binary registers. New Go components join
-    # via cmd/calico's import set and pick up this gate automatically.
-    # docker/calico/ is the image's Dockerfile and entrypoint assets, so a
-    # change there also has to retrigger the build.
+    # cmd/calico's Go closure already covers felix/typha (registered as
+    # subcommands); the non-go paths close the gap for Felix Build/UT, which
+    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
+    # consumers use .semaphore/load-cached-images, which falls back to a local
+    # build on cache miss.
     run:
       when: "true"
     dependencies: []
