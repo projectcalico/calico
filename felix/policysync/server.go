@@ -19,12 +19,12 @@ import (
 	"errors"
 	"sync"
 
-	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/felix/collector"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pod2daemon/binder"
 )
 

@@ -19,8 +19,9 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // detectEncapInterface returns the name of the tunnel device used by the
@@ -35,7 +36,7 @@ func detectEncapInterface(cli ctrlclient.Client) string {
 
 	pools := &v3.IPPoolList{}
 	if err := cli.List(ctx, pools); err != nil {
-		logrus.WithError(err).Warn("Could not list IPPools for encap detection, assuming no tunnel")
+		log.WithError(err).Warn("Could not list IPPools for encap detection, assuming no tunnel")
 		return ""
 	}
 
@@ -43,16 +44,16 @@ func detectEncapInterface(cli ctrlclient.Client) string {
 	for _, pool := range pools.Items {
 		switch {
 		case pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet:
-			logrus.Infof("Detected IPIP encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.IPIPMode)
+			log.Infof("Detected IPIP encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.IPIPMode)
 			if result != "" && result != "tunl0" {
-				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses IPIP but another pool uses VXLAN; using %s", pool.Name, result)
+				log.Warnf("Mixed encapsulation detected: IPPool %s uses IPIP but another pool uses VXLAN; using %s", pool.Name, result)
 				continue
 			}
 			result = "tunl0"
 		case pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet:
-			logrus.Infof("Detected VXLAN encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.VXLANMode)
+			log.Infof("Detected VXLAN encapsulation from IPPool %s (mode=%s)", pool.Name, pool.Spec.VXLANMode)
 			if result != "" && result != "vxlan.calico" {
-				logrus.Warnf("Mixed encapsulation detected: IPPool %s uses VXLAN but another pool uses IPIP; using %s", pool.Name, result)
+				log.Warnf("Mixed encapsulation detected: IPPool %s uses VXLAN but another pool uses IPIP; using %s", pool.Name, result)
 				continue
 			}
 			result = "vxlan.calico"
@@ -63,6 +64,6 @@ func detectEncapInterface(cli ctrlclient.Client) string {
 		return result
 	}
 
-	logrus.Info("No encapsulation detected from IPPools")
+	log.Info("No encapsulation detected from IPPools")
 	return ""
 }

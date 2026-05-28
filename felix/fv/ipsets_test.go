@@ -22,10 +22,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
@@ -51,7 +51,7 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ Tests for IPset rendering", [
 				"FELIX_IPSETSREFRESHINTERVAL": "0",
 			}
 		}
-		logrus.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 		infra = getInfra()
 		tc, client = infrastructure.StartSingleNodeTopology(topologyOptions, infra)
 		felixPID = tc.Felixes[0].GetFelixPID()

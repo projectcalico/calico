@@ -18,8 +18,8 @@ import (
 	"reflect"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -94,11 +94,11 @@ type DataFeed struct {
 func (d *DataFeed) Start() {
 	// We can skip this if there are no registrations.
 	if len(d.registrations) == 0 && len(d.statusRegistrations) == 0 {
-		logrus.Info("No registrations for data feed, skipping start")
+		log.Info("No registrations for data feed, skipping start")
 		return
 	}
 
-	logrus.Info("Starting syncer")
+	log.Info("Starting syncer")
 	d.syncer.Start()
 }
 
@@ -114,7 +114,7 @@ func (d *DataFeed) RegisterForNotification(key model.Key, h UpdateHandler) {
 }
 
 func (d *DataFeed) OnStatusUpdated(status bapi.SyncStatus) {
-	logrus.Infof("Node controller syncer status updated: %s", status)
+	log.Infof("Node controller syncer status updated: %s", status)
 	for _, f := range d.statusRegistrations {
 		f(status)
 	}

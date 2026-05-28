@@ -29,7 +29,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	cniv1 "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -40,6 +39,7 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/wait"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
@@ -61,7 +61,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	utils.ConfigureLogging(conf)
 
-	logger := logrus.WithFields(logrus.Fields{
+	logger := log.WithFields(log.Fields{
 		"WorkloadEndpoint": epIDs.WEPName,
 		"ContainerID":      epIDs.ContainerID,
 		"Pod":              epIDs.Pod,
@@ -576,7 +576,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			// to be filled in.
 			err := wait.ForEndpointReadyWithTimeout(conf.EndpointStatusDir, endpointOut, timeout)
 			if err != nil {
-				logrus.WithError(err).Warn("Error waiting for endpoint to become ready. Unblocking pod creation...")
+				log.WithError(err).Warn("Error waiting for endpoint to become ready. Unblocking pod creation...")
 			}
 		}
 	}
@@ -589,7 +589,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 // As such, we must only delete the workload endpoint when the provided CNI_CONTAINERID matches the value on the WorkloadEndpoint. If they do not match,
 // it means the DEL is for an old sandbox and the pod is still running. We should still clean up IPAM allocations, since they are identified by the
 // container ID rather than the pod name and namespace. If they do match, then we can delete the workload endpoint.
-func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger *logrus.Entry) error {
+func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIdentifiers, args *skel.CmdArgs, conf types.NetConf, logger log.Logger) error {
 	d, err := dataplane.GetDataplane(conf, logger)
 	if err != nil {
 		return err
@@ -680,7 +680,7 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 
 // releaseIPAddrs calls directly into Calico IPAM to release the specified IP addresses.
 // NOTE: This function assumes Calico IPAM is in use, and calls into it directly rather than calling the IPAM plugin.
-func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *logrus.Entry) error {
+func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger log.Logger) error {
 	// For each IP, call out to Calico IPAM to release it.
 	for _, ip := range ipAddrs {
 		log := logger.WithField("IP", ip)
@@ -706,7 +706,7 @@ func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *log
 // ipAddrsResult parses the ipAddrs annotation and calls the configured IPAM plugin for
 // each IP passed to it by setting the IP field in CNI_ARGS, and returns the result of calling the IPAM plugin.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logger log.Logger) (*cniv1.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrs\":%s", ipAddrs)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -744,7 +744,7 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 // callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
 // to get current.Result and then it unsets the IP field from CNI_ARGS ENV var,
 // so it doesn't pollute the subsequent requests.
-func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cniv1.Result, error) {
+func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger log.Logger) (*cniv1.Result, error) {
 	// Save the original value of the CNI_ARGS ENV var for backup.
 	originalArgs := os.Getenv("CNI_ARGS")
 	logger.Debugf("Original CNI_ARGS=%s", originalArgs)
@@ -814,7 +814,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 // overrideIPAMResult generates current.Result like the one produced by IPAM plugin,
 // but sets IP field manually since IPAM is bypassed with this annotation.
 // Example annotation value string: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*cniv1.Result, error) {
+func overrideIPAMResult(ipAddrsNoIpam string, logger log.Logger) (*cniv1.Result, error) {
 	logger.Infof("Parsing annotation \"cni.projectcalico.org/ipAddrsNoIpam\":%s", ipAddrsNoIpam)
 
 	// We need to make sure there is only one IPv4 and/or one IPv6
@@ -858,7 +858,7 @@ func overrideIPAMResult(ipAddrsNoIpam string, logger *logrus.Entry) (*cniv1.Resu
 
 // validateAndExtractIPs is a utility function that validates the passed IP list to make sure
 // there is one IPv4 and/or one IPv6 and then returns the slice of IPs.
-func validateAndExtractIPs(ipAddrs string, annotation string, logger *logrus.Entry) ([]net.IP, error) {
+func validateAndExtractIPs(ipAddrs string, annotation string, logger log.Logger) ([]net.IP, error) {
 	// Parse IPs from JSON.
 	ips, err := parseIPAddrs(ipAddrs, logger)
 	if err != nil {
@@ -906,7 +906,7 @@ func validateAndExtractIPs(ipAddrs string, annotation string, logger *logrus.Ent
 // parseIPAddrs is a utility function that parses string of IPs in json format that are
 // passed in as a string and returns a slice of string with IPs.
 // It also makes sure the slice isn't empty.
-func parseIPAddrs(ipAddrsStr string, logger *logrus.Entry) ([]string, error) {
+func parseIPAddrs(ipAddrsStr string, logger log.Logger) ([]string, error) {
 	var ips []string
 
 	err := json.Unmarshal([]byte(ipAddrsStr), &ips)
@@ -962,7 +962,7 @@ func getK8sRestConfig(conf types.NetConf) (*rest.Config, error) {
 		configOverrides)
 }
 
-func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clientset, error) {
+func NewK8sClient(conf types.NetConf, logger log.Logger) (*kubernetes.Clientset, error) {
 	// Get the Kubernetes REST config
 	config, err := getK8sRestConfig(conf)
 	if err != nil {
@@ -975,7 +975,7 @@ func NewK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 
 // NewKubeVirtClient creates a KubeVirt client from the CNI network configuration.
 // Note: This will return an error if KubeVirt is not installed in the cluster.
-func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtClientInterface, error) {
+func NewKubeVirtClient(conf types.NetConf, logger log.Logger) (kubevirt.VirtClientInterface, error) {
 	// Get the Kubernetes REST config
 	config, err := getK8sRestConfig(conf)
 	if err != nil {
@@ -989,7 +989,7 @@ func NewKubeVirtClient(conf types.NetConf, logger *logrus.Entry) (kubevirt.VirtC
 func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotations map[string]string, err error) {
 	ns, err := client.CoreV1().Namespaces().Get(context.Background(), podNamespace, metav1.GetOptions{})
 	// Do not log the full Namespace object — annotations may carry operator tokens or sensitive state.
-	logrus.WithField("namespace", podNamespace).Debug("Pod namespace")
+	log.WithField("namespace", podNamespace).Debug("Pod namespace")
 	if err != nil {
 		return nil, err
 	}
@@ -999,7 +999,7 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []internalapi.WorkloadEndpointPort, profiles []string, generateName, serviceAccount string, err error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(context.Background(), podName, metav1.GetOptions{})
 	// Do not log the full Pod object — env vars may contain literal credentials.
-	logrus.WithFields(logrus.Fields{"name": podName, "namespace": podNamespace}).Debug("Pod info")
+	log.WithFields(log.Fields{"name": podName, "namespace": podNamespace}).Debug("Pod info")
 	if err != nil {
 		return nil, nil, nil, nil, "", "", err
 	}

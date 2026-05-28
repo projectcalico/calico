@@ -25,12 +25,11 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -86,7 +85,7 @@ type IPSets struct {
 
 	gaugeNumIpsets prometheus.Gauge
 
-	logCxt *log.Entry
+	logCxt log.Logger
 
 	// restoreInCopy holds a copy of the stdin that we send to ipset restore.  It is reset
 	// after each use.
@@ -98,14 +97,14 @@ type IPSets struct {
 	// each use.
 	stderrCopy bytes.Buffer
 
-	opReporter logutils.OpRecorder
+	opReporter log.OpRecorder
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.
 	neededIPSetNames set.Set[string]
 }
 
-func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
+func NewIPSets(ipVersionConfig *IPVersionConfig, recorder log.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		recorder,
@@ -117,7 +116,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *
 // NewIPSetsWithShims is an internal test constructor.
 func NewIPSetsWithShims(
 	ipVersionConfig *IPVersionConfig,
-	recorder logutils.OpRecorder,
+	recorder log.OpRecorder,
 	cmdFactory cmdFactory,
 	sleep func(time.Duration),
 ) *IPSets {

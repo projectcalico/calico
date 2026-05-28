@@ -15,12 +15,12 @@
 package main
 
 import (
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/cni-plugin/pkg/install"
 	"github.com/projectcalico/calico/cni-plugin/pkg/ipamplugin"
 	"github.com/projectcalico/calico/cni-plugin/pkg/plugin"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -39,7 +39,7 @@ func newCNICommand() *cobra.Command {
 		Short: "Install the Calico CNI plugin on the host",
 		Run: func(cmd *cobra.Command, args []string) {
 			if err := install.Install(buildinfo.Version); err != nil {
-				logrus.WithError(err).Fatal("Error installing CNI plugin")
+				log.WithError(err).Fatal("Error installing CNI plugin")
 			}
 		},
 	})

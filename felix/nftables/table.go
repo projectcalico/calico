@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -32,8 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -243,8 +241,8 @@ type NftablesTable struct {
 	peakNftablesReadTime  time.Duration
 	peakNftablesWriteTime time.Duration
 
-	logCxt               *logrus.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	logCxt               log.Logger
+	updateRateLimitedLog log.Logger
 
 	gaugeNumChains prometheus.Gauge
 	gaugeNumRules  prometheus.Gauge
@@ -257,7 +255,7 @@ type NftablesTable struct {
 	timeNow   func() time.Time
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   log.OpRecorder
 	reason       string
 
 	contextTimeout time.Duration
@@ -287,7 +285,7 @@ type TableOptions struct {
 	OnStillAlive func()
 
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder log.OpRecorder
 }
 
 func NewTable(
@@ -309,7 +307,7 @@ func NewTable(
 		ipsetFamily = ipsets.IPFamilyV6
 	}
 
-	logFields := logrus.Fields{
+	logFields := log.Fields{
 		"ipVersion": ipVersion,
 		"table":     name,
 	}
@@ -336,7 +334,7 @@ func NewARPTable(
 	// and base chains ("filter-OUTPUT", prefixed by the table layer name).
 	ourChainsRegexp := regexp.MustCompile("^(cali|filter)-.*")
 
-	logFields := logrus.Fields{
+	logFields := log.Fields{
 		"ipVersion": 4,
 		"table":     name,
 		"family":    "arp",
@@ -363,7 +361,7 @@ func newTable(
 	baseChainDefs map[string]knftables.Chain,
 	nftFamily knftables.Family,
 	ipsetFamily ipsets.IPFamily,
-	logFields logrus.Fields,
+	logFields log.Fields,
 	gaugeLabel string,
 ) *NftablesTable {
 	// Pre-populate the insert and append table with empty lists for each kernel chain.  Ensures that we
@@ -408,9 +406,9 @@ func newTable(
 	nft, err := options.NewDataplane(nftFamily, name)
 	if err != nil {
 		if required {
-			logrus.WithError(err).Panic("Failed to create knftables client")
+			log.WithError(err).Panic("Failed to create knftables client")
 		} else {
-			logrus.WithError(err).Info("Failed to create knftables client")
+			log.WithError(err).Info("Failed to create knftables client")
 			return nil
 		}
 	}
@@ -432,10 +430,10 @@ func newTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]*knftables.Rule{},
-		logCxt:                 logrus.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		logCxt:                 log.WithFields(logFields),
+		updateRateLimitedLog: log.NewRateLimitedLogger(
+			log.WithInterval(30*time.Second),
+			log.WithBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,
@@ -485,7 +483,7 @@ func (n *NftablesTable) IPVersion() uint8 {
 // always appended.
 func (t *NftablesTable) InsertOrAppendRules(chainName string, rules []generictables.Rule) {
 	if t.disabled {
-		logrus.WithField("chainName", chainName).Panic("BUG: Attempted to insert rules into a disabled table")
+		log.WithField("chainName", chainName).Panic("BUG: Attempted to insert rules into a disabled table")
 	}
 
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule insertions")
@@ -512,7 +510,7 @@ func (t *NftablesTable) InsertOrAppendRules(chainName string, rules []generictab
 // rules added with InsertOrAppendRules.
 func (t *NftablesTable) AppendRules(chainName string, rules []generictables.Rule) {
 	if t.disabled {
-		logrus.WithField("chainName", chainName).Panic("BUG: Attempted to append rules into a disabled table")
+		log.WithField("chainName", chainName).Panic("BUG: Attempted to append rules into a disabled table")
 	}
 
 	t.logCxt.WithField("chainName", chainName).Debug("Updating rule appends")
@@ -536,7 +534,7 @@ func (t *NftablesTable) UpdateChains(chains []*generictables.Chain) {
 
 func (t *NftablesTable) UpdateChain(chain *generictables.Chain) {
 	if t.disabled {
-		logrus.WithField("chainName", chain.Name).Panic("BUG: Attempted to update chain in a disabled table")
+		log.WithField("chainName", chain.Name).Panic("BUG: Attempted to update chain in a disabled table")
 	}
 
 	t.logCxt.WithField("chainName", chain.Name).Debug("Adding chain to available set.")
@@ -681,7 +679,7 @@ func (t *NftablesTable) loadDataplaneState() {
 			// One of our chains, should match exactly.
 			dpHashes := dataplaneHashes[chainName]
 			if !reflect.DeepEqual(dpHashes, expectedHashes) {
-				logCxt.WithFields(logrus.Fields{
+				logCxt.WithFields(log.Fields{
 					"dpHashes":       dpHashes,
 					"expectedHashes": expectedHashes,
 				}).Warn("Detected out-of-sync Calico chain, marking for resync")
@@ -874,7 +872,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	now := t.timeNow()
 	defer func() {
 		if time.Since(now) > time.Second {
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"applyTime":      time.Since(now),
 				"reasonForApply": t.reason,
 			}).Info("Updating nftables took >1s")
@@ -952,7 +950,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		lastReadToNow = now.Sub(t.lastReadTime)
 
 		// Refresh interval is set, start with that.
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"lastReadToNow":   lastReadToNow,
 			"refreshInterval": t.refreshInterval,
 		}).Debug("Calculating reschedule time")
@@ -1009,13 +1007,13 @@ func (t *NftablesTable) applyUpdates() error {
 		t.logCxt.WithField("chainName", chainName).Debug("Checking dirty chain")
 		if _, present := t.desiredStateOfChain(chainName); !present {
 			// About to delete this chain, flush it first to sever dependencies.
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Flushing chain before deletion")
 			tx.Flush(&knftables.Chain{Name: chainName})
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
 			// Chain doesn't exist in dataplane, mark it for creation.
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Adding chain")
 			tx.Add(&knftables.Chain{Name: chainName})
@@ -1038,14 +1036,14 @@ func (t *NftablesTable) applyUpdates() error {
 				if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
 					tx.Add(set)
 				} else {
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chain": chainName,
 						"set":   setName,
 					}).Warn("IP Set for chain has not yet been received by data plane")
 				}
 			}
 
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 				"previous":  previousHashes,
 				"current":   currentHashes,
@@ -1058,14 +1056,14 @@ func (t *NftablesTable) applyUpdates() error {
 					}
 					rendered := t.render.Render(chainName, currentHashes[i], chain.Rules[i], features)
 					rendered.Handle = t.chainToFullRules[chainName][i].Handle
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 						"handle":    *rendered.Handle,
 					}).Debug("Replacing rule in chain")
 					tx.Replace(rendered)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 					}).Debug("Deleting old rule from end of chain")
 					tx.Delete(&knftables.Rule{
@@ -1074,7 +1072,7 @@ func (t *NftablesTable) applyUpdates() error {
 					})
 				} else {
 					// currentHashes was longer.  Append.
-					t.logCxt.WithFields(logrus.Fields{
+					t.logCxt.WithFields(log.Fields{
 						"chainName": chainName,
 					}).Debug("Appending rule to chain")
 					tx.Add(t.render.Render(chainName, currentHashes[i], chain.Rules[i], features))
@@ -1153,7 +1151,7 @@ func (t *NftablesTable) applyUpdates() error {
 	for chainName := range t.dirtyChains.All() {
 		if _, ok := t.desiredStateOfChain(chainName); !ok {
 			// Chain deletion
-			t.logCxt.WithFields(logrus.Fields{
+			t.logCxt.WithFields(log.Fields{
 				"chainName": chainName,
 			}).Debug("Deleting chain that is no longer needed")
 			tx.Delete(&knftables.Chain{Name: chainName})
@@ -1177,7 +1175,7 @@ func (t *NftablesTable) applyUpdates() error {
 		// Run the transaction.
 		t.opReporter.RecordOperation(fmt.Sprintf("update-%v-v%d", t.name, t.ipVersion))
 
-		if logrus.IsLevelEnabled(logrus.TraceLevel) {
+		if log.IsLevelEnabled(log.TraceLevel) {
 			t.logCxt.Tracef("Updating nftables: %s", tx.String())
 		}
 
@@ -1235,7 +1233,7 @@ func (t *NftablesTable) runTransaction(tx *knftables.Transaction) error {
 		restoreDuration := t.timeNow().Sub(startTime)
 		t.peakNftablesWriteTime = t.peakNftablesWriteTime * 99 / 100
 		if restoreDuration > t.peakNftablesWriteTime {
-			logrus.WithField("duration", restoreDuration).Debug("Updating nftables write-time peak duration.")
+			log.WithField("duration", restoreDuration).Debug("Updating nftables write-time peak duration.")
 			t.peakNftablesWriteTime = restoreDuration
 		}
 	}()
@@ -1278,7 +1276,7 @@ func (t *NftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 func (t *NftablesTable) InsertRulesNow(chain string, rules []generictables.Rule) error {
 	if t.disabled {
 		// We should never be inserting rules when the table is disabled.
-		logrus.WithField("chain", chain).Panic("BUG: InsertRulesNow called on disabled table.")
+		log.WithField("chain", chain).Panic("BUG: InsertRulesNow called on disabled table.")
 	}
 
 	features := t.featureDetector.GetFeatures()

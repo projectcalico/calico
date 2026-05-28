@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/knftables"
 
@@ -31,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -88,13 +87,13 @@ type IPSets struct {
 
 	gaugeNumSets prometheus.Gauge
 
-	opReporter logutils.OpRecorder
+	opReporter log.OpRecorder
 
 	sleep func(time.Duration)
 
 	resyncRequired bool
 
-	logCxt *log.Entry
+	logCxt log.Logger
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.
@@ -103,7 +102,7 @@ type IPSets struct {
 	nft knftables.Interface
 }
 
-func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
+func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface, recorder log.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		time.Sleep,
@@ -113,7 +112,7 @@ func NewIPSets(ipVersionConfig *ipsets.IPVersionConfig, nft knftables.Interface,
 }
 
 // NewIPSetsWithShims is an internal test constructor.
-func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder logutils.OpRecorder) *IPSets {
+func NewIPSetsWithShims(ipVersionConfig *ipsets.IPVersionConfig, sleep func(time.Duration), nft knftables.Interface, recorder log.OpRecorder) *IPSets {
 	familyStr := string(ipVersionConfig.Family)
 	return &IPSets{
 		IPVersionConfig:      ipVersionConfig,

@@ -21,10 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 type namespaceable interface {
@@ -56,7 +55,7 @@ func (s *actionSet) Reject(with generictables.RejectWith) generictables.Action {
 		return RejectAction{With: "tcp reset"}
 	}
 	if with != "" {
-		logrus.WithField("reject-with", with).Panic("Unknown reject-with value")
+		log.WithField("reject-with", with).Panic("Unknown reject-with value")
 	}
 	return RejectAction{}
 }
@@ -476,10 +475,10 @@ func (a LimitPacketRateAction) ToFragment(features *environment.Features) string
 	// Rate and Burst are limited to XT_LIMIT_SCALE (10k)
 	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_limit.h#L8
 	if a.Rate < 0 || a.Rate > 10000 {
-		logrus.WithField("rate", a.Rate).Panic("Invalid rate")
+		log.WithField("rate", a.Rate).Panic("Invalid rate")
 	}
 	if a.Burst < 1 || a.Burst > 10000 {
-		logrus.WithField("burst", a.Burst).Panic("Invalid burst")
+		log.WithField("burst", a.Burst).Panic("Invalid burst")
 	}
 	return fmt.Sprintf("limit rate over %d/second burst %d packets drop", a.Rate, a.Burst)
 }
@@ -500,12 +499,12 @@ func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) st
 	case generictables.RejectWithTCPReset:
 		rejectWith = "tcp reset"
 	default:
-		logrus.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
+		log.WithField("reject-with", a.RejectWith).Panic("Unknown reject-with value")
 	}
 	// The connection limit is an uint32 (maximum value 4294967295).
 	// See https://github.com/torvalds/linux/blob/16b70698aa3ae7888826d0c84567c72241cf6713/include/uapi/linux/netfilter/xt_connlimit.h#L25
 	if a.Num < 0 || a.Num > math.MaxUint32 {
-		logrus.WithField("rate", a.Num).Panic("Invalid limit")
+		log.WithField("rate", a.Num).Panic("Invalid limit")
 	}
 	return fmt.Sprintf("ct count over %d reject with %s", a.Num, rejectWith)
 }
