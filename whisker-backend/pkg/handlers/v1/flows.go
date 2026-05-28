@@ -18,8 +18,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
@@ -55,7 +53,9 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
+	// Do not log filter objects or flow objects — they may contain user identifiers and
+	// flow metadata that could be a bulk-exfil vector.
+	logger.Debug("Applying filters.")
 
 	filter := toProtoFilter(params.Filters)
 	if params.Watch {
@@ -84,7 +84,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 						break
 					}
 
-					logrus.WithField("flow", flow).Debug("Received flow from stream.")
+					logger.Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}

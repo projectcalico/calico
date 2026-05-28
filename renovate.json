@@ -3,13 +3,13 @@
   "extends": ["config:recommended"],
   "rebaseWhen": "behind-base-branch",
   "dependencyDashboard": false,
-  "baseBranchPatterns": ["release-v3.31", "release-v3.32"],
+  "baseBranchPatterns": ["release-v3.31", "release-v3.32", "master"],
   "prBodyTemplate": "{{{header}}}{{{table}}}{{{warnings}}}{{{notes}}}{{{changelogs}}}{{{controls}}}",
   "separateMinorPatch": true,
   "enabledManagers": ["gomod", "custom.regex", "npm"],
   "prHourlyLimit": 20,
   "prConcurrentLimit": 20,
-  "addLabels": ["docs-not-required", "release-note-not-required", "dependencies", "merge-when-ready", "delete-branch"],
+  "addLabels": ["docs-not-required", "release-note-not-required", "dependencies", "merge-when-ready", "delete-branch", "skip-bot-cherry-pick"],
   "gomod": {
     "managerFilePatterns": ["/^go\\.mod$/"]
   },
@@ -91,7 +91,7 @@
     },
     {
       "description": "Run gen-deps-files on selected branches only",
-      "matchBaseBranches": ["master", "release-v3.31", "release-v3.32"],
+      "matchBaseBranches": ["release-v3.31", "release-v3.32", "master"],
       "postUpgradeTasks": {
         "commands": ["make gen-deps-files"],
         "fileFilters": ["**/deps.txt"],

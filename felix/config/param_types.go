@@ -653,8 +653,8 @@ func (p *EndpointListParam) Parse(raw string) (result any, err error) {
 		if u.Opaque != "" || u.User != nil || u.Path != "/" ||
 			u.RawPath != "" || u.RawQuery != "" ||
 			u.Fragment != "" {
-			log.WithField("url", fmt.Sprintf("%#v", u)).Error(
-				"Unsupported URL part")
+			// Do not log the full URL — it may contain credentials in userinfo.
+			log.WithField("url", u.Host).Error("Unsupported URL part")
 			err = p.parseFailed(raw,
 				"endpoint contained unsupported URL part; "+
 					"expected http(s)://hostname:port only.")
@@ -718,7 +718,7 @@ func (p *OneofListParam) SchemaDescription() string {
 		values = append(values, fmt.Sprintf("`%s`", v))
 	}
 	sort.Strings(values)
-	return "One of: " + strings.Join(values, ", ") + " (case insensitive)"
+	return "One of: " + strings.Join(values, ", ")
 }
 
 type CIDRListParam struct {

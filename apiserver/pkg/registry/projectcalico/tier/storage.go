@@ -19,18 +19,21 @@ import (
 
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
 
 // REST implements a RESTStorage for API services against etcd
 type REST struct {
 	*registry.Store
+	authorizer authorizer.TierAuthorizer
 }
 
 // EmptyObject returns an empty instance
@@ -63,7 +66,8 @@ func (r *StatusREST) Get(ctx context.Context, name string, options *metav1.GetOp
 
 // Update alters the status subset of an object.
 func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions,
+) (runtime.Object, bool, error) {
 	return r.store.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
 }
 
@@ -150,5 +154,40 @@ func NewREST(scheme *runtime.Scheme, opts server.Options, statusOpts server.Opti
 	statusStore.Storage = statusStorageInterface
 	statusStore.DestroyFunc = statusDFunc
 
-	return &REST{store}, &StatusREST{&statusStore}, nil
+	return &REST{store, authorizer.NewTierAuthorizer(opts.Authorizer)}, &StatusREST{&statusStore}, nil
+}
+
+// Apply tiered RBAC to delete requests. A Tier is its own tier scope, so the
+// object's name is also the tierName argument.
+func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	if err := r.authorizer.AuthorizeTierOperation(ctx, name, name); err != nil {
+		return nil, false, err
+	}
+	return r.Store.Delete(ctx, name, deleteValidation, options)
+}
+
+// Apply tiered RBAC to deletecollection requests.
+func (r *REST) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *metainternalversion.ListOptions) (runtime.Object, error) {
+	if listOptions == nil {
+		listOptions = &metainternalversion.ListOptions{}
+	}
+	listObj, err := r.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+	items, err := meta.ExtractList(listObj)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		accessor, err := meta.Accessor(item)
+		if err != nil {
+			return nil, err
+		}
+		tierName := accessor.GetName()
+		if err := r.authorizer.AuthorizeTierOperation(ctx, tierName, tierName); err != nil {
+			return nil, err
+		}
+	}
+	return r.Store.DeleteCollection(ctx, deleteValidation, options, listOptions)
 }

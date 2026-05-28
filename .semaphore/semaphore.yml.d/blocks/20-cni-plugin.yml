@@ -15,7 +15,7 @@
     jobs:
       - name: "CNI Plugin: CI"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
+          - ../.semaphore/run-and-monitor ci.log make ci-no-prereqs
     epilogue:
       always:
         commands:

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,7 +54,6 @@ import (
 	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
@@ -665,7 +665,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		for _, a := range standardBlockAffinities {
 			_, err := bc.Apply(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: netip.MustParsePrefix(a.cidr),
 					Host: a.host,
 				},
 				Value: &model.BlockAffinity{
@@ -677,7 +677,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 		return func() {
 			for _, a := range standardBlockAffinities {
 				_, _ = bc.Delete(ctx, model.BlockAffinityKey{
-					CIDR: mustParseCIDR(a.cidr),
+					CIDR: netip.MustParsePrefix(a.cidr),
 					Host: a.host,
 				}, "")
 			}
@@ -716,14 +716,6 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 			}
 		}
 	}
-}
-
-func mustParseCIDR(s string) cnet.IPNet {
-	_, cidr, err := cnet.ParseCIDR(s)
-	if err != nil {
-		panic(fmt.Sprintf("parsing CIDR %q: %v", s, err))
-	}
-	return *cidr
 }
 
 // oneshotTestCase defines a single oneshot confd template rendering test.
@@ -838,9 +830,21 @@ func compareOutput(t *testing.T, outputDir, goldenDir string) {
 
 		expectedPath := filepath.Join("compiled_templates", goldenDir, f)
 		want, err := os.ReadFile(expectedPath)
-		require.NoError(t, err, "reading golden file %s", expectedPath)
-
 		gotNorm := normalizeBlankLines(string(got))
+		if err != nil {
+			if updateGoldenFiles && os.IsNotExist(err) {
+				t.Logf("creating golden file %s", expectedPath)
+				if err := os.MkdirAll(filepath.Dir(expectedPath), 0755); err != nil {
+					t.Fatalf("failed to create golden dir for %s: %v", expectedPath, err)
+				}
+				if err := os.WriteFile(expectedPath, []byte(gotNorm), 0644); err != nil {
+					t.Fatalf("failed to create golden file %s: %v", expectedPath, err)
+				}
+				continue
+			}
+			require.NoError(t, err, "reading golden file %s", expectedPath)
+		}
+
 		wantNorm := normalizeBlankLines(string(want))
 		if gotNorm != wantNorm {
 			if updateGoldenFiles {
@@ -1085,6 +1089,11 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 			expectedPath := filepath.Join("compiled_templates", goldenDir, f)
 			want, err := os.ReadFile(expectedPath)
 			if err != nil {
+				if updateGoldenFiles && os.IsNotExist(err) {
+					allMatch = false
+					lastMismatch = fmt.Sprintf("%s missing, will create", expectedPath)
+					break
+				}
 				d.t.Fatalf("reading golden file %s: %v", expectedPath, err)
 			}
 
@@ -1122,6 +1131,9 @@ func (d *confdDaemon) updateGoldenFiles(goldenDir string, files []string) {
 		}
 		expectedPath := filepath.Join("compiled_templates", goldenDir, f)
 		d.t.Logf("updating golden file %s", expectedPath)
+		if err := os.MkdirAll(filepath.Dir(expectedPath), 0755); err != nil {
+			d.t.Fatalf("failed to create golden dir for %s: %v", expectedPath, err)
+		}
 		if err := os.WriteFile(expectedPath, []byte(normalizeBlankLines(string(got))), 0644); err != nil {
 			d.t.Fatalf("failed to update golden file %s: %v", expectedPath, err)
 		}

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package nat
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -150,19 +152,42 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 	return obj, nil
 }
 
+// tryUpdateExistingCTLBLink updates the program behind a previously-pinned
+// cgroup link. It returns needsReattach=true if the pin should be discarded and
+// the caller should perform a fresh AttachCGroup + Pin — currently that means
+// the kernel reported ENOLINK, i.e. the link was severed from the cgroup.
+func tryUpdateExistingCTLBLink(obj *libbpf.Obj, progName, progPinPath string) (needsReattach bool, err error) {
+	link, err := libbpf.OpenLink(progPinPath)
+	if err != nil {
+		return false, fmt.Errorf("error opening link %s : %w", progPinPath, err)
+	}
+	defer link.Close()
+	if err := link.Update(obj, progName); err != nil {
+		if errors.Is(err, unix.ENOLINK) {
+			log.WithField("program", progName).Debug("Cgroup link severed, re-attaching")
+			if rmErr := os.Remove(progPinPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				return false, fmt.Errorf("error removing stale pin %s: %w", progPinPath, rmErr)
+			}
+			return true, nil
+		}
+		return false, fmt.Errorf("error updating program %s : %w", progName, err)
+	}
+	return false, nil
+}
+
 func attachProgram(name, ipver, bpfMount, cgroupPath string, obj *libbpf.Obj) error {
 	progName := "calico_" + name + "_v" + ipver
 	progPinPath := path.Join(bpfMount, progName)
 	if _, err := os.Stat(progPinPath); err == nil {
-		link, err := libbpf.OpenLink(progPinPath)
+		needsReattach, err := tryUpdateExistingCTLBLink(obj, progName, progPinPath)
 		if err != nil {
-			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
+			return err
 		}
-		defer link.Close()
-		if err := link.Update(obj, progName); err != nil {
-			return fmt.Errorf("error updating program %s : %w", progName, err)
+		if !needsReattach {
+			return nil
 		}
-		return nil
+		// Pin existed but the underlying cgroup link was severed (e.g. cleared
+		// across a Felix restart). Fall through to a fresh AttachCGroup + Pin.
 	}
 
 	link, err := obj.AttachCGroup(cgroupPath, progName)

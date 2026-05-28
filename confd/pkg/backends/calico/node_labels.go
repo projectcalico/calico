@@ -11,8 +11,8 @@ import (
 )
 
 // newNodeLabelManager returns a newly initialized nodeLabelManager with no label data.
-func newNodeLabelManager() nodeLabelManager {
-	return nodeLabelManager{
+func newNodeLabelManager() *nodeLabelManager {
+	return &nodeLabelManager{
 		nodeLabels: map[string]map[string]string{},
 	}
 }

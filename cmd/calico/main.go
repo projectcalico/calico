@@ -62,8 +62,9 @@ const (
 )
 
 // dispatch decides which handler to run based on argv and the CNI_COMMAND
-// env var. It is pure so the dispatch rules can be covered by unit tests
-// without invoking the actual handlers.
+// env var, and returns the (possibly rewritten) argv to use. It is pure so
+// the dispatch rules can be covered by unit tests without invoking the
+// actual handlers.
 //
 // Rules:
 //   - argv[0] basename of "calico-ipam" (or "calico-ipam.exe" on Windows) →
@@ -73,24 +74,34 @@ const (
 //     the per-platform release artifacts (e.g. "calicoctl-linux-amd64",
 //     "calicoctl-windows-amd64.exe") so users don't have to rename the
 //     downloaded binary.
-//   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin, but
-//     only when no subcommand args were passed. This guards against a stray
-//     CNI_COMMAND in a shell environment silently hijacking "calicoctl get
-//     nodes" or "calico component foo".
+//   - argv[0] basename of "uds" → Cobra, with "component flexvol" inserted
+//     so kubelet's "<plugin-dir>/uds <init|mount|unmount>" calls route
+//     into the flexvol subcommand. argv[0] itself is preserved so that
+//     panic traces and log prefixes still see the original invocation name.
+//   - Otherwise, CNI_COMMAND in the env dispatches to the CNI plugin. If
+//     args[1] is a known top-level cobra subcommand, prefer cobra — that
+//     guards against a stray CNI_COMMAND silently hijacking "calico
+//     component foo".
 //   - Otherwise, the full Cobra tree.
-func dispatch(args []string, cniCommand string) dispatchMode {
+func dispatch(args []string, cniCommand string) (dispatchMode, []string) {
 	_, filename := filepath.Split(args[0])
 	filename = strings.TrimSuffix(filename, ".exe")
 	switch {
 	case filename == "calico-ipam":
-		return modeCNIIPAM
+		return modeCNIIPAM, args
 	case strings.HasPrefix(filename, "calicoctl"):
-		return modeCalicoctl
+		return modeCalicoctl, args
+	case filename == "uds":
+		rewritten := append([]string{args[0], "component", "flexvol"}, args[1:]...)
+		return modeCobra, rewritten
 	default:
-		if len(args) == 1 && cniCommand != "" {
-			return modeCNI
+		if cniCommand != "" {
+			if len(args) > 1 && isCobraSubcommand(args[1]) {
+				return modeCobra, args
+			}
+			return modeCNI, args
 		}
-		return modeCobra
+		return modeCobra, args
 	}
 }
 
@@ -103,8 +114,19 @@ func newCalicoctlCommand() *cobra.Command {
 	return cmd
 }
 
+// isCobraSubcommand reports whether s is a known top-level subcommand of the
+// calico cobra tree. Used by dispatch to disambiguate when CNI_COMMAND is set.
+func isCobraSubcommand(s string) bool {
+	switch s {
+	case "component", "ctl", "health", "version", "help":
+		return true
+	}
+	return false
+}
+
 func main() {
-	mode := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
+	mode, newArgs := dispatch(os.Args, os.Getenv("CNI_COMMAND"))
+	os.Args = newArgs
 
 	switch mode {
 	case modeCNIIPAM, modeCNI:

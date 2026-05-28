@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -49,6 +48,15 @@ func NewClientManualConfig(ip, key, user string) *Client {
 func (e *Client) IP() string {
 	return e.IPs()[0]
 }
+
+// SSHIP returns the address used to ssh to the external node.
+func (e *Client) SSHIP() string { return e.extIP }
+
+// SSHUser returns the ssh user.
+func (e *Client) SSHUser() string { return e.extUser }
+
+// SSHKeyPath returns the path to the private key used for ssh.
+func (e *Client) SSHKeyPath() string { return e.extKey }
 
 func (e *Client) IPs() []string {
 	e.lock.Lock()
@@ -153,42 +161,6 @@ func (e *Client) UDP(target string, postdata string) string {
 	target = strings.Replace(target, "[", "", 1)
 	target = strings.Replace(target, "]", "", 1)
 	return fmt.Sprintf(`echo %v | nc -6 -u -w1 %v`, postdata, target)
-}
-
-func (e *Client) TestCanConnect(target string) {
-	command := fmt.Sprintf(`curl -s -m2 %v`, target)
-	tryConnect := func() error {
-		_, err := e.Exec("sh", "-c", command)
-		return err
-	}
-
-	// Test connectivity. Use Eventually to handle potential race conditions in setting up the service.
-	Eventually(tryConnect, 15*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
-
-	// Once we get a single success, it should consistently succeed afterwards.
-	Consistently(tryConnect, 9*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
-
-	// It's reliably up. Check output.
-	_, err := e.Exec("sh", "-c", command)
-	Expect(err).NotTo(HaveOccurred())
-}
-
-func (e *Client) TestCannotConnect(target string) {
-	command := fmt.Sprintf(`curl -s -m2 %v`, target)
-	tryConnect := func() error {
-		_, err := e.Exec("sh", "-c", command)
-		return err
-	}
-
-	// Test connectivity. Use Eventually to handle potential race conditions in setting up the service.
-	Eventually(tryConnect, 15*time.Second, 3*time.Second).Should(HaveOccurred())
-
-	// Once we get a single failure, it should consistently fail afterwards.
-	Consistently(tryConnect, 9*time.Second, 3*time.Second).Should(HaveOccurred())
-
-	// It's reliably not working. Check output.
-	_, err := e.Exec("sh", "-c", command)
-	Expect(err).To(HaveOccurred())
 }
 
 func (e *Client) SetupIperf() {

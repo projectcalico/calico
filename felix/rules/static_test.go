@@ -43,7 +43,7 @@ var _ = Describe("Static", func() {
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
-				allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+				allPoolSetName := fmt.Sprintf("cali%v0network-ip-pools", ipVersion)
 				thisHostSetName := fmt.Sprintf("cali%v0this-host", ipVersion)
 				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 				expRules = append(expRules, generictables.Rule{
@@ -1947,7 +1947,7 @@ var _ = Describe("Static", func() {
 				Comment: []string{"MarkSeenMASQ Mark"},
 			},
 			{
-				Match:   iptables.Match().MarkMatchesWithMask(0x3800000, 0x3f00000),
+				Match:   iptables.Match().MarkMatchesWithMask(0x1800000, 0x1f00000),
 				Action:  iptables.ReturnAction{},
 				Comment: []string{"MarkSeenNATOutgoing Mark"},
 			},

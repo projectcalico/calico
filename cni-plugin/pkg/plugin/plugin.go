@@ -208,6 +208,16 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		conf.NumQueues = 1
 	}
 
+	// Validate DeviceType. Reject unknown values rather than silently falling
+	// back so misconfigured CNI configs surface as a clear error.
+	switch conf.DeviceType {
+	case "", types.DeviceTypeVeth, types.DeviceTypeNetkit:
+		// OK.
+	default:
+		return fmt.Errorf("unknown device_type %q in CNI config (supported: %q, %q)",
+			conf.DeviceType, types.DeviceTypeVeth, types.DeviceTypeNetkit)
+	}
+
 	// Determine which node name to use.
 	nodename := utils.DetermineNodename(conf)
 

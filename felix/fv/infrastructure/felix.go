@@ -38,8 +38,6 @@ import (
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/bpf/jump"
-	"github.com/projectcalico/calico/felix/bpf/polprog"
 	"github.com/projectcalico/calico/felix/collector/flowlog"
 	"github.com/projectcalico/calico/felix/collector/goldmane"
 	"github.com/projectcalico/calico/felix/collector/local"
@@ -140,9 +138,6 @@ func (f *Felix) TriggerDelayedStart() {
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	logrus.Info("Starting felix")
-	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
-	bpfEnableIPv6 := fmt.Sprint(options.BPFEnableIPv6)
-
 	args := infra.GetDockerArgs()
 	args = append(args, "--privileged")
 
@@ -161,8 +156,7 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
 		"FELIX_BPFLOGLEVEL":              "debug",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
-		"FELIX_IPV6SUPPORT":              ipv6Enabled,
-		"FELIX_BPFIPV6SUPPORT":           bpfEnableIPv6,
+		"FELIX_IPV6SUPPORT":              fmt.Sprint(options.EnableIPv6),
 		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
 		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
@@ -658,18 +652,6 @@ func (f *Felix) BPFIfState(family int) map[string]BPFIfState {
 	return states
 }
 
-func (f *Felix) BPFNumContiguousPolProgramsFn(iface string, ingressOrEgress string, family int) func() int {
-	return func() int {
-		cont, _ := f.BPFNumPolProgramsByName(iface, ingressOrEgress, family)
-		return cont
-	}
-}
-
-func (f *Felix) BPFNumPolProgramsByName(iface string, ingressOrEgress string, family int) (contiguous, total int) {
-	entryPointIdx := f.BPFPolEntryPointIdx(iface, ingressOrEgress, family)
-	return f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
-}
-
 func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family int) int {
 	ifState := f.BPFIfState(family)[iface]
 	var entryPointIdx int
@@ -685,46 +667,6 @@ func (f *Felix) BPFPolEntryPointIdx(iface string, ingressOrEgress string, family
 		}
 	}
 	return entryPointIdx
-}
-
-func (f *Felix) BPFNumPolProgramsTotalByEntryPointFn(entryPointIdx int, ingressOrEgress string) func() (total int) {
-	return func() (total int) {
-		_, total = f.BPFNumPolProgramsByEntryPoint(entryPointIdx, ingressOrEgress)
-		return
-	}
-}
-
-func (f *Felix) BPFNumPolProgramsByEntryPoint(entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
-	gapSeen := false
-	jmpMapName := jump.EgressMapParameters.VersionedName()
-	if ingressOrEgress == "egress" {
-		jmpMapName = jump.IngressMapParameters.VersionedName()
-	}
-	pinnedMap := "/sys/fs/bpf/tc/globals/" + jmpMapName
-	for i := range jump.MaxSubPrograms {
-		k := polprog.SubProgramJumpIdx(entryPointIdx, i, jump.TCMaxEntryPoints)
-		out, err := f.ExecOutput(
-			"bpftool", "map", "lookup",
-			"pinned", pinnedMap,
-			"key",
-			fmt.Sprintf("%d", k&0xff),
-			fmt.Sprintf("%d", (k>>8)&0xff),
-			fmt.Sprintf("%d", (k>>16)&0xff),
-			fmt.Sprintf("%d", (k>>24)&0xff),
-		)
-		if err != nil {
-			gapSeen = true
-		}
-		if strings.Contains(out, `value:`) || strings.Contains(out, `"value":`) {
-			total++
-			if !gapSeen {
-				contiguous++
-			}
-		} else {
-			gapSeen = true
-		}
-	}
-	return
 }
 
 func (f *Felix) IPTablesChains(table string) map[string][]string {

@@ -28,6 +28,7 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config) {
+	// Config fields are file paths and host:port only — no inline credentials or key material.
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
 	// Generate credentials for the Goldmane client.

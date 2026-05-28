@@ -15,6 +15,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -24,6 +25,7 @@ func TestDispatch(t *testing.T) {
 		args       []string
 		cniCommand string
 		wantMode   dispatchMode
+		wantArgs   []string
 	}{
 		{
 			name:       "plain calicoctl basename runs the ctl command tree as root",
@@ -56,6 +58,27 @@ func TestDispatch(t *testing.T) {
 			wantMode:   modeCalicoctl,
 		},
 		{
+			name:       "uds basename inserts component flexvol and preserves argv[0]",
+			args:       []string{"/usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds", "mount", "/dest", "{}"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds/uds", "component", "flexvol", "mount", "/dest", "{}"},
+		},
+		{
+			name:       "uds basename with no args still rewrites (help path)",
+			args:       []string{"/host/driver/uds"},
+			cniCommand: "",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/host/driver/uds", "component", "flexvol"},
+		},
+		{
+			name:       "uds basename ignores CNI_COMMAND in the env",
+			args:       []string{"/host/driver/uds", "init"},
+			cniCommand: "ADD",
+			wantMode:   modeCobra,
+			wantArgs:   []string{"/host/driver/uds", "component", "flexvol", "init"},
+		},
+		{
 			name:       "calico-ipam basename dispatches to IPAM plugin",
 			args:       []string{"/opt/cni/bin/calico-ipam"},
 			cniCommand: "ADD",
@@ -86,10 +109,24 @@ func TestDispatch(t *testing.T) {
 			wantMode:   modeCobra,
 		},
 		{
-			name:       "plain calico with subcommand ignores CNI_COMMAND (footgun guard)",
+			name:       "plain calico with cobra subcommand ignores CNI_COMMAND (footgun guard)",
 			args:       []string{"/usr/bin/calico", "component", "felix"},
 			cniCommand: "ADD",
 			wantMode:   modeCobra,
+		},
+		{
+			name:       "plain calico with CNI_COMMAND and netconf positional arg dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico", `{"name":"net","type":"calico"}`},
+			cniCommand: "ADD",
+			wantMode:   modeCNI,
+			wantArgs:   []string{"/opt/cni/bin/calico", `{"name":"net","type":"calico"}`},
+		},
+		{
+			name:       "plain calico with CNI_COMMAND and -t flag dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico", "-t"},
+			cniCommand: "VERSION",
+			wantMode:   modeCNI,
+			wantArgs:   []string{"/opt/cni/bin/calico", "-t"},
 		},
 		{
 			name:       "plain calico with subcommand and no CNI_COMMAND runs Cobra",
@@ -100,9 +137,14 @@ func TestDispatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotMode := dispatch(tt.args, tt.cniCommand)
+			gotMode, gotArgs := dispatch(tt.args, tt.cniCommand)
 			if gotMode != tt.wantMode {
 				t.Errorf("mode = %v, want %v", gotMode, tt.wantMode)
+			}
+			// Only the rewriting cases (calicoctl-as-ctl, uds) assert on the
+			// returned argv; the rest leave wantArgs unset and pass args through.
+			if tt.wantArgs != nil && !reflect.DeepEqual(gotArgs, tt.wantArgs) {
+				t.Errorf("args = %v, want %v", gotArgs, tt.wantArgs)
 			}
 		})
 	}

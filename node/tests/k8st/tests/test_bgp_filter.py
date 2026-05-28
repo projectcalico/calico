@@ -92,8 +92,8 @@ EOF
         except subprocess.CalledProcessError:
             pass
 
-        kubectl("delete bgppeer node-extra.peer", allow_fail=True)
-        kubectl("delete bgppeer node-extra-v6.peer", allow_fail=True)
+        kubectl("delete bgppeer.projectcalico.org node-extra.peer", allow_fail=True)
+        kubectl("delete bgppeer.projectcalico.org node-extra-v6.peer", allow_fail=True)
 
     def setUp(self):
         super(TestBGPFilter, self).setUp()
@@ -145,7 +145,7 @@ EOF
         """Patch BGPFilters in a BGPPeer"""
         filterStr = "\"" + "\", \"".join(filters) + "\"" if len(filters) > 0 else ""
         patchStr = "{\"spec\": {\"filters\": [%s]}}" % filterStr
-        kubectl("patch --type merge bgppeer %s --patch '%s'" % (peer, patchStr))
+        kubectl("patch --type merge bgppeer.projectcalico.org %s --patch '%s'" % (peer, patchStr))
 
 
     def _test_bgp_filter_basic(self, ipv4, ipv6):
@@ -489,11 +489,11 @@ EOF
 
             # Patch BGPPeer to make it global
             if ipv4:
-                kubectl("patch --type=merge bgppeer node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
             if ipv6:
-                kubectl("patch --type=merge bgppeer node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
-                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
+                kubectl("patch --type=merge bgppeer.projectcalico.org node-extra-v6.peer --type json --patch '[{\"op\": \"remove\", \"path\": \"/spec/nodeSelector\"}]'")
+                self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer.projectcalico.org node-extra-v6.peer --patch '{\"spec\":{\"nodeSelector\":\"egress == \\\"true\\\"\"}}'"))
 
             # Check that route is present
             if ipv4:

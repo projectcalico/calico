@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func newHostsIPSetManager(
 
 func (m *hostsIPSetManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
+	case *proto.HostMetadataUpdate:
 		if (m.ipVersion == 4 && msg.Ipv4Addr == "") || (m.ipVersion == 6 && msg.Ipv6Addr == "") {
 			// Skip since the update is for a mismatched IP version
 			m.logCtx.WithField("msg", msg).Debug("Skipping mismatched IP version update")
@@ -87,7 +87,7 @@ func (m *hostsIPSetManager) OnUpdate(protoBufMsg any) {
 		parts := strings.Split(addr, "/")
 		m.activeHostnameToIP[msg.Hostname] = parts[0]
 		m.ipSetDirty = true
-	case *proto.HostMetadataV4V6Remove:
+	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.ipSetDirty = true

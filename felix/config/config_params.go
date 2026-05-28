@@ -528,8 +528,6 @@ type Config struct {
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
-	useNodeResourceUpdates bool
-
 	RequireMTUFile bool `config:"bool;false"`
 
 	// BPFMaglevMaxEndpointsPerService is the maximum number of endpoints
@@ -1247,14 +1245,6 @@ func mustParseOptionalInt(rawValue string, defaultVal int, fieldName string) int
 	return value
 }
 
-func (config *Config) SetUseNodeResourceUpdates(b bool) {
-	config.useNodeResourceUpdates = b
-}
-
-func (config *Config) UseNodeResourceUpdates() bool {
-	return config.useNodeResourceUpdates
-}
-
 func (config *Config) RawValues() map[string]string {
 	cp := map[string]string{}
 	maps.Copy(cp, config.rawValues)
@@ -1337,4 +1327,5 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
+	NoEncapEnabled bool
 }

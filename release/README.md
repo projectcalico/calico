@@ -26,7 +26,7 @@ This section describes how to build a test release using the locally checked out
 Build the release, providing your own registry to use for the images. For example:
 
 ```
-ARCHES=amd64 ./bin/release hashrelease build --skip-validation --build-images --dev-registry <YOUR REGISTRY>
+ARCHS=amd64 ./bin/release hashrelease build --no-validation --images --dev-registry <YOUR REGISTRY>
 ```
 
 This may take some time, but will produce a full set of release images as well as an operator image based on the locally checked out commit. Artifacts can be found

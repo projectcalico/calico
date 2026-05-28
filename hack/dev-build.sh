@@ -57,12 +57,12 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
-# Build the operator image if its inputs (tag, registry, branch, versions)
+# Build the operator image if its inputs (tag, registry, repo, branch, versions)
 # have changed since the last run.
 operator() {
     mkdir -p "$STAMP_DIR"
     versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
-    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_BRANCH}:${versions_hash}"
+    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_REPO}:${OPERATOR_BRANCH}:${versions_hash}"
     stamp="${STAMP_DIR}/operator.inputs"
     prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
 

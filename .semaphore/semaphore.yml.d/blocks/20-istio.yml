@@ -3,6 +3,7 @@
     when: "${CHANGE_IN(istio)}"
   dependencies:
     - Prerequisites
+    - "Build: nftables RPMs"
   task:
     prologue:
       commands:
@@ -10,6 +11,12 @@
     jobs:
       - name: "Istio: CI"
         commands:
+          # Load the amd64 patched nftables RPMs producer image so the
+          # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+          - zstd -d --rm /tmp/nft-rpms.tar.zst
+          - docker load -i /tmp/nft-rpms.tar
+          - rm -f /tmp/nft-rpms.tar
           # Include the istio ztunnel build in the amd64 CI job.
           - ../.semaphore/run-and-monitor ci.log make ci
       - name: "Istio: build arm64"

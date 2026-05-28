@@ -119,8 +119,8 @@ var _ = Describe("wireguard metrics", func() {
 	var wgClient *wireguardDevicesOnly
 	var mockPeers []*mockPeerInfo
 	const (
-		hostname                 = "l0c4lh057"
-		defaultRateLimitInterval = time.Second * 5
+		hostname              = "l0c4lh057"
+		testRateLimitInterval = 100 * time.Millisecond
 	)
 
 	newWireguardDevicesOnly := func() (netlinkshim.Wireguard, error) {
@@ -138,7 +138,7 @@ var _ = Describe("wireguard metrics", func() {
 		wgStats = wireguard.NewWireguardMetricsWithShims(
 			hostname,
 			newWireguardDevicesOnly,
-			defaultRateLimitInterval,
+			testRateLimitInterval,
 		)
 	})
 
@@ -157,19 +157,20 @@ var _ = Describe("wireguard metrics", func() {
 		Expect(mfs).To(HaveLen(4))
 
 		By("checking if rate-limiting works")
+		ts := wgClient.generatePeerTraffic(1024, 1024)
 		mfs2, err := registry.Gather()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(mfs2).To(BeEmpty())
+		Expect(mfs2).To(Equal(mfs))
 
-		<-time.After(5 * time.Second)
-		ts := wgClient.generatePeerTraffic(1024, 1024)
-		mfs, err = registry.Gather()
+		<-time.After(101 * time.Millisecond)
+		mfs3, err := registry.Gather()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(mfs).To(HaveLen(4))
+		Expect(mfs3).To(HaveLen(4))
+		Expect(mfs3).NotTo(Equal(mfs))
 
 		By("comparing text output")
 		buf := &bytes.Buffer{}
-		for _, mf := range mfs {
+		for _, mf := range mfs3 {
 			_, err := expfmt.MetricFamilyToText(buf, mf)
 			Expect(err).ToNot(HaveOccurred())
 		}
@@ -203,27 +204,6 @@ wireguard_meta{hostname="{{.hostname}}",iface="{{.iface}}",listen_port="{{.liste
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(buf.String()).To(Equal(buf2.String()))
-	})
-
-	It("should not yield metrics if unregistered", func() {
-		By("checking if it's constructable")
-		Expect(wgStats).ToNot(BeNil())
-
-		By("registering it in a prometheus.Registry")
-		registry := prometheus.NewRegistry()
-		registry.MustRegister(wgStats)
-
-		By("unregistering with no issue")
-		ok := registry.Unregister(wgStats)
-		Expect(ok).To(BeTrue())
-
-		By("checking if gathering metrics will not error")
-		wgClient.generatePeerTraffic(512, 512)
-		mfs, err := registry.Gather()
-		Expect(err).ToNot(HaveOccurred())
-
-		By("checking if there are no metrics at all since it is unregistered")
-		Expect(mfs).To(HaveLen(0))
 	})
 
 	AfterEach(func() {

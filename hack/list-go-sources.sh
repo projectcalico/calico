@@ -37,7 +37,7 @@ list_dirs() {
   for d in */; do
     d=${d%/}
     excluded "$d" && continue
-    if find "$d" -name '*.go' -print -quit 2>/dev/null | read -r _; then
+    if find "$d" -type f -name '*.go' -print -quit 2>/dev/null | read -r _; then
       echo "$d"
     fi
   done

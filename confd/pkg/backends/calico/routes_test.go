@@ -156,6 +156,7 @@ var _ = Describe("RouteGenerator", func() {
 				ExternalIPRouteIndex:     NewRouteIndex(),
 				ClusterIPRouteIndex:      NewRouteIndex(),
 				LoadBalancerIPRouteIndex: NewRouteIndex(),
+				nodeLabelManager:         newNodeLabelManager(),
 
 				externalIPs: []string{
 					ipNet1.String(),
@@ -842,6 +843,7 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 				ExternalIPRouteIndex:     NewRouteIndex(),
 				ClusterIPRouteIndex:      NewRouteIndex(),
 				LoadBalancerIPRouteIndex: NewRouteIndex(),
+				nodeLabelManager:         newNodeLabelManager(),
 			}
 			rg.client = mockClient
 			rg.nodeName = "test-node"
@@ -1141,5 +1143,4 @@ var _ = Describe("Service Load Balancer Aggregation", func() {
 			})
 		})
 	})
-
 })

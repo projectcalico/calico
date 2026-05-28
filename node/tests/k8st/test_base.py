@@ -190,6 +190,13 @@ class TestBase(TestCase):
                 "externalTrafficPolicy": traffic_policy,
             }
         )
+        if svc_type == "LoadBalancer":
+          # Pin LB IPAM to Calico's loadbalancer controller. Without this,
+          # metallb's ServiceReconciler (still installed for Gateway API
+          # conformance L2 reachability) treats the unclassified Service as
+          # its own and races Calico's status updates with empty-status
+          # writes, leaving the Service's status.loadBalancer empty.
+          service.spec["loadBalancerClass"] = "calico"
         if cluster_ip:
           service.spec["clusterIP"] = cluster_ip
         if ext_ip:

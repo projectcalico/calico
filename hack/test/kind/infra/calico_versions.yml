@@ -12,8 +12,6 @@ components:
     version: test-build
   calico:
     version: test-build
-  csi-node-driver-registrar:
-    version: test-build
   whisker:
     version: test-build
   envoy-gateway:

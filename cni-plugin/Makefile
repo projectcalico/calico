@@ -15,7 +15,6 @@ BUILD_IMAGES  ?= $(WINDOWS_IMAGE)
 include ../lib.Makefile
 
 ## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
-TEST_SRC_FILES=$(shell find tests -name '*.go')
 WINFV_SRCFILES=$(shell find win_tests -name '*.go')
 
 # fail if unable to download
@@ -49,23 +48,15 @@ clean-windows: clean-windows-builder
 # CNI plugin ships in the calico/calico image. The Windows binary is the
 # combined `calico` binary from cmd/calico, dispatched by name.
 .PHONY: build
-build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
+build:
 ifeq ($(ARCH),amd64)
 WINDOWS_BIN=bin/windows
 # `calico cni install` copies calico.exe to both names on the host.
 build: $(WINDOWS_BIN)/calico.exe
 endif
 
-## Build the Calico installation binary for the network and ipam plugins
-$(BIN)/install binary: $(SRC_FILES)
-	$(call build_binary, $(PACKAGE_NAME)/cmd/install, $@)
-
-## Build the Calico network and ipam plugins
-$(BIN)/calico: $(SRC_FILES)
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico, $@)
-
-$(BIN)/calico-ipam: $(BIN)/calico
-	ln -sf "./calico" "$@"
+# The Linux bin/calico and bin/calico-ipam fixtures used by the unit tests are
+# sourced from the combined cmd/calico binary further down this Makefile.
 
 ## Hard-link the combined cmd/calico binary as calico.exe.
 $(WINDOWS_BIN)/calico.exe:
@@ -173,7 +164,21 @@ remove-kubevirt-crds:
 		echo "KubeVirt CRDs already removed or not present"
 
 
-UT_PREREQS = run-k8s-controller-manager $(BIN)/install $(BIN)/host-local $(BIN)/calico-ipam $(BIN)/calico
+# Source the CNI plugin and IPAM binaries from the combined calico binary;
+# argv[0] dispatch in cmd/calico/main.go picks the right entry point.
+COMBINED_BINARY = $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH)
+
+$(COMBINED_BINARY): $(call local-deps-go-files,cmd)
+	$(MAKE) -C $(REPO_ROOT)/cmd/calico build
+
+$(BIN)/calico: $(COMBINED_BINARY)
+	mkdir -p $(BIN)
+	cp $< $@
+
+$(BIN)/calico-ipam: $(BIN)/calico
+	ln -sf ./calico $@
+
+UT_PREREQS = run-k8s-controller-manager $(BIN)/host-local $(BIN)/calico $(BIN)/calico-ipam
 
 ## Run all unit tests.
 ut: $(UT_PREREQS)
@@ -226,19 +231,30 @@ pkg/install/install.test: pkg/install/*.go
 			cd /go/src/$(PACKAGE_NAME) && \
 			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
-.PHONY: test-install-cni
+.PHONY: test-install-cni test-install-cni-prereqs test-install-cni-no-prereqs
 ## Test the install
 # Uses the combined calico/calico image (loaded from the calico-image prerequisite
-# job in CI, or built locally via `make -C cmd/calico image`). The test invokes
-# `calico component cni install` instead of the legacy `/opt/cni/bin/install`.
-test-install-cni: run-k8s-apiserver pkg/install/install.test
+# job in CI, or built locally via the marker rule in lib.Makefile). The test
+# invokes `calico component cni install` instead of the legacy
+# `/opt/cni/bin/install`. CI invokes the *-no-prereqs target directly so a
+# missing cached image fails loudly rather than triggering a silent rebuild.
+test-install-cni: test-install-cni-prereqs
+	$(MAKE) test-install-cni-no-prereqs
+
+test-install-cni-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+
+test-install-cni-no-prereqs: run-k8s-apiserver pkg/install/install.test
 	cd pkg/install && CONTAINER_NAME=calico/calico:latest-$(ARCH) CERTS_PATH=$(CERTS_PATH) ./install.test
 
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: ci
+.PHONY: ci ci-no-prereqs
 ci: clean mod-download build static-checks ut test-install-cni
+
+# CI entry point: skips the calico image rebuild and runs the full test suite.
+# The image must be preloaded from the GCS cache.
+ci-no-prereqs: mod-download build static-checks ut test-install-cni-no-prereqs
 
 ## Build fv binary for Windows
 $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
@@ -249,6 +265,6 @@ $(WINDOWS_BIN)/win-fv.exe: $(WINFV_SRCFILES)
 ###############################################################################
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
-test-watch: $(BIN)/install run-etcd run-k8s-apiserver
+test-watch: run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) ginkgo watch -skip-package pkg/install

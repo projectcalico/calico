@@ -129,7 +129,8 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.Validate
 }
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions,
+) (runtime.Object, bool, error) {
 	oldObj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
 	if err != nil {
 		return nil, false, err
@@ -183,6 +184,24 @@ func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.Va
 	}
 
 	return r.Store.Delete(ctx, name, deleteValidation, options)
+}
+
+// Apply tiered RBAC to deletecollection requests.
+func (r *REST) DeleteCollection(
+	ctx context.Context,
+	deleteValidation rest.ValidateObjectFunc,
+	options *metav1.DeleteOptions,
+	listOptions *metainternalversion.ListOptions,
+) (runtime.Object, error) {
+	if listOptions == nil {
+		listOptions = &metainternalversion.ListOptions{}
+	} else {
+		listOptions = listOptions.DeepCopy()
+	}
+	if err := util.EnsureTierSelector(ctx, listOptions, r.authorizer, r.CalicoResourceLister); err != nil {
+		return nil, err
+	}
+	return r.Store.DeleteCollection(ctx, deleteValidation, options, listOptions)
 }
 
 func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {

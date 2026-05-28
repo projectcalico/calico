@@ -79,9 +79,18 @@ bin/gotestsum:
 
 ## Run the unit tests in a container.
 # kube-controllers tests use the combined calico/calico image (loaded from the
-# calico-image prerequisite in CI, or built locally via `make -C cmd/calico image`).
+# calico-image prerequisite in CI, or built locally via the marker rule in
+# lib.Makefile). CI invokes the *-no-prereqs targets directly so a missing
+# cached image fails loudly instead of triggering a silent rebuild.
 test: ut
-ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest bin/gotestsum
+
+.PHONY: ut fv ut-prereqs ut-no-prereqs
+ut fv: ut-prereqs
+	$(MAKE) ut-no-prereqs
+
+ut-prereqs: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+
+ut-no-prereqs: $(TEST_BINARIES) setup-envtest bin/gotestsum
 	KUBE_IMAGE=$(CALICO_BUILD) \
 		   ETCD_IMAGE=$(ETCD_IMAGE) \
 		   CALICO_API_GROUP=$(CALICO_API_GROUP) \
@@ -105,5 +114,9 @@ ut fv: $(TEST_BINARIES) $(KUBE_CONTROLLER_CONTAINER_CREATED) setup-envtest bin/g
 ###############################################################################
 # CI
 ###############################################################################
-.PHONY: ci
+.PHONY: ci ci-no-prereqs
 ci: clean mod-download static-checks ut
+
+# CI entry point: skips the calico image rebuild and runs static checks plus
+# the unit tests. The image must be preloaded from the GCS cache.
+ci-no-prereqs: mod-download static-checks ut-no-prereqs

@@ -67,4 +67,9 @@ blocks:
       prologue:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
+          - export LOGS_DIR=${SEMAPHORE_GIT_DIR}/release/_logs
           - cd release
+      epilogue:
+        always:
+          commands:
+            - artifact push job ${LOGS_DIR} --destination semaphore/hashrelease-logs || true

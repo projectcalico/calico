@@ -24,9 +24,7 @@ LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 ## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
 BUILD_DEPS = $(LIBBPF_A) \
-	     filesystem/usr/lib/calico/bpf \
-	     filesystem/etc/calico/confd/conf.d \
-	     filesystem/etc/calico/confd/templates
+	     filesystem/usr/lib/calico/bpf
 
 ## IMAGE_DEPS lists non-Go files the calico/node image depends on.
 IMAGE_DEPS = ./Dockerfile $(BUILD_DEPS)
@@ -64,6 +62,11 @@ THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
+
+# Producer image carrying the patched nftables + libnftnl RPMs we install in
+# the runtime stage. The tag is content-addressed so any change to specs,
+# patches, or version pins yields a new tag (see hack/rpms/nftables/Makefile).
+include ../hack/rpms/nftables/image.mk
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
@@ -176,15 +179,6 @@ clean-windows: clean-windows-builder
 ###############################################################################
 build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
 
-# Pull in config from confd.
-filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/conf.d $@
-	chmod +w $@
-
-filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
-	chmod +w $@
-
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
 
@@ -270,21 +264,41 @@ dist/LICENSE: ../LICENSE.md
 	cp ../LICENSE.md $@
 
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
+
+# nft-rpms-image builds (or no-ops on cache hit) the per-arch producer image
+# carrying our patched nftables + libnftnl RPMs. It's an order-only prereq;
+# the consumer build wires it in via --build-context nft-rpms=docker-image://...
+# so buildkit sources it from the local daemon (avoiding `--pull=always`
+# trying to fetch it from a registry where it may not have been pushed yet).
+.PHONY: nft-rpms-image
+# `| register` so binfmt is set up before cross-arch buildx.
+nft-rpms-image: | register
+	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
+
+# Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
+# nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
+# as a registry pull and fails when that tag hasn't been pushed yet (PR
+# builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
+# BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
+$(NODE_CONTAINER_CREATED) $(NODE_CONTAINER_FIPS_CREATED): DOCKER_PULL :=
+
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
@@ -347,12 +361,6 @@ dist/calicoctl:
 	make -C ../calicoctl build
 	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
 
-dist/calico dist/calico-ipam:
-	mkdir -p dist
-	make -C ../cni-plugin build
-	cp ../cni-plugin/bin/$(ARCH)/calico dist/calico
-	cp ../cni-plugin/bin/$(ARCH)/calico-ipam dist/calico-ipam
-
 # Create images for containers used in the tests
 busybox.tar:
 	docker pull $(ARCH)/busybox:latest
@@ -394,6 +402,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v $(KUBECTL):/bin/kubectl \
 	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
+	    -e PYTHONDONTWRITEBYTECODE=1 \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \

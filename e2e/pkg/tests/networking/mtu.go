@@ -36,7 +36,7 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("calico-mtu")
 
 		var checker conncheck.ConnectionTester
-		var clientPod *conncheck.Client
+		var clientPod conncheck.Client
 
 		ginkgo.BeforeEach(func() {
 			// Run the test pod as root and with NET_RAW capabiltiies to allow access to network interfaces.

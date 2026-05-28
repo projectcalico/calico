@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# image-exists STAMP_FILE
+#
+# Prints MISSING-IMAGE on stdout when STAMP_FILE records an image ref that
+# Docker doesn't have locally. Used as a Make prereq via $(shell) so a
+# pruned image forces the stamp's rule to re-run even when the stamp's
+# mtime is fresh.
+
+set -u
+
+stamp=${1:?usage: image-exists STAMP_FILE}
+
+[ -f "$stamp" ] || exit 0
+img=$(cat "$stamp")
+[ -n "$img" ] || exit 0
+docker image inspect "$img" >/dev/null 2>&1 && exit 0
+echo MISSING-IMAGE

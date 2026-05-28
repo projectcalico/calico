@@ -16,13 +16,13 @@
       - name: "Typha: UT and FV tests"
         commands:
           - export TEST_SUITE_PREFIX="calico/base"
-          - ../.semaphore/run-and-monitor make-ci.log make ci
+          - ../.semaphore/run-and-monitor make-ci.log make ci-no-prereqs
       - name: "Typha: FV tests on UBI-minimal"
         commands:
           - 'export TEST_SUITE_PREFIX="UBI-minimal"'
           # Rebuild the combined image with UBI-minimal as CALICO_BASE,
           # then run Typha FV against it.
-          - ../.semaphore/run-and-monitor make-fv-ubi.log bash -c 'make -C ../cmd/calico clean image && make fv'
+          - ../.semaphore/run-and-monitor make-fv-ubi.log bash -c 'make -C ../cmd/calico clean image && make fv-no-prereqs'
         env_vars:
           - name: USE_UBI_AS_CALICO_BASE
             value: '1'
