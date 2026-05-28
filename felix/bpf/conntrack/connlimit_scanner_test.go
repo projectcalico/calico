@@ -393,3 +393,50 @@ func TestConnLimitScannerNoCountWhenWrongDirection(t *testing.T) {
 		t.Errorf("expected no counts when pod is opener but only has ingress limit, got %v", scanner.counts)
 	}
 }
+
+// TestConnLimitScannerDownsamples verifies that the scanner runs its real
+// recount on iterations 1, 1+N, 1+2N, ... and skips the rest. The skipThisRun
+// flag should suppress both Check (returns OK without touching counts) and
+// IterationEnd. getPodInfo must be called only on the real-recount iterations.
+func TestConnLimitScannerDownsamples(t *testing.T) {
+	podInfoCalls := 0
+	getPodInfo := func() map[string]ConnLimitPodInfo {
+		podInfoCalls++
+		return map[string]ConnLimitPodInfo{}
+	}
+
+	scanner := &ConnLimitScanner{
+		getPodInfo: getPodInfo,
+		counts:     make(map[connlimitKey]uint32),
+	}
+
+	// Drive 2 full cycles + 1 extra iteration so we exercise both the
+	// "run" and "skip" branches multiple times.
+	const cycles = 2
+	for i := 1; i <= cycles*connLimitScannerRunEveryN+1; i++ {
+		scanner.IterationStart()
+
+		wantSkip := (i-1)%connLimitScannerRunEveryN != 0
+		if scanner.skipThisRun != wantSkip {
+			t.Errorf("iteration %d: skipThisRun=%v, want %v", i, scanner.skipThisRun, wantSkip)
+		}
+
+		// Check should short-circuit on skipped iterations regardless
+		// of input. Pass nil args — they must not be dereferenced.
+		verdict, _ := scanner.Check(nil, nil, nil)
+		if verdict != ScanVerdictOK {
+			t.Errorf("iteration %d: Check verdict=%v, want OK", i, verdict)
+		}
+
+		// IterationEnd should short-circuit on skipped iterations.
+		// On non-skipped iterations the podInfo is empty so the
+		// early-return at "len(s.podInfo) == 0" kicks in instead.
+		scanner.IterationEnd()
+	}
+
+	// Real recounts occur on iterations 1, 1+N, 1+2N → cycles+1 calls.
+	wantCalls := cycles + 1
+	if podInfoCalls != wantCalls {
+		t.Errorf("getPodInfo calls=%d, want %d (one per real recount across %d cycles + 1)", podInfoCalls, wantCalls, cycles)
+	}
+}
