@@ -184,33 +184,50 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			ToHostDrop: false,
 			DSR:        false,
 		}))
-		Expect(atIng).NotTo(HaveKey(hook.AttachType{
+		// IPv6 host attach is present whenever IPv6 is enabled, regardless
+		// of whether a v6 host IP has been provided yet. Programs attach
+		// with HOST_IPv6=0; the few BPF features that need a real host IP
+		// (VXLAN return-path encap) drop with the DroppedNoHostIP counter
+		// until the host IP becomes known.
+		v6HostIng := hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
-		Expect(atEg).NotTo(HaveKey(hook.AttachType{
+		}
+		v6HostEg := hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
+		}
+		if ipv6Enabled {
+			Expect(atIng).To(HaveKey(v6HostIng))
+			Expect(atEg).To(HaveKey(v6HostEg))
+		} else {
+			Expect(atIng).NotTo(HaveKey(v6HostIng))
+			Expect(atEg).NotTo(HaveKey(v6HostEg))
+		}
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
+		// When IPv6 is enabled, BPF programs attach for both v4 and v6
+		// regardless of whether v6 host IP has arrived yet (the v6 globals
+		// just hold HOST_IP=0), so both ready flags are set.
+		expectedReady := ifstate.FlgIPv4Ready
 		if ipv6Enabled {
+			expectedReady |= ifstate.FlgIPv6Ready
 			Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload0.Attrs().Index))))
 			workloadep0State := ifstateMap[ifstate.NewKey(uint32(workload0.Attrs().Index))]
-			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready))
+			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | expectedReady))
 		}
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
-		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgHEP))
+		Expect(hostep1State.Flags()).To(Equal(expectedReady | ifstate.FlgHEP))
 
 		if ipv6Enabled {
 			// IPv6 address update
@@ -667,10 +684,17 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// We got no new updates, we still have the same programs attached
+		// Even without HostMetadata yet, the new manager re-attaches
+		// programs (with HOST_IP=0) so that a Felix restart with a
+		// missing/cleared Node IP doesn't leave interfaces unprogrammed.
+		// The pinned attach IDs differ from the pre-restart ones.
 		attached2, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attached2).To(Equal(attached))
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attached2).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attached2[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attached2[iface].Egress))
+		}
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
@@ -700,12 +724,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		attachedNew, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		// All programs are replaced by now
+		// HostMetadataUpdate triggers another re-attach so programs pick
+		// up the real HOST_IP. attachedNew differs from both the
+		// pre-restart attach IDs and the post-restart HOST_IP=0 attach IDs.
 		// XXX down infaces are not removed yet
 		for _, iface := range []string{"hostep2", "workloadep2"} {
 			Expect(attachedNew).To(HaveKey(iface))
 			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
 			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+			Expect(attached2[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached2[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
 		}
 	})
 
