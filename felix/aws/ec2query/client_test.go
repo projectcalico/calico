@@ -168,6 +168,42 @@ func TestErrorResponseParsed(t *testing.T) {
 	}
 }
 
+func TestDefaultEndpoint(t *testing.T) {
+	cases := map[string]string{
+		"us-west-2":     "https://ec2.us-west-2.amazonaws.com/",
+		"us-gov-west-1": "https://ec2.us-gov-west-1.amazonaws.com/",
+		"cn-north-1":    "https://ec2.cn-north-1.amazonaws.com.cn/",
+	}
+	for region, want := range cases {
+		if got := defaultEndpoint(region); got != want {
+			t.Errorf("defaultEndpoint(%q) = %q, want %q", region, got, want)
+		}
+	}
+}
+
+func TestNewFromConfigHonorsConfig(t *testing.T) {
+	custom := &http.Client{}
+	base := "https://ec2.example.local/"
+	c := NewFromConfig(aws.Config{
+		Region:       "us-west-2",
+		Credentials:  staticCreds{},
+		HTTPClient:   custom,
+		BaseEndpoint: &base,
+	})
+	if c.HTTPClient != custom {
+		t.Errorf("expected config HTTPClient to be used, got %v", c.HTTPClient)
+	}
+	if c.Endpoint != base {
+		t.Errorf("expected endpoint %q, got %q", base, c.Endpoint)
+	}
+
+	// With no HTTPClient on the config, fall back to the default.
+	c = NewFromConfig(aws.Config{Region: "us-west-2", Credentials: staticCreds{}})
+	if c.HTTPClient != http.DefaultClient {
+		t.Errorf("expected http.DefaultClient fallback, got %v", c.HTTPClient)
+	}
+}
+
 func TestErrorResponseAlternateEnvelope(t *testing.T) {
 	const errBody = `<?xml version="1.0"?>
 <ErrorResponse>

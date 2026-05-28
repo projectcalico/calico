@@ -41,7 +41,7 @@ const service = "ec2"
 
 // Client is a minimal EC2 Query API client. One Client is bound to one region.
 type Client struct {
-	HTTPClient *http.Client
+	HTTPClient aws.HTTPClient
 	Signer     *v4.Signer
 	Creds      aws.CredentialsProvider
 	Region     string
@@ -51,12 +51,20 @@ type Client struct {
 
 // NewFromConfig builds a Client from a loaded aws.Config.
 func NewFromConfig(cfg aws.Config) *Client {
-	return &Client{
-		HTTPClient: http.DefaultClient,
+	c := &Client{
+		HTTPClient: cfg.HTTPClient,
 		Signer:     v4.NewSigner(),
 		Creds:      cfg.Credentials,
 		Region:     cfg.Region,
 	}
+	if c.HTTPClient == nil {
+		c.HTTPClient = http.DefaultClient
+	}
+	// Honor a custom endpoint (AWS_ENDPOINT_URL / config override) when set.
+	if cfg.BaseEndpoint != nil {
+		c.Endpoint = *cfg.BaseEndpoint
+	}
+	return c
 }
 
 // Do issues a signed POST to the EC2 Query API. params is form-encoded into
@@ -73,7 +81,7 @@ func (c *Client) Do(ctx context.Context, action string, params url.Values, out a
 
 	endpoint := c.Endpoint
 	if endpoint == "" {
-		endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com/", c.Region)
+		endpoint = defaultEndpoint(c.Region)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(body))
 	if err != nil {
@@ -112,6 +120,17 @@ func (c *Client) Do(ctx context.Context, action string, params url.Values, out a
 		return fmt.Errorf("ec2query: decode %s response: %w", action, err)
 	}
 	return nil
+}
+
+// defaultEndpoint returns the regional EC2 Query API endpoint. The China
+// partition has a distinct DNS suffix; other partitions (including GovCloud)
+// use the standard amazonaws.com suffix.
+func defaultEndpoint(region string) string {
+	suffix := "amazonaws.com"
+	if strings.HasPrefix(region, "cn-") {
+		suffix = "amazonaws.com.cn"
+	}
+	return fmt.Sprintf("https://ec2.%s.%s/", region, suffix)
 }
 
 // APIError is returned for non-2xx responses from the EC2 Query API. It
