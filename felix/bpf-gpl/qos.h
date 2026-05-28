@@ -17,17 +17,20 @@ struct calico_qos_key {
 
 struct calico_qos_val {
 	struct bpf_spin_lock lock;
-	// config
+	// packet rate config
 	__s16 packet_rate;
 	__s16 packet_burst;
-	// state
+	// packet rate state
 	__s16 packet_rate_tokens;
 	__s16 padding[3]; // alignment
 	__u64 packet_rate_last_update;
+	// connection limit
+	__s32 max_connections; // 0 = no limit, >0 = limit
+	__s32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
 };
 
 // 2*IFACE_STATE_MAP_SIZE because it will potentially have 2 entries for each interface (ingress/egress)
-CALI_MAP(cali_qos,,
+CALI_MAP(cali_qos, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_qos_key, struct calico_qos_val,
 		2*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
@@ -149,6 +152,80 @@ static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
 	}
 #endif /* IPVER6 */
 	return true;
+}
+
+/* qos_connlimit_check_and_increment atomically checks the connection limit for
+ * the current interface and direction using the cali_qos map. If below the
+ * limit, increments the counter and returns 0 (allow). If at or above the
+ * limit, returns -1 (reject). Returns 0 if no limit is configured for this
+ * interface+direction (no map entry or max_connections <= 0).
+ *
+ * Only called for TCP SYN on WEP interfaces.
+ */
+static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx *ctx)
+{
+	struct calico_qos_key key = {
+		.ifindex = ctx->skb->ifindex,
+#if CALI_F_INGRESS
+		.ingress = 1,
+#else // CALI_F_EGRESS
+		.ingress = 0,
+#endif
+	};
+
+	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	if (!qos || qos->max_connections <= 0) {
+		return 0;
+	}
+
+	int rc = 0;
+
+	bpf_spin_lock(&qos->lock);
+	if (qos->current_count >= qos->max_connections) {
+		rc = -1;
+	} else {
+		qos->current_count++;
+	}
+	bpf_spin_unlock(&qos->lock);
+
+	if (rc < 0) {
+		CALI_DEBUG("connlimit: over limit (%d >= %d), rejecting",
+			   qos->current_count, qos->max_connections);
+	} else {
+		CALI_DEBUG("connlimit: under limit (%d/%d), allowing",
+			   qos->current_count, qos->max_connections);
+	}
+
+	return rc;
+}
+
+/* qos_connlimit_decrement decrements the connection limit counter for the
+ * given interface and direction. Called when a TCP connection closes (both FINs
+ * seen or RST). Takes an explicit ifindex+direction because the decrement may
+ * run from any BPF program (from_hep, from_wep, etc.), not just the pod's own
+ * WEP program.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement(struct cali_tc_ctx *ctx,
+						     __u32 ifindex, __u32 direction)
+{
+	struct calico_qos_key key = {
+		.ifindex = ifindex,
+		.ingress = direction,
+	};
+
+	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	if (!qos || qos->max_connections <= 0) {
+		return;
+	}
+
+	bpf_spin_lock(&qos->lock);
+	if (qos->current_count > 0) {
+		qos->current_count--;
+	}
+	bpf_spin_unlock(&qos->lock);
+
+	CALI_DEBUG("connlimit: decremented count to %d/%d",
+		   qos->current_count, qos->max_connections);
 }
 
 #endif /* __CALI_QOS_H__ */
