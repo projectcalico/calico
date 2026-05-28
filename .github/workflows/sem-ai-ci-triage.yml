@@ -1,0 +1,186 @@
+# Drop this into the target repo at: .github/workflows/sem-ai-ci-triage.yml
+# Required repo secrets:
+#   SEM_AI_TRIAGE_URL   — endpoint of the triage service
+#   SEM_AI_TRIAGE_TOKEN — bearer token expected by the endpoint
+#
+# The workflow is a no-op if either secret is missing or the triage
+# service is unreachable / errors out — it never fails noisily on a
+# transient backend issue.
+
+name: sem-ai CI triage
+
+on:
+  status: {}
+  workflow_dispatch:
+    inputs:
+      workflow_id:
+        description: "Semaphore workflow_id (UUID)"
+        required: true
+        type: string
+      pr_number:
+        description: "PR number to comment on"
+        required: true
+        type: number
+
+# SHA-keyed for status events: a force-push gets a new SHA and runs in a
+# separate group, so the old SHA's run is not cancelled. Acceptable here —
+# Semaphore typically fires one status per (SHA, context), so the race is
+# rare and a stale comment would be overwritten on the next failure anyway.
+concurrency:
+  group: sem-ai-ci-triage-${{ inputs.pr_number || github.event.sha || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'status' &&
+       github.event.context == 'ci/semaphoreci/pr: Calico' &&
+       (github.event.state == 'failure' || github.event.state == 'error'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SEM_AI_TRIAGE_URL: ${{ secrets.SEM_AI_TRIAGE_URL }}
+      SEM_AI_TRIAGE_TOKEN: ${{ secrets.SEM_AI_TRIAGE_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Skip if secrets are not configured
+        id: gate
+        run: |
+          if [[ -z "${SEM_AI_TRIAGE_URL}" || -z "${SEM_AI_TRIAGE_TOKEN}" ]]; then
+            echo "::warning::SEM_AI_TRIAGE_URL or SEM_AI_TRIAGE_TOKEN secret missing — skipping triage"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve workflow_id + pr_number from event
+        id: resolve
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "wid=${{ inputs.workflow_id }}" >> "$GITHUB_OUTPUT"
+            echo "pr=${{ inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+            echo "source=workflow_dispatch" >> "$GITHUB_OUTPUT"
+          else
+            TARGET="${{ github.event.target_url }}"
+            SHA="${{ github.event.sha }}"
+            WID=$(printf '%s' "$TARGET" | sed -nE 's|.*/workflows/([0-9a-fA-F-]{36}).*|\1|p')
+            if [[ -z "$WID" ]]; then
+              echo "::warning::could not extract workflow_id from target_url='$TARGET' — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            PR=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                   --jq '[.[] | select(.state == "open")] | .[0].number // empty')
+            if [[ -z "$PR" ]]; then
+              echo "::warning::no open PR for sha=$SHA — skipping (commit is likely on a branch with no open PR)"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "wid=$WID" >> "$GITHUB_OUTPUT"
+            echo "pr=$PR" >> "$GITHUB_OUTPUT"
+            echo "source=status:${{ github.event.context }}:${{ github.event.state }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch PR title + body
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        run: |
+          gh api "repos/$REPO/pulls/${{ steps.resolve.outputs.pr }}" \
+            --jq '{title: .title, body: .body}' > pr.json
+          echo "PR #${{ steps.resolve.outputs.pr }} : $(jq -r .title pr.json)"
+          echo "body length: $(jq -r '.body|length' pr.json) chars"
+          echo "trigger: ${{ steps.resolve.outputs.source }}"
+
+      - name: Call sem-ai triage service
+        id: triage
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        run: |
+          PROMPT=$(jq -n --slurpfile pr pr.json --arg wf "${{ steps.resolve.outputs.wid }}" '
+            "Triage Semaphore workflow " + $wf + ".\n\n" +
+            "PR title: " + $pr[0].title + "\n\n" +
+            "PR description:\n" + ($pr[0].body // "")')
+
+          jq -n --arg p "$PROMPT" --arg mid "gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" '{
+            jsonrpc: "2.0",
+            id: 1,
+            method: "message/send",
+            params: {
+              message: {
+                messageId: $mid,
+                role: "user",
+                parts: [{kind: "text", text: $p}]
+              },
+              configuration: { returnImmediately: false }
+            }
+          }' > req.json
+
+          # Soft-skip if the triage service is unreachable / errors out.
+          # The PoC backend is best-effort — never fail the workflow on
+          # a transient backend issue and never post a half-broken comment.
+          set +e
+          HTTP=$(curl -sS --max-time 300 -o resp.json -w '%{http_code}' \
+            "$SEM_AI_TRIAGE_URL" \
+            -H "Authorization: Bearer $SEM_AI_TRIAGE_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @req.json)
+          CURL_RC=$?
+          set -e
+          if [[ $CURL_RC -ne 0 || "$HTTP" != "200" ]]; then
+            echo "::warning::triage service unreachable or errored (curl_rc=$CURL_RC, http=$HTTP) — skipping comment for this run"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Tolerate non-JSON / unexpected payloads — fall through to the
+          # empty-file skip below rather than aborting the step.
+          set +e
+          jq -r '
+            .result.artifacts[0].parts[0].text //
+            .result.message.parts[0].text //
+            empty
+          ' resp.json > triage.md
+          set -e
+
+          if [[ ! -s triage.md ]]; then
+            echo "::warning::empty or malformed triage response — skipping comment for this run"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "--- triage ---"
+          cat triage.md
+
+      - name: Upsert PR comment (skip on PASS)
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.triage.outputs.skip != 'true'
+        run: |
+          BODY=$(cat triage.md)
+          if [[ "$BODY" == "PASS — no comment needed" ]]; then
+            echo "PASS — no comment to post"
+            exit 0
+          fi
+
+          MARKER="<!-- sem-ai-ci-triage -->"
+          FULL_BODY="$MARKER"$'\n'"$BODY"
+          PR=${{ steps.resolve.outputs.pr }}
+
+          EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][0].id")
+
+          PAYLOAD=$(jq -n --arg b "$FULL_BODY" '{body: $b}')
+
+          if [[ -n "$EXISTING" && "$EXISTING" != "null" ]]; then
+            echo "editing existing comment $EXISTING"
+            gh api -X PATCH "repos/$REPO/issues/comments/$EXISTING" --input - <<<"$PAYLOAD"
+          else
+            echo "posting new comment on PR #$PR"
+            gh api -X POST "repos/$REPO/issues/$PR/comments" --input - <<<"$PAYLOAD"
+          fi

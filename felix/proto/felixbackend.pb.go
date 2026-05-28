@@ -4520,6 +4520,7 @@ type IPAMPool struct {
 	Masquerade    bool                   `protobuf:"varint,2,opt,name=masquerade,proto3" json:"masquerade,omitempty"`
 	IpipMode      string                 `protobuf:"bytes,3,opt,name=ipip_mode,json=ipipMode,proto3" json:"ipip_mode,omitempty"`
 	VxlanMode     string                 `protobuf:"bytes,4,opt,name=vxlan_mode,json=vxlanMode,proto3" json:"vxlan_mode,omitempty"`
+	AllowedUses   []string               `protobuf:"bytes,5,rep,name=allowed_uses,json=allowedUses,proto3" json:"allowed_uses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4580,6 +4581,13 @@ func (x *IPAMPool) GetVxlanMode() string {
 		return x.VxlanMode
 	}
 	return ""
+}
+
+func (x *IPAMPool) GetAllowedUses() []string {
+	if x != nil {
+		return x.AllowedUses
+	}
+	return nil
 }
 
 type Encapsulation struct {
@@ -6545,7 +6553,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
 	"\x04pool\x18\x02 \x01(\v2\x0f.felix.IPAMPoolR\x04pool\" \n" +
 	"\x0eIPAMPoolRemove\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"z\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x9d\x01\n" +
 	"\bIPAMPool\x12\x12\n" +
 	"\x04cidr\x18\x01 \x01(\tR\x04cidr\x12\x1e\n" +
 	"\n" +
@@ -6553,7 +6561,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"masquerade\x12\x1b\n" +
 	"\tipip_mode\x18\x03 \x01(\tR\bipipMode\x12\x1d\n" +
 	"\n" +
-	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\"\xab\x01\n" +
+	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\x12!\n" +
+	"\fallowed_uses\x18\x05 \x03(\tR\vallowedUses\"\xab\x01\n" +
 	"\rEncapsulation\x12!\n" +
 	"\fipip_enabled\x18\x01 \x01(\bR\vipipEnabled\x12#\n" +
 	"\rvxlan_enabled\x18\x02 \x01(\bR\fvxlanEnabled\x12(\n" +
