@@ -264,7 +264,7 @@ var _ = infrastructure.DatastoreDescribe(
 			))
 		})
 
-		It("should clear cached host IP when the address is removed from the Node", func() {
+		It("should report readiness degraded when the IP is removed from the Node while the Node remains", func() {
 			felix := tc.Felixes[0]
 
 			By("Verifying host SSH is reachable before any change")
@@ -285,7 +285,7 @@ var _ = infrastructure.DatastoreDescribe(
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Removing all addresses from the Node (Node still exists, IP is gone)")
+			By("Removing all addresses from the Node (Node still exists, IPs gone)")
 			// We must clear BOTH Spec.BGP and Spec.Addresses to drop the
 			// IP: extractNodeAddress in the calc graph falls back from
 			// the (now-missing) BGP address to Spec.Addresses, so
@@ -295,9 +295,12 @@ var _ = infrastructure.DatastoreDescribe(
 			// and emits HostMetadataRemove instead of HostMetadataUpdate.
 			// With both cleared, the calc graph emits HostMetadataUpdate
 			// with empty addresses, exercising the "IP removed while
-			// Node still exists" path — the BPF endpoint manager must
-			// clear m.v[46].hostIP, re-attach programs with HOST_IP=0,
-			// and report readiness degraded.
+			// Node still exists" path.
+			//
+			// updateOurHostIP treats this case identically to
+			// HostMetadataRemove: the cached lastSeenHostIP is kept so
+			// pinned BPF programs continue functioning, and only the
+			// BPFHostIP readiness reporter goes degraded.
 			modified := savedNode.DeepCopy()
 			modified.Spec.BGP = nil
 			modified.Spec.Addresses = nil
@@ -308,7 +311,7 @@ var _ = infrastructure.DatastoreDescribe(
 			)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Failsafe SSH should still succeed (programs reattach with HOST_IP=0)")
+			By("Failsafe SSH should still succeed (cached HOST_IP preserved)")
 			Consistently(probeHostSSH, "10s", "500ms").Should(Succeed())
 
 			By("Readiness should report degraded with an IPv4-unknown timestamp")
