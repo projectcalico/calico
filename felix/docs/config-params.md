@@ -1177,13 +1177,8 @@ program that route. Felix always programs such routes for IP Pools with vxlanMod
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ProgramClusterRoutes` |
-<<<<<<< HEAD
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive) |
-| Default value (above encoding) | `Enabled` |
-=======
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
-| Default value (above encoding) | `Disabled` |
->>>>>>> upstream/master
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
 | Default value (YAML) | `Enabled` |

@@ -2165,19 +2165,11 @@
           "NameEnvVar": "FELIX_ProgramClusterRoutes",
           "NameYAML": "programClusterRoutes",
           "NameGoAPI": "ProgramClusterRoutes",
-<<<<<<< HEAD
-          "StringSchema": "One of: `Disabled`, `Enabled` (case insensitive)",
-          "StringSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code> (case insensitive)",
+          "StringSchema": "One of: `Disabled`, `Enabled`",
+          "StringSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>",
           "StringDefault": "Enabled",
           "ParsedDefault": "Enabled",
           "ParsedDefaultJSON": "\"Enabled\"",
-=======
-          "StringSchema": "One of: `Disabled`, `Enabled`",
-          "StringSchemaHTML": "One of: <code>Disabled</code>, <code>Enabled</code>",
-          "StringDefault": "Disabled",
-          "ParsedDefault": "Disabled",
-          "ParsedDefaultJSON": "\"Disabled\"",
->>>>>>> upstream/master
           "ParsedType": "string",
           "YAMLType": "string",
           "YAMLSchema": "One of: `\"Disabled\"`, `\"Enabled\"`.",
