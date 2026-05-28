@@ -440,8 +440,8 @@ RUST_CROSS_ENV := \
 	-e CC_aarch64_unknown_linux_gnu=clang \
 	-e CXX_aarch64_unknown_linux_gnu=clang++ \
 	-e AR_aarch64_unknown_linux_gnu=$(CROSS_TRIPLE)-ar \
-	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT)" \
-	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT)" \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
 	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT) -I$(CROSS_SYSROOT)/usr/include"
 endif
 endif
