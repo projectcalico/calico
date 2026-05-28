@@ -15,6 +15,7 @@
 package calico
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -174,6 +175,9 @@ type CalicoManager struct {
 	awsProfile    string
 	s3Bucket      string
 	githubToken   string
+
+	// tagAtHEAD memoizes tagExistsAtHEAD so the rev-parse runs once per release.
+	tagAtHEAD *tagCheck
 
 	// imageRegistries is the list of imageRegistries to which we should publish images.
 	imageRegistries []string
@@ -516,11 +520,56 @@ func (r *CalicoManager) TagRelease(ver string) error {
 		return fmt.Errorf("failed to determine branch: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
-	_, err = r.git("tag", ver)
-	if err != nil {
+
+	tc := r.tagState(ver)
+	if tc.err != nil {
+		return fmt.Errorf("checking %s tag matches HEAD: %w", ver, tc.err)
+	}
+	if tc.atHEAD {
+		logrus.WithField("version", ver).Info("Tag already exists at HEAD, skipping tag creation")
+		return nil
+	}
+
+	if _, err = r.git("tag", ver); err != nil {
 		return fmt.Errorf("failed to tag release: %s", err)
 	}
 	return nil
+}
+
+type tagCheck struct {
+	atHEAD bool
+	err    error
+}
+
+// tagState reports whether the tag already exists and points at HEAD.
+// A tag at a different commit is a conflict, surfaced via err.
+// The result is memoized as both releasePrereqs and TagRelease consult it.
+func (r *CalicoManager) tagState(ver string) *tagCheck {
+	if r.tagAtHEAD != nil {
+		return r.tagAtHEAD
+	}
+	tc := &tagCheck{}
+	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+ver+"^{commit}")
+	if err != nil || strings.TrimSpace(tagCommit) == "" {
+		r.tagAtHEAD = tc
+		return tc
+	}
+	tagCommit = strings.TrimSpace(tagCommit)
+	headCommit, err := r.git("rev-parse", "HEAD")
+	if err != nil {
+		tc.err = fmt.Errorf("resolve HEAD: %w", err)
+		r.tagAtHEAD = tc
+		return tc
+	}
+	headCommit = strings.TrimSpace(headCommit)
+	if tagCommit != headCommit {
+		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", ver, tagCommit, headCommit)
+		r.tagAtHEAD = tc
+		return tc
+	}
+	tc.atHEAD = true
+	r.tagAtHEAD = tc
+	return tc
 }
 
 // modifyHelmChartsValues modifies values in helm charts to use the correct version.
@@ -777,6 +826,11 @@ func (r *CalicoManager) releasePrereqs() error {
 		if !reflect.DeepEqual(r.imageRegistries, defaultRegistries) {
 			return fmt.Errorf("image registries cannot be different from default registries for a release")
 		}
+	}
+
+	// Check if the tag exist and that it does not point at a different commit.
+	if tc := r.tagState(r.calicoVersion); tc.err != nil {
+		return fmt.Errorf("checking %s tag matches HEAD: %w", r.calicoVersion, tc.err)
 	}
 
 	return nil
@@ -1275,11 +1329,52 @@ func (r *CalicoManager) publishGitTag() error {
 		logrus.Info("Skipping git tag")
 		return nil
 	}
-	_, err := r.git("push", r.remote, r.calicoVersion)
+
+	lsRemote, err := r.git("ls-remote", "--tags", r.remote, "refs/tags/"+r.calicoVersion)
 	if err != nil {
+		return fmt.Errorf("query remote tag: %w", err)
+	}
+	if remoteSHA := remoteTagCommit(lsRemote, r.calicoVersion); remoteSHA != "" {
+		localSHA, err := r.git("rev-list", "-n1", r.calicoVersion)
+		if err != nil {
+			return fmt.Errorf("resolve local tag %s: %w", r.calicoVersion, err)
+		}
+		localSHA = strings.TrimSpace(localSHA)
+		if remoteSHA == localSHA {
+			logrus.WithField("version", r.calicoVersion).Info("Remote tag already exists and matches, skipping push")
+			return nil
+		}
+		return fmt.Errorf("remote tag %s already exists at %s but local tag is %s", r.calicoVersion, remoteSHA, localSHA)
+	}
+
+	if _, err := r.git("push", r.remote, r.calicoVersion); err != nil {
 		return fmt.Errorf("failed to push git tag: %w", err)
 	}
 	return nil
+}
+
+// remoteTagCommit returns the commit a remote tag points at
+// For annotated tags, used the peeled reference (refs/tags/<tag>^{}) to get the commit SHA.
+func remoteTagCommit(lsRemoteOutput, ver string) string {
+	tagRef := "refs/tags/" + ver
+	peeledRef := tagRef + "^{}"
+	var tagObjSHA, peeledSHA string
+	for _, line := range strings.Split(lsRemoteOutput, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		switch fields[1] {
+		case peeledRef:
+			peeledSHA = fields[0]
+		case tagRef:
+			tagObjSHA = fields[0]
+		}
+	}
+	if peeledSHA != "" {
+		return peeledSHA
+	}
+	return tagObjSHA
 }
 
 func (r *CalicoManager) publishGithubRelease() error {
@@ -1322,6 +1417,13 @@ Additional links:
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
 
+	// if a release is already published, stop instead.
+	if published, err := r.publishedReleaseExists(); err != nil {
+		return fmt.Errorf("publishing github release: %w", err)
+	} else if published {
+		return fmt.Errorf("github release %s is already published; refusing to modify it", r.calicoVersion)
+	}
+
 	args := []string{
 		"-username", r.githubOrg,
 		"-repository", r.repo,
@@ -1336,6 +1438,28 @@ Additional links:
 		return fmt.Errorf("failed to publish github release: %w", err)
 	}
 	return nil
+}
+
+// publishedReleaseExists reports whether a non-draft GitHub release exists for the tag.
+func (r *CalicoManager) publishedReleaseExists() (bool, error) {
+	out, err := r.runner.RunInDir(r.repoRoot, "./bin/gh", []string{
+		"release", "view", r.calicoVersion,
+		"--repo", fmt.Sprintf("%s/%s", r.githubOrg, r.repo),
+		"--json", "isDraft",
+	}, nil)
+	if err != nil {
+		if strings.Contains(out, "release not found") || strings.Contains(err.Error(), "release not found") {
+			return false, nil
+		}
+		return false, fmt.Errorf("query github release: %w", err)
+	}
+	var rel struct {
+		IsDraft bool `json:"isDraft"`
+	}
+	if err := json.Unmarshal([]byte(out), &rel); err != nil {
+		return false, fmt.Errorf("parse github release: %w", err)
+	}
+	return !rel.IsDraft, nil
 }
 
 func (r *CalicoManager) publishContainerImages() error {
