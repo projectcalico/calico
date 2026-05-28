@@ -35,11 +35,11 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils/stacktrace"
 )
@@ -138,7 +138,7 @@ func (c *Container) Stop() {
 	logCxt.Info("Container stopped")
 }
 
-func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
+func withTimeoutPanic(logCxt log.Logger, t time.Duration, f func()) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)

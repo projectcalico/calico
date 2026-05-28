@@ -10,8 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sirupsen/logrus"
-
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -100,10 +99,10 @@ func (repo *Repo) execWithOutput(args ...string) (string, error) {
 		"--ignore=extension",
 	}
 	cmdArgs = append(cmdArgs, args...)
-	logrus.Debugf("running reprepro command %s", strings.Join(cmdArgs, " "))
+	log.Debugf("running reprepro command %s", strings.Join(cmdArgs, " "))
 	out, err := command.Run("reprepro", cmdArgs)
 	if err != nil {
-		logrus.Error(out)
+		log.Error(out)
 		return "", fmt.Errorf("running 'reprepro %s': %w", strings.Join(args, " "), err)
 	}
 	return out, nil
@@ -123,7 +122,7 @@ func (repo *Repo) configFilePath() string {
 
 // CleanBaseDir removes the repo's configured base directory
 func (repo *Repo) cleanBaseDir() error {
-	logrus.Debugf("removing repo base directory %s", repo.BaseDirectory)
+	log.Debugf("removing repo base directory %s", repo.BaseDirectory)
 	if err := os.RemoveAll(repo.BaseDirectory); err != nil {
 		return fmt.Errorf("could not clean repo base directory %s: %w", repo.BaseDirectory, err)
 	}
@@ -132,7 +131,7 @@ func (repo *Repo) cleanBaseDir() error {
 
 // CleanOutputDir removes the repo's configured output directory
 func (repo *Repo) cleanOutputDir() error {
-	logrus.Debugf("removing repo output directory %s", repo.OutputDirectory)
+	log.Debugf("removing repo output directory %s", repo.OutputDirectory)
 	if err := os.RemoveAll(repo.OutputDirectory); err != nil {
 		return fmt.Errorf("could not clean repo output directory %s: %w", repo.OutputDirectory, err)
 	}

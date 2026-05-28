@@ -20,11 +20,11 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var (
@@ -52,7 +52,7 @@ func main() {
 	// Generate credentials for the Goldmane client.
 	creds, err := client.ClientCredentials(clientCert, clientKey, clientCA)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
+		log.WithError(err).Fatal("Failed to create goldmane TLS credentials.")
 	}
 
 	// Create a client to interact with Flows.

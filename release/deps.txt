@@ -17,7 +17,6 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapp
 github.com/Masterminds/semver v1.5.0
 github.com/Masterminds/semver/v3 v3.4.0
 github.com/ProtonMail/go-crypto v1.0.0
-github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
 github.com/cloudflare/circl v1.6.3
 github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5
@@ -42,14 +41,9 @@ github.com/googleapis/gax-go/v2 v2.21.0
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 github.com/klauspost/compress v1.18.5
 github.com/mitchellh/go-homedir v1.1.0
-github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/opencontainers/go-digest v1.0.0
 github.com/opencontainers/image-spec v1.1.1
 github.com/projectcalico/calico
-github.com/prometheus/client_golang v1.23.2
-github.com/prometheus/client_model v0.6.2
-github.com/prometheus/common v0.67.5
-github.com/prometheus/procfs v0.20.1
 github.com/sirupsen/logrus v1.9.4
 github.com/slack-go/slack v0.23.1
 github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
@@ -66,7 +60,6 @@ go.opentelemetry.io/otel/metric v1.43.0
 go.opentelemetry.io/otel/sdk v1.43.0
 go.opentelemetry.io/otel/sdk/metric v1.43.0
 go.opentelemetry.io/otel/trace v1.43.0
-go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
 golang.org/x/crypto v0.51.0
 golang.org/x/net v0.54.0
@@ -85,8 +78,7 @@ google.golang.org/protobuf v1.36.11
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
 
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
+local:lib/std/log
 local:release/cmd
 local:release/internal/ci
 local:release/internal/command

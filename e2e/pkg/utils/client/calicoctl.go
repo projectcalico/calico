@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -12,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/kubernetes/test/e2e/framework/kubectl"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 var _ client.Client = &calicoctlExecClient{}
@@ -64,7 +65,7 @@ func (c *calicoctlExecClient) Create(ctx context.Context, obj client.Object, opt
 	// Create a calicoctl command to create the object.
 	cmd := []string{"exec", "-i", c.name, "--", "calicoctl", "create", "-f", "-"}
 
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"data": w.String(),
 	}).Info("Executing calicoctl create command")
 
@@ -100,7 +101,7 @@ func (c *calicoctlExecClient) Delete(ctx context.Context, obj client.Object, opt
 
 	// Execute the command in the specified pod.
 	out, err := kubectl.RunKubectl(c.namespace, cmd...)
-	logrus.WithFields(logrus.Fields{"output": out}).Info("calicoctl delete output")
+	log.WithFields(log.Fields{"output": out}).Info("calicoctl delete output")
 	return err
 }
 
@@ -162,14 +163,14 @@ func (c *calicoctlExecClient) Get(ctx context.Context, key client.ObjectKey, obj
 
 	// Execute the command in the specified pod.
 	out, err := kubectl.RunKubectl(c.namespace, cmd...)
-	logrus.WithFields(logrus.Fields{"output": out}).Debug("calicoctl get output")
+	log.WithFields(log.Fields{"output": out}).Debug("calicoctl get output")
 	if err != nil {
 		return err
 	}
 
 	f := serializer.NewCodecFactory(c.scheme)
 	if err := runtime.DecodeInto(f.UniversalDecoder(), []byte(out), obj); err != nil {
-		logrus.WithError(err).Error("failed to decode calicoctl get output")
+		log.WithError(err).Error("failed to decode calicoctl get output")
 		return err
 	}
 	return nil
@@ -193,14 +194,14 @@ func (c *calicoctlExecClient) List(ctx context.Context, list client.ObjectList, 
 		return err
 	}
 	out, err := kubectl.RunKubectl(c.namespace, "exec", c.name, "--", "calicoctl", "get", kind, "-o", "yaml")
-	logrus.WithFields(logrus.Fields{"output": out}).Debug("calicoctl list output")
+	log.WithFields(log.Fields{"output": out}).Debug("calicoctl list output")
 	if err != nil {
 		return err
 	}
 
 	f := serializer.NewCodecFactory(c.scheme)
 	if err := runtime.DecodeInto(f.UniversalDecoder(), []byte(out), list); err != nil {
-		logrus.WithError(err).Error("failed to decode calicoctl list output")
+		log.WithError(err).Error("failed to decode calicoctl list output")
 		return err
 	}
 	return nil

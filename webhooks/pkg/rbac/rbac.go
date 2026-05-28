@@ -24,7 +24,6 @@ import (
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admission/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
@@ -49,7 +49,7 @@ type TierGetter interface {
 
 // RegisterHook creates a new tiered RBAC admission webhook authorizer and registers the necessary HTTP handler.
 func RegisterHook(cs kubernetes.Interface, tierGetter TierGetter, handleFn utils.HandleFn) {
-	logrus.WithFields(logrus.Fields{
+	log.WithFields(log.Fields{
 		"path": "/rbac",
 	}).Info("Registering RBAC admission webhook")
 
@@ -60,7 +60,7 @@ func RegisterHook(cs kubernetes.Interface, tierGetter TierGetter, handleFn utils
 
 	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+		log.WithError(err).Fatal("Failed to create webhook authorizer")
 	}
 	handler := NewTieredRBACHook(authorizer.NewTierAuthorizer(authz), tierGetter).Handler()
 
@@ -91,7 +91,7 @@ func (h *tieredRBACHook) Handler() utils.AdmissionReviewHandler {
 }
 
 func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	logCtx := logrus.WithFields(logrus.Fields{
+	logCtx := log.WithFields(log.Fields{
 		"uid":       ar.Request.UID,
 		"kind":      ar.Request.Kind,
 		"resource":  ar.Request.Resource,
@@ -178,7 +178,7 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 	if tier == "" {
 		tier = oldTier
 	}
-	logCtx = logCtx.WithFields(logrus.Fields{"newTier": newTier, "oldTier": oldTier})
+	logCtx = logCtx.WithFields(log.Fields{"newTier": newTier, "oldTier": oldTier})
 	if err = h.authz.AuthorizeTierOperation(ctx, obj.GetName(), tier); err != nil {
 		logCtx.WithError(err).Warn("User is not authorized")
 		return &v1.AdmissionResponse{
@@ -222,7 +222,7 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 
 // checkTierExists verifies the tier exists and is not terminating. Returns an AdmissionResponse if
 // the tier is invalid, or nil if the tier is valid.
-func (h *tieredRBACHook) checkTierExists(ctx context.Context, logCtx *logrus.Entry, tierName string) *v1.AdmissionResponse {
+func (h *tieredRBACHook) checkTierExists(ctx context.Context, logCtx log.Logger, tierName string) *v1.AdmissionResponse {
 	tier, err := h.tierGetter.Get(ctx, tierName, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {

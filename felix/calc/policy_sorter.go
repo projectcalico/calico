@@ -21,8 +21,8 @@ import (
 
 	"github.com/google/btree"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -57,7 +57,7 @@ func (poc *PolicySorter) Sorted() []*TierInfo {
 				return true
 			} else {
 				// A key for a tier that isn't found in the map is highly unexpected so panic
-				logrus.WithField("name", t.Name).Panic("Bug: tier present in map but not the sorted tree.")
+				log.WithField("name", t.Name).Panic("Bug: tier present in map but not the sorted tree.")
 				return false
 			}
 		})
@@ -69,11 +69,11 @@ func (poc *PolicySorter) OnUpdate(update api.Update) (dirty bool) {
 	switch key := update.Key.(type) {
 	case model.TierKey:
 		tierName := key.Name
-		logCxt := logrus.WithField("tierName", tierName)
+		logCxt := log.WithField("tierName", tierName)
 		tierInfo := poc.tiers[tierName]
 		if update.Value != nil {
 			newTier := update.Value.(*model.Tier)
-			logCxt.WithFields(logrus.Fields{
+			logCxt.WithFields(log.Fields{
 				"order":         newTier.Order,
 				"defaultAction": newTier.DefaultAction,
 			}).Debug("Tier update")
@@ -177,7 +177,7 @@ func ExtractPolicyMetadata(policy *model.Policy) policyMetadata {
 	if policy.Tier == "" {
 		// This shouldn't happen - all policies should have a tier assigned by now.
 		// Log a warning and assign to default tier to be safe.
-		logrus.WithField("policy", policy).Warn("Policy has no tier assigned")
+		log.WithField("policy", policy).Warn("Policy has no tier assigned")
 		m.Tier = names.DefaultTierName
 	}
 	if policy.Order == nil {
@@ -264,7 +264,7 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 
 	if tierName == "" {
 		// Failed to find a tier name for this policy. This should not happen.
-		logrus.WithFields(logrus.Fields{
+		log.WithFields(log.Fields{
 			"policyKey": key,
 			"newPolicy": newPolicy,
 		}).Warn("Failed to find tier for policy during policy sorter update.")
@@ -272,8 +272,8 @@ func (poc *PolicySorter) UpdatePolicy(key model.PolicyKey, newPolicy *policyMeta
 
 	// If the tier has changed, remove from old tier first.
 	if oldTierInfo != nil && oldTierInfo != tierInfo {
-		if logrus.IsLevelEnabled(logrus.DebugLevel) {
-			logrus.WithFields(logrus.Fields{
+		if log.IsLevelEnabled(log.DebugLevel) {
+			log.WithFields(log.Fields{
 				"policyKey":   key,
 				"oldTierName": oldTierInfo.Name,
 				"newTierName": tierName,
