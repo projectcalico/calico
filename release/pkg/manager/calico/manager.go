@@ -530,8 +530,8 @@ func (r *CalicoManager) TagRelease(ver string) error {
 		return nil
 	}
 
-	if _, err = r.git("tag", ver); err != nil {
-		return fmt.Errorf("failed to tag release: %s", err)
+	if _, err = r.git("tag", "-a", "-m", "Release "+ver, ver); err != nil {
+		return fmt.Errorf("tag release: %w", err)
 	}
 	return nil
 }
