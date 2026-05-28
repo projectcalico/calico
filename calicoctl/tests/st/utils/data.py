@@ -1345,6 +1345,7 @@ bgpconfig_name1_rev1 = {
         'nodeToNodeMeshEnabled': True,
         'asNumber': 6512,
         'serviceLoadBalancerAggregation': 'Enabled',
+        'programClusterRoutes': 'Disabled',
     }
 }
 
@@ -1408,6 +1409,7 @@ bgpconfig_name3_rev1 = {
     'spec': {
         'logSeverityScreen': 'Debug',
         'serviceLoadBalancerAggregation': 'Enabled',
+        'programClusterRoutes': 'Disabled',
     }
 }
 
@@ -1420,6 +1422,7 @@ bgpconfig_name4_rev1 = {
     'spec': {
         'logSeverityScreen': 'Debug',
         'serviceLoadBalancerAggregation': 'Enabled',
+        'programClusterRoutes': 'Disabled',
     }
 }
 
