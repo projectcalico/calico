@@ -1107,10 +1107,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			collectorConntrackInfoReader = collectorCtInfoReader
 		}
 
-		// Add connection limit scanner as a safety net for counter drift correction.
-		// The scanner periodically recounts active TCP connections and writes the
-		// true count to the cali_qos map, correcting any drift from missed
-		// decrements or LRU eviction.
+		// Add connection limit scanner as a low-frequency drift safety net.
+		// It piggybacks on the CT scan loop but downsamples its recount work
+		// internally (see connLimitScannerRunEveryN in connlimit_scanner.go),
+		// so the actual recount runs roughly every 60s. It covers silent
+		// CT-entry purges that the BPF fast-path can't observe: half-close,
+		// idle TCPEstablished timeout, network partition, and LRU eviction.
 		if bpfEndpointManager != nil {
 			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
 				return bpfEndpointManager.GetConnLimitedPodInfo()

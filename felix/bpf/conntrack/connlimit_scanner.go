@@ -50,11 +50,21 @@ type connlimitKey struct {
 // periodically recounts all established connections and overwrites the count,
 // serving as the sole decrement mechanism (connections that close or time out
 // simply aren't counted on the next scan).
+// connLimitScannerRunEveryN downsamples the scanner relative to the parent CT
+// scan loop. With timeouts.ScanPeriod = 10s and N = 6 the scanner does a real
+// recount roughly every 60s; the intervening 5 iterations early-return in
+// IterationStart / Check / IterationEnd. The scanner only exists as a drift
+// safety net for silent CT-entry purges (half-close, idle TCPEstablished,
+// network partition), so a ~60s recovery window is adequate.
+const connLimitScannerRunEveryN = 6
+
 type ConnLimitScanner struct {
-	qosMap     maps.MapWithUpdateWithFlags
-	getPodInfo ConnLimitPodInfoProvider
-	podInfo    map[string]ConnLimitPodInfo
-	counts     map[connlimitKey]uint32
+	qosMap      maps.MapWithUpdateWithFlags
+	getPodInfo  ConnLimitPodInfoProvider
+	podInfo     map[string]ConnLimitPodInfo
+	counts      map[connlimitKey]uint32
+	iterCount   int
+	skipThisRun bool
 }
 
 // NewConnLimitScanner creates a new ConnLimitScanner.
@@ -69,8 +79,15 @@ func NewConnLimitScanner(
 	}
 }
 
-// IterationStart satisfies EntryScannerSynced
+// IterationStart satisfies EntryScannerSynced. Downsamples the recount to run
+// on iterations 1, 1+N, 1+2N, ... so a recount fires on the first CT scan
+// after Felix starts (rather than waiting for the Nth scan).
 func (s *ConnLimitScanner) IterationStart() {
+	s.iterCount++
+	s.skipThisRun = connLimitScannerRunEveryN > 1 && (s.iterCount-1)%connLimitScannerRunEveryN != 0
+	if s.skipThisRun {
+		return
+	}
 	s.podInfo = s.getPodInfo()
 	s.counts = make(map[connlimitKey]uint32)
 }
@@ -79,6 +96,9 @@ func (s *ConnLimitScanner) IterationStart() {
 // connection against the appropriate interface+direction based on the pod IP
 // and opener bit.
 func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get EntryGet) (ScanVerdict, int64) {
+	if s.skipThisRun {
+		return ScanVerdictOK, 0
+	}
 	if len(s.podInfo) == 0 {
 		return ScanVerdictOK, 0
 	}
@@ -144,6 +164,9 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 // the cali_qos BPF map, updating only the current_count field while preserving
 // all other fields (packet rate config/state).
 func (s *ConnLimitScanner) IterationEnd() {
+	if s.skipThisRun {
+		return
+	}
 	if len(s.podInfo) == 0 {
 		return
 	}
