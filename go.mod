@@ -62,6 +62,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
+	github.com/projectcalico/calico/lib/logrus v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
@@ -395,6 +396,7 @@ require (
 replace (
 	github.com/projectcalico/api => ./api
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
+	github.com/projectcalico/calico/lib/logrus => ./lib/logrus
 	github.com/projectcalico/calico/lib/std => ./lib/std
 
 	// Need replacements for all the k8s subsidiary projects that are pulled in indirectly because
