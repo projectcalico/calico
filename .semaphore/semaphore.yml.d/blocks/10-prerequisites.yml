@@ -136,8 +136,11 @@
   # arches) and uploads the image tarball to GCS for downstream consumers.
   # Publishing to Docker Hub happens in a separate post-build promotion
   # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+  #
+  # Consumers: calico/node and the istio CNI install image. If a third
+  # consumer is added, extend the CHANGE_IN argument list below to match.
   run:
-    when: "true"
+    when: "${CHANGE_IN(node,istio,non-go:/hack/rpms/nftables/)}"
   dependencies: []
   task:
     agent:
@@ -193,12 +196,18 @@
               gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
             fi
 - name: "Build: calico image"
-  # Always build and cache the calico image so that downstream CI blocks can
-  # load it from GCS instead of rebuilding per component. This block is the
-  # sole producer for the "calico" build-cache group — every Go component
-  # block on master restores the module + build cache populated here.
+  # Build and cache the calico image so that downstream CI blocks can load it
+  # from GCS instead of rebuilding per component. This block is the sole
+  # producer for the "calico" build-cache group — every Go component block on
+  # master restores the module + build cache populated here.
+  #
+  # Gated on cmd/calico's transitive Go import closure, which covers every
+  # component subcommand the unified binary registers. New Go components join
+  # via cmd/calico's import set and pick up this gate automatically.
+  # docker/calico/ is the image's Dockerfile and entrypoint assets, so a
+  # change there also has to retrigger the build.
   run:
-    when: "true"
+    when: "${CHANGE_IN(cmd/calico,non-go:/docker/calico/)}"
   dependencies: []
   task:
     env_vars:
