@@ -246,10 +246,6 @@ func NFTSetNameForSelector(ipVersion int, rawSelector string) string {
 	return nftables.LegalizeSetName(base)
 }
 
-// IPSetName returns the dataplane name of the "main" IP set with the given ID
-// (e.g. rules.IPSetIDNetworkPools) for the given IP version, using the standard
-// "cali" prefix. For example, IPSetName(rules.IPSetIDNetworkPools, 4) returns
-// "cali40network-ip-pools".
 func IPSetName(ipSetID string, ipVersion uint8) string {
 	ipFamily := ipsets.IPFamilyV4
 	if ipVersion == 6 {
@@ -258,11 +254,6 @@ func IPSetName(ipSetID string, ipVersion uint8) string {
 	return ipsets.NewIPVersionConfig(ipFamily, rules.IPSetNamePrefix, nil, nil).NameForMainIPSet(ipSetID)
 }
 
-// NFTSetName returns the nftables set reference for the "main" IP set with the
-// given ID for the given IP version. It is the dataplane set name (see
-// IPSetName) prefixed with "@", as used in nftables rule expressions. For
-// example, NFTSetName(rules.IPSetIDNetworkPools, 4) returns
-// "@cali40network-ip-pools".
 func NFTSetName(ipSetID string, ipVersion uint8) string {
 	return "@" + IPSetName(ipSetID, ipVersion)
 }

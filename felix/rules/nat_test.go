@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -239,3 +239,11 @@ var _ = Describe("NAT", func() {
 		}))
 	})
 })
+
+func ipSetName(ipSetID string, ipVersion uint8) string {
+	family := ipsets.IPFamilyV4
+	if ipVersion == 6 {
+		family = ipsets.IPFamilyV6
+	}
+	return ipsets.NewIPVersionConfig(family, ipsets.IPSetNamePrefix, nil, nil).NameForMainIPSet(ipSetID)
+}

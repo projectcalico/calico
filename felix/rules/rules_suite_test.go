@@ -20,24 +20,11 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-}
-
-// ipSetName returns the dataplane name of the "main" IP set with the given ID
-// (e.g. IPSetIDNetworkPools) for the given IP version, using the standard "cali"
-// prefix used throughout these tests. For example,
-// ipSetName(IPSetIDNetworkPools, 4) returns "cali40network-ip-pools".
-func ipSetName(ipSetID string, ipVersion uint8) string {
-	family := ipsets.IPFamilyV4
-	if ipVersion == 6 {
-		family = ipsets.IPFamilyV6
-	}
-	return ipsets.NewIPVersionConfig(family, ipsets.IPSetNamePrefix, nil, nil).NameForMainIPSet(ipSetID)
 }
 
 func TestRules(t *testing.T) {
