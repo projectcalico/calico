@@ -78,12 +78,13 @@ function import_windows_images() {
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
   ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
 
-  # The tarballs are built as <name>:latest; import under the calico/ repo and
-  # then re-tag to test-build so the ref matches what the operator renders.
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/node-windows c:\calico-node-windows.tar --all-platforms'
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/cni-windows c:\calico-cni-plugin-windows.tar --all-platforms'
-  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/calico/node-windows:latest docker.io/calico/node-windows:${DEV_IMAGE_TAG}"
-  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/calico/cni-windows:latest docker.io/calico/cni-windows:${DEV_IMAGE_TAG}"
+  # The tarballs carry the ref <name>:latest, so ctr imports them under
+  # docker.io/library/. Re-tag to calico/<name>:test-build to match what the
+  # operator renders.
+  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import c:\calico-node-windows.tar --all-platforms'
+  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import c:\calico-cni-plugin-windows.tar --all-platforms'
+  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/node-windows:latest docker.io/calico/node-windows:${DEV_IMAGE_TAG}"
+  ${WINDOWS_CONNECT_COMMAND} "c:\\bin\\ctr.exe --namespace k8s.io images tag docker.io/library/cni-windows:latest docker.io/calico/cni-windows:${DEV_IMAGE_TAG}"
   echo "Imported Windows images onto ${WINDOWS_EIP}"
 }
 
