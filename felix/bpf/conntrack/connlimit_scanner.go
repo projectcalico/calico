@@ -186,7 +186,7 @@ func (s *ConnLimitScanner) IterationEnd() {
 	batchK := make([][]byte, 0, batchCap)
 	batchV := make([][]byte, 0, batchCap)
 
-	appendUpdate := func(ifindex, direction uint32, count int32) {
+	appendUpdate := func(ifindex, direction uint32, count uint32) {
 		if k, v, changed := s.prepareUpdate(ifindex, direction, count); changed {
 			batchK = append(batchK, k)
 			batchV = append(batchV, v)
@@ -195,7 +195,7 @@ func (s *ConnLimitScanner) IterationEnd() {
 
 	// Active counts.
 	for key, count := range s.counts {
-		appendUpdate(key.ifindex, key.direction, int32(count))
+		appendUpdate(key.ifindex, key.direction, uint32(count))
 	}
 
 	// Zero out counts for limited pods with no active connections.
@@ -237,7 +237,7 @@ func (s *ConnLimitScanner) IterationEnd() {
 // and a new value with current_count replaced by `count` (preserving the
 // packet-rate fields and max_connections). Returns changed=false when the
 // existing count already matches `count`, or when the read fails.
-func (s *ConnLimitScanner) prepareUpdate(ifindex, direction uint32, count int32) (keyBytes, valBytes []byte, changed bool) {
+func (s *ConnLimitScanner) prepareUpdate(ifindex, direction uint32, count uint32) (keyBytes, valBytes []byte, changed bool) {
 	qosKey := qos.NewKey(ifindex, direction)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {

@@ -1409,40 +1409,35 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * The Go-side CT scanner periodically recounts and corrects drift.
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped &&
-			ctx->state->ip_proto == IPPROTO_TCP &&
 			ct_result_is_syn(ctx->state->ct_result.rc)) {
-		bool reject = false;
 		if (ctx->state->ct_result.rc & CT_RES_CONNLIMIT_FIRST_SYN) {
 			/* First SYN: check and increment. */
-			reject = qos_connlimit_check_and_increment(ctx) < 0;
-		} else if (ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
-			/* SYN retransmission of a previously rejected connection. */
-			CALI_DEBUG("connlimit: retransmission of rejected connection");
-			reject = true;
-		}
-		if (reject) {
-			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
-			/* Mark the CT entry so retransmissions are unconditionally
-			 * rejected without re-checking the counter (which may have
-			 * changed due to scanner recounts). */
-			{
-				bool sltd = src_lt_dest(&ctx->state->ip_src,
+			if (qos_connlimit_check_and_increment(ctx) < 0) {
+				CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
+				/* Mark the CT entry so retransmissions are unconditionally
+				 * rejected without re-checking the counter (which may have
+				 * changed due to scanner recounts). */
+				{
+					bool sltd = src_lt_dest(&ctx->state->ip_src,
 							&ctx->state->ip_dst,
 							ctx->state->sport,
 							ctx->state->dport);
-				struct calico_ct_key ck;
-				fill_ct_key(&ck, sltd, ctx->state->ip_proto,
-					    &ctx->state->ip_src, &ctx->state->ip_dst,
-					    ctx->state->sport, ctx->state->dport);
-				struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
-				if (cv) {
-					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
+					struct calico_ct_key ck;
+					fill_ct_key(&ck, sltd, ctx->state->ip_proto,
+							&ctx->state->ip_src, &ctx->state->ip_dst,
+							ctx->state->sport, ctx->state->dport);
+					struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
+					if (cv) {
+						ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
+					}
 				}
-			}
-			if (!skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 				ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
 				CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
+				goto deny;
 			}
+		} else if (ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+			/* SYN retransmission of a previously rejected connection. */
+			CALI_DEBUG("connlimit: retransmission of rejected connection");
 			goto deny;
 		}
 	}
@@ -1529,10 +1524,8 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
-			if (!skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
-				ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
-				CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
-			}
+			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
 	}

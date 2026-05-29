@@ -138,13 +138,6 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 	ret;												\
 })
 
-#define ct_value_clear_flags(v, f) do {		\
-	(v)->flags  &= ~((f) & 0xff);		\
-	(v)->flags2 &= ~(((f) >> 8) & 0xff);	\
-	(v)->flags3 &= ~(((f) >> 16) & 0xff);	\
-	(v)->flags4 &= ~(((f) >> 24) & 0xff);	\
-} while(0)
-
 struct ct_lookup_ctx {
 	__u8 proto;
 	DECLARE_IP_ADDR(src);

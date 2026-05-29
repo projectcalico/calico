@@ -25,8 +25,8 @@ struct calico_qos_val {
 	__s16 padding[3]; // alignment
 	__u64 packet_rate_last_update;
 	// connection limit
-	__s32 max_connections; // 0 = no limit, >0 = limit
-	__s32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
+	__u32 max_connections; // 0 = no limit, >0 = limit
+	__u32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
 };
 
 // 2*IFACE_STATE_MAP_SIZE because it will potentially have 2 entries for each interface (ingress/egress)

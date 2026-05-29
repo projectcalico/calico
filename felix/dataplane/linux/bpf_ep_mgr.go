@@ -2662,9 +2662,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			}
 
 			// Connection limit fields
-			var maxConnections, currentCount int32
+			var maxConnections, currentCount uint32
 			if hasIngressCL {
-				maxConnections = int32(wep.QosControls.IngressMaxConnections)
+				maxConnections = uint32(wep.QosControls.IngressMaxConnections)
 				currentCount = existing.CurrentCount() // preserve current count
 			}
 
@@ -2719,9 +2719,9 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			}
 
 			// Connection limit fields
-			var maxConnections, currentCount int32
+			var maxConnections, currentCount uint32
 			if hasEgressCL {
-				maxConnections = int32(wep.QosControls.EgressMaxConnections)
+				maxConnections = uint32(wep.QosControls.EgressMaxConnections)
 				currentCount = existing.CurrentCount() // preserve current count
 			}
 
