@@ -51,8 +51,12 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 	if !opts.EnableValidatingAdmissionPolicy {
 		disabledPlugins = append(disabledPlugins, validating.PluginName)
 	}
-	opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
-	opts.RecommendedOptions.Admission.DisablePlugins = disabledPlugins
+	if opts.RecommendedOptions.Admission == nil {
+		opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
+	}
+	opts.RecommendedOptions.Admission.DisablePlugins = append(
+		opts.RecommendedOptions.Admission.DisablePlugins, disabledPlugins...,
+	)
 
 	config, err := opts.Config()
 	if err != nil {
