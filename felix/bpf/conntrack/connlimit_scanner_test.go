@@ -19,8 +19,68 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 )
+
+// fakeQoSMap is a tiny in-memory implementation of connLimitQoSMap used by
+// the batching tests. We don't reuse felix/bpf/mock.Map because that package
+// imports conntrack (via cleaner.go), which would create a test-time import
+// cycle.
+type fakeQoSMap struct {
+	contents         map[string][]byte
+	batchUpdateCalls int
+	lastBatchSize    int
+	lastBatchFlags   uint64
+	batchUpdateErr   error
+}
+
+func newFakeQoSMap() *fakeQoSMap {
+	return &fakeQoSMap{contents: map[string][]byte{}}
+}
+
+func (f *fakeQoSMap) Get(k []byte) ([]byte, error) {
+	v, ok := f.contents[string(k)]
+	if !ok {
+		return nil, unix.ENOENT
+	}
+	cp := make([]byte, len(v))
+	copy(cp, v)
+	return cp, nil
+}
+
+func (f *fakeQoSMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
+	f.batchUpdateCalls++
+	f.lastBatchSize = len(ks)
+	f.lastBatchFlags = flags
+	if f.batchUpdateErr != nil {
+		return 0, f.batchUpdateErr
+	}
+	for i := range ks {
+		cp := make([]byte, len(vs[i]))
+		copy(cp, vs[i])
+		f.contents[string(ks[i])] = cp
+	}
+	return len(ks), nil
+}
+
+func (f *fakeQoSMap) seed(t *testing.T, ifindex, direction uint32, maxConn, current int32) {
+	t.Helper()
+	k := qos.NewKey(ifindex, direction).AsBytes()
+	v := qos.NewValue(100, 50, 25, 12345, maxConn, current).AsBytes()
+	f.contents[string(k)] = v[:]
+}
+
+func (f *fakeQoSMap) currentCount(t *testing.T, ifindex, direction uint32) int32 {
+	t.Helper()
+	bytes, err := f.Get(qos.NewKey(ifindex, direction).AsBytes())
+	if err != nil {
+		t.Fatalf("fake Get for (%d,%d) failed: %v", ifindex, direction, err)
+	}
+	return qos.ValueFromBytes(bytes).CurrentCount()
+}
 
 // TestConnLimitScannerCheckNoPodsIsNoOp verifies that the scanner's Check
 // method is a no-op when no pods have connection limits configured.
@@ -438,5 +498,132 @@ func TestConnLimitScannerDownsamples(t *testing.T) {
 	wantCalls := cycles + 1
 	if podInfoCalls != wantCalls {
 		t.Errorf("getPodInfo calls=%d, want %d (one per real recount across %d cycles + 1)", podInfoCalls, wantCalls, cycles)
+	}
+}
+
+// TestConnLimitScannerBatchesActiveCountUpdates verifies that IterationEnd
+// batches updates for entries whose counts changed, preserves the packet-rate
+// fields, and leaves unchanged entries alone.
+func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
+	m := newFakeQoSMap()
+
+	// Three limited pods: two whose counts changed, one whose count is
+	// already correct (must not appear in the batch).
+	const (
+		ifA = uint32(11)
+		ifB = uint32(22)
+		ifC = uint32(33)
+	)
+	m.seed(t, ifA, 1, 5, 5) // ingress, will go to 2
+	m.seed(t, ifB, 0, 5, 0) // egress, will go to 3
+	m.seed(t, ifC, 1, 5, 1) // ingress, no change
+
+	scanner := &ConnLimitScanner{
+		qosMap: m,
+		podInfo: map[string]ConnLimitPodInfo{
+			"\x0a\x41\x00\x01": {IfIndex: ifA, HasIngressLimit: true},
+			"\x0a\x41\x00\x02": {IfIndex: ifB, HasEgressLimit: true},
+			"\x0a\x41\x00\x03": {IfIndex: ifC, HasIngressLimit: true},
+		},
+		counts: map[connlimitKey]uint32{
+			{ifindex: ifA, direction: 1}: 2,
+			{ifindex: ifB, direction: 0}: 3,
+			{ifindex: ifC, direction: 1}: 1,
+		},
+	}
+
+	scanner.IterationEnd()
+
+	if got, want := m.currentCount(t, ifA, 1), int32(2); got != want {
+		t.Errorf("ifA ingress current=%d, want %d", got, want)
+	}
+	if got, want := m.currentCount(t, ifB, 0), int32(3); got != want {
+		t.Errorf("ifB egress current=%d, want %d", got, want)
+	}
+	if got, want := m.currentCount(t, ifC, 1), int32(1); got != want {
+		t.Errorf("ifC ingress current=%d, want %d (unchanged)", got, want)
+	}
+
+	// Exactly one BatchUpdate syscall, containing the two changed entries.
+	if m.batchUpdateCalls != 1 {
+		t.Errorf("expected 1 BatchUpdate call, got %d", m.batchUpdateCalls)
+	}
+	if m.lastBatchSize != 2 {
+		t.Errorf("expected batch size 2 (the changed entries), got %d", m.lastBatchSize)
+	}
+	if m.lastBatchFlags != unix.BPF_F_LOCK {
+		t.Errorf("expected batch flags=BPF_F_LOCK (0x%x), got 0x%x", unix.BPF_F_LOCK, m.lastBatchFlags)
+	}
+
+	// Packet-rate fields and max_connections must survive the recount.
+	bytes, err := m.Get(qos.NewKey(ifA, 1).AsBytes())
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	v := qos.ValueFromBytes(bytes)
+	if v.PacketRate() != 100 || v.PacketBurst() != 50 || v.MaxConnections() != 5 {
+		t.Errorf("packet-rate / max_connections fields not preserved: rate=%d burst=%d max=%d",
+			v.PacketRate(), v.PacketBurst(), v.MaxConnections())
+	}
+}
+
+// TestConnLimitScannerBatchNoOpWhenNothingChanged verifies that when the
+// scanner's recount matches the existing map state, IterationEnd issues no
+// BatchUpdate at all.
+func TestConnLimitScannerBatchNoOpWhenNothingChanged(t *testing.T) {
+	m := newFakeQoSMap()
+	m.seed(t, 11, 1, 5, 2)
+	m.seed(t, 22, 0, 5, 3)
+
+	scanner := &ConnLimitScanner{
+		qosMap: m,
+		podInfo: map[string]ConnLimitPodInfo{
+			"\x0a\x41\x00\x01": {IfIndex: 11, HasIngressLimit: true},
+			"\x0a\x41\x00\x02": {IfIndex: 22, HasEgressLimit: true},
+		},
+		counts: map[connlimitKey]uint32{
+			{ifindex: 11, direction: 1}: 2,
+			{ifindex: 22, direction: 0}: 3,
+		},
+	}
+
+	scanner.IterationEnd()
+	if m.batchUpdateCalls != 0 {
+		t.Errorf("expected 0 BatchUpdate calls when nothing changed, got %d", m.batchUpdateCalls)
+	}
+}
+
+// TestConnLimitScannerBatchZeroesOutInactiveLimits verifies that pods with
+// limits but no entries in s.counts get their current_count batched to 0.
+func TestConnLimitScannerBatchZeroesOutInactiveLimits(t *testing.T) {
+	m := newFakeQoSMap()
+	// Stale non-zero current_count from a previous scan; no active connections
+	// counted this iteration. Must be reset to 0.
+	m.seed(t, 11, 1, 5, 4) // ingress
+	m.seed(t, 22, 0, 5, 2) // egress
+
+	scanner := &ConnLimitScanner{
+		qosMap: m,
+		podInfo: map[string]ConnLimitPodInfo{
+			"\x0a\x41\x00\x01": {IfIndex: 11, HasIngressLimit: true},
+			"\x0a\x41\x00\x02": {IfIndex: 22, HasEgressLimit: true},
+		},
+		counts: map[connlimitKey]uint32{}, // no active connections
+	}
+
+	scanner.IterationEnd()
+
+	if got := m.currentCount(t, 11, 1); got != 0 {
+		t.Errorf("ifindex 11 ingress: got current=%d, want 0", got)
+	}
+	if got := m.currentCount(t, 22, 0); got != 0 {
+		t.Errorf("ifindex 22 egress: got current=%d, want 0", got)
+	}
+	// Both zero-outs should be in a single batch.
+	if m.batchUpdateCalls != 1 {
+		t.Errorf("expected 1 BatchUpdate call, got %d", m.batchUpdateCalls)
+	}
+	if m.lastBatchSize != 2 {
+		t.Errorf("expected batch size 2, got %d", m.lastBatchSize)
 	}
 }

@@ -58,8 +58,17 @@ type connlimitKey struct {
 // network partition), so a ~60s recovery window is adequate.
 const connLimitScannerRunEveryN = 6
 
+// connLimitQoSMap is the subset of the QoS BPF map API that the scanner needs.
+// Narrowed from maps.MapWithUpdateWithFlags so tests can supply a small fake
+// without taking a dependency on the full Map interface (avoids an import
+// cycle with felix/bpf/mock, which itself depends on conntrack).
+type connLimitQoSMap interface {
+	Get(k []byte) ([]byte, error)
+	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
+}
+
 type ConnLimitScanner struct {
-	qosMap      maps.MapWithUpdateWithFlags
+	qosMap      connLimitQoSMap
 	getPodInfo  ConnLimitPodInfoProvider
 	podInfo     map[string]ConnLimitPodInfo
 	counts      map[connlimitKey]uint32
@@ -69,7 +78,7 @@ type ConnLimitScanner struct {
 
 // NewConnLimitScanner creates a new ConnLimitScanner.
 func NewConnLimitScanner(
-	qosMap maps.MapWithUpdateWithFlags,
+	qosMap connLimitQoSMap,
 	getPodInfo ConnLimitPodInfoProvider,
 ) *ConnLimitScanner {
 	return &ConnLimitScanner{
@@ -160,9 +169,9 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 	return ScanVerdictOK, 0
 }
 
-// IterationEnd satisfies EntryScannerSynced. Writes the recounted values to
-// the cali_qos BPF map, updating only the current_count field while preserving
-// all other fields (packet rate config/state).
+// IterationEnd satisfies EntryScannerSynced. Collects per-entry updates for
+// the cali_qos BPF map (preserving all fields except current_count) and
+// writes them in a single batch.
 func (s *ConnLimitScanner) IterationEnd() {
 	if s.skipThisRun {
 		return
@@ -173,8 +182,20 @@ func (s *ConnLimitScanner) IterationEnd() {
 
 	log.WithField("counts", s.counts).WithField("numPods", len(s.podInfo)).Debug("ConnLimitScanner: recount done")
 
+	batchCap := len(s.counts) + 2*len(s.podInfo)
+	batchK := make([][]byte, 0, batchCap)
+	batchV := make([][]byte, 0, batchCap)
+
+	appendUpdate := func(ifindex, direction uint32, count int32) {
+		if k, v, changed := s.prepareUpdate(ifindex, direction, count); changed {
+			batchK = append(batchK, k)
+			batchV = append(batchV, v)
+		}
+	}
+
+	// Active counts.
 	for key, count := range s.counts {
-		s.updateCount(key.ifindex, key.direction, int32(count))
+		appendUpdate(key.ifindex, key.direction, int32(count))
 	}
 
 	// Zero out counts for limited pods with no active connections.
@@ -185,7 +206,7 @@ func (s *ConnLimitScanner) IterationEnd() {
 			if !seen[key] {
 				seen[key] = true
 				if _, counted := s.counts[key]; !counted {
-					s.updateCount(pod.IfIndex, 1, 0)
+					appendUpdate(pod.IfIndex, 1, 0)
 				}
 			}
 		}
@@ -194,36 +215,47 @@ func (s *ConnLimitScanner) IterationEnd() {
 			if !seen[key] {
 				seen[key] = true
 				if _, counted := s.counts[key]; !counted {
-					s.updateCount(pod.IfIndex, 0, 0)
+					appendUpdate(pod.IfIndex, 0, 0)
 				}
 			}
 		}
 	}
+
+	if len(batchK) == 0 {
+		return
+	}
+	applied, err := s.qosMap.BatchUpdate(batchK, batchV, unix.BPF_F_LOCK)
+	if err != nil {
+		log.WithError(err).
+			WithField("applied", applied).
+			WithField("requested", len(batchK)).
+			Warn("ConnLimitScanner: BatchUpdate failed; some entries may not have been recounted.")
+	}
 }
 
-// updateCount reads the QoS map entry, preserves all fields except
-// current_count, and writes it back with the new count.
-func (s *ConnLimitScanner) updateCount(ifindex, direction uint32, count int32) {
+// prepareUpdate reads the existing QoS map entry and returns the key bytes
+// and a new value with current_count replaced by `count` (preserving the
+// packet-rate fields and max_connections). Returns changed=false when the
+// existing count already matches `count`, or when the read fails.
+func (s *ConnLimitScanner) prepareUpdate(ifindex, direction uint32, count int32) (keyBytes, valBytes []byte, changed bool) {
 	qosKey := qos.NewKey(ifindex, direction)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {
 		if !maps.IsNotExists(err) {
 			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading QoS map entry.")
 		}
-		return
+		return nil, nil, false
 	}
 	existing := qos.ValueFromBytes(qosValBytes)
 	if existing.CurrentCount() == count {
-		return // no change needed
+		return nil, nil, false
 	}
 	newVal := qos.NewValue(
 		existing.PacketRate(), existing.PacketBurst(),
 		existing.PacketRateTokens(), existing.PacketRateLastUpdate(),
 		existing.MaxConnections(), count,
 	)
-	if err := s.qosMap.UpdateWithFlags(qosKey.AsBytes(), newVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
-		log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("Error updating QoS map during connlimit recount.")
-	}
+	return qosKey.AsBytes(), newVal.AsBytes(), true
 }
 
 // ipToString converts a net.IP to a string key for map lookup.
