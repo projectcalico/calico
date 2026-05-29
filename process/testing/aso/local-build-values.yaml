@@ -18,8 +18,9 @@ goldmane:
 whisker:
   enabled: false
 
-# Operator image built in-job by build-operator.sh and imported onto the
-# Linux node as calico/operator:test-build.
+# Operator image built in-job by build-operator.sh and imported onto the Linux
+# node as calico/operator:<tag>. install-calico.sh overrides version with
+# DEV_IMAGE_TAG (test-build by default) so it tracks the imported images.
 tigeraOperator:
   image: calico/operator
   version: test-build

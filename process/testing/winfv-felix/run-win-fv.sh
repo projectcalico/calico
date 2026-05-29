@@ -36,16 +36,21 @@ pushd "${ASO_DIR}"
 make setup-kubeadm
 popd
 
-# For the local-build flow, build the operator and helm chart from the commit
-# under test and import every component image onto the nodes before installing
-# Calico. This keeps the operator, Linux, and Windows images all on the same
-# commit instead of mixing a cached operator with hashrelease components.
+# For the local-build flow, build a fresh operator image, package the helm
+# chart, and import every component image onto the nodes before installing
+# Calico. The Linux and Windows component images are built from the commit under
+# test; the operator image tracks tigera/operator master but is pointed at those
+# component images. This replaces the old mix of a cached operator:master with
+# hashrelease components, which skewed against the node binary built here.
 if [[ "${RELEASE_STREAM:-}" == "local-build" ]]; then
-    export DEV_IMAGE_REGISTRY="${DEV_IMAGE_REGISTRY:-docker.io}"
-    export DEV_IMAGE_PATH="${DEV_IMAGE_PATH:-calico}"
+    # The pipeline assumes docker.io/calico image paths (the Linux images come
+    # from the GCS cache as calico/<name> and the Windows images build to the
+    # same path), so only the tag is parameterized.
+    export DEV_IMAGE_REGISTRY="docker.io"
+    export DEV_IMAGE_PATH="calico"
     export DEV_IMAGE_TAG="${DEV_IMAGE_TAG:-test-build}"
 
-    # Build the operator image (renders component images at test-build) and
+    # Build the operator image (renders component images at DEV_IMAGE_TAG) and
     # package the chart that install-calico installs.
     pushd "${REPO_DIR}/hack/test/kind/infra"
     ./build-operator.sh

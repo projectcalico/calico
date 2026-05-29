@@ -125,9 +125,13 @@ if [[ ${RELEASE_STREAM} == 'local-build' ]]; then
         echo "ERROR: operator chart not found at ${CHART}; run 'make chart' first"
         exit 1
     fi
+    # Pin the operator image tag to the one import-images.sh used (test-build by
+    # default), so the chart and the imported images stay in sync.
+    : "${DEV_IMAGE_TAG:=test-build}"
     ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
     ${HELM} install calico "${CHART}" \
         -f "${SCRIPT_CURRENT_DIR}/local-build-values.yaml" \
+        --set tigeraOperator.version="${DEV_IMAGE_TAG}" \
         -n tigera-operator --create-namespace
 elif [[ ${RELEASE_STREAM} == 'local' ]]; then
     # Use local manifests
