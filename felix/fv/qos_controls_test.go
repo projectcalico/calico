@@ -1017,9 +1017,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 							By("Waiting for ingress counter to drop (scanner-only path)")
 							// The scanner downsamples and only recounts every
-							// connLimitScannerRunEveryN CT-scan cycles (~60s).
-							// 90s gives one full downsample cycle plus margin.
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(int32(0)))
+							// connLimitScannerRunEveryN CT-scan cycles (~30s).
+							// 60s gives one full downsample cycle plus margin.
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "1s").Should(Equal(int32(0)))
 
 							By("Removing limits from workload 0")
 							w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1072,9 +1072,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 								By("Waiting past TCPEstablished + scan cycle for silent BPF cleanup + scanner recount")
 								// The scanner downsamples and only recounts every
-								// connLimitScannerRunEveryN CT-scan cycles (~60s).
-								// 90s gives one full downsample cycle plus margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(int32(0)))
+								// connLimitScannerRunEveryN CT-scan cycles (~30s).
+								// 60s gives one full downsample cycle plus margin.
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "60s", "1s").Should(Equal(int32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1121,9 +1121,9 @@ var _ = infrastructure.DatastoreDescribe(
 								}()
 
 								By("Waiting for CT entries to age out and scanner to recount")
-								// 5s TCPEstablished + ~60s downsampled scanner
+								// 5s TCPEstablished + ~30s downsampled scanner
 								// recount + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "120s", "1s").Should(Equal(int32(0)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "75s", "1s").Should(Equal(int32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
