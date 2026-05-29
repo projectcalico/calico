@@ -293,5 +293,9 @@ The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/des
 
 Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies; for BPF, "changes how it works" specifically means a new sub-program, CT flag, mark bit, map or map field, or any change to the packet path or forwarding decision.
 
+## Helm Chart Review
+
+The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. The doc-update rule above applies; for charts, "changes how it works" means anything that alters how a user installs or upgrades Calico via Helm — moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, or changing a documented values key or example command.
+
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.
