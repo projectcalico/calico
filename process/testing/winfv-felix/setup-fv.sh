@@ -33,8 +33,6 @@ cd "${SCRIPT_DIR}"
 
 : "${KUBECONFIG:=${ASO_DIR}/kubeconfig}"
 
-GIT_VERSION=$(git describe --tags --dirty --long --always --abbrev=12)
-
 function upload_fv_scripts() {
   mkdir -p ./windows
   ${GOMPLATE} --file ./run-fv-felix.ps1 --out ./windows/run-fv.ps1
@@ -46,32 +44,6 @@ function upload_fv_scripts() {
 
   ${ASO_DIR}/scp-to-windows.sh 0 $CALICO_HOME/felix/fv/win-fv.exe 'c:\k\win-fv.exe'
   echo "Copied win-fv.exe to Windows node"
-}
-
-function upload_calico_images(){
-  make -C "$CALICO_HOME/node" image-windows WINDOWS_IMAGE=node-windows
-  make -C "$CALICO_HOME/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows
-
-  if [[ $WINDOWS_SERVER_VERSION == "windows-2022" ]]; then
-    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2022.tar"
-    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2022.tar"
-  else # $WINDOWS_SERVER_VERSION == "windows-2019"
-    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2019.tar"
-    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2019.tar"
-  fi
-
-  ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
-  ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
-
-  #Import images from locally built images
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/node-windows c:\calico-node-windows.tar --all-platforms'
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/cni-windows c:\calico-cni-plugin-windows.tar --all-platforms'
-
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" annotate ds -n calico-system calico-node-windows unsupported.operator.tigera.io/ignore="true"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" patch ds -n calico-system calico-node-windows --patch-file "${SCRIPT_DIR}/calico-node-windows.yaml"
-
-  echo "Waiting for calico-node-windows to be ready after image replacement..."
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" rollout status ds -n calico-system calico-node-windows --timeout=600s
 }
 
 function start_test_infra(){
@@ -143,11 +115,11 @@ function get_logs(){
 }
 
 # Main execution
-# Always collect pod logs on exit so failures during image rollout or test
-# infrastructure setup don't leave us without diagnostic data.
+# Always collect pod logs on exit so failures during test infrastructure setup
+# don't leave us without diagnostic data. Component images are imported and
+# Calico installed before this script runs (see run-win-fv.sh).
 trap get_logs EXIT
 
 upload_fv_scripts
-upload_calico_images
 start_test_infra
 run_windows_fv
