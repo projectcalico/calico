@@ -354,7 +354,8 @@ var _ = describe.CalicoDescribe(
 		// Even an admin cannot update or delete it. Each test includes a
 		// DeferCleanup safety net that restores the default tier if the
 		// operation unexpectedly succeeds, so we don't leave the cluster broken.
-		Context("default tier", func() {
+		framework.Context("default tier", describe.RequiresCalicoAPIServer(), func() {
+			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
 			// restoreDefaultTier is a safety net for default tier tests. If the
 			// tier was modified (ResourceVersion changed) it restores the saved
 			// spec; if it was deleted it recreates it.
