@@ -50,7 +50,7 @@ func NewFilteredStagedKubernetesNetworkPolicyInformer(client clientset.Interface
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewStagedKubernetesNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
-	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagedkubernetesnetworkpolicys"}
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagedkubernetesnetworkpolicies"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
 	return cache.NewSharedIndexInformerWithOptions(
