@@ -32,3 +32,6 @@ exclude:
 
     - label: RequiresXtables
       reason: "requires iptables or nftables dataplane, but this cluster uses BPF"
+
+    - label: RequiresCalicoAPIServer
+      reason: "USE_API_SERVER is false on this pipeline; aggregated apiserver is not deployed"
