@@ -50,7 +50,7 @@ func NewFilteredNetworkPolicyInformer(client clientset.Interface, namespace stri
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
-	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networkpolicys"}
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networkpolicies"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
 	return cache.NewSharedIndexInformerWithOptions(

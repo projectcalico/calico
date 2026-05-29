@@ -49,7 +49,7 @@ func NewFilteredCalicoNodeStatusInformer(client clientset.Interface, resyncPerio
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewCalicoNodeStatusInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
-	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "caliconodestatuss"}
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "caliconodestatuses"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
 	return cache.NewSharedIndexInformerWithOptions(
