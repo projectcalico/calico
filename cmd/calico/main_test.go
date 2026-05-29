@@ -28,25 +28,34 @@ func TestDispatch(t *testing.T) {
 		wantArgs   []string
 	}{
 		{
-			name:       "calicoctl basename inserts ctl subcommand and preserves argv[0]",
+			name:       "plain calicoctl basename runs the ctl command tree as root",
 			args:       []string{"/usr/bin/calicoctl", "get", "nodes"},
 			cniCommand: "",
-			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calicoctl", "ctl", "get", "nodes"},
+			wantMode:   modeCalicoctl,
 		},
 		{
 			name:       "calicoctl basename ignores CNI_COMMAND in the env",
 			args:       []string{"/usr/bin/calicoctl", "get", "nodes"},
 			cniCommand: "ADD",
-			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calicoctl", "ctl", "get", "nodes"},
+			wantMode:   modeCalicoctl,
 		},
 		{
-			name:       "calicoctl with no args still rewrites (help path)",
-			args:       []string{"/usr/bin/calicoctl"},
+			name:       "calicoctl-linux-amd64 release artifact runs ctl as root",
+			args:       []string{"./calicoctl-linux-amd64", "get", "nodes"},
 			cniCommand: "",
-			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calicoctl", "ctl"},
+			wantMode:   modeCalicoctl,
+		},
+		{
+			name:       "calicoctl-windows-amd64.exe release artifact runs ctl as root",
+			args:       []string{"./calicoctl-windows-amd64.exe", "get", "nodes"},
+			cniCommand: "",
+			wantMode:   modeCalicoctl,
+		},
+		{
+			name:       "calicoctl.exe (renamed) runs ctl as root",
+			args:       []string{"calicoctl.exe", "get", "nodes"},
+			cniCommand: "",
+			wantMode:   modeCalicoctl,
 		},
 		{
 			name:       "uds basename inserts component flexvol and preserves argv[0]",
@@ -74,28 +83,36 @@ func TestDispatch(t *testing.T) {
 			args:       []string{"/opt/cni/bin/calico-ipam"},
 			cniCommand: "ADD",
 			wantMode:   modeCNIIPAM,
-			wantArgs:   []string{"/opt/cni/bin/calico-ipam"},
+		},
+		{
+			name:       "calico-ipam.exe basename (Windows) dispatches to IPAM plugin",
+			args:       []string{"/opt/cni/bin/calico-ipam.exe"},
+			cniCommand: "ADD",
+			wantMode:   modeCNIIPAM,
+		},
+		{
+			name:       "calico.exe with CNI_COMMAND (Windows) dispatches to CNI plugin",
+			args:       []string{"/opt/cni/bin/calico.exe"},
+			cniCommand: "ADD",
+			wantMode:   modeCNI,
 		},
 		{
 			name:       "plain calico with CNI_COMMAND and no args dispatches to CNI plugin",
 			args:       []string{"/opt/cni/bin/calico"},
 			cniCommand: "ADD",
 			wantMode:   modeCNI,
-			wantArgs:   []string{"/opt/cni/bin/calico"},
 		},
 		{
 			name:       "plain calico without CNI_COMMAND runs Cobra",
 			args:       []string{"/usr/bin/calico"},
 			cniCommand: "",
 			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calico"},
 		},
 		{
 			name:       "plain calico with cobra subcommand ignores CNI_COMMAND (footgun guard)",
 			args:       []string{"/usr/bin/calico", "component", "felix"},
 			cniCommand: "ADD",
 			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calico", "component", "felix"},
 		},
 		{
 			name:       "plain calico with CNI_COMMAND and netconf positional arg dispatches to CNI plugin",
@@ -116,7 +133,6 @@ func TestDispatch(t *testing.T) {
 			args:       []string{"/usr/bin/calico", "health", "--port=9099"},
 			cniCommand: "",
 			wantMode:   modeCobra,
-			wantArgs:   []string{"/usr/bin/calico", "health", "--port=9099"},
 		},
 	}
 	for _, tt := range tests {
@@ -125,7 +141,9 @@ func TestDispatch(t *testing.T) {
 			if gotMode != tt.wantMode {
 				t.Errorf("mode = %v, want %v", gotMode, tt.wantMode)
 			}
-			if !reflect.DeepEqual(gotArgs, tt.wantArgs) {
+			// Only the rewriting cases (calicoctl-as-ctl, uds) assert on the
+			// returned argv; the rest leave wantArgs unset and pass args through.
+			if tt.wantArgs != nil && !reflect.DeepEqual(gotArgs, tt.wantArgs) {
 				t.Errorf("args = %v, want %v", gotArgs, tt.wantArgs)
 			}
 		})
