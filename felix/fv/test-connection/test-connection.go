@@ -47,7 +47,7 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>] [--sleep=<seconds>]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>] [--log-pongs] [--stdin] [--timeout=<seconds>] [--sleep=<seconds>] [--send-rst]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -62,6 +62,7 @@ Options:
   --stdin                  Read and send data from stdin
   --timeout=<seconds>      Exit after timeout if pong not received
   --sleep=<seconds>        How long to sleep before seding another ping
+  --send-rst               Close connection with TCP RST (SO_LINGER 0) instead of graceful FIN
 
 If connection is successful, test-connection exits successfully.
 
@@ -152,6 +153,11 @@ func main() {
 		log.WithError(err).Fatal("Invalid --stdin")
 	}
 
+	sendRST, err := arguments.Bool("--send-rst")
+	if err != nil {
+		log.WithError(err).Fatal("Invalid --send-rst")
+	}
+
 	var timeout, sleep time.Duration
 
 	if toval := arguments["--timeout"]; toval != nil {
@@ -192,7 +198,7 @@ func main() {
 		// Test connection from wherever we are already running.
 		if err == nil {
 			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep, sendRST)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -211,7 +217,7 @@ func main() {
 				return e
 			}
 			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
-				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep)
+				seconds, loopFile, sendLen, recvLen, logPongs, stdin, timeout, sleep, sendRST)
 		})
 	}
 
@@ -271,7 +277,7 @@ type protocolDriver interface {
 }
 
 func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol string,
-	duration time.Duration, sendLen, recvLen int, stdin bool) (*testConn, error) {
+	duration time.Duration, sendLen, recvLen int, stdin bool, sendRST bool) (*testConn, error) {
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
 		return nil, err
@@ -331,6 +337,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 			driver = &connectedTCP{
 				localAddr:  localAddr,
 				remoteAddr: remoteAddr,
+				sendRST:    sendRST,
 			}
 		}
 	}
@@ -363,10 +370,10 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 }
 
 func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
-	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool, timeout, sleep time.Duration) error {
+	seconds int, loopFile string, sendLen, recvLen int, logPongs, stdin bool, timeout, sleep time.Duration, sendRST bool) error {
 
 	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
-		time.Duration(seconds)*time.Second, sendLen, recvLen, stdin)
+		time.Duration(seconds)*time.Second, sendLen, recvLen, stdin, sendRST)
 	if err != nil {
 		tc.sendErrorResp(err)
 		log.WithError(err).Fatal("Failed to create TestConn")
@@ -1185,6 +1192,7 @@ func tcpForceV6(ip net.IP, port int) (net.Conn, error) {
 type connectedTCP struct {
 	localAddr  string
 	remoteAddr string
+	sendRST    bool
 
 	conn net.Conn
 	r    *bufio.Reader
@@ -1251,6 +1259,21 @@ func (d *connectedTCP) Receive() ([]byte, error) {
 func (d *connectedTCP) Close() error {
 	if d.conn == nil {
 		return nil
+	}
+	if d.sendRST {
+		// Set SO_LINGER with timeout 0 to force TCP RST on close
+		// instead of a graceful FIN shutdown.
+		if tcpConn, ok := d.conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetLinger(0)
+		} else if sc, ok := d.conn.(syscall.Conn); ok {
+			// reuse.Dial may wrap the connection; use syscall.Conn fallback.
+			if raw, err := sc.SyscallConn(); err == nil {
+				_ = raw.Control(func(fd uintptr) {
+					_ = syscall.SetsockoptLinger(int(fd), syscall.SOL_SOCKET, syscall.SO_LINGER,
+						&syscall.Linger{Onoff: 1, Linger: 0})
+				})
+			}
+		}
 	}
 	return d.conn.Close()
 }
