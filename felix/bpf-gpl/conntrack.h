@@ -575,6 +575,47 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	return syn && (a->fin_seen || a->rst_seen) && (b->fin_seen || b->rst_seen);
 }
 
+/* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
+ * for a CT entry that is closing or being purged. Reads the entry's
+ * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
+ * (ifindex, direction) pair(s). Idempotent: skips entries that already carry
+ * CONNLIMIT_DEC, and sets DEC before decrementing so a concurrent decrement
+ * on another CPU sees the flag and bails.
+ *
+ * Called from the packet path on FIN-FIN / RST close, and from
+ * conntrack_cleanup when an idle entry is purged with no close packet.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
+{
+	__u32 cl_flags = ct_value_get_flags(v);
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
+	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
+		return;
+	}
+	ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
+
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+		/* Ingress: pod is the responder (non-opener). */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->b_to_a.ifindex
+			: v->a_to_b.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 1);
+		}
+	}
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
+		/* Egress: pod is the opener. */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->a_to_b.ifindex
+			: v->b_to_a.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 0);
+		}
+	}
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -999,39 +1040,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
 
-		/* Decrement connlimit counter when a TCP connection closes.
-		 * Detect "both FINs seen" or "RST seen" after the flag update.
-		 * CONNLIMIT_DEC prevents double-decrement across CPUs/programs.
-		 * The scanner remains as a safety net for missed decrements,
-		 * LRU evictions, and timeouts.
+		/* Decrement connlimit counter when a TCP connection closes
+		 * (both FINs seen or RST). The helper sets CONNLIMIT_DEC
+		 * before decrementing so concurrent paths bail.
 		 */
-		__u32 cl_flags = ct_value_get_flags(v);
-		if ((cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS)) &&
-				!(cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC)) {
-			bool closing = (src_to_dst->fin_seen && dst_to_src->fin_seen) ||
-					   tcp_header->rst;
-			if (closing) {
-				ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
-
-				if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
-					/* Ingress: pod is the responder (non-opener). */
-					__u32 pod_ifindex = v->a_to_b.opener
-						? v->b_to_a.ifindex
-						: v->a_to_b.ifindex;
-					if (pod_ifindex != CT_INVALID_IFINDEX) {
-						qos_connlimit_decrement(ctx, pod_ifindex, 1);
-					}
-				}
-				if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
-					/* Egress: pod is the opener. */
-					__u32 pod_ifindex = v->a_to_b.opener
-						? v->a_to_b.ifindex
-						: v->b_to_a.ifindex;
-					if (pod_ifindex != CT_INVALID_IFINDEX) {
-						qos_connlimit_decrement(ctx, pod_ifindex, 0);
-					}
-				}
-			}
+		if ((src_to_dst->fin_seen && dst_to_src->fin_seen) || tcp_header->rst) {
+			qos_connlimit_decrement_for_ct(v);
 		}
 	}
 

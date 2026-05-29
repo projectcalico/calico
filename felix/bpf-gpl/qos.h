@@ -201,12 +201,12 @@ static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx 
 
 /* qos_connlimit_decrement decrements the connection limit counter for the
  * given interface and direction. Called when a TCP connection closes (both FINs
- * seen or RST). Takes an explicit ifindex+direction because the decrement may
- * run from any BPF program (from_hep, from_wep, etc.), not just the pod's own
- * WEP program.
+ * seen or RST) and from the cleanup program when a counted CT entry expires.
+ * Takes an explicit ifindex+direction because the decrement may run from any
+ * BPF program (from_hep, from_wep, conntrack_cleanup, ...), not just the pod's
+ * own WEP program.
  */
-static CALI_BPF_INLINE void qos_connlimit_decrement(struct cali_tc_ctx *ctx,
-						     __u32 ifindex, __u32 direction)
+static CALI_BPF_INLINE void qos_connlimit_decrement(__u32 ifindex, __u32 direction)
 {
 	struct calico_qos_key key = {
 		.ifindex = ifindex,
@@ -224,7 +224,10 @@ static CALI_BPF_INLINE void qos_connlimit_decrement(struct cali_tc_ctx *ctx,
 	}
 	bpf_spin_unlock(&qos->lock);
 
-	CALI_DEBUG("connlimit: decremented count to %d/%d",
+	/* CALI_DEBUG_NO_FLAG (not CALI_DEBUG) — the TC programs' CALI_LOG
+	 * override reads ctx->globals which we don't have here.
+	 */
+	CALI_DEBUG_NO_FLAG("connlimit: decremented count to %d/%d",
 		   qos->current_count, qos->max_connections);
 }
 
