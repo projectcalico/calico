@@ -44,24 +44,25 @@ clean-windows: clean-windows-builder
 ###############################################################################
 # Building the binary
 ###############################################################################
-# Only the Windows image is built standalone here; Linux ships in calico/calico.
+# Linux binaries are only built locally for unit tests; the production Linux
+# CNI plugin ships in the calico/calico image. The Windows binary is the
+# combined `calico` binary from cmd/calico, dispatched by name.
 .PHONY: build
 build:
 ifeq ($(ARCH),amd64)
-# Go only supports amd64 for Windows builds.
 WINDOWS_BIN=bin/windows
-# calico-ipam.exe is not built: install.exe copies calico.exe to both names on the host.
-build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe
+# `calico cni install` copies calico.exe to both names on the host.
+build: $(WINDOWS_BIN)/calico.exe
 endif
 
-## Build the Calico network and ipam plugins for Windows
-$(WINDOWS_BIN)/install.exe: $(SRC_FILES)
-	mkdir -p $(WINDOWS_BIN)
-	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/install, $@)
+# The Linux bin/calico and bin/calico-ipam fixtures used by the unit tests are
+# sourced from the combined cmd/calico binary further down this Makefile.
 
-$(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
+## Hard-link the combined cmd/calico binary as calico.exe.
+$(WINDOWS_BIN)/calico.exe:
+	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(WINDOWS_BIN)
-	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
+	cp -fl ../cmd/calico/bin/calicoctl-windows-amd64.exe $@
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
