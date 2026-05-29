@@ -218,24 +218,28 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut      uint32 = (1 << 0)
-	FlagNATFwdDsr   uint32 = (1 << 1)
-	FlagNATNPFwd    uint32 = (1 << 2)
-	FlagSkipFIB     uint32 = (1 << 3)
-	FlagReserved4   uint32 = (1 << 4)
-	FlagReserved5   uint32 = (1 << 5)
-	FlagExtLocal    uint32 = (1 << 6)
-	FlagViaNATIf    uint32 = (1 << 7)
-	FlagSrcDstBA    uint32 = (1 << 8)
-	FlagHostPSNAT   uint32 = (1 << 9)
-	FlagSvcSelf     uint32 = (1 << 10)
-	FlagNPLoop      uint32 = (1 << 11)
-	FlagNPRemote    uint32 = (1 << 12)
-	FlagNoDSR       uint32 = (1 << 13)
-	FlagNoRedirPeer uint32 = (1 << 14)
-	FlagSetDSCP     uint32 = (1 << 15)
-	FlagMaglev      uint32 = (1 << 16)
-	FlagSendRST     uint32 = (1 << 17)
+	FlagNATOut       uint32 = (1 << 0)
+	FlagNATFwdDsr    uint32 = (1 << 1)
+	FlagNATNPFwd     uint32 = (1 << 2)
+	FlagSkipFIB      uint32 = (1 << 3)
+	FlagReserved4    uint32 = (1 << 4)
+	FlagReserved5    uint32 = (1 << 5)
+	FlagExtLocal     uint32 = (1 << 6)
+	FlagViaNATIf     uint32 = (1 << 7)
+	FlagSrcDstBA     uint32 = (1 << 8)
+	FlagHostPSNAT    uint32 = (1 << 9)
+	FlagSvcSelf      uint32 = (1 << 10)
+	FlagNPLoop       uint32 = (1 << 11)
+	FlagNPRemote     uint32 = (1 << 12)
+	FlagNoDSR        uint32 = (1 << 13)
+	FlagNoRedirPeer  uint32 = (1 << 14)
+	FlagSetDSCP      uint32 = (1 << 15)
+	FlagMaglev       uint32 = (1 << 16)
+	FlagSendRST      uint32 = (1 << 17)
+	FlagConnLimitIn  uint32 = (1 << 18)
+	FlagConnLimitRej uint32 = (1 << 19)
+	FlagConnLimitOut uint32 = (1 << 20)
+	FlagConnLimitDec uint32 = (1 << 21)
 )
 
 // FlagNames returns the human-readable names for the set bits in flags.
@@ -260,6 +264,10 @@ func FlagNames(flags uint32) []string {
 		{FlagSetDSCP, "dscp"},
 		{FlagMaglev, "maglev"},
 		{FlagSendRST, "send-rst"},
+		{FlagConnLimitIn, "connlimit-in"},
+		{FlagConnLimitRej, "connlimit-rej"},
+		{FlagConnLimitOut, "connlimit-out"},
+		{FlagConnLimitDec, "connlimit-dec"},
 	}
 	var names []string
 	for _, f := range flagTable {
