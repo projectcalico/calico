@@ -141,14 +141,20 @@
           - make bin/calico-felix.exe fv/win-fv.exe
 - name: "Felix: Windows FV"
   run:
-    when: "false or ${CHANGE_IN(felix,non-go:/process/testing/aso,non-go:/process/testing/utils,non-go:/process/testing/winfv-felix)}"
-  dependencies: ["Felix: Build Windows binaries"]
+    when: "false or ${CHANGE_IN(felix,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+  dependencies:
+    - "Felix: Build Windows binaries"
+    - "Build: calico image"
+    - "Build: node image"
   task:
     secrets:
       - name: banzai-secrets
       - name: private-repo
     prologue:
       commands:
+        # Load the locally-built calico + node images from the GCS cache so the
+        # local-build install uses images from the commit under test.
+        - .semaphore/load-cached-images
         - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
         - export REPORT_DIR=/home/semaphore/report
         - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -170,6 +176,12 @@
         value: "calico"
       - name: FV_TYPE
         value: "calico-felix"
+      # Install the operator, Linux, and Windows images all built from the
+      # commit under test instead of a cached operator + hashrelease components.
+      - name: RELEASE_STREAM
+        value: "local-build"
+      - name: HASH_RELEASE
+        value: "false"
       - name: SEMAPHORE_ARTIFACT_EXPIRY
         value: 2w
       - name: CONTAINERD_VERSION

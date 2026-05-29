@@ -34,6 +34,28 @@ export WINDOWS_NODE_COUNT=1
 # Create kubeadm cluster
 pushd "${ASO_DIR}"
 make setup-kubeadm
+popd
+
+# For the local-build flow, build the operator and helm chart from the commit
+# under test and import every component image onto the nodes before installing
+# Calico. This keeps the operator, Linux, and Windows images all on the same
+# commit instead of mixing a cached operator with hashrelease components.
+if [[ "${RELEASE_STREAM:-}" == "local-build" ]]; then
+    export DEV_IMAGE_REGISTRY="${DEV_IMAGE_REGISTRY:-docker.io}"
+    export DEV_IMAGE_PATH="${DEV_IMAGE_PATH:-calico}"
+    export DEV_IMAGE_TAG="${DEV_IMAGE_TAG:-test-build}"
+
+    # Build the operator image (renders component images at test-build) and
+    # package the chart that install-calico installs.
+    pushd "${REPO_DIR}/hack/test/kind/infra"
+    ./build-operator.sh
+    popd
+    make -C "${REPO_DIR}" chart
+
+    "${SCRIPT_DIR}/import-images.sh"
+fi
+
+pushd "${ASO_DIR}"
 make install-calico
 popd
 
