@@ -51,12 +51,12 @@ type connlimitKey struct {
 // serving as the sole decrement mechanism (connections that close or time out
 // simply aren't counted on the next scan).
 // connLimitScannerRunEveryN downsamples the scanner relative to the parent CT
-// scan loop. With timeouts.ScanPeriod = 10s and N = 6 the scanner does a real
-// recount roughly every 60s; the intervening 5 iterations early-return in
+// scan loop. With timeouts.ScanPeriod = 10s and N = 3 the scanner does a real
+// recount roughly every 30s; the intervening 2 iterations early-return in
 // IterationStart / Check / IterationEnd. The scanner only exists as a drift
 // safety net for silent CT-entry purges (half-close, idle TCPEstablished,
-// network partition), so a ~60s recovery window is adequate.
-const connLimitScannerRunEveryN = 6
+// network partition), so a ~30s recovery window is adequate.
+const connLimitScannerRunEveryN = 3
 
 // connLimitQoSMap is the subset of the QoS BPF map API that the scanner needs.
 // Narrowed from maps.MapWithUpdateWithFlags so tests can supply a small fake
