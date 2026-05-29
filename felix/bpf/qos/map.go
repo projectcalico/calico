@@ -94,7 +94,7 @@ func NewValue(
 	packetRateTokens int16,
 	packetRateLastUpdate uint64,
 	maxConnections,
-	currentCount int32,
+	currentCount uint32,
 ) Value {
 	var v Value
 
@@ -130,12 +130,12 @@ func (v Value) PacketRateLastUpdate() uint64 {
 	return binary.LittleEndian.Uint64(v[16:24])
 }
 
-func (v Value) MaxConnections() int32 {
-	return int32(binary.LittleEndian.Uint32(v[24:28]))
+func (v Value) MaxConnections() uint32 {
+	return uint32(binary.LittleEndian.Uint32(v[24:28]))
 }
 
-func (v Value) CurrentCount() int32 {
-	return int32(binary.LittleEndian.Uint32(v[28:32]))
+func (v Value) CurrentCount() uint32 {
+	return uint32(binary.LittleEndian.Uint32(v[28:32]))
 }
 
 func (v Value) String() string {

@@ -327,8 +327,8 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				}
 
-				getBPFMaxConnections := func(felixId, wlId int, hook string) func() int32 {
-					return func() int32 {
+				getBPFMaxConnections := func(felixId, wlId int, hook string) func() uint32 {
+					return func() uint32 {
 						value := getBPFQoSValue(felixId, wlId, hook)
 						if value == nil {
 							return 0
@@ -337,8 +337,8 @@ var _ = infrastructure.DatastoreDescribe(
 					}
 				}
 
-				getBPFCurrentCount := func(felixId, wlId int, hook string) func() int32 {
-					return func() int32 {
+				getBPFCurrentCount := func(felixId, wlId int, hook string) func() uint32 {
+					return func() uint32 {
 						value := getBPFQoSValue(felixId, wlId, hook)
 						if value == nil {
 							return 0
@@ -668,8 +668,8 @@ var _ = infrastructure.DatastoreDescribe(
 
 						if BPFMode() {
 							By("Waiting for ingress connection limit to appear in QoS map")
-							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
-							Consistently(getBPFMaxConnections(0, 0, "egress"), "5s", "1s").Should(Equal(int32(0)))
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+							Consistently(getBPFMaxConnections(0, 0, "egress"), "5s", "1s").Should(Equal(uint32(0)))
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 0")
 							if NFTMode() {
@@ -710,7 +710,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						if BPFMode() {
 							By("Waiting for BPF connlimit counter to reflect closed connection")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", int32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", uint32(numConnections)))
 						}
 
 						By("Re-filling the connection slot after RST close")
@@ -731,7 +731,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						if BPFMode() {
 							By("Waiting for BPF connlimit counter to reflect closed connection")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", int32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "5s", "1s").Should(BeNumerically("<", uint32(numConnections)))
 						}
 
 						By("Re-filling the connection slot after FIN close")
@@ -759,7 +759,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 						if BPFMode() {
 							By("Waiting for connection limit to be removed from QoS map")
-							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(0)))
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(0)))
 						} else {
 							By("Waiting for the config to disappear in 'iptables-save/nft list ruleset' on workload 0")
 							if NFTMode() {
@@ -783,8 +783,8 @@ var _ = infrastructure.DatastoreDescribe(
 
 						if BPFMode() {
 							By("Waiting for egress connection limit to appear in QoS map")
-							Consistently(getBPFMaxConnections(1, 1, "ingress"), "5s", "1s").Should(Equal(int32(0)))
-							Eventually(getBPFMaxConnections(1, 1, "egress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Consistently(getBPFMaxConnections(1, 1, "ingress"), "5s", "1s").Should(Equal(uint32(0)))
+							Eventually(getBPFMaxConnections(1, 1, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 						} else {
 							By("Waiting for the config to appear in 'iptables-save/nft list ruleset' on workload 1")
 							if NFTMode() {
@@ -809,12 +809,12 @@ var _ = infrastructure.DatastoreDescribe(
 							// and wait one scan cycle for the recount to drop
 							// to 0 before opening the phase-2 connections.
 							By("Flushing conntrack entries until egress count is 0")
-							Eventually(func() int32 {
+							Eventually(func() uint32 {
 								tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 								tc.Felixes[1].Exec("calico-bpf", "conntrack", "clean")
 								time.Sleep(12 * time.Second)
 								return getBPFCurrentCount(1, 1, "egress")()
-							}, "60s", "1s").Should(Equal(int32(0)))
+							}, "60s", "1s").Should(Equal(uint32(0)))
 						}
 
 						By("Starting persistent connections on workload 1")
@@ -882,7 +882,7 @@ var _ = infrastructure.DatastoreDescribe(
 							w[0].UpdateInInfra(infra)
 
 							By("Waiting for ingress connection limit to appear in QoS map")
-							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("Starting persistent connections on workload 1 to fill the limit")
 							pcs := make([]*connectivity.PersistentConnection, numConnections)
@@ -898,7 +898,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}()
 
 							By("Waiting for ingress counter to reach the limit")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("SIGKILLing all test-connection client processes on workload 1's container")
 							// Kernel cleans up sockets on process death and is
@@ -915,7 +915,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 
 							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(int32(0)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
 
 							By("Removing limits from workload 0")
 							w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -932,7 +932,7 @@ var _ = infrastructure.DatastoreDescribe(
 							w[0].UpdateInInfra(infra)
 
 							By("Waiting for ingress connection limit to appear in QoS map")
-							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("Starting persistent connections on workload 1 to fill the limit")
 							pcs := make([]*connectivity.PersistentConnection, numConnections)
@@ -948,7 +948,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}()
 
 							By("Waiting for ingress counter to reach the limit")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("Killing client processes attached to w[1] netns so kernel emits FIN/RST through still-attached veth")
 							// workload.Stop() tears down kill/veth/netns in parallel,
@@ -968,7 +968,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 
 							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(int32(0)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
 
 							By("Tearing down the workload netns (final cleanup)")
 							w[1].Stop()
@@ -1009,7 +1009,7 @@ var _ = infrastructure.DatastoreDescribe(
 								w[0].UpdateInInfra(infra)
 
 								By("Waiting for ingress connection limit to appear in QoS map")
-								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("Starting persistent connections on workload 1 to fill the limit")
 								pcs := make([]*connectivity.PersistentConnection, numConnections)
@@ -1018,7 +1018,7 @@ var _ = infrastructure.DatastoreDescribe(
 								}
 
 								By("Waiting for ingress counter to reach the limit")
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("SIGSTOPping client test-connection processes so they cannot send")
 								// SIGSTOP keeps client sockets alive but blocks app sends.
@@ -1039,7 +1039,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 								By("Waiting for cleanup-time decrement after TCPFinsSeen expiry")
 								// 5s TCPFinsSeen + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(int32(0)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1056,7 +1056,7 @@ var _ = infrastructure.DatastoreDescribe(
 								w[0].UpdateInInfra(infra)
 
 								By("Waiting for ingress connection limit to appear in QoS map")
-								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("Starting persistent connections on workload 1 to fill the limit")
 								pcs := make([]*connectivity.PersistentConnection, numConnections)
@@ -1065,7 +1065,7 @@ var _ = infrastructure.DatastoreDescribe(
 								}
 
 								By("Waiting for ingress counter to reach the limit")
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("SIGSTOPping both client and server so connections idle")
 								Expect(w[1].C.ExecMayFail("pkill", "-STOP", "-f", "test-connection")).NotTo(HaveOccurred())
@@ -1076,7 +1076,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 								By("Waiting for cleanup-time decrement after TCPEstablished expiry")
 								// 5s TCPEstablished + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(int32(0)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1093,7 +1093,7 @@ var _ = infrastructure.DatastoreDescribe(
 								w[0].UpdateInInfra(infra)
 
 								By("Waiting for ingress connection limit to appear in QoS map")
-								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("Starting persistent connections on workload 1 to fill the limit")
 								pcs := make([]*connectivity.PersistentConnection, numConnections)
@@ -1109,7 +1109,7 @@ var _ = infrastructure.DatastoreDescribe(
 								}()
 
 								By("Waiting for ingress counter to reach the limit")
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(int32(numConnections)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("Dropping outbound TCP traffic in client netns to simulate partition")
 								// iptables OUTPUT DROP swallows kernel cleanup
@@ -1124,7 +1124,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 								By("Waiting for CT entries to age out and cleanup-time decrement to fire")
 								// 5s TCPEstablished + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(int32(0)))
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
