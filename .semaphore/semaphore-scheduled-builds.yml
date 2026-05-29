@@ -341,6 +341,9 @@ blocks:
     # arches) and uploads the image tarball to GCS for downstream consumers.
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+    #
+    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
+    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
     run:
       when: "true"
     dependencies: []
@@ -397,10 +400,16 @@ blocks:
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
-    # Always build and cache the calico image so that downstream CI blocks can
-    # load it from GCS instead of rebuilding per component. This block is the
-    # sole producer for the "calico" build-cache group — every Go component
-    # block on master restores the module + build cache populated here.
+    # Build and cache the calico image so that downstream CI blocks can load it
+    # from GCS instead of rebuilding per component. This block is the sole
+    # producer for the "calico" build-cache group — every Go component block on
+    # master restores the module + build cache populated here.
+    #
+    # cmd/calico's Go closure already covers felix/typha (registered as
+    # subcommands); the non-go paths close the gap for Felix Build/UT, which
+    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
+    # consumers use .semaphore/load-cached-images, which falls back to a local
+    # build on cache miss.
     run:
       when: "true"
     dependencies: []
@@ -1311,25 +1320,10 @@ blocks:
               values:
                 - arm64
           commands:
-            # Skip istio ztunnel in this arm64 cross-build job.
-            # ztunnel is built separately in the native arm64 runner block below.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: "true"
-    dependencies:
-      - Istio
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd istio
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
+            # Cross-builds all istio components including ztunnel.
+            # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+            # toolchain (clang + sysroot), no native arm64 runner needed.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: "true"

@@ -135,6 +135,7 @@ local:libcalico-go/lib/epstatusfile
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

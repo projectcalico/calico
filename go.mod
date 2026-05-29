@@ -111,6 +111,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-aggregator v0.36.1
 	k8s.io/kube-openapi v0.31.0
+	k8s.io/kubectl v0.36.1
 	k8s.io/kubernetes v1.36.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	kubevirt.io/api v1.8.2
@@ -331,7 +332,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
-	github.com/tigera/api v0.0.0-20260310182635-546021df243c
+	github.com/tigera/api v0.0.0-20260310182635-546021df243c // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/urfave/cli v1.22.16 // indirect
@@ -378,7 +379,6 @@ require (
 	k8s.io/dynamic-resource-allocation v0.36.1 // indirect
 	k8s.io/kms v0.36.1 // indirect
 	k8s.io/kube-scheduler v0.36.1 // indirect
-	k8s.io/kubectl v0.36.1
 	k8s.io/kubelet v0.36.1 // indirect
 	k8s.io/mount-utils v0.36.1 // indirect
 	k8s.io/pod-security-admission v0.36.1

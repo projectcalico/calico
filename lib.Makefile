@@ -135,6 +135,13 @@ ifneq ($(GO_BUILD_PARALLELISM),)
 GOFLAGS := $(GOFLAGS) -p=$(GO_BUILD_PARALLELISM)
 endif
 
+# Outer parallelism for image / kind-build-images / kind-reload. Each parallel
+# job spawns a docker go-build container, so `-j$(nproc)` on a workstation with
+# limited RAM (e.g. 32G running alongside an IDE/LSP/AI session) will thrash
+# into swap. Default to a conservative 4. Raise via NUM_BUILD_JOBS=N for a
+# bigger machine.
+NUM_BUILD_JOBS ?= 4
+
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -162,6 +169,12 @@ endif
 # Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+
+# Rust target triple (long form). Injected as CARGO_BUILD_TARGET so cargo
+# cross-compiles transparently. Linker/sysroot side uses CROSS_TRIPLE below.
+RUST_TARGET_amd64   := x86_64-unknown-linux-gnu
+RUST_TARGET_arm64   := aarch64-unknown-linux-gnu
+RUST_TARGET         := $(RUST_TARGET_$(ARCH))
 
 # Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
 ifeq ($(BUILDARCH),amd64)
@@ -424,12 +437,29 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
+# Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+RUST_CROSS_ENV := \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--target=$(CROSS_TRIPLE) -C link-arg=--sysroot=$(CROSS_SYSROOT) -C link-arg=-fuse-ld=lld" \
+	-e CC_aarch64_unknown_linux_gnu=clang \
+	-e CXX_aarch64_unknown_linux_gnu=clang++ \
+	-e AR_aarch64_unknown_linux_gnu=$(CROSS_TRIPLE)-ar \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT) -I$(CROSS_SYSROOT)/usr/include"
+endif
+endif
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
-		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
+		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
+		$(RUST_CROSS_ENV) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
@@ -815,9 +845,10 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
+	  parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$(shell $(REPO_REL_DIR)/hack/find-parent-release-branch.sh) \
+	                -e parent_branch=$$parent_branch \
 	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
@@ -1794,7 +1825,7 @@ kind-deploy:
 # re-pulls the new digests under the test-build tag (PullAlways).
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \

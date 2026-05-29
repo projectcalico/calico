@@ -65,6 +65,7 @@ local:libcalico-go/lib/backend/encap
 local:libcalico-go/lib/backend/model
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
