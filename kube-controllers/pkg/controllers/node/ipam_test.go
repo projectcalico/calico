@@ -723,18 +723,13 @@ var _ = Describe("IPAM controller UTs", func() {
 	})
 
 	It("should refresh the sequence number of an already-tracked allocation on block update", func() {
-		// Regression test: a coalesced block update that carries a new sequence
-		// number for an allocation whose (handle, IP) identity is unchanged must
-		// refresh the cached sequence number. If it doesn't, the cached value
-		// goes stale and every attempt to release the IP fails with a
-		// sequence-number conflict (ErrorBadSequenceNumber, surfaced as "update
-		// conflict"), which is not a retryable datastore conflict - so the GC
-		// spins forever and only a restart clears it.
+		// Regression test: if a reallocation bumps an allocation's sequence number
+		// but we keep the stale one, every GC release of that IP fails with "update
+		// conflict" forever (until restart). See onBlockUpdated.
 		c.Start(stopChan)
 
-		// A /30 block affine to "cnode" with one address allocated to a handle.
-		// The block has been written 10 times, and the address was allocated at
-		// that sequence number.
+		// A /30 block affine to "cnode" with one address allocated to a handle,
+		// at the block's current sequence number (10).
 		cidr := net.MustParseCIDR("10.0.0.0/30")
 		aff := "host:cnode"
 		key := model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}
@@ -774,15 +769,22 @@ var _ = Describe("IPAM controller UTs", func() {
 			return 0
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(uint64(10)))
 
-		// Simulate the address being released and re-allocated to the same
-		// handle in between syncs, such that the syncer only delivers the net
-		// result: the same (handle, IP) is still present, but the block has been
-		// written again and the address now carries a newer sequence number.
+		// Mark it a leak candidate - state tied to the current incarnation that
+		// must not survive a reallocation.
+		func() {
+			done := c.pause()
+			defer done()
+			c.allocationsByBlock[blockCIDR][id].markLeak(gracePeriod)
+			Expect(c.allocationsByBlock[blockCIDR][id].isCandidateLeak()).To(BeTrue())
+		}()
+
+		// Reallocate: same (handle, IP), but the block is rewritten with a newer
+		// sequence number.
 		b.SequenceNumber = 11
 		b.SetSequenceNumberForOrdinal(0)
 		c.onUpdate(update)
 
-		// The cached allocation's sequence number must track the latest block.
+		// The cache must now track the latest sequence number.
 		Eventually(func() uint64 {
 			done := c.pause()
 			defer done()
@@ -792,13 +794,23 @@ var _ = Describe("IPAM controller UTs", func() {
 			return 0
 		}, 1*time.Second, 100*time.Millisecond).Should(Equal(uint64(11)))
 
-		// And the release options derived from it must carry that sequence
-		// number, so a release uses the current value and won't conflict.
-		done := c.pause()
-		defer done()
-		opts := c.allocationsByBlock[blockCIDR][id].ReleaseOptions()
-		Expect(opts.SequenceNumber).NotTo(BeNil())
-		Expect(*opts.SequenceNumber).To(Equal(uint64(11)))
+		func() {
+			done := c.pause()
+			defer done()
+
+			// Reallocation clears the stale leak state...
+			a := c.allocationsByBlock[blockCIDR][id]
+			Expect(a.isCandidateLeak()).To(BeFalse())
+			Expect(a.isConfirmedLeak()).To(BeFalse())
+
+			// ...and release uses the current sequence number, so it won't conflict.
+			opts := a.ReleaseOptions()
+			Expect(opts.SequenceNumber).NotTo(BeNil())
+			Expect(*opts.SequenceNumber).To(Equal(uint64(11)))
+		}()
+
+		// assertConsistentState pauses internally; don't call it while paused.
+		assertConsistentState(c)
 	})
 
 	It("should maintain pool and block mappings", func() {

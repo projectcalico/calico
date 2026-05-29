@@ -571,21 +571,12 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 
 		// Check if we already know about this allocation.
 		if existing, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
-			// We already track this (handle, IP). Refresh the sequence number
-			// from the latest block, preserving leak-tracking state.
-			//
-			// The per-ordinal sequence number is bumped by IPAM every time the
-			// address is (re)allocated. A coalesced block update can carry a new
-			// sequence number for an allocation whose (handle, IP) identity is
-			// unchanged. If we keep the stale value, every attempt to release
-			// this IP fails with a sequence-number conflict (ErrorBadSequenceNumber,
-			// surfaced as "update conflict"), which is not a retryable datastore
-			// conflict and never resolves on its own. The GC then spins forever
-			// re-attempting a release it can never complete, and only a restart
-			// (which rebuilds this cache from scratch) clears it. Refreshing in
-			// place keeps our cached view accurate so the release uses the
-			// current sequence number and succeeds.
-			existing.sequenceNumber = alloc.sequenceNumber
+			// If the sequence number has changed for an existing allocation, it means
+			// it has been reallocated. Update the allocation in place and mark it as valid.
+			if existing.sequenceNumber != alloc.sequenceNumber {
+				existing.sequenceNumber = alloc.sequenceNumber
+				existing.markValid()
+			}
 			continue
 		}
 
