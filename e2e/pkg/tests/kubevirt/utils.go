@@ -1021,14 +1021,3 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	Fail(fmt.Sprintf("no third worker node found (node1=%s, node2=%s); need at least 3 schedulable workers for the double-migration eBGP test", node1, node2))
 	return ""
 }
-
-// requireOperatorManagedCluster fails the calling test if the cluster does not
-// have an operator-managed Installation/default. The live-migration tests patch
-// the Installation CR to disable natOutgoing; without an Installation that path
-// is invalid (manifest installs configure IPPool directly).
-func requireOperatorManagedCluster(cli ctrlclient.Client) {
-	GinkgoHelper()
-	if utils.GetInstallation(cli) == nil {
-		Fail("Installation/default not found, these tests require an operator-managed cluster")
-	}
-}

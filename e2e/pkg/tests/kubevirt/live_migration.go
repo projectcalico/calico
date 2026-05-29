@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,8 +55,9 @@ import (
 //   - At least 2 schedulable worker nodes (3 recommended for double-migration tests)
 //   - For Test 3: an external TOR node with BIRD eBGP peering (EXT_IP, EXT_KEY, EXT_USER)
 //
-// Only the eBGP test (Test 3) mutates cluster-global state; WithSerial is
-// scoped to that Context, leaving Tests 1, 2, 4 parallel-safe.
+// All tests are parallel-safe. eBGP uses random suffixes for its
+// cluster-scoped resources and treats natOutgoing=false on the VM IPPool
+// as a provisioning precondition.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
@@ -264,7 +264,7 @@ var _ = describe.CalicoDescribe(
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
 		// priority correctly reverts and re-elevates across two consecutive migrations.
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
-		framework.Context("eBGP external client", describe.RequiresExternalNode(), describe.WithSerial(), func() {
+		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				tor := externalnode.NewClient()
 				if tor == nil {
@@ -274,55 +274,26 @@ var _ = describe.CalicoDescribe(
 					Fail("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
 				}
 
-				// Only this spec patches the Installation CR (natOutgoing) —
-				// that path only exists on operator-managed clusters. Fail fast
-				// rather than after the first patch attempt 404s.
-				requireOperatorManagedCluster(cli)
-
 				ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 				defer cancel()
 				ns := f.Namespace.Name
 
+				// Precondition: natOutgoing must be false on the IPPool backing VM
+				// workloads. If true, natOutgoing rewrites the VM's source IP to the
+				// node's IP at egress NAT and breaks the TOR's reverse-path matching
+				// after migration. The pipeline that runs this test is expected to
+				// configure the IPPool with natOutgoing=false at provisioning time;
+				// we only verify here so the failure mode is obvious.
+				const vmIPPoolName = "default-ipv4-ippool"
+				By(fmt.Sprintf("Verifying natOutgoing=false on IPPool %s", vmIPPoolName))
+				pool := &v3.IPPool{}
+				Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: vmIPPoolName}, pool)).
+					To(Succeed(), "IPPool %q must exist", vmIPPoolName)
+				Expect(pool.Spec.NATOutgoing).To(BeFalse(),
+					"IPPool %q must have natOutgoing=false (set by cluster provisioning)", vmIPPoolName)
+
 				By("Setting up eBGP peering between TOR and cluster nodes")
 				setupEBGPPeering(f, tor)
-
-				// Disable natOutgoing on the IPPool that backs VM workloads. natOutgoing
-				// rewrites the VM's source IP to the node's IP at the egress NAT, which
-				// breaks the TOR's reverse-path matching after migration (the next-hop
-				// changes mid-flow). Doing this through Installation rather than IPPool
-				// directly because the operator reconciles the IPPool from Installation
-				// and would revert any direct IPPool patch.
-				const vmIPPoolName = "default-ipv4-ippool"
-				By("Disabling natOutgoing via Installation to prevent masquerade breaking TCP after migration")
-				restoreNATOutgoing, err := utils.ConfigureWithCleanup(cli,
-					ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{},
-					func(inst *operatorv1.Installation) {
-						if inst.Spec.CalicoNetwork == nil {
-							Fail("Installation default has no CalicoNetwork spec")
-						}
-						for i := range inst.Spec.CalicoNetwork.IPPools {
-							if inst.Spec.CalicoNetwork.IPPools[i].Name == vmIPPoolName {
-								inst.Spec.CalicoNetwork.IPPools[i].NATOutgoing = operatorv1.NATOutgoingDisabled
-								return
-							}
-						}
-						Fail(fmt.Sprintf("IPPool %q not found in Installation default", vmIPPoolName))
-					})
-				Expect(err).NotTo(HaveOccurred(), "disable natOutgoing on Installation")
-				DeferCleanup(restoreNATOutgoing)
-
-				// Wait for the operator to reconcile the change to the IPPool resource
-				// and for Felix to drain the masq ipset.
-				logrus.Info("Waiting for natOutgoing=false to propagate to IPPool...")
-				Eventually(func() (bool, error) {
-					pool := &v3.IPPool{}
-					if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: vmIPPoolName}, pool); err != nil {
-						return true, err
-					}
-					return pool.Spec.NATOutgoing, nil
-				}, 30*time.Second, 2*time.Second).Should(BeFalse(),
-					"natOutgoing should be false on IPPool after Installation patch")
-				logrus.Info("natOutgoing=false confirmed on IPPool")
 
 				vmName := "e2e-ebgp-tcp"
 				vm := &kubeVirtVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit}
