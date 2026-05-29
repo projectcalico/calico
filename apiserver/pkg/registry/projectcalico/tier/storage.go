@@ -15,15 +15,11 @@
 package tier
 
 import (
-	"context"
-
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/generic/registry"
-	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/server"
 )
@@ -41,31 +37,6 @@ func EmptyObject() runtime.Object {
 // NewList returns a new shell of a binding list
 func NewList() runtime.Object {
 	return &calico.TierList{}
-}
-
-// StatusREST implements the REST endpoint for changing the status of a Tier.
-type StatusREST struct {
-	store *registry.Store
-}
-
-func (r *StatusREST) New() runtime.Object {
-	return &calico.Tier{}
-}
-
-func (r *StatusREST) Destroy() {
-	r.store.Destroy()
-}
-
-// Get retrieves the object from the storage. It is required to support Patch.
-func (r *StatusREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	return r.store.Get(ctx, name, options)
-}
-
-// Update alters the status subset of an object.
-func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions,
-) (runtime.Object, bool, error) {
-	return r.store.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
 }
 
 // NewREST returns a RESTStorage object that will work against API services.
@@ -119,24 +90,5 @@ func NewREST(scheme *runtime.Scheme, opts server.Options) (*REST, error) {
 		DestroyFunc: dFunc,
 	}
 
-	statusStorageInterface, statusDFunc, err := statusOpts.GetStorage(
-		prefix,
-		statusKeyFunc,
-		strategy,
-		func() runtime.Object { return &calico.Tier{} },
-		func() runtime.Object { return &calico.TierList{} },
-		GetAttrs,
-		nil,
-		nil,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	statusStore := *store
-	statusStore.UpdateStrategy = NewStatusStrategy(strategy)
-	statusStore.Storage = statusStorageInterface
-	statusStore.DestroyFunc = statusDFunc
-
-	return &REST{store}, &StatusREST{&statusStore}, nil
+	return &REST{store}, nil
 }
