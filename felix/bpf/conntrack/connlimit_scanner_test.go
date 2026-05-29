@@ -66,14 +66,14 @@ func (f *fakeQoSMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	return len(ks), nil
 }
 
-func (f *fakeQoSMap) seed(t *testing.T, ifindex, direction uint32, maxConn, current int32) {
+func (f *fakeQoSMap) seed(t *testing.T, ifindex, direction uint32, maxConn, current uint32) {
 	t.Helper()
 	k := qos.NewKey(ifindex, direction).AsBytes()
 	v := qos.NewValue(100, 50, 25, 12345, maxConn, current).AsBytes()
 	f.contents[string(k)] = v[:]
 }
 
-func (f *fakeQoSMap) currentCount(t *testing.T, ifindex, direction uint32) int32 {
+func (f *fakeQoSMap) currentCount(t *testing.T, ifindex, direction uint32) uint32 {
 	t.Helper()
 	bytes, err := f.Get(qos.NewKey(ifindex, direction).AsBytes())
 	if err != nil {
@@ -534,13 +534,13 @@ func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
 
 	scanner.IterationEnd()
 
-	if got, want := m.currentCount(t, ifA, 1), int32(2); got != want {
+	if got, want := m.currentCount(t, ifA, 1), uint32(2); got != want {
 		t.Errorf("ifA ingress current=%d, want %d", got, want)
 	}
-	if got, want := m.currentCount(t, ifB, 0), int32(3); got != want {
+	if got, want := m.currentCount(t, ifB, 0), uint32(3); got != want {
 		t.Errorf("ifB egress current=%d, want %d", got, want)
 	}
-	if got, want := m.currentCount(t, ifC, 1), int32(1); got != want {
+	if got, want := m.currentCount(t, ifC, 1), uint32(1); got != want {
 		t.Errorf("ifC ingress current=%d, want %d (unchanged)", got, want)
 	}
 
