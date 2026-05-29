@@ -43,14 +43,14 @@ var _ = Describe("Static", func() {
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
-				allPoolSetName := ipSetName(IPSetIDNetworkPools, ipVersion)
+				networkPoolSetName := ipSetName(IPSetIDNetworkPools, ipVersion)
 				thisHostSetName := ipSetName(IPSetIDThisHostIPs, ipVersion)
 				dscpSetName := ipSetName(IPSetIDDSCPEndpoints, ipVersion)
 				expRules = append(expRules, generictables.Rule{
 					// DSCP rule.
 					Match: iptables.Match().
 						SourceIPSet(dscpSetName).
-						NotDestIPSet(allPoolSetName).
+						NotDestIPSet(networkPoolSetName).
 						NotDestIPSet(thisHostSetName),
 					Action:  iptables.JumpAction{Target: ChainEgressDSCP},
 					Comment: []string{"set dscp for traffic leaving cluster."},

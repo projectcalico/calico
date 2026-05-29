@@ -157,11 +157,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				binary = "ip6tables-save"
 			}
-			allPoolsIPSet := utils.IPSetName(rules.IPSetIDNetworkPools, ipVersion)
+			networkPoolsIPSet := utils.IPSetName(rules.IPSetIDNetworkPools, ipVersion)
 			thisHostIPSet := utils.IPSetName(rules.IPSetIDThisHostIPs, ipVersion)
 			dscpIPSet := utils.IPSetName(rules.IPSetIDDSCPEndpoints, ipVersion)
 			tmpl := "-m set --match-set %v src -m set ! --match-set %v dst -m set ! --match-set %v dst -j cali-egress-dscp"
-			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, allPoolsIPSet, thisHostIPSet)
+			expectedRule := fmt.Sprintf(tmpl, dscpIPSet, networkPoolsIPSet, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput(binary, "-t", "mangle")
 				return output
@@ -175,11 +175,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ dscp tests", []apiconfig.Da
 			if ipVersion == 6 {
 				ipFamily = "ip6"
 			}
-			allPoolsIPSet := utils.NFTSetName(rules.IPSetIDNetworkPools, ipVersion)
+			networkPoolsIPSet := utils.NFTSetName(rules.IPSetIDNetworkPools, ipVersion)
 			thisHostIPSet := utils.NFTSetName(rules.IPSetIDThisHostIPs, ipVersion)
 			dscpIPSet := utils.NFTSetName(rules.IPSetIDDSCPEndpoints, ipVersion)
 			tmpl := "%v saddr %v %v daddr != %v %v daddr != %v .* jump mangle-cali-egress-dscp"
-			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, allPoolsIPSet, ipFamily, thisHostIPSet)
+			pattern := fmt.Sprintf(tmpl, ipFamily, dscpIPSet, ipFamily, networkPoolsIPSet, ipFamily, thisHostIPSet)
 			getRules := func() string {
 				output, _ := felix.ExecOutput("nft", "list", "chain", ipFamily, "calico", "mangle-cali-POSTROUTING")
 				return output
