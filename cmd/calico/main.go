@@ -142,7 +142,12 @@ func main() {
 	}
 
 	if err := root.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		if mode == modeCalicoctl {
+			// Standalone calicoctl prints the bare (already massaged) error, no "Error:" prefix.
+			fmt.Fprintln(os.Stderr, err)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }
