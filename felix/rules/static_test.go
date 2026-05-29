@@ -43,14 +43,14 @@ var _ = Describe("Static", func() {
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
-				allPoolSetName := fmt.Sprintf("cali%v0network-ip-pools", ipVersion)
-				thisHostSetName := fmt.Sprintf("cali%v0this-host", ipVersion)
-				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
+				networkPoolSetName := ipSetName(IPSetIDNetworkPools, ipVersion)
+				thisHostSetName := ipSetName(IPSetIDThisHostIPs, ipVersion)
+				dscpSetName := ipSetName(IPSetIDDSCPEndpoints, ipVersion)
 				expRules = append(expRules, generictables.Rule{
 					// DSCP rule.
 					Match: iptables.Match().
 						SourceIPSet(dscpSetName).
-						NotDestIPSet(allPoolSetName).
+						NotDestIPSet(networkPoolSetName).
 						NotDestIPSet(thisHostSetName),
 					Action:  iptables.JumpAction{Target: ChainEgressDSCP},
 					Comment: []string{"set dscp for traffic leaving cluster."},
@@ -200,7 +200,7 @@ var _ = Describe("Static", func() {
 				Describe(fmt.Sprintf("IPv%d", ipVersion), func() {
 					// Capture current value of ipVersion.
 					ipVersion := ipVersion
-					ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
+					ipSetThisHost := ipSetName(IPSetIDThisHostIPs, ipVersion)
 
 					var portRanges []*proto.PortRange
 					portRange := &proto.PortRange{
@@ -730,7 +730,7 @@ var _ = Describe("Static", func() {
 					{
 						Match: iptables.Match().
 							ProtocolNum(4).
-							SourceIPSet("cali40all-hosts-net").
+							SourceIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							DestAddrType("LOCAL"),
 
 						Action:  iptables.AcceptAction{},
@@ -781,7 +781,7 @@ var _ = Describe("Static", func() {
 					{
 						Match: iptables.Match().
 							ProtocolNum(4).
-							SourceIPSet("cali40all-hosts-net").
+							SourceIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							DestAddrType("LOCAL"),
 
 						Action:  iptables.AcceptAction{},
@@ -900,7 +900,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: iptables.Match().ProtocolNum(4).
-							DestIPSet("cali40all-hosts-net").
+							DestIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							SrcAddrType(generictables.AddrTypeLocal, false),
 						Action:  iptables.AcceptAction{},
 						Comment: []string{"Allow IPIP packets to other Calico hosts"},
@@ -935,7 +935,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: iptables.Match().ProtocolNum(4).
-							DestIPSet("cali40all-hosts-net").
+							DestIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							SrcAddrType(generictables.AddrTypeLocal, false),
 						Action:  iptables.AcceptAction{},
 						Comment: []string{"Allow IPIP packets to other Calico hosts"},
@@ -1315,7 +1315,7 @@ var _ = Describe("Static", func() {
 		})
 		for _, ipVersion := range []uint8{4, 6} {
 			// Capture current value of ipVersion.
-			ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
+			ipSetThisHost := ipSetName(IPSetIDThisHostIPs, ipVersion)
 
 			portRanges1 := []*proto.PortRange{
 				{First: 30030, Last: 30040},
@@ -1877,12 +1877,7 @@ var _ = Describe("Static", func() {
 					Expect(chain).NotTo(BeNil())
 					Expect(chain.Name).To(Equal("cali-POSTROUTING"))
 
-					var expectedMeshIPSet string
-					if ipVersion == 4 {
-						expectedMeshIPSet = "cali40all-istio-weps"
-					} else {
-						expectedMeshIPSet = "cali60all-istio-weps"
-					}
+					expectedMeshIPSet := ipSetName(IPSetIDAllIstioWEPs, ipVersion)
 
 					// Look for the Istio DSCP marking rule
 					found := false

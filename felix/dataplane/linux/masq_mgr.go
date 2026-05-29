@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ func newMasqManager(
 	// in sync, by which point we'll have added all our CIDRs into the sets.
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
 		MaxSize: maxIPSetSize,
-		SetID:   rules.IPSetIDAllPools,
+		SetID:   rules.IPSetIDNetworkPools,
 		Type:    ipsets.IPSetTypeHashNet,
 	}, []string{})
 	ipsetsDataplane.AddOrReplaceIPSet(ipsets.IPSetMetadata{
@@ -108,7 +108,7 @@ func (m *masqManager) OnUpdate(msg any) {
 		// same IP is a no-op anyway.
 		logCxt.Debug("Removing old pool.")
 		if !isLoadBalancerOnly(oldPool) {
-			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDAllPools, []string{oldPool.Cidr})
+			m.ipsetsDataplane.RemoveMembers(rules.IPSetIDNetworkPools, []string{oldPool.Cidr})
 		}
 		if oldPool.Masquerade {
 			logCxt.Debug("Masquerade was enabled on pool.")
@@ -134,7 +134,7 @@ func (m *masqManager) OnUpdate(msg any) {
 			logCxt.Debug("Skipping LoadBalancer-only pool from network-ip-pools IP set.")
 		} else {
 			logCxt.Debug("Adding IPAM pool to network-ip-pools IP set.")
-			m.ipsetsDataplane.AddMembers(rules.IPSetIDAllPools, []string{newPool.Cidr})
+			m.ipsetsDataplane.AddMembers(rules.IPSetIDNetworkPools, []string{newPool.Cidr})
 		}
 		if newPool.Masquerade {
 			logCxt.Debug("IPAM has masquerade enabled.")
