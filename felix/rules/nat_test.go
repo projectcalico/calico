@@ -54,8 +54,8 @@ var _ = Describe("NAT", func() {
 				{
 					Action: MasqAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)),
 				},
 			},
 		}))
@@ -71,9 +71,9 @@ var _ = Describe("NAT", func() {
 				{
 					Action: MasqAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").
-						NotDestIPSet("cali40all-hosts-net"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDAllHostNets, 4)),
 				},
 			},
 		}))
@@ -90,8 +90,8 @@ var _ = Describe("NAT", func() {
 				{
 					Action: SNATAction{ToAddr: snatAddress},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)),
 				},
 			},
 		}))
@@ -108,32 +108,32 @@ var _ = Describe("NAT", func() {
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp"),
 				},
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp"),
 				},
 				{
 					Action: MasqAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)),
 				},
 			},
 		}))
@@ -151,36 +151,36 @@ var _ = Describe("NAT", func() {
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp").
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp").
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: MasqAction{ToPorts: "99-100"},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp").
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp").
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp").
 						OutInterface("cali-123"),
 				},
 				{
 					Action: MasqAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).
 						OutInterface("cali-123"),
 				},
 			},
@@ -202,32 +202,32 @@ var _ = Describe("NAT", func() {
 				{
 					Action: SNATAction{ToAddr: expectedAddress},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("tcp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("tcp"),
 				},
 				{
 					Action: SNATAction{ToAddr: expectedAddress},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp"),
 				},
 				{
 					Action: ReturnAction{},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools").Protocol("udp"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)).Protocol("udp"),
 				},
 				{
 					Action: SNATAction{ToAddr: snatAddress},
 					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40network-ip-pools"),
+						SourceIPSet(ipSetName(IPSetIDNATOutgoingMasqPools, 4)).
+						NotDestIPSet(ipSetName(IPSetIDNetworkPools, 4)),
 				},
 			},
 		}))
