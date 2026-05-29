@@ -20,31 +20,39 @@ import (
 	"strconv"
 )
 
-// DescribeInstancesInput is the subset of parameters we need.
+// The Input/Output structs below mirror their counterparts in
+// aws-sdk-go-v2/service/ec2 and service/ec2/types at EC2 API version 2016-11-15
+// (see APIVersion). They carry only the fields felix/aws sends or reads; adding
+// a field means copying it from the matching upstream type.
+
+// DescribeInstancesInput mirrors ec2.DescribeInstancesInput.
 type DescribeInstancesInput struct {
 	InstanceIDs []string
 }
 
-// DescribeInstancesOutput is the subset of fields we read from the response.
-// The XML root element <DescribeInstancesResponse> is unmarshalled into this
-// struct directly.
+// DescribeInstancesOutput mirrors ec2.DescribeInstancesOutput. The XML root
+// element <DescribeInstancesResponse> is unmarshalled into this struct directly.
 type DescribeInstancesOutput struct {
 	Reservations []Reservation `xml:"reservationSet>item"`
 }
 
+// Reservation mirrors ec2types.Reservation.
 type Reservation struct {
 	Instances []Instance `xml:"instancesSet>item"`
 }
 
+// Instance mirrors ec2types.Instance.
 type Instance struct {
 	NetworkInterfaces []InstanceNetworkInterface `xml:"networkInterfaceSet>item"`
 }
 
+// InstanceNetworkInterface mirrors ec2types.InstanceNetworkInterface.
 type InstanceNetworkInterface struct {
 	NetworkInterfaceID string                              `xml:"networkInterfaceId"`
 	Attachment         *InstanceNetworkInterfaceAttachment `xml:"attachment"`
 }
 
+// InstanceNetworkInterfaceAttachment mirrors ec2types.InstanceNetworkInterfaceAttachment.
 type InstanceNetworkInterfaceAttachment struct {
 	DeviceIndex int32 `xml:"deviceIndex"`
 }
@@ -62,13 +70,15 @@ func (c *Client) DescribeInstances(ctx context.Context, in *DescribeInstancesInp
 	return &out, nil
 }
 
-// ModifyNetworkInterfaceAttributeInput covers the SourceDestCheck use case.
-// Only one attribute may be modified per call.
+// ModifyNetworkInterfaceAttributeInput mirrors the SourceDestCheck subset of
+// ec2.ModifyNetworkInterfaceAttributeInput. Only one attribute may be modified
+// per call.
 type ModifyNetworkInterfaceAttributeInput struct {
 	NetworkInterfaceID string
 	SourceDestCheck    *bool
 }
 
+// ModifyNetworkInterfaceAttributeOutput mirrors ec2.ModifyNetworkInterfaceAttributeOutput.
 type ModifyNetworkInterfaceAttributeOutput struct{}
 
 // ModifyNetworkInterfaceAttribute calls the EC2 ModifyNetworkInterfaceAttribute
