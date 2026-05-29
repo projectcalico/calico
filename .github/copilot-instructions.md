@@ -242,5 +242,9 @@ make image                   # Build all images (slow)
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
+## Helm Chart Review
+
+The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. A chart change that alters how a user installs or upgrades Calico via Helm — moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, or changing a documented values key or example command — must update the matching README in the same PR.
+
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.

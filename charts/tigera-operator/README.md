@@ -24,6 +24,12 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    helm repo add projectcalico https://docs.tigera.io/calico/charts
    ```
 
+1. Install the Calico CRDs. As of Calico v3.32, CRDs are no longer bundled in this chart and must be installed separately from the `crd.projectcalico.org.v1` chart. See [Custom Resource Definitions](#custom-resource-definitions) below for why.
+
+   ```
+   helm template calico-crds projectcalico/crd.projectcalico.org.v1 | kubectl apply --server-side -f -
+   ```
+
 1. Create the tigera-operator namespace.
 
    ```
@@ -35,6 +41,18 @@ Calico’s flexible architecture supports a wide range of deployment options, us
    ```
    helm install calico projectcalico/tigera-operator --namespace tigera-operator
    ```
+
+# Custom Resource Definitions
+
+This chart does not install the Calico CRDs (the `crd.projectcalico.org` and `operator.tigera.io` API groups). Helm does not upgrade or delete CRDs that live in a chart's `crds/` directory, which makes CRD lifecycle management awkward over the life of a cluster. Following [Helm's CRD best practices](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/), the CRDs are shipped in a separate `crd.projectcalico.org.v1` chart that you install and upgrade yourself.
+
+To install or upgrade the CRDs:
+
+```
+helm template calico-crds projectcalico/crd.projectcalico.org.v1 | kubectl apply --server-side -f -
+```
+
+`helm template | kubectl apply --server-side` is used rather than `helm install` because some Calico CRDs exceed the size limit for client-side apply.
 
 # Upgrading
 
@@ -85,6 +103,12 @@ Starting in Calico v3.28, a change in the way UIDs are generated for projectcali
 > the output and then re-running the command without --dry-run to commit to the changes.
 
 ## All other upgrades
+
+1. Update the Calico CRDs. Helm will not do this for you (see [Custom Resource Definitions](#custom-resource-definitions)), so apply them before upgrading the operator chart.
+
+   ```bash
+   helm template calico-crds projectcalico/crd.projectcalico.org.v1 | kubectl apply --server-side -f -
+   ```
 
 1. Run the helm upgrade:
 
