@@ -73,6 +73,8 @@ func (c *mockClient) ModifyNetworkInterfaceAttribute(ctx context.Context, params
 func (c *mockClient) DescribeInstances(ctx context.Context, params *ec2query.DescribeInstancesInput) (*ec2query.DescribeInstancesOutput, error) {
 	c.UsageCounter++
 
+	deviceIndex := int32(0)
+	eniId := testEniId
 	return &ec2query.DescribeInstancesOutput{
 		Reservations: []ec2query.Reservation{
 			{
@@ -80,9 +82,9 @@ func (c *mockClient) DescribeInstances(ctx context.Context, params *ec2query.Des
 					{
 						NetworkInterfaces: []ec2query.InstanceNetworkInterface{
 							{
-								NetworkInterfaceID: testEniId,
+								NetworkInterfaceId: &eniId,
 								Attachment: &ec2query.InstanceNetworkInterfaceAttachment{
-									DeviceIndex: 0,
+									DeviceIndex: &deviceIndex,
 								},
 							},
 						},

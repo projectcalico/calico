@@ -209,7 +209,7 @@ func newEC2Client(ctx context.Context) (*ec2Client, error) {
 
 func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstanceId string, err error) {
 	input := &ec2query.DescribeInstancesInput{
-		InstanceIDs: []string{c.ec2InstanceId},
+		InstanceIds: []string{c.ec2InstanceId},
 	}
 
 	var out *ec2query.DescribeInstancesOutput
@@ -244,8 +244,11 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 		// response to make sure the right device is updated.
 		for _, networkInterface := range instance.NetworkInterfaces {
 			if networkInterface.Attachment != nil &&
-				networkInterface.Attachment.DeviceIndex == deviceIndexZero {
-				interfaceId = networkInterface.NetworkInterfaceID
+				networkInterface.Attachment.DeviceIndex != nil &&
+				*networkInterface.Attachment.DeviceIndex == deviceIndexZero {
+				if networkInterface.NetworkInterfaceId != nil {
+					interfaceId = *networkInterface.NetworkInterfaceId
+				}
 				if interfaceId != "" {
 					log.Debugf("instance-id: %s, network-interface-id: %s", c.ec2InstanceId, interfaceId)
 					return interfaceId, nil
@@ -262,8 +265,8 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 
 func (c *ec2Client) setEC2SourceDestinationCheck(ctx context.Context, ec2NetId string, checkVal bool) error {
 	input := &ec2query.ModifyNetworkInterfaceAttributeInput{
-		NetworkInterfaceID: ec2NetId,
-		SourceDestCheck:    &checkVal,
+		NetworkInterfaceId: &ec2NetId,
+		SourceDestCheck:    &ec2query.AttributeBooleanValue{Value: &checkVal},
 	}
 
 	var err error

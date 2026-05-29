@@ -80,7 +80,7 @@ func TestDescribeInstancesParsesResponse(t *testing.T) {
 		_, _ = w.Write([]byte(respBody))
 	}))
 
-	out, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIDs: []string{"i-abc"}})
+	out, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIds: []string{"i-abc"}})
 	if err != nil {
 		t.Fatalf("DescribeInstances: %v", err)
 	}
@@ -102,11 +102,12 @@ func TestDescribeInstancesParsesResponse(t *testing.T) {
 	if len(ifaces) != 2 {
 		t.Fatalf("expected 2 interfaces, got %d", len(ifaces))
 	}
-	if ifaces[0].NetworkInterfaceID != "eni-primary" || ifaces[0].Attachment == nil || ifaces[0].Attachment.DeviceIndex != 0 {
+	if ifaces[0].NetworkInterfaceId == nil || *ifaces[0].NetworkInterfaceId != "eni-primary" ||
+		ifaces[0].Attachment == nil || ifaces[0].Attachment.DeviceIndex == nil || *ifaces[0].Attachment.DeviceIndex != 0 {
 		t.Errorf("interface 0 wrong: %+v / %+v", ifaces[0], ifaces[0].Attachment)
 	}
-	if ifaces[1].Attachment.DeviceIndex != 1 {
-		t.Errorf("interface 1 device index wrong: %d", ifaces[1].Attachment.DeviceIndex)
+	if ifaces[1].Attachment.DeviceIndex == nil || *ifaces[1].Attachment.DeviceIndex != 1 {
+		t.Errorf("interface 1 device index wrong: %v", ifaces[1].Attachment.DeviceIndex)
 	}
 }
 
@@ -119,9 +120,10 @@ func TestModifyNetworkInterfaceAttributeEncodesParams(t *testing.T) {
 	}))
 
 	enabled := false
+	niid := "eni-1"
 	_, err := c.ModifyNetworkInterfaceAttribute(context.Background(), &ModifyNetworkInterfaceAttributeInput{
-		NetworkInterfaceID: "eni-1",
-		SourceDestCheck:    &enabled,
+		NetworkInterfaceId: &niid,
+		SourceDestCheck:    &AttributeBooleanValue{Value: &enabled},
 	})
 	if err != nil {
 		t.Fatalf("ModifyNetworkInterfaceAttribute: %v", err)
@@ -152,7 +154,7 @@ func TestErrorResponseParsed(t *testing.T) {
 		_, _ = w.Write([]byte(errBody))
 	}))
 
-	_, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIDs: []string{"i-abc"}})
+	_, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIds: []string{"i-abc"}})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -217,7 +219,7 @@ func TestErrorResponseAlternateEnvelope(t *testing.T) {
 		_, _ = w.Write([]byte(errBody))
 	}))
 
-	_, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIDs: []string{"i-abc"}})
+	_, err := c.DescribeInstances(context.Background(), &DescribeInstancesInput{InstanceIds: []string{"i-abc"}})
 	var ae *APIError
 	if !errors.As(err, &ae) {
 		t.Fatalf("expected *APIError, got %T: %v", err, err)

@@ -22,12 +22,15 @@ import (
 
 // The Input/Output structs below mirror their counterparts in
 // aws-sdk-go-v2/service/ec2 and service/ec2/types at EC2 API version 2016-11-15
-// (see APIVersion). They carry only the fields felix/aws sends or reads; adding
-// a field means copying it from the matching upstream type.
+// (see APIVersion). Field names and pointer-ness match the upstream types so
+// that callers read them the same way; each struct carries only the fields
+// felix/aws sends or reads, and adding a field means copying it from the
+// matching upstream type. The xml tags name the elements of the EC2 Query API
+// response.
 
 // DescribeInstancesInput mirrors ec2.DescribeInstancesInput.
 type DescribeInstancesInput struct {
-	InstanceIDs []string
+	InstanceIds []string
 }
 
 // DescribeInstancesOutput mirrors ec2.DescribeInstancesOutput. The XML root
@@ -48,19 +51,19 @@ type Instance struct {
 
 // InstanceNetworkInterface mirrors ec2types.InstanceNetworkInterface.
 type InstanceNetworkInterface struct {
-	NetworkInterfaceID string                              `xml:"networkInterfaceId"`
+	NetworkInterfaceId *string                             `xml:"networkInterfaceId"`
 	Attachment         *InstanceNetworkInterfaceAttachment `xml:"attachment"`
 }
 
 // InstanceNetworkInterfaceAttachment mirrors ec2types.InstanceNetworkInterfaceAttachment.
 type InstanceNetworkInterfaceAttachment struct {
-	DeviceIndex int32 `xml:"deviceIndex"`
+	DeviceIndex *int32 `xml:"deviceIndex"`
 }
 
 // DescribeInstances calls the EC2 DescribeInstances operation.
 func (c *Client) DescribeInstances(ctx context.Context, in *DescribeInstancesInput) (*DescribeInstancesOutput, error) {
 	params := url.Values{}
-	for i, id := range in.InstanceIDs {
+	for i, id := range in.InstanceIds {
 		params.Set("InstanceId."+strconv.Itoa(i+1), id)
 	}
 	var out DescribeInstancesOutput
@@ -70,12 +73,17 @@ func (c *Client) DescribeInstances(ctx context.Context, in *DescribeInstancesInp
 	return &out, nil
 }
 
+// AttributeBooleanValue mirrors ec2types.AttributeBooleanValue.
+type AttributeBooleanValue struct {
+	Value *bool
+}
+
 // ModifyNetworkInterfaceAttributeInput mirrors the SourceDestCheck subset of
 // ec2.ModifyNetworkInterfaceAttributeInput. Only one attribute may be modified
 // per call.
 type ModifyNetworkInterfaceAttributeInput struct {
-	NetworkInterfaceID string
-	SourceDestCheck    *bool
+	NetworkInterfaceId *string
+	SourceDestCheck    *AttributeBooleanValue
 }
 
 // ModifyNetworkInterfaceAttributeOutput mirrors ec2.ModifyNetworkInterfaceAttributeOutput.
@@ -85,9 +93,11 @@ type ModifyNetworkInterfaceAttributeOutput struct{}
 // operation. Today only SourceDestCheck is supported.
 func (c *Client) ModifyNetworkInterfaceAttribute(ctx context.Context, in *ModifyNetworkInterfaceAttributeInput) (*ModifyNetworkInterfaceAttributeOutput, error) {
 	params := url.Values{}
-	params.Set("NetworkInterfaceId", in.NetworkInterfaceID)
-	if in.SourceDestCheck != nil {
-		params.Set("SourceDestCheck.Value", strconv.FormatBool(*in.SourceDestCheck))
+	if in.NetworkInterfaceId != nil {
+		params.Set("NetworkInterfaceId", *in.NetworkInterfaceId)
+	}
+	if in.SourceDestCheck != nil && in.SourceDestCheck.Value != nil {
+		params.Set("SourceDestCheck.Value", strconv.FormatBool(*in.SourceDestCheck.Value))
 	}
 	if err := c.Do(ctx, "ModifyNetworkInterfaceAttribute", params, nil); err != nil {
 		return nil, err
