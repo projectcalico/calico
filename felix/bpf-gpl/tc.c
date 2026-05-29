@@ -1401,6 +1401,52 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 		skb_log(ctx, true);
 	}
 
+	/* Ingress connection limit for TCP SYN arriving at a WEP.
+	 * On the first SYN (CT_RES_CONNLIMIT_FIRST_SYN), atomically check the
+	 * limit and increment the counter in the QoS map. On SYN retransmissions,
+	 * always reject if the CT entry was previously rejected (CONNLIMIT_REJECTED
+	 * flag), otherwise allow (the connection was already accepted and counted).
+	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 */
+	if (CALI_F_TO_WEP && !policy_skipped &&
+			ctx->state->ip_proto == IPPROTO_TCP &&
+			ct_result_is_syn(ctx->state->ct_result.rc)) {
+		bool reject = false;
+		if (ctx->state->ct_result.rc & CT_RES_CONNLIMIT_FIRST_SYN) {
+			/* First SYN: check and increment. */
+			reject = qos_connlimit_check_and_increment(ctx) < 0;
+		} else if (ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+			/* SYN retransmission of a previously rejected connection. */
+			CALI_DEBUG("connlimit: retransmission of rejected connection");
+			reject = true;
+		}
+		if (reject) {
+			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
+			/* Mark the CT entry so retransmissions are unconditionally
+			 * rejected without re-checking the counter (which may have
+			 * changed due to scanner recounts). */
+			{
+				bool sltd = src_lt_dest(&ctx->state->ip_src,
+							&ctx->state->ip_dst,
+							ctx->state->sport,
+							ctx->state->dport);
+				struct calico_ct_key ck;
+				fill_ct_key(&ck, sltd, ctx->state->ip_proto,
+					    &ctx->state->ip_src, &ctx->state->ip_dst,
+					    ctx->state->sport, ctx->state->dport);
+				struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
+				if (cv) {
+					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
+				}
+			}
+			if (!skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+				ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+				CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
+			}
+			goto deny;
+		}
+	}
+
 	if ((CALI_F_FROM_WEP || CALI_F_TO_HEP) && qos_dscp_needs_update(ctx) && !qos_dscp_set(ctx, EGRESS_DSCP)) {
 		goto deny;
 	}
@@ -1475,6 +1521,22 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		CALI_DEBUG("Allowed by policy: ACCEPT");
 	}
 
+	/* Check egress connection limit for new TCP connections from WEP.
+	 * Atomically check the limit and increment the counter in the QoS map.
+	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 */
+	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP &&
+			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
+		if (qos_connlimit_check_and_increment(ctx) < 0) {
+			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
+			if (!skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
+				ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+				CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
+			}
+			goto deny;
+		}
+	}
+
 	if (CALI_F_FROM_WEP &&
 			CALI_DROP_WORKLOAD_TO_HOST &&
 			cali_rt_flags_local_host(
@@ -1511,6 +1573,9 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	}
 	if (state->flags & CALI_ST_SKIP_REDIR_PEER) {
 		ct_ctx_nat->flags |= CALI_CT_FLAG_SKIP_REDIR_PEER;
+	}
+	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP && EGRESS_CONN_LIMIT_CONFIGURED) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_CONNLIMIT_EGRESS;
 	}
 	if (CALI_F_TO_WEP) {
 		if (!(ctx->skb->mark & CALI_SKB_MARK_SEEN)) {
