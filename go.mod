@@ -127,7 +127,7 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/tigera/api v0.0.0-20260227222130-df0b9e289a34 // indirect
+	github.com/tigera/api v0.0.0-20260310182635-546021df243c // indirect
 	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 )
@@ -323,8 +323,8 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
-	github.com/tklauser/go-sysconf v0.3.15 // indirect
-	github.com/tklauser/numcpus v0.10.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.16 // indirect
+	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/urfave/cli v1.22.16 // indirect
 	github.com/vbatts/tar-split v0.11.6 // indirect
 	github.com/virtuald/go-ordered-json v0.0.0-20170621173500-b18e6e673d74 // indirect
