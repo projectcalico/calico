@@ -68,7 +68,7 @@ github.com/sirupsen/logrus v1.9.3
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/stoewer/go-strcase v1.3.0
-github.com/tigera/api v0.0.0-20260227222130-df0b9e289a34
+github.com/tigera/api v0.0.0-20260310182635-546021df243c
 github.com/tigera/operator/api v0.0.0-20260313201632-bb0fdd128e6b
 github.com/x448/float16 v0.8.4
 go.etcd.io/etcd/api/v3 v3.6.5
