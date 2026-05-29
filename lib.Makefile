@@ -135,6 +135,13 @@ ifneq ($(GO_BUILD_PARALLELISM),)
 GOFLAGS := $(GOFLAGS) -p=$(GO_BUILD_PARALLELISM)
 endif
 
+# Outer parallelism for image / kind-build-images / kind-reload. Each parallel
+# job spawns a docker go-build container, so `-j$(nproc)` on a workstation with
+# limited RAM (e.g. 32G running alongside an IDE/LSP/AI session) will thrash
+# into swap. Default to a conservative 4. Raise via NUM_BUILD_JOBS=N for a
+# bigger machine.
+NUM_BUILD_JOBS ?= 4
+
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -1818,7 +1825,7 @@ kind-deploy:
 # re-pulls the new digests under the test-build tag (PullAlways).
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
