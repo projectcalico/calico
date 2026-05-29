@@ -222,7 +222,26 @@ conntrack_cleanup_v6.d: conntrack_cleanup.c
 	$(COMPILE_DEPS)
 
 
-LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
+# LLVM 21 added TrapUnreachable=true to the BPF backend (llvm/llvm-project#131731).
+# This causes llc to emit a trap instruction (call to __bpf_trap kfunc) after
+# every __builtin_unreachable().  Our bpf_exit() helper (bpf.h) uses inline asm
+# to emit a BPF "exit" instruction followed by __builtin_unreachable() to tell
+# the compiler the path is dead.  With TrapUnreachable, llc inserts a trap
+# instruction after the exit; the kernel BPF verifier sees it as unreachable
+# dead code ("unreachable insn N") and rejects every program.
+#
+# The flag -bpf-disable-trap-unreachable restores the LLVM 20 behaviour where
+# __builtin_unreachable() generates no code.  It is cl::Hidden (internal to
+# LLVM, not guaranteed stable across releases), but it was authored by a kernel
+# BPF maintainer and is the only available workaround short of restructuring
+# bpf_exit() or requiring kernel 6.16+ (which added the __bpf_trap kfunc).
+#
+# If a future LLVM release removes this flag, alternatives are:
+#   - A stable clang flag like -ftrap-unreachable=none (proposed in
+#     llvm/llvm-project#174894, not yet merged as of LLVM 22).
+#   - Restructuring bpf_exit() to avoid inline asm "exit" + __builtin_unreachable().
+#   - Requiring kernel 6.16+ and accepting the __bpf_trap kfunc calls.
+LINK=$(LD) -march=bpf -filetype=obj -bpf-disable-trap-unreachable -o $@ $<
 bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
 	$(LINK)
 bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
