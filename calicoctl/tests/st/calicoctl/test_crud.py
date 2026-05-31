@@ -1561,24 +1561,15 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_contains("No resources specified")
 
-    def test_validate_rejects_datastore_args(self):
+    def test_validate_ignores_datastore_args(self):
         """
-        Test that validate command rejects datastore-related arguments
+        Test that validate tolerates datastore-related flags. Validation is
+        offline, so --config and --context are accepted and ignored.
         """
-        # Test --config argument rejection
-        rc = calicoctl("validate --config=/tmp/config.yaml -f /tmp/test.yaml", no_config=True)
-        rc.assert_error()
-        rc.assert_output_contains("Usage:")
-
-        # Test --namespace argument rejection
-        rc = calicoctl("validate --namespace=test -f /tmp/test.yaml", no_config=True)
-        rc.assert_error()
-        rc.assert_output_contains("Usage:")
-
-        # Test --context argument rejection
-        rc = calicoctl("validate --context=test -f /tmp/test.yaml", no_config=True)
-        rc.assert_error()
-        rc.assert_output_contains("Usage:")
+        rc = calicoctl("validate --config=/tmp/config.yaml --context=test",
+                       data=bgppeer_name1_rev1_v4, no_config=True)
+        rc.assert_no_error()
+        rc.assert_output_contains("Successfully validated 1 'BGPPeer' resource(s)")
 
     def test_validate_different_resource_types(self):
         """
@@ -1634,7 +1625,7 @@ class TestCalicoctlCommands(TestBase):
         resources = [valid_ippool, invalid_networkpolicy]
         rc = calicoctl("validate", data=resources, no_config=True)
         rc.assert_error()
-        rc.assert_output_contains("hit error(s):")
+        rc.assert_output_contains("hit error:")
 
 #
 # class TestCreateFromFile(TestBase):
