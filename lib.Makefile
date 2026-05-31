@@ -170,6 +170,12 @@ endif
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
 
+# Rust target triple (long form). Injected as CARGO_BUILD_TARGET so cargo
+# cross-compiles transparently. Linker/sysroot side uses CROSS_TRIPLE below.
+RUST_TARGET_amd64   := x86_64-unknown-linux-gnu
+RUST_TARGET_arm64   := aarch64-unknown-linux-gnu
+RUST_TARGET         := $(RUST_TARGET_$(ARCH))
+
 # Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
 ifeq ($(BUILDARCH),amd64)
 ifneq ($(ARCH),amd64)
@@ -431,12 +437,29 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
+# Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+RUST_CROSS_ENV := \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--target=$(CROSS_TRIPLE) -C link-arg=--sysroot=$(CROSS_SYSROOT) -C link-arg=-fuse-ld=lld" \
+	-e CC_aarch64_unknown_linux_gnu=clang \
+	-e CXX_aarch64_unknown_linux_gnu=clang++ \
+	-e AR_aarch64_unknown_linux_gnu=$(CROSS_TRIPLE)-ar \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT) -I$(CROSS_SYSROOT)/usr/include"
+endif
+endif
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
-		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
+		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
+		$(RUST_CROSS_ENV) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
