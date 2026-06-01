@@ -367,6 +367,7 @@ the BPF dataplane).
 - After editing chart templates: `make gen-manifests`
 - This regenerates `manifests/` directory (mostly auto-generated)
 - Commit both chart changes and regenerated manifests
+- The install/upgrade instructions in `charts/tigera-operator/README.md` and `charts/crd.projectcalico.org.v1/README.md` are hand-written and drift silently. A chart change that alters how a user installs or upgrades Calico via Helm (moving resources between charts, adding/removing a manual step, renaming a chart, changing a documented values key or example command) must update the matching README in the same PR. See [`.github/instructions/helm-charts.instructions.md`](../.github/instructions/helm-charts.instructions.md).
 
 ### Working with eBPF Code
 

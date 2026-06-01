@@ -655,6 +655,11 @@ blocks:
     # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
     # consumers use .semaphore/load-cached-images, which falls back to a local
     # build on cache miss.
+    # The process/testing paths trigger this so the win-fv-felix block (which now
+    # installs the locally-built calico image) has it cached in GCS. The libcalico
+    # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
+    # superset of the win-fv-felix block's trigger (felix's full test closure plus
+    # its own CI block), so win-fv-felix never runs without this image in GCS.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -663,6 +668,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/10-prerequisites.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/.semaphore/vms/',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
@@ -947,6 +953,7 @@ blocks:
         '/libcalico-go/lib/errors/*.go',
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/ipam/',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
@@ -967,6 +974,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
@@ -998,6 +1006,9 @@ blocks:
         '/pod2daemon/flexvol/creds/*.go',
         '/pod2daemon/pkg/csi/*.go',
         '/pod2daemon/pkg/flexvol/*.go',
+        '/process/testing/aso',
+        '/process/testing/util',
+        '/process/testing/winfv-felix',
         '/typha/',
         '/typha/cmd/typha/*.go',
         '/typha/pkg/calc/*.go',
@@ -1104,6 +1115,13 @@ blocks:
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
     # can depend on the shared producer→GCS→consumer upload pattern.
+    # felix + process/testing paths trigger this so the win-fv-felix block (which
+    # now installs the locally-built node image) has it cached in GCS. felix is a
+    # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
+    # (test + non-Go files) that the win-fv-felix block triggers on as a primary
+    # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
+    # the rest of felix's test closure, keeping this a superset of win-fv-felix so
+    # it never runs without this image in GCS.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -1112,6 +1130,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/10-prerequisites.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/defaults/*.go',
@@ -1141,6 +1160,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/felix/',
         '/felix/aws/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
@@ -1150,6 +1170,7 @@ blocks:
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
         '/felix/bpf/bpfmap/*.go',
+        '/felix/bpf/cmd/*.go',
         '/felix/bpf/conntrack/*.go',
         '/felix/bpf/conntrack/cleanupv1/*.go',
         '/felix/bpf/conntrack/timeouts/*.go',
@@ -1183,7 +1204,10 @@ blocks:
         '/felix/bpf/xdp/*.go',
         '/felix/cachingmap/*.go',
         '/felix/calc/*.go',
+        '/felix/cmd/calico-bpf/*.go',
         '/felix/cmd/calico-bpf/commands/*.go',
+        '/felix/cmd/calico-felix-docgen/*.go',
+        '/felix/cmd/calico-felix/*.go',
         '/felix/collector/*.go',
         '/felix/collector/flowlog/*.go',
         '/felix/collector/goldmane/*.go',
@@ -1209,14 +1233,22 @@ blocks:
         '/felix/dispatcher/*.go',
         '/felix/environment/*.go',
         '/felix/ethtool/*.go',
+        '/felix/fv/cgroup/*.go',
+        '/felix/fv/connectivity/*.go',
+        '/felix/fv/pktgen/*.go',
+        '/felix/fv/test-connection/*.go',
+        '/felix/fv/test-workload/*.go',
+        '/felix/fv/utils/*.go',
         '/felix/generictables/*.go',
         '/felix/idalloc/*.go',
+        '/felix/idalloc/collision/*.go',
         '/felix/ifacemonitor/*.go',
         '/felix/ip/*.go',
         '/felix/ipsets/*.go',
         '/felix/iptables/*.go',
         '/felix/iptables/cmdshim/*.go',
         '/felix/jitter/*.go',
+        '/felix/k8sfv/*.go',
         '/felix/k8sutils/*.go',
         '/felix/labelindex/*.go',
         '/felix/labelindex/ipsetmember/*.go',
@@ -1312,19 +1344,27 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
         '/node/**',
+        '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
+        '/process/testing/aso',
+        '/process/testing/util',
+        '/process/testing/winfv-felix',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
-        '/typha/pkg/tlsutils/*.go'],
+        '/typha/pkg/tlsutils/*.go',
+        'felix/**/*Dockerfile*',
+        'felix/Makefile',
+        'felix/deps.txt'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -2265,7 +2305,7 @@ blocks:
         '/node/pkg/cni/*.go',
         '/pkg/buildinfo/*.go',
         '/process/testing/aso',
-        '/process/testing/utils',
+        '/process/testing/util',
         '/process/testing/winfv-cni-plugin'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -3636,7 +3676,7 @@ blocks:
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
         '/process/testing/aso',
-        '/process/testing/utils',
+        '/process/testing/util',
         '/process/testing/winfv-felix',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
@@ -3661,13 +3701,19 @@ blocks:
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go']})
-    dependencies: ["Felix: Build Windows binaries"]
+    dependencies:
+      - "Felix: Build Windows binaries"
+      - "Build: calico image"
+      - "Build: node image"
     task:
       secrets:
         - name: banzai-secrets
         - name: private-repo
       prologue:
         commands:
+          # Load the locally-built calico + node images from the GCS cache so the
+          # local-build install uses images from the commit under test.
+          - .semaphore/load-cached-images
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -3689,6 +3735,12 @@ blocks:
           value: "calico"
         - name: FV_TYPE
           value: "calico-felix"
+        # Install the operator, Linux, and Windows images all built from the
+        # commit under test instead of a cached operator + hashrelease components.
+        - name: RELEASE_STREAM
+          value: "local-build"
+        - name: HASH_RELEASE
+          value: "false"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: CONTAINERD_VERSION
@@ -4121,43 +4173,10 @@ blocks:
               values:
                 - arm64
           commands:
-            # Skip istio ztunnel in this arm64 cross-build job.
-            # ztunnel is built separately in the native arm64 runner block below.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: >-
-        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
-        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
-        '/.semaphore/semaphore.yml.d/03-promotions.yml',
-        '/.semaphore/semaphore.yml.d/09-blocks.yml',
-        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
-        '/.semaphore/semaphore.yml.d/blocks/20-istio.yml',
-        '/hack/test/certs/',
-        '/istio/**',
-        '/lib.Makefile',
-        '/metadata.mk'],
-        {pipeline_file: 'ignore', exclude: ['/**/*.md',
-        '/**/.gitignore',
-        '/**/AUTHORS*',
-        '/**/CONTRIBUTING*',
-        '/**/DEVELOPER_GUIDE*',
-        '/**/LICENSE*',
-        '/**/README*',
-        '/**/SECURITY.md']})
-    dependencies:
-      - Istio
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd istio
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
+            # Cross-builds all istio components including ztunnel.
+            # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+            # toolchain (clang + sysroot), no native arm64 runner needed.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: >-

@@ -76,8 +76,11 @@ jobs:
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            PR=$(gh api "repos/$REPO/commits/$SHA/pulls" \
-                   --jq '[.[] | select(.state == "open")] | .[0].number // empty')
+            # Use the search API rather than repos/$REPO/commits/$SHA/pulls:
+            # the latter does not return PRs whose head commit lives on a
+            # fork, and projectcalico/calico PRs all come from forks.
+            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                   --jq '.items[0].number // empty')
             if [[ -z "$PR" ]]; then
               echo "::warning::no open PR for sha=$SHA — skipping (commit is likely on a branch with no open PR)"
               echo "skip=true" >> "$GITHUB_OUTPUT"
