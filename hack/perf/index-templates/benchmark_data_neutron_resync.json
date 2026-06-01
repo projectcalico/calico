@@ -1,0 +1,67 @@
+{
+  "index_patterns": ["benchmark_data_neutron_resync_*"],
+  "template": {
+    "mappings": {
+      "properties": {
+        "@timestamp":       {"type": "date"},
+        "git_commit":       {"type": "keyword"},
+        "git_branch":       {"type": "keyword"},
+        "code_version":     {"type": "keyword"},
+        "ci_run_id":        {"type": "keyword"},
+        "test_name":        {"type": "keyword"},
+        "env":              {"type": "keyword"},
+        "phase":            {"type": "keyword"},
+        "iter":             {"type": "integer"},
+        "ok":               {"type": "boolean"},
+        "error":            {"type": "keyword"},
+
+        "scale_ports":      {"type": "integer"},
+        "scale_networks":   {"type": "integer"},
+        "scale_sgs":        {"type": "integer"},
+        "scale_hosts":      {"type": "integer"},
+
+        "total_ms":         {"type": "double"},
+
+        "expand_total_ms":         {"type": "double"},
+
+        "subnets_total_ms":        {"type": "double"},
+        "subnets_compare_ms":      {"type": "double"},
+        "subnets_etcd_read_ms":    {"type": "double"},
+        "subnets_neutron_read_ms": {"type": "double"},
+        "subnets_create_ms":       {"type": "double"},
+        "subnets_etcd_items":      {"type": "integer"},
+        "subnets_neutron_items":   {"type": "integer"},
+        "subnets_correct":         {"type": "integer"},
+        "subnets_updated":         {"type": "integer"},
+        "subnets_deleted":         {"type": "integer"},
+        "subnets_created":         {"type": "integer"},
+
+        "policy_total_ms":         {"type": "double"},
+        "policy_compare_ms":       {"type": "double"},
+        "policy_etcd_read_ms":     {"type": "double"},
+        "policy_neutron_read_ms":  {"type": "double"},
+        "policy_create_ms":        {"type": "double"},
+        "policy_etcd_items":       {"type": "integer"},
+        "policy_neutron_items":    {"type": "integer"},
+        "policy_correct":          {"type": "integer"},
+        "policy_updated":          {"type": "integer"},
+        "policy_deleted":          {"type": "integer"},
+        "policy_created":          {"type": "integer"},
+
+        "endpoints_total_ms":         {"type": "double"},
+        "endpoints_compare_ms":       {"type": "double"},
+        "endpoints_etcd_read_ms":     {"type": "double"},
+        "endpoints_neutron_read_ms":  {"type": "double"},
+        "endpoints_create_ms":        {"type": "double"},
+        "endpoints_etcd_items":       {"type": "integer"},
+        "endpoints_neutron_items":    {"type": "integer"},
+        "endpoints_correct":          {"type": "integer"},
+        "endpoints_updated":          {"type": "integer"},
+        "endpoints_deleted":          {"type": "integer"},
+        "endpoints_created":          {"type": "integer"},
+
+        "felix_config_total_ms":      {"type": "double"}
+      }
+    }
+  }
+}
