@@ -15,7 +15,6 @@
 
 """Scope object describing what a resync should cover."""
 
-import contextlib
 import dataclasses
 import time
 import uuid
@@ -24,6 +23,7 @@ from typing import Any, Dict, Optional
 
 from neutron.db import models_v2
 from neutron_lib import context as ctx
+from neutron_lib.db import api as db_api
 
 from oslo_log import log
 
@@ -145,11 +145,9 @@ class Scope:
                 policy_syncer = self.driver.policy_syncer
                 endpoint_syncer = self.driver.endpoint_syncer
             else:
-                subnet_syncer = SubnetSyncer(self.db, _txn_from_context)
-                policy_syncer = PolicySyncer(self.db, _txn_from_context)
-                endpoint_syncer = WorkloadEndpointSyncer(
-                    self.db, _txn_from_context, policy_syncer
-                )
+                subnet_syncer = SubnetSyncer(self.db)
+                policy_syncer = PolicySyncer(self.db)
+                endpoint_syncer = WorkloadEndpointSyncer(self.db, policy_syncer)
 
             phases["expand"] = _run_phase(self.expand)
             phases["subnets"] = _run_phase(
@@ -227,12 +225,14 @@ class Scope:
         # added all their ports.
         remaining_subnet_ids = self.subnets - network_subnet_ids
         if remaining_subnet_ids:
-            with _txn_from_context(self.admin_context, "expand-subnet-ports"):
-                for allocation in (
-                    self.admin_context.session.query(models_v2.IPAllocation)
-                    .filter(models_v2.IPAllocation.subnet_id.in_(remaining_subnet_ids))
-                    .all()
-                ):
+            with db_api.CONTEXT_WRITER.using(self.admin_context):
+                # Iterate directly rather than calling .all() so this matches
+                # the bulk-prefetch pattern in WorkloadEndpointSyncer.  Real
+                # SQLAlchemy Query supports iteration; the test mocks return
+                # plain lists, which would refuse a .all().
+                for allocation in self.admin_context.session.query(
+                    models_v2.IPAllocation
+                ).filter(models_v2.IPAllocation.subnet_id.in_(remaining_subnet_ids)):
                     self.all_port_ids.add(allocation.port_id)
 
         # include-sgs-for-ports: read security-group bindings authoritatively via
@@ -410,32 +410,3 @@ def provide_felix_config():
             else:
                 # Short sleep to avoid a tight loop.
                 time.sleep(1)
-
-
-@contextlib.contextmanager
-def _txn_from_context(context, tag="<unset>"):
-    """Open a Neutron DB transaction on ``context``.
-
-    Equivalent to the ``CalicoMechanismDriver._txn_from_context``
-    method.  Living here lets the resync runner be used without an
-    instance of the driver.
-    """
-    sess = context.session
-    if getattr(sess, "bind", None):
-        conn_url = str(sess.bind.url).lower()
-    else:
-        conn_url = str(sess.connection().engine.url).lower()
-
-    if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
-        msg = (
-            "Unsupported MySQL driver detected in SQLAlchemy connection "
-            "URL: %s.  Please use the 'mysql+pymysql' driver to avoid "
-            "known issues.  See "
-            "https://bugs.launchpad.net/oslo.db/+bug/1350149 for "
-            "details." % conn_url
-        )
-        LOG.error(msg)
-        raise RuntimeError(msg)
-
-    with context.session.begin(subtransactions=True) as txn:
-        yield txn
