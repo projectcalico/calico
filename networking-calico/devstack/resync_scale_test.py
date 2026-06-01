@@ -373,7 +373,18 @@ def create_ports(conn, num_ports, networks, subnets, sgs, hosts):
         created.extend(p for p in results if p is not None)
         if (batch_start // PORT_BULK_BATCH) % 10 == 0:
             LOG.info("  ...created %d/%d ports", len(created), num_ports)
+
     LOG.info("Port creation done: %d ports", len(created))
+    if len(created) != num_ports:
+        # A shortfall here is a real problem (quota, race, transient DB
+        # pressure, ...) -- not something to paper over.  Raise so the
+        # caller aborts this scale before any resync runs, and we don't
+        # ship a perf doc to Lens labelled at full scale that actually
+        # measured scale - N.
+        raise RuntimeError(
+            "Port creation shortfall: only %d/%d ports created"
+            % (len(created), num_ports)
+        )
     return created
 
 
@@ -696,6 +707,26 @@ def run_one_scale(scale, conn, etcd_client, db_args, neutron_conf, extra_conf):
         LOG.info("Cold-etcd run")
         cold = run_calico_resync(neutron_conf, extra_conf)
 
+        # Belt-and-braces: cross-check that the cold run actually saw the
+        # full expected set of endpoints.  ``created`` is what landed in
+        # etcd from a cold start (we just wiped it), so it should equal
+        # ``scale``; ``correct`` should be 0 because nothing pre-existed.
+        # Mismatches indicate either a populate-phase bug we missed
+        # above, or a bind/postcommit failure between port-create and
+        # the resync (port made it into Neutron but never into etcd).
+        endpoints = (cold.get("phases") or {}).get("endpoints") or {}
+        if endpoints.get("created") != scale or endpoints.get("correct") != 0:
+            raise RuntimeError(
+                "Cold resync mismatch at scale=%d: endpoints.created=%r "
+                "(want %d), endpoints.correct=%r (want 0)"
+                % (
+                    scale,
+                    endpoints.get("created"),
+                    scale,
+                    endpoints.get("correct"),
+                )
+            )
+
         summarise(scale, num_networks, num_sgs, num_hosts, cold, steady_runs)
         return True
     finally:
@@ -772,8 +803,15 @@ def main():
                 extra_conf,
             )
         except Exception:
-            LOG.exception("Scale %d failed", scale)
+            # Abort the whole run on the first scale failure -- if
+            # scale=100 can't even populate cleanly, the numbers from
+            # subsequent (larger) scales aren't trustworthy and burning
+            # 30+ minutes of CI to find that out is wasteful.  Cleanup
+            # of THIS scale's resources already happened in
+            # run_one_scale's finally block.
+            LOG.exception("Scale %d failed; aborting remaining scales", scale)
             failed = True
+            break
 
     LOG.info(
         "Resync scale benchmark finished at %s", datetime.datetime.utcnow().isoformat()
