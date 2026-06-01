@@ -38,6 +38,12 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
+// single socket read before waking to re-check for context cancellation
+// (and thus how quickly it stops). A read that hits the deadline simply
+// loops
+const readDeadlineInterval = 1 * time.Second
+
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
 type serviceID struct {
@@ -491,7 +497,7 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		_ = l.arpCli.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
@@ -527,7 +533,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		_ = l.ndpCli.SetReadDeadline(time.Now().Add(1 * time.Second))
+		_ = l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
