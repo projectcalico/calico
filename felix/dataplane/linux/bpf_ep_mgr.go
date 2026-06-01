@@ -954,11 +954,22 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 		if msg.Hostname != m.hostname {
 			break
 		}
-		if m.v4 != nil {
+		// Unlike the consolidated HostMetadataUpdate on the main branch,
+		// on this branch the authoritative per-family host IP is delivered
+		// by the dedicated HostMetadataUpdate (v4) / HostMetadataV6Update
+		// (v6) messages. HostMetadataV4V6Update instead carries the Node's
+		// *BGP spec* addresses (node.Spec.BGP.IPv[46]Address), which are
+		// empty whenever BGP is not configured. An empty address here means
+		// "no BGP-spec address", NOT "host IP removed", so we must not feed
+		// it into updateOurHostIP — doing so would clear the BPFHostIP
+		// readiness signal that HostMetadataUpdate just set and wedge Felix
+		// non-ready. Only act on a non-empty address; the degraded/removed
+		// transition is owned by HostMetadataRemove / HostMetadataV6Remove.
+		if m.v4 != nil && msg.Ipv4Addr != "" {
 			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
 			m.updateOurHostIP(parseHostIP(msg.Ipv4Addr, 4), 4)
 		}
-		if m.v6 != nil {
+		if m.v6 != nil && msg.Ipv6Addr != "" {
 			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
 			m.updateOurHostIP(parseHostIP(msg.Ipv6Addr, 6), 6)
 		}
