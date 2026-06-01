@@ -523,9 +523,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
-		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
+		bpfEpMgr.v4.lastSeenHostIP = net.ParseIP("1.2.3.4")
 		if ipv6Enabled {
-			bpfEpMgr.v6.hostIP = net.ParseIP("1::4")
+			bpfEpMgr.v6.lastSeenHostIP = net.ParseIP("1::4")
 		}
 	}
 
@@ -662,6 +662,18 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{
 				Hostname: "uthost",
 				Ipv6Addr: ip,
+			})
+			err := bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+		}
+	}
+
+	genHostMetadataV4V6Update := func(ip4, ip6 string) func() {
+		return func() {
+			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{
+				Hostname: "uthost",
+				Ipv4Addr: ip4,
+				Ipv6Addr: ip6,
 			})
 			err := bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
@@ -1090,6 +1102,43 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			genHostMetadataV6Update("1::4")()
 			Expect(dp.numOfAttaches("cali12345:ingress")).To(Equal(5))
 			Expect(dp.numOfAttaches("cali12345:egress")).To(Equal(5))
+		})
+	})
+
+	Context("with BPFHostIP readiness", func() {
+		// Regression test for the release-v3.32 cherry-pick of the
+		// host-IP readiness work. On this branch the authoritative host IP
+		// is delivered via HostMetadataUpdate (v4) / HostMetadataV6Update
+		// (v6), while HostMetadataV4V6Update carries the optional BGP-spec
+		// address and is empty when BGP is not configured. An empty
+		// combined update must NOT clear the host-IP presence that the
+		// dedicated messages set — otherwise BPFHostIP stays non-ready and
+		// Felix never reports ready (the failure that broke every BPF FV).
+		It("keeps v4 presence when an empty HostMetadataV4V6Update follows the host IP", func() {
+			newBpfEpMgr(false) // single-stack v4, matching the failing BPF FVs.
+			genHostMetadataUpdate("172.17.0.7")()
+			Expect(bpfEpMgr.v4.hostIPPresent).To(BeTrue())
+
+			// BGP not configured: the calc graph emits an empty combined
+			// update. It must be a no-op for host-IP presence.
+			genHostMetadataV4V6Update("", "")()
+			Expect(bpfEpMgr.v4.hostIPPresent).To(BeTrue())
+		})
+
+		It("keeps v6 presence when an empty HostMetadataV4V6Update follows the host IP", func() {
+			newBpfEpMgr(true)
+			genHostMetadataV6Update("1::4")()
+			Expect(bpfEpMgr.v6.hostIPPresent).To(BeTrue())
+
+			genHostMetadataV4V6Update("", "")()
+			Expect(bpfEpMgr.v6.hostIPPresent).To(BeTrue())
+		})
+
+		It("still records a host IP delivered via a populated HostMetadataV4V6Update", func() {
+			newBpfEpMgr(true)
+			genHostMetadataV4V6Update("172.17.0.7", "1::4")()
+			Expect(bpfEpMgr.v4.hostIPPresent).To(BeTrue())
+			Expect(bpfEpMgr.v6.hostIPPresent).To(BeTrue())
 		})
 	})
 
