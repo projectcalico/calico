@@ -223,7 +223,6 @@ enum calico_ct_result_type {
 #define CT_RES_SYN		0x1000
 #define CT_RES_CONFIRMED	0x2000
 #define CT_RES_TO_WORKLOAD	0x4000
-#define CT_RES_CONNLIMIT_FIRST_SYN	0x8000
 
 #define ct_result_rc(rc)			((rc) & 0xff)
 #define ct_result_flags(rc)			((rc) & ~0xff)

@@ -489,10 +489,11 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 //   - does NOT increment the QoS counter for the retransmission.
 //
 // The relevant logic lives in tc.c:~1411 (calico_to_workload_ep ingress
-// connlimit handling). The "first SYN" branch is gated on
-// CT_RES_CONNLIMIT_FIRST_SYN; the "retransmission" branch is gated on
-// CONNLIMIT_REJECTED propagated from the CT entry's flags. Both arms reject
-// via PROG_INDEX_TCP_RST.
+// connlimit handling). The "first SYN" branch fires when neither
+// CONNLIMIT_INGRESS nor CONNLIMIT_REJECTED is propagated to result.flags;
+// the "retransmission of rejected" branch fires when CONNLIMIT_REJECTED is
+// propagated (but not CONNLIMIT_INGRESS). Both reject arms feed a single
+// PROG_INDEX_TCP_RST tail call so the client gets an RST promptly.
 func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -524,15 +525,15 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 
 	// Pre-populate the CT entry for the 5-tuple that was rejected on its
 	// first SYN. State: opener (srcIP) sent SYN; responder (dstIP) never
-	// responded. Flags: CONNLIMIT_INGRESS (entry was counted at SYN time)
-	// AND CONNLIMIT_REJECTED (the count was over limit, so the SYN was
-	// rejected). No FIN/RST on either side, so tcp_recycled() returns
-	// false and the existing entry is used.
+	// responded. Flag: CONNLIMIT_REJECTED only — under the new semantics,
+	// CONNLIMIT_INGRESS is set only on a successful count, so a rejected
+	// entry carries REJECTED alone. No FIN/RST on either side, so
+	// tcp_recycled() returns false and the existing entry is used.
 	legA := ctv4.Leg{SynSeen: true, Opener: true}
 	legB := ctv4.Leg{Ifindex: ifIndex}
 	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
 	v := ctv4.NewValueNormal(time.Duration(0),
-		ctv4.FlagConnLimitIn|ctv4.FlagConnLimitRej,
+		ctv4.FlagConnLimitRej,
 		legA, legB)
 	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 
@@ -564,13 +565,97 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		// Reject path goes through PROG_INDEX_TCP_RST. Final return
-		// is TC_ACT_SHOT (RST construction trims the skb and either
-		// emits it or shots).
-		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+		// Reject path tail-calls into PROG_INDEX_TCP_RST. TCP_RST
+		// constructs the RST and forwards it back to the source via
+		// forward_or_drop; the final BPF return is TC_ACT_UNSPEC,
+		// signalling "kernel takes the modified skb from here." In
+		// production this means the client sees an RST instead of a
+		// drop-and-retry.
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withIngressQoSConnLimit())
 
 	// Counter must be unchanged — the retransmission branch does NOT
 	// touch qos_connlimit_check_and_increment.
 	Expect(readQoSCount()).To(Equal(uint32(0)))
+}
+
+// TestQoSConnLimitIngressRetransmissionOfAccepted verifies that when a SYN
+// retransmission arrives at to-wep for a connection that was previously
+// *accepted* (CT entry carries CONNLIMIT_INGRESS), the BPF dataplane:
+//
+//   - allows the retransmission (the connection already exists); and
+//   - does NOT re-increment the QoS counter (the entry was already counted
+//     on its first SYN).
+//
+// This pins the new "INGRESS-precedes-REJECTED" precedence in tc.c — even
+// if a concurrent-SYN race left both flags on the same entry, the presence
+// of CONNLIMIT_INGRESS wins and the retransmission is allowed.
+func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWretxa"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23457
+		dstPort        uint16 = 8055
+	)
+
+	// Routes (same shape as the rejected-retransmission test).
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// Pre-populate the CT entry for an accepted connection. Flag:
+	// CONNLIMIT_INGRESS only — the entry contributed to the counter on
+	// its first SYN. No FIN/RST.
+	legA := ctv4.Leg{SynSeen: true, Opener: true}
+	legB := ctv4.Leg{Ifindex: ifIndex}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0),
+		ctv4.FlagConnLimitIn,
+		legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	// QoS map: max=3, current=1 (this entry was already counted).
+	defer resetQoSMap(qosMap)
+	resetQoSMap(qosMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */)
+	Expect(qosMap.Update(qosKey.AsBytes(),
+		qos.NewValue(0, 0, 0, 0, maxConnections, 1).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ValueFromBytes(b).CurrentCount()
+	}
+
+	// Retransmitted SYN matching the accepted entry's 5-tuple.
+	_, _, _, _, pktBytes, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		// Retransmission allowed: program returns TC_ACT_UNSPEC (no
+		// reject, no special verdict — packet proceeds normally).
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIngressQoSConnLimit())
+
+	// Counter must be unchanged at 1 — the "already counted" arm of the
+	// ingress check does NOT call qos_connlimit_check_and_increment.
+	Expect(readQoSCount()).To(Equal(uint32(1)))
 }
