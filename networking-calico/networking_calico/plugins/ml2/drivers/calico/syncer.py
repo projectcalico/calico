@@ -142,7 +142,7 @@ class ResourceSyncer(object):
             etcd_map = self.get_from_etcd(scope)
             t_etcd_read = time.monotonic()
 
-            with db_api.CONTEXT_READER.using(context):
+            with db_api.CONTEXT_WRITER.using(context):
                 neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
@@ -185,7 +185,7 @@ class ResourceSyncer(object):
                 # is at least as fresh as our etcd read; the CAS on mod_revision
                 # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
-                with db_api.CONTEXT_READER.using(context):
+                with db_api.CONTEXT_WRITER.using(context):
                     write_data = self.neutron_to_etcd_write_data(
                         name, neutron_map[name], context, reread=False
                     )
@@ -208,7 +208,7 @@ class ResourceSyncer(object):
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so we don't race with
                 # a concurrent dynamic delete.
-                with db_api.CONTEXT_READER.using(context):
+                with db_api.CONTEXT_WRITER.using(context):
                     try:
                         write_data = self.neutron_to_etcd_write_data(
                             name, neutron_map[name], context, reread=True

@@ -879,7 +879,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Update the existing ports for this network and which don't have their own
         # qos_policy_id.
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             ports = self.db.get_ports(
                 plugin_context,
                 filters={
@@ -903,7 +903,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
-        with db_api.CONTEXT_READER.using(context):
+        with db_api.CONTEXT_WRITER.using(context):
             policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
             # Find ports whose network use this QoS policy and that don't have a
@@ -948,7 +948,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # we're writing the effects of this call into etcd.
         subnet = context.current
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
                 self.subnet_syncer.write_subnet(subnet, context)
@@ -962,7 +962,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # we're writing the effects of this call into etcd.
         subnet = context.current
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
                 self.subnet_syncer.write_subnet(subnet, context)
@@ -1001,7 +1001,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             self.endpoint_syncer.write_endpoint(port, plugin_context)
 
     def update_port_postcommit(self, context):
@@ -1051,7 +1051,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # corresponding data into etcd while still holding the Neutron DB
         # transaction.
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
 
             # If the port was previously bound, the endpoint should already
             # exist.
@@ -1174,7 +1174,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("UPDATE_FLOATINGIP")
         LOG.info("UPDATE_FLOATINGIP: %s", plugin_context)
 
-        with db_api.CONTEXT_READER.using(plugin_context):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
             self._update_port(plugin_context, port)
 
@@ -1226,7 +1226,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         TrackTask("SECURITY_GROUPS_RULE_UPDATED")
         LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
-        with db_api.CONTEXT_READER.using(context.plugin_context):
+        with db_api.CONTEXT_WRITER.using(context.plugin_context):
             self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
 
     def _update_port(self, plugin_context, port):
