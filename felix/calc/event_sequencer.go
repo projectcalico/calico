@@ -666,13 +666,18 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 
 func (buf *EventSequencer) flushIPPoolUpdates() {
 	for key, pool := range buf.pendingIPPoolUpdates {
+		allowedUses := make([]string, len(pool.AllowedUses))
+		for i, u := range pool.AllowedUses {
+			allowedUses[i] = string(u)
+		}
 		buf.Callback(&proto.IPAMPoolUpdate{
 			Id: cidrToIPPoolID(key),
 			Pool: &proto.IPAMPool{
-				Cidr:       pool.CIDR.String(),
-				Masquerade: pool.Masquerade,
-				IpipMode:   string(pool.IPIPMode),
-				VxlanMode:  string(pool.VXLANMode),
+				Cidr:        pool.CIDR.String(),
+				Masquerade:  pool.Masquerade,
+				IpipMode:    string(pool.IPIPMode),
+				VxlanMode:   string(pool.VXLANMode),
+				AllowedUses: allowedUses,
 			},
 		})
 		buf.sentIPPools.Add(key)

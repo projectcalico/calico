@@ -58,23 +58,24 @@ func WithCategory(cat Category) any {
 //
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
-	"NetworkPolicy":             true,
-	"Tiered-Policy":             true,
-	"IPPool":                    true,
-	"IPAM":                      true,
-	"AutoHEPs":                  true,
-	"Host-Protection":           true,
-	"HostPorts":                 true,
-	"OwnerReferences":           true,
-	"MTU":                       true,
-	"Maglev":                    true,
-	"BGPPeer":                   true,
-	"IPIP":                      true,
-	"Tiered-RBAC":               true,
-	"Pods":                      true,
-	"QoS":                       true,
-	"Datapath":                  true,
-	"Istio":                     true,
+	"NetworkPolicy":   true,
+	"Tiered-Policy":   true,
+	"IPPool":          true,
+	"IPAM":            true,
+	"AutoHEPs":        true,
+	"Host-Protection": true,
+	"HostPorts":       true,
+	"OwnerReferences": true,
+	"MTU":             true,
+	"Maglev":          true,
+	"BGPPeer":         true,
+	"IPIP":            true,
+	"Tiered-RBAC":     true,
+	"Pods":            true,
+	"QoS":             true,
+	"Datapath":        true,
+	"Istio":           true,
+	"KubeVirt":        true,
 	"LocalSubnetL2Reachability": true,
 }
 
@@ -146,6 +147,10 @@ func RequiresAWS() any {
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
+}
+
+func RequiresExternalNode() any {
+	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresKindNetwork marks tests that need to attach a docker container to the

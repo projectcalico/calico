@@ -66,15 +66,16 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		validator.SetCRDValidationEnabled(true)
 	}
 
-	c := NewFromBackend(be).(client)
-	c.config = config
-	return c, nil
+	return NewFromBackend(config, be), nil
 }
 
 // NewFromBackend wraps an existing backend client (e.g. one backed by fakes
-// in tests) in a clientv3 Interface.
-func NewFromBackend(be bapi.Client) Interface {
+// in tests) in a clientv3 Interface. config drives behavior that depends on
+// the datastore type (e.g. ensureClusterInformation tagging clusters with a
+// "kdd"/"k8s" suffix); pass the same CalicoAPIConfig that produced be.
+func NewFromBackend(config apiconfig.CalicoAPIConfig, be bapi.Client) Interface {
 	return client{
+		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
 	}
