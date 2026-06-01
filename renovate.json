@@ -115,15 +115,6 @@
       "description": "Group envoy-gateway updates into a dedicated PR",
       "matchPackageNames": ["envoyproxy/gateway"],
       "groupName": "envoy-gateway"
-    },
-    {
-      "description": "Regenerate envoy-gateway helm-rendered resources after version bump",
-      "matchPackageNames": ["envoyproxy/gateway"],
-      "postUpgradeTasks": {
-        "commands": ["make -C third_party/envoy-gateway gen-gateway-api-resources"],
-        "fileFilters": ["third_party/envoy-gateway/gateway_api_resources.yaml"],
-        "executionMode": "branch"
-      }
     }
   ]
 }

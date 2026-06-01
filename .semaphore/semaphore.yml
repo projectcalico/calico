@@ -2343,7 +2343,7 @@ blocks:
     run:
       when: >-
         false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/envoy-gateway'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE', '/third_party/envoy-gateway/gateway_api_resources.yaml']})
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
       minutes: 30
     dependencies:

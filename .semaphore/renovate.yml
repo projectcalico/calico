@@ -28,7 +28,7 @@ blocks:
             - name: RENOVATE_REPOSITORIES
               value: projectcalico/calico
             - name: RENOVATE_ALLOWED_COMMANDS
-              value: '["^make gen-deps-files$", "^make -C third_party/envoy-gateway gen-gateway-api-resources$"]'
+              value: '["^make gen-deps-files$"]'
             - name: RENOVATE_GIT_AUTHOR
               value: "marvin-tigera <marvin-tigera@users.noreply.github.com>"
             - name: LOG_LEVEL
