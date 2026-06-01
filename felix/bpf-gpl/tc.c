@@ -1417,42 +1417,61 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	/* Ingress connection limit for TCP SYN arriving at a WEP.
-	 * On the first SYN (CT_RES_CONNLIMIT_FIRST_SYN), atomically check the
-	 * limit and increment the counter in the QoS map. On SYN retransmissions,
-	 * always reject if the CT entry was previously rejected (CONNLIMIT_REJECTED
-	 * flag), otherwise allow (the connection was already accepted and counted).
+	 *
+	 * The CT lookup propagates the CT entry's CONNLIMIT_INGRESS /
+	 * CONNLIMIT_REJECTED flags into result.flags. Three cases:
+	 *
+	 *   - INGRESS set: the connection was counted on its first SYN.
+	 *     This is a retransmission of an accepted SYN; allow.
+	 *   - REJECTED set (and not INGRESS): the first SYN was rejected.
+	 *     This is a retransmission of a rejected SYN; reject and send
+	 *     TCP RST so the client sees the rejection promptly.
+	 *   - Neither: first SYN. Run qos_connlimit_check_and_increment;
+	 *     on success mark CONNLIMIT_INGRESS, on failure mark
+	 *     CONNLIMIT_REJECTED. The CT lookup runs once and is reused
+	 *     for both writes.
+	 *
 	 * The Go-side CT scanner periodically recounts and corrects drift.
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped &&
 			ct_result_is_syn(ctx->state->ct_result.rc)) {
-		if (ctx->state->ct_result.rc & CT_RES_CONNLIMIT_FIRST_SYN) {
-			/* First SYN: check and increment. */
+		__u32 cl_flags = ctx->state->ct_result.flags;
+		bool reject = false;
+
+		if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+			/* Retransmission of accepted SYN — already counted, allow. */
+		} else if (cl_flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+			/* Retransmission of rejected SYN — stay rejected. */
+			CALI_DEBUG("connlimit: retransmission of rejected connection");
+			reject = true;
+		} else {
+			/* First SYN: count it. */
+			bool sltd = src_lt_dest(&ctx->state->ip_src,
+					&ctx->state->ip_dst,
+					ctx->state->sport,
+					ctx->state->dport);
+			struct calico_ct_key ck;
+			fill_ct_key(&ck, sltd, ctx->state->ip_proto,
+					&ctx->state->ip_src, &ctx->state->ip_dst,
+					ctx->state->sport, ctx->state->dport);
+			struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
 			if (qos_connlimit_check_and_increment(ctx) < 0) {
 				CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
-				/* Mark the CT entry so retransmissions are unconditionally
-				 * rejected without re-checking the counter (which may have
-				 * changed due to scanner recounts). */
-				{
-					bool sltd = src_lt_dest(&ctx->state->ip_src,
-							&ctx->state->ip_dst,
-							ctx->state->sport,
-							ctx->state->dport);
-					struct calico_ct_key ck;
-					fill_ct_key(&ck, sltd, ctx->state->ip_proto,
-							&ctx->state->ip_src, &ctx->state->ip_dst,
-							ctx->state->sport, ctx->state->dport);
-					struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
-					if (cv) {
-						ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
-					}
+				if (cv) {
+					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
 				}
-				ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
-				CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
-				goto deny;
+				reject = true;
+			} else if (cv) {
+				/* Counted successfully — mark the entry so
+				 * retransmissions find it via conntrack.h's
+				 * flag propagation and skip the count. */
+				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS);
 			}
-		} else if (ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
-			/* SYN retransmission of a previously rejected connection. */
-			CALI_DEBUG("connlimit: retransmission of rejected connection");
+		}
+
+		if (reject) {
+			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
 		}
 	}
