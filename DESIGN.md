@@ -157,18 +157,7 @@ reporters with timeouts).
 - When adding Go dependencies:
   `cd <component> && go mod tidy && cd .. && make check-go-mod`.
 
-## 5. Docker build system
-
-- All builds run inside Docker containers using
-  `calico/go-build` (version pinned in `metadata.mk`).
-- Base images configured in `metadata.mk`.
-- Build cache in `.go-pkg-cache/` (speeds up rebuilds).
-- Supported architectures: amd64, arm64, ppc64le, s390x (plus
-  Windows builds).
-- Cross-compilation via `ARCH=<target>` and binfmt registration
-  (`calico/binfmt`).
-
-## 6. Entry points
+## 5. Entry points
 
 | Path | Role |
 |---|---|

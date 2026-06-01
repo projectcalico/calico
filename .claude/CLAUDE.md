@@ -44,6 +44,14 @@ make image
 make -C felix build ARCH=arm64
 ```
 
+### Docker Build System
+
+- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
+- Base images configured in `metadata.mk`
+- Build cache in `.go-pkg-cache/` (speeds up rebuilds)
+- Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
+- Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
+
 ### Running Tests
 
 ```bash
@@ -331,7 +339,7 @@ Image loading is incremental — `kind-reload` and `kind-deploy` compare local D
 - `lib.Makefile` - Shared Makefile logic for all components
 - `Makefile` - Root orchestration
 
-For component entry points and architectural code paths, see [`DESIGN.md`](../DESIGN.md) §6.
+For component entry points and architectural code paths, see [`DESIGN.md`](../DESIGN.md) §5.
 
 **Kind Cluster Infrastructure:**
 - `hack/test/kind/` - Kind cluster scripts (creation, image loading, deployment, teardown)
