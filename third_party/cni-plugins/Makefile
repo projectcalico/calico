@@ -2,7 +2,7 @@ include ../../metadata.mk
 
 PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/cni-plugins
 
-CNI_PLUGINS_IMAGE ?= cni-plugins
+CNI_PLUGINS_IMAGE ?= third-party-cni-plugins
 BUILD_IMAGES      ?= $(CNI_PLUGINS_IMAGE)
 
 ##############################################################################
