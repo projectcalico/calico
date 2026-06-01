@@ -11,6 +11,7 @@
 #include "icmp.h"
 #include "types.h"
 #include "rpf.h"
+#include "qos.h"
 
 #ifdef IPVER6
 #define IPPROTO_ICMP_46	IPPROTO_ICMPV6
@@ -574,6 +575,47 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	return syn && (a->fin_seen || a->rst_seen) && (b->fin_seen || b->rst_seen);
 }
 
+/* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
+ * for a CT entry that is closing or being purged. Reads the entry's
+ * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
+ * (ifindex, direction) pair(s). Idempotent: skips entries that already carry
+ * CONNLIMIT_DEC, and sets DEC before decrementing so a concurrent decrement
+ * on another CPU sees the flag and bails.
+ *
+ * Called from the packet path on FIN-FIN / RST close, and from
+ * conntrack_cleanup when an idle entry is purged with no close packet.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
+{
+	__u32 cl_flags = ct_value_get_flags(v);
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
+	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
+		return;
+	}
+	ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
+
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+		/* Ingress: pod is the responder (non-opener). */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->b_to_a.ifindex
+			: v->a_to_b.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 1);
+		}
+	}
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
+		/* Egress: pod is the opener. */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->a_to_b.ifindex
+			: v->b_to_a.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 0);
+		}
+	}
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -731,6 +773,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(tracking_v);
 			cali_ct_delete_elem(&k);
 			cali_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
@@ -876,6 +924,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NORMAL entry.");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(v);
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
@@ -997,6 +1051,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
+
+		/* Decrement connlimit counter when a TCP connection closes
+		 * (both FINs seen or RST). The helper sets CONNLIMIT_DEC
+		 * before decrementing so concurrent paths bail.
+		 */
+		if ((src_to_dst->fin_seen && dst_to_src->fin_seen) || tcp_header->rst) {
+			qos_connlimit_decrement_for_ct(v);
+		}
 	}
 
 	__u32 ifindex = CALI_F_TO_HOST ? ctx->skb->ifindex : skb_ingress_ifindex(ctx->skb);
@@ -1097,8 +1159,25 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	if (syn) {
 		CALI_CT_DEBUG("packet is SYN");
 		ct_result_set_flag(result.rc, CT_RES_SYN);
-	}
 
+		/* For ingress connection limit, propagate the CT entry's
+		 * CONNLIMIT_INGRESS / CONNLIMIT_REJECTED flags to the result
+		 * so accepted_entrypoint can decide what to do without an
+		 * extra CT lookup. The flags themselves are written by
+		 * accepted_entrypoint after the limit check resolves —
+		 * INGRESS on success, REJECTED on failure, never both — so
+		 * we don't need a dedicated "first SYN" result flag.
+		 */
+		if (CALI_F_TO_WEP && INGRESS_CONN_LIMIT_CONFIGURED) {
+			__u32 cl = ct_value_get_flags(v);
+			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS;
+			}
+			if (cl & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_REJECTED;
+			}
+		}
+	}
 
 	CALI_CT_DEBUG("result: 0x%x", result.rc);
 
