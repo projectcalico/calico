@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,14 @@ const (
 
 	FlowsPath            = sep + "flows"
 	FlowsFilterHintsPath = sep + "flows-filter-hints"
+	ConfigPath           = sep + "config"
 )
+
+type ConfigRequest struct{}
+
+type ConfigResponse struct {
+	Streaming bool `json:"streaming"`
+}
 
 func init() {
 	// Register a decoder for the SortBys.
@@ -268,6 +275,14 @@ type FlowResponse struct {
 	PacketsOut      int64       `json:"packets_out"`
 	BytesIn         int64       `json:"bytes_in"`
 	BytesOut        int64       `json:"bytes_out"`
+	Service         *ServiceRef `json:"service,omitempty"`
+}
+
+type ServiceRef struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Port      int64  `json:"port"`
+	PortName  string `json:"port_name,omitempty"`
 }
 
 type PolicyTrace struct {
