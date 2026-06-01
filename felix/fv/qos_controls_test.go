@@ -197,7 +197,7 @@ var _ = infrastructure.DatastoreDescribe(
 					tc           infrastructure.TopologyContainers
 					calicoClient client.Interface
 					topt         infrastructure.TopologyOptions
-					w            [2]*workload.Workload
+					w            [3]*workload.Workload
 					cancel       context.CancelFunc
 				)
 
@@ -244,11 +244,17 @@ var _ = infrastructure.DatastoreDescribe(
 
 					infra.AddDefaultAllow()
 
+					// w[0] and w[1] are on different felixes (cross-node).
+					// w[2] sits on tc.Felixes[0] alongside w[0] so that w[2] -> w[0]
+					// traffic exercises the same-node code path (redirect-peer
+					// optimisation, etc.).
+					wFelix := [3]int{0, 1, 0}
+					wIPs := [3]string{"10.65.0.2", "10.65.1.2", "10.65.0.3"}
 					for ii := range w {
-						wIP := fmt.Sprintf("10.65.%d.2", ii)
+						wIP := wIPs[ii]
 						wName := fmt.Sprintf("w%d", ii)
-						infrastructure.AssignIP(wName, wIP, tc.Felixes[ii].Hostname, calicoClient)
-						w[ii] = workload.Run(tc.Felixes[ii], wName, "default", wIP, "8055", "tcp")
+						infrastructure.AssignIP(wName, wIP, tc.Felixes[wFelix[ii]].Hostname, calicoClient)
+						w[ii] = workload.Run(tc.Felixes[wFelix[ii]], wName, "default", wIP, "8055", "tcp")
 						w[ii].ConfigureInInfra(infra)
 					}
 
@@ -1132,6 +1138,132 @@ var _ = infrastructure.DatastoreDescribe(
 							})
 						})
 					}
+				})
+
+				// Connection-limit tests where both endpoints sit on the same
+				// Felix node (w[2] -> w[0], both on tc.Felixes[0]). Exercises
+				// the bpf_redirect_peer fast path that bypasses the to-wep
+				// program for established traffic; verifies the first-SYN
+				// connlimit increment and the close-time decrement still
+				// work end-to-end in that topology.
+				Context("With connection limits, same-node traffic (w[2] -> w[0])", func() {
+					if !BPFMode() {
+						return
+					}
+
+					tryConnect := func(client *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
+						return func() error {
+							pc, err := client.StartPersistentConnectionMayFail(ip, port, opts)
+							if err == nil {
+								pc.Stop()
+							}
+							return err
+						}
+					}
+
+					It("should enforce ingress connlimit for same-node connections", func() {
+						const numConnections = 3
+
+						By("Setting ingress connlimit on w[0]")
+						w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							IngressMaxConnections: int64(numConnections),
+						}
+						w[0].UpdateInInfra(infra)
+
+						By("Waiting for ingress limit to appear in BPF QoS map")
+						Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+						By("Filling the ingress slots from same-node client w[2]")
+						pcs := make([]*connectivity.PersistentConnection, numConnections)
+						for i := range pcs {
+							pcs[i] = w[2].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+						}
+						defer func() {
+							for i := range pcs {
+								if pcs[i] != nil {
+									pcs[i].Stop()
+								}
+							}
+						}()
+
+						By("Waiting for ingress counter to reach the limit")
+						Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+						By("Attempting one more connection, expecting failure")
+						Eventually(tryConnect(w[2], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+
+						By("Closing one connection (graceful FIN) to free a slot")
+						pcs[0].Stop()
+						pcs[0] = nil
+
+						By("Waiting for ingress counter to drop below the limit (close-time decrement)")
+						Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+
+						By("Re-opening one connection, expecting success")
+						Eventually(func() error {
+							pc, err := w[2].StartPersistentConnectionMayFail(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							if err == nil {
+								pcs[0] = pc
+							}
+							return err
+						}, "10s", "1s").ShouldNot(HaveOccurred())
+
+						By("Removing ingress limit from w[0]")
+						w[0].WorkloadEndpoint.Spec.QoSControls = nil
+						w[0].UpdateInInfra(infra)
+					})
+
+					It("should enforce egress connlimit for same-node connections", func() {
+						const numConnections = 3
+
+						By("Setting egress connlimit on w[2]")
+						w[2].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+							EgressMaxConnections: int64(numConnections),
+						}
+						w[2].UpdateInInfra(infra)
+
+						By("Waiting for egress limit to appear in BPF QoS map")
+						Eventually(getBPFMaxConnections(0, 2, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+						By("Filling the egress slots from same-node client w[2]")
+						pcs := make([]*connectivity.PersistentConnection, numConnections)
+						for i := range pcs {
+							pcs[i] = w[2].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+						}
+						defer func() {
+							for i := range pcs {
+								if pcs[i] != nil {
+									pcs[i].Stop()
+								}
+							}
+						}()
+
+						By("Waiting for egress counter to reach the limit")
+						Eventually(getBPFCurrentCount(0, 2, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+						By("Attempting one more connection, expecting failure")
+						Eventually(tryConnect(w[2], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+
+						By("Closing one connection (graceful FIN) to free a slot")
+						pcs[0].Stop()
+						pcs[0] = nil
+
+						By("Waiting for egress counter to drop below the limit (close-time decrement)")
+						Eventually(getBPFCurrentCount(0, 2, "egress"), "10s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+
+						By("Re-opening one connection, expecting success")
+						Eventually(func() error {
+							pc, err := w[2].StartPersistentConnectionMayFail(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							if err == nil {
+								pcs[0] = pc
+							}
+							return err
+						}, "10s", "1s").ShouldNot(HaveOccurred())
+
+						By("Removing egress limit from w[2]")
+						w[2].WorkloadEndpoint.Spec.QoSControls = nil
+						w[2].UpdateInInfra(infra)
+					})
 				})
 			})
 		}
