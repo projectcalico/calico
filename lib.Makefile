@@ -151,10 +151,10 @@ CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 RUST_BUILD_IMAGE ?= calico/rust-build
 CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
-# We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
+# On amd64 we build with CGO enabled (libbpf and other cgo deps require it);
+# other architectures default to pure-Go builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-GOEXPERIMENT?=boringcrypto
-TAGS?=boringcrypto,osusergo,netgo
+TAGS?=osusergo,netgo
 CGO_ENABLED?=1
 else
 CGO_ENABLED?=0
@@ -188,25 +188,7 @@ endif
 endif
 endif
 
-# Build a binary with boring crypto support.
-# This function expects you to pass in two arguments:
-#   1st arg: path/to/input/package(s)
-#   2nd arg: path/to/output/binary
-# Only when arch = amd64 it will use boring crypto to build the binary.
-# Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
-# Tests that the resulting binary contains boringcrypto symbols.
-define build_cgo_boring_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) GOEXPERIMENT=boringcrypto go build -o $(2) -tags fipsstrict -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1) \
-			&& go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
-endef
-
-# Use this when building binaries that need cgo, but have no crypto and therefore would not contain any boring symbols.
+# Use this when building binaries that need cgo (e.g. for libbpf).
 define build_cgo_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
@@ -217,7 +199,7 @@ define build_cgo_binary
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
-# For binaries that do not require boring crypto.
+# For binaries that do not require cgo.
 define build_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=0 \
