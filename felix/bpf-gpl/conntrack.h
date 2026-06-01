@@ -773,6 +773,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(tracking_v);
 			cali_ct_delete_elem(&k);
 			cali_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
@@ -918,6 +924,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NORMAL entry.");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(v);
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
