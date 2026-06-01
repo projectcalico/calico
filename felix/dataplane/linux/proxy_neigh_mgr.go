@@ -38,10 +38,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// desiredIPSet is an immutable set of IPs that a listener goroutine reads to
-// decide whether to respond to an ARP/NDP request. Swapped atomically.
-type desiredIPSet map[string]bool
-
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
 type serviceID struct {
@@ -72,17 +68,19 @@ type ndpConnFactory func(ifaceName string) (ndpConn, net.HardwareAddr, error)
 // ifaceListener manages a raw socket listener for a single host interface.
 type ifaceListener struct {
 	ifaceName string
-	desired   atomic.Pointer[desiredIPSet]
-	arpCli    arpClient // IPv4 only
-	ndpCli    ndpConn   // IPv6 only
-	hwAddr    net.HardwareAddr
-	cancel    context.CancelFunc
-	done      chan struct{}
+	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
+	// and swapped atomically; never mutated after publishing.
+	desired atomic.Pointer[set.Set[string]]
+	arpCli  arpClient // IPv4 only
+	ndpCli  ndpConn   // IPv6 only
+	hwAddr  net.HardwareAddr
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
-// Instead of programming kernel proxy neighbor entries, it listens on raw sockets and
+// It listens on raw sockets and
 // responds directly in userspace.
 type proxyNeighManager struct {
 	ipVersion      uint8
@@ -349,7 +347,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
 	// Build desired state: which IPs should each interface respond to.
-	desiredByIface := make(map[string]desiredIPSet)
+	desiredByIface := make(map[string]set.Set[string])
 
 	// Pod IPs: the hosting node always answers for its own pods.
 	for _, ipNets := range m.localWorkloadIPs {
@@ -412,8 +410,8 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		// us which IPs are new and need a GARP/UNA.
 		d := desired
 		old := l.desired.Swap(&d)
-		for ip := range desired {
-			if old == nil || !(*old)[ip] {
+		for ip := range desired.All() {
+			if old == nil || !(*old).Contains(ip) {
 				m.sendGARP(l, ip)
 			}
 		}
@@ -424,14 +422,14 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 
 // addMatchingIPs adds the IP to the desired set for every host interface whose subnet
 // contains it.
-func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]desiredIPSet, ip net.IP) {
+func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[string], ip net.IP) {
 	for ifaceName, cidrs := range m.hostIfaceToCIDRs {
 		for _, cidr := range cidrs {
 			if cidr.Contains(ip) {
 				if desiredByIface[ifaceName] == nil {
-					desiredByIface[ifaceName] = make(desiredIPSet)
+					desiredByIface[ifaceName] = set.New[string]()
 				}
-				desiredByIface[ifaceName][ip.String()] = true
+				desiredByIface[ifaceName].Add(ip.String())
 				break
 			}
 		}
@@ -510,7 +508,7 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 
 		targetIP := pkt.TargetIP.String()
 		desired := l.desired.Load()
-		if desired == nil || !(*desired)[targetIP] {
+		if desired == nil || !(*desired).Contains(targetIP) {
 			continue
 		}
 
@@ -546,7 +544,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 
 		targetIP := ns.TargetAddress.String()
 		desired := l.desired.Load()
-		if desired == nil || !(*desired)[targetIP] {
+		if desired == nil || !(*desired).Contains(targetIP) {
 			continue
 		}
 

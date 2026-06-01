@@ -345,7 +345,7 @@ func svcUpdate(name, namespace, svcType string, ingressIPs ...string) *proto.Ser
 }
 
 // getDesiredIPs returns the desired IP set for an interface from the manager's listener.
-func getDesiredIPs(mgr *proxyNeighManager, ifaceName string) desiredIPSet {
+func getDesiredIPs(mgr *proxyNeighManager, ifaceName string) set.Set[string] {
 	l, ok := mgr.listeners[ifaceName]
 	if !ok {
 		return nil
@@ -389,7 +389,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 		It("should have 10.0.0.50 in desired set for eth0", func() {
 			desired := getDesiredIPs(mgr, "eth0")
-			Expect(desired).To(HaveKey("10.0.0.50"))
+			Expect(desired.Contains("10.0.0.50")).To(BeTrue())
 		})
 
 		It("should start a listener on eth0", func() {
@@ -411,7 +411,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
-			Expect(getDesiredIPs(mgr, "eth0")).To(HaveKey("10.0.0.50"))
+			Expect(getDesiredIPs(mgr, "eth0").Contains("10.0.0.50")).To(BeTrue())
 
 			mgr.OnUpdate(proxyNeighWepRemove("k8s", "default/pod1", "eth0"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -434,8 +434,8 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 		It("should have both IPs in the desired set", func() {
 			desired := getDesiredIPs(mgr, "eth0")
-			Expect(desired).To(HaveKey("10.0.0.50"))
-			Expect(desired).To(HaveKey("10.0.0.51"))
+			Expect(desired.Contains("10.0.0.50")).To(BeTrue())
+			Expect(desired.Contains("10.0.0.51")).To(BeTrue())
 		})
 	})
 
@@ -562,7 +562,7 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 
 		It("should have the LB IP in desired set", func() {
 			desired := getDesiredIPs(mgr, "eth0")
-			Expect(desired).To(HaveKey("10.0.0.100"))
+			Expect(desired.Contains("10.0.0.100")).To(BeTrue())
 		})
 
 		It("should send GARP for LB VIP", func() {
@@ -646,7 +646,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 
 		It("should have fd00::50 in desired set for eth0", func() {
 			desired := getDesiredIPs(mgr, "eth0")
-			Expect(desired).To(HaveKey("fd00::50"))
+			Expect(desired.Contains("fd00::50")).To(BeTrue())
 		})
 
 		It("should start a listener", func() {
