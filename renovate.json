@@ -47,6 +47,14 @@
       "depNameTemplate": "calico/base",
       "datasourceTemplate": "docker",
       "versioningTemplate": "regex:^(?<compatibility>ubi\\d+)-(?<patch>\\d+)$"
+    },
+    {
+      "description": "Renovate only manages ENVOY_GATEWAY_VERSION. On any bump, manually verify the Envoy Gateway compatibility matrix (https://gateway.envoyproxy.io/news/releases/matrix/) is satisfied for envoy-proxy (ENVOYBINARY_IMAGE in third_party/envoy-proxy/Makefile) and envoy-ratelimit (ENVOY_RATELIMIT_VERSION in third_party/envoy-ratelimit/Makefile), which Renovate does not track.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^third_party\\/envoy-gateway\\/Makefile$/"],
+      "matchStrings": ["ENVOY_GATEWAY_VERSION=(?<currentValue>v\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "envoyproxy/gateway",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
@@ -90,13 +98,23 @@
       "groupName": "dependency-updates"
     },
     {
-      "description": "Run gen-deps-files on selected branches only",
-      "matchBaseBranches": ["release-v3.31", "release-v3.32", "master"],
+      "description": "Run gen-deps-files after updates",
       "postUpgradeTasks": {
         "commands": ["make gen-deps-files"],
         "fileFilters": ["**/deps.txt"],
         "executionMode": "branch"
       }
+    },
+    {
+      "description": "envoy-gateway: only patch updates allowed (block minor/major/digest)",
+      "matchPackageNames": ["envoyproxy/gateway"],
+      "matchUpdateTypes": ["minor", "major", "digest"],
+      "enabled": false
+    },
+    {
+      "description": "Group envoy-gateway updates into a dedicated PR",
+      "matchPackageNames": ["envoyproxy/gateway"],
+      "groupName": "envoy-gateway"
     }
   ]
 }
