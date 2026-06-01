@@ -585,57 +585,64 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 	}
 }
 
-// sendGARP sends a gratuitous ARP (IPv4) or unsolicited NA (IPv6) for the
-// given IP using the listener's raw socket.
+// sendGARP parses ipStr and dispatches to the IPv4 (gratuitous ARP) or IPv6
+// (unsolicited NA) sender for the manager's address family.
 func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
+	addr, err := netip.ParseAddr(ipStr)
+	if err != nil {
+		return
+	}
 	if m.ipVersion == 4 {
-		ip, err := netip.ParseAddr(ipStr)
-		if err != nil {
-			return
-		}
-		pkt, err := arp.NewPacket(arp.OperationRequest, l.hwAddr, ip, ethernet.Broadcast, ip)
-		if err != nil {
-			logrus.WithError(err).WithField("ip", ipStr).Debug("Failed to create GARP packet")
-			return
-		}
-		if err := l.arpCli.WriteTo(pkt, ethernet.Broadcast); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"iface": l.ifaceName,
-				"ip":    ipStr,
-			}).Warn("Failed to send GARP")
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"iface": l.ifaceName,
-				"ip":    ipStr,
-			}).Debug("Sent gratuitous ARP")
-		}
+		m.sendGARPV4(l, addr)
 	} else {
-		addr, err := netip.ParseAddr(ipStr)
-		if err != nil {
-			return
-		}
-		na := &ndp.NeighborAdvertisement{
-			Override:      true,
-			TargetAddress: addr,
-			Options: []ndp.Option{
-				&ndp.LinkLayerAddress{
-					Direction: ndp.Target,
-					Addr:      l.hwAddr,
-				},
+		m.sendGARPV6(l, addr)
+	}
+}
+
+// sendGARPV4 sends a gratuitous ARP for ip using the listener's raw socket.
+func (m *proxyNeighManager) sendGARPV4(l *ifaceListener, ip netip.Addr) {
+	pkt, err := arp.NewPacket(arp.OperationRequest, l.hwAddr, ip, ethernet.Broadcast, ip)
+	if err != nil {
+		logrus.WithError(err).WithField("ip", ip).Debug("Failed to create GARP packet")
+		return
+	}
+	if err := l.arpCli.WriteTo(pkt, ethernet.Broadcast); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    ip,
+		}).Warn("Failed to send GARP")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    ip,
+		}).Debug("Sent gratuitous ARP")
+	}
+}
+
+// sendGARPV6 sends an unsolicited Neighbor Advertisement for addr using the
+// listener's raw socket.
+func (m *proxyNeighManager) sendGARPV6(l *ifaceListener, addr netip.Addr) {
+	na := &ndp.NeighborAdvertisement{
+		Override:      true,
+		TargetAddress: addr,
+		Options: []ndp.Option{
+			&ndp.LinkLayerAddress{
+				Direction: ndp.Target,
+				Addr:      l.hwAddr,
 			},
-		}
-		allNodes := netip.MustParseAddr("ff02::1")
-		if err := l.ndpCli.WriteTo(na, nil, allNodes); err != nil {
-			logrus.WithError(err).WithFields(logrus.Fields{
-				"iface": l.ifaceName,
-				"ip":    ipStr,
-			}).Warn("Failed to send unsolicited NA")
-		} else {
-			logrus.WithFields(logrus.Fields{
-				"iface": l.ifaceName,
-				"ip":    ipStr,
-			}).Debug("Sent unsolicited NA")
-		}
+		},
+	}
+	allNodes := netip.MustParseAddr("ff02::1")
+	if err := l.ndpCli.WriteTo(na, nil, allNodes); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    addr,
+		}).Warn("Failed to send unsolicited NA")
+	} else {
+		logrus.WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    addr,
+		}).Debug("Sent unsolicited NA")
 	}
 }
 
