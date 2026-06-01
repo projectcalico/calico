@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,12 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
+	goldmaneupstream "github.com/projectcalico/calico/whisker-backend/pkg/upstream/goldmane"
 )
 
 func Run(ctx context.Context, cfg *config.Config) {
@@ -51,11 +53,17 @@ func Run(ctx context.Context, cfg *config.Config) {
 		opts = append(opts, server.WithTLSFiles(cfg.TLSCertPath, cfg.TLSKeyPath))
 	}
 
-	flowsAPI := v1.NewFlows(gmCli)
+	backend := goldmaneupstream.NewBackend(gmCli)
+	flowsAPI := v1.NewFlows(backend)
+	configAPI := v1.NewConfig(true)
+
+	var endpoints []apiutil.Endpoint
+	endpoints = append(endpoints, flowsAPI.APIs()...)
+	endpoints = append(endpoints, configAPI.APIs()...)
 
 	srv, err := server.NewHTTPServer(
 		gorillaadpt.NewRouter(),
-		flowsAPI.APIs(),
+		endpoints,
 		opts...,
 	)
 	if err != nil {
