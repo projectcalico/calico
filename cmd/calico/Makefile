@@ -27,17 +27,9 @@ CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -le
 CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
 endif
 
-FIPS ?= false
-ifeq ($(FIPS),true)
-BINDIR = bin/$(ARCH)-fips
-CONTAINER_MARKER = .image.created-$(ARCH)-fips
-IMAGE_TAG = latest-fips
-VALIDARCHES=amd64
-else
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
 IMAGE_TAG = latest
-endif
 
 .PHONY: clean
 clean:
@@ -53,20 +45,11 @@ build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
 build-race: $(BINDIR)/calico-race-$(ARCH)
 
-ifeq ($(FIPS),true)
-# The FIPS binary is cgo-linked via build_cgo_boring_binary, so it needs libbpf
-# available in the build container for transitive felix/bpf/libbpf imports.
-$(BINDIR)/calico-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
-	$(call build_cgo_boring_binary, ./, $@)
-else
 $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
-endif
 
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./, $@)
-else ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, ./, $@)
 else
 	$(call build_binary, ./, $@)
@@ -101,11 +84,9 @@ $(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(AR
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
 
 ###############################################################################
 # CI/CD
@@ -124,8 +105,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) clean image-all RELEASE=true
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Pushes the combined calico image to the registries.
@@ -133,5 +112,4 @@ release-build: .release-$(VERSION).created
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@

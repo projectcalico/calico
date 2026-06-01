@@ -49,12 +49,7 @@ REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) 
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
-CGO_ENABLED=1
-GOEXPERIMENT=""
-else ifeq ($(ARCH), $(filter $(ARCH),arm64))
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
@@ -72,7 +67,7 @@ REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
 $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
 			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
