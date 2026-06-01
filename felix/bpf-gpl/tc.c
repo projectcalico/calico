@@ -1419,7 +1419,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	/* Ingress connection limit for TCP SYN arriving at a WEP.
 	 *
 	 * The CT lookup propagates the CT entry's CONNLIMIT_INGRESS /
-	 * CONNLIMIT_REJECTED flags into result.flags. Three cases:
+	 * CONNLIMIT_INGRESS_REJECTED flags into result.flags. Three cases:
 	 *
 	 *   - INGRESS set: the connection was counted on its first SYN.
 	 *     This is a retransmission of an accepted SYN; allow.
@@ -1428,7 +1428,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 *     TCP RST so the client sees the rejection promptly.
 	 *   - Neither: first SYN. Run qos_connlimit_check_and_increment;
 	 *     on success mark CONNLIMIT_INGRESS, on failure mark
-	 *     CONNLIMIT_REJECTED. The CT lookup runs once and is reused
+	 *     CONNLIMIT_INGRESS_REJECTED. The CT lookup runs once and is reused
 	 *     for both writes.
 	 *
 	 * The Go-side CT scanner periodically recounts and corrects drift.
@@ -1440,7 +1440,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 		if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
 			/* Retransmission of accepted SYN — already counted, allow. */
-		} else if (cl_flags & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
+		} else if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) {
 			/* Retransmission of rejected SYN — stay rejected. */
 			CALI_DEBUG("connlimit: retransmission of rejected connection");
 			reject = true;
@@ -1458,7 +1458,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 			if (qos_connlimit_check_and_increment(ctx) < 0) {
 				CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
 				if (cv) {
-					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_REJECTED);
+					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
 				}
 				reject = true;
 			} else if (cv) {

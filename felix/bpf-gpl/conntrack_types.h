@@ -43,7 +43,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_MAGLEV	0X10000 /* marks Maglev connections. Allows packets of an existing to arrive via a different tunnel after failover. */
 #define CALI_CT_FLAG_SEND_RESET	0x20000 /* marks connections where we should send a TCP RST on behalf of the workload */
 #define CALI_CT_FLAG_CONNLIMIT_INGRESS	0x40000 /* marks connections counted against an ingress connection limit */
-#define CALI_CT_FLAG_CONNLIMIT_REJECTED	0x80000 /* marks connections rejected by the connection limit */
+#define CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED	0x80000 /* marks connections rejected by the ingress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
 

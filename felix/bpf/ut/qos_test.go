@@ -481,7 +481,7 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 
 // TestQoSConnLimitIngressRetransmissionOfRejected verifies that when a SYN
 // retransmission arrives at to-wep for a connection that was previously
-// rejected (CT entry carries CONNLIMIT_REJECTED), the BPF dataplane:
+// rejected (CT entry carries CONNLIMIT_INGRESS_REJECTED), the BPF dataplane:
 //
 //   - rejects the retransmission unconditionally (without re-checking the
 //     counter), so a SYN that lost the limit race once stays lost even if
@@ -490,8 +490,8 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 //
 // The relevant logic lives in tc.c:~1411 (calico_to_workload_ep ingress
 // connlimit handling). The "first SYN" branch fires when neither
-// CONNLIMIT_INGRESS nor CONNLIMIT_REJECTED is propagated to result.flags;
-// the "retransmission of rejected" branch fires when CONNLIMIT_REJECTED is
+// CONNLIMIT_INGRESS nor CONNLIMIT_INGRESS_REJECTED is propagated to result.flags;
+// the "retransmission of rejected" branch fires when CONNLIMIT_INGRESS_REJECTED is
 // propagated (but not CONNLIMIT_INGRESS). Both reject arms feed a single
 // PROG_INDEX_TCP_RST tail call so the client gets an RST promptly.
 func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
@@ -525,7 +525,7 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 
 	// Pre-populate the CT entry for the 5-tuple that was rejected on its
 	// first SYN. State: opener (srcIP) sent SYN; responder (dstIP) never
-	// responded. Flag: CONNLIMIT_REJECTED only — under the new semantics,
+	// responded. Flag: CONNLIMIT_INGRESS_REJECTED only — under the new semantics,
 	// CONNLIMIT_INGRESS is set only on a successful count, so a rejected
 	// entry carries REJECTED alone. No FIN/RST on either side, so
 	// tcp_recycled() returns false and the existing entry is used.
@@ -533,7 +533,7 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 	legB := ctv4.Leg{Ifindex: ifIndex}
 	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
 	v := ctv4.NewValueNormal(time.Duration(0),
-		ctv4.FlagConnLimitRej,
+		ctv4.FlagConnLimitInRej,
 		legA, legB)
 	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 
