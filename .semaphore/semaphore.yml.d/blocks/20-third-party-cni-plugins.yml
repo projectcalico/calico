@@ -1,4 +1,4 @@
-- name: CNI plugins image
+- name: Third-party CNI plugins image
   run:
     when: "${FORCE_RUN} or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
   execution_time_limit:
@@ -10,10 +10,10 @@
       commands:
         - cd third_party/cni-plugins
     jobs:
-      - name: "CNI plugins: CI"
+      - name: "Third-party CNI plugins: CI"
         commands:
           - ../../.semaphore/run-and-monitor make-ci.log make ci
-      - name: "CNI plugins: build multi-arch binaries"
+      - name: "Third-party CNI plugins: build multi-arch binaries"
         matrix:
           - env_var: ARCH
             values:

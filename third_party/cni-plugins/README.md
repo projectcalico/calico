@@ -1,4 +1,4 @@
-# calico/cni-plugins
+# calico/third-party-cni-plugins
 
 Image containing the upstream CNI plugins that Calico installs onto each node:
 
