@@ -37,6 +37,7 @@ import (
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/hostendpoints"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/ipam"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/istio"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/kubevirt"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/networking"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/operator"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"

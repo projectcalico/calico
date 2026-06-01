@@ -507,6 +507,7 @@ local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/multireadbuf
 local:libcalico-go/lib/names

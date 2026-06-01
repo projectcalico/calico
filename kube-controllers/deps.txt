@@ -220,6 +220,7 @@ local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

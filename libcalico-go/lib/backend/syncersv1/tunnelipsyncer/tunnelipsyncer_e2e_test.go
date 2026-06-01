@@ -108,6 +108,7 @@ var _ = testutils.E2eDatastoreDescribe("Tunnel IP allocation syncer tests", test
 					IPAM:           true,
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
+					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 				},
 				Revision: pool.ResourceVersion,
 			})

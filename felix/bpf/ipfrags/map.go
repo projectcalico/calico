@@ -28,7 +28,7 @@ var MapParams = maps.MapParameters{
 	ValueSize:  ValueSize,
 	MaxEntries: 10000, // max number of nodes that can forward nodeports to a single node
 	Name:       "cali_v4_frags",
-	Version:    2,
+	Version:    3,
 }
 
 const (
@@ -48,7 +48,7 @@ var MapParameters = maps.MapParameters{
 	ValueSize:  ValueSize,
 	MaxEntries: 1,
 	Name:       "cali_v4_frgtmp",
-	Version:    2,
+	Version:    3,
 }
 
 func MapTmp() maps.Map {
