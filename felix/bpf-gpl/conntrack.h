@@ -596,7 +596,11 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	}
 	ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
 
-	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+	/* Skip the ingress decrement if the entry was rejected by the
+	 * ingress limit check.
+	 */
+	if ((cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) &&
+			!(cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED)) {
 		/* Ingress: pod is the responder (non-opener). */
 		__u32 pod_ifindex = v->a_to_b.opener
 			? v->b_to_a.ifindex
@@ -1161,20 +1165,19 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		ct_result_set_flag(result.rc, CT_RES_SYN);
 
 		/* For ingress connection limit, propagate the CT entry's
-		 * CONNLIMIT_INGRESS / CONNLIMIT_REJECTED flags to the result
+		 * CONNLIMIT_INGRESS / CONNLIMIT_INGRESS_REJECTED flags to the result
 		 * so accepted_entrypoint can decide what to do without an
 		 * extra CT lookup. The flags themselves are written by
 		 * accepted_entrypoint after the limit check resolves —
-		 * INGRESS on success, REJECTED on failure, never both — so
-		 * we don't need a dedicated "first SYN" result flag.
+		 * INGRESS on success, REJECTED on failure, never both
 		 */
 		if (CALI_F_TO_WEP && INGRESS_CONN_LIMIT_CONFIGURED) {
 			__u32 cl = ct_value_get_flags(v);
 			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
 				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS;
 			}
-			if (cl & CALI_CT_FLAG_CONNLIMIT_REJECTED) {
-				result.flags |= CALI_CT_FLAG_CONNLIMIT_REJECTED;
+			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED;
 			}
 		}
 	}

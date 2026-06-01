@@ -59,8 +59,7 @@ func connLimitWEP(name string, ipv4Nets []string, ingressMax, egressMax int64) *
 // the zero value of ConnLimitPodInfo, we assert the key is absent.
 func assertConnLimitInfo(t *testing.T, m *bpfEndpointManager, ipv4 string, want bpfconntrack.ConnLimitPodInfo) {
 	t.Helper()
-	key := string(net.ParseIP(ipv4).To4())
-	got, ok := m.GetConnLimitedPodInfo()[key]
+	got, ok := m.GetConnLimitedPodInfo()[string(net.ParseIP(ipv4).To4())]
 	if want == (bpfconntrack.ConnLimitPodInfo{}) {
 		if ok {
 			t.Errorf("ip=%s: expected absent, got %+v", ipv4, got)

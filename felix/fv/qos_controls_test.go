@@ -984,6 +984,66 @@ var _ = infrastructure.DatastoreDescribe(
 							w[0].UpdateInInfra(infra)
 						})
 
+						// Regression guard for the historical decrement-without-increment
+						// bug: in an earlier version, CONNLIMIT_INGRESS was stamped on the
+						// CT entry before the limit check ran, so rejected entries carried
+						// INGRESS despite never being counted. When such an entry was
+						// purged, the cleanup decrement fired with no matching increment
+						// and current_count drifted below the live count, admitting an
+						// extra connection. Current code stamps INGRESS only after a
+						// successful increment, and the cleanup helper additionally skips
+						// the ingress decrement when REJECTED is set; this test guards
+						// the invariant end-to-end.
+						It("should not under-count after a rejected SYN's CT entry ages out", func() {
+							const numConnections = 3
+
+							By("Setting ingress connlimit on w[0]")
+							w[0].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{
+								IngressMaxConnections: int64(numConnections),
+							}
+							w[0].UpdateInInfra(infra)
+
+							By("Waiting for ingress connlimit to appear in BPF QoS map")
+							Eventually(getBPFMaxConnections(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+							By("Filling the ingress slots")
+							pcs := make([]*connectivity.PersistentConnection, numConnections)
+							for i := range pcs {
+								pcs[i] = w[1].StartPersistentConnection(w[0].IP, 8055, workload.PersistentConnectionOpts{})
+							}
+							defer func() {
+								for i := range pcs {
+									if pcs[i] != nil {
+										pcs[i].Stop()
+									}
+								}
+							}()
+
+							By("Waiting for ingress counter to reach the limit")
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+							By("Attempting one more connection (rejected, leaves a REJECTED CT entry)")
+							Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+
+							By("Flushing CT to purge the rejected entry through the cleanup decrement path")
+							// calico-bpf conntrack clean runs the cleanup program over
+							// each entry; that's where qos_connlimit_decrement_for_ct
+							// fires. If the cleanup decrements on a rejected entry that
+							// shouldn't have been counted, the counter dips below the
+							// live count and the next assertion catches it.
+							tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
+
+							By("Verifying ingress counter does not dip below the live count")
+							Consistently(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
+
+							By("Re-attempting connection -- still expect rejection (counter still at limit)")
+							Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+
+							By("Removing ingress limit from w[0]")
+							w[0].WorkloadEndpoint.Spec.QoSControls = nil
+							w[0].UpdateInInfra(infra)
+						})
+
 						Describe("with short BPF CT timeouts (cleanup-time decrement path)", func() {
 							BeforeEach(func() {
 								// Set both TCPEstablished and TCPFinsSeen to
