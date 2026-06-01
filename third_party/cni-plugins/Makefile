@@ -156,10 +156,14 @@ print-cni-plugins-hash:
 ##############################################################################
 # CI/CD
 ##############################################################################
+.PHONY: ut
+ut:
+	$(DOCKER_GO_BUILD) go test ./cmd/...
+
 # Probe the cache registry for a content-addressed image first; fall through to
 # a real build (and push the cache tag) on cache miss. See image-content-addressed.
 .PHONY: ci
-ci: image-content-addressed
+ci: ut image-content-addressed
 
 .PHONY: cd
 cd: image-all cd-common
