@@ -167,6 +167,7 @@ for batch in "${batches[@]}"; do
     # distinguish "done, just waiting to be reaped" from "genuinely hung".
     done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
     rm -f "$done_marker"
+    trap 'touch "$done_marker"' EXIT
 
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
     echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
