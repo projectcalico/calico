@@ -46,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -433,6 +434,14 @@ func (c *KubeClient) Clean() error {
 					return nil // Problems are reported through kindsWithProblems set.
 				} else {
 					for _, r := range rs.KVPairs {
+						// The built-in tiers cannot be deleted - they are protected by a
+						// ValidatingAdmissionPolicy. Skip them, otherwise every Clean() burns
+						// its full retry budget failing to delete them and logs spurious errors.
+						if k == apiv3.KindTier {
+							if rk, ok := r.Key.(model.ResourceKey); ok && names.TierIsStatic(rk.Name) {
+								continue
+							}
+						}
 						delEG.Go(func() error {
 							if _, err := c.DeleteKVP(ctx, r); err != nil {
 								log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
