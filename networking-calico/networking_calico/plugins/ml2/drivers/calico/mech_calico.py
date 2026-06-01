@@ -56,6 +56,7 @@ from oslo_config import cfg
 import oslo_context
 
 from oslo_db import exception as db_exc
+from oslo_db import options as oslo_db_options
 
 from oslo_log import log
 
@@ -222,6 +223,13 @@ def _check_mysql_driver():
     CalicoMechanismDriver.initialize() for the driver path, and from
     networking_calico.resync.cli.main() / Scope.run() for the resync path.
     """
+    # Ensure the [database] option group is registered.  In neutron-server's
+    # startup, ML2 ``mechanism_manager.initialize()`` runs during plugin
+    # __init__, before anything has imported oslo.db's enginefacade -- which
+    # is what would otherwise side-effect-register this group.  Registering
+    # the opts ourselves is idempotent and decouples us from Neutron's
+    # startup ordering.
+    cfg.CONF.register_opts(oslo_db_options.database_opts, "database")
     conn_url = (cfg.CONF.database.connection or "").lower()
     if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
         msg = (
