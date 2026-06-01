@@ -76,6 +76,7 @@ var features = map[string]bool{
 	"Datapath":        true,
 	"Istio":           true,
 	"KubeVirt":        true,
+	"LocalSubnetL2Reachability": true,
 }
 
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
@@ -150,6 +151,15 @@ func WithExternalNode() any {
 
 func RequiresExternalNode() any {
 	return framework.WithLabel("RequiresExternalNode")
+}
+
+// RequiresKindNetwork marks tests that need to attach a docker container to the
+// host's "kind" network as an L2-adjacent peer of the cluster nodes. These
+// tests can only run where the test runner has direct access to the local
+// docker daemon (i.e., kind clusters), and must be skipped elsewhere via
+// --ginkgo.skip=KindNetwork.
+func RequiresKindNetwork() any {
+	return framework.WithLabel("KindNetwork")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.
