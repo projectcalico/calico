@@ -27,13 +27,15 @@ import (
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
 	"github.com/mdlayher/ndp"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // desiredIPSet is an immutable set of IPs that a listener goroutine reads to
@@ -98,7 +100,7 @@ type proxyNeighManager struct {
 
 	// clusterNodes is the set of hostnames known to the cluster. Used as the
 	// hash ring for LB VIP node selection.
-	clusterNodes map[string]struct{}
+	clusterNodes set.Set[string]
 
 	// noEncapPools maps IPPool ID to the pool's parsed CIDR.
 	noEncapPools map[string]net.IPNet
@@ -119,7 +121,8 @@ type proxyNeighManager struct {
 func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
-		log.WithError(err).Panic("Failed to create netlink handle for proxy neighbor manager")
+		logrus.WithError(err).Error("Failed to create netlink handle for proxy neighbor manager")
+		return nil
 	}
 	var af arpClientFactory
 	var nf ndpConnFactory
@@ -177,7 +180,7 @@ func newProxyNeighManagerWithShims(
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
-		clusterNodes:     make(map[string]struct{}),
+		clusterNodes:     set.New[string](),
 		noEncapPools:     make(map[string]net.IPNet),
 		listeners:        make(map[string]*ifaceListener),
 		nlHandle:         nl,
@@ -194,7 +197,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
 			return
 		}
-		log.WithFields(log.Fields{
+		logrus.WithFields(logrus.Fields{
 			"ifaceName": msg.Name,
 			"addrs":     msg.Addrs,
 		}).Debug("Proxy neighbor manager received ifaceAddrsUpdate")
@@ -217,7 +220,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		} else {
 			ips = ep.Ipv6Nets
 		}
-		log.WithFields(log.Fields{
+		logrus.WithFields(logrus.Fields{
 			"workload":      wlKey,
 			"ips":           ips,
 			"migrationRole": ep.LiveMigrationRole,
@@ -237,14 +240,14 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		}
 		wlKey := types.ProtoToWorkloadEndpointID(msg.GetId())
 		if _, ok := m.localWorkloadIPs[wlKey]; ok {
-			log.WithField("workload", wlKey).Debug("Proxy neighbor manager received WorkloadEndpointRemove")
+			logrus.WithField("workload", wlKey).Debug("Proxy neighbor manager received WorkloadEndpointRemove")
 			delete(m.localWorkloadIPs, wlKey)
 			m.dirty = true
 		}
 
 	case *proto.ServiceUpdate:
 		svcKey := serviceID{Namespace: msg.Namespace, Name: msg.Name}
-		if msg.Type != "LoadBalancer" {
+		if v1.ServiceType(msg.Type) != v1.ServiceTypeLoadBalancer {
 			if _, ok := m.lbServiceIPs[svcKey]; ok {
 				delete(m.lbServiceIPs, svcKey)
 				m.dirty = true
@@ -260,7 +263,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if msg.LoadbalancerIp != "" && m.isMatchingIPVersion(msg.LoadbalancerIp) {
 			lbIPs = append(lbIPs, msg.LoadbalancerIp)
 		}
-		log.WithFields(log.Fields{
+		logrus.WithFields(logrus.Fields{
 			"service": svcKey,
 			"lbIPs":   lbIPs,
 		}).Debug("Proxy neighbor manager received ServiceUpdate")
@@ -275,7 +278,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 	case *proto.ServiceRemove:
 		svcKey := serviceID{Namespace: msg.Namespace, Name: msg.Name}
 		if _, ok := m.lbServiceIPs[svcKey]; ok {
-			log.WithField("service", svcKey).Debug("Proxy neighbor manager received ServiceRemove")
+			logrus.WithField("service", svcKey).Debug("Proxy neighbor manager received ServiceRemove")
 			delete(m.lbServiceIPs, svcKey)
 			m.dirty = true
 		}
@@ -291,14 +294,14 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if addr == "" {
 			return
 		}
-		log.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataV4V6Update")
-		m.clusterNodes[msg.Hostname] = struct{}{}
+		logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataUpdate")
+		m.clusterNodes.Add(msg.Hostname)
 		m.dirty = true
 
 	case *proto.HostMetadataRemove:
-		if _, ok := m.clusterNodes[msg.Hostname]; ok {
-			log.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataV4V6Remove")
-			delete(m.clusterNodes, msg.Hostname)
+		if m.clusterNodes.Contains(msg.Hostname) {
+			logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataRemove")
+			m.clusterNodes.Discard(msg.Hostname)
 			m.dirty = true
 		}
 
@@ -310,10 +313,10 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if isNoEncapPool(pool) {
 			_, cidr, err := net.ParseCIDR(pool.Cidr)
 			if err != nil {
-				log.WithError(err).WithField("cidr", pool.Cidr).Warn("Failed to parse IPPool CIDR")
+				logrus.WithError(err).WithField("cidr", pool.Cidr).Warn("Failed to parse IPPool CIDR")
 				return
 			}
-			log.WithFields(log.Fields{
+			logrus.WithFields(logrus.Fields{
 				"poolID": msg.Id,
 				"cidr":   pool.Cidr,
 			}).Debug("Proxy neighbor manager tracking no-encap IPPool")
@@ -325,7 +328,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 
 	case *proto.IPAMPoolRemove:
 		if _, ok := m.noEncapPools[msg.Id]; ok {
-			log.WithField("poolID", msg.Id).Debug("Proxy neighbor manager received IPAMPoolRemove")
+			logrus.WithField("poolID", msg.Id).Debug("Proxy neighbor manager received IPAMPoolRemove")
 			delete(m.noEncapPools, msg.Id)
 			m.dirty = true
 		}
@@ -338,11 +341,11 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	}
 	m.dirty = false
 
-	log.WithFields(log.Fields{
+	logrus.WithFields(logrus.Fields{
 		"numWorkloads":  len(m.localWorkloadIPs),
 		"numHostIfaces": len(m.hostIfaceToCIDRs),
 		"numLBServices": len(m.lbServiceIPs),
-		"numNodes":      len(m.clusterNodes),
+		"numNodes":      m.clusterNodes.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
 	// Build desired state: which IPs should each interface respond to.
@@ -384,7 +387,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
 			if err := m.startListener(ifaceName); err != nil {
-				log.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
+				logrus.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
 				// Re-mark dirty so the next CompleteDeferredWork retries,
 				// and remember the error to surface it to the dataplane loop.
 				m.dirty = true
@@ -467,7 +470,7 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 	}
 
 	m.listeners[ifaceName] = l
-	log.WithField("iface", ifaceName).Info("Started proxy neighbor listener")
+	logrus.WithField("iface", ifaceName).Info("Started proxy neighbor listener")
 	return nil
 }
 
@@ -481,7 +484,7 @@ func (m *proxyNeighManager) stopListener(l *ifaceListener) {
 		_ = l.ndpCli.Close()
 	}
 	<-l.done
-	log.WithField("iface", l.ifaceName).Info("Stopped proxy neighbor listener")
+	logrus.WithField("iface", l.ifaceName).Info("Stopped proxy neighbor listener")
 }
 
 // runARPListener listens for ARP requests on a raw socket and replies for
@@ -512,7 +515,7 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 		}
 
 		if err := l.arpCli.Reply(pkt, l.hwAddr, pkt.TargetIP); err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logrus.WithError(err).WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    targetIP,
 			}).Debug("ARP listener: failed to send reply")
@@ -570,7 +573,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 			},
 		}
 		if err := l.ndpCli.WriteTo(na, nil, dst); err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logrus.WithError(err).WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    targetIP,
 			}).Debug("NDP listener: failed to send NA")
@@ -588,16 +591,16 @@ func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 		}
 		pkt, err := arp.NewPacket(arp.OperationRequest, l.hwAddr, ip, ethernet.Broadcast, ip)
 		if err != nil {
-			log.WithError(err).WithField("ip", ipStr).Debug("Failed to create GARP packet")
+			logrus.WithError(err).WithField("ip", ipStr).Debug("Failed to create GARP packet")
 			return
 		}
 		if err := l.arpCli.WriteTo(pkt, ethernet.Broadcast); err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logrus.WithError(err).WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
 			}).Warn("Failed to send GARP")
 		} else {
-			log.WithFields(log.Fields{
+			logrus.WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
 			}).Debug("Sent gratuitous ARP")
@@ -619,12 +622,12 @@ func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 		}
 		allNodes := netip.MustParseAddr("ff02::1")
 		if err := l.ndpCli.WriteTo(na, nil, allNodes); err != nil {
-			log.WithError(err).WithFields(log.Fields{
+			logrus.WithError(err).WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
 			}).Warn("Failed to send unsolicited NA")
 		} else {
-			log.WithFields(log.Fields{
+			logrus.WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    ipStr,
 			}).Debug("Sent unsolicited NA")
@@ -635,12 +638,12 @@ func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 // selectNodeForIP uses Rendezvous hashing (Highest Random Weight) to select
 // which cluster node should answer ARP for the given IP.
 func (m *proxyNeighManager) selectNodeForIP(ipStr string) bool {
-	if len(m.clusterNodes) == 0 {
+	if m.clusterNodes.Len() == 0 {
 		return false
 	}
 	var bestScore uint32
 	var bestNode string
-	for hostname := range m.clusterNodes {
+	for hostname := range m.clusterNodes.All() {
 		h := fnv.New32a()
 		_, _ = h.Write([]byte(ipStr))
 		_, _ = h.Write([]byte(hostname))
@@ -691,7 +694,7 @@ func (m *proxyNeighManager) removeHostIface(ifaceName string) {
 func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 	link, err := m.nlHandle.LinkByName(ifaceName)
 	if err != nil {
-		log.WithError(err).WithField("iface", ifaceName).Debug("Failed to look up interface for CIDR update")
+		logrus.WithError(err).WithField("iface", ifaceName).Debug("Failed to look up interface for CIDR update")
 		delete(m.hostIfaceToCIDRs, ifaceName)
 		return
 	}
@@ -703,7 +706,7 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 
 	addrs, err := m.nlHandle.AddrList(link, family)
 	if err != nil {
-		log.WithError(err).WithField("iface", ifaceName).Debug("Failed to list addresses for interface")
+		logrus.WithError(err).WithField("iface", ifaceName).Debug("Failed to list addresses for interface")
 		delete(m.hostIfaceToCIDRs, ifaceName)
 		return
 	}
@@ -716,7 +719,7 @@ func (m *proxyNeighManager) refreshHostIface(ifaceName string) {
 		cidrs = append(cidrs, *addr.IPNet)
 	}
 
-	log.WithFields(log.Fields{
+	logrus.WithFields(logrus.Fields{
 		"iface": ifaceName,
 		"cidrs": cidrs,
 	}).Debug("Proxy neighbor manager refreshed host interface CIDRs from AddrList")

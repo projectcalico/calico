@@ -753,7 +753,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	// Register the proxy neighbor managers when enabled. They listen on raw sockets
 	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
 	// within the same subnet as a host physical interface.
-	if config.LocalSubnetL2Reachability == "PodsAndLoadBalancers" {
+	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
 		proxyNeighMgr4 := newProxyNeighManager(config, 4)
 		dp.RegisterManager(proxyNeighMgr4)
 		dp.proxyNeighManagers = append(dp.proxyNeighManagers, proxyNeighMgr4)
