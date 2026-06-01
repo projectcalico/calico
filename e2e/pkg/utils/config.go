@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,8 +39,7 @@ import (
 func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlclient.ObjectKey, obj T, mutate func(T)) (func(), error) {
 	ctx := context.Background()
 
-	err := cli.Get(ctx, key, obj)
-	if apierrors.IsNotFound(err) {
+	if err := cli.Get(ctx, key, obj); apierrors.IsNotFound(err) {
 		obj.SetName(key.Name)
 		obj.SetNamespace(key.Namespace)
 		mutate(obj)
@@ -51,25 +51,34 @@ func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlcl
 				framework.Logf("WARNING: failed to delete %T %s: %v", obj, key, err)
 			}
 		}, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get %T: %w", obj, err)
 	}
 
-	original := obj.DeepCopyObject().(T)
-	mutate(obj)
-	if err := cli.Update(ctx, obj); err != nil {
+	// Operator-reconciled resources (e.g. Installation) can be updated by a
+	// controller between our Get and Update, returning 409 Conflict. Wrap
+	// Get-mutate-Update in RetryOnConflict so we re-read the latest
+	// resourceVersion and re-apply our mutation on conflict.
+	var original T
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := cli.Get(ctx, key, obj); err != nil {
+			return err
+		}
+		original = obj.DeepCopyObject().(T)
+		mutate(obj)
+		return cli.Update(ctx, obj)
+	}); err != nil {
 		return nil, fmt.Errorf("failed to update %T: %w", obj, err)
 	}
 
 	return func() {
-		// Re-fetch to get the current resourceVersion before restoring.
-		if err := cli.Get(context.Background(), key, obj); err != nil {
-			framework.Logf("WARNING: failed to get %T for restoration: %v", obj, err)
-			return
-		}
-		original.SetResourceVersion(obj.GetResourceVersion())
-		if err := cli.Update(context.Background(), original); err != nil {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := cli.Get(context.Background(), key, obj); err != nil {
+				return err
+			}
+			original.SetResourceVersion(obj.GetResourceVersion())
+			return cli.Update(context.Background(), original)
+		}); err != nil {
 			framework.Logf("WARNING: failed to restore %T: %v", obj, err)
 		}
 	}, nil
