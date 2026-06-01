@@ -118,7 +118,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 }
 
 // ClientOptions provides pre-built clients for constructing a KubeClient.
-// ClientSet and RESTClient are required; the rest are optional.
+// ClientSet, RESTClient, and Group are required; the rest are optional.
 type ClientOptions struct {
 	ClientSet                  kubernetes.Interface
 	RESTClient                 rest.Interface
@@ -132,10 +132,16 @@ type ClientOptions struct {
 // to be injected for testing.
 func NewWithOptions(opts ClientOptions) (api.Client, error) {
 	if opts.ClientSet == nil {
-		return nil, fmt.Errorf("ClientSet is required")
+		return nil, fmt.Errorf("a ClientSet is required")
 	}
 	if opts.RESTClient == nil {
-		return nil, fmt.Errorf("RESTClient is required")
+		return nil, fmt.Errorf("a RESTClient is required")
+	}
+	switch opts.Group {
+	case resources.BackingAPIGroupV1, resources.BackingAPIGroupV3:
+	default:
+		return nil, fmt.Errorf("group must be %s or %s, got %q",
+			resources.BackingAPIGroupV1, resources.BackingAPIGroupV3, opts.Group)
 	}
 
 	c := &KubeClient{

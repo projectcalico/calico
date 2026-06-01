@@ -537,9 +537,9 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())
-		bpfEpMgr.v4.hostIP = net.ParseIP("1.2.3.4")
+		bpfEpMgr.v4.lastSeenHostIP = net.ParseIP("1.2.3.4")
 		if ipv6Enabled {
-			bpfEpMgr.v6.hostIP = net.ParseIP("1::4")
+			bpfEpMgr.v6.lastSeenHostIP = net.ParseIP("1::4")
 		}
 	}
 
