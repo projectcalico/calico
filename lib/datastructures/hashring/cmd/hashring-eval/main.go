@@ -14,7 +14,10 @@
 
 // hashring-eval reports load distribution and lookup cost for the
 // hashring package across a sweep of (members, replicas, probes)
-// configurations. Run with `go run ./lib/datastructures/hashring/cmd/hashring-eval`.
+// configurations. lib/datastructures is its own module, so run from
+// inside it:
+//
+//	cd lib/datastructures && go run ./hashring/cmd/hashring-eval
 package main
 
 import (
