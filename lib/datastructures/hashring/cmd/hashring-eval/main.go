@@ -14,7 +14,7 @@
 
 // hashring-eval reports load distribution and lookup cost for the
 // hashring package across a sweep of (members, replicas, probes)
-// configurations. Run with `go run ./lib/std/hashring/cmd/hashring-eval`.
+// configurations. Run with `go run ./lib/datastructures/hashring/cmd/hashring-eval`.
 package main
 
 import (
@@ -25,7 +25,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/projectcalico/calico/lib/std/hashring"
+	"github.com/projectcalico/calico/lib/datastructures/hashring"
 )
 
 type config struct {

@@ -19,11 +19,9 @@
 // (each replicated as several virtual nodes) such that adding or
 // removing a member reassigns only ~1/N of keys.
 //
-// The default hash is FNV-1a (stdlib hash/fnv, used via a
-// per-Ring hasher). Callers can swap in any deterministic string
-// hasher via WithHash — for stronger distribution, wrap
-// crypto/sha256 to return the first eight bytes as a uint64. Do
-// not use hash/maphash: its seed is process-local.
+// The default hash is XXH3-64 (github.com/zeebo/xxh3). Callers
+// can swap in any deterministic byte-slice hasher via WithHash.
+// Do not use hash/maphash: its seed is process-local.
 //
 // The Ring is not safe for concurrent use. Callers sharing a
 // ring across goroutines should wrap it in their own lock.
@@ -32,8 +30,9 @@ package hashring
 import (
 	"cmp"
 	"encoding/binary"
-	"hash/fnv"
 	"slices"
+
+	"github.com/zeebo/xxh3"
 )
 
 // Hash hashes a byte slice to a uint64. Implementations must be
@@ -44,18 +43,13 @@ import (
 // must not retain or mutate the slice past the call.
 type Hash func([]byte) uint64
 
-// newDefaultHash returns a Hash backed by a per-Ring stdlib
-// hash/fnv.New64a hasher. Each Ring gets its own hasher so the
-// closure has no shared state (no goroutine-safety pitfall beyond
-// the Ring itself).
-func newDefaultHash() Hash {
-	h := fnv.New64a()
-	return func(b []byte) uint64 {
-		h.Reset()
-		h.Write(b)
-		return h.Sum64()
-	}
-}
+// defaultHash is the default Hash used when no WithHash option is
+// passed: XXH3-64 (github.com/zeebo/xxh3). XXH3 is stateless,
+// allocation-free, and has much better avalanche than FNV-1a — for
+// short or near-sequential inputs (consecutive IPs, etc.) FNV
+// clusters virtual nodes badly, leaving some members with zero
+// keys; XXH3 reaches the Poisson floor of uniform distribution.
+var defaultHash Hash = xxh3.Hash
 
 // Ring is a consistent hash ring keyed by string, owning values of
 // type V. The zero value is not usable; construct one with New.
@@ -87,9 +81,8 @@ type ringConfig struct {
 }
 
 // WithHash sets the hash function used by the Ring. The default is
-// stdlib hash/fnv 64-bit FNV-1a, used via a per-Ring hasher. The
-// hasher MUST be deterministic across processes (do not use
-// hash/maphash).
+// XXH3-64 (github.com/zeebo/xxh3). The hasher MUST be deterministic
+// across processes (do not use hash/maphash).
 func WithHash(h Hash) Option {
 	return func(c *ringConfig) { c.hash = h }
 }
@@ -122,7 +115,7 @@ func New[V any](opts ...Option) *Ring[V] {
 	// Pre-build the default hasher so options can override it; any
 	// explicit WithHash(nil) lands as cfg.hash == nil after the
 	// loop and is caught as a programmer error.
-	cfg := ringConfig{hash: newDefaultHash(), replicas: 1, probes: 1}
+	cfg := ringConfig{hash: defaultHash, replicas: 1, probes: 1}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
