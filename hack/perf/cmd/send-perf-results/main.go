@@ -224,8 +224,15 @@ func sendFamily(client *http.Client, esURL, auth, familyDir, family, year string
 			failed++
 			continue
 		}
+		// Use UseNumber() so large integers (byte counts, nanosecond
+		// timings) survive the round-trip without being coerced to
+		// float64 and losing precision past 2^53.  json.Number values
+		// re-marshal as their original string form, so producer-side
+		// numeric fidelity is preserved end-to-end.
 		var doc map[string]any
-		if jerr := json.Unmarshal(raw, &doc); jerr != nil {
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if jerr := dec.Decode(&doc); jerr != nil {
 			log.Printf("warning: parse %s: %v", f, jerr)
 			failed++
 			continue
