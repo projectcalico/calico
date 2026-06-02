@@ -232,7 +232,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			"ips":           ips,
 			"migrationRole": ep.LiveMigrationRole,
 		}).Debug("Proxy neighbor manager received WorkloadEndpointUpdate")
-		if ep.LiveMigrationRole == proto.LiveMigrationRole_SOURCE && len(ips) > 0 {
+		if ep.LiveMigrationRole != proto.LiveMigrationRole_SOURCE && len(ips) > 0 {
 			m.localWorkloadIPs[wlKey] = ips
 		} else {
 			delete(m.localWorkloadIPs, wlKey)
