@@ -39,16 +39,8 @@ CALICO_API_GROUP ?= projectcalico.org/v3
 ###############################################################################
 include ../lib.Makefile
 
-FIPS ?= false
-
-ifeq ($(FIPS),true)
-NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-else
 NODE_CONTAINER_BIN_DIR=dist/bin
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
-endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
@@ -74,7 +66,6 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-NODE_CONTAINER_FIPS_CREATED=.calico_node.created-$(ARCH)-fips
 WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
@@ -217,15 +208,10 @@ CGO_CFLAGS=""
 endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
-# Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
-# it to bin/$(ARCH)-fips, which is where we pick it up from below.
 CMD_CALICO_BINDIR = ../cmd/calico/bin
-ifeq ($(FIPS),true)
-CMD_CALICO_BINDIR = ../cmd/calico/bin/$(ARCH)-fips
-endif
 
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH) FIPS=$(FIPS)
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
 	cp $(CMD_CALICO_BINDIR)/calico-cgo-$(ARCH) $@
 
@@ -250,11 +236,9 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
 
 dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
@@ -277,7 +261,7 @@ nft-rpms-image: | register
 # as a registry pull and fails when that tag hasn't been pushed yet (PR
 # builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
 # BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
-$(NODE_CONTAINER_CREATED) $(NODE_CONTAINER_FIPS_CREATED): DOCKER_PULL :=
+$(NODE_CONTAINER_CREATED): DOCKER_PULL :=
 
 $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
@@ -288,17 +272,6 @@ $(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOU
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
-	$(DOCKER_BUILD) \
-		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
-		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
-		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
-		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 # download BIRD source to include in image.
@@ -425,8 +398,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)
@@ -441,7 +412,6 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
