@@ -226,7 +226,7 @@ Most component daemons are registered as subcommands of a single `calico` binary
 **Adding a new component:**
 
 1. Expose a `NewCommand() *cobra.Command` from the component's package.
-2. Register it in `cmd/calico/component.go` under `newComponentCommand`.
+2. Register it in `addComponentCommand` in `cmd/calico/component_linux.go` (and in `component_windows.go` too if it runs on Windows).
 3. If the component runs in the node container, add a runit service at `node/filesystem/etc/service/available/<name>/run` whose body is `exec calico component <name>`.
 4. The component's `Run` handler should call `logutils.ConfigureFormatter("<name>")` so log lines carry a consistent component prefix.
 
