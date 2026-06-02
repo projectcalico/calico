@@ -241,7 +241,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		It("should converge iBGP routes after live migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), iBGPDoubleMigrationTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 
