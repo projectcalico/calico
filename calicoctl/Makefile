@@ -33,22 +33,26 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
 
-# Hard-link from cmd/calico/bin/ to keep release staging happy without
-# duplicating 100-200 MB per binary.
-bin/calicoctl-linux-%:
+# Hard-link cmd/calico's binary into calicoctl/bin/ for release/FV/ST staging
+# without duplicating 100-200 MB. FORCE refreshes the link each run: go build's
+# atomic -o write replaces the inode, so a cached link would otherwise go stale.
+bin/calicoctl-linux-%: FORCE
 	$(MAKE) -C ../cmd/calico bin/calicoctl-linux-$*
 	mkdir -p bin
 	cp -fl ../cmd/calico/bin/calicoctl-linux-$* $@
 
-bin/calicoctl-darwin-%:
+bin/calicoctl-darwin-%: FORCE
 	$(MAKE) -C ../cmd/calico bin/calicoctl-darwin-$*
 	mkdir -p bin
 	cp -fl ../cmd/calico/bin/calicoctl-darwin-$* $@
 
-bin/calicoctl-windows-%.exe:
+bin/calicoctl-windows-%.exe: FORCE
 	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-$*.exe
 	mkdir -p bin
 	cp -fl ../cmd/calico/bin/calicoctl-windows-$*.exe $@
+
+.PHONY: FORCE
+FORCE:
 
 bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@

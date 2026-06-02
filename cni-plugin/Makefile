@@ -58,11 +58,15 @@ endif
 # The Linux bin/calico and bin/calico-ipam fixtures used by the unit tests are
 # sourced from the combined cmd/calico binary further down this Makefile.
 
-## Hard-link the combined cmd/calico binary as calico.exe.
-$(WINDOWS_BIN)/calico.exe:
+## Hard-link the combined cmd/calico binary as calico.exe. FORCE refreshes the
+## link each run, since go build's atomic -o write replaces the source inode.
+$(WINDOWS_BIN)/calico.exe: FORCE
 	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(WINDOWS_BIN)
 	cp -fl ../cmd/calico/bin/calicoctl-windows-amd64.exe $@
+
+.PHONY: FORCE
+FORCE:
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \

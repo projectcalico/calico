@@ -232,11 +232,15 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 LIBBPF_FILE_CREATED:
 	make -C ../felix clone-libbpf
 
-# Use the combined binary with name-based dispatch.
-$(WINDOWS_BINARY):
+# Use the combined binary with name-based dispatch. FORCE refreshes the link
+# each run, since go build's atomic -o write replaces the source inode.
+$(WINDOWS_BINARY): FORCE
 	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(dir $@)
 	cp -fl ../cmd/calico/bin/calicoctl-windows-amd64.exe $@
+
+.PHONY: FORCE
+FORCE:
 
 $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
 	cp $(WINDOWS_BINARY) $@
