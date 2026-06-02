@@ -46,30 +46,16 @@ class PolicySyncer(ResourceSyncer):
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
         # When set (during resync), maps each security-group ID to the list
-        # of its rules.  Populated by resync() before calling through to
-        # the base class, and read by neutron_to_etcd_write_data() to
-        # avoid per-SG DB round-trips.
+        # of its rules.  Populated by get_from_neutron() before calling
+        # through to the base class, and read by neutron_to_etcd_write_data()
+        # to avoid per-SG DB round-trips.
         self._rules_by_sg = None
 
     def resync(self, context, scope):
-        # Bulk-fetch the rules for every security group in scope in one
-        # query, rather than one query per SG during the comparison loop.
-        # At scale, this is what changes the policy resync cost from O(N)
-        # DB round-trips to O(1).
-        if scope.all():
-            sgs = self.db.get_security_groups(context)
-        else:
-            sgs = self.db.get_security_groups(
-                context, filters={"id": list(scope.ids())}
-            )
-        sg_ids = [sg["id"] for sg in sgs]
-        rules_by_sg = {}
-        if sg_ids:
-            for rule in self.db.get_security_group_rules(
-                context, filters={"security_group_id": sg_ids}
-            ):
-                rules_by_sg.setdefault(rule["security_group_id"], []).append(rule)
-        self._rules_by_sg = rules_by_sg
+        # The bulk-fetch happens inside get_from_neutron, AFTER the base
+        # class's etcd-first read.  Just clear self._rules_by_sg in finally
+        # so a subsequent postcommit-hook caller falls through to the
+        # per-SG query path.
         try:
             return super(PolicySyncer, self).resync(context, scope)
         finally:
@@ -82,6 +68,23 @@ class PolicySyncer(ResourceSyncer):
             sgs = self.db.get_security_groups(
                 context, filters={"id": list(scope.ids())}
             )
+
+        # Bulk-fetch the rules for every SG in scope in one query, rather
+        # than one query per SG during the compare loop.  At scale this is
+        # what changes the policy resync DB cost from O(N) round-trips to
+        # O(1).  Done here, after the base class's etcd read, so the rules
+        # we cache reflect a Neutron snapshot taken AFTER our etcd snapshot
+        # -- preserving the etcd-first ordering's CAS-based protection
+        # against concurrent dynamic SG-rule updates.
+        sg_ids = [sg["id"] for sg in sgs]
+        rules_by_sg = {}
+        if sg_ids:
+            for rule in self.db.get_security_group_rules(
+                context, filters={"security_group_id": sg_ids}
+            ):
+                rules_by_sg.setdefault(rule["security_group_id"], []).append(rule)
+        self._rules_by_sg = rules_by_sg
+
         return dict((SG_NAME_PREFIX + sg["id"], sg) for sg in sgs)
 
     def get_from_etcd(self, scope):
