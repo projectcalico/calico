@@ -1,0 +1,8 @@
+# kind-kubevirt.yaml - test selection for KubeVirt live migration on KIND.
+#
+# Used by the "KubeVirt live migration (KIND)" Semaphore block.
+# Runs only KubeVirt-KIND-tagged tests, which exercise live migration
+# networking against MockVirt (KubeVirt simulation mode) on a KIND cluster.
+
+include:
+  - Feature:KubeVirt-KIND
