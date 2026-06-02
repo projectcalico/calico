@@ -126,7 +126,6 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 	nl, err := netlinkshim.NewRealNetlink()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to create netlink handle for proxy neighbor manager")
-		return nil
 	}
 	var af arpClientFactory
 	var nf ndpConnFactory
