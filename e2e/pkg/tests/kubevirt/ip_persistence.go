@@ -416,9 +416,9 @@ var _ = describe.CalicoDescribe(
 			ns := f.Namespace.Name
 			vmName := "e2e-static-ip"
 
-			// Pick a static IP from the cluster's IPPool.
+			// Pick an unallocated static IP from the cluster's IPPool.
 			lcgc := newLibcalicoClient(f)
-			staticIP := pickStaticIPFromPool(ctx, lcgc, 200)
+			staticIP := pickUnallocatedIP(ctx, lcgc)
 			logrus.Infof("Using static IP %s for VM %s", staticIP, vmName)
 
 			vm := &kubeVirtVM{

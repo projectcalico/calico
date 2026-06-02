@@ -16,8 +16,8 @@ package kubevirt
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"time"
@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -58,7 +59,6 @@ const (
 	vmiRecreationTimeout       = 12 * time.Minute
 	singleMigrationTimeout     = 5 * time.Minute
 	doubleMigrationTimeout     = 6 * time.Minute
-	iBGPDoubleMigrationTimeout = 6 * time.Minute
 	eBGPDoubleMigrationTimeout = 6 * time.Minute
 )
 
@@ -493,26 +493,25 @@ func discoverPodCIDR(ctx context.Context, lcgc clientv3.Interface) string {
 	return ""
 }
 
-// pickStaticIPFromPool discovers the cluster's first IPv4 IPPool and returns
-// a specific IP from within that CIDR (offset from the network base). Used
-// by the static-IP test to pick a deterministic IP that is inside the pool
-// but unlikely to be already assigned.
-func pickStaticIPFromPool(ctx context.Context, lcgc clientv3.Interface, offset int) string {
+// pickUnallocatedIP discovers the cluster's first IPv4 IPPool and returns an
+// IP within that CIDR that is not currently allocated. Fails the test if no
+// unallocated IP can be found.
+func pickUnallocatedIP(ctx context.Context, lcgc clientv3.Interface) string {
 	GinkgoHelper()
-	pools, err := lcgc.IPPools().List(ctx, options.ListOptions{})
-	Expect(err).NotTo(HaveOccurred(), "list IPPools")
-	for _, p := range pools.Items {
-		if strings.Contains(p.Spec.CIDR, ":") {
-			continue
+	cidr := discoverPodCIDR(ctx, lcgc)
+	_, ipNet, err := net.ParseCIDR(cidr)
+	Expect(err).NotTo(HaveOccurred(), "parse IPPool CIDR %s", cidr)
+	base := cnet.IP{IP: ipNet.IP}
+	ones, bits := ipNet.Mask.Size()
+	numHosts := 1 << (bits - ones) // addresses in the pool (e.g. /24 → 256)
+	for offset := 1; offset < numHosts; offset++ {
+		candidate := cnet.IncrementIP(base, big.NewInt(int64(offset)))
+		_, err := lcgc.IPAM().GetAssignmentAttributes(ctx, candidate)
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			return candidate.String()
 		}
-		_, ipNet, err := net.ParseCIDR(p.Spec.CIDR)
-		Expect(err).NotTo(HaveOccurred(), "parse IPPool CIDR %s", p.Spec.CIDR)
-		base := ipNet.IP.To4()
-		ip := make(net.IP, 4)
-		binary.BigEndian.PutUint32(ip, binary.BigEndian.Uint32(base)+uint32(offset))
-		return ip.String()
 	}
-	Fail("no IPv4 IPPool found — cannot pick a static IP")
+	Fail("no unallocated IP found in pool " + cidr)
 	return ""
 }
 

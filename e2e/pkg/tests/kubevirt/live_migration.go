@@ -80,7 +80,7 @@ var _ = describe.CalicoDescribe(
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
 			if isKINDCluster(f) {
-				Skip("TCP stream iBGP test requires a real cluster, not KinD")
+				Fail("KubeVirt tests selected but cluster is a KIND cluster")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
@@ -181,7 +181,7 @@ var _ = describe.CalicoDescribe(
 		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				if isKINDCluster(f) {
-					Skip("eBGP external client test requires a physical TOR node, skipping on KinD")
+					Fail("KubeVirt tests selected but cluster is a KIND cluster")
 				}
 				tor := externalnode.NewClient()
 				if tor == nil {
@@ -392,7 +392,7 @@ var _ = describe.CalicoDescribe(
 		// allowed and a denied client.
 		It("should enforce NetworkPolicy after live migration", func() {
 			if isKINDCluster(f) {
-				Skip("NetworkPolicy test requires a real VM with a TCP server; KinD simulation mode has no guest OS")
+				Fail("KubeVirt tests selected but cluster is a KIND cluster")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
 			defer cancel()
