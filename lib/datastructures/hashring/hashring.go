@@ -103,7 +103,7 @@ func WithProbes(n int) Option {
 	return func(c *ringConfig) { c.probes = n }
 }
 
-// New builds a Ring. Defaults: hash = FNV1a, replicas = 1,
+// New builds a Ring. Defaults: hash = XXH3-64, replicas = 1,
 // probes = 1 (bare consistent hashing — poor load balance). Pass
 // WithReplicas / WithProbes to control imbalance and WithHash to
 // swap the hasher. Imbalance scales roughly with replicas*probes;
