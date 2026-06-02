@@ -25,8 +25,41 @@ import (
 	"sort"
 	"time"
 
+	"github.com/zeebo/xxh3"
+
 	"github.com/projectcalico/calico/lib/datastructures/hashring"
 )
+
+// rendezvousRing is a throwaway HRW (Highest Random Weight)
+// implementation for side-by-side comparison with the ring. For
+// each Lookup it hashes (key, member) for every member and returns
+// the member with the highest hash. No data structure beyond the
+// member list, O(N) per Lookup, perfect distribution (no virtual-
+// node clustering possible).
+type rendezvousRing struct {
+	members []string
+	scratch []byte
+}
+
+func (r *rendezvousRing) Insert(m string) {
+	r.members = append(r.members, m)
+}
+
+func (r *rendezvousRing) Lookup(key string) string {
+	var bestMember string
+	var bestHash uint64
+	for i, m := range r.members {
+		r.scratch = append(r.scratch[:0], key...)
+		r.scratch = append(r.scratch, 0)
+		r.scratch = append(r.scratch, m...)
+		h := xxh3.Hash(r.scratch)
+		if i == 0 || h > bestHash {
+			bestHash = h
+			bestMember = m
+		}
+	}
+	return bestMember
+}
 
 type config struct {
 	members  int
@@ -74,7 +107,52 @@ func main() {
 			cfg := config{members: n, replicas: rp[0], probes: rp[1]}
 			report(cfg, *keys)
 		}
+		reportRendezvous(n, *keys)
 	}
+}
+
+func reportRendezvous(members, numKeys int) {
+	r := &rendezvousRing{}
+
+	insertStart := time.Now()
+	for i := range members {
+		r.Insert(fmt.Sprintf("member-%d", i))
+	}
+	insertElapsed := time.Since(insertStart)
+
+	counts := make(map[string]int, members)
+	lookupStart := time.Now()
+	for i := range numKeys {
+		v := r.Lookup(fmt.Sprintf("k-%d", i))
+		counts[v]++
+	}
+	lookupElapsed := time.Since(lookupStart)
+
+	ownership := make([]float64, 0, members)
+	for i := range members {
+		k := fmt.Sprintf("member-%d", i)
+		ownership = append(ownership, float64(counts[k]))
+	}
+	sort.Float64s(ownership)
+
+	mean := float64(numKeys) / float64(members)
+	lo := ownership[0]
+	hi := ownership[len(ownership)-1]
+	p99 := ownership[int(float64(len(ownership))*0.99)]
+	variance := 0.0
+	for _, o := range ownership {
+		d := o - mean
+		variance += d * d
+	}
+	stddev := math.Sqrt(variance / float64(len(ownership)))
+
+	insertPer := time.Duration(int64(insertElapsed) / int64(members))
+	lookupPer := time.Duration(int64(lookupElapsed) / int64(numKeys))
+
+	fmt.Printf("%-10s %-10s %-12d %-10.3f %-10.3f %-10.1f %-10.3f %-12s %-12s\n",
+		"rendezv", "-", members,
+		lo/mean, hi/mean, stddev, p99/mean,
+		insertPer, lookupPer)
 }
 
 // poissonFloor returns the theoretical metrics that an *ideal* (uniform
