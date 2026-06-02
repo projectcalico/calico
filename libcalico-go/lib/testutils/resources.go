@@ -35,6 +35,12 @@ import (
 
 const ExpectNoNamespace = ""
 
+// watchEventTimeout bounds how long ExpectEvents waits for the expected watch
+// events to arrive.  It is generous on purpose: watch-event delivery can lag
+// under a loaded apiserver, and waiting longer only slows the rare genuine
+// failure rather than flaking the common success path.
+const watchEventTimeout = 20 * time.Second
+
 type resourceMatcher struct {
 	kind, namespace, name string
 	spec                  any
@@ -238,19 +244,23 @@ func (t *testResourceWatcher) ExpectEventsAnyOrder(kind string, expectedEvents [
 func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedEvents []watch.Event) {
 	By("Waiting for the correct number of events")
 	log.Infof("Start waiting at %s", time.Now())
-	t.lock.Lock()
-	cur := len(t.events)
-	t.lock.Unlock()
-	for ii := 0; ii < 10 && cur != len(expectedEvents); ii++ {
-		time.Sleep(100 * time.Millisecond)
+	// Poll until we have received at least the expected number of events, or a
+	// generous deadline elapses.  This previously gave up after only ~1s of
+	// quiescence (10 x 100ms with no new event), which flaked when watch-event
+	// delivery lagged under a loaded apiserver - the watcher bailed with too few
+	// events and failed.  We deliberately do not assert here: the block below
+	// logs the received events and produces a precise failure message if the
+	// count is wrong.  Stopping as soon as the count is reached preserves the
+	// original behaviour of catching a too-many-events bug downstream.
+	deadline := time.Now().Add(watchEventTimeout)
+	for {
 		t.lock.Lock()
-		newcur := len(t.events)
+		cur := len(t.events)
 		t.lock.Unlock()
-		if newcur != cur {
-			// We've got new events, so reset the counter.
-			ii = 0
-			cur = newcur
+		if cur >= len(expectedEvents) || !time.Now().Before(deadline) {
+			break
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	log.Infof("Finish waiting at %s", time.Now())
 
