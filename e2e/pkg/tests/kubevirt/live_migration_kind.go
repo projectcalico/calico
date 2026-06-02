@@ -191,10 +191,11 @@ func setupKindEBGPPeering(f *framework.Framework, bird *kindBIRDPeer) {
 	setupEBGPPeeringCommon(f, bird, "kubevirt-kind-lm-", "kind-ebgp-peer-")
 }
 
-// waitForMigrationFailed polls the VMIM until it reaches MigrationFailed
+// expectMigrationFailed polls the VMIM until it reaches MigrationFailed
 // phase. Immediately stops polling with a fatal error if MigrationSucceeded is
 // observed (the migration was expected to fail).
-func waitForMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+func expectMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Waiting for migration %s to fail", vmim.Name))
 	Eventually(func() error {
 		got := &kubevirtv1.VirtualMachineInstanceMigration{}
@@ -218,10 +219,10 @@ func waitForMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *ku
 // local_pref) using a local BIRD container on the Docker "kind" network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("KubeVirt"),
+	describe.WithFeature("KubeVirt-KIND"),
 	describe.WithCategory(describe.Networking),
 	describe.WithSerial(),
-	"KubeVirt live migration (KinD)",
+	"KubeVirt live migration (KIND)",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-kind")
 
@@ -229,7 +230,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			if !isKINDCluster(f) {
-				Skip("KinD-specific test: skipping on non-KinD cluster")
+				Fail("KubeVirt-KIND tests selected but cluster is not a KIND cluster")
 			}
 			// Double migration needs 3 workers: source, first target, second target.
 			utils.RequireNodeCount(f, 3)
@@ -268,10 +269,10 @@ var _ = describe.CalicoDescribe(
 			vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
 			Expect(cli.Create(ctx, vmim1)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
-			waitForMigrationSuccess(ctx, cli, vmim1)
-			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+			expectMigrationSuccess(ctx, cli, vmim1)
+			vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
-			Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
+			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("First migration: %s -> %s", node1, node2)
 
 			// Target node should have elevated metric (512) during convergence window.
@@ -299,10 +300,10 @@ var _ = describe.CalicoDescribe(
 			}
 			Expect(cli.Create(ctx, vmim2)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
-			waitForMigrationSuccess(ctx, cli, vmim2)
-			vmi = waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+			expectMigrationSuccess(ctx, cli, vmim2)
+			vmi = expectMigrationStatePopulated(ctx, cli, ns, vmName)
 			node3 := vmi.Status.MigrationState.TargetNode
-			Expect(node3).NotTo(Equal(node2), "VM didn't migrate off node 2")
+			Expect(node3).NotTo(Equal(node2), "VM should have migrated to a different node")
 			logrus.Infof("Second migration: %s -> %s", node2, node3)
 
 			// Target node should have elevated metric (512) during convergence window.
@@ -318,8 +319,6 @@ var _ = describe.CalicoDescribe(
 				return queryWorkerMetric(f, node3, vmIP)
 			}, 45*time.Second, 2*time.Second).Should(Equal(1024),
 				"target node kernel route metric should revert to 1024 after second migration convergence")
-
-			logrus.Info("iBGP route convergence validated across two live migrations on KIND")
 		})
 
 		It("should not have /32 host route on target node after a migration timeout", func() {
@@ -359,7 +358,7 @@ var _ = describe.CalicoDescribe(
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
 
 			// Wait for migration to fail with timeout.
-			waitForMigrationFailed(ctx, cli, vmim)
+			expectMigrationFailed(ctx, cli, vmim)
 
 			// Re-fetch the VMI to get the MigrationState populated after failure.
 			vmi := &kubevirtv1.VirtualMachineInstance{}
@@ -417,8 +416,6 @@ var _ = describe.CalicoDescribe(
 			}, 1*time.Minute, 2*time.Second).Should(Succeed())
 			logrus.Infof("IPAM ownership confirmed: Active pod=%s node=%s, Alternate=empty",
 				sourcePod.Name, sourceNode)
-
-			logrus.Info("No /32 route leaked and IPAM stable after migration timeout on KIND")
 		})
 
 		It("should enforce NetworkPolicy after live migration", func() {
@@ -490,21 +487,12 @@ var _ = describe.CalicoDescribe(
 			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
 			Expect(cli.Create(ctx, vmim)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			waitForMigrationSuccess(ctx, cli, vmim)
+			expectMigrationSuccess(ctx, cli, vmim)
 
-			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+			vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
 			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("VM migrated: %s -> %s", node1, node2)
-
-			By("Confirming migration resource reports success")
-			Eventually(func() kubevirtv1.VirtualMachineInstanceMigrationPhase {
-				got := &kubevirtv1.VirtualMachineInstanceMigration{}
-				if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: vmim.Name}, got); err != nil {
-					return ""
-				}
-				return got.Status.Phase
-			}, 15*time.Second, 1*time.Second).Should(Equal(kubevirtv1.MigrationSucceeded))
 
 			By("Verifying policy enforcement is consistent for at least 10 seconds")
 			Consistently(func(g Gomega) {
@@ -515,7 +503,6 @@ var _ = describe.CalicoDescribe(
 				g.Expect(err).To(HaveOccurred(),
 					"denied client should still be blocked by NetworkPolicy")
 			}, 10*time.Second, 2*time.Second).Should(Succeed())
-			logrus.Info("NetworkPolicy enforcement confirmed consistently after live migration on KIND")
 		})
 
 		It("should converge eBGP routes after live migration", func() {
@@ -557,10 +544,10 @@ var _ = describe.CalicoDescribe(
 			vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
 			Expect(cli.Create(ctx, vmim1)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
-			waitForMigrationSuccess(ctx, cli, vmim1)
-			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+			expectMigrationSuccess(ctx, cli, vmim1)
+			vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
 			node2 := vmi.Status.MigrationState.TargetNode
-			Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
+			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
 			logrus.Infof("First migration: %s -> %s", node1, node2)
 
 			// Verify elevated route priority on the target worker and BIRD container.
@@ -599,10 +586,10 @@ var _ = describe.CalicoDescribe(
 			}
 			Expect(cli.Create(ctx, vmim2)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
-			waitForMigrationSuccess(ctx, cli, vmim2)
-			vmi = waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+			expectMigrationSuccess(ctx, cli, vmim2)
+			vmi = expectMigrationStatePopulated(ctx, cli, ns, vmName)
 			node3 := vmi.Status.MigrationState.TargetNode
-			Expect(node3).NotTo(Equal(node2), "VM didn't migrate off node 2")
+			Expect(node3).NotTo(Equal(node2), "VM should have migrated to a different node")
 			logrus.Infof("Second migration: %s -> %s", node2, node3)
 
 			// After second migration: expect two /32 routes with different
@@ -641,8 +628,6 @@ var _ = describe.CalicoDescribe(
 				return -1
 			}, 45*time.Second, 2*time.Second).Should(Equal(100),
 				"BIRD /32 local_pref should revert to 100 after second migration convergence")
-
-			logrus.Info("eBGP route convergence validated across two live migrations on KIND")
 		})
 	},
 )
