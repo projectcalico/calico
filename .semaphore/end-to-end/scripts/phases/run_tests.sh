@@ -73,6 +73,14 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
+  # Optional debug pause: touch /home/semaphore/pause before this point to
+  # hold execution so you can SSH in and inspect the environment.  Remove
+  # the file to continue.
+  while [[ -f /home/semaphore/pause ]]; do
+    echo "[DEBUG] /home/semaphore/pause exists — waiting (remove it to continue)..."
+    sleep 15
+  done
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
