@@ -27,6 +27,7 @@ import (
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
 	"github.com/mdlayher/ndp"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
@@ -679,8 +680,8 @@ func (m *proxyNeighManager) isMatchingIPVersion(ipStr string) bool {
 }
 
 func isNoEncapPool(pool *proto.IPAMPool) bool {
-	return (pool.IpipMode == "" || strings.EqualFold(pool.IpipMode, "Never")) &&
-		(pool.VxlanMode == "" || strings.EqualFold(pool.VxlanMode, "Never"))
+	return (pool.IpipMode == "" || v3.IPIPMode(pool.IpipMode) == v3.IPIPModeNever) &&
+		(pool.VxlanMode == "" || v3.VXLANMode(pool.VxlanMode) == v3.VXLANModeNever)
 }
 
 func (m *proxyNeighManager) isInNoEncapPool(ip net.IP) bool {
