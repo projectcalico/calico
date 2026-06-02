@@ -8,6 +8,7 @@
         "git_branch":       {"type": "keyword"},
         "code_version":     {"type": "keyword"},
         "ci_run_id":        {"type": "keyword"},
+        "pr_number":        {"type": "keyword"},
         "test_name":        {"type": "keyword"},
         "env":              {"type": "keyword"},
         "phase":            {"type": "keyword"},
