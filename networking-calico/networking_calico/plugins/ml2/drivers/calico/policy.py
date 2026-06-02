@@ -53,9 +53,17 @@ class PolicySyncer(ResourceSyncer):
 
     def resync(self, context, scope):
         # The bulk-fetch happens inside get_from_neutron, AFTER the base
-        # class's etcd-first read.  Just clear self._rules_by_sg in finally
-        # so a subsequent postcommit-hook caller falls through to the
-        # per-SG query path.
+        # class's etcd-first read.  Clear self._rules_by_sg in finally
+        # so a subsequent resync on the same instance starts cold.  In
+        # production this is dead code: each resync runs on a fresh
+        # PolicySyncer constructed by Scope.run() and GC'd when the
+        # resync returns.  But the test framework reuses the driver's
+        # syncer across multiple _trigger_resync() calls, and without
+        # the reset the second call's compare loop would read stale
+        # rules from the first call's snapshot.  The postcommit-hook
+        # path doesn't read self._rules_by_sg at all -- write_sgs_to_etcd
+        # always does a fresh DB query -- so the reset has no effect
+        # there.
         try:
             return super(PolicySyncer, self).resync(context, scope)
         finally:

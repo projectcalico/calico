@@ -112,10 +112,17 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.cache_port_project_data()
 
     def resync(self, context, scope):
-        # Clear the bulk-port-data cache after the resync completes, so a
-        # subsequent postcommit-hook call to get_extra_port_information()
-        # falls through to the per-port path (correct on a single-port
-        # write where building the bulk cache would be wasted work).
+        # Clear the bulk-port-data cache after the resync completes.  In
+        # production this is dead code: ``_do_startup_resync`` builds a
+        # fresh syncer instance via ``Scope(self.db).run()`` (no
+        # ``driver=``), and that instance gets GC'd as ``Scope.run()``
+        # returns.  But the test framework reuses the driver's syncer
+        # across resync and postcommit calls (``_trigger_resync(
+        # driver=self.driver)``), and in that scenario a subsequent
+        # ``get_extra_port_information()`` on the postcommit-hook path
+        # would otherwise read stale prefetch data from a previous
+        # resync.  Reset is cheap, test-correct, and defensive against
+        # any future architecture that shares the instance.
         try:
             return super(WorkloadEndpointSyncer, self).resync(context, scope)
         finally:
