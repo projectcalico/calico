@@ -193,6 +193,24 @@ PRIORITY_LOW = 1
 PRIORITY_RETRY = 2
 
 
+def _close_session_safely(context):
+    """Close the session on an admin context, swallowing any error.
+
+    Background threads (currently just _loop_writing_port_statuses)
+    create their own admin contexts and are responsible for cleaning
+    up the session when they're done with it for this cycle.  If we
+    leave it open, GC may eventually trigger a rollback on the
+    eventlet hub greenlet -- which raises an AssertionError from
+    eventlet because the hub is not allowed to do blocking I/O.
+    """
+    try:
+        session = getattr(context, "session", None)
+        if session is not None:
+            session.close()
+    except Exception:
+        LOG.exception("Failed to close admin context session; ignoring.")
+
+
 def _check_mysql_driver():
     """One-shot validation that the configured MySQL driver is acceptable.
 
@@ -679,29 +697,27 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("PORT_STATUS_WRITE")
         LOG.info("Port status write thread started epoch=%s", expected_epoch)
         admin_context = ctx.get_admin_context()
-        while self._epoch == expected_epoch:
-            # Wait for work to do.
-            _, port_status_key = self._port_status_queue.get()
-            # Wrap each update in a deterministic enginefacade scope: it
-            # opens a writer transaction on entry and tears it down on
-            # exit, releasing the connection back to the pool inside this
-            # greenlet.  Without it, SQLAlchemy's connection-fairy
-            # lifecycle is opaque -- the fairy can be finalised at
-            # arbitrary moments (weakref callbacks, GC), and its rollback
-            # socket I/O can end up running on the eventlet hub greenlet,
-            # tripping ``AssertionError: do not call blocking functions
-            # from the mainloop`` (the symptom captured in CORE-11889).
-            #
-            # Catch all exceptions to avoid terminating this long-lived
-            # loop on a single bad update.
-            try:
-                with db_api.CONTEXT_WRITER.using(admin_context):
+        try:
+            while self._epoch == expected_epoch:
+                # Wait for work to do.
+                _, port_status_key = self._port_status_queue.get()
+                # Actually do the update.  Catch all exceptions to avoid
+                # terminating this long-lived loop.
+                try:
                     self._try_to_update_port_status(admin_context, port_status_key)
-            except Exception:
-                LOG.exception(
-                    "Unexpected error updating port status for %s",
-                    port_status_key,
-                )
+                except Exception:
+                    LOG.exception(
+                        "Unexpected error updating port status for %s",
+                        port_status_key,
+                    )
+                finally:
+                    # Close the session after each update so that its
+                    # connection is returned to the pool promptly.  This
+                    # avoids the GC-on-hub rollback path; the next call
+                    # transparently gets a fresh session from the pool.
+                    _close_session_safely(admin_context)
+        finally:
+            _close_session_safely(admin_context)
 
     def _try_to_update_port_status(self, admin_context, port_status_key):
         """Attempts to update the given port status.
