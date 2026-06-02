@@ -48,29 +48,62 @@ func main() {
 		os.Exit(2)
 	}
 
-	memberCounts := []int{100, 1000}
+	memberCounts := []int{50, 500, 5000, 50000}
 	if *customN > 0 {
 		memberCounts = []int{*customN}
 	}
 
-	// Configs chosen to compare equal R*P budgets (load-balance
-	// budget is roughly the product) at different R/P splits.
+	// 3x3 sweep over (replicas, probes). R controls per-member
+	// ring memory; P controls per-Lookup CPU. Both contribute to
+	// the imbalance budget roughly as R*P.
 	rpPairs := [][2]int{
-		{1, 1}, // bare CH baseline
-		{10, 1}, {1, 10}, {3, 3},
-		{100, 1}, {1, 100}, {10, 10},
-		{1000, 1}, {1, 1000}, {32, 32},
+		{1, 1}, {1, 10}, {1, 20},
+		{10, 1}, {10, 10}, {10, 20},
+		{100, 1}, {100, 10}, {100, 20},
 	}
 
 	for _, n := range memberCounts {
-		fmt.Printf("\n=== members=%d  keys=%d ===\n", n, *keys)
+		mean := float64(*keys) / float64(n)
+		fmt.Printf("\n=== members=%d  keys=%d  (mean=%.2f per member) ===\n", n, *keys, mean)
 		fmt.Printf("%-10s %-10s %-12s %-10s %-10s %-10s %-10s %-12s %-12s\n",
 			"replicas", "probes", "ring_size", "min/mean", "max/mean", "stddev", "p99/mean", "insert_ns", "lookup_ns")
+		fMin, fMax, fSD, fP99 := poissonFloor(n, *keys)
+		fmt.Printf("%-10s %-10s %-12s %-10.3f %-10.3f %-10.1f %-10.3f %-12s %-12s\n",
+			"-", "-", "-", fMin, fMax, fSD, fP99, "-", "-")
 		for _, rp := range rpPairs {
 			cfg := config{members: n, replicas: rp[0], probes: rp[1]}
 			report(cfg, *keys)
 		}
 	}
+}
+
+// poissonFloor returns the theoretical metrics that an *ideal* (uniform
+// random) assignment of `keys` items to `members` bins would yield. It's
+// the lower bound on imbalance any consistent-hashing algorithm can hit
+// — anything an actual algorithm reports below the floor is sampling
+// luck; anything above the floor is ring-quality cost.
+//
+// Approximations used:
+//   - Each bin is Poisson(lambda=keys/members).
+//   - Max via Gumbel: E[max] ~ lambda + sqrt(2*lambda*ln(members)).
+//   - Min symmetric, floored at zero when E[empty bins] >= 0.5.
+//   - p99 from the Poisson 99% quantile ~ lambda + 2.326*sqrt(lambda).
+//   - stddev = sqrt(lambda).
+func poissonFloor(members, numKeys int) (minMean, maxMean, stddev, p99Mean float64) {
+	lambda := float64(numKeys) / float64(members)
+	if lambda <= 0 {
+		return
+	}
+	stddev = math.Sqrt(lambda)
+	spread := math.Sqrt(2 * lambda * math.Log(float64(members)))
+	maxMean = (lambda + spread) / lambda
+	if float64(members)*math.Exp(-lambda) >= 0.5 {
+		minMean = 0
+	} else {
+		minMean = math.Max(0, (lambda-spread)/lambda)
+	}
+	p99Mean = (lambda + 2.326*math.Sqrt(lambda)) / lambda
+	return
 }
 
 func report(cfg config, numKeys int) {
