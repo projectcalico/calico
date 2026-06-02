@@ -353,7 +353,18 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		"numNodes":      m.clusterNodes.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
-	// Build desired state: which IPs should each interface respond to.
+	desiredByIface := m.buildDesiredState()
+	startErr := m.reconcileListeners(desiredByIface)
+	m.publishDesiredIPs(desiredByIface)
+
+	return startErr
+}
+
+// buildDesiredState computes which IPs each host interface should answer for:
+// the node's own pod IPs, plus any LoadBalancer VIPs this node was selected to
+// own. Only IPs that fall in a no-encap pool and within a host interface's
+// subnet are included.
+func (m *proxyNeighManager) buildDesiredState() map[string]set.Set[string] {
 	desiredByIface := make(map[string]set.Set[string])
 
 	// Pod IPs: the hosting node always answers for its own pods.
@@ -387,7 +398,14 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		}
 	}
 
-	// Reconcile listeners: start new ones, stop removed ones.
+	return desiredByIface
+}
+
+// reconcileListeners starts a listener for each interface that newly needs one
+// and stops listeners for interfaces that no longer appear in the desired
+// state. On a start failure it re-marks the manager dirty (so the next
+// CompleteDeferredWork retries) and returns the error.
+func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
 	var startErr error
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
@@ -406,8 +424,13 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 			delete(m.listeners, ifaceName)
 		}
 	}
+	return startErr
+}
 
-	// Swap desired IP sets and send GARP/UNA for newly-appearing IPs.
+// publishDesiredIPs atomically swaps each listener's desired IP set and sends a
+// gratuitous ARP (IPv4) / unsolicited NA (IPv6) for every IP that is newly
+// appearing on that interface.
+func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[string]) {
 	for ifaceName, desired := range desiredByIface {
 		l, ok := m.listeners[ifaceName]
 		if !ok {
@@ -423,8 +446,6 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 			}
 		}
 	}
-
-	return startErr
 }
 
 // addMatchingIPs adds the IP to the desired set for every host interface whose subnet
