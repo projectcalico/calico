@@ -209,7 +209,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			"addrs":     msg.Addrs,
 		}).Debug("Proxy neighbor manager received ifaceAddrsUpdate")
 		if msg.Addrs == nil {
-			m.removeHostIface(msg.Name)
+			delete(m.hostIfaceToCIDRs, msg.Name)
 		} else {
 			m.refreshHostIface(msg.Name)
 		}
@@ -691,12 +691,6 @@ func (m *proxyNeighManager) isInNoEncapPool(ip net.IP) bool {
 		}
 	}
 	return false
-}
-
-// removeHostIface drops any tracked subnet info for ifaceName. Used when the
-// interface goes away.
-func (m *proxyNeighManager) removeHostIface(ifaceName string) {
-	delete(m.hostIfaceToCIDRs, ifaceName)
 }
 
 // refreshHostIface re-reads the addresses configured on ifaceName from netlink
