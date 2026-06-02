@@ -93,6 +93,18 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # get_extra_port_information() which falls back to per-port
         # queries when this is None (e.g. postcommit hooks, single-port
         # writes via write_endpoint()).
+        #
+        # Concurrency note: this cache is process-local and assumes the
+        # resync runs in a different OS process from the API / RPC forks
+        # that handle dynamic postcommit hooks.  That is how the driver
+        # is wired today: CalicoStartupResyncWorker (and the calico-resync
+        # CLI) get their own WorkloadEndpointSyncer instance, distinct
+        # from the one used by the API forks' postcommit handlers, so a
+        # concurrent dynamic update cannot transitively read stale data
+        # from this cache.  If the architecture ever shares a single
+        # syncer instance across resync and postcommit paths in the same
+        # process, this needs revisiting -- a concurrent postcommit could
+        # then read self._bulk and produce a stale WEP write.
         self._bulk = None
 
         # Prime the project data cache now so that we do not pay a fill
