@@ -575,6 +575,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 			// it has been reallocated. Update the allocation in place and mark it as valid.
 			if existing.sequenceNumber != alloc.sequenceNumber {
 				existing.sequenceNumber = alloc.sequenceNumber
+				existing.attrs = alloc.attrs
 				existing.markValid()
 			}
 			continue
