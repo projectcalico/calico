@@ -198,6 +198,9 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
 	case *ifaceAddrsUpdate:
 		if m.wlIfacesRegexp.MatchString(msg.Name) {
+			logrus.WithFields(logrus.Fields{
+				"ifaceName": msg.Name,
+			}).Debug("Ignoring ifaceAddrsUpdate for workload interface")
 			return
 		}
 		logrus.WithFields(logrus.Fields{
@@ -228,9 +231,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			"ips":           ips,
 			"migrationRole": ep.LiveMigrationRole,
 		}).Debug("Proxy neighbor manager received WorkloadEndpointUpdate")
-		if ep.LiveMigrationRole == proto.LiveMigrationRole_SOURCE {
-			delete(m.localWorkloadIPs, wlKey)
-		} else if len(ips) > 0 {
+		if ep.LiveMigrationRole == proto.LiveMigrationRole_SOURCE && len(ips) > 0 {
 			m.localWorkloadIPs[wlKey] = ips
 		} else {
 			delete(m.localWorkloadIPs, wlKey)
