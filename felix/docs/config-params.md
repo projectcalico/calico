@@ -1077,7 +1077,7 @@ subnet are reachable from the local L2 segment without BGP.
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_LocalSubnetL2Reachability` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> (case insensitive) |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> |
 | Default value (above encoding) | `Disabled` |
 | `FelixConfiguration` field | `localSubnetL2Reachability` (YAML) `LocalSubnetL2Reachability` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
