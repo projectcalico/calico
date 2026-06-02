@@ -162,7 +162,10 @@ var _ = infrastructure.DatastoreDescribe(
 				ContainSubstring("BPFHostIP"),
 				ContainSubstring("status=503"),
 				ContainSubstring("Host IP unknown"),
-				ContainSubstring("IPv4 unknown since"),
+				// The readiness detail wraps across table lines, so the
+				// "IPv4 unknown" and "since <ts>" halves can be split by
+				// padding and "|" borders — tolerate that between them.
+				MatchRegexp(`IPv4 unknown[\s|]*since`),
 			))
 		})
 
@@ -318,7 +321,10 @@ var _ = infrastructure.DatastoreDescribe(
 			Eventually(readinessReport, "10s", "500ms").Should(SatisfyAll(
 				ContainSubstring("BPFHostIP"),
 				ContainSubstring("status=503"),
-				ContainSubstring("IPv4 unknown since"),
+				// The readiness detail wraps across table lines, so the
+				// "IPv4 unknown" and "since <ts>" halves can be split by
+				// padding and "|" borders — tolerate that between them.
+				MatchRegexp(`IPv4 unknown[\s|]*since`),
 			))
 
 			By("Restoring the Node IP and confirming readiness recovers")
