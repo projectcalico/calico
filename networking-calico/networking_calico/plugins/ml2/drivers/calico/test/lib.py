@@ -22,6 +22,7 @@ Common code for Neutron driver UT.
 import contextlib
 import logging
 import sys
+from types import SimpleNamespace
 
 import eventlet
 import mock
@@ -782,8 +783,6 @@ class Lib(object):
     # attribute-style access (row.port_id, row.name, ...) works as it
     # would on a real SQLAlchemy model row.
     def db_query_ip_allocation_bulk(self, _expr):
-        from types import SimpleNamespace
-
         return [
             SimpleNamespace(
                 port_id=p["id"],
@@ -795,8 +794,6 @@ class Lib(object):
         ]
 
     def db_query_floating_ip_bulk(self, _expr):
-        from types import SimpleNamespace
-
         return [
             SimpleNamespace(
                 fixed_port_id=fip["fixed_port_id"],
@@ -807,8 +804,6 @@ class Lib(object):
         ]
 
     def db_query_network_bulk(self, _expr):
-        from types import SimpleNamespace
-
         return [SimpleNamespace(id=n["id"], name=n["name"]) for n in self.osdb_networks]
 
     def db_query_qos_policy_bw_rule_bulk(self, _expr):
