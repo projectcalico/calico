@@ -326,10 +326,11 @@ func deleteVMIMigration(cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineIn
 	}
 }
 
-// waitForMigrationSuccess polls the VMIM until it reaches MigrationSucceeded
+// expectMigrationSuccess polls the VMIM until it reaches MigrationSucceeded
 // phase. Immediately stops polling with a fatal error if MigrationFailed is
 // observed.
-func waitForMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+func expectMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Waiting for migration %s to succeed", vmim.Name))
 	Eventually(func() error {
 		got := &kubevirtv1.VirtualMachineInstanceMigration{}
@@ -746,7 +747,7 @@ func setupEBGPPeeringCommon(f *framework.Framework, peer ebgpBIRDPeer, filterPre
 
 	// Wait for confd on the master to regenerate bird.cfg with the filter.
 	By(fmt.Sprintf("Waiting for confd to regenerate bird.cfg with filter %s on master", filterName))
-	masterPod := waitForMasterCalicoNodePod(f, masterName)
+	masterPod := expectMasterCalicoNodePod(f, masterName)
 	Eventually(func() error {
 		cfg, err := utils.ExecInCalicoNode(masterPod, "cat /etc/calico/confd/config/bird.cfg")
 		if err != nil {
@@ -827,10 +828,10 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	setupEBGPPeeringCommon(f, adapter, "kubevirt-lm-", "tor-ebgp-peer-")
 }
 
-// waitForMasterCalicoNodePod polls until the calico-node pod on the
+// expectMasterCalicoNodePod polls until the calico-node pod on the
 // control-plane node is observable. Returns the pod. Used as a precondition
 // for any test step that needs to exec birdcl on the master.
-func waitForMasterCalicoNodePod(f *framework.Framework, masterName string) *corev1.Pod {
+func expectMasterCalicoNodePod(f *framework.Framework, masterName string) *corev1.Pod {
 	GinkgoHelper()
 	var pod *corev1.Pod
 	Eventually(func() error {
@@ -1067,10 +1068,10 @@ func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) int {
 	return -1
 }
 
-// waitForMigrationStatePopulated polls the VMI for a fully populated
+// expectMigrationStatePopulated polls the VMI for a fully populated
 // MigrationState. virt-handler writes it asynchronously after the VMIM phase
 // flips, so a bare read can race.
-func waitForMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
+func expectMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
 	GinkgoHelper()
 	vmi := &kubevirtv1.VirtualMachineInstance{}
 	Eventually(func(g Gomega) {
@@ -1129,15 +1130,4 @@ func isKINDCluster(f *framework.Framework) bool {
 		}
 	}
 	return false
-}
-
-// requireOperatorManagedCluster fails the calling test if the cluster does not
-// have an operator-managed Installation/default. The live-migration tests patch
-// the Installation CR to disable natOutgoing; without an Installation that path
-// is invalid (manifest installs configure IPPool directly).
-func requireOperatorManagedCluster(cli ctrlclient.Client) {
-	GinkgoHelper()
-	if utils.GetInstallation(cli) == nil {
-		Fail("Installation/default not found, these tests require an operator-managed cluster")
-	}
 }

@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 )
 
@@ -49,6 +50,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
+	describe.WithFeature("KubeVirt-KIND"),
 	describe.WithCategory(describe.Networking),
 	"KubeVirt IP persistence",
 	func() {
@@ -120,7 +122,7 @@ var _ = describe.CalicoDescribe(
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			waitForMigrationSuccess(ctx, cli, vmim)
+			expectMigrationSuccess(ctx, cli, vmim)
 
 			By("Verifying VMI IP is preserved after migration")
 			// Use Eventually to avoid reading stale VMI status after migration.
@@ -317,7 +319,94 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Handle %s released after VM deletion", handleID)
 		})
 
-		// Test 5: assigning a static IP via the cni.projectcalico.org/ipAddrs annotation
+		// Test 5: active IPAM owner promotes from source to target after migration.
+		// Asserts Active=target,Alternate=empty (Felix EnsureActiveVMOwnerAttrs) by
+		// matching the real target pod/node, not just "differs from source".
+		It("should promote target pod to active IPAM owner after migration", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
+			defer cancel()
+			ns := f.Namespace.Name
+			vmName := "e2e-attr-promote"
+			vm := &kubeVirtVM{name: vmName, namespace: ns}
+
+			vm.Create(ctx, cli)
+			DeferCleanup(func() { vm.Delete(cli) })
+			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
+
+			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
+			Expect(err).NotTo(HaveOccurred())
+			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
+
+			lcgc := newLibcalicoClient(f)
+
+			By("Verifying IPAM attributes before migration (Active=source, Alternate=empty)")
+			Eventually(func() error {
+				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
+				if err != nil {
+					return err
+				}
+				if active[model.IPAMBlockAttributePod] != sourcePod.Name {
+					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
+						active[model.IPAMBlockAttributePod], sourcePod.Name)
+				}
+				if active[model.IPAMBlockAttributeNode] != sourceNode {
+					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
+						active[model.IPAMBlockAttributeNode], sourceNode)
+				}
+				if len(alternate) != 0 {
+					return fmt.Errorf("AlternateOwnerAttrs should be empty before migration, got %v", alternate)
+				}
+				return nil
+			}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+			By("Migrating the VM")
+			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
+			err = cli.Create(ctx, vmim)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
+			expectMigrationSuccess(ctx, cli, vmim)
+
+			// Read the target pod and node directly from the VMI's MigrationState,
+			// which KubeVirt populates with the source/target identifiers as part of
+			// the migration. expectMigrationStatePopulated polls until virt-handler
+			// finishes writing the state (it can lag the VMIM Succeeded phase).
+			vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
+			targetPodName := vmi.Status.MigrationState.TargetPod
+			targetNode := vmi.Status.MigrationState.TargetNode
+			Expect(targetPodName).NotTo(Equal(sourcePod.Name), "target pod should be a new pod")
+			Expect(targetNode).NotTo(Equal(sourceNode), "VM should have moved to a different node")
+			logrus.Infof("Target pod: %s on %s", targetPodName, targetNode)
+
+			By("Verifying target pod has the original IP")
+			targetPod, err := f.ClientSet.CoreV1().Pods(ns).Get(ctx, targetPodName, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(targetPod.Status.PodIP).To(Equal(originalIP),
+				"target pod IP should match original VM IP")
+
+			By("Verifying Active=target and Alternate=empty after swap")
+			Eventually(func() error {
+				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
+				if err != nil {
+					return err
+				}
+				if active[model.IPAMBlockAttributePod] != targetPodName {
+					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
+						active[model.IPAMBlockAttributePod], targetPodName)
+				}
+				if active[model.IPAMBlockAttributeNode] != targetNode {
+					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
+						active[model.IPAMBlockAttributeNode], targetNode)
+				}
+				if len(alternate) != 0 {
+					return fmt.Errorf("AlternateOwnerAttrs should be cleared after promotion, got %v", alternate)
+				}
+				return nil
+			}, 1*time.Minute, 2*time.Second).Should(Succeed())
+			logrus.Infof("After promotion: Active pod=%s node=%s (was %s on %s)",
+				targetPodName, targetNode, sourcePod.Name, sourceNode)
+		})
+
+		// Test 6: assigning a static IP via the cni.projectcalico.org/ipAddrs annotation
 		// on the VM spec template. The annotation propagates through VMI to the
 		// virt-launcher pod, where the Calico CNI plugin honours it. After a live
 		// migration the same static IP must survive on the new pod.
@@ -360,7 +449,7 @@ var _ = describe.CalicoDescribe(
 			err = cli.Create(ctx, vmim)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			waitForMigrationSuccess(ctx, cli, vmim)
+			expectMigrationSuccess(ctx, cli, vmim)
 
 			// 4. Verify IP preserved and VM moved to a different node.
 			var postIP, postNode string
