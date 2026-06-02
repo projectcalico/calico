@@ -87,8 +87,12 @@ DEFAULT_SCALES = "100,1000,3000"
 # a port to a host.  Must match AGENT_TYPE_FELIX in mech_calico.py.
 AGENT_TYPE_FELIX = "Calico per-host agent (felix)"
 
-# How many ports to ask the Neutron API to create in one HTTP request.  Bulk create is
-# supported by the v2 API and is much faster than one-at-a-time.
+# Batch size for the port-create loop in ``create_ports``.  Each batch issues this
+# many *single-port* create_port calls in parallel across the thread pool.  We don't
+# use Neutron's bulk-create endpoint because the populate phase is just setup -- we
+# don't time it, and bulk vs single creates produce identical rows in the ports
+# table either way, so the later resync reads them identically.  Smaller batches
+# just mean more frequent progress logs.
 PORT_BULK_BATCH = 50
 
 # How many concurrent worker threads to use when populating resources.  Modest
@@ -139,9 +143,11 @@ def parse_db_connection(neutron_conf_path):
     conn_str = parser.get("database", "connection")
     parsed = urlparse(conn_str)
     if not parsed.username or not parsed.password:
+        # Don't include conn_str in the message -- it contains the DB password
+        # and would otherwise be echoed straight into CI logs.
         raise RuntimeError(
-            "Could not parse user/password from neutron.conf [database] connection=%s"
-            % conn_str
+            "Could not parse user/password from neutron.conf [database] "
+            "connection URL (host=%r scheme=%r)" % (parsed.hostname, parsed.scheme)
         )
     return {
         "host": parsed.hostname or "127.0.0.1",
@@ -363,16 +369,21 @@ def create_ports(conn, num_ports, networks, subnets, sgs, hosts):
             return None
 
     created = []
-    for batch_start in range(0, num_ports, PORT_BULK_BATCH):
-        batch = [
-            _build_port_spec(i)
-            for i in range(batch_start, min(batch_start + PORT_BULK_BATCH, num_ports))
-        ]
-        with concurrent.futures.ThreadPoolExecutor(max_workers=POPULATE_WORKERS) as ex:
+    # Reuse a single executor across all batches; otherwise the
+    # ThreadPoolExecutor setup/teardown cost dominates at small batch
+    # sizes, especially since at scale=3000 we have 60 batches.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=POPULATE_WORKERS) as ex:
+        for batch_start in range(0, num_ports, PORT_BULK_BATCH):
+            batch = [
+                _build_port_spec(i)
+                for i in range(
+                    batch_start, min(batch_start + PORT_BULK_BATCH, num_ports)
+                )
+            ]
             results = list(ex.map(_create_one, batch))
-        created.extend(p for p in results if p is not None)
-        if (batch_start // PORT_BULK_BATCH) % 10 == 0:
-            LOG.info("  ...created %d/%d ports", len(created), num_ports)
+            created.extend(p for p in results if p is not None)
+            if (batch_start // PORT_BULK_BATCH) % 10 == 0:
+                LOG.info("  ...created %d/%d ports", len(created), num_ports)
 
     LOG.info("Port creation done: %d ports", len(created))
     if len(created) != num_ports:
