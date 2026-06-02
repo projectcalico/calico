@@ -153,6 +153,7 @@ var _ = DescribeTable("Node IP detection failure cases",
 	},
 
 	Entry("startup should terminate if IP is set to none and Calico is used for networking", "bird", 1, "", false),
+	Entry("startup should terminate if IP is set to none and Felix programs in-cluster routes", "felix", 1, "", false),
 	Entry("startup should NOT terminate if IP is set to none and Calico is policy-only", "none", 0, "", false),
 	Entry("startup should NOT terminate and BGPSpec shouldn't be set", "none", 0, "rrClusterID", false),
 )
