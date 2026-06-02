@@ -1,0 +1,3 @@
+datastore: kubernetes
+network: calico
+cluster_routing_mode: felix
