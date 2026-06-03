@@ -479,25 +479,29 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 	})
 }
 
-// TestQoSConnLimitIngressRetransmissionOfRejected verifies that when a SYN
-// retransmission arrives at to-wep for a connection that was previously
-// rejected (CT entry carries CONNLIMIT_INGRESS_REJECTED), the BPF dataplane:
+// TestQoSConnLimitIngressRetransmissionOfRejectedStillOverLimit verifies that
+// when a SYN retransmission arrives at to-wep for a connection that was
+// previously rejected (CT entry carries CONNLIMIT_INGRESS_REJECTED) AND the
+// counter is still at the limit, the BPF dataplane:
 //
-//   - rejects the retransmission unconditionally (without re-checking the
-//     counter), so a SYN that lost the limit race once stays lost even if
-//     the counter has dipped below the limit in the meantime; and
-//   - does NOT increment the QoS counter for the retransmission.
+//   - re-runs qos_connlimit_check_and_increment, which fails because the
+//     counter is saturated;
+//   - rejects the retransmission with TCP RST (same diagnostic path as the
+//     first-SYN reject); and
+//   - leaves the QoS counter at the limit (the failed check does not
+//     increment).
 //
-// The relevant logic lives in tc.c:~1411 (calico_to_workload_ep ingress
-// connlimit handling). The "first SYN" branch fires when neither
-// CONNLIMIT_INGRESS nor CONNLIMIT_INGRESS_REJECTED is propagated to result.flags;
-// the "retransmission of rejected" branch fires when CONNLIMIT_INGRESS_REJECTED is
-// propagated (but not CONNLIMIT_INGRESS). Both reject arms feed a single
-// PROG_INDEX_TCP_RST tail call so the client gets an RST promptly.
-func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
+// The relevant logic lives in tc.c:~1421 (calico_to_workload_ep ingress
+// connlimit handling). The branch fires when CONNLIMIT_INGRESS_REJECTED is
+// propagated to result.flags (but not CONNLIMIT_INGRESS) — the "second
+// chance" path. The companion test
+// TestQoSConnLimitIngressRetransmissionOfRejectedSecondChance covers the
+// case where the second chance succeeds (counter has dipped below the
+// limit).
+func TestQoSConnLimitIngressRetransmissionOfRejectedStillOverLimit(t *testing.T) {
 	RegisterTestingT(t)
 
-	bpfIfaceName = "HWretx"
+	bpfIfaceName = "HWretxR"
 	defer func() { bpfIfaceName = "" }()
 
 	const (
@@ -525,9 +529,9 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 
 	// Pre-populate the CT entry for the 5-tuple that was rejected on its
 	// first SYN. State: opener (srcIP) sent SYN; responder (dstIP) never
-	// responded. Flag: CONNLIMIT_INGRESS_REJECTED only — under the new semantics,
-	// CONNLIMIT_INGRESS is set only on a successful count, so a rejected
-	// entry carries REJECTED alone. No FIN/RST on either side, so
+	// responded. Flag: CONNLIMIT_INGRESS_REJECTED only — under the new
+	// semantics, CONNLIMIT_INGRESS is set only on a successful count, so a
+	// rejected entry carries REJECTED alone. No FIN/RST on either side, so
 	// tcp_recycled() returns false and the existing entry is used.
 	legA := ctv4.Leg{SynSeen: true, Opener: true}
 	legB := ctv4.Leg{Ifindex: ifIndex}
@@ -537,16 +541,14 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 		legA, legB)
 	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 
-	// Pre-populate the ingress QoS map entry with the counter BELOW the
-	// limit. The point of the retransmission-rejected branch is that even
-	// when there's headroom, the retransmission stays rejected. If the
-	// rejected SYN's owner wants in, they have to start a fresh
-	// connection.
+	// Pre-populate the ingress QoS map entry with the counter AT the
+	// limit. The retransmission's second-chance check should re-run and
+	// fail (current_count >= max_connections), keeping the rejection.
 	defer resetQoSMap(qosMap)
 	resetQoSMap(qosMap)
 	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
 	Expect(qosMap.Update(qosKey.AsBytes(),
-		qos.NewValue(0, 0, 0, 0, maxConnections, 0).AsBytes())).
+		qos.NewValue(0, 0, 0, 0, maxConnections, maxConnections).AsBytes())).
 		NotTo(HaveOccurred())
 
 	readQoSCount := func() uint32 {
@@ -574,9 +576,105 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 	}, withIngressQoSConnLimit())
 
-	// Counter must be unchanged — the retransmission branch does NOT
-	// touch qos_connlimit_check_and_increment.
-	Expect(readQoSCount()).To(Equal(uint32(0)))
+	// Counter must be unchanged — qos_connlimit_check_and_increment fails
+	// (current_count >= max_connections) without incrementing.
+	Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+
+	// CT entry's flags must be unchanged: REJECTED still set, INGRESS not
+	// set (the retransmission didn't successfully count).
+	ctValBytes, err := ctMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	ctVal := ctv4.ValueFromBytes(ctValBytes)
+	Expect(ctVal.Flags() & ctv4.FlagConnLimitInRej).To(Equal(ctv4.FlagConnLimitInRej))
+	Expect(ctVal.Flags() & ctv4.FlagConnLimitIn).To(Equal(uint32(0)))
+}
+
+// TestQoSConnLimitIngressRetransmissionOfRejectedSecondChance verifies the
+// "second-chance accept" path: a SYN retransmission for a previously-rejected
+// CT entry succeeds when the counter has dipped below the limit since the
+// original rejection (e.g. another connection closed in the meantime).
+//
+// On success the BPF dataplane:
+//
+//   - increments the QoS counter (current_count → maxConnections);
+//   - sets CONNLIMIT_INGRESS on the CT entry;
+//   - clears CONNLIMIT_INGRESS_REJECTED on the CT entry (mandatory — the
+//     cleanup-time decrement gates on INGRESS && !INGRESS_REJECTED, so
+//     leaving REJECTED set would leak the slot upward at close time);
+//   - allows the SYN through (no TCP RST).
+func TestQoSConnLimitIngressRetransmissionOfRejectedSecondChance(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWretxS"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23456
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// CT entry from the original rejection — REJECTED only, no INGRESS.
+	legA := ctv4.Leg{SynSeen: true, Opener: true}
+	legB := ctv4.Leg{Ifindex: ifIndex}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0),
+		ctv4.FlagConnLimitInRej,
+		legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	// QoS counter is one below the limit — slot has freed since the
+	// original rejection. The retransmission's second-chance check
+	// should re-run and succeed.
+	defer resetQoSMap(qosMap)
+	resetQoSMap(qosMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+	Expect(qosMap.Update(qosKey.AsBytes(),
+		qos.NewValue(0, 0, 0, 0, maxConnections, maxConnections-1).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ValueFromBytes(b).CurrentCount()
+	}
+
+	_, _, _, _, pktBytes, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		// Accepted path: no TCP_RST tail call. The packet proceeds
+		// through forward_or_drop; BPF returns TC_ACT_UNSPEC, kernel
+		// forwards the SYN to the workload normally.
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	}, withIngressQoSConnLimit())
+
+	// Counter incremented from maxConnections-1 to maxConnections.
+	Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+
+	// CT entry flags now have INGRESS set and REJECTED cleared.
+	ctValBytes, err := ctMap.Get(k.AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+	ctVal := ctv4.ValueFromBytes(ctValBytes)
+	Expect(ctVal.Flags() & ctv4.FlagConnLimitIn).To(Equal(ctv4.FlagConnLimitIn))
+	Expect(ctVal.Flags() & ctv4.FlagConnLimitInRej).To(Equal(uint32(0)))
 }
 
 // TestQoSConnLimitIngressRetransmissionOfAccepted verifies that when a SYN
