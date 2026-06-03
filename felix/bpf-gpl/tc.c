@@ -944,6 +944,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 			}
 		}
 		if (encap_needed) {
+			if (ip_void(HOST_IP)) {
+				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
+				goto deny;
+			}
 			if (!skb_is_gso(ctx->skb) && ip_is_dnf(ip_hdr(ctx)) && vxlan_encap_too_big(ctx)) {
 				CALI_DEBUG("Return ICMP mtu is too big segs %d size %d",
 					   ctx->skb->gso_segs, ctx->skb->gso_size);
@@ -1055,6 +1060,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 				CALI_DEBUG("Returning related ICMP from host to tunnel");
 			}
 
+			if (ip_void(HOST_IP)) {
+				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
+				goto deny;
+			}
 			STATE->ip_src = HOST_IP;
 			STATE->ip_dst = STATE->ct_result.tun_ip;
 			goto nat_encap;
@@ -1161,6 +1171,11 @@ static CALI_BPF_INLINE enum do_nat_res do_nat(struct cali_tc_ctx *ctx,
 		 */
 		if ((dnat_return_should_encap() || (CALI_F_TO_HEP && !CALI_F_DSR)) &&
 									!ip_void(STATE->ct_result.tun_ip)) {
+			if (ip_void(HOST_IP)) {
+				CALI_DEBUG("VXLAN encap needed but host IP unknown; dropping");
+				deny_reason(ctx, CALI_REASON_NO_HOST_IP);
+				goto deny;
+			}
 			STATE->ip_src = HOST_IP;
 			STATE->ip_dst = STATE->ct_result.tun_ip;
 			goto nat_encap;
