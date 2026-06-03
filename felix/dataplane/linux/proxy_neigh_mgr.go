@@ -482,7 +482,7 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		}
 		// Atomically swap in the new desired set; the previous pointer tells
 		// us which IPs are new and need a GARP/UNA.
-		old := l.desired.Swap(new(desired))
+		old := l.desired.Swap(&desired)
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
 				m.sendGARP(l, ip)
@@ -557,13 +557,12 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 		}
 
 		if err := l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
-			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set ARP read deadline")
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set ARP read deadline")
 		}
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
 			if err, ok := errors.AsType[net.Error](err); ok && err.Timeout() {
-				logrus.WithField("iface", l.ifaceName).Debug("ARP read deadline expired with no packet")
 				continue
 			}
 			// Unrecoverable socket error: flag this listener so the manager
@@ -587,7 +586,7 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"iface": l.ifaceName,
 				"ip":    targetIP,
-			}).Debug("ARP listener: failed to send reply")
+			}).Warn("ARP listener: failed to send reply")
 		}
 	}
 }
@@ -603,13 +602,12 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 		}
 
 		if err := l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
-			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set NDP read deadline")
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set NDP read deadline")
 		}
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
 			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
-				logrus.WithField("iface", l.ifaceName).Debug("NDP read deadline expired with no packet")
 				continue
 			}
 			// Unrecoverable socket error: flag this listener so the manager
@@ -666,6 +664,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
 	addr, err := netip.ParseAddr(ipStr)
 	if err != nil {
+		logrus.WithError(err).WithField("ip", ipStr).Debug("Failed to parse IP for GARP")
 		return
 	}
 	if m.ipVersion == 4 {
