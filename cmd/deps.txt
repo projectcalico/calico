@@ -293,7 +293,6 @@ local:calicoctl/calicoctl/resourcemgr
 local:calicoctl/calicoctl/util
 local:calicoctl/calicoctl/util/yaml
 local:cmd/calico
-local:cmd/calico-windows
 local:cni-plugin/internal/pkg/azure
 local:cni-plugin/internal/pkg/utils
 local:cni-plugin/internal/pkg/utils/cri
