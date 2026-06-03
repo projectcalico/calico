@@ -14,7 +14,10 @@
 
 package names
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 const (
 	DefaultTierName      = "default"
@@ -24,6 +27,22 @@ const (
 	// OpenStackNetworkPolicyNamePrefix is the prefix for OpenStack security groups.
 	OpenStackNetworkPolicyNamePrefix = "ossg."
 )
+
+// ProtectedTierNames are the built-in tiers that always exist and cannot be
+// deleted: a ValidatingAdmissionPolicy blocks their deletion and
+// EnsureInitialized recreates them. This is narrower than TierIsStatic, which
+// also covers the adminnetworkpolicy/baselineadminnetworkpolicy tiers - those
+// are static but deletable, so cleanup paths must not skip them.
+var ProtectedTierNames = []string{
+	DefaultTierName,
+	KubeAdminTierName,
+	KubeBaselineTierName,
+}
+
+// TierIsProtected returns true for the built-in tiers that cannot be deleted.
+func TierIsProtected(name string) bool {
+	return slices.Contains(ProtectedTierNames, name)
+}
 
 // TierOrDefault returns the tier name, or the default if blank.
 func TierOrDefault(tier string) string {

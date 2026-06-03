@@ -5836,6 +5836,8 @@ blocks:
         machine:
           type: f1-standard-2
           os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
       prologue:
         commands:
           - cd networking-calico
@@ -5845,6 +5847,10 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log make tox-caracal
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
+            # Env vars needed for saving performance results.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall

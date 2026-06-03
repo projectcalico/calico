@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -4356,7 +4357,14 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 		// Try to create the Tier.
 		_, err = client.Tiers().Create(context.Background(), &tierSpec, options.SetOptions{})
 		if errStr == "" {
-			Expect(err).NotTo(HaveOccurred())
+			// The built-in tiers (default, kube-admin, kube-baseline) can't be deleted,
+			// so Clean() leaves them in place between tests. A create that collides with
+			// one returns AlreadyExists, which still means validation admitted the spec.
+			if names.TierIsProtected(tierSpec.Name) && err != nil {
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceAlreadyExists{}))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 		} else {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(errStr), "Expected error message to contain substring")

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,39 +20,45 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/smithy-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/clock"
 
+	"github.com/projectcalico/calico/felix/aws/ec2query"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
 
 const (
 	timeout         = 20 * time.Second
 	retries         = 3
-	deviceIndexZero = 0
+	deviceIndexZero = int32(0)
 )
 
+// apiError is satisfied by *ec2query.APIError. It is also (intentionally)
+// satisfied by smithy.APIError, so callers wrapping SDK-style errors continue
+// to be unwrapped correctly.
+type apiError interface {
+	error
+	ErrorCode() string
+	ErrorMessage() string
+}
+
 func convertError(err error) string {
-	var awsErr smithy.APIError
-	if errors.As(err, &awsErr) {
-		return fmt.Sprintf("%s: %s", awsErr.ErrorCode(), awsErr.ErrorMessage())
+	var aerr apiError
+	if errors.As(err, &aerr) {
+		return fmt.Sprintf("%s: %s", aerr.ErrorCode(), aerr.ErrorMessage())
 	}
 
 	return fmt.Sprintf("%v", err.Error())
 }
 
 func retriable(err error) bool {
-	var awsErr smithy.APIError
-	if errors.As(err, &awsErr) {
-		switch awsErr.ErrorCode() {
+	var aerr apiError
+	if errors.As(err, &aerr) {
+		switch aerr.ErrorCode() {
 		case "InternalError":
 			return true
 		case "InternalFailure":
@@ -148,8 +154,8 @@ type ec2MetadataAPI interface {
 }
 
 type ec2API interface {
-	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
-	ModifyNetworkInterfaceAttribute(ctx context.Context, params *ec2.ModifyNetworkInterfaceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyNetworkInterfaceAttributeOutput, error)
+	DescribeInstances(ctx context.Context, in *ec2query.DescribeInstancesInput) (*ec2query.DescribeInstancesOutput, error)
+	ModifyNetworkInterfaceAttribute(ctx context.Context, in *ec2query.ModifyNetworkInterfaceAttributeInput) (*ec2query.ModifyNetworkInterfaceAttributeOutput, error)
 }
 
 func getEC2InstanceID(ctx context.Context, svc ec2MetadataAPI) (string, error) {
@@ -192,12 +198,8 @@ func newEC2Client(ctx context.Context) (*ec2Client, error) {
 		return nil, fmt.Errorf("error getting ec2 instance-id: %s", convertError(err))
 	}
 
-	ec2Svc := ec2.NewFromConfig(cfg, func(o *ec2.Options) {
-		o.Region = region
-	})
-	if ec2Svc == nil {
-		return nil, fmt.Errorf("error connecting to EC2 service")
-	}
+	cfg.Region = region
+	ec2Svc := ec2query.NewFromConfig(cfg)
 
 	return &ec2Client{
 		EC2Svc:        ec2Svc,
@@ -206,13 +208,11 @@ func newEC2Client(ctx context.Context) (*ec2Client, error) {
 }
 
 func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstanceId string, err error) {
-	input := &ec2.DescribeInstancesInput{
-		InstanceIds: []string{
-			c.ec2InstanceId,
-		},
+	input := &ec2query.DescribeInstancesInput{
+		InstanceIds: []string{c.ec2InstanceId},
 	}
 
-	var out *ec2.DescribeInstancesOutput
+	var out *ec2query.DescribeInstancesOutput
 	for range retries {
 		out, err = c.EC2Svc.DescribeInstances(ctx, input)
 		if err != nil {
@@ -245,8 +245,10 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 		for _, networkInterface := range instance.NetworkInterfaces {
 			if networkInterface.Attachment != nil &&
 				networkInterface.Attachment.DeviceIndex != nil &&
-				*(networkInterface.Attachment.DeviceIndex) == deviceIndexZero {
-				interfaceId = *(networkInterface.NetworkInterfaceId)
+				*networkInterface.Attachment.DeviceIndex == deviceIndexZero {
+				if networkInterface.NetworkInterfaceId != nil {
+					interfaceId = *networkInterface.NetworkInterfaceId
+				}
 				if interfaceId != "" {
 					log.Debugf("instance-id: %s, network-interface-id: %s", c.ec2InstanceId, interfaceId)
 					return interfaceId, nil
@@ -262,11 +264,9 @@ func (c *ec2Client) getEC2NetworkInterfaceId(ctx context.Context) (networkInstan
 }
 
 func (c *ec2Client) setEC2SourceDestinationCheck(ctx context.Context, ec2NetId string, checkVal bool) error {
-	input := &ec2.ModifyNetworkInterfaceAttributeInput{
-		NetworkInterfaceId: aws.String(ec2NetId),
-		SourceDestCheck: &types.AttributeBooleanValue{
-			Value: aws.Bool(checkVal),
-		},
+	input := &ec2query.ModifyNetworkInterfaceAttributeInput{
+		NetworkInterfaceId: &ec2NetId,
+		SourceDestCheck:    &ec2query.AttributeBooleanValue{Value: &checkVal},
 	}
 
 	var err error
