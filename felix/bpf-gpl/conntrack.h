@@ -196,7 +196,13 @@ create:
 	src_to_dst->packets = 1;
 	src_to_dst->bytes = ctx->skb->len;
 	if (CALI_F_TO_HOST) {
-		src_to_dst->ifindex = ctx->skb->ifindex;
+		/* Store the host-side primary ifindex. For netkit, skb->ifindex
+		 * is the peer (pod-side) ifindex; use host_ifindex from globals
+		 * so downstream consumers (connlimit decrement, redirect_peer)
+		 * see the primary that maps are keyed by.
+		 */
+		src_to_dst->ifindex = ctx->globals->data.host_ifindex ?
+			ctx->globals->data.host_ifindex : ctx->skb->ifindex;
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -1074,7 +1080,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	}
 
-	__u32 ifindex = CALI_F_TO_HOST ? ctx->skb->ifindex : skb_ingress_ifindex(ctx->skb);
+	/* host_ifindex fallback for netkit: skb->ifindex is the peer there;
+	 * we want to compare against the host-side primary that src_to_dst
+	 * stores.
+	 */
+	__u32 ifindex = CALI_F_TO_HOST
+		? (ctx->globals->data.host_ifindex ? ctx->globals->data.host_ifindex : ctx->skb->ifindex)
+		: skb_ingress_ifindex(ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
 		// Conntrack entry records a different ingress interface than the one the
