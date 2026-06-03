@@ -1452,7 +1452,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * today; the Go-side ConnLimitScanner corrects drift on its next
 	 * pass (~30s).
 	 */
-	if (CALI_F_TO_WEP && !policy_skipped &&
+	if (CALI_F_TO_WEP && !policy_skipped && INGRESS_CONN_LIMIT_CONFIGURED &&
 			ct_result_is_syn(ctx->state->ct_result.rc)) {
 		__u32 cl_flags = ctx->state->ct_result.flags;
 		bool reject = false;
