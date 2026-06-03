@@ -46,6 +46,9 @@ import (
 // loops
 const readDeadlineInterval = 1 * time.Second
 
+// ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
+const ipv6AllNodesMulticast = "ff02::1"
+
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
 type serviceID struct {
@@ -634,7 +637,7 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 		dst := srcAddr
 		solicited := true
 		if !srcAddr.IsValid() || srcAddr.IsUnspecified() {
-			dst = netip.MustParseAddr("ff02::1")
+			dst = netip.MustParseAddr(ipv6AllNodesMulticast)
 			solicited = false
 		}
 
@@ -705,8 +708,7 @@ func (m *proxyNeighManager) sendGARPV6(l *ifaceListener, addr netip.Addr) {
 			},
 		},
 	}
-	allNodes := netip.MustParseAddr("ff02::1")
-	if err := l.ndpCli.WriteTo(na, nil, allNodes); err != nil {
+	if err := l.ndpCli.WriteTo(na, nil, netip.MustParseAddr(ipv6AllNodesMulticast)); err != nil {
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"iface": l.ifaceName,
 			"ip":    addr,
