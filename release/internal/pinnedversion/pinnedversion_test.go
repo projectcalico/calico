@@ -64,18 +64,19 @@ func TestImageComponents(t *testing.T) {
 	// ImageComponents (see noImageComponents), so the expected maps below
 	// do not include it.
 	commonComponents := map[string]registry.Component{
-		"node":              {Version: "v3.31.0", Image: "node"},
-		"node-windows":      {Version: "v3.31.0", Image: "node-windows"},
-		"cni-windows":       {Version: "v3.31.0", Image: "cni-windows"},
-		"flannel":           {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
-		"envoy-gateway":     {Version: "v3.31.0", Image: "envoy-gateway"},
-		"envoy-proxy":       {Version: "v3.31.0", Image: "envoy-proxy"},
-		"envoy-ratelimit":   {Version: "v3.31.0", Image: "envoy-ratelimit"},
-		"whisker":           {Version: "v3.31.0", Image: "whisker"},
-		"istio-install-cni": {Version: "v3.31.0", Image: "istio-install-cni"},
-		"istio-pilot":       {Version: "v3.31.0", Image: "istio-pilot"},
-		"istio-proxyv2":     {Version: "v3.31.0", Image: "istio-proxyv2"},
-		"istio-ztunnel":     {Version: "v3.31.0", Image: "istio-ztunnel"},
+		"node":                    {Version: "v3.31.0", Image: "node"},
+		"node-windows":            {Version: "v3.31.0", Image: "node-windows"},
+		"cni-windows":             {Version: "v3.31.0", Image: "cni-windows"},
+		"third-party-cni-plugins": {Version: "v3.31.0", Image: "third-party-cni-plugins"},
+		"flannel":                 {Version: "v0.12.0", Image: "coreos/flannel", Registry: "quay.io"},
+		"envoy-gateway":           {Version: "v3.31.0", Image: "envoy-gateway"},
+		"envoy-proxy":             {Version: "v3.31.0", Image: "envoy-proxy"},
+		"envoy-ratelimit":         {Version: "v3.31.0", Image: "envoy-ratelimit"},
+		"whisker":                 {Version: "v3.31.0", Image: "whisker"},
+		"istio-install-cni":       {Version: "v3.31.0", Image: "istio-install-cni"},
+		"istio-pilot":             {Version: "v3.31.0", Image: "istio-pilot"},
+		"istio-proxyv2":           {Version: "v3.31.0", Image: "istio-proxyv2"},
+		"istio-ztunnel":           {Version: "v3.31.0", Image: "istio-ztunnel"},
 	}
 	t.Run("without operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{}
