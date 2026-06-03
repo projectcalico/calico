@@ -178,7 +178,14 @@ type testResourceWatcher struct {
 func (t *testResourceWatcher) run() {
 	for {
 		select {
-		case event := <-t.watch.ResultChan():
+		case event, ok := <-t.watch.ResultChan():
+			if !ok {
+				// The watcher closed its result channel (the watch.Interface
+				// Stop() contract).  Treat it as end-of-stream rather than
+				// spinning on zero-value events.
+				log.Info("Watch result channel closed; exiting test watch loop")
+				return
+			}
 			if t.ignored(event) {
 				continue
 			}

@@ -29,21 +29,50 @@ import (
 // slowWatch is a watch.Interface whose events are delivered on a caller-controlled
 // schedule.  It is used to simulate watch-event delivery lagging under a loaded
 // apiserver, which is what made the clientv3 *_e2e_test.go watch specs flaky.
+//
+// A forwarder goroutine is the sole sender on the result channel, so it can
+// safely close that channel on Stop() as required by the watch.Interface
+// contract without racing an in-flight send.
 type slowWatch struct {
+	in       chan watch.Event
 	ch       chan watch.Event
 	stopOnce sync.Once
 	stopped  chan struct{}
 }
 
+var _ watch.Interface = (*slowWatch)(nil)
+
 func newSlowWatch() *slowWatch {
-	return &slowWatch{
+	w := &slowWatch{
+		in:      make(chan watch.Event),
 		ch:      make(chan watch.Event),
 		stopped: make(chan struct{}),
+	}
+	go w.loop()
+	return w
+}
+
+// loop forwards events from send to the result channel until the watch is
+// stopped, then closes the result channel.
+func (w *slowWatch) loop() {
+	defer close(w.ch)
+	for {
+		select {
+		case e := <-w.in:
+			select {
+			case w.ch <- e:
+			case <-w.stopped:
+				return
+			}
+		case <-w.stopped:
+			return
+		}
 	}
 }
 
 func (w *slowWatch) ResultChan() <-chan watch.Event { return w.ch }
 
+// Stop terminates the watch; the forwarder goroutine closes the result channel.
 func (w *slowWatch) Stop() {
 	w.stopOnce.Do(func() { close(w.stopped) })
 }
@@ -51,7 +80,7 @@ func (w *slowWatch) Stop() {
 // send delivers an event, abandoning the send if the watcher has been stopped.
 func (w *slowWatch) send(e watch.Event) {
 	select {
-	case w.ch <- e:
+	case w.in <- e:
 	case <-w.stopped:
 	}
 }
@@ -92,5 +121,29 @@ var _ = Describe("TestResourceWatch event waiting", func() {
 			{Type: watch.Added, Object: res1},
 			{Type: watch.Added, Object: res2},
 		})
+	})
+
+	It("treats a closed result channel as end-of-stream", func() {
+		w := newSlowWatch()
+		tw := testutils.NewTestResourceWatch(apiconfig.EtcdV3, w)
+		defer tw.Stop()
+
+		res1 := tier("tier-1")
+		go func() {
+			defer GinkgoRecover()
+			w.send(watch.Event{Type: watch.Added, Object: res1})
+		}()
+		tw.ExpectEvents(apiv3.KindTier, []watch.Event{
+			{Type: watch.Added, Object: res1},
+		})
+
+		// Stop the watch directly; per the watch.Interface contract this
+		// closes the result channel.  The event-collection loop must treat
+		// that as end-of-stream - it used to spin on the closed channel,
+		// appending zero-value events.  ExpectEvents consumed the event
+		// above, so no further events should be observed.
+		w.Stop()
+		time.Sleep(200 * time.Millisecond)
+		tw.ExpectEvents(apiv3.KindTier, []watch.Event{})
 	})
 })
