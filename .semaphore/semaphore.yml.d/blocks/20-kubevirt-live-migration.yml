@@ -1,6 +1,6 @@
 - name: "KubeVirt live migration (KIND)"
   run:
-    when: "${CHANGE_IN(felix,cni-plugin,confd,node,e2e,libcalico-go)}"
+    when: "${CHANGE_IN(felix,cni-plugin,confd,node,e2e,libcalico-go,non-go:/e2e/pkg/)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"

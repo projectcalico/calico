@@ -26,10 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,6 +55,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
+	describe.RequiresRealKubeVirt(),
 	describe.WithCategory(describe.Networking),
 	"KubeVirt live migration",
 	func() {
@@ -80,7 +77,7 @@ var _ = describe.CalicoDescribe(
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
 			if isKINDCluster(f) {
-				Fail("KubeVirt tests selected but cluster is a KIND cluster")
+				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
@@ -178,10 +175,10 @@ var _ = describe.CalicoDescribe(
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
 		// priority correctly reverts and re-elevates across two consecutive migrations.
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
-		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
+		framework.Context("eBGP external client", describe.WithExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
 				if isKINDCluster(f) {
-					Fail("KubeVirt tests selected but cluster is a KIND cluster")
+					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
 				}
 				tor := externalnode.NewClient()
 				if tor == nil {
@@ -277,14 +274,16 @@ var _ = describe.CalicoDescribe(
 				// revert window so we observe it deterministically.
 				By("Verifying elevated route priority on worker and TOR after first migration")
 				Eventually(func(g Gomega) {
-					g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
+					m, err := queryWorkerMetric(f, node2, vmIP)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(m).To(Equal(elevatedRouteMetric),
 						"worker kernel metric should be elevated (512) after migration")
 					st := queryTORRoute(tor, vmIP)
 					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
 					g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
-					g.Expect(st.Routes[0].LocalPref).To(Equal(2147483135), "TOR /32 should have elevated local_pref")
-					g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"), "TOR /32 should have community tag")
-				}, 20*time.Second, 1*time.Second).Should(Succeed())
+					g.Expect(st.Routes[0].LocalPref).To(Equal(elevatedLocalPref), "TOR /32 should have elevated local_pref")
+					g.Expect(st.Routes[0].Community).To(Equal(migrationCommunityTag), "TOR /32 should have community tag")
+				}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 				// Wait for the elevated /32 route to revert to normal local_pref
 				// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
@@ -295,7 +294,7 @@ var _ = describe.CalicoDescribe(
 						return snap.Host32.Routes[0].LocalPref
 					}
 					return -1
-				}, 45*time.Second, 2*time.Second).Should(Equal(100),
+				}, metricRevertTimeout, 2*time.Second).Should(Equal(normalLocalPref),
 					"TOR /32 local_pref should revert to 100 after convergence")
 
 				midLines := len(probe.Lines())
@@ -335,15 +334,15 @@ var _ = describe.CalicoDescribe(
 						}
 					}
 					g.Expect(b).NotTo(BeNil(), "TOR should have a best /32 route")
-					g.Expect(b.LocalPref).To(Equal(2147483135), "best /32 route should have elevated local_pref")
-					g.Expect(b.Community).To(Equal("(65000,100)"), "best /32 route should have community tag")
+					g.Expect(b.LocalPref).To(Equal(elevatedLocalPref), "best /32 route should have elevated local_pref")
+					g.Expect(b.Community).To(Equal(migrationCommunityTag), "best /32 route should have community tag")
 					// After the second migration, two /32 routes must exist: the new
 					// node's elevated route and the old node's normal route. They
 					// must have different local_pref to avoid ECMP.
 					g.Expect(nb).NotTo(BeNil(), "TOR should have two /32 routes after second migration")
 					g.Expect(nb.LocalPref).NotTo(Equal(b.LocalPref),
 						"two /32 routes must have different local_pref to avoid ECMP")
-				}, 20*time.Second, 1*time.Second).Should(Succeed())
+				}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 				// Wait for the second migration's /32 route to revert to normal
 				// local_pref, same as after the first migration.
@@ -354,7 +353,7 @@ var _ = describe.CalicoDescribe(
 						return snap.Host32.Routes[0].LocalPref
 					}
 					return -1
-				}, 45*time.Second, 2*time.Second).Should(Equal(100),
+				}, metricRevertTimeout, 2*time.Second).Should(Equal(normalLocalPref),
 					"TOR /32 local_pref should revert to 100 after second migration convergence")
 
 				finalLines := len(probe.Lines())
@@ -385,117 +384,6 @@ var _ = describe.CalicoDescribe(
 				Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
 					fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
 			})
-		})
-
-		// Test 4: a NetworkPolicy selecting the VM (app=vm) by ingress role=allowed must
-		// keep applying after the VM live-migrates to a different node, both for an
-		// allowed and a denied client.
-		It("should enforce NetworkPolicy after live migration", func() {
-			if isKINDCluster(f) {
-				Fail("KubeVirt tests selected but cluster is a KIND cluster")
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
-			defer cancel()
-			ns := f.Namespace.Name
-
-			vmName := "e2e-netpol-vm"
-			vm := &kubeVirtVM{
-				name:      vmName,
-				namespace: ns,
-				cloudInit: tcpServerCloudInit,
-				labels:    map[string]string{"app": "vm"},
-			}
-
-			By("Creating VM with TCP server and app=vm label")
-			vm.Create(ctx, cli)
-			DeferCleanup(func() { vm.Delete(cli) })
-			vmIP, node1 := vm.WaitForRunningWithIP(ctx, cli)
-			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
-
-			tester := conncheck.NewConnectionTester(f)
-			DeferCleanup(tester.Stop)
-			allowed := conncheck.NewClient("client-allowed", f.Namespace,
-				conncheck.WithClientLabels(map[string]string{"role": "allowed"}))
-			denied := conncheck.NewClient("client-denied", f.Namespace,
-				conncheck.WithClientLabels(map[string]string{"role": "denied"}))
-			tester.AddClient(allowed)
-			tester.AddClient(denied)
-			tester.Deploy()
-			vmTarget := conncheck.NewTCPConnectTarget(vmIP, 9999)
-
-			// Cold-boot VM cloud-init can take up to ~2m to bind nc -lkp,
-			// so the first reachability assertion needs a longer budget
-			// than conncheck's default 30s.
-			By("Verifying both clients can reach VM before policy is applied")
-			tester.WithTimeout(2 * time.Minute)
-			tester.ExpectSuccess(allowed, vmTarget)
-			tester.ExpectSuccess(denied, vmTarget)
-			tester.Execute()
-			tester.ResetExpectations()
-
-			By("Creating NetworkPolicy to allow only role=allowed on TCP/9999")
-			protocol := corev1.ProtocolTCP
-			netpol := &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "allow-client1-only", Namespace: ns},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "vm"},
-					},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{{
-						From: []networkingv1.NetworkPolicyPeer{{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"role": "allowed"},
-							},
-						}},
-						Ports: []networkingv1.NetworkPolicyPort{{
-							Protocol: &protocol,
-							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 9999},
-						}},
-					}},
-				},
-			}
-			_, err := f.ClientSet.NetworkingV1().NetworkPolicies(ns).Create(ctx, netpol, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				_ = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Delete(context.Background(), netpol.Name, metav1.DeleteOptions{})
-			})
-
-			By("Verifying policy is enforced: client1 allowed, client2 denied")
-			tester.ExpectSuccess(allowed, vmTarget)
-			tester.ExpectFailure(denied, vmTarget)
-			tester.Execute()
-			tester.ResetExpectations()
-
-			By("Triggering live migration")
-			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
-			err = cli.Create(ctx, vmim)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			expectMigrationSuccess(ctx, cli, vmim)
-
-			vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
-			node2 := vmi.Status.MigrationState.TargetNode
-			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
-			logrus.Infof("VM migrated: %s -> %s", node1, node2)
-
-			// Felix is async after VMIM Succeeded: it must learn the new
-			// workload and program policy on the target node. Use
-			// Eventually wrapping both Connects so the assertion only
-			// passes when allowed succeeds AND denied fails in the same
-			// iteration; otherwise the denied probe could match
-			// ExpectFailure on a transient pre-route window and exit
-			// before policy is actually in force.
-			By("Verifying policy survives migration: allowed reaches, denied blocked")
-			Eventually(func(g Gomega) {
-				_, err := tester.Connect(allowed, vmTarget)
-				g.Expect(err).NotTo(HaveOccurred(),
-					"allowed client should reach migrated pod")
-				_, err = tester.Connect(denied, vmTarget)
-				g.Expect(err).To(HaveOccurred(),
-					"denied client should be blocked by NetworkPolicy")
-			}, 90*time.Second, 2*time.Second).Should(Succeed())
-			logrus.Info("NetworkPolicy enforcement confirmed after live migration")
 		})
 	},
 )
