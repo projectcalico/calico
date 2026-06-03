@@ -50,18 +50,18 @@ build:
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
 WINDOWS_BIN=bin/windows
-# calico-ipam.exe is not built: install.exe copies calico.exe to both names on the host.
-build: $(WINDOWS_BIN)/install.exe $(WINDOWS_BIN)/calico.exe
+# calico-ipam.exe is not built: "calico.exe component cni install" stages calico.exe under both names on the host.
+build: $(WINDOWS_BIN)/calico.exe
 endif
 
-## Build the Calico network and ipam plugins for Windows
-$(WINDOWS_BIN)/install.exe: $(SRC_FILES)
-	mkdir -p $(WINDOWS_BIN)
-	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/install, $@)
-
+# calico.exe is the combined Windows binary (cmd/calico-windows), the same one
+# shipped in the node image. The operator runs it as "calico.exe component cni
+# install"; install.Install() then stages it onto the host as the calico and
+# calico-ipam CNI plugins. Built from the repo-root package, not cni-plugin/cmd/calico,
+# so it carries the "component" subcommand tree the operator drives.
 $(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
 	mkdir -p $(WINDOWS_BIN)
-	$(call build_windows_binary, $(PACKAGE_NAME)/cmd/calico, $@)
+	$(call build_windows_binary, github.com/projectcalico/calico/cmd/calico-windows, $@)
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \
