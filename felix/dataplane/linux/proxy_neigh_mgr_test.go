@@ -533,93 +533,37 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 })
 
 var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
-	var (
-		mgr        *proxyNeighManager
-		nl         *mockNetlinkForProxyNeigh
-		arpClients map[string]*mockARPClient
-	)
 
-	// With nodes ["node-a","node-b","node-c"], HRW (Rendezvous) hashing selects:
-	//   "10.0.0.100" -> node-c
-	//   "10.0.0.101" -> node-b
-	//   "10.0.0.102" -> node-a
-
-	setupThreeNodes := func(mgr *proxyNeighManager) {
-		sendHostMetadata(mgr, "node-a", "1.1.1.1")
-		sendHostMetadata(mgr, "node-b", "1.1.1.2")
-		sendHostMetadata(mgr, "node-c", "1.1.1.3")
-	}
-
-	Describe("LB IP on selected node", func() {
-		BeforeEach(func() {
-			nl = newMockNetlinkForProxyNeigh()
-			arpClients = map[string]*mockARPClient{
+	It("is claimed by exactly one node, which answers and GARPs for it", func() {
+		const vip = "10.0.0.100"
+		answering := 0
+		for _, host := range []string{"node-a", "node-b", "node-c"} {
+			nl := newMockNetlinkForProxyNeigh()
+			arpClients := map[string]*mockARPClient{
 				"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
 			}
-			mgr = newTestProxyNeighManagerWithHostname(nl, arpClients, "node-c")
-			setupThreeNodes(mgr)
+			mgr := newTestProxyNeighManagerWithHostname(nl, arpClients, host)
+			sendHostMetadata(mgr, "node-a", "1.1.1.1")
+			sendHostMetadata(mgr, "node-b", "1.1.1.2")
+			sendHostMetadata(mgr, "node-c", "1.1.1.3")
 			nl.setIfaceAddr("eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
-			mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", "10.0.0.100"))
+			mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", vip))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
-		})
 
-		AfterEach(func() { mgr.cancel() })
-
-		It("should have the LB IP in desired set", func() {
-			desired := getDesiredIPs(mgr, "eth0")
-			Expect(desired.Contains("10.0.0.100")).To(BeTrue())
-		})
-
-		It("should send GARP for LB VIP", func() {
-			Eventually(func() int {
-				return len(arpClients["eth0"].getWrites())
-			}).Should(BeNumerically(">=", 1))
-		})
-	})
-
-	Describe("LB IP on non-selected node", func() {
-		BeforeEach(func() {
-			nl = newMockNetlinkForProxyNeigh()
-			arpClients = map[string]*mockARPClient{
-				"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
+			if d := getDesiredIPs(mgr, "eth0"); d != nil && d.Contains(vip) {
+				answering++
+				// The owning node announces the VIP with a gratuitous ARP.
+				Eventually(func() int {
+					return len(arpClients["eth0"].getWrites())
+				}).Should(BeNumerically(">=", 1))
+			} else {
+				// Non-owning nodes don't open a listener for it at all.
+				Expect(mgr.listeners).To(BeEmpty())
 			}
-			mgr = newTestProxyNeighManagerWithHostname(nl, arpClients, "node-a")
-			setupThreeNodes(mgr)
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
-			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
-			mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", "10.0.0.100"))
-			Expect(mgr.CompleteDeferredWork()).To(Succeed())
-		})
-
-		AfterEach(func() { mgr.cancel() })
-
-		It("should not have any desired IPs", func() {
-			Expect(mgr.listeners).To(BeEmpty())
-		})
-	})
-
-	Describe("selectNodeForIP deterministic", func() {
-		It("should be deterministic", func() {
-			nl = newMockNetlinkForProxyNeigh()
-			arpClients = map[string]*mockARPClient{}
-			mgr = newTestProxyNeighManagerWithHostname(nl, arpClients, "node-c")
-			setupThreeNodes(mgr)
-
-			result1 := mgr.selectNodeForIP("10.0.0.100")
-			result2 := mgr.selectNodeForIP("10.0.0.100")
-			Expect(result1).To(Equal(result2))
-			Expect(result1).To(BeTrue()) // node-c is selected for this IP
 			mgr.cancel()
-		})
-
-		It("should return false with zero nodes", func() {
-			nl = newMockNetlinkForProxyNeigh()
-			arpClients = map[string]*mockARPClient{}
-			mgr = newTestProxyNeighManagerWithHostname(nl, arpClients, "node-a")
-			Expect(mgr.selectNodeForIP("10.0.0.100")).To(BeFalse())
-			mgr.cancel()
-		})
+		}
+		Expect(answering).To(Equal(1)) // exactly one node owns the VIP
 	})
 })
 

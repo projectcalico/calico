@@ -17,7 +17,6 @@ package intdataplane
 import (
 	"context"
 	"errors"
-	"hash/fnv"
 	"net"
 	"net/netip"
 	"regexp"
@@ -37,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/datastructures/hashring"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -105,9 +105,9 @@ type proxyNeighManager struct {
 	// lbServiceIPs maps service ID to LoadBalancer ingress IP strings.
 	lbServiceIPs map[serviceID][]string
 
-	// clusterNodes is the set of hostnames known to the cluster. Used as the
-	// hash ring for LB VIP node selection.
-	clusterNodes set.Set[string]
+	// nodeRing is a consistent hash ring of the cluster's hostnames, used to
+	// pick the single node that answers ARP/NDP for each LoadBalancer VIP.
+	nodeRing *hashring.Ring[string]
 
 	// noEncapPools maps IPPool ID to the pool's parsed CIDR.
 	noEncapPools map[string]net.IPNet
@@ -186,7 +186,7 @@ func newProxyNeighManagerWithShims(
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
-		clusterNodes:     set.New[string](),
+		nodeRing:         hashring.New[string](hashring.WithReplicas(100)),
 		noEncapPools:     make(map[string]net.IPNet),
 		listeners:        make(map[string]*ifaceListener),
 		nlHandle:         nl,
@@ -302,13 +302,14 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 			return
 		}
 		logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataUpdate")
-		m.clusterNodes.Add(msg.Hostname)
+		m.nodeRing.Insert(msg.Hostname, msg.Hostname)
 		m.dirty = true
 
 	case *proto.HostMetadataRemove:
-		if m.clusterNodes.Contains(msg.Hostname) {
+		before := m.nodeRing.Len()
+		m.nodeRing.Remove(msg.Hostname)
+		if m.nodeRing.Len() != before {
 			logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataRemove")
-			m.clusterNodes.Discard(msg.Hostname)
 			m.dirty = true
 		}
 
@@ -352,7 +353,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		"numWorkloads":  len(m.localWorkloadIPs),
 		"numHostIfaces": len(m.hostIfaceToCIDRs),
 		"numLBServices": len(m.lbServiceIPs),
-		"numNodes":      m.clusterNodes.Len(),
+		"numNodes":      m.nodeRing.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
 	desiredByIface := m.buildDesiredState()
@@ -715,25 +716,12 @@ func (m *proxyNeighManager) sendGARPV6(l *ifaceListener, addr netip.Addr) {
 	}
 }
 
-// selectNodeForIP uses Rendezvous hashing (Highest Random Weight) to select
-// which cluster node should answer ARP for the given IP.
+// selectNodeForIP reports whether this node is the one the hash ring assigns to
+// answer ARP/NDP for the given LoadBalancer IP. The ring assigns each IP to
+// exactly one live node, spreading VIPs evenly across the cluster.
 func (m *proxyNeighManager) selectNodeForIP(ipStr string) bool {
-	if m.clusterNodes.Len() == 0 {
-		return false
-	}
-	var bestScore uint32
-	var bestNode string
-	for hostname := range m.clusterNodes.All() {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(ipStr))
-		_, _ = h.Write([]byte(hostname))
-		score := h.Sum32()
-		if score > bestScore || (score == bestScore && hostname > bestNode) {
-			bestScore = score
-			bestNode = hostname
-		}
-	}
-	return bestNode == m.hostname
+	owner, ok := m.nodeRing.Lookup(ipStr)
+	return ok && owner == m.hostname
 }
 
 func (m *proxyNeighManager) isMatchingIPVersion(ipStr string) bool {

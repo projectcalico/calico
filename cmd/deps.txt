@@ -92,6 +92,7 @@ github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/kelseyhightower/memkv v0.1.1
 github.com/klauspost/compress v1.18.5
+github.com/klauspost/cpuid/v2 v2.2.10
 github.com/kylelemons/godebug v1.1.0
 github.com/leodido/go-urn v1.4.0
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
@@ -155,6 +156,7 @@ github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
+github.com/zeebo/xxh3 v1.1.0
 go.etcd.io/etcd/api/v3 v3.6.10
 go.etcd.io/etcd/client/pkg/v3 v3.6.10
 go.etcd.io/etcd/client/v3 v3.6.10
@@ -468,6 +470,7 @@ local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
+local:lib/datastructures/hashring
 local:lib/httpmachinery/pkg/apiutil
 local:lib/httpmachinery/pkg/codec
 local:lib/httpmachinery/pkg/context

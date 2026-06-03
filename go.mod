@@ -64,6 +64,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
+	github.com/projectcalico/calico/lib/datastructures v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
@@ -393,8 +394,14 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 )
 
+require (
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
+	github.com/zeebo/xxh3 v1.1.0 // indirect
+)
+
 replace (
 	github.com/projectcalico/api => ./api
+	github.com/projectcalico/calico/lib/datastructures => ./lib/datastructures
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
 	github.com/projectcalico/calico/lib/std => ./lib/std
 
