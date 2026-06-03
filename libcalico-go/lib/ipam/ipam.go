@@ -2095,58 +2095,37 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 // GetIPAMConfig returns the global IPAM configuration.  If no IPAM configuration
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
+//
+// This is a read-only operation. When no config exists we return the default in
+// memory rather than persisting it: materializing config as a side effect of a
+// read races between nodes and surprises callers on paths like IP release that
+// have no business writing global config. Use SetIPAMConfig to change it.
 func (c ipamClient) GetIPAMConfig(ctx context.Context) (*IPAMConfig, error) {
-	var obj *model.KVPair
-	var err error
-	var retries int
-
-	maxRetry := 5
-
-	// Try to get the IPAM Config. If it doesn't exist, we'll attempt to create it.
-	for retries = 1; retries < maxRetry; retries++ {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+	obj, err := c.client.Get(ctx, model.IPAMConfigKey{}, "")
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			log.WithError(err).Error("Error getting IPAM config")
+			return nil, err
 		}
 
-		obj, err = c.client.Get(ctx, model.IPAMConfigKey{}, "")
-		if err != nil {
-			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				// Unexpected error querying the IPAM config.
-				log.WithError(err).Errorf("Error getting IPAM config")
-				return nil, err
-			}
-
-			// Create the default config because it doesn't already exist.
-			enabled := "Enabled"
-			kvp := &model.KVPair{
-				Key: model.IPAMConfigKey{},
-				Value: &model.IPAMConfig{
-					StrictAffinity:               false,
-					AutoAllocateBlocks:           true,
-					MaxBlocksPerHost:             0,
-					KubeVirtVMAddressPersistence: &enabled, // Default: enabled for auto-detection
-				},
-			}
-
-			obj, err = c.client.Create(ctx, kvp)
-			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
-					log.Info("Failed to create global IPAM config; another node got there first.")
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				log.WithError(err).Errorf("Error creating IPAM config")
-				return nil, err
-			}
+		// No config has been set, so fall back to the default.
+		enabled := string(VMAddressPersistenceEnabled)
+		obj = &model.KVPair{
+			Key: model.IPAMConfigKey{},
+			Value: &model.IPAMConfig{
+				StrictAffinity:               false,
+				AutoAllocateBlocks:           true,
+				MaxBlocksPerHost:             0,
+				KubeVirtVMAddressPersistence: &enabled,
+			},
 		}
-		break
 	}
 
-	if retries >= maxRetry {
-		return nil, fmt.Errorf("failed to get ipam config after %d retries", retries)
+	backend, ok := obj.Value.(*model.IPAMConfig)
+	if !ok {
+		return nil, fmt.Errorf("unexpected value type %T for IPAM config", obj.Value)
 	}
-
-	config := c.convertBackendToIPAMConfig(obj.Value.(*model.IPAMConfig))
+	config := c.convertBackendToIPAMConfig(backend)
 
 	if detectOS(ctx) == "windows" {
 		// When a Windows node owns a block, it creates a local /26 subnet object and as far as we know, it can't
