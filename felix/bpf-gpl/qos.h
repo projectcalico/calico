@@ -172,8 +172,14 @@ static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
  */
 static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx *ctx)
 {
+	/* For netkit, skb->ifindex is the peer (pod-side) ifindex; the QoS
+	 * map is keyed by the host-side primary ifindex. Use host_ifindex
+	 * from globals when available.
+	 */
+	__u32 __qos_ifindex = ctx->globals->data.host_ifindex ?
+		ctx->globals->data.host_ifindex : ctx->skb->ifindex;
 	struct calico_qos_key key = {
-		.ifindex = ctx->skb->ifindex,
+		.ifindex = __qos_ifindex,
 #if CALI_F_INGRESS
 		.ingress = 1,
 #else // CALI_F_EGRESS
