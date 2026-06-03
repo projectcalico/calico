@@ -344,12 +344,25 @@ build-calico-race:
 # this target to build everything so that it can be cached and shared between downstream jobs.
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
+            $(FV_BINARY) \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
             bin/pktgen \
             build-bpf \
             fv/fv.test
+
+# FV bind-mounts $(FV_BINARY) (built by ../cmd/calico, either calico-race or
+# calico-cgo depending on FV_RACE_DETECTOR_ENABLED) into the felix-test
+# container as /usr/local/bin/calico-felix. Felix Go source lives outside this
+# Makefile's view, so we delegate to ../cmd/calico — declaring the target
+# PHONY ensures the inner Make re-evaluates source-file timestamps every time
+# (it's a no-op when the binary is already current). Without this, edits to
+# Felix Go code silently fail to reach the FV container and the on-disk
+# binary disagrees with the freshly-rebuilt BPF objects in bin/bpf.
+.PHONY: $(FV_BINARY)
+$(FV_BINARY):
+	$(MAKE) -C ../cmd/calico bin/$(notdir $@)
 
 # build-fv-env: Prepare the environment for FV (Function Verification) tests
 #
