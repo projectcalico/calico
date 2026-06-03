@@ -52,8 +52,8 @@ func newSlowWatch() *slowWatch {
 	return w
 }
 
-// loop forwards events from send to the result channel until the watch is
-// stopped, then closes the result channel.
+// loop forwards events queued via send() to the result channel until the
+// watch is stopped, then closes the result channel.
 func (w *slowWatch) loop() {
 	defer close(w.ch)
 	for {
@@ -78,6 +78,8 @@ func (w *slowWatch) Stop() {
 }
 
 // send delivers an event, abandoning the send if the watcher has been stopped.
+// It cannot block forever: loop() only exits after stopped is closed, and once
+// stopped is closed the second select case is always ready.
 func (w *slowWatch) send(e watch.Event) {
 	select {
 	case w.in <- e:
@@ -142,6 +144,12 @@ var _ = Describe("TestResourceWatch event waiting", func() {
 		// that as end-of-stream - it used to spin on the closed channel,
 		// appending zero-value events.  ExpectEvents consumed the event
 		// above, so no further events should be observed.
+		//
+		// The sleep cannot make this test flake: with a correct collection
+		// loop nothing can deliver events after Stop(), so the final check
+		// is deterministic.  It only gives a regressed (spinning) loop time
+		// to append events before the check; the loop is internal to the
+		// harness, so there is nothing to synchronize on instead.
 		w.Stop()
 		time.Sleep(200 * time.Millisecond)
 		tw.ExpectEvents(apiv3.KindTier, []watch.Event{})
