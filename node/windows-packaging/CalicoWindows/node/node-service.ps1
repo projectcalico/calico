@@ -26,7 +26,7 @@ function Get-TokenRefresherPid()
 function Start-TokenRefresher()
 {
     Write-Host "Starting Calico token refresher..."
-    Start-Process -NoNewWindow .\calico-node.exe -ArgumentList "node","monitor-token"
+    Start-Process -NoNewWindow .\calico-node.exe -ArgumentList "component","node","monitor-token"
     Write-Host "Calico token refresher running on PID" $(Get-TokenRefresherPid)
 }
 
@@ -193,7 +193,7 @@ while ($True)
             $kubeletPid = $currentKubeletPid
             while ($true)
             {
-                .\calico-node.exe node startup --complete-startup
+                .\calico-node.exe component node startup --complete-startup
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."
