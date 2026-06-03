@@ -301,9 +301,12 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 		if addr == "" {
 			return
 		}
-		logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataUpdate")
+		before := m.nodeRing.Len()
 		m.nodeRing.Insert(msg.Hostname, msg.Hostname)
-		m.dirty = true
+		if m.nodeRing.Len() != before {
+			logrus.WithField("hostname", msg.Hostname).Debug("Proxy neighbor manager received HostMetadataUpdate")
+			m.dirty = true
+		}
 
 	case *proto.HostMetadataRemove:
 		before := m.nodeRing.Len()
