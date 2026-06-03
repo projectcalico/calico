@@ -383,7 +383,6 @@ type InternalDataplane struct {
 	allManagers             []Manager
 	managersWithRouteTables []ManagerWithRouteTables
 	managersWithRouteRules  []ManagerWithRouteRules
-	proxyNeighManagers      []*proxyNeighManager
 	ruleRenderer            rules.RuleRenderer
 
 	// datastoreInSync is set to true after we receive the "in sync" message from the datastore.
@@ -756,11 +755,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
 		proxyNeighMgr4 := newProxyNeighManager(config, 4)
 		dp.RegisterManager(proxyNeighMgr4)
-		dp.proxyNeighManagers = append(dp.proxyNeighManagers, proxyNeighMgr4)
 		if config.IPv6Enabled {
 			proxyNeighMgr6 := newProxyNeighManager(config, 6)
 			dp.RegisterManager(proxyNeighMgr6)
-			dp.proxyNeighManagers = append(dp.proxyNeighManagers, proxyNeighMgr6)
 		}
 	}
 
