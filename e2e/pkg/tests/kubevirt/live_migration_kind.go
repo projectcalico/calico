@@ -17,9 +17,6 @@ package kubevirt
 import (
 	"context"
 	"fmt"
-	"net"
-	"os/exec"
-	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -29,7 +26,6 @@ import (
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -37,180 +33,8 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
-	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
-
-// kindBIRDPeer manages a BIRD 1.x container running on the Docker "kind"
-// network. Unlike externalnode.Client (SSH-based), this uses local Docker
-// commands so no external node or SSH credentials are required.
-type kindBIRDPeer struct {
-	containerName string
-	containerIP   string
-}
-
-// startKindBIRDPeer starts a BIRD container on the kind Docker network and
-// returns a handle for interacting with it. The container runs in privileged
-// mode so BIRD can manipulate the routing table.
-func startKindBIRDPeer(name string) *kindBIRDPeer {
-	GinkgoHelper()
-
-	// Remove any stale container from a previous run.
-	_ = exec.Command("docker", "rm", "-f", name).Run()
-
-	By(fmt.Sprintf("Starting BIRD container %s on kind network", name))
-	out, err := exec.Command("docker", "run", "-d", "--privileged",
-		"--network", "kind", "--name", name, images.CalicoBIRD).CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to start BIRD container %s: %s", name, string(out))
-
-	// Wait for the container to be running.
-	Eventually(func() error {
-		out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("docker inspect: %w (%s)", err, string(out))
-		}
-		if strings.TrimSpace(string(out)) != "true" {
-			return fmt.Errorf("container %s not running yet", name)
-		}
-		return nil
-	}, 30*time.Second, 2*time.Second).Should(Succeed(), "BIRD container %s not running", name)
-
-	// Get the container IP on the kind network.
-	ipOut, err := exec.Command("docker", "inspect", "-f",
-		"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name).CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(), "failed to get IP of container %s", name)
-	containerIP := strings.TrimSpace(string(ipOut))
-	Expect(containerIP).NotTo(BeEmpty(), "container %s has no IP address", name)
-
-	logrus.Infof("BIRD container %s started with IP %s on kind network", name, containerIP)
-	return &kindBIRDPeer{containerName: name, containerIP: containerIP}
-}
-
-// PeerIP returns the container IP for the Calico BGPPeer resource.
-func (p *kindBIRDPeer) PeerIP() string { return p.containerIP }
-
-// CheckBGPSession returns the output of "birdcl show protocols".
-func (p *kindBIRDPeer) CheckBGPSession() (string, error) {
-	return p.exec("birdcl", "show", "protocols")
-}
-
-// stop removes the BIRD container.
-func (p *kindBIRDPeer) stop() {
-	By(fmt.Sprintf("Stopping BIRD container %s", p.containerName))
-	_ = exec.Command("docker", "rm", "-f", p.containerName).Run()
-}
-
-// exec runs a command inside the BIRD container and returns stdout+stderr.
-func (p *kindBIRDPeer) exec(args ...string) (string, error) {
-	cmdArgs := append([]string{"exec", p.containerName}, args...)
-	out, err := exec.Command("docker", cmdArgs...).CombinedOutput()
-	return string(out), err
-}
-
-// writeFile writes content to a file inside the container via docker exec.
-func (p *kindBIRDPeer) writeFile(path, content string) {
-	GinkgoHelper()
-	cmdArgs := []string{"exec", "-i", p.containerName, "sh", "-c", fmt.Sprintf("cat > %s", path)}
-	cmd := exec.Command("docker", cmdArgs...)
-	cmd.Stdin = strings.NewReader(content)
-	out, err := cmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to write %s in container %s: %s", path, p.containerName, string(out))
-}
-
-// ConfigureBIRD writes the peers config, enables merge paths, and reloads BIRD.
-func (p *kindBIRDPeer) ConfigureBIRD(peersConf string) {
-	GinkgoHelper()
-
-	// Enable merge paths in the kernel protocol for ECMP support.
-	out, err := p.exec("sed", "-i", "/protocol kernel {/a merge paths on;", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to enable merge paths in BIRD: %s", out)
-
-	// Replace the source address placeholder with the container's actual IP.
-	peersConf = strings.ReplaceAll(peersConf, "ip@local", p.containerIP)
-	p.writeFile("/etc/bird/peers.conf", peersConf)
-
-	By("Reloading BIRD config")
-	out, err = p.exec("birdcl", "configure")
-	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
-	logrus.Infof("birdcl configure: %s", out)
-}
-
-// queryRoute queries the BIRD routing table for a /32 route and returns
-// the parsed route state. Uses parseBIRDRouteOutput from utils.go.
-func (p *kindBIRDPeer) queryRoute(vmIP string) torRouteState {
-	ip := strings.Split(vmIP, "/")[0]
-
-	out, err := p.exec("birdcl", "show", "route", ip+"/32", "all")
-	if err != nil {
-		logrus.Warnf("kindBIRDPeer.queryRoute: exec error: %v", err)
-		return torRouteState{}
-	}
-
-	var state torRouteState
-	state.Routes = parseBIRDRouteOutput(out)
-	state.Has32 = len(state.Routes) > 0
-	return state
-}
-
-// querySnapshot queries the BIRD routing table for both the /32 host route
-// and the /26 block route. Same pattern as queryTORSnapshot but via local
-// docker exec instead of SSH.
-func (p *kindBIRDPeer) querySnapshot(vmIP string) torRouteSnapshot {
-	ip := strings.Split(vmIP, "/")[0]
-
-	parsed := net.ParseIP(ip).To4()
-	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
-	block26 := fmt.Sprintf("%s/26", blockIP)
-
-	// Query /32 route.
-	out32, _ := p.exec("birdcl", "show", "route", ip+"/32", "all")
-	routes32 := parseBIRDRouteOutput(out32)
-
-	// Query /26 route.
-	out26, _ := p.exec("birdcl", "show", "route", block26, "all")
-	routes26 := parseBIRDRouteOutput(out26)
-
-	snap := torRouteSnapshot{
-		Host32:  torPrefixState{Present: len(routes32) > 0, Routes: routes32},
-		Block26: torPrefixState{Present: len(routes26) > 0, Routes: routes26},
-	}
-
-	logrus.Infof("kindBIRDPeer.querySnapshot(%s): /32=%v(%d) /26=%v(%d)",
-		ip, snap.Host32.Present, len(snap.Host32.Routes),
-		snap.Block26.Present, len(snap.Block26.Routes))
-	return snap
-}
-
-// setupKindEBGPPeering configures eBGP peering between a BIRD container on the
-// kind Docker network and the cluster's control-plane calico-node.
-func setupKindEBGPPeering(f *framework.Framework, bird *kindBIRDPeer) {
-	GinkgoHelper()
-	setupEBGPPeeringCommon(f, bird, "kubevirt-kind-lm-", "kind-ebgp-peer-")
-}
-
-// expectMigrationFailed polls the VMIM until it reaches MigrationFailed
-// phase. Immediately stops polling with a fatal error if MigrationSucceeded is
-// observed (the migration was expected to fail).
-func expectMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
-	GinkgoHelper()
-	By(fmt.Sprintf("Waiting for migration %s to fail", vmim.Name))
-	Eventually(func() error {
-		got := &kubevirtv1.VirtualMachineInstanceMigration{}
-		if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: vmim.Namespace, Name: vmim.Name}, got); err != nil {
-			return err
-		}
-		if got.Status.Phase == kubevirtv1.MigrationSucceeded {
-			return StopTrying("migration unexpectedly succeeded")
-		}
-		if got.Status.Phase != kubevirtv1.MigrationFailed {
-			return fmt.Errorf("phase is %s", got.Status.Phase)
-		}
-		return nil
-	}, 5*time.Minute, 1*time.Second).Should(Succeed())
-}
 
 // KubeVirt live migration route convergence tests for KIND clusters.
 // iBGP test: validates kernel route metric elevation (512) and reversion (1024)
@@ -219,9 +43,8 @@ func expectMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kub
 // local_pref) using a local BIRD container on the Docker "kind" network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("KubeVirt-KIND"),
+	describe.WithFeature("KubeVirt"),
 	describe.WithCategory(describe.Networking),
-	describe.WithSerial(),
 	"KubeVirt live migration (KIND)",
 	func() {
 		f := utils.NewDefaultFramework("calico-kubevirt-kind")
@@ -259,10 +82,12 @@ var _ = describe.CalicoDescribe(
 
 			// Pre-migration: the source node should have a normal-priority /32 route.
 			By("Verifying pre-migration kernel route metric on source node")
-			Eventually(func() int {
-				return queryWorkerMetric(f, node1, vmIP)
-			}, 2*time.Minute, 5*time.Second).Should(Equal(1024),
-				"source node should have normal kernel route metric (1024) before migration")
+			Eventually(func(g Gomega) {
+				m, err := queryWorkerMetric(f, node1, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(normalRouteMetric),
+					"source node should have normal kernel route metric (1024) before migration")
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 			// === First migration ===
 			By("Starting first migration")
@@ -277,17 +102,21 @@ var _ = describe.CalicoDescribe(
 
 			// Target node should have elevated metric (512) during convergence window.
 			By("Verifying elevated kernel route metric on target node after first migration")
-			Eventually(func() int {
-				return queryWorkerMetric(f, node2, vmIP)
-			}, 20*time.Second, 1*time.Second).Should(Equal(512),
-				"target node should have elevated kernel route metric (512) after migration")
+			Eventually(func(g Gomega) {
+				m, err := queryWorkerMetric(f, node2, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(elevatedRouteMetric),
+					"target node should have elevated kernel route metric (512) after migration")
+			}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 			// Wait for metric to revert to normal (1024) after convergence window (~30s).
 			By("Waiting for kernel route metric to revert to normal on target node")
-			Eventually(func() int {
-				return queryWorkerMetric(f, node2, vmIP)
-			}, 45*time.Second, 2*time.Second).Should(Equal(1024),
-				"target node kernel route metric should revert to 1024 after convergence")
+			Eventually(func(g Gomega) {
+				m, err := queryWorkerMetric(f, node2, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(normalRouteMetric),
+					"target node kernel route metric should revert to 1024 after convergence")
+			}, metricRevertTimeout, 2*time.Second).Should(Succeed())
 
 			// === Second migration ===
 			// Pin to a third worker so we exercise a brand-new /32 route.
@@ -308,17 +137,21 @@ var _ = describe.CalicoDescribe(
 
 			// Target node should have elevated metric (512) during convergence window.
 			By("Verifying elevated kernel route metric on target node after second migration")
-			Eventually(func() int {
-				return queryWorkerMetric(f, node3, vmIP)
-			}, 20*time.Second, 1*time.Second).Should(Equal(512),
-				"target node should have elevated kernel route metric (512) after second migration")
+			Eventually(func(g Gomega) {
+				m, err := queryWorkerMetric(f, node3, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(elevatedRouteMetric),
+					"target node should have elevated kernel route metric (512) after second migration")
+			}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 			// Wait for metric to revert to normal (1024) after convergence window.
 			By("Waiting for kernel route metric to revert to normal on target node after second migration")
-			Eventually(func() int {
-				return queryWorkerMetric(f, node3, vmIP)
-			}, 45*time.Second, 2*time.Second).Should(Equal(1024),
-				"target node kernel route metric should revert to 1024 after second migration convergence")
+			Eventually(func(g Gomega) {
+				m, err := queryWorkerMetric(f, node3, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(normalRouteMetric),
+					"target node kernel route metric should revert to 1024 after second migration convergence")
+			}, metricRevertTimeout, 2*time.Second).Should(Succeed())
 		})
 
 		It("should not have /32 host route on target node after a migration timeout", func() {
@@ -374,12 +207,14 @@ var _ = describe.CalicoDescribe(
 			// kernel route for the VM IP. During successful migration, Felix
 			// programs an elevated /32 (metric 512) on the target; on failure
 			// this must not appear or must be cleaned up.
-			// queryWorkerMetric returns -1 when no /32 route exists.
 			By("Verifying target node has no /32 kernel route after migration timeout")
-			Consistently(func() int {
-				return queryWorkerMetric(f, targetNode, vmIP)
-			}, 15*time.Second, 2*time.Second).Should(Equal(-1),
-				"target node should not have /32 kernel route after failed migration")
+			Consistently(func() error {
+				_, err := queryWorkerMetric(f, targetNode, vmIP)
+				if err == nil {
+					return fmt.Errorf("target node should not have /32 kernel route after failed migration")
+				}
+				return nil
+			}, 15*time.Second, 2*time.Second).Should(Succeed())
 
 			// Delete the orphaned target pod and verify IPAM ownership is
 			// unchanged: the source pod must remain the sole active owner
@@ -505,13 +340,13 @@ var _ = describe.CalicoDescribe(
 			}, 10*time.Second, 2*time.Second).Should(Succeed())
 		})
 
-		It("should converge eBGP routes after live migration", func() {
+		It("should converge eBGP routes after live migration", Serial, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
 
 			// Start BIRD container on the kind Docker network.
-			bird := startKindBIRDPeer("kind-bird-ebgp")
+			bird := startKindBIRDPeer(utils.GenerateRandomName("kind-bird-ebgp-"))
 			DeferCleanup(bird.stop)
 
 			// Set up eBGP peering between the BIRD container and the cluster.
@@ -553,16 +388,18 @@ var _ = describe.CalicoDescribe(
 			// Verify elevated route priority on the target worker and BIRD container.
 			By("Verifying elevated route priority after first migration")
 			Eventually(func(g Gomega) {
-				g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
+				m, err := queryWorkerMetric(f, node2, vmIP)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(m).To(Equal(elevatedRouteMetric),
 					"worker kernel metric should be elevated (512) after migration")
 				st := bird.queryRoute(vmIP)
 				g.Expect(st.Has32).To(BeTrue(), "BIRD should have /32 after migration")
 				g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
-				g.Expect(st.Routes[0].LocalPref).To(Equal(2147483135),
+				g.Expect(st.Routes[0].LocalPref).To(Equal(elevatedLocalPref),
 					"BIRD /32 should have elevated local_pref")
-				g.Expect(st.Routes[0].Community).To(Equal("(65000,100)"),
+				g.Expect(st.Routes[0].Community).To(Equal(migrationCommunityTag),
 					"BIRD /32 should have community tag")
-			}, 20*time.Second, 1*time.Second).Should(Succeed())
+			}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 			// Wait for the elevated /32 route to revert to normal local_pref.
 			By("Waiting for BIRD /32 local_pref to revert to normal after convergence")
@@ -572,7 +409,7 @@ var _ = describe.CalicoDescribe(
 					return snap.Host32.Routes[0].LocalPref
 				}
 				return -1
-			}, 45*time.Second, 2*time.Second).Should(Equal(100),
+			}, metricRevertTimeout, 2*time.Second).Should(Equal(normalLocalPref),
 				"BIRD /32 local_pref should revert to 100 after convergence")
 
 			// === Second migration ===
@@ -607,16 +444,16 @@ var _ = describe.CalicoDescribe(
 					}
 				}
 				g.Expect(b).NotTo(BeNil(), "BIRD should have a best /32 route")
-				g.Expect(b.LocalPref).To(Equal(2147483135),
+				g.Expect(b.LocalPref).To(Equal(elevatedLocalPref),
 					"best /32 route should have elevated local_pref")
-				g.Expect(b.Community).To(Equal("(65000,100)"),
+				g.Expect(b.Community).To(Equal(migrationCommunityTag),
 					"best /32 route should have community tag")
 				// Two /32 routes with different local_pref (no ECMP).
 				g.Expect(nb).NotTo(BeNil(),
 					"BIRD should have two /32 routes after second migration")
 				g.Expect(nb.LocalPref).NotTo(Equal(b.LocalPref),
 					"two /32 routes must have different local_pref to avoid ECMP")
-			}, 20*time.Second, 1*time.Second).Should(Succeed())
+			}, elevatedMetricTimeout, 1*time.Second).Should(Succeed())
 
 			// Wait for the second migration's /32 route to revert.
 			By("Waiting for BIRD /32 local_pref to revert after second migration")
@@ -626,7 +463,7 @@ var _ = describe.CalicoDescribe(
 					return snap.Host32.Routes[0].LocalPref
 				}
 				return -1
-			}, 45*time.Second, 2*time.Second).Should(Equal(100),
+			}, metricRevertTimeout, 2*time.Second).Should(Equal(normalLocalPref),
 				"BIRD /32 local_pref should revert to 100 after second migration convergence")
 		})
 	},
