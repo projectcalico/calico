@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"context"
+	"errors"
 	"hash/fnv"
 	"net"
 	"net/netip"
@@ -453,8 +454,7 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		}
 		// Atomically swap in the new desired set; the previous pointer tells
 		// us which IPs are new and need a GARP/UNA.
-		d := desired
-		old := l.desired.Swap(&d)
+		old := l.desired.Swap(new(desired))
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
 				m.sendGARP(l, ip)
@@ -524,17 +524,26 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		err := l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
-		if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+
+		if err := l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
 			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set ARP read deadline")
 		}
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
-			if ctx.Err() != nil {
-				return
+			if err, ok := errors.AsType[net.Error](err); ok && err.Timeout() {
+				logrus.WithField("iface", l.ifaceName).Debug("ARP read deadline expired with no packet")
+				continue
 			}
-			// Timeout or transient error — keep looping.
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("ARP listener read failed; retrying")
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(readDeadlineInterval):
+			}
 			continue
 		}
 
@@ -563,15 +572,27 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		err := l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
-		if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+
+		if err := l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
 			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set NDP read deadline")
 		}
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
-			if ctx.Err() != nil {
+			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+				logrus.WithField("iface", l.ifaceName).Debug("NDP read deadline expired with no packet")
+				continue
+			}
+			// Unexpected, persistent error. Log and back off so a broken
+			// socket can't spin the CPU; ctx cancellation still breaks out.
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("NDP listener read failed; retrying")
+			select {
+			case <-ctx.Done():
 				return
+			case <-time.After(readDeadlineInterval):
 			}
 			continue
 		}
