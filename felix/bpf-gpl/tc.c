@@ -1419,19 +1419,38 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	/* Ingress connection limit for TCP SYN arriving at a WEP.
 	 *
 	 * The CT lookup propagates the CT entry's CONNLIMIT_INGRESS /
-	 * CONNLIMIT_INGRESS_REJECTED flags into result.flags. Three cases:
+	 * CONNLIMIT_INGRESS_REJECTED flags into result.flags. Two cases:
 	 *
 	 *   - INGRESS set: the connection was counted on its first SYN.
 	 *     This is a retransmission of an accepted SYN; allow.
-	 *   - REJECTED set (and not INGRESS): the first SYN was rejected.
-	 *     This is a retransmission of a rejected SYN; reject and send
-	 *     TCP RST so the client sees the rejection promptly.
-	 *   - Neither: first SYN. Run qos_connlimit_check_and_increment;
-	 *     on success mark CONNLIMIT_INGRESS, on failure mark
-	 *     CONNLIMIT_INGRESS_REJECTED. The CT lookup runs once and is reused
-	 *     for both writes.
+	 *   - Otherwise (first SYN, OR retransmission of a previously-
+	 *     rejected SYN with REJECTED set): run
+	 *     qos_connlimit_check_and_increment. If it succeeds we stamp
+	 *     CONNLIMIT_INGRESS — and clear CONNLIMIT_INGRESS_REJECTED if
+	 *     this is a second-chance accept (a slot has freed up since
+	 *     the original rejection). If it still fails, stamp
+	 *     CONNLIMIT_INGRESS_REJECTED (idempotent if already set) and
+	 *     emit a TCP RST.
 	 *
-	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 * Second-chance accept rationale: TCP retries SYNs on 1s/3s/7s/...
+	 * backoff. If the limit is saturated when the original SYN
+	 * arrives but capacity has freed by the time a retransmission
+	 * lands, accepting it gives the connection a chance to succeed
+	 * rather than waiting out tcp_syn_retries (~127s).
+	 *
+	 * Clearing REJECTED on second-chance accept is correctness, not
+	 * hygiene: qos_connlimit_decrement_for_ct gates the cleanup-time
+	 * decrement on (INGRESS && !INGRESS_REJECTED), so leaving REJECTED
+	 * set would leak one slot upward per accepted second-chance
+	 * connection.
+	 *
+	 * Concurrency: two retransmissions for the same 5-tuple can both
+	 * win the limit check (current_count < max twice in quick
+	 * succession) and double-increment. The cleanup-time decrement
+	 * only fires once, so the counter drifts +1 over that
+	 * connection's lifetime. Same race shape as the first-SYN path
+	 * today; the Go-side ConnLimitScanner corrects drift on its next
+	 * pass (~30s).
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped &&
 			ct_result_is_syn(ctx->state->ct_result.rc)) {
@@ -1440,12 +1459,11 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 
 		if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
 			/* Retransmission of accepted SYN — already counted, allow. */
-		} else if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) {
-			/* Retransmission of rejected SYN — stay rejected. */
-			CALI_DEBUG("connlimit: retransmission of rejected connection");
-			reject = true;
 		} else {
-			/* First SYN: count it. */
+			/* First SYN OR retransmission of a previously-rejected
+			 * SYN. Re-run the limit check; if it succeeds we stamp
+			 * INGRESS, clearing REJECTED on second-chance accepts. */
+			bool was_rejected = (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) != 0;
 			bool sltd = src_lt_dest(&ctx->state->ip_src,
 					&ctx->state->ip_dst,
 					ctx->state->sport,
@@ -1456,15 +1474,20 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 					ctx->state->sport, ctx->state->dport);
 			struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
 			if (qos_connlimit_check_and_increment(ctx) < 0) {
-				CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
-				if (cv) {
-					ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				if (was_rejected) {
+					CALI_DEBUG("connlimit: retransmission of rejected SYN, limit still full");
+				} else {
+					CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
+					if (cv) {
+						ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+					}
 				}
 				reject = true;
 			} else if (cv) {
-				/* Counted successfully — mark the entry so
-				 * retransmissions find it via conntrack.h's
-				 * flag propagation and skip the count. */
+				if (was_rejected) {
+					CALI_DEBUG("connlimit: retransmission of rejected SYN now under limit; accepting");
+					ct_value_clear_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+				}
 				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS);
 			}
 		}
