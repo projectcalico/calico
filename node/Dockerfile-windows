@@ -32,7 +32,7 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY dist/LICENSE /licenses/LICENSE
 
-COPY dist/bin/calico-node.exe /CalicoWindows/calico-node.exe
+COPY dist/bin/calico.exe /CalicoWindows/calico.exe
 COPY windows-packaging/CalicoWindows/felix/felix-service.ps1 /CalicoWindows/felix-service.ps1
 COPY windows-packaging/CalicoWindows/node/node-service.ps1 /CalicoWindows/node-service.ps1
 COPY windows-packaging/CalicoWindows/confd /CalicoWindows/confd
