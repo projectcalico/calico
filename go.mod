@@ -18,7 +18,7 @@ require (
 	github.com/aws/smithy-go v1.25.0
 	github.com/bits-and-blooms/bitset v1.24.4
 	github.com/buger/jsonparser v1.1.2
-	github.com/container-storage-interface/spec v1.9.0
+	github.com/container-storage-interface/spec v1.12.0
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
