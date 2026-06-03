@@ -343,7 +343,7 @@ func (m *proxyNeighManager) OnUpdate(protoBufMsg any) {
 }
 
 func (m *proxyNeighManager) CompleteDeferredWork() error {
-	if !m.dirty {
+	if !m.dirty && !m.hasFailedListener() {
 		return nil
 	}
 	m.dirty = false
@@ -360,6 +360,17 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	m.publishDesiredIPs(desiredByIface)
 
 	return err
+}
+
+// hasFailedListener reports whether any listener goroutine has flagged itself
+// failed (and so needs dropping and recreating by reconcileListeners).
+func (m *proxyNeighManager) hasFailedListener() bool {
+	for _, l := range m.listeners {
+		if l.failed.Load() {
+			return true
+		}
+	}
+	return false
 }
 
 // buildDesiredState computes which IPs each host interface should answer for:

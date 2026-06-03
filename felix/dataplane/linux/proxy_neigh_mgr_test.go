@@ -117,11 +117,12 @@ func (m *mockNetlinkForProxyNeigh) setIfaceAddr(name, cidr string) {
 // --- Mock ARP client ---
 
 type mockARPClient struct {
-	mu     sync.Mutex
-	reads  chan *arp.Packet
-	writes []arpWrite
-	hwAddr net.HardwareAddr
-	closed bool
+	mu      sync.Mutex
+	reads   chan *arp.Packet
+	readErr chan error
+	writes  []arpWrite
+	hwAddr  net.HardwareAddr
+	closed  bool
 }
 
 type arpWrite struct {
@@ -131,17 +132,22 @@ type arpWrite struct {
 
 func newMockARPClient(hwAddr net.HardwareAddr) *mockARPClient {
 	return &mockARPClient{
-		reads:  make(chan *arp.Packet, 10),
-		hwAddr: hwAddr,
+		reads:   make(chan *arp.Packet, 10),
+		readErr: make(chan error, 1),
+		hwAddr:  hwAddr,
 	}
 }
 
 func (c *mockARPClient) Read() (*arp.Packet, *ethernet.Frame, error) {
-	pkt, ok := <-c.reads
-	if !ok {
-		return nil, nil, fmt.Errorf("closed")
+	select {
+	case err := <-c.readErr:
+		return nil, nil, err
+	case pkt, ok := <-c.reads:
+		if !ok {
+			return nil, nil, fmt.Errorf("closed")
+		}
+		return pkt, nil, nil
 	}
-	return pkt, nil, nil
 }
 
 func (c *mockARPClient) Reply(req *arp.Packet, hwAddr net.HardwareAddr, ip netip.Addr) error {
@@ -718,5 +724,68 @@ var _ = Describe("Proxy neighbor manager - live migration", func() {
 		Expect(mgr.CompleteDeferredWork()).To(Succeed())
 		desired := getDesiredIPs(mgr, "eth0")
 		Expect(desired).To(HaveKey("10.0.0.50"))
+	})
+})
+
+var _ = Describe("Proxy neighbor manager - listener recreation", func() {
+	var (
+		mgr     *proxyNeighManager
+		nl      *mockNetlinkForProxyNeigh
+		created []*mockARPClient
+	)
+
+	BeforeEach(func() {
+		nl = newMockNetlinkForProxyNeigh()
+		created = nil
+		config := Config{
+			Hostname:    "test-node",
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		// Hand out a fresh mock each time a listener is (re)started, recording
+		// them so the test can inject a failure into the first one and confirm a
+		// second one gets created.
+		af := func(ifaceName string) (arpClient, net.HardwareAddr, error) {
+			c := newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01})
+			created = append(created, c)
+			return c, c.hwAddr, nil
+		}
+		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil)
+		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
+		nl.setIfaceAddr("eth0", "10.0.0.1/24")
+		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
+		mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		Expect(mgr.listeners).To(HaveKey("eth0"))
+		Expect(created).To(HaveLen(1))
+	})
+
+	AfterEach(func() { mgr.cancel() })
+
+	It("recreates a listener after an unrecoverable read error", func() {
+		first := mgr.listeners["eth0"]
+
+		// Simulate a broken socket: a persistent, non-timeout read error.
+		created[0].readErr <- fmt.Errorf("socket boom")
+
+		// The listener goroutine flags itself failed and exits.
+		Eventually(first.failed.Load).Should(BeTrue())
+
+		// A plain reconcile - with nothing else having dirtied the manager -
+		// must drop the failed listener and start a fresh one.
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+
+		recreated := mgr.listeners["eth0"]
+		Expect(recreated).ToNot(BeIdenticalTo(first))
+		Expect(recreated.failed.Load()).To(BeFalse())
+		Expect(created).To(HaveLen(2))
+		// The fresh listener still answers for the pod IP.
+		Expect(getDesiredIPs(mgr, "eth0").Contains("10.0.0.50")).To(BeTrue())
+	})
+
+	It("is a no-op when nothing is dirty and no listener has failed", func() {
+		first := mgr.listeners["eth0"]
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		Expect(mgr.listeners["eth0"]).To(BeIdenticalTo(first))
+		Expect(created).To(HaveLen(1))
 	})
 })
