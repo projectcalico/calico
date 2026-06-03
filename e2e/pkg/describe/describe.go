@@ -58,24 +58,25 @@ func WithCategory(cat Category) any {
 //
 // If you are unsure which feature to use, please ask!
 var features = map[string]bool{
-	"NetworkPolicy":   true,
-	"Tiered-Policy":   true,
-	"IPPool":          true,
-	"IPAM":            true,
-	"AutoHEPs":        true,
-	"Host-Protection": true,
-	"HostPorts":       true,
-	"OwnerReferences": true,
-	"MTU":             true,
-	"Maglev":          true,
-	"BGPPeer":         true,
-	"IPIP":            true,
-	"Tiered-RBAC":     true,
-	"Pods":            true,
-	"QoS":             true,
-	"Datapath":        true,
-	"Istio":           true,
-	"KubeVirt":        true,
+	"NetworkPolicy":             true,
+	"Tiered-Policy":             true,
+	"IPPool":                    true,
+	"IPAM":                      true,
+	"AutoHEPs":                  true,
+	"Host-Protection":           true,
+	"HostPorts":                 true,
+	"OwnerReferences":           true,
+	"MTU":                       true,
+	"Maglev":                    true,
+	"BGPPeer":                   true,
+	"IPIP":                      true,
+	"Tiered-RBAC":               true,
+	"Pods":                      true,
+	"QoS":                       true,
+	"Datapath":                  true,
+	"Istio":                     true,
+	"KubeVirt":                  true,
+	"LocalSubnetL2Reachability": true,
 }
 
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
@@ -150,6 +151,15 @@ func WithExternalNode() any {
 
 func RequiresExternalNode() any {
 	return framework.WithLabel("RequiresExternalNode")
+}
+
+// RequiresKindNetwork marks tests that need to attach a docker container to the
+// host's "kind" network as an L2-adjacent peer of the cluster nodes. These
+// tests can only run where the test runner has direct access to the local
+// docker daemon (i.e., kind clusters), and must be skipped elsewhere via
+// --ginkgo.skip=KindNetwork.
+func RequiresKindNetwork() any {
+	return framework.WithLabel("KindNetwork")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.
