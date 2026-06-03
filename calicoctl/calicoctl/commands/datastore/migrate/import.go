@@ -252,9 +252,9 @@ func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error
 						}
 					}
 				case "tiers":
-					// The built-in tiers (default, kube-admin, kube-baseline) are created
-					// automatically and can't be deleted, so they'll be present in any KDD
-					// target and shouldn't block an import.
+					// The protected built-in tiers (default, kube-admin, kube-baseline) are
+					// created automatically and can't be deleted, so they'll be present in any
+					// KDD target and shouldn't block an import.
 					objs, err := meta.ExtractList(resource)
 					if err != nil {
 						return fmt.Errorf("error extracting tiers for inspection: %w", err)
@@ -266,7 +266,7 @@ func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error
 							return fmt.Errorf("unable to convert Calico tier for inspection")
 						}
 
-						if !names.TierIsStatic(metaObj.GetObjectMeta().GetName()) {
+						if !names.TierIsProtected(metaObj.GetObjectMeta().GetName()) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}

@@ -4360,7 +4360,7 @@ var _ = testutils.E2eDatastoreDescribe("e2e validation tests", testutils.Datasto
 			// The built-in tiers (default, kube-admin, kube-baseline) can't be deleted,
 			// so Clean() leaves them in place between tests. A create that collides with
 			// one returns AlreadyExists, which still means validation admitted the spec.
-			if names.TierIsStatic(tierSpec.Name) && err != nil {
+			if names.TierIsProtected(tierSpec.Name) && err != nil {
 				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceAlreadyExists{}))
 			} else {
 				Expect(err).NotTo(HaveOccurred())
