@@ -197,6 +197,38 @@ EOF
     return 1
   fi
 
+  # VirtualMachine Ready means Azure provisioned the VM — NOT that the
+  # CustomScript extensions that install containerd (Linux) or configure
+  # OpenSSH / runtime (Windows) have finished. Without an explicit gate
+  # here, downstream scripts race the extension and time out 5+ minutes
+  # later inside the VM with no useful diagnostic.
+  log_info "Waiting for VM extensions to finish reconciling..."
+  local ext_resources=()
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-linux-${i}-containerd")
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-windows-${i}-openssh")
+    ext_resources+=("vm-windows-${i}-customextension")
+  done
+
+  local failed_exts=()
+  for ext in "${ext_resources[@]}"; do
+    if ! wait_for_aso_resource "virtualmachinesextension" "$ext" "aso" "$ASO_TIMEOUT_DEFAULT"; then
+      log_error "VirtualMachinesExtension $ext failed to become ready"
+      failed_exts+=("$ext")
+      ${KUBECTL} describe virtualmachinesextension "$ext" -n aso | tail -30
+    else
+      log_info "VirtualMachinesExtension $ext is ready"
+    fi
+  done
+
+  if [[ ${#failed_exts[@]} -gt 0 ]]; then
+    log_error "Failed VirtualMachinesExtension resources: ${failed_exts[*]}"
+    log_info "Use '${KUBECTL} describe virtualmachinesextension <name> -n aso' for more details"
+    return 1
+  fi
+
   log_info "All ASO v2 resources applied and reconciled successfully"
 }
 
@@ -693,6 +725,29 @@ function diagnose_aso_resources() {
       if ${KUBECTL} get virtualmachine $vm -n aso &>/dev/null; then
         echo "--- VirtualMachine: $vm ---"
         ${KUBECTL} get virtualmachine $vm -n aso -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
+      fi
+    done
+
+    # Per-extension health. The summary above only shows finalizers, which
+    # tells us the resources exist but NOT whether the CustomScript
+    # extensions on each VM actually finished (Ready/provisioningState).
+    # That's what we need to debug "containerd not ready" style timeouts.
+    log_info "Detailed VirtualMachinesExtension status:"
+    local ext_names=()
+    for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+      ext_names+=("vm-linux-${i}-containerd")
+    done
+    for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+      ext_names+=("vm-windows-${i}-openssh")
+      ext_names+=("vm-windows-${i}-customextension")
+    done
+    for ext in "${ext_names[@]}"; do
+      if ${KUBECTL} get virtualmachinesextension "$ext" -n aso &>/dev/null; then
+        echo "--- VirtualMachinesExtension: $ext ---"
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='{range .status.conditions[*]}  type={.type} status={.status} reason={.reason} message={.message}{"\n"}{end}' 2>/dev/null
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='  provisioningState={.status.provisioningState}{"\n"}' 2>/dev/null
       fi
     done
   else
