@@ -33,9 +33,14 @@ func SetMapSize(size int) {
 }
 
 const (
-	KeySize    = 4 + 4
-	ValueSize  = 4 + 2 + 2 + 2 + 3*2 + 8 + 4 + 4
-	MaxEntries = 2 * ifstate.MaxEntries
+	KeySize = 4 + 2 + 2
+	// IP family constants used in the QoS map key. Values match the IP
+	// version number to keep BPF-side debug output legible.
+	IPFamilyV4 uint16 = 4
+	IPFamilyV6 uint16 = 6
+	ValueSize         = 4 + 2 + 2 + 2 + 3*2 + 8 + 4 + 4
+	// 4 entries per interface: 2 directions × 2 IP families.
+	MaxEntries = 4 * ifstate.MaxEntries
 )
 
 var MapParams = maps.MapParameters{
@@ -45,7 +50,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_qos",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      2,
+	Version:      3,
 	UpdatedByBPF: true,
 }
 
@@ -53,13 +58,14 @@ func Map() maps.Map {
 	return maps.NewPinnedMap(MapParams)
 }
 
-type Key [8]byte
+type Key [KeySize]byte
 
-func NewKey(ifIndex uint32, ingress uint32) Key {
+func NewKey(ifIndex uint32, ingress, family uint16) Key {
 	var k Key
 
 	binary.LittleEndian.PutUint32(k[:4], ifIndex)
-	binary.LittleEndian.PutUint32(k[4:], ingress)
+	binary.LittleEndian.PutUint16(k[4:6], ingress)
+	binary.LittleEndian.PutUint16(k[6:8], family)
 
 	return k
 }
@@ -72,12 +78,16 @@ func (k Key) IfIndex() uint32 {
 	return binary.LittleEndian.Uint32(k[:4])
 }
 
-func (k Key) Ingress() uint32 {
-	return binary.LittleEndian.Uint32(k[4:])
+func (k Key) Ingress() uint16 {
+	return binary.LittleEndian.Uint16(k[4:6])
+}
+
+func (k Key) Family() uint16 {
+	return binary.LittleEndian.Uint16(k[6:8])
 }
 
 func (k Key) String() string {
-	return fmt.Sprintf("{ifIndex: %d, ingress: %d}", k.IfIndex(), k.Ingress())
+	return fmt.Sprintf("{ifIndex: %d, ingress: %d, family: %d}", k.IfIndex(), k.Ingress(), k.Family())
 }
 
 func KeyFromBytes(b []byte) Key {

@@ -12,7 +12,8 @@
 
 struct calico_qos_key {
 	__u32 ifindex;
-	__u32 ingress; // 0=egress; 1=ingress;
+	__u16 ingress; // 0=egress; 1=ingress;
+	__u16 family;  // 4=IPv4, 6=IPv6
 };
 
 struct calico_qos_val {
@@ -29,11 +30,13 @@ struct calico_qos_val {
 	__u32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
 };
 
-// 2*IFACE_STATE_MAP_SIZE because it will potentially have 2 entries for each interface (ingress/egress)
-CALI_MAP(cali_qos, 2,
+// 4*IFACE_STATE_MAP_SIZE: up to 2 entries (ingress/egress) per interface and
+// per IP family (v4/v6). v4 and v6 traffic count against separate counters,
+// matching the per-family rule semantics of iptables and nftables modes.
+CALI_MAP(cali_qos, 3,
 		BPF_MAP_TYPE_HASH,
 		struct calico_qos_key, struct calico_qos_val,
-		2*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
+		4*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 {
@@ -60,6 +63,11 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 		.ingress = 1,
 #else // CALI_F_EGRESS
 		.ingress = 0,
+#endif
+#ifdef IPVER6
+		.family = 6,
+#else
+		.family = 4,
 #endif
 	};
 	if (!(qos = cali_qos_lookup_elem(&key))) {
@@ -171,6 +179,11 @@ static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx 
 #else // CALI_F_EGRESS
 		.ingress = 0,
 #endif
+#ifdef IPVER6
+		.family = 6,
+#else
+		.family = 4,
+#endif
 	};
 
 	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
@@ -200,17 +213,20 @@ static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx 
 }
 
 /* qos_connlimit_decrement decrements the connection limit counter for the
- * given interface and direction. Called when a TCP connection closes (both FINs
- * seen or RST) and from the cleanup program when a counted CT entry expires.
- * Takes an explicit ifindex+direction because the decrement may run from any
- * BPF program (from_hep, from_wep, conntrack_cleanup, ...), not just the pod's
- * own WEP program.
+ * given interface, direction, and IP family. Called when a TCP connection
+ * closes (both FINs seen or RST) and from the cleanup program when a counted
+ * CT entry expires. Takes an explicit ifindex+direction+family because the
+ * decrement may run from any BPF program (from_hep, from_wep,
+ * conntrack_cleanup, ...), not just the pod's own WEP program. Family is
+ * compile-time-known at every call site (the BPF programs are family-typed
+ * via the IPVER6 macro), so callers pass it as a literal.
  */
-static CALI_BPF_INLINE void qos_connlimit_decrement(__u32 ifindex, __u32 direction)
+static CALI_BPF_INLINE void qos_connlimit_decrement(__u32 ifindex, __u16 direction, __u16 family)
 {
 	struct calico_qos_key key = {
 		.ifindex = ifindex,
 		.ingress = direction,
+		.family = family,
 	};
 
 	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);

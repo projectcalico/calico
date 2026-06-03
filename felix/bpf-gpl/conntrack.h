@@ -599,6 +599,15 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	/* Skip the ingress decrement if the entry was rejected by the
 	 * ingress limit check.
 	 */
+	/* CT entries are family-typed (v4 BPF programs only see v4 CT entries,
+	 * v6 only sees v6), so the family is known at compile time via IPVER6.
+	 */
+#ifdef IPVER6
+	const __u16 family = 6;
+#else
+	const __u16 family = 4;
+#endif
+
 	if ((cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) &&
 			!(cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED)) {
 		/* Ingress: pod is the responder (non-opener). */
@@ -606,7 +615,7 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 			? v->b_to_a.ifindex
 			: v->a_to_b.ifindex;
 		if (pod_ifindex != CT_INVALID_IFINDEX) {
-			qos_connlimit_decrement(pod_ifindex, 1);
+			qos_connlimit_decrement(pod_ifindex, 1, family);
 		}
 	}
 	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
@@ -615,7 +624,7 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 			? v->a_to_b.ifindex
 			: v->b_to_a.ifindex;
 		if (pod_ifindex != CT_INVALID_IFINDEX) {
-			qos_connlimit_decrement(pod_ifindex, 0);
+			qos_connlimit_decrement(pod_ifindex, 0, family);
 		}
 	}
 }

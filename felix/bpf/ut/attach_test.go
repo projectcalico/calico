@@ -875,7 +875,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 
 	// Verify that QoS map state is correctly created
 	qosMap := commonMaps.QoSMap
-	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1)
+	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1, qos.IPFamilyV4)
 	qosValBytes1, err := qosMap.Get(qosKey1.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal1 := qos.ValueFromBytes(qosValBytes1)
@@ -884,7 +884,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(qosVal1.PacketRateTokens()).To(Equal(int16(-1)))
 	Expect(qosVal1.PacketRateLastUpdate()).To(Equal(uint64(0)))
 
-	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0)
+	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0, qos.IPFamilyV4)
 	qosValBytes2, err := qosMap.Get(qosKey2.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal2 := qos.ValueFromBytes(qosValBytes2)

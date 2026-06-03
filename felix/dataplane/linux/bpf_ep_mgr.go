@@ -2833,49 +2833,55 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 				ap.IngressConnLimitConfigured = true
 			}
 
-			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
-				return state, err
-			}
-			existing := qos.ValueFromBytes(qosValBytes)
+			// One entry per IP family — v4 and v6 traffic count against
+			// independent counters, matching iptables/nftables.
+			for _, family := range m.qosFamilies() {
+				qosKey := qos.NewKey(uint32(ifindex), 1, family) // ingress=1
+				qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
+					return state, err
+				}
+				existing := qos.ValueFromBytes(qosValBytes)
 
-			// Packet rate fields
-			var qosPacketRate, qosPacketBurst, qosTokens int16
-			var qosLastUpdate uint64
-			if hasIngressPR {
-				qosPacketRate = existing.PacketRate()
-				qosPacketBurst = existing.PacketBurst()
-				qosTokens = existing.PacketRateTokens()
-				qosLastUpdate = existing.PacketRateLastUpdate()
-				// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
-				if existing.PacketRate() != int16(wep.QosControls.IngressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
-					qosPacketRate = int16(wep.QosControls.IngressPacketRate)
-					qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
-					qosTokens = int16(-1)
-					qosLastUpdate = uint64(0)
+				// Packet rate fields
+				var qosPacketRate, qosPacketBurst, qosTokens int16
+				var qosLastUpdate uint64
+				if hasIngressPR {
+					qosPacketRate = existing.PacketRate()
+					qosPacketBurst = existing.PacketBurst()
+					qosTokens = existing.PacketRateTokens()
+					qosLastUpdate = existing.PacketRateLastUpdate()
+					// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
+					if existing.PacketRate() != int16(wep.QosControls.IngressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
+						qosPacketRate = int16(wep.QosControls.IngressPacketRate)
+						qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
+						qosTokens = int16(-1)
+						qosLastUpdate = uint64(0)
+					}
+				}
+
+				// Connection limit fields
+				var maxConnections, currentCount uint32
+				if hasIngressCL {
+					maxConnections = uint32(wep.QosControls.IngressMaxConnections)
+					currentCount = existing.CurrentCount() // preserve per-family current count
+				}
+
+				qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
+				if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating ingress entry in QoS map.")
+					return state, fmt.Errorf("failed to update QoS map. err=%w", err)
 				}
 			}
-
-			// Connection limit fields
-			var maxConnections, currentCount uint32
-			if hasIngressCL {
-				maxConnections = uint32(wep.QosControls.IngressMaxConnections)
-				currentCount = existing.CurrentCount() // preserve current count
-			}
-
-			qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
-			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating ingress entry in QoS map.")
-				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
-			}
 		} else {
-			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-			err = m.QoSMap.Delete(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
-				return state, err
+			for _, family := range m.qosFamilies() {
+				qosKey := qos.NewKey(uint32(ifindex), 1, family) // ingress=1
+				err = m.QoSMap.Delete(qosKey.AsBytes())
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing ingress entry from QoS map.")
+					return state, err
+				}
 			}
 		}
 
@@ -2890,64 +2896,70 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 				ap.EgressConnLimitConfigured = true
 			}
 
-			qosKey := qos.NewKey(uint32(ifindex), 0) // egress=0
-			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving egress entry from QoS map.")
-				return state, err
-			}
-			existing := qos.ValueFromBytes(qosValBytes)
+			for _, family := range m.qosFamilies() {
+				qosKey := qos.NewKey(uint32(ifindex), 0, family) // egress=0
+				qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error retrieving egress entry from QoS map.")
+					return state, err
+				}
+				existing := qos.ValueFromBytes(qosValBytes)
 
-			// Packet rate fields
-			var qosPacketRate, qosPacketBurst, qosTokens int16
-			var qosLastUpdate uint64
-			if hasEgressPR {
-				qosPacketRate = existing.PacketRate()
-				qosPacketBurst = existing.PacketBurst()
-				qosTokens = existing.PacketRateTokens()
-				qosLastUpdate = existing.PacketRateLastUpdate()
-				// Reset state if config changed
-				if existing.PacketRate() != int16(wep.QosControls.EgressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
-					qosPacketRate = int16(wep.QosControls.EgressPacketRate)
-					qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
-					qosTokens = int16(-1)
-					qosLastUpdate = uint64(0)
+				// Packet rate fields
+				var qosPacketRate, qosPacketBurst, qosTokens int16
+				var qosLastUpdate uint64
+				if hasEgressPR {
+					qosPacketRate = existing.PacketRate()
+					qosPacketBurst = existing.PacketBurst()
+					qosTokens = existing.PacketRateTokens()
+					qosLastUpdate = existing.PacketRateLastUpdate()
+					// Reset state if config changed
+					if existing.PacketRate() != int16(wep.QosControls.EgressPacketRate) || existing.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
+						qosPacketRate = int16(wep.QosControls.EgressPacketRate)
+						qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
+						qosTokens = int16(-1)
+						qosLastUpdate = uint64(0)
+					}
+				}
+
+				// Connection limit fields
+				var maxConnections, currentCount uint32
+				if hasEgressCL {
+					maxConnections = uint32(wep.QosControls.EgressMaxConnections)
+					currentCount = existing.CurrentCount() // preserve per-family current count
+				}
+
+				qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
+				if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating egress entry in QoS map.")
+					return state, fmt.Errorf("failed to update QoS map. err=%w", err)
 				}
 			}
-
-			// Connection limit fields
-			var maxConnections, currentCount uint32
-			if hasEgressCL {
-				maxConnections = uint32(wep.QosControls.EgressMaxConnections)
-				currentCount = existing.CurrentCount() // preserve current count
-			}
-
-			qosVal := qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate, maxConnections, currentCount)
-			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating egress entry in QoS map.")
-				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
-			}
 		} else {
-			qosKey := qos.NewKey(uint32(ifindex), 0) // egress=0
-			err = m.QoSMap.Delete(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
-				return state, err
+			for _, family := range m.qosFamilies() {
+				qosKey := qos.NewKey(uint32(ifindex), 0, family) // egress=0
+				err = m.QoSMap.Delete(qosKey.AsBytes())
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing egress entry from QoS map.")
+					return state, err
+				}
 			}
 		}
 	} else {
 		// Either the workload endpoint or QoSControls were removed, clean up both ingress and egress state from map
-		qosIngressKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-		err = m.QoSMap.Delete(qosIngressKey.AsBytes())
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
-			return state, err
-		}
-		qosEgressKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
-		err = m.QoSMap.Delete(qosEgressKey.AsBytes())
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
-			return state, err
+		for _, family := range m.qosFamilies() {
+			qosIngressKey := qos.NewKey(uint32(ifindex), 1, family) // ingress=1
+			err = m.QoSMap.Delete(qosIngressKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing ingress entry from QoS map.")
+				return state, err
+			}
+			qosEgressKey := qos.NewKey(uint32(ifindex), 0, family) // egress=0
+			err = m.QoSMap.Delete(qosEgressKey.AsBytes())
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing egress entry from QoS map.")
+				return state, err
+			}
 		}
 	}
 
@@ -4390,18 +4402,20 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
 	}
 
-	// Clean up QoS map
-	qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1) // ingress=1
-	qosErr := m.QoSMap.Delete(qosIngressKey.AsBytes())
-	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
-		err = qosErr
-		logrus.WithError(err).Warn("QoS map may leak.")
-	}
-	qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0) // ingress=0
-	qosErr = m.QoSMap.Delete(qosEgressKey.AsBytes())
-	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
-		err = qosErr
-		logrus.WithError(err).Warn("QoS map may leak.")
+	// Clean up QoS map: one entry per (direction, family) combination.
+	for _, family := range m.qosFamilies() {
+		qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1, family) // ingress=1
+		qosErr := m.QoSMap.Delete(qosIngressKey.AsBytes())
+		if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
+			err = qosErr
+			logrus.WithField("family", family).WithError(err).Warn("QoS map may leak.")
+		}
+		qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0, family) // egress=0
+		qosErr = m.QoSMap.Delete(qosEgressKey.AsBytes())
+		if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
+			err = qosErr
+			logrus.WithField("family", family).WithError(err).Warn("QoS map may leak.")
+		}
 	}
 
 	return err
@@ -5728,6 +5742,18 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 			"stack":     pa.freeStack,
 		}).Panic("Free set and free stack got out of sync")
 	}
+}
+
+// qosFamilies returns the IP families for which we program QoS map entries,
+// matching the set of enabled BPF dataplane programs. v4 is always present;
+// v6 is added when BPF IPv6 is enabled. The cali_qos map key carries the
+// family so v4 and v6 traffic count against independent connlimit (and
+// packet-rate) budgets, mirroring iptables/nftables per-family rules.
+func (m *bpfEndpointManager) qosFamilies() []uint16 {
+	if m.ipv6Enabled {
+		return []uint16{qos.IPFamilyV4, qos.IPFamilyV6}
+	}
+	return []uint16{qos.IPFamilyV4}
 }
 
 // GetConnLimitedPodInfo returns a snapshot of pod IPs to their connection
