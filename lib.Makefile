@@ -1730,7 +1730,7 @@ MISSING-IMAGE:
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/node/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,node)
+    $(LIBBPF_MARKER) $(call local-deps-go-files,node) $(call local-deps-go-files,cmd)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/node image
 	echo "node:latest-$(ARCH)" > $@
