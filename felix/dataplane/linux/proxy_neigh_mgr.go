@@ -739,8 +739,8 @@ func (m *proxyNeighManager) isMatchingIPVersion(ipStr string) bool {
 }
 
 func isNoEncapPool(pool *proto.IPAMPool) bool {
-	return (pool.IpipMode == "" || v3.IPIPMode(pool.IpipMode) == v3.IPIPModeNever) &&
-		(pool.VxlanMode == "" || v3.VXLANMode(pool.VxlanMode) == v3.VXLANModeNever)
+	return (v3.IPIPMode(pool.IpipMode) == v3.IPIPModeNever || v3.IPIPMode(pool.IpipMode) == v3.IPIPModeNever) &&
+		(v3.VXLANMode(pool.VxlanMode) == v3.VXLANModeNever || v3.VXLANMode(pool.VxlanMode) == v3.VXLANModeNever)
 }
 
 func (m *proxyNeighManager) isInNoEncapPool(ip net.IP) bool {
