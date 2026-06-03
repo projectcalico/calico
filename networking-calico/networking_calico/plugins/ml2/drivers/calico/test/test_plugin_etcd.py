@@ -374,6 +374,11 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # This value needs to be a string:
         lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
 
+        # _check_mysql_driver() reads this at start of day to validate the
+        # SQLAlchemy driver.  Without a concrete value here, the default
+        # MagicMock would let the prefix check false-positive on "mysql:".
+        lib.m_oslo_config.cfg.CONF.database.connection = None
+
         self.sg_default_key_v3 = (
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + self.namespace
