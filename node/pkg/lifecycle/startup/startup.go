@@ -1415,10 +1415,17 @@ func ensureDefaultIPAMConfigExists(ctx context.Context, c client.Interface) erro
 	// admission path, not on a direct client Create.
 	newIPAMConf := api.NewIPAMConfiguration()
 	newIPAMConf.Name = globalIPAMConfigName
-	newIPAMConf.Spec.StrictAffinity = false
 	newIPAMConf.Spec.AutoAllocateBlocks = true
 	newIPAMConf.Spec.MaxBlocksPerHost = 0
 	newIPAMConf.Spec.KubeVirtVMAddressPersistence = ptr.To(api.VMAddressPersistenceEnabled)
+
+	// Leave StrictAffinity disabled, matching the previous default. Windows
+	// nodes require it enabled, but it's a single global setting and Windows
+	// clusters are usually mixed with Linux, so we can't pick the right value
+	// from one node at startup without racing the others. Windows clusters
+	// enable it explicitly via "calicoctl ipam configure", and GetIPAMConfig
+	// enforces it for Windows nodes.
+	newIPAMConf.Spec.StrictAffinity = false
 	_, err = c.IPAMConfiguration().Create(ctx, newIPAMConf, options.SetOptions{})
 	if err != nil {
 		if conflict, exists := err.(cerrors.ErrorResourceAlreadyExists); exists {
