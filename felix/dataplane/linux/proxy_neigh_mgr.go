@@ -354,10 +354,10 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
 	desiredByIface := m.buildDesiredState()
-	startErr := m.reconcileListeners(desiredByIface)
+	err := m.reconcileListeners(desiredByIface)
 	m.publishDesiredIPs(desiredByIface)
 
-	return startErr
+	return err
 }
 
 // buildDesiredState computes which IPs each host interface should answer for:
@@ -406,15 +406,14 @@ func (m *proxyNeighManager) buildDesiredState() map[string]set.Set[string] {
 // state. On a start failure it re-marks the manager dirty (so the next
 // CompleteDeferredWork retries) and returns the error.
 func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
-	var startErr error
+	var err error
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
-			if err := m.startListener(ifaceName); err != nil {
+			if err = m.startListener(ifaceName); err != nil {
 				logrus.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
 				// Re-mark dirty so the next CompleteDeferredWork retries,
 				// and remember the error to surface it to the dataplane loop.
 				m.dirty = true
-				startErr = err
 			}
 		}
 	}
@@ -424,7 +423,7 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 			delete(m.listeners, ifaceName)
 		}
 	}
-	return startErr
+	return err
 }
 
 // publishDesiredIPs atomically swaps each listener's desired IP set and sends a
@@ -504,10 +503,16 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 func (m *proxyNeighManager) stopListener(l *ifaceListener) {
 	l.cancel()
 	if l.arpCli != nil {
-		_ = l.arpCli.Close()
+		err := l.arpCli.Close()
+		if err != nil {
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to close ARP client")
+		}
 	}
 	if l.ndpCli != nil {
-		_ = l.ndpCli.Close()
+		err := l.ndpCli.Close()
+		if err != nil {
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to close NDP client")
+		}
 	}
 	<-l.done
 	logrus.WithField("iface", l.ifaceName).Info("Stopped proxy neighbor listener")
@@ -519,7 +524,10 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		_ = l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
+		err := l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
+		if err != nil {
+			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set ARP read deadline")
+		}
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
@@ -555,7 +563,10 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 	defer close(l.done)
 
 	for {
-		_ = l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
+		err := l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval))
+		if err != nil {
+			logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to set NDP read deadline")
+		}
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
