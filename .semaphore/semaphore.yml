@@ -4377,6 +4377,7 @@ blocks:
         '/crypto/pkg/tls/*.go',
         '/e2e/cmd/k8s/*.go',
         '/e2e/images/rapidclient/*.go',
+        '/e2e/pkg/',
         '/felix/**',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',

@@ -76,7 +76,14 @@ var features = map[string]bool{
 	"Datapath":        true,
 	"Istio":           true,
 	"KubeVirt":        true,
-	"KubeVirt-KIND":   true,
+}
+
+// RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
+// actual QEMU-backed VMs. Tests with this label require a guest OS that boots
+// and runs services (e.g., TCP servers via cloud-init) and cannot run against
+// MockVirt/simulated KubeVirt on KIND clusters.
+func RequiresRealKubeVirt() any {
+	return framework.WithLabel("RequiresRealKubeVirt")
 }
 
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
