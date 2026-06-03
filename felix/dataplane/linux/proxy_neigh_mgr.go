@@ -401,6 +401,22 @@ func (m *proxyNeighManager) buildDesiredState() map[string]set.Set[string] {
 	return desiredByIface
 }
 
+// addMatchingIPs adds the IP to the desired set for every host interface whose subnet
+// contains it.
+func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[string], ip net.IP) {
+	for ifaceName, cidrs := range m.hostIfaceToCIDRs {
+		for _, cidr := range cidrs {
+			if cidr.Contains(ip) {
+				if desiredByIface[ifaceName] == nil {
+					desiredByIface[ifaceName] = set.New[string]()
+				}
+				desiredByIface[ifaceName].Add(ip.String())
+				break
+			}
+		}
+	}
+}
+
 // reconcileListeners starts a listener for each interface that newly needs one
 // and stops listeners for interfaces that no longer appear in the desired
 // state. On a start failure it re-marks the manager dirty (so the next
@@ -442,22 +458,6 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
 				m.sendGARP(l, ip)
-			}
-		}
-	}
-}
-
-// addMatchingIPs adds the IP to the desired set for every host interface whose subnet
-// contains it.
-func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[string], ip net.IP) {
-	for ifaceName, cidrs := range m.hostIfaceToCIDRs {
-		for _, cidr := range cidrs {
-			if cidr.Contains(ip) {
-				if desiredByIface[ifaceName] == nil {
-					desiredByIface[ifaceName] = set.New[string]()
-				}
-				desiredByIface[ifaceName].Add(ip.String())
-				break
 			}
 		}
 	}
