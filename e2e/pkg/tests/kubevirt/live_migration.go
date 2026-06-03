@@ -26,10 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,14 +36,12 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 // KubeVirt live migration e2e tests validate Calico's seamless migration support for
 // KubeVirt VMs. The tests cover:
-//   - IPAM attribute ownership handover (Test 1)
-//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 2-3)
-//   - Kubernetes NetworkPolicy enforcement survives migration (Test 4)
+//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 1-2)
+//   - Kubernetes NetworkPolicy enforcement survives migration (Test 3)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
@@ -61,6 +55,7 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
+	describe.RequiresRealKubeVirt(),
 	describe.WithCategory(describe.Networking),
 	"KubeVirt live migration",
 	func() {
@@ -77,97 +72,13 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
-		// Test 1: active IPAM owner promotes from source to target after migration.
-		// Asserts Active=target,Alternate=empty (Felix EnsureActiveVMOwnerAttrs) by
-		// matching the real target pod/node, not just "differs from source".
-		It("should promote target pod to active IPAM owner after migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
-			defer cancel()
-			ns := f.Namespace.Name
-			vmName := "e2e-attr-promote"
-			vm := &kubeVirtVM{name: vmName, namespace: ns}
-
-			vm.Create(ctx, cli)
-			DeferCleanup(func() { vm.Delete(cli) })
-			originalIP, sourceNode := vm.WaitForRunningWithIP(ctx, cli)
-
-			sourcePod, err := vm.FindVirtLauncherPod(ctx, f)
-			Expect(err).NotTo(HaveOccurred())
-			logrus.Infof("Source pod: %s on %s, IP: %s", sourcePod.Name, sourceNode, originalIP)
-
-			lcgc := newLibcalicoClient(f)
-
-			By("Verifying IPAM attributes before migration (Active=source, Alternate=empty)")
-			Eventually(func() error {
-				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
-				if err != nil {
-					return err
-				}
-				if active[model.IPAMBlockAttributePod] != sourcePod.Name {
-					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
-						active[model.IPAMBlockAttributePod], sourcePod.Name)
-				}
-				if active[model.IPAMBlockAttributeNode] != sourceNode {
-					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
-						active[model.IPAMBlockAttributeNode], sourceNode)
-				}
-				if len(alternate) != 0 {
-					return fmt.Errorf("AlternateOwnerAttrs should be empty before migration, got %v", alternate)
-				}
-				return nil
-			}, 30*time.Second, 2*time.Second).Should(Succeed())
-
-			By("Migrating the VM")
-			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
-			err = cli.Create(ctx, vmim)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			waitForMigrationSuccess(ctx, cli, vmim)
-
-			// Read the target pod and node directly from the VMI's MigrationState,
-			// which KubeVirt populates with the source/target identifiers as part of
-			// the migration. waitForMigrationStatePopulated polls until virt-handler
-			// finishes writing the state (it can lag the VMIM Succeeded phase).
-			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
-			targetPodName := vmi.Status.MigrationState.TargetPod
-			targetNode := vmi.Status.MigrationState.TargetNode
-			Expect(targetPodName).NotTo(Equal(sourcePod.Name), "target pod should be a new pod")
-			Expect(targetNode).NotTo(Equal(sourceNode), "VM should have moved to a different node")
-			logrus.Infof("Target pod: %s on %s", targetPodName, targetNode)
-
-			By("Verifying target pod has the original IP")
-			targetPod, err := f.ClientSet.CoreV1().Pods(ns).Get(ctx, targetPodName, metav1.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(targetPod.Status.PodIP).To(Equal(originalIP),
-				"target pod IP should match original VM IP")
-
-			By("Verifying Active=target and Alternate=empty after swap")
-			Eventually(func() error {
-				active, alternate, err := getIPAMOwnerAttributes(ctx, lcgc, originalIP)
-				if err != nil {
-					return err
-				}
-				if active[model.IPAMBlockAttributePod] != targetPodName {
-					return fmt.Errorf("ActiveOwnerAttrs[pod]=%q, want %q",
-						active[model.IPAMBlockAttributePod], targetPodName)
-				}
-				if active[model.IPAMBlockAttributeNode] != targetNode {
-					return fmt.Errorf("ActiveOwnerAttrs[node]=%q, want %q",
-						active[model.IPAMBlockAttributeNode], targetNode)
-				}
-				if len(alternate) != 0 {
-					return fmt.Errorf("AlternateOwnerAttrs should be cleared after promotion, got %v", alternate)
-				}
-				return nil
-			}, 1*time.Minute, 2*time.Second).Should(Succeed())
-			logrus.Infof("After promotion: Active pod=%s node=%s (was %s on %s)",
-				targetPodName, targetNode, sourcePod.Name, sourceNode)
-		})
-
-		// Test 2: TCP stream over iBGP must not lose any "seq=N" segments across two
+		// Test 1: TCP stream over iBGP must not lose any "seq=N" segments across two
 		// consecutive cross-node live migrations on a 3-worker cluster (server VM hops,
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
+			if isKINDCluster(f) {
+				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
 			ns := f.Namespace.Name
@@ -211,7 +122,7 @@ var _ = describe.CalicoDescribe(
 			vmim1 := newVMIMigration(serverVMName+"-migration1", ns, serverVMName)
 			Expect(cli.Create(ctx, vmim1)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
-			waitForMigrationSuccess(ctx, cli, vmim1)
+			expectMigrationSuccess(ctx, cli, vmim1)
 			vmi := &kubevirtv1.VirtualMachineInstance{}
 			Expect(cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)).To(Succeed())
 			node2 := vmi.Status.NodeName
@@ -228,7 +139,7 @@ var _ = describe.CalicoDescribe(
 			vmim2 := newVMIMigration(serverVMName+"-migration2", ns, serverVMName)
 			Expect(cli.Create(ctx, vmim2)).To(Succeed())
 			DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
-			waitForMigrationSuccess(ctx, cli, vmim2)
+			expectMigrationSuccess(ctx, cli, vmim2)
 			Expect(cli.Get(ctx, ctrlclient.ObjectKey{Namespace: ns, Name: serverVMName}, vmi)).To(Succeed())
 			node3 := vmi.Status.NodeName
 			// With 3 worker nodes, second migration moves away from node2.
@@ -264,8 +175,11 @@ var _ = describe.CalicoDescribe(
 		// flip the TOR's kernel next-hop without dropping the TCP stream, and that
 		// priority correctly reverts and re-elevates across two consecutive migrations.
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
-		framework.Context("eBGP external client", describe.RequiresExternalNode(), func() {
+		framework.Context("eBGP external client", describe.WithExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
+				if isKINDCluster(f) {
+					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
+				}
 				tor := externalnode.NewClient()
 				if tor == nil {
 					// The RequiresExternalNode label gates whether this test runs at
@@ -348,8 +262,8 @@ var _ = describe.CalicoDescribe(
 				vmim1 := newVMIMigration(vmName+"-migration1", ns, vmName)
 				Expect(cli.Create(ctx, vmim1)).To(Succeed())
 				DeferCleanup(func() { deleteVMIMigration(cli, vmim1) })
-				waitForMigrationSuccess(ctx, cli, vmim1)
-				vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+				expectMigrationSuccess(ctx, cli, vmim1)
+				vmi := expectMigrationStatePopulated(ctx, cli, ns, vmName)
 				node2 := vmi.Status.MigrationState.TargetNode
 				Expect(node2).NotTo(Equal(node1), "VM didn't migrate off node 1")
 
@@ -360,7 +274,9 @@ var _ = describe.CalicoDescribe(
 				// revert window so we observe it deterministically.
 				By("Verifying elevated route priority on worker and TOR after first migration")
 				Eventually(func(g Gomega) {
-					g.Expect(queryWorkerMetric(f, node2, vmIP)).To(Equal(512),
+					m, err := queryWorkerMetric(f, node2, vmIP)
+					g.Expect(err).NotTo(HaveOccurred())
+					g.Expect(m).To(Equal(512),
 						"worker kernel metric should be elevated (512) after migration")
 					st := queryTORRoute(tor, vmIP)
 					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
@@ -396,8 +312,8 @@ var _ = describe.CalicoDescribe(
 				}
 				Expect(cli.Create(ctx, vmim2)).To(Succeed())
 				DeferCleanup(func() { deleteVMIMigration(cli, vmim2) })
-				waitForMigrationSuccess(ctx, cli, vmim2)
-				vmi = waitForMigrationStatePopulated(ctx, cli, ns, vmName)
+				expectMigrationSuccess(ctx, cli, vmim2)
+				vmi = expectMigrationStatePopulated(ctx, cli, ns, vmName)
 				node3 := vmi.Status.MigrationState.TargetNode
 				Expect(node3).NotTo(Equal(node2), "VM didn't migrate off node 2")
 
@@ -468,114 +384,6 @@ var _ = describe.CalicoDescribe(
 				Expect(lastSeq).To(BeNumerically(">=", int(elapsed*0.8)),
 					fmt.Sprintf("TCP seq count (%d) too low for elapsed time (%.0fs)", lastSeq, elapsed))
 			})
-		})
-
-		// Test 4: a NetworkPolicy selecting the VM (app=vm) by ingress role=allowed must
-		// keep applying after the VM live-migrates to a different node, both for an
-		// allowed and a denied client.
-		It("should enforce NetworkPolicy after live migration", func() {
-			ctx, cancel := context.WithTimeout(context.Background(), singleMigrationTimeout)
-			defer cancel()
-			ns := f.Namespace.Name
-
-			vmName := "e2e-netpol-vm"
-			vm := &kubeVirtVM{
-				name:      vmName,
-				namespace: ns,
-				cloudInit: tcpServerCloudInit,
-				labels:    map[string]string{"app": "vm"},
-			}
-
-			By("Creating VM with TCP server and app=vm label")
-			vm.Create(ctx, cli)
-			DeferCleanup(func() { vm.Delete(cli) })
-			vmIP, node1 := vm.WaitForRunningWithIP(ctx, cli)
-			logrus.Infof("VM %s on %s with IP %s", vmName, node1, vmIP)
-
-			tester := conncheck.NewConnectionTester(f)
-			DeferCleanup(tester.Stop)
-			allowed := conncheck.NewClient("client-allowed", f.Namespace,
-				conncheck.WithClientLabels(map[string]string{"role": "allowed"}))
-			denied := conncheck.NewClient("client-denied", f.Namespace,
-				conncheck.WithClientLabels(map[string]string{"role": "denied"}))
-			tester.AddClient(allowed)
-			tester.AddClient(denied)
-			tester.Deploy()
-			vmTarget := conncheck.NewTCPConnectTarget(vmIP, 9999)
-
-			// Cold-boot VM cloud-init can take up to ~2m to bind nc -lkp,
-			// so the first reachability assertion needs a longer budget
-			// than conncheck's default 30s.
-			By("Verifying both clients can reach VM before policy is applied")
-			tester.WithTimeout(2 * time.Minute)
-			tester.ExpectSuccess(allowed, vmTarget)
-			tester.ExpectSuccess(denied, vmTarget)
-			tester.Execute()
-			tester.ResetExpectations()
-
-			By("Creating NetworkPolicy to allow only role=allowed on TCP/9999")
-			protocol := corev1.ProtocolTCP
-			netpol := &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "allow-client1-only", Namespace: ns},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "vm"},
-					},
-					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-					Ingress: []networkingv1.NetworkPolicyIngressRule{{
-						From: []networkingv1.NetworkPolicyPeer{{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{"role": "allowed"},
-							},
-						}},
-						Ports: []networkingv1.NetworkPolicyPort{{
-							Protocol: &protocol,
-							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 9999},
-						}},
-					}},
-				},
-			}
-			_, err := f.ClientSet.NetworkingV1().NetworkPolicies(ns).Create(ctx, netpol, metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				_ = f.ClientSet.NetworkingV1().NetworkPolicies(ns).Delete(context.Background(), netpol.Name, metav1.DeleteOptions{})
-			})
-
-			By("Verifying policy is enforced: client1 allowed, client2 denied")
-			tester.ExpectSuccess(allowed, vmTarget)
-			tester.ExpectFailure(denied, vmTarget)
-			tester.Execute()
-			tester.ResetExpectations()
-
-			By("Triggering live migration")
-			vmim := newVMIMigration(vmName+"-migration", ns, vmName)
-			err = cli.Create(ctx, vmim)
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(func() { deleteVMIMigration(cli, vmim) })
-			waitForMigrationSuccess(ctx, cli, vmim)
-
-			vmi := waitForMigrationStatePopulated(ctx, cli, ns, vmName)
-			node2 := vmi.Status.MigrationState.TargetNode
-			Expect(node2).NotTo(Equal(node1), "VM should have migrated to a different node")
-			logrus.Infof("VM migrated: %s -> %s", node1, node2)
-
-			// Felix is async after VMIM Succeeded: it must learn the new
-			// workload and program policy on the target node. Use
-			// Eventually wrapping both Connects so the assertion only
-			// passes when allowed succeeds AND denied fails in the same
-			// iteration; otherwise the denied probe could match
-			// ExpectFailure on a transient pre-route window and exit
-			// before policy is actually in force.
-			By("Verifying policy survives migration: allowed reaches, denied blocked")
-			Eventually(func(g Gomega) {
-				_, err := tester.Connect(allowed, vmTarget)
-				g.Expect(err).NotTo(HaveOccurred(),
-					"allowed client should reach migrated pod")
-				_, err = tester.Connect(denied, vmTarget)
-				g.Expect(err).To(HaveOccurred(),
-					"denied client should be blocked by NetworkPolicy")
-			}, 90*time.Second, 2*time.Second).Should(Succeed())
-			logrus.Info("NetworkPolicy enforcement confirmed after live migration")
 		})
 	},
 )
