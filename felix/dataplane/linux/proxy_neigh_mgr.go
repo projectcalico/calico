@@ -725,7 +725,11 @@ func (m *proxyNeighManager) sendGARPV6(l *ifaceListener, addr netip.Addr) {
 // exactly one live node, spreading VIPs evenly across the cluster.
 func (m *proxyNeighManager) selectNodeForIP(ipStr string) bool {
 	owner, ok := m.nodeRing.Lookup(ipStr)
-	return ok && owner == m.hostname
+	selected := ok && owner == m.hostname
+	if selected {
+		logrus.WithField("ip", ipStr).Debug("This node owns the LoadBalancer IP")
+	}
+	return selected
 }
 
 func (m *proxyNeighManager) isMatchingIPVersion(ipStr string) bool {
