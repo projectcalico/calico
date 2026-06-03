@@ -59,17 +59,17 @@ type serviceID struct {
 // arpClient abstracts the mdlayher/arp.Client for testing.
 type arpClient interface {
 	Read() (*arp.Packet, *ethernet.Frame, error)
-	Reply(req *arp.Packet, hwAddr net.HardwareAddr, ip netip.Addr) error
-	WriteTo(p *arp.Packet, addr net.HardwareAddr) error
-	SetReadDeadline(t time.Time) error
+	Reply(*arp.Packet, net.HardwareAddr, netip.Addr) error
+	WriteTo(*arp.Packet, net.HardwareAddr) error
+	SetReadDeadline(time.Time) error
 	Close() error
 }
 
 // ndpConn abstracts the mdlayher/ndp.Conn for testing.
 type ndpConn interface {
 	ReadFrom() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error)
-	WriteTo(m ndp.Message, cm *ipv6.ControlMessage, dst netip.Addr) error
-	SetReadDeadline(t time.Time) error
+	WriteTo(ndp.Message, *ipv6.ControlMessage, netip.Addr) error
+	SetReadDeadline(time.Time) error
 	Close() error
 }
 
