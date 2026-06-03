@@ -84,6 +84,7 @@ type ifaceListener struct {
 	hwAddr  net.HardwareAddr
 	cancel  context.CancelFunc
 	done    chan struct{}
+	failed  atomic.Bool
 }
 
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
@@ -423,6 +424,15 @@ func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[str
 // state. On a start failure it re-marks the manager dirty (so the next
 // CompleteDeferredWork retries) and returns the error.
 func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
+	// Drop listeners whose goroutine reported an unrecoverable socket error;
+	// the start loop below recreates a fresh one for any still desired.
+	for ifaceName, l := range m.listeners {
+		if l.failed.Load() {
+			logrus.WithField("iface", ifaceName).Info("Recreating failed proxy neighbor listener")
+			m.stopListener(l)
+			delete(m.listeners, ifaceName)
+		}
+	}
 	var err error
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
@@ -538,13 +548,11 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 				logrus.WithField("iface", l.ifaceName).Debug("ARP read deadline expired with no packet")
 				continue
 			}
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("ARP listener read failed; retrying")
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(readDeadlineInterval):
-			}
-			continue
+			// Unrecoverable socket error: flag this listener so the manager
+			// drops it and recreates a fresh one on the next reconcile.
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("ARP listener read failed; recreating listener")
+			l.failed.Store(true)
+			return
 		}
 
 		if pkt.Operation != arp.OperationRequest {
@@ -586,15 +594,11 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 				logrus.WithField("iface", l.ifaceName).Debug("NDP read deadline expired with no packet")
 				continue
 			}
-			// Unexpected, persistent error. Log and back off so a broken
-			// socket can't spin the CPU; ctx cancellation still breaks out.
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("NDP listener read failed; retrying")
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(readDeadlineInterval):
-			}
-			continue
+			// Unrecoverable socket error: flag this listener so the manager
+			// drops it and recreates a fresh one on the next reconcile.
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("NDP listener read failed; recreating listener")
+			l.failed.Store(true)
+			return
 		}
 
 		ns, ok := msg.(*ndp.NeighborSolicitation)
