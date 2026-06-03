@@ -38,7 +38,7 @@ type ConnLimitPodInfoProvider func() map[string]ConnLimitPodInfo
 
 type connlimitKey struct {
 	ifindex   uint32
-	direction uint32
+	direction uint16
 }
 
 // ConnLimitScanner is an EntryScannerSynced that periodically recounts active
@@ -68,22 +68,32 @@ type connLimitQoSMap interface {
 }
 
 type ConnLimitScanner struct {
-	qosMap      connLimitQoSMap
-	getPodInfo  ConnLimitPodInfoProvider
-	podInfo     map[string]ConnLimitPodInfo
-	counts      map[connlimitKey]uint32
+	qosMap     connLimitQoSMap
+	getPodInfo ConnLimitPodInfoProvider
+	podInfo    map[string]ConnLimitPodInfo
+	counts     map[connlimitKey]uint32
+	// family is the IP family this scanner runs over (4 or 6). Used as
+	// the family dimension when writing back to the cali_qos map so v4
+	// and v6 each update their own counter, avoiding the dual-stack
+	// overwrite that would otherwise happen with a shared map entry.
+	family      uint16
 	iterCount   int
 	skipThisRun bool
 }
 
-// NewConnLimitScanner creates a new ConnLimitScanner.
+// NewConnLimitScanner creates a new ConnLimitScanner. family must be either
+// qos.IPFamilyV4 (4) or qos.IPFamilyV6 (6) — it identifies which family's
+// CT map this scanner is walking and which family's QoS map entry it
+// writes back to.
 func NewConnLimitScanner(
 	qosMap connLimitQoSMap,
 	getPodInfo ConnLimitPodInfoProvider,
+	family uint16,
 ) *ConnLimitScanner {
 	return &ConnLimitScanner{
 		qosMap:     qosMap,
 		getPodInfo: getPodInfo,
+		family:     family,
 		counts:     make(map[connlimitKey]uint32),
 	}
 }
@@ -186,7 +196,7 @@ func (s *ConnLimitScanner) IterationEnd() {
 	batchK := make([][]byte, 0, batchCap)
 	batchV := make([][]byte, 0, batchCap)
 
-	appendUpdate := func(ifindex, direction uint32, count uint32) {
+	appendUpdate := func(ifindex uint32, direction uint16, count uint32) {
 		if k, v, changed := s.prepareUpdate(ifindex, direction, count); changed {
 			batchK = append(batchK, k)
 			batchV = append(batchV, v)
@@ -237,8 +247,8 @@ func (s *ConnLimitScanner) IterationEnd() {
 // and a new value with current_count replaced by `count` (preserving the
 // packet-rate fields and max_connections). Returns changed=false when the
 // existing count already matches `count`, or when the read fails.
-func (s *ConnLimitScanner) prepareUpdate(ifindex, direction uint32, count uint32) (keyBytes, valBytes []byte, changed bool) {
-	qosKey := qos.NewKey(ifindex, direction)
+func (s *ConnLimitScanner) prepareUpdate(ifindex uint32, direction uint16, count uint32) (keyBytes, valBytes []byte, changed bool) {
+	qosKey := qos.NewKey(ifindex, direction, s.family)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {
 		if !maps.IsNotExists(err) {

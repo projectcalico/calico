@@ -66,16 +66,16 @@ func (f *fakeQoSMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	return len(ks), nil
 }
 
-func (f *fakeQoSMap) seed(t *testing.T, ifindex, direction uint32, maxConn, current uint32) {
+func (f *fakeQoSMap) seed(t *testing.T, ifindex uint32, direction uint16, maxConn, current uint32) {
 	t.Helper()
-	k := qos.NewKey(ifindex, direction).AsBytes()
+	k := qos.NewKey(ifindex, direction, qos.IPFamilyV4).AsBytes()
 	v := qos.NewValue(100, 50, 25, 12345, maxConn, current).AsBytes()
 	f.contents[string(k)] = v[:]
 }
 
-func (f *fakeQoSMap) currentCount(t *testing.T, ifindex, direction uint32) uint32 {
+func (f *fakeQoSMap) currentCount(t *testing.T, ifindex uint32, direction uint16) uint32 {
 	t.Helper()
-	bytes, err := f.Get(qos.NewKey(ifindex, direction).AsBytes())
+	bytes, err := f.Get(qos.NewKey(ifindex, direction, qos.IPFamilyV4).AsBytes())
 	if err != nil {
 		t.Fatalf("fake Get for (%d,%d) failed: %v", ifindex, direction, err)
 	}
@@ -86,6 +86,7 @@ func (f *fakeQoSMap) currentCount(t *testing.T, ifindex, direction uint32) uint3
 // method is a no-op when no pods have connection limits configured.
 func TestConnLimitScannerCheckNoPodsIsNoOp(t *testing.T) {
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 	}
 
@@ -159,6 +160,7 @@ func TestConnLimitScannerCountsEstablishedTCP(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -186,6 +188,7 @@ func TestConnLimitScannerCountsEgressConnection(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, false, true),
@@ -213,6 +216,7 @@ func TestConnLimitScannerSkipsFINSeen(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -236,6 +240,7 @@ func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -259,6 +264,7 @@ func TestConnLimitScannerSkipsNotEstablished(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -281,6 +287,7 @@ func TestConnLimitScannerSkipsNATForward(t *testing.T) {
 	podIP := "10.65.0.2"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -303,6 +310,7 @@ func TestConnLimitScannerSkipsNonTCP(t *testing.T) {
 	podIP := "10.65.0.2"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -324,6 +332,7 @@ func TestConnLimitScannerSkipsNonTCP(t *testing.T) {
 
 func TestConnLimitScannerSkipsUnlimitedPods(t *testing.T) {
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			// Pod at 10.65.0.2 has limits, but the connection is between
@@ -348,6 +357,7 @@ func TestConnLimitScannerMultipleConnections(t *testing.T) {
 	podIP := "10.65.0.2"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, true),
@@ -377,6 +387,7 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	podB := "10.65.0.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podA).To4()): podInfo(9, false, true),  // egress only
@@ -408,6 +419,7 @@ func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
 	remoteIP := "10.65.1.3"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
@@ -436,6 +448,7 @@ func TestConnLimitScannerNoCountWhenWrongDirection(t *testing.T) {
 	podIP := "10.65.0.2"
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		counts: make(map[connlimitKey]uint32),
 		podInfo: map[string]ConnLimitPodInfo{
 			// Pod only has INGRESS limit, no egress limit.
@@ -466,6 +479,7 @@ func TestConnLimitScannerDownsamples(t *testing.T) {
 	}
 
 	scanner := &ConnLimitScanner{
+		family:     qos.IPFamilyV4,
 		getPodInfo: getPodInfo,
 		counts:     make(map[connlimitKey]uint32),
 	}
@@ -519,6 +533,7 @@ func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
 	m.seed(t, ifC, 1, 5, 1) // ingress, no change
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		qosMap: m,
 		podInfo: map[string]ConnLimitPodInfo{
 			"\x0a\x41\x00\x01": {IfIndex: ifA, HasIngressLimit: true},
@@ -556,7 +571,7 @@ func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
 	}
 
 	// Packet-rate fields and max_connections must survive the recount.
-	bytes, err := m.Get(qos.NewKey(ifA, 1).AsBytes())
+	bytes, err := m.Get(qos.NewKey(ifA, 1, qos.IPFamilyV4).AsBytes())
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -576,6 +591,7 @@ func TestConnLimitScannerBatchNoOpWhenNothingChanged(t *testing.T) {
 	m.seed(t, 22, 0, 5, 3)
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		qosMap: m,
 		podInfo: map[string]ConnLimitPodInfo{
 			"\x0a\x41\x00\x01": {IfIndex: 11, HasIngressLimit: true},
@@ -603,6 +619,7 @@ func TestConnLimitScannerBatchZeroesOutInactiveLimits(t *testing.T) {
 	m.seed(t, 22, 0, 5, 2) // egress
 
 	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
 		qosMap: m,
 		podInfo: map[string]ConnLimitPodInfo{
 			"\x0a\x41\x00\x01": {IfIndex: 11, HasIngressLimit: true},

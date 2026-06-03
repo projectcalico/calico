@@ -303,7 +303,7 @@ var _ = infrastructure.DatastoreDescribe(
 						Expect(true).To(BeFalse(), "hook must be either 'ingress' or 'egress', '%s' is invalid", hook)
 					}
 
-					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), ingress)
+					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), uint16(ingress), qos.IPFamilyV4)
 					keyStr := bytesToHexString(key.AsBytes())
 
 					args := []string{"bash", "-c", fmt.Sprintf(`bpftool map dump name %s -j | jq '.[].elements[] | select(.key | join(" ") == "%s") | .value | join(" ")'`, qosMapName, keyStr)}
@@ -358,7 +358,16 @@ var _ = infrastructure.DatastoreDescribe(
 						if BPFMode() && BPFAttachType() == "tc" {
 							Skip("Skipping QoS control bandwidth tests on BPF TC attach mode.")
 						}
+					})
 
+					// JustBeforeEach (not BeforeEach) so this runs after the
+					// outer JustBeforeEach has refreshed w[] with workloads
+					// for the current spec. Putting the iteration in a
+					// BeforeEach would dereference stale workload pointers
+					// left over from the previous spec, whose K8s pods have
+					// already been torn down — the Pod Get inside
+					// UpdateInInfra would return 404 and panic.
+					JustBeforeEach(func() {
 						By("Removing all limits from workloads")
 						for i := range len(w) {
 							w[i].WorkloadEndpoint.Spec.QoSControls = nil
@@ -633,16 +642,6 @@ var _ = infrastructure.DatastoreDescribe(
 				})
 
 				Context("With connection limits", func() {
-					tryConnect := func(w *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
-						return func() error {
-							logrus.Info("Trying to start connection")
-							pc, err := w.StartPersistentConnectionMayFail(ip, port, opts)
-							if err == nil {
-								pc.Stop()
-							}
-							return err
-						}
-					}
 
 					It("should limit connections correctly (connlimit counter)", func() {
 						const numConnections = 4
@@ -654,7 +653,9 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Starting n+1th connection on workload 1, expecting success")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeTrue())
 						logrus.Infof("%dth connection suceeded as expected", numConnections)
 
 						By("Stopping persistent connections")
@@ -705,7 +706,9 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeFalse())
 						logrus.Infof("%dth connection failed as expected", numConnections)
 
 						// Test RST close path: stop the last connection (SendRST=true)
@@ -829,7 +832,9 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Starting n+1th connection on workload 1, expecting failure")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeFalse())
 						logrus.Infof("%dth connection failed as expected", numConnections)
 
 						By("Stopping persistent connections")
@@ -864,7 +869,9 @@ var _ = infrastructure.DatastoreDescribe(
 						}
 
 						By("Starting n+1th connection on workload 1, expecting success")
-						Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").ShouldNot(HaveOccurred())
+						Eventually(func() bool {
+							return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeTrue())
 						logrus.Infof("%dth connection suceeded as expected", numConnections)
 
 						By("Stopping persistent connections")
@@ -1023,7 +1030,9 @@ var _ = infrastructure.DatastoreDescribe(
 							Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("Attempting one more connection (rejected, leaves a REJECTED CT entry)")
-							Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+							Eventually(func() bool {
+								return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+							}, "10s", "1s").Should(BeFalse())
 
 							By("Flushing CT to purge the rejected entry through the cleanup decrement path")
 							// calico-bpf conntrack clean runs the cleanup program over
@@ -1037,7 +1046,9 @@ var _ = infrastructure.DatastoreDescribe(
 							Consistently(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
 							By("Re-attempting connection -- still expect rejection (counter still at limit)")
-							Eventually(tryConnect(w[1], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+							Eventually(func() bool {
+								return w[1].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+							}, "10s", "1s").Should(BeFalse())
 
 							By("Removing ingress limit from w[0]")
 							w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1211,16 +1222,6 @@ var _ = infrastructure.DatastoreDescribe(
 						return
 					}
 
-					tryConnect := func(client *workload.Workload, ip string, port int, opts workload.PersistentConnectionOpts) func() error {
-						return func() error {
-							pc, err := client.StartPersistentConnectionMayFail(ip, port, opts)
-							if err == nil {
-								pc.Stop()
-							}
-							return err
-						}
-					}
-
 					It("should enforce ingress connlimit for same-node connections", func() {
 						const numConnections = 3
 
@@ -1249,8 +1250,23 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Waiting for ingress counter to reach the limit")
 						Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
+						// Use CanConnectTo (synchronous one-shot) rather than
+						// StartPersistentConnectionMayFail. The persistent-
+						// connection helper leaves the docker exec'd
+						// test-connection process running on connect failure
+						// (Start() returns an error without recording the runCmd
+						// on the returned pc, so the caller can't clean it up).
+						// Each lingering process has a kernel socket in SYN-SENT
+						// retransmitting for ~tcp_syn_retries (~127s). When a
+						// slot later opens up (close-time decrement), one of those
+						// queued SYN retries races the test's own re-open and
+						// steals the freed slot. CanConnectTo waits for the
+						// underlying test-connection process to exit before
+						// returning, so no zombies are left behind.
 						By("Attempting one more connection, expecting failure")
-						Eventually(tryConnect(w[2], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+						Eventually(func() bool {
+							return w[2].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeFalse())
 
 						By("Closing one connection (graceful FIN) to free a slot")
 						pcs[0].Stop()
@@ -1258,6 +1274,13 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Waiting for ingress counter to drop below the limit (close-time decrement)")
 						Eventually(getBPFCurrentCount(0, 0, "ingress"), "10s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+
+						// Flush BPF CT so the closed connection's entry is purged
+						// before the new SYN. Without this the new connection's
+						// 5-tuple can collide with a stale CT entry (kernel ephemeral
+						// port reuse, etc.) and the SYN hangs.
+						By("Flushing BPF conntrack on the same-node felix")
+						tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 
 						By("Re-opening one connection, expecting success")
 						Eventually(func() error {
@@ -1301,8 +1324,12 @@ var _ = infrastructure.DatastoreDescribe(
 						By("Waiting for egress counter to reach the limit")
 						Eventually(getBPFCurrentCount(0, 2, "egress"), "10s", "1s").Should(Equal(uint32(numConnections)))
 
+						// See ingress test for why this uses CanConnectTo
+						// rather than StartPersistentConnectionMayFail.
 						By("Attempting one more connection, expecting failure")
-						Eventually(tryConnect(w[2], w[0].IP, 8055, workload.PersistentConnectionOpts{}), "10s", "1s").Should(HaveOccurred())
+						Eventually(func() bool {
+							return w[2].CanConnectTo(w[0].IP, "8055", "tcp").HasConnectivity()
+						}, "10s", "1s").Should(BeFalse())
 
 						By("Closing one connection (graceful FIN) to free a slot")
 						pcs[0].Stop()
@@ -1310,6 +1337,13 @@ var _ = infrastructure.DatastoreDescribe(
 
 						By("Waiting for egress counter to drop below the limit (close-time decrement)")
 						Eventually(getBPFCurrentCount(0, 2, "egress"), "10s", "1s").Should(BeNumerically("<", uint32(numConnections)))
+
+						// Flush BPF CT so the closed connection's entry is purged
+						// before the new SYN. Without this the new connection's
+						// 5-tuple can collide with a stale CT entry (kernel ephemeral
+						// port reuse, etc.) and the SYN hangs.
+						By("Flushing BPF conntrack on the same-node felix")
+						tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 
 						By("Re-opening one connection, expecting success")
 						Eventually(func() error {

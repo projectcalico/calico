@@ -61,8 +61,8 @@ func TestQoSPacketRate(t *testing.T) {
 	// Populate QoS map
 	resetQoSMap(qosMap)
 	defer resetQoSMap(qosMap)
-	key1 := qos.NewKey(uint32(ifIndex), 1)
-	key2 := qos.NewKey(uint32(ifIndex), 0)
+	key1 := qos.NewKey(uint32(ifIndex), 1, qos.IPFamilyV4)
+	key2 := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV4)
 	value := qos.NewValue(1, 1, -1, 0, 0, 0)
 
 	err = qosMap.Update(
@@ -407,14 +407,14 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 	// seedQoSCount populates the egress QoS map entry for ifIndex with
 	// max=maxConnections and the given current_count.
 	seedQoSCount := func(current uint32) {
-		key := qos.NewKey(uint32(ifIndex), 0 /* egress */)
+		key := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
 		// Packet-rate fields zero; max=maxConnections; current=current.
 		v := qos.NewValue(0, 0, 0, 0, maxConnections, current)
 		Expect(qosMap.Update(key.AsBytes(), v.AsBytes())).NotTo(HaveOccurred())
 	}
 
 	readQoSCount := func() uint32 {
-		key := qos.NewKey(uint32(ifIndex), 0)
+		key := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV4)
 		b, err := qosMap.Get(key.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
 		return qos.ValueFromBytes(b).CurrentCount()
@@ -544,7 +544,7 @@ func TestQoSConnLimitIngressRetransmissionOfRejected(t *testing.T) {
 	// connection.
 	defer resetQoSMap(qosMap)
 	resetQoSMap(qosMap)
-	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
 	Expect(qosMap.Update(qosKey.AsBytes(),
 		qos.NewValue(0, 0, 0, 0, maxConnections, 0).AsBytes())).
 		NotTo(HaveOccurred())
@@ -631,7 +631,7 @@ func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
 	// QoS map: max=3, current=1 (this entry was already counted).
 	defer resetQoSMap(qosMap)
 	resetQoSMap(qosMap)
-	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
 	Expect(qosMap.Update(qosKey.AsBytes(),
 		qos.NewValue(0, 0, 0, 0, maxConnections, 1).AsBytes())).
 		NotTo(HaveOccurred())
