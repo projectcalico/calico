@@ -447,7 +447,7 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 	for ifaceName, l := range m.listeners {
 		if l.failed.Load() {
 			logrus.WithField("iface", ifaceName).Info("Recreating failed proxy neighbor listener")
-			m.stopListener(l)
+			l.stop()
 			delete(m.listeners, ifaceName)
 		}
 	}
@@ -464,7 +464,7 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 	}
 	for ifaceName, l := range m.listeners {
 		if _, ok := desiredByIface[ifaceName]; !ok {
-			m.stopListener(l)
+			l.stop()
 			delete(m.listeners, ifaceName)
 		}
 	}
@@ -485,7 +485,7 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		old := l.desired.Swap(&desired)
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
-				m.sendGARP(l, ip)
+				l.sendGARP(ip)
 			}
 		}
 	}
@@ -510,7 +510,7 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 		}
 		l.arpCli = client
 		l.hwAddr = hwAddr
-		go m.runARPListener(ctx, l)
+		go l.runARPListener(ctx)
 	} else {
 		conn, hwAddr, err := m.ndpFactory(ifaceName)
 		if err != nil {
@@ -519,7 +519,7 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 		}
 		l.ndpCli = conn
 		l.hwAddr = hwAddr
-		go m.runNDPListener(ctx, l)
+		go l.runNDPListener(ctx)
 	}
 
 	m.listeners[ifaceName] = l
@@ -527,8 +527,9 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 	return nil
 }
 
-// stopListener cancels and cleans up a listener.
-func (m *proxyNeighManager) stopListener(l *ifaceListener) {
+// stop cancels the listener goroutine, closes its raw socket, and waits for the
+// goroutine to exit.
+func (l *ifaceListener) stop() {
 	l.cancel()
 	if l.arpCli != nil {
 		err := l.arpCli.Close()
@@ -548,7 +549,7 @@ func (m *proxyNeighManager) stopListener(l *ifaceListener) {
 
 // runARPListener listens for ARP requests on a raw socket and replies for
 // IPs in the desired set.
-func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener) {
+func (l *ifaceListener) runARPListener(ctx context.Context) {
 	defer close(l.done)
 
 	for {
@@ -593,7 +594,7 @@ func (m *proxyNeighManager) runARPListener(ctx context.Context, l *ifaceListener
 
 // runNDPListener listens for Neighbor Solicitations on a raw ICMPv6 socket
 // and replies with Neighbor Advertisements for IPs in the desired set.
-func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener) {
+func (l *ifaceListener) runNDPListener(ctx context.Context) {
 	defer close(l.done)
 
 	for {
@@ -660,22 +661,22 @@ func (m *proxyNeighManager) runNDPListener(ctx context.Context, l *ifaceListener
 }
 
 // sendGARP parses ipStr and dispatches to the IPv4 (gratuitous ARP) or IPv6
-// (unsolicited NA) sender for the manager's address family.
-func (m *proxyNeighManager) sendGARP(l *ifaceListener, ipStr string) {
+// (unsolicited NA) sender, based on which raw socket this listener holds.
+func (l *ifaceListener) sendGARP(ipStr string) {
 	addr, err := netip.ParseAddr(ipStr)
 	if err != nil {
 		logrus.WithError(err).WithField("ip", ipStr).Debug("Failed to parse IP for GARP")
 		return
 	}
-	if m.ipVersion == 4 {
-		m.sendGARPV4(l, addr)
+	if l.arpCli != nil {
+		l.sendGARPV4(addr)
 	} else {
-		m.sendGARPV6(l, addr)
+		l.sendGARPV6(addr)
 	}
 }
 
 // sendGARPV4 sends a gratuitous ARP for ip using the listener's raw socket.
-func (m *proxyNeighManager) sendGARPV4(l *ifaceListener, ip netip.Addr) {
+func (l *ifaceListener) sendGARPV4(ip netip.Addr) {
 	pkt, err := arp.NewPacket(arp.OperationRequest, l.hwAddr, ip, ethernet.Broadcast, ip)
 	if err != nil {
 		logrus.WithError(err).WithField("ip", ip).Debug("Failed to create GARP packet")
@@ -696,7 +697,7 @@ func (m *proxyNeighManager) sendGARPV4(l *ifaceListener, ip netip.Addr) {
 
 // sendGARPV6 sends an unsolicited Neighbor Advertisement for addr using the
 // listener's raw socket.
-func (m *proxyNeighManager) sendGARPV6(l *ifaceListener, addr netip.Addr) {
+func (l *ifaceListener) sendGARPV6(addr netip.Addr) {
 	na := &ndp.NeighborAdvertisement{
 		Override:      true,
 		TargetAddress: addr,
