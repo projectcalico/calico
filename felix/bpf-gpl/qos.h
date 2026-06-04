@@ -33,7 +33,7 @@ struct calico_qos_val {
 // 4*IFACE_STATE_MAP_SIZE: up to 2 entries (ingress/egress) per interface and
 // per IP family (v4/v6). v4 and v6 traffic count against separate counters,
 // matching the per-family rule semantics of iptables and nftables modes.
-CALI_MAP(cali_qos, 3,
+CALI_MAP(cali_qos, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_qos_key, struct calico_qos_val,
 		4*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)

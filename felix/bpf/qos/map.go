@@ -50,7 +50,7 @@ var MapParams = maps.MapParameters{
 	MaxEntries:   MaxEntries,
 	Name:         "cali_qos",
 	Flags:        unix.BPF_F_NO_PREALLOC,
-	Version:      3,
+	Version:      2,
 	UpdatedByBPF: true,
 }
 
