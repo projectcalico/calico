@@ -47,8 +47,9 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	# Generate CRDs
-	$(call gen-calico-crds,./lib/apis/...,config/crd/)
+	# Generate CRDs using the in-repo Calico-patched controller-gen.
+	$(MAKE) -C $(REPO_ROOT) build-calico-controller-gen
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.

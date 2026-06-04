@@ -62,14 +62,15 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
-	# Generate CRDs
-	$(call gen-calico-crds,./pkg/apis/...,config/crd/)
+	# Generate CRDs using the in-repo Calico-patched controller-gen.
+	$(MAKE) -C $(REPO_ROOT) build-calico-controller-gen
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
-	rm -f config/crd/projectcalico.org_profiles.yaml
+	rm -f config/crd/*.orig config/crd/projectcalico.org_profiles.yaml
 
 	# Generate defaults
 	$(DOCKER_RUN) $(CALICO_BUILD) \

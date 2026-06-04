@@ -47,7 +47,8 @@ check-copyright:
 ###############################################################################
 .PHONY: gen-files
 gen-files:
-	$(DOCKER_GO_BUILD) sh -c 'go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
+	$(MAKE) -C $(REPO_ROOT) build-calico-controller-gen
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
 
 ###############################################################################
 # Tests

@@ -382,6 +382,38 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+###############################################################################
+# Calico-patched controller-gen
+#
+# CRD generation uses a controller-gen with Calico-specific patches (see the
+# *.patch files under //hack/cmd/calico-controller-gen): NumOrString/Port/
+# Protocol/DSCP int-or-string union schemas, and nullable slice-of-pointer
+# elements. The projectcalico/toolchain repo bakes a (NumOrString-only) patched
+# binary into the calico/go-build image; we build our own patched binary
+# in-repo instead (download tarball -> apply patches -> go build), so CRD
+# generation owns its patches and does not depend on the image's controller-gen.
+#
+# CONTROLLER_TOOLS_VERSION MUST match the toolchain go-build image
+# (projectcalico/toolchain images/calico-go-build/Dockerfile).
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
+
+# The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
+# every component container, including api/'s isolated mount). It is stamped
+# with both the controller-tools version and a hash of all patches, so bumping
+# the version OR editing/adding a patch produces a new path and triggers a
+# rebuild.
+CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
+CALICO_CONTROLLER_GEN := /go-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+
+# build-calico-controller-gen builds the patched controller-gen into the shared
+# cache. It must run with the repo root mounted (so build.sh and the patch are
+# visible); components in their own module (api/) reach it via
+# $(MAKE) -C $(REPO_ROOT) build-calico-controller-gen.
+.PHONY: build-calico-controller-gen
+build-calico-controller-gen:
+	$(DOCKER_GO_BUILD) sh -c \
+		'./hack/cmd/calico-controller-gen/build.sh $(CONTROLLER_TOOLS_VERSION) $(CALICO_CONTROLLER_GEN)'
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
@@ -391,41 +423,6 @@ DOCKER_RUST_BUILD := mkdir -p bin && \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
-
-###############################################################################
-# Calico CRD generation — vanilla controller-gen + the calico-crd-transform
-# post-processor at //hack/cmd/calico-crd-transform.  See its README header
-# for the rule format.
-#
-# The post-processor needs to run in main-calico-module context (where its
-# go.mod is).  Sub-Makefiles in the main module call it directly via go run;
-# api/ (its own module) bounces through $(MAKE) -C $(REPO_ROOT).
-#
-# Usage:
-#   $(call gen-calico-crds,./pkg/apis/...,config/crd/)
-CONTROLLER_TOOLS_VERSION ?= v0.18.0
-
-# gen-calico-crds runs controller-gen with the same flag set used on master,
-# then calico-crd-transform.
-#   $(1) = Go package path glob (e.g. ./pkg/apis/...)
-#   $(2) = output dir relative to caller
-define gen-calico-crds
-$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-    go run sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION) \
-        crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false \
-        paths=$(1) output:crd:dir=$(2)' && \
-$(MAKE) -C $(REPO_ROOT) crd-transform CRD_DIR=$(patsubst $(REPO_ROOT)/%,%,$(abspath $(2)))
-endef
-
-# crd-transform runs //hack/cmd/calico-crd-transform against $(CRD_DIR), a
-# path relative to the main calico module root.  Always runs in main-module
-# context so sub-Makefiles with their own go.mod can still drive it.
-.PHONY: crd-transform
-crd-transform:
-	$(DOCKER_GO_BUILD) sh -c \
-		'go run ./hack/cmd/calico-crd-transform \
-		    --config ./hack/cmd/calico-crd-transform/transforms.yaml \
-		    --dir $(CRD_DIR)'
 
 ###############################################################################
 # Source file dependency tracking via deps.txt

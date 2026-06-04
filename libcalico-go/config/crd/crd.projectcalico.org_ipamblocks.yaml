@@ -36,7 +36,9 @@ spec:
             metadata:
               type: object
             spec:
-              description: IPAMBlockSpec contains the specification for an IPAMBlock resource.
+              description:
+                IPAMBlockSpec contains the specification for an IPAMBlock
+                resource.
               properties:
                 affinity:
                   description: |-
@@ -52,8 +54,8 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    type: integer
                     nullable: true
+                    type: integer
                   type: array
                 attributes:
                   description: |-
@@ -75,7 +77,9 @@ spec:
                       secondary:
                         additionalProperties:
                           type: string
-                        description: ActiveOwnerAttrs contains attributes of the active owner (the pod currently using the IP).
+                        description:
+                          ActiveOwnerAttrs contains attributes of the active
+                          owner (the pod currently using the IP).
                         type: object
                     type: object
                   type: array
@@ -107,10 +111,14 @@ spec:
                     the key is cast to a string.
                   type: object
                 strictAffinity:
-                  description: StrictAffinity on the IPAMBlock is deprecated and no longer used by the code. Use IPAMConfig StrictAffinity instead.
+                  description:
+                    StrictAffinity on the IPAMBlock is deprecated and no
+                    longer used by the code. Use IPAMConfig StrictAffinity instead.
                   type: boolean
                 unallocated:
-                  description: Unallocated is an ordered list of allocations which are free in the block.
+                  description:
+                    Unallocated is an ordered list of allocations which are
+                    free in the block.
                   items:
                     type: integer
                   type: array
