@@ -342,8 +342,13 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
-    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -352,6 +357,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/10-prerequisites.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/defaults/*.go',
@@ -381,6 +387,7 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/felix/',
         '/felix/aws/*.go',
         '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
@@ -391,6 +398,7 @@ blocks:
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
         '/felix/bpf/bpfmap/*.go',
+        '/felix/bpf/cmd/*.go',
         '/felix/bpf/conntrack/*.go',
         '/felix/bpf/conntrack/cleanupv1/*.go',
         '/felix/bpf/conntrack/timeouts/*.go',
@@ -424,7 +432,10 @@ blocks:
         '/felix/bpf/xdp/*.go',
         '/felix/cachingmap/*.go',
         '/felix/calc/*.go',
+        '/felix/cmd/calico-bpf/*.go',
         '/felix/cmd/calico-bpf/commands/*.go',
+        '/felix/cmd/calico-felix-docgen/*.go',
+        '/felix/cmd/calico-felix/*.go',
         '/felix/collector/*.go',
         '/felix/collector/flowlog/*.go',
         '/felix/collector/goldmane/*.go',
@@ -450,14 +461,22 @@ blocks:
         '/felix/dispatcher/*.go',
         '/felix/environment/*.go',
         '/felix/ethtool/*.go',
+        '/felix/fv/cgroup/*.go',
+        '/felix/fv/connectivity/*.go',
+        '/felix/fv/pktgen/*.go',
+        '/felix/fv/test-connection/*.go',
+        '/felix/fv/test-workload/*.go',
+        '/felix/fv/utils/*.go',
         '/felix/generictables/*.go',
         '/felix/idalloc/*.go',
+        '/felix/idalloc/collision/*.go',
         '/felix/ifacemonitor/*.go',
         '/felix/ip/*.go',
         '/felix/ipsets/*.go',
         '/felix/iptables/*.go',
         '/felix/iptables/cmdshim/*.go',
         '/felix/jitter/*.go',
+        '/felix/k8sfv/*.go',
         '/felix/k8sutils/*.go',
         '/felix/labelindex/*.go',
         '/felix/labelindex/ipsetmember/*.go',
@@ -555,6 +574,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
@@ -562,13 +582,20 @@ blocks:
         '/metadata.mk',
         '/node/',
         '/node/**',
+        '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
+        '/process/testing/aso',
+        '/process/testing/util',
+        '/process/testing/winfv-felix',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        'felix/**/*Dockerfile*',
+        'felix/Makefile',
+        'felix/deps.txt',
         'istio/**/*Dockerfile*',
         'istio/Makefile',
         'istio/deps.txt'],

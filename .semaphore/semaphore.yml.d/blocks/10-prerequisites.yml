@@ -137,10 +137,15 @@
   # Publishing to Docker Hub happens in a separate post-build promotion
   # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
   #
-  # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
-  # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
+  # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+  # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+  # block's CHANGE_IN must be a superset of the union of all three consumer
+  # triggers — otherwise the consumer fires, the producer skips, and the
+  # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+  # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+  # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
   run:
-    when: "${CHANGE_IN(node,istio,non-go:/node/,non-go:/istio/,non-go:/hack/rpms/nftables/)}"
+    when: "${CHANGE_IN(node,istio,felix,non-go:/node/,non-go:/istio/,non-go:/felix/,non-go:/hack/rpms/nftables/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies: []
   task:
     agent:
