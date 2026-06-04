@@ -18,11 +18,28 @@ name: CI finished Slack notify
 
 on:
   status: {}
+  # Manual test path: simulate a finished-CI status for a given PR, so the
+  # full chain (resolve -> opt-in lookup -> DM) can be exercised on demand
+  # without waiting for real CI. Dispatchable only once this file is on the
+  # default branch (a GitHub limitation), so it's for post-merge sanity
+  # checks, not pre-merge testing.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to notify about"
+        required: true
+        type: string
+      state:
+        description: "Simulated CI outcome"
+        required: false
+        default: success
+        type: choice
+        options: [success, failure, error]
 
-# SHA-keyed: a force-push gets a new SHA in its own group, so a notify
-# for an earlier push is not cancelled by a later one.
+# SHA-keyed for status events; PR-keyed for manual runs. A force-push gets a
+# new SHA in its own group, so a notify for an earlier push is not cancelled.
 concurrency:
-  group: ci-notify-${{ github.event.sha || github.run_id }}
+  group: ci-notify-${{ github.event.sha || inputs.pr_number || github.run_id }}
   cancel-in-progress: false
 
 permissions:
@@ -33,11 +50,13 @@ jobs:
   notify:
     # Fire once when the aggregate Semaphore status reaches a terminal
     # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # Manual workflow_dispatch runs always proceed (state comes from input).
     if: >-
-      github.event.context == 'ci/semaphoreci/pr: Calico' &&
-      (github.event.state == 'success' ||
-       github.event.state == 'failure' ||
-       github.event.state == 'error')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.context == 'ci/semaphoreci/pr: Calico' &&
+       (github.event.state == 'success' ||
+        github.event.state == 'failure' ||
+        github.event.state == 'error'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -45,7 +64,9 @@ jobs:
       REPO: ${{ github.repository }}
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
-      STATE: ${{ github.event.state }}
+      # On a status event these come from the event; on workflow_dispatch
+      # STATE falls through to the input and SHA/TARGET_URL are empty.
+      STATE: ${{ github.event.state || inputs.state }}
       SHA: ${{ github.event.sha }}
       TARGET_URL: ${{ github.event.target_url }}
     steps:
@@ -59,19 +80,32 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Resolve PR + author from SHA
+      - name: Resolve PR + author
         id: resolve
         if: steps.gate.outputs.skip != 'true'
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
         run: |
-          # Use the search API rather than repos/$REPO/commits/$SHA/pulls:
-          # the latter does not return PRs whose head commit lives on a
-          # fork, and projectcalico/calico PRs all come from forks.
-          PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
-                 --jq '.items[0].number // empty')
-          if [[ -z "$PR" ]]; then
-            echo "::notice::no open PR for sha=$SHA — skipping"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [[ -n "$INPUT_PR" ]]; then
+            # Manual run: trust only a numeric PR number (guards against
+            # injection via the free-form dispatch input).
+            if [[ ! "$INPUT_PR" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number must be numeric, got '$INPUT_PR'"
+              exit 1
+            fi
+            PR="$INPUT_PR"
+          else
+            # Status event: resolve PR from SHA. Use the search API rather
+            # than repos/$REPO/commits/$SHA/pulls — the latter does not
+            # return PRs whose head commit lives on a fork, and
+            # projectcalico/calico PRs all come from forks.
+            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                   --jq '.items[0].number // empty')
+            if [[ -z "$PR" ]]; then
+              echo "::notice::no open PR for sha=$SHA — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           fi
           # pr.json holds the free-form title; it stays on the runner disk
           # and is read with jq in later steps. It is never routed through
@@ -112,7 +146,7 @@ jobs:
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
-          github.event.state != 'success'
+          env.STATE != 'success'
         env:
           PR: ${{ steps.resolve.outputs.pr }}
         run: |
