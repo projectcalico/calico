@@ -92,8 +92,7 @@ type ifaceListener struct {
 
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
-// It listens on raw sockets and
-// responds directly in userspace.
+// It listens on raw sockets and responds directly in userspace.
 type proxyNeighManager struct {
 	ipVersion      uint8
 	hostname       string
@@ -157,7 +156,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
-			// Set the IPMP6 filter to only deliver Neighbor Solicitations
+			// Set the IPMPV6 filter to only deliver Neighbor Solicitations
 			var f ipv6.ICMPFilter
 			f.SetAll(true)
 			f.Accept(ipv6.ICMPTypeNeighborSolicitation)
