@@ -374,6 +374,11 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # This value needs to be a string:
         lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
 
+        # _check_mysql_driver() reads this at start of day to validate the
+        # SQLAlchemy driver.  Without a concrete value here, the default
+        # MagicMock would let the prefix check false-positive on "mysql:".
+        lib.m_oslo_config.cfg.CONF.database.connection = None
+
         self.sg_default_key_v3 = (
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
             + self.namespace
@@ -2617,7 +2622,12 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             m_try_upd.mock_calls,
         )
-
+        # the loop must close its session after each iteration
+        # AND on loop exit, so two calls here: one from the
+        # inner `finally` after _try_to_update_port_status, one
+        # from the outer `finally` when StopIteration propagates.
+        self.assertEqual(2, m_close.call_count)
+          
     def test_try_to_update_port_status(self):
         self.driver._get_db()
 

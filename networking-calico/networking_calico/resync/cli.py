@@ -48,6 +48,7 @@ from neutron_lib.plugins import directory as plugin_dir
 from oslo_config import cfg
 
 from networking_calico.common import config as calico_config
+from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.resync import scope as scope_mod
 
 
@@ -167,6 +168,11 @@ def main(argv=None) -> int:
     # same way neutron-dhcp-agent reads neutron.conf + dhcp_agent.ini.
     common_config.init(["--config-file=%s" % path for path in config_files])
     common_config.setup_logging()
+
+    # Fail fast on an unsupported MySQL driver, before doing any real work --
+    # this is the same check the mech driver does in initialize(), reading
+    # [database] connection from oslo.config.
+    mech_calico._check_mysql_driver()
 
     # Initialise the Neutron plugin registry so the core plugin is instantiated and
     # discoverable via directory.get_plugin().
