@@ -61,6 +61,11 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Istio"),
 	describe.WithCategory(describe.Networking),
+	// Asserts Calico NetworkPolicy enforcement on ambient traffic, which the
+	// BPF dataplane does not do (ztunnel redirect bypasses BPF policy). Keeps
+	// this suite excluded on BPF-mode clusters while still allowing the
+	// dataplane-independent Istio L7-logging tests to run there.
+	describe.RequiresAmbientPolicyEnforcement(),
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")
