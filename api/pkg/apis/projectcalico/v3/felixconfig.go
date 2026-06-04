@@ -460,6 +460,9 @@ type FelixConfigurationSpec struct {
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
+	// +kubebuilder:validation:Format=int64
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
 	IptablesMarkMask *uint32 `json:"iptablesMarkMask,omitempty"`
 
 	// DisableConntrackInvalidCheck disables the check for invalid connections in conntrack. While the conntrack
@@ -691,6 +694,9 @@ type FelixConfigurationSpec struct {
 	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
+	// +kubebuilder:validation:Format=int64
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
 	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
