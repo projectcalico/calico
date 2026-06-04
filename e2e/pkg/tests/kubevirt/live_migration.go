@@ -32,6 +32,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
@@ -76,8 +77,8 @@ var _ = describe.CalicoDescribe(
 		// consecutive cross-node live migrations on a 3-worker cluster (server VM hops,
 		// client pod stays put).
 		It("should maintain TCP connection over iBGP across two consecutive live migrations", func() {
-			if isKINDCluster(f) {
-				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
+			if isMockVirtDeployed(f) {
+				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), doubleMigrationTimeout)
 			defer cancel()
@@ -177,8 +178,8 @@ var _ = describe.CalicoDescribe(
 		// Requires EXT_IP, EXT_KEY, EXT_USER.
 		framework.Context("eBGP external client", describe.WithExternalNode(), func() {
 			It("should maintain TCP connection from eBGP external client across two consecutive migrations", func() {
-				if isKINDCluster(f) {
-					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; KIND clusters use MockVirt which does not run a guest OS")
+				if isMockVirtDeployed(f) {
+					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
 				}
 				tor := externalnode.NewClient()
 				if tor == nil {
@@ -207,7 +208,7 @@ var _ = describe.CalicoDescribe(
 					"IPPool %q must have natOutgoing=false (set by cluster provisioning)", vmIPPoolName)
 
 				By("Setting up eBGP peering between TOR and cluster nodes")
-				setupEBGPPeering(f, tor)
+				torPeer := setupKubeVirtEBGPPeering(f, tor)
 
 				vmName := "e2e-ebgp-tcp"
 				vm := &kubeVirtVM{name: vmName, namespace: ns, cloudInit: tcpServerCloudInit}
@@ -221,11 +222,11 @@ var _ = describe.CalicoDescribe(
 
 				By("Verifying TOR can reach the VM (eBGP routing is up)")
 				Eventually(func() error {
-					out, err := runOnTOR(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
+					out, err := runOnExternalNode(tor, fmt.Sprintf("ping -c 1 -W 2 %s", vmIP))
 					if err != nil {
-						routes, _ := runOnTOR(tor, "sudo docker exec tor-bird birdcl show route")
+						routes, _ := runOnExternalNode(tor, "sudo docker exec tor-bird birdcl show route")
 						logrus.Infof("TOR BIRD routes:\n%s", routes)
-						kernRoutes, _ := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1", vmIP))
+						kernRoutes, _ := runOnExternalNode(tor, fmt.Sprintf("ip route get %s 2>&1", vmIP))
 						logrus.Infof("TOR kernel route to %s: %s", vmIP, kernRoutes)
 						return fmt.Errorf("ping %s failed: %v (output=%s)", vmIP, err, out)
 					}
@@ -236,7 +237,7 @@ var _ = describe.CalicoDescribe(
 				By("Waiting for TCP server on VM to be reachable from TOR")
 				const ncClientContainer = "tor-nc-client"
 				Eventually(func() error {
-					out, _ := runOnTOR(tor, fmt.Sprintf(
+					out, _ := runOnExternalNode(tor, fmt.Sprintf(
 						"sudo docker run --rm --network host alpine sh -c 'sleep 999 | timeout 5 nc %s 9999' 2>&1", vmIP))
 					if !strings.Contains(out, "seq=") {
 						return fmt.Errorf("TCP server not sending data from TOR (output=%q)", out)
@@ -278,7 +279,7 @@ var _ = describe.CalicoDescribe(
 					g.Expect(err).NotTo(HaveOccurred())
 					g.Expect(m).To(Equal(elevatedRouteMetric),
 						"worker kernel metric should be elevated (512) after migration")
-					st := queryTORRoute(tor, vmIP)
+					st := torPeer.QueryRoute(vmIP)
 					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after migration")
 					g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
 					g.Expect(st.Routes[0].LocalPref).To(Equal(elevatedLocalPref), "TOR /32 should have elevated local_pref")
@@ -289,7 +290,7 @@ var _ = describe.CalicoDescribe(
 				// after the LiveMigrationRouteConvergenceTime (default 30s) expires.
 				By("Waiting for TOR /32 local_pref to revert to normal after convergence")
 				Eventually(func() int {
-					snap := queryTORSnapshot(tor, vmIP)
+					snap := torPeer.QuerySnapshot(vmIP)
 					if len(snap.Host32.Routes) > 0 {
 						return snap.Host32.Routes[0].LocalPref
 					}
@@ -322,10 +323,10 @@ var _ = describe.CalicoDescribe(
 				// convergence window. Poll for the elevated state.
 				By("Verifying TOR route state after second migration")
 				Eventually(func(g Gomega) {
-					st := queryTORRoute(tor, vmIP)
+					st := torPeer.QueryRoute(vmIP)
 					g.Expect(st.Has32).To(BeTrue(), "TOR should have /32 after second migration")
 					// Find best route — it must have elevated local_pref (no ECMP).
-					var b, nb *torBIRDRoute
+					var b, nb *bgp.BIRDRoute
 					for i := range st.Routes {
 						if st.Routes[i].Best {
 							b = &st.Routes[i]
@@ -348,7 +349,7 @@ var _ = describe.CalicoDescribe(
 				// local_pref, same as after the first migration.
 				By("Waiting for TOR /32 local_pref to revert after second migration")
 				Eventually(func() int {
-					snap := queryTORSnapshot(tor, vmIP)
+					snap := torPeer.QuerySnapshot(vmIP)
 					if len(snap.Host32.Routes) > 0 {
 						return snap.Host32.Routes[0].LocalPref
 					}

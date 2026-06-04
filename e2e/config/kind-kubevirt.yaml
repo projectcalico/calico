@@ -1,8 +1,9 @@
-# kind-kubevirt.yaml - test selection for KubeVirt live migration on KIND.
+# kind-kubevirt.yaml - test selection for KubeVirt live migration with MockVirt.
 #
-# Used by the "KubeVirt live migration (KIND)" Semaphore block.
-# Runs KubeVirt tests that work with MockVirt (simulated KubeVirt) on a KIND
-# cluster. Tests requiring real QEMU-backed VMs are excluded via the
+# Used by the "KubeVirt live migration (MockVirt)" Semaphore block.
+# Runs KubeVirt tests that work with MockVirt (simulated KubeVirt).
+# MockVirt can run on any cluster, not just KIND.
+# Tests requiring real QEMU-backed VMs are excluded via the
 # RequiresRealKubeVirt label.
 
 include:
@@ -11,4 +12,4 @@ include:
 exclude:
   labels:
     - label: RequiresRealKubeVirt
-      reason: "requires real KubeVirt with QEMU VMs; KIND uses MockVirt simulation"
+      reason: "requires real KubeVirt with QEMU VMs; MockVirt simulates without a guest OS"

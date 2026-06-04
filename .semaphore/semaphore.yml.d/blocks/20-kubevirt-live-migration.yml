@@ -34,6 +34,10 @@
           - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
           - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
           - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+          # Start external BIRD BGP peer container on the KIND Docker network.
+          # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+          - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+          - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
           # Run KubeVirt e2e tests
           - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
     epilogue:

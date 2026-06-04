@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -34,6 +33,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -41,6 +43,7 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -431,71 +434,15 @@ func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 	return
 }
 
-// runOnTOR runs cmd on the external TOR via SSH and returns stdout plus any
-// wrapped error. Callers wanting fire-and-forget must explicitly drop the error.
-func runOnTOR(tor *externalnode.Client, cmd string) (string, error) {
-	out, err := tor.Exec("sh", "-c", cmd)
+// runOnExternalNode runs cmd on an external node via SSH and returns stdout
+// plus any wrapped error. Used by live_migration.go for non-BIRD operations
+// (ping, kernel route checks, docker run).
+func runOnExternalNode(node *externalnode.Client, cmd string) (string, error) {
+	out, err := node.Exec("sh", "-c", cmd)
 	if err != nil {
-		return out, fmt.Errorf("TOR cmd %q failed: %w (output=%q)", cmd, err, out)
+		return out, fmt.Errorf("SSH cmd %q failed: %w (output=%q)", cmd, err, out)
 	}
 	return out, nil
-}
-
-// torBirdHeaderTemplate is the static header of the TOR BIRD peers config.
-// The %s placeholder is the cluster's IPv4 IPPool CIDR, used to gate the
-// import filter so only pod-network routes are accepted. Filter shape mirrors
-// confd's communities_and_operations bird.cfg.
-const torBirdHeaderTemplate = `function import_community_lp() {
-  if ((65000, 100) ~ bgp_community) then { bgp_local_pref = 2147483135; accept; }
-  accept;
-}
-
-filter import_community_priority {
-  # Only accept routes within the pod CIDR. Reject kernel/direct routes
-  # (0.0.0.0/0, 10.x, 169.254.x, 172.16.x) that would break TOR routing.
-  if (net !~ %s) then reject;
-
-  import_community_lp();
-  if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then
-    preference = 200;
-  accept;
-}
-
-template bgp bgp_template {
-  debug { states };
-  description "BGP peer";
-  local as 65001;
-  multihop;
-  gateway recursive;
-  import filter import_community_priority;
-  export none;
-  source address ip@local;
-  add paths on;
-  graceful restart;
-  connect delay time 2;
-  connect retry time 5;
-  error wait time 5,30;
-}
-
-`
-
-// torBirdPeerTemplate is the per-peer block format. Args: index, peer IP.
-const torBirdPeerTemplate = `protocol bgp node_%d from bgp_template {
-  neighbor %s as 64512;
-  passive on;
-}
-
-`
-
-// generateTORBirdPeersConf renders a BIRD 1.x peers config for the TOR. podCIDR
-// gates the import filter; pass the cluster's IPv4 IPPool CIDR.
-func generateTORBirdPeersConf(podCIDR string, nodeIPs []string) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, torBirdHeaderTemplate, podCIDR)
-	for i, nodeIP := range nodeIPs {
-		sb.WriteString(fmt.Sprintf(torBirdPeerTemplate, i, nodeIP))
-	}
-	return sb.String()
 }
 
 // discoverPodCIDR returns the CIDR of the first IPv4 IPPool found in the
@@ -536,85 +483,6 @@ func pickUnallocatedIP(ctx context.Context, lcgc clientv3.Interface) string {
 	return ""
 }
 
-// startBirdOnTOR launches a calico/bird container on the TOR, applies the
-// per-test peer config, and registers cleanup. Lifecycle is owned by the test
-// so different cases can use different BIRD configs.
-func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
-	GinkgoHelper()
-	By("Starting BIRD container on TOR")
-
-	_ = tor.RemoveContainer("tor-bird")
-
-	// The calico/bird image ships with a base bird.conf that defines router
-	// id, protocol kernel, and protocol device, plus an include for
-	// /etc/bird/*.conf so peers.conf is picked up on reload.
-	_, err := tor.RunContainer("tor-bird", images.CalicoBIRD,
-		[]string{"-d", "--privileged", "--network", "host"})
-	Expect(err).NotTo(HaveOccurred(), "failed to start BIRD container on TOR")
-	// Register cleanup before the readiness wait so a panic still removes
-	// the container we just created.
-	DeferCleanup(func() { stopBirdOnTOR(tor) })
-
-	Eventually(func() (bool, error) {
-		return tor.IsContainerRunning("tor-bird")
-	}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tor-bird container is not running")
-
-	// Add "merge paths on" to the kernel protocol block for ECMP support.
-	// With different BIRD preferences (200 for community-tagged, 100 for
-	// default), merge paths only merges routes of equal preference, so the
-	// higher-preference route wins during migration.
-	_, err = tor.RunInContainer("tor-bird", "sed", "-i",
-		"'/protocol kernel {/a merge paths on;'", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(), "failed to enable merge paths in tor-bird")
-
-	peersConf = strings.ReplaceAll(peersConf, "ip@local", torIP)
-	Expect(tor.WriteFileInContainer("tor-bird", "/etc/bird/peers.conf", []byte(peersConf))).
-		To(Succeed(), "failed to write BIRD peers config to TOR")
-
-	By("Reloading BIRD config on TOR")
-	out, err := tor.RunInContainer("tor-bird", "birdcl", "configure")
-	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
-	logrus.Infof("birdcl configure: %s", out)
-}
-
-// stopBirdOnTOR removes the BIRD container from the TOR node.
-func stopBirdOnTOR(tor *externalnode.Client) {
-	By("Stopping BIRD on TOR")
-	_ = tor.RemoveContainer("tor-bird")
-}
-
-// ebgpBIRDPeer abstracts the transport layer for an external BIRD peer used in
-// eBGP live migration tests. Both kindBIRDPeer (local Docker on the kind
-// network) and torBIRDPeerAdapter (SSH to an external TOR node) implement this.
-type ebgpBIRDPeer interface {
-	// PeerIP returns the IP address to use in the Calico BGPPeer resource.
-	PeerIP() string
-	// ConfigureBIRD applies the BIRD peers configuration and ensures BIRD is
-	// running with the new config. Implementations handle ip@local substitution,
-	// merge-paths enablement, and BIRD reload internally.
-	ConfigureBIRD(peersConf string)
-	// CheckBGPSession returns the output of "birdcl show protocols" for
-	// verifying BGP session establishment.
-	CheckBGPSession() (string, error)
-}
-
-// torBIRDPeerAdapter wraps an externalnode.Client to implement ebgpBIRDPeer
-// for SSH-based TOR nodes.
-type torBIRDPeerAdapter struct {
-	tor    *externalnode.Client
-	peerIP string // L2TP IP on the BGP subnet
-}
-
-func (a *torBIRDPeerAdapter) PeerIP() string { return a.peerIP }
-
-func (a *torBIRDPeerAdapter) ConfigureBIRD(peersConf string) {
-	startBirdOnTOR(a.tor, a.peerIP, peersConf)
-}
-
-func (a *torBIRDPeerAdapter) CheckBGPSession() (string, error) {
-	return a.tor.RunInContainer("tor-bird", "birdcl", "show", "protocols")
-}
-
 // setupEBGPPeeringCommon configures eBGP peering between an external BIRD peer
 // and the cluster's control-plane calico-node. It:
 //   - discovers the master node and pod CIDR
@@ -625,7 +493,7 @@ func (a *torBIRDPeerAdapter) CheckBGPSession() (string, error) {
 //
 // All Calico resources are cleaned up via DeferCleanup. filterPrefix and
 // peerPrefix control the random name prefixes for stale-resource sweeping.
-func setupEBGPPeeringCommon(f *framework.Framework, peer ebgpBIRDPeer, filterPrefix, peerPrefix string) {
+func setupEBGPPeeringCommon(f *framework.Framework, peer bgp.BIRDPeer, filterPrefix, peerPrefix string) {
 	GinkgoHelper()
 	By("Setting up eBGP peering")
 
@@ -691,7 +559,7 @@ func setupEBGPPeeringCommon(f *framework.Framework, peer ebgpBIRDPeer, filterPre
 	logrus.Infof("Discovered pod CIDR for BIRD import filter: %s", podCIDR)
 
 	// Generate BIRD peers config and apply via the transport-specific peer.
-	peersConf := generateTORBirdPeersConf(podCIDR, []string{masterBGPIP})
+	peersConf := bgp.GenerateBIRDPeersConf(podCIDR, []string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
 	peer.ConfigureBIRD(peersConf)
 
@@ -803,11 +671,11 @@ func setupEBGPPeeringCommon(f *framework.Framework, peer ebgpBIRDPeer, filterPre
 	logrus.Info("eBGP peering established")
 }
 
-// setupEBGPPeering configures eBGP peering between a TOR node (via SSH) and
+// setupKubeVirtEBGPPeering configures eBGP peering between a TOR node (via SSH) and
 // the cluster's control-plane calico-node. It discovers the TOR's L2TP IP by
 // matching against the master's BGP subnet, then delegates to
 // setupEBGPPeeringCommon for the shared BGPFilter/BGPPeer/session logic.
-func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
+func setupKubeVirtEBGPPeering(f *framework.Framework, tor *externalnode.Client) bgp.BIRDPeer {
 	GinkgoHelper()
 	By("Setting up eBGP peering between TOR and cluster nodes")
 
@@ -844,8 +712,9 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		"no TOR IP found in BGP subnet %s (TOR IPs: %v)", bgpSubnet, torIPs)
 	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
 
-	adapter := &torBIRDPeerAdapter{tor: tor, peerIP: torL2tpIP}
+	adapter := bgp.NewSSHBIRDPeer(tor, torL2tpIP)
 	setupEBGPPeeringCommon(f, adapter, "kubevirt-lm-", "tor-ebgp-peer-")
+	return adapter
 }
 
 // expectMasterCalicoNodePod polls until the calico-node pod on the
@@ -880,182 +749,6 @@ func logBIRDDiagnostics(masterPod *corev1.Pod, filterName string) {
 		out, _ := utils.ExecInCalicoNode(masterPod, it.cmd)
 		logrus.Infof("FAILURE-DEBUG %s:\n%s", it.label, out)
 	}
-}
-
-// torRouteState captures the parsed state of a /32 route on the TOR's BIRD
-// routing table, including all candidate routes and the kernel next hop.
-type torRouteState struct {
-	Has32         bool           `json:"has32"`
-	Routes        []torBIRDRoute `json:"routes"`
-	KernelNextHop string         `json:"kernelNextHop"`
-}
-
-// torBIRDRoute represents a single BIRD route entry for a /32 prefix.
-type torBIRDRoute struct {
-	NextHop   string `json:"nextHop"`
-	LocalPref int    `json:"localPref"`
-	Community string `json:"community"`
-	Best      bool   `json:"best"`
-}
-
-// torPrefixState captures whether a prefix is present in BIRD and its routes.
-type torPrefixState struct {
-	Present bool           `json:"present"`
-	Routes  []torBIRDRoute `json:"routes"`
-}
-
-// torRouteSnapshot captures the full TOR route picture at a point in time:
-// the /32 host route (elevated during migration), the /26 block route
-// (steady-state subnet route), and the kernel next-hop for the VM IP.
-type torRouteSnapshot struct {
-	Host32    torPrefixState `json:"host32"`
-	Block26   torPrefixState `json:"block26"`
-	KernelVia string         `json:"kernelVia"`
-}
-
-// parseBIRDRouteOutput parses the output of "birdcl show route <prefix> all"
-// and returns the list of routes. Returns nil if the output contains
-// "Network not in table" or is empty.
-func parseBIRDRouteOutput(output string) []torBIRDRoute {
-	if strings.Contains(output, "Network not in table") {
-		return nil
-	}
-
-	var routes []torBIRDRoute
-	var current *torBIRDRoute
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimRight(line, "\r")
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "BIRD") {
-			continue
-		}
-
-		// Route line: contains "via" but is not a BGP attribute.
-		if strings.Contains(line, " via ") && !strings.HasPrefix(trimmed, "BGP.") {
-			r := torBIRDRoute{}
-			if idx := strings.Index(line, " via "); idx >= 0 {
-				fields := strings.Fields(line[idx+5:])
-				if len(fields) > 0 {
-					r.NextHop = fields[0]
-				}
-			}
-			// BIRD marks the active/best route with " * " (space-asterisk-space)
-			// in the output line, e.g.:
-			//   10.244.0.64/32     via 172.16.8.2 on eth0 * [bgp_node0 16:22:38] (100/0) [AS65000i]
-			//                      via 172.16.8.4 on eth0 [bgp_node2 16:21:49] (100/0) [AS65000i]
-			// Match the standalone token rather than substring " * " elsewhere
-			// in the line (e.g. interface names containing "*" or AS-path
-			// expressions) so we never wrongly mark a non-best route as best.
-			r.Best = false
-			for _, tok := range strings.Fields(line) {
-				if tok == "*" {
-					r.Best = true
-					break
-				}
-			}
-			routes = append(routes, r)
-			current = &routes[len(routes)-1]
-			continue
-		}
-
-		// BGP attribute lines.
-		if current != nil {
-			if strings.HasPrefix(trimmed, "BGP.local_pref:") {
-				val := strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.local_pref:"))
-				if _, err := fmt.Sscanf(val, "%d", &current.LocalPref); err != nil {
-					logrus.Warnf("parseBIRDRouteOutput: failed to parse BGP.local_pref %q: %v", val, err)
-				}
-			} else if strings.HasPrefix(trimmed, "BGP.community:") {
-				current.Community = strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.community:"))
-			}
-		}
-	}
-	return routes
-}
-
-// queryTORRoute returns the /32 BIRD route state plus the kernel next-hop.
-// Called from polling loops, so it does not log per-call: callers log
-// snapshots themselves.
-func queryTORRoute(tor *externalnode.Client, vmIP string) torRouteState {
-	ip := strings.Split(vmIP, "/")[0]
-
-	out, err := runOnTOR(tor, fmt.Sprintf(
-		"sudo docker exec tor-bird birdcl show route %s/32 all 2>&1", ip))
-	if err != nil {
-		logrus.Warnf("queryTORRoute: SSH error: %v", err)
-		return torRouteState{}
-	}
-
-	var state torRouteState
-	state.Routes = parseBIRDRouteOutput(out)
-	state.Has32 = len(state.Routes) > 0
-
-	// Query kernel route for the active next hop.
-	kernOut, _ := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1", ip))
-	if idx := strings.Index(kernOut, "via "); idx >= 0 {
-		fields := strings.Fields(kernOut[idx+4:])
-		if len(fields) > 0 {
-			state.KernelNextHop = fields[0]
-		}
-	}
-
-	return state
-}
-
-// queryTORSnapshot queries the TOR's BIRD routing table for both the /32 host
-// route and the /26 block route, plus the kernel next-hop. This captures the
-// full route picture at a point in time with a single SSH call.
-func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
-	ip := strings.Split(vmIP, "/")[0]
-
-	parsed := net.ParseIP(ip).To4()
-	if parsed == nil {
-		return torRouteSnapshot{}
-	}
-	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
-	block26 := fmt.Sprintf("%s/26", blockIP)
-
-	// Single SSH call with section markers.
-	cmd := fmt.Sprintf(
-		"echo '=== /32 ==='; sudo docker exec tor-bird birdcl show route %s/32 all 2>&1; "+
-			"echo '=== /26 ==='; sudo docker exec tor-bird birdcl show route %s all 2>&1; "+
-			"echo '=== kernel ==='; ip route get %s 2>&1",
-		ip, block26, ip)
-	out, err := runOnTOR(tor, cmd)
-	if err != nil {
-		logrus.Warnf("queryTORSnapshot: SSH error: %v", err)
-		return torRouteSnapshot{}
-	}
-
-	var snap torRouteSnapshot
-
-	sections := strings.Split(out, "=== ")
-	for _, sec := range sections {
-		switch {
-		case strings.HasPrefix(sec, "/32 ==="):
-			body := strings.TrimPrefix(sec, "/32 ===")
-			routes := parseBIRDRouteOutput(body)
-			snap.Host32 = torPrefixState{Present: len(routes) > 0, Routes: routes}
-		case strings.HasPrefix(sec, "/26 ==="):
-			body := strings.TrimPrefix(sec, "/26 ===")
-			routes := parseBIRDRouteOutput(body)
-			snap.Block26 = torPrefixState{Present: len(routes) > 0, Routes: routes}
-		case strings.HasPrefix(sec, "kernel ==="):
-			body := strings.TrimPrefix(sec, "kernel ===")
-			if idx := strings.Index(body, "via "); idx >= 0 {
-				fields := strings.Fields(body[idx+4:])
-				if len(fields) > 0 {
-					snap.KernelVia = fields[0]
-				}
-			}
-		}
-	}
-
-	logrus.Infof("queryTORSnapshot(%s): /32=%v(%d) /26=%v(%d) kernelVia=%s",
-		ip, snap.Host32.Present, len(snap.Host32.Routes),
-		snap.Block26.Present, len(snap.Block26.Routes), snap.KernelVia)
-	return snap
 }
 
 // queryWorkerMetric queries the kernel route metric for a /32 VM route on a
@@ -1138,173 +831,31 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	return ""
 }
 
-// isKINDCluster returns true if the cluster is a KIND (Kubernetes IN Docker)
-// cluster. Detection is based on the providerID prefix "kind://" on any node.
-func isKINDCluster(f *framework.Framework) bool {
-	nodes, err := f.ClientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		logrus.Warnf("isKINDCluster: failed to list nodes: %v", err)
-		return false
-	}
-	for _, n := range nodes.Items {
-		if strings.HasPrefix(n.Spec.ProviderID, "kind://") {
-			return true
-		}
-	}
-	return false
-}
-
-// kindBIRDPeer manages a BIRD 1.x container running on the Docker "kind"
-// network. Unlike externalnode.Client (SSH-based), this uses local Docker
-// commands so no external node or SSH credentials are required.
-type kindBIRDPeer struct {
-	containerName string
-	containerIP   string
-}
-
-// startKindBIRDPeer starts a BIRD container on the kind Docker network and
-// returns a handle for interacting with it. The container runs in privileged
-// mode so BIRD can manipulate the routing table.
-func startKindBIRDPeer(name string) *kindBIRDPeer {
+// isMockVirtDeployed returns true if the cluster is running MockVirt (simulated
+// KubeVirt). Detection checks the KubeVirt CR's simulationMode field, which the
+// MockVirt deploy script patches to true.
+func isMockVirtDeployed(f *framework.Framework) bool {
 	GinkgoHelper()
-
-	// Remove any stale container from a previous run.
-	_ = exec.Command("docker", "rm", "-f", name).Run()
-
-	By(fmt.Sprintf("Starting BIRD container %s on kind network", name))
-	out, err := exec.Command("docker", "run", "-d", "--privileged",
-		"--network", "kind", "--name", name, images.CalicoBIRD).CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to start BIRD container %s: %s", name, string(out))
-
-	// Wait for the container to be running.
-	Eventually(func() error {
-		out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("docker inspect: %w (%s)", err, string(out))
-		}
-		if strings.TrimSpace(string(out)) != "true" {
-			return fmt.Errorf("container %s not running yet", name)
-		}
-		return nil
-	}, 30*time.Second, 2*time.Second).Should(Succeed(), "BIRD container %s not running", name)
-
-	// Get the container IP on the kind network.
-	ipOut, err := exec.Command("docker", "inspect", "-f",
-		"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", name).CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(), "failed to get IP of container %s", name)
-	containerIP := strings.TrimSpace(string(ipOut))
-	Expect(containerIP).NotTo(BeEmpty(), "container %s has no IP address", name)
-
-	logrus.Infof("BIRD container %s started with IP %s on kind network", name, containerIP)
-	return &kindBIRDPeer{containerName: name, containerIP: containerIP}
-}
-
-// PeerIP returns the container IP for the Calico BGPPeer resource.
-func (p *kindBIRDPeer) PeerIP() string { return p.containerIP }
-
-// CheckBGPSession returns the output of "birdcl show protocols".
-func (p *kindBIRDPeer) CheckBGPSession() (string, error) {
-	return p.exec("birdcl", "show", "protocols")
-}
-
-// stop removes the BIRD container.
-func (p *kindBIRDPeer) stop() {
-	By(fmt.Sprintf("Stopping BIRD container %s", p.containerName))
-	_ = exec.Command("docker", "rm", "-f", p.containerName).Run()
-}
-
-// exec runs a command inside the BIRD container and returns stdout+stderr.
-func (p *kindBIRDPeer) exec(args ...string) (string, error) {
-	cmdArgs := append([]string{"exec", p.containerName}, args...)
-	out, err := exec.Command("docker", cmdArgs...).CombinedOutput()
-	return string(out), err
-}
-
-// writeFile writes content to a file inside the container via docker exec.
-func (p *kindBIRDPeer) writeFile(path, content string) {
-	GinkgoHelper()
-	cmdArgs := []string{"exec", "-i", p.containerName, "sh", "-c", fmt.Sprintf("cat > %s", path)}
-	cmd := exec.Command("docker", cmdArgs...)
-	cmd.Stdin = strings.NewReader(content)
-	out, err := cmd.CombinedOutput()
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to write %s in container %s: %s", path, p.containerName, string(out))
-}
-
-// ConfigureBIRD writes the peers config, enables merge paths, and reloads BIRD.
-func (p *kindBIRDPeer) ConfigureBIRD(peersConf string) {
-	GinkgoHelper()
-
-	// Enable merge paths in the kernel protocol for ECMP support.
-	out, err := p.exec("sed", "-i", "/protocol kernel {/a merge paths on;", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to enable merge paths in BIRD: %s", out)
-
-	// Replace the source address placeholder with the container's actual IP.
-	peersConf = strings.ReplaceAll(peersConf, "ip@local", p.containerIP)
-	p.writeFile("/etc/bird/peers.conf", peersConf)
-
-	By("Reloading BIRD config")
-	out, err = p.exec("birdcl", "configure")
-	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
-	logrus.Infof("birdcl configure: %s", out)
-}
-
-// queryRoute queries the BIRD routing table for a /32 route and returns
-// the parsed route state. Uses parseBIRDRouteOutput from utils.go.
-func (p *kindBIRDPeer) queryRoute(vmIP string) torRouteState {
-	ip := strings.Split(vmIP, "/")[0]
-
-	out, err := p.exec("birdcl", "show", "route", ip+"/32", "all")
-	if err != nil {
-		logrus.Warnf("kindBIRDPeer.queryRoute: exec error: %v", err)
-		return torRouteState{}
+	dynClient, err := dynamic.NewForConfig(f.ClientConfig())
+	Expect(err).NotTo(HaveOccurred(), "failed to create dynamic client")
+	kvResource := schema.GroupVersionResource{
+		Group:    "kubevirt.io",
+		Version:  "v1",
+		Resource: "kubevirts",
 	}
-
-	var state torRouteState
-	state.Routes = parseBIRDRouteOutput(out)
-	state.Has32 = len(state.Routes) > 0
-	return state
+	obj, err := dynClient.Resource(kvResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to get KubeVirt CR kubevirt/kubevirt")
+	simMode, found, err := unstructured.NestedBool(obj.Object,
+		"spec", "configuration", "developerConfiguration", "simulationMode")
+	Expect(err).NotTo(HaveOccurred(), "failed to read simulationMode from KubeVirt CR")
+	return found && simMode
 }
 
-// querySnapshot queries the BIRD routing table for both the /32 host route
-// and the /26 block route. Same pattern as queryTORSnapshot but via local
-// docker exec instead of SSH.
-func (p *kindBIRDPeer) querySnapshot(vmIP string) torRouteSnapshot {
-	ip := strings.Split(vmIP, "/")[0]
-
-	parsed := net.ParseIP(ip).To4()
-	if parsed == nil {
-		return torRouteSnapshot{}
-	}
-	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
-	block26 := fmt.Sprintf("%s/26", blockIP)
-
-	// Query /32 route.
-	out32, _ := p.exec("birdcl", "show", "route", ip+"/32", "all")
-	routes32 := parseBIRDRouteOutput(out32)
-
-	// Query /26 route.
-	out26, _ := p.exec("birdcl", "show", "route", block26, "all")
-	routes26 := parseBIRDRouteOutput(out26)
-
-	snap := torRouteSnapshot{
-		Host32:  torPrefixState{Present: len(routes32) > 0, Routes: routes32},
-		Block26: torPrefixState{Present: len(routes26) > 0, Routes: routes26},
-	}
-
-	logrus.Infof("kindBIRDPeer.querySnapshot(%s): /32=%v(%d) /26=%v(%d)",
-		ip, snap.Host32.Present, len(snap.Host32.Routes),
-		snap.Block26.Present, len(snap.Block26.Routes))
-	return snap
-}
-
-// setupKindEBGPPeering configures eBGP peering between a BIRD container on the
-// kind Docker network and the cluster's control-plane calico-node.
-func setupKindEBGPPeering(f *framework.Framework, bird *kindBIRDPeer) {
+// setupMockVirtEBGPPeering configures eBGP peering between a BIRD container on
+// the Docker network and the cluster's control-plane calico-node.
+func setupMockVirtEBGPPeering(f *framework.Framework, bird *bgp.ContainerBIRDPeer) {
 	GinkgoHelper()
-	setupEBGPPeeringCommon(f, bird, "kubevirt-kind-lm-", "kind-ebgp-peer-")
+	setupEBGPPeeringCommon(f, bird, "kubevirt-mockvirt-lm-", "mockvirt-ebgp-peer-")
 }
 
 // expectMigrationFailed polls the VMIM until it reaches MigrationFailed

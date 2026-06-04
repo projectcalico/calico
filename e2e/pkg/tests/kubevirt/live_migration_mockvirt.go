@@ -31,30 +31,31 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	e2eclient "github.com/projectcalico/calico/e2e/pkg/utils/client"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-// KubeVirt live migration route convergence tests for KIND clusters.
+// KubeVirt live migration route convergence tests for MockVirt clusters.
 // iBGP test: validates kernel route metric elevation (512) and reversion (1024)
 // on worker nodes during live migration — no external BIRD peer required.
 // eBGP test: validates BGP route priority (krt_metric, community tagging,
-// local_pref) using a local BIRD container on the Docker "kind" network.
+// local_pref) using a local BIRD container on the Docker network.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("KubeVirt"),
 	describe.RequiresMockVirt(),
 	describe.WithCategory(describe.Networking),
-	"KubeVirt live migration (KIND)",
+	"KubeVirt live migration (MockVirt)",
 	func() {
-		f := utils.NewDefaultFramework("calico-kubevirt-kind")
+		f := utils.NewDefaultFramework("calico-kubevirt-mockvirt")
 
 		var cli ctrlclient.Client
 
 		BeforeEach(func() {
-			if !isKINDCluster(f) {
-				Fail("KubeVirt-KIND tests selected but cluster is not a KIND cluster")
+			if !isMockVirtDeployed(f) {
+				Fail("KubeVirt-MockVirt tests selected but cluster does not have MockVirt deployed")
 			}
 			// Double migration needs 3 workers: source, first target, second target.
 			utils.RequireNodeCount(f, 3)
@@ -71,7 +72,7 @@ var _ = describe.CalicoDescribe(
 
 			// Create a VM with default cloud-init (no TCP server needed — this
 			// test only validates kernel route state, not TCP continuity).
-			vmName := "e2e-kind-ibgp"
+			vmName := "e2e-mockvirt-ibgp"
 			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
 			By("Creating VM")
@@ -160,7 +161,7 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 
-			vmName := "e2e-kind-timeout"
+			vmName := "e2e-mockvirt-timeout"
 			// The migration-timeout label is set on the VM spec template,
 			// which propagates it to the VMI and virt-launcher pod automatically.
 			// FakeDomainManager reads vmi.Labels["migration-timeout"] to decide
@@ -259,7 +260,7 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 
-			vmName := "e2e-kind-netpol"
+			vmName := "e2e-mockvirt-netpol"
 			vm := &kubeVirtVM{
 				name:      vmName,
 				namespace: ns,
@@ -346,16 +347,15 @@ var _ = describe.CalicoDescribe(
 			defer cancel()
 			ns := f.Namespace.Name
 
-			// Start BIRD container on the kind Docker network.
-			bird := startKindBIRDPeer(utils.GenerateRandomName("kind-bird-ebgp-"))
-			DeferCleanup(bird.stop)
+			// Discover the pre-existing BIRD container (created by infra setup).
+			bird := bgp.NewContainerBIRDPeer()
 
 			// Set up eBGP peering between the BIRD container and the cluster.
-			setupKindEBGPPeering(f, bird)
+			setupMockVirtEBGPPeering(f, bird)
 
 			// Create a VM with default cloud-init (no TCP server needed — this
 			// test only validates route convergence, not TCP continuity).
-			vmName := "e2e-kind-ebgp"
+			vmName := "e2e-mockvirt-ebgp"
 			vm := &kubeVirtVM{name: vmName, namespace: ns}
 
 			By("Creating VM")
@@ -370,7 +370,7 @@ var _ = describe.CalicoDescribe(
 			// migration. Verify the /26 to confirm eBGP routing is working.
 			By("Verifying BIRD container has /26 block route for VM subnet")
 			Eventually(func() bool {
-				snap := bird.querySnapshot(vmIP)
+				snap := bird.QuerySnapshot(vmIP)
 				return snap.Block26.Present
 			}, 2*time.Minute, 5*time.Second).Should(BeTrue(),
 				"BIRD container should have /26 block route via eBGP")
@@ -393,7 +393,7 @@ var _ = describe.CalicoDescribe(
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(m).To(Equal(elevatedRouteMetric),
 					"worker kernel metric should be elevated (512) after migration")
-				st := bird.queryRoute(vmIP)
+				st := bird.QueryRoute(vmIP)
 				g.Expect(st.Has32).To(BeTrue(), "BIRD should have /32 after migration")
 				g.Expect(st.Routes).To(HaveLen(1), "should be single /32 route (no ECMP)")
 				g.Expect(st.Routes[0].LocalPref).To(Equal(elevatedLocalPref),
@@ -405,7 +405,7 @@ var _ = describe.CalicoDescribe(
 			// Wait for the elevated /32 route to revert to normal local_pref.
 			By("Waiting for BIRD /32 local_pref to revert to normal after convergence")
 			Eventually(func() int {
-				snap := bird.querySnapshot(vmIP)
+				snap := bird.QuerySnapshot(vmIP)
 				if len(snap.Host32.Routes) > 0 {
 					return snap.Host32.Routes[0].LocalPref
 				}
@@ -434,9 +434,9 @@ var _ = describe.CalicoDescribe(
 			// local_pref (elevated for new node, normal for old node).
 			By("Verifying BIRD route state after second migration")
 			Eventually(func(g Gomega) {
-				st := bird.queryRoute(vmIP)
+				st := bird.QueryRoute(vmIP)
 				g.Expect(st.Has32).To(BeTrue(), "BIRD should have /32 after second migration")
-				var b, nb *torBIRDRoute
+				var b, nb *bgp.BIRDRoute
 				for i := range st.Routes {
 					if st.Routes[i].Best {
 						b = &st.Routes[i]
@@ -459,7 +459,7 @@ var _ = describe.CalicoDescribe(
 			// Wait for the second migration's /32 route to revert.
 			By("Waiting for BIRD /32 local_pref to revert after second migration")
 			Eventually(func() int {
-				snap := bird.querySnapshot(vmIP)
+				snap := bird.QuerySnapshot(vmIP)
 				if len(snap.Host32.Routes) > 0 {
 					return snap.Host32.Routes[0].LocalPref
 				}
