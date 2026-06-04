@@ -48,6 +48,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	bpfringbuf "github.com/projectcalico/calico/felix/bpf/ringbuf"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -1101,6 +1102,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			log.Info("BPF: ConntrackInfoReader added to conntrackScanner")
 			collectorConntrackInfoReader = collectorCtInfoReader
+		}
+
+		// Add connection limit scanner as a low-frequency drift safety net.
+		// It piggybacks on the CT scan loop but downsamples its recount work
+		// internally (see connLimitScannerRunEveryN in connlimit_scanner.go),
+		// so the actual recount runs roughly every 30s. It covers silent
+		// CT-entry purges that the BPF fast-path can't observe: half-close,
+		// idle TCPEstablished timeout, network partition, and LRU eviction.
+		if bpfEndpointManager != nil {
+			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
+				return bpfEndpointManager.GetConnLimitedPodInfo()
+			}
+			if conntrackScannerV4 != nil {
+				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSMap, connLimitProvider, qos.IPFamilyV4))
+			}
+			if conntrackScannerV6 != nil {
+				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSMap, connLimitProvider, qos.IPFamilyV6))
+			}
 		}
 
 		if conntrackScannerV4 != nil {
@@ -3087,6 +3108,7 @@ func startBPFDataplaneComponents(
 	}
 
 	workloadRemoveChan := make(chan string, 1000)
+
 	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),
