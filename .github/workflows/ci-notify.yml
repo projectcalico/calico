@@ -118,10 +118,16 @@ jobs:
         run: |
           MARKER="<!-- sem-ai-ci-triage -->"
           COMMENT_URL=""
+          # Bound the query with `since` (filters by updated_at): triage
+          # always *creates or PATCHes* its comment for the current run, so
+          # its updated_at is recent. A 2h window keeps the result set to
+          # ~1 page instead of walking every comment 12 times — avoids the
+          # API churn/rate-limit risk of an unbounded --paginate in a loop.
+          SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           # ~120s budget (12 x 10s). Triage typically comments well within
-          # this; if not, we fall back to a plain PR link in the DM.
+          # this; if not, we just omit the analysis link from the DM.
           for _ in $(seq 1 12); do
-            COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
               --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][-1].html_url // empty")
             [[ -n "$COMMENT_URL" ]] && break
             sleep 10
@@ -172,8 +178,11 @@ jobs:
             --data-binary @payload.json)
           set -e
 
-          if [[ "$(printf '%s' "$RESP" | jq -r '.ok // false')" != "true" ]]; then
-            echo "::warning::Slack DM failed: $(printf '%s' "$RESP" | jq -r '.error // "unknown"')"
+          # jq stderr suppressed: an empty/non-JSON $RESP (Slack unreachable)
+          # is already non-fatal here — the [[ ]] just takes the warning
+          # branch — but silencing jq keeps a transient failure out of the log.
+          if [[ "$(printf '%s' "$RESP" | jq -r '.ok // false' 2>/dev/null)" != "true" ]]; then
+            echo "::warning::Slack DM failed: $(printf '%s' "$RESP" | jq -r '.error // "unknown"' 2>/dev/null)"
           else
             echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
           fi
