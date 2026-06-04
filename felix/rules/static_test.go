@@ -43,7 +43,7 @@ var _ = Describe("Static", func() {
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
-				allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
+				allPoolSetName := fmt.Sprintf("cali%v0network-ip-pools", ipVersion)
 				thisHostSetName := fmt.Sprintf("cali%v0this-host", ipVersion)
 				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
 				expRules = append(expRules, generictables.Rule{
