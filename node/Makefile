@@ -131,7 +131,15 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from node/deps.txt by lib.Makefile.
+## The node image ships the combined `calico` monobinary built from
+## ../cmd/calico (see $(NODE_CONTAINER_BINARY) below). The monobinary's source
+## closure (felix, confd, etc.) is NOT in node/deps.txt because node's own Go
+## module doesn't import those packages directly — they're pulled in by the
+## `make -C ../cmd/calico` recursion, which deps.txt generation can't see. Fold
+## in the cmd module's local deps so a change to felix (or anything else in the
+## monobinary) rebuilds the node image.
+SRC_FILES += $(call local-deps-go-files,cmd)
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
