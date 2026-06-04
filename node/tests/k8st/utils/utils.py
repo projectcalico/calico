@@ -240,6 +240,26 @@ def run(command, logerr=True, allow_fail=False, allow_codes=[], returnerr=False)
     return out
 
 
+def run_go_test(binary, timeout="12m"):
+    """Run a compiled k8st Go test binary against the current kind cluster.
+
+    Go-based k8st tests live in their own package under node/tests/k8st/ and are
+    compiled by `make -C node build-k8st-go-tests` into tests/k8st/bin/<binary>
+    (the k8st test container has no Go toolchain). A thin pytest wrapper calls
+    this to run the binary with the cluster kubeconfig, surface each Go sub-test
+    via -test.v, and dump cluster diagnostics on failure. `binary` is the file
+    name under tests/k8st/bin
+    """
+    bin_path = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "bin", binary))
+    assert os.path.exists(bin_path), (
+        "%s not found -- build the k8st Go test binaries first with "
+        "`make -C node build-k8st-go-tests`" % bin_path)
+    with DiagsCollector():
+        run("KUBECONFIG=/root/.kube/config %s -test.v -test.timeout=%s"
+            % (bin_path, timeout))
+
+
 def curl(hostname, container="kube-node-extra"):
     if ':' in hostname:
         # It's an IPv6 address.
