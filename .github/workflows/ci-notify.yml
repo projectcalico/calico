@@ -149,12 +149,32 @@ jobs:
           env.STATE != 'success'
         env:
           PR: ${{ steps.resolve.outputs.pr }}
+          # When CI finished, per GitHub (status events only; empty on a
+          # manual workflow_dispatch). Used as the freshness reference below.
+          EVENT_CREATED_AT: ${{ github.event.created_at }}
         run: |
           MARKER="<!-- sem-ai-ci-triage -->"
           COMMENT_URL=""
-          # Bound the query with `since` (filters by updated_at): triage
-          # always *creates or PATCHes* its comment for the current run, so
-          # its updated_at is recent. A 2h window keeps the result set to
+
+          # Freshness gate: triage upserts a single comment per PR, so a
+          # comment from an *earlier* failure can already exist. Accept it
+          # only if it was updated after this CI run finished — i.e. triage
+          # (which is triggered by the same status event) has rewritten it
+          # for the current run. Compare GitHub-server timestamps on both
+          # sides (event created_at vs comment updated_at); ISO-8601 UTC
+          # sorts lexicographically, so a string '>' is a time comparison.
+          # If triage lags we keep polling; if it skips the run entirely the
+          # comment never goes fresh and we correctly omit the link. On a
+          # manual run there is no event time, so skip the gate.
+          REF="$EVENT_CREATED_AT"
+          if [[ -n "$REF" ]]; then
+            FRESH="and (.updated_at > \"$REF\")"
+          else
+            FRESH=""
+          fi
+
+          # Bound the query with `since` (filters by updated_at): triage's
+          # comment is always recent, so a 2h window keeps the result to
           # ~1 page instead of walking every comment 12 times — avoids the
           # API churn/rate-limit risk of an unbounded --paginate in a loop.
           SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -162,7 +182,7 @@ jobs:
           # this; if not, we just omit the analysis link from the DM.
           for _ in $(seq 1 12); do
             COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
-              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][-1].html_url // empty")
+              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH)][-1].html_url // empty")
             [[ -n "$COMMENT_URL" ]] && break
             sleep 10
           done
