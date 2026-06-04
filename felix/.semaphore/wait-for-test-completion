@@ -11,7 +11,18 @@ while true; do
   sleep 1
 
   # Check if the process is still running.
-  if [ -e "/proc/$(cat test.pid)" ]; then
+  if [ ! -f test.pid ]; then
+    echo "ERROR: test.pid not found" >&2
+    echo "66"
+    break
+  fi
+  pid=$(cat test.pid)
+  if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: test.pid contains non-numeric value: '$pid'" >&2
+    echo "66"
+    break
+  fi
+  if [ -e "/proc/$pid" ]; then
     # It is, so keep waiting.
     continue
   fi

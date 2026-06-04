@@ -341,6 +341,112 @@ var _ = Describe("RBAC calculator tests", func() {
 		})
 	})
 
+	It("treats deletecollection as a distinct verb from delete for tiered policies", func() {
+		// Granting only "delete" must not produce matches for VerbDeleteCollection.
+		// The storage layer's DeleteCollection override relies on this distinction:
+		// without an explicit deletecollection grant, a caller cannot bulk-delete
+		// policies in tiers they only have per-item delete access on.
+		gettableTiers := []string{"default", "tier2"}
+		mock.ClusterRoleBindings = []string{"delete-only", "get-tiers"}
+		mock.ClusterRoles = map[string][]rbac_v1.PolicyRule{
+			"delete-only": {{
+				APIGroups: []string{"*"},
+				Resources: []string{"*"},
+				Verbs:     []string{"delete"},
+			}},
+			"get-tiers": {{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"tiers"},
+				Verbs:         []string{"get"},
+				ResourceNames: gettableTiers,
+			}},
+		}
+
+		res, err := calc.CalculatePermissions(myUser, allResourceVerbs)
+		Expect(err).ToNot(HaveOccurred())
+
+		for _, resourceType := range tieredPolicyResources {
+			Expect(res[resourceType]).To(haveMatchForVerbs([]Match{
+				{Tier: "default"},
+				{Tier: "tier2"},
+			}, VerbDelete), resourceType.String())
+			Expect(res[resourceType]).To(haveMatchNoneForVerbs(VerbDeleteCollection), resourceType.String())
+		}
+	})
+
+	It("matches deletecollection across gettable tiers when granted cluster-wide", func() {
+		// Granting "deletecollection" cluster-wide on tiered policies must expand
+		// to matches for each gettable tier — the same expansion the calculator
+		// applies to every other tier-aware verb. This guards the calculator side
+		// of the DeleteCollection authorization fix: the storage override only
+		// works correctly if the calculator surfaces deletecollection grants.
+		gettableTiers := []string{"default", "tier2"}
+		mock.ClusterRoleBindings = []string{"deletecollection-all", "get-tiers"}
+		mock.ClusterRoles = map[string][]rbac_v1.PolicyRule{
+			"deletecollection-all": {{
+				APIGroups: []string{"*"},
+				Resources: []string{"*"},
+				Verbs:     []string{"deletecollection"},
+			}},
+			"get-tiers": {{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"tiers"},
+				Verbs:         []string{"get"},
+				ResourceNames: gettableTiers,
+			}},
+		}
+
+		res, err := calc.CalculatePermissions(myUser, allResourceVerbs)
+		Expect(err).ToNot(HaveOccurred())
+
+		By("tiered policies expand deletecollection across gettable tiers", func() {
+			for _, resourceType := range tieredPolicyResources {
+				Expect(res[resourceType]).To(haveOnlyMatchesForVerbs([]Match{
+					{Tier: "default"},
+					{Tier: "tier2"},
+				}, VerbDeleteCollection), resourceType.String())
+			}
+		})
+
+		By("non-tiered resources match cluster-wide", func() {
+			for _, resourceType := range []ResourceType{
+				resourceHostEndpoints,
+				resourceNetworkSets,
+				resourceGlobalNetworkSets,
+				resourcePods,
+			} {
+				Expect(res[resourceType]).To(haveMatchAllForVerbs(VerbDeleteCollection), resourceType.String())
+			}
+		})
+	})
+
+	It("scopes namespaced deletecollection matches to authorized namespaces", func() {
+		// Granting deletecollection only via a namespaced RoleBinding must not
+		// leak into other namespaces. This mirrors the per-namespace handling of
+		// other verbs and is the namespaced counterpart to the cluster-wide test.
+		mock.RoleBindings = map[string][]string{"ns1": {"/deletecollection-ns"}}
+		mock.Roles = map[string][]rbac_v1.PolicyRule{
+			"ns1/deletecollection-ns": {{
+				APIGroups: []string{"*"},
+				Resources: []string{"*"},
+				Verbs:     []string{"deletecollection"},
+			}},
+		}
+
+		res, err := calc.CalculatePermissions(myUser, allResourceVerbs)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Pick a representative non-tiered namespaced resource. Tiered policies
+		// require get-tiers RBAC to expand and are covered in the cluster-wide
+		// test above.
+		Expect(res[resourceNetworkSets]).To(haveMatchForVerbs(
+			[]Match{{Namespace: "ns1"}}, VerbDeleteCollection,
+		))
+		Expect(res[resourceNetworkSets]).To(haveMatchNoneForVerbs(
+			VerbGet, VerbList, VerbUpdate, VerbCreate, VerbPatch, VerbDelete, VerbWatch,
+		))
+	})
+
 	It("matches wildcard name matches for all resources in namespace ns1, get access all Tiers and UISettingsGroups", func() {
 		mock.ClusterRoleBindings = []string{"get-tiers", "get-uisettingsgroups"}
 		mock.ClusterRoles = map[string][]rbac_v1.PolicyRule{
@@ -520,12 +626,13 @@ var _ = Describe("RBAC calculator tests", func() {
 					{Tier: "tier2"},
 					{Tier: "tier3"},
 				},
-				VerbUpdate: nil,
-				VerbCreate: nil,
-				VerbList:   nil,
-				VerbDelete: nil,
-				VerbPatch:  nil,
-				VerbWatch:  nil,
+				VerbUpdate:           nil,
+				VerbCreate:           nil,
+				VerbList:             nil,
+				VerbDelete:           nil,
+				VerbDeleteCollection: nil,
+				VerbPatch:            nil,
+				VerbWatch:            nil,
 			}))
 		})
 
@@ -537,25 +644,27 @@ var _ = Describe("RBAC calculator tests", func() {
 					resourceType == resourceStagedCalicoNetworkPolicies {
 					By("tiered policy resources", func() {
 						Expect(res[resourceType]).To(Equal(map[Verb][]Match{
-							VerbCreate: nil,
-							VerbPatch:  {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
-							VerbDelete: {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
-							VerbWatch:  {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
-							VerbGet:    nil,
-							VerbUpdate: nil,
-							VerbList:   {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
+							VerbCreate:           nil,
+							VerbPatch:            {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
+							VerbDelete:           {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
+							VerbDeleteCollection: nil,
+							VerbWatch:            {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
+							VerbGet:              nil,
+							VerbUpdate:           nil,
+							VerbList:             {{Tier: "tier2", Namespace: "ns1"}, {Tier: "tier3", Namespace: "ns1"}},
 						}), resourceType.String())
 					})
 				} else {
 					By("resources (except tiered-policies)", func() {
 						Expect(res[resourceType]).To(Equal(map[Verb][]Match{
-							VerbCreate: nil,
-							VerbPatch:  {{Namespace: "ns1"}},
-							VerbDelete: {{Namespace: "ns1"}},
-							VerbWatch:  {{Namespace: "ns1"}},
-							VerbGet:    nil,
-							VerbUpdate: nil,
-							VerbList:   {{Namespace: "ns1"}},
+							VerbCreate:           nil,
+							VerbPatch:            {{Namespace: "ns1"}},
+							VerbDelete:           {{Namespace: "ns1"}},
+							VerbDeleteCollection: nil,
+							VerbWatch:            {{Namespace: "ns1"}},
+							VerbGet:              nil,
+							VerbUpdate:           nil,
+							VerbList:             {{Namespace: "ns1"}},
 						}), resourceType.String())
 					})
 				}

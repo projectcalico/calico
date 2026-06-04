@@ -2,31 +2,31 @@ include ../metadata.mk
 
 # This Makefile builds Felix and releases it in various forms:
 #
-#				   Go install
-#					|
-#		 +-------+		v
-#		 | Felix |   +---------------------+
-#		 |  Go   |   | calico/go-build     |
-#		 |  code |   +---------------------+
-#		 +-------+	  /
-#			\	 /
-#			 \      /
-#			 go build
-#			     |
-#			     v
-#		       +------------------+
-#		       | bin/calico-felix |
-#		       +------------------+
-#			       /
-#		      .-------'
-#		    /
-#		   /
-#	    docker build
-#		  |
-#		  v
-#	   +-------------------+
-#	   | calico/felix-test |
-#	   +-------------------+
+#                                  Go install
+#                                       |
+#                +-------+              v
+#                | Felix |   +---------------------+
+#                |  Go   |   | calico/go-build     |
+#                |  code |   +---------------------+
+#                +-------+        /
+#                       \        /
+#                        \      /
+#                        go build
+#                            |
+#                            v
+#                      +------------------+
+#                      | bin/calico-felix |
+#                      +------------------+
+#                              /
+#                     .-------'
+#                   /
+#                  /
+#           docker build
+#                 |
+#                 v
+#          +-------------------+
+#          | calico/felix-test |
+#          +-------------------+
 #
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
@@ -174,14 +174,10 @@ DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC)
 LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
 bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-else
 ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-endif
 endif
 
 bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
@@ -319,18 +315,20 @@ fv/fv.test: $(LIBBPF_A) $(SRC_FILES) $(FV_SRC_FILES)
 	fi
 	$(DOCKER_GO_BUILD_CGO) go test ./fv -c -o $@
 
-REMOTE_DEPS=build-calico-image
-ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
-REMOTE_DEPS+=build-calico-race
-else
-REMOTE_DEPS+=build-calico-cgo
-endif
-
 # Typha runs from the combined calico image as `component typha` (see
-# FV_TYPHAIMAGE). For local FV runs we build the image here; in CI it is
-# preloaded from the calico-image GCS cache.
-build-calico-image:
-	$(MAKE) -C ../cmd/calico image
+# FV_TYPHAIMAGE). The marker rule lives in lib.Makefile and recurses into
+# cmd/calico to build the image; in CI the image is preloaded from the
+# calico-image GCS cache and CALICO_IMAGE_DEP is cleared to opt out so a
+# broken cache fails loudly instead of silently rebuilding. Callers that
+# supply the image themselves (e.g. typha k8sfv-test) clear CALICO_IMAGE_DEP
+# but keep CALICO_BINARY_DEP so the on-disk FV binary is still produced.
+CALICO_IMAGE_DEP=$(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+ifeq ($(FV_RACE_DETECTOR_ENABLED),true)
+CALICO_BINARY_DEP=build-calico-race
+else
+CALICO_BINARY_DEP=build-calico-cgo
+endif
+REMOTE_DEPS=$(CALICO_IMAGE_DEP) $(CALICO_BINARY_DEP)
 
 # FV mounts the combined binary into the felix-test container. The cgo
 # variant supports BPF; the race variant adds -race for the race detector.
@@ -340,7 +338,7 @@ build-calico-cgo:
 build-calico-race:
 	$(MAKE) -C ../cmd/calico build-race
 
-.PHONY: fv fv-prereqs fv-no-build build-calico-image build-calico-cgo build-calico-race
+.PHONY: fv fv-prereqs fv-no-build build-calico-cgo build-calico-race
 
 # Build everything needed to run the FVs but don't actually run them.  The semaphore job runs
 # this target to build everything so that it can be cached and shared between downstream jobs.

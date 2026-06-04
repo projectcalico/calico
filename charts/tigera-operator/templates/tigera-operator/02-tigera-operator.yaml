@@ -56,7 +56,7 @@ spec:
       containers:
         - name: tigera-operator
           image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: {{ .Values.tigeraOperator.imagePullPolicy | default "IfNotPresent" }}
           command:
             - operator
           args:

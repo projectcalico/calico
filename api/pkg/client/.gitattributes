@@ -1,0 +1,4 @@
+applyconfiguration_generated/** linguist-generated=true
+clientset_generated/**          linguist-generated=true
+informers_generated/**          linguist-generated=true
+listers_generated/**            linguist-generated=true

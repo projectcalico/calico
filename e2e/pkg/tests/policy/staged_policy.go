@@ -69,8 +69,8 @@ var _ = describe.CalicoDescribe(
 		Context("Test presence in flow logs", func() {
 			var (
 				tierObj *v3.Tier
-				client1 *conncheck.Client
-				server  *conncheck.Server
+				client1 conncheck.Client
+				server  conncheck.Server
 
 				stopCh chan time.Time
 				url    string
@@ -220,8 +220,8 @@ var _ = describe.CalicoDescribe(
 		Context("enforcing staged-policies", func() {
 			var (
 				tierObj *v3.Tier
-				server  *conncheck.Server
-				client1 *conncheck.Client
+				server  conncheck.Server
+				client1 conncheck.Client
 			)
 
 			BeforeEach(func() {

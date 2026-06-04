@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.2
+go 1.26.3
 cel.dev/expr v0.25.1
 github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/aws/smithy-go v1.25.0
@@ -17,9 +17,9 @@ github.com/fxamacker/cbor/v2 v2.9.0
 github.com/go-kit/log v0.2.1
 github.com/go-logfmt/logfmt v0.6.0
 github.com/go-logr/logr v1.4.3
-github.com/go-openapi/jsonpointer v0.21.0
-github.com/go-openapi/jsonreference v0.20.2
-github.com/go-openapi/swag v0.23.0
+github.com/go-openapi/jsonpointer v0.21.2
+github.com/go-openapi/jsonreference v0.21.0
+github.com/go-openapi/swag v0.23.1
 github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/gogo/protobuf v1.3.2
@@ -35,7 +35,7 @@ github.com/json-iterator/go v1.1.12
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/leodido/go-urn v1.4.0
-github.com/mailru/easyjson v0.7.7
+github.com/mailru/easyjson v0.9.0
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
@@ -61,15 +61,15 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.50.0
+golang.org/x/crypto v0.51.0
 golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
-golang.org/x/mod v0.35.0
-golang.org/x/net v0.53.0
+golang.org/x/mod v0.36.0
+golang.org/x/net v0.54.0
 golang.org/x/oauth2 v0.36.0
 golang.org/x/sync v0.20.0
-golang.org/x/sys v0.43.0
-golang.org/x/term v0.42.0
-golang.org/x/text v0.36.0
+golang.org/x/sys v0.44.0
+golang.org/x/term v0.43.0
+golang.org/x/text v0.37.0
 golang.org/x/time v0.15.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -83,12 +83,12 @@ gopkg.in/go-playground/validator.v9 v9.31.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/ini.v1 v1.67.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.35.4
-k8s.io/apiextensions-apiserver v0.35.4
-k8s.io/apimachinery v0.35.4
-k8s.io/apiserver v0.35.4
-k8s.io/client-go v0.35.4
-k8s.io/component-base v0.35.4
+k8s.io/api v0.35.5
+k8s.io/apiextensions-apiserver v0.35.5
+k8s.io/apimachinery v0.35.5
+k8s.io/apiserver v0.35.5
+k8s.io/client-go v0.35.5
+k8s.io/component-base v0.35.5
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
@@ -114,8 +114,10 @@ local:felix/stringutils
 local:hack/cmd/calico-selector
 local:hack/cmd/coalesce-imports
 local:hack/cmd/deps
+local:hack/cmd/format-go-file
 local:hack/cmd/gomodder
 local:hack/cmd/ipam-hammer
+local:hack/perf/cmd/send-perf-results
 local:hack/test/spider
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
@@ -137,6 +139,7 @@ local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/logutils
+local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

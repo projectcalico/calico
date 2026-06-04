@@ -125,7 +125,13 @@ for filename in $changed_go_files; do
     continue
   fi
   if [[ -z "${skipped_files[${filename}]+isset}" ]]; then
-    if goimports -d "${filename}" | grep '.'; then
+    # Capture the diff into a variable rather than piping straight into
+    # grep: a piped form would let a non-zero exit from goimports (e.g.
+    # missing tool, parse error) be swallowed by grep's exit status and
+    # silently pass the hook. With "set -e" at the top of the script the
+    # command substitution propagates the failure.
+    gofmt_diff=$(go tool goimports -d "${filename}")
+    if [ -n "${gofmt_diff}" ]; then
       echo "  goimports would make changes to file:" ${filename}
       gofmt_failed=true
     fi

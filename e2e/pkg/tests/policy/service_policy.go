@@ -43,8 +43,8 @@ var _ = describe.CalicoDescribe(
 	"service network policy",
 	func() {
 		var checker conncheck.ConnectionTester
-		var server *conncheck.Server
-		var client1 *conncheck.Client
+		var server conncheck.Server
+		var client1 conncheck.Client
 
 		f := utils.NewDefaultFramework("service-policy")
 

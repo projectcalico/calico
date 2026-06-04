@@ -135,7 +135,7 @@ var _ = Describe("Test the GlobalNetworkPolicy update processor", func() {
 
 		It("should NOT accept a GlobalNetworkPolicy with the wrong Key type", func() {
 			_, err := up.Process(&model.KVPair{
-				Key:      model.GlobalBGPPeerKey{PeerIP: cnet.MustParseIP("1.2.3.4")},
+				Key:      model.GlobalBGPPeerKey{PeerIP: model.AddrFromIP(cnet.MustParseIP("1.2.3.4"))},
 				Value:    emptyGNP,
 				Revision: "abcde",
 			})

@@ -37,10 +37,16 @@ ut combined.coverprofile: $(SRC_FILES)
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: ci version
+.PHONY: ci ci-no-prereqs version version-no-prereqs fv fv-no-prereqs k8sfv-test k8sfv-test-no-prereqs
+
 # Uses the combined calico/calico image (loaded from the calico-image prerequisite
-# in CI, or built locally via `make -C cmd/calico image`).
-version:
+# in CI, or built locally via the marker rule in lib.Makefile). CI invokes the
+# *-no-prereqs targets directly so a missing cached image fails loudly rather
+# than triggering a silent rebuild.
+version: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+	$(MAKE) version-no-prereqs
+
+version-no-prereqs:
 	docker run --rm calico/calico:latest-$(ARCH) version
 
 ci: mod-download version static-checks ut
@@ -48,12 +54,23 @@ ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test
 endif
 
+# CI entry point: skips the calico image rebuild and runs the full test suite.
+# The image must be preloaded from the GCS cache.
+ci-no-prereqs: mod-download version-no-prereqs static-checks ut
+ifeq (,$(filter k8sfv-test, $(EXCEPT)))
+	@$(MAKE) k8sfv-test-no-prereqs
+endif
+
 fv: k8sfv-test
+fv-no-prereqs: k8sfv-test-no-prereqs
 
 # k8sfv-test runs the combined calico/calico image with `component typha` as the
 # command. The image is loaded from GCS in CI or built locally.
-k8sfv-test:
-	$(MAKE) -C ../felix JUST_A_MINUTE=true USE_TYPHA=true \
+k8sfv-test: $(REPO_ROOT)/cmd/calico/.image.created-$(ARCH)
+	$(MAKE) k8sfv-test-no-prereqs
+
+k8sfv-test-no-prereqs:
+	$(MAKE) -C ../felix CALICO_IMAGE_DEP= JUST_A_MINUTE=true USE_TYPHA=true \
 		FV_TYPHAIMAGE=calico/calico:latest-$(ARCH) \
 		FV_TYPHACMD="component typha" \
 		TYPHA_VERSION=latest k8sfv-test

@@ -100,7 +100,7 @@ global_job_config:
       # cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
-          GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+          GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
           image="calico/go-build:${GO_BUILD_VER}"
           if ! docker image inspect "$image" >/dev/null 2>&1; then
             cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
@@ -127,7 +127,10 @@ global_job_config:
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
-  # Manual promotion for publishing a hashrelease.
+  # Manual promotion for publishing a hashrelease. To push per-component
+  # images at the current SHA, trigger this with BUILD_CONTAINER_IMAGES=true
+  # and PUBLISH_IMAGES=true — that replaces the previous per-merge auto-push
+  # behavior that fired the Push * promotions below on every merge.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
     parameters:
@@ -161,44 +164,34 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
-  # Have separate promotions for publishing images so we can re-run
-  # them individually if they fail, and so we can run them in parallel.
+  # Separate promotions for publishing images individually, kept as manual
+  # buttons so a single component can be re-pushed without re-running the
+  # full hashrelease. These no longer auto-fire on master/release merges —
+  # use "Publish hashrelease" with PUBLISH_IMAGES=true for the bulk push.
   - name: Push calico images
     pipeline_file: push-images/calico.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
+  - name: Push cni-plugin images
+    pipeline_file: push-images/cni-plugin.yml
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
-    auto_promote:
-      when: "branch =~ 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
+  - name: Push nftables RPM images
+    pipeline_file: push-images/nft-rpms.yml
 blocks:
   - name: Check images availability
     run:
@@ -339,6 +332,50 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
             - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+  - name: "Build: nftables RPMs"
+    # Producer for the patched nftables + libnftnl RPMs that calico/node and the
+    # istio CNI install image consume. The image tag is content-addressed (sha
+    # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
+    # this block is just a `docker manifest inspect` + GCS upload of the
+    # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
+    # arches) and uploads the image tarball to GCS for downstream consumers.
+    # Publishing to Docker Hub happens in a separate post-build promotion
+    # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+    #
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - mkdir logs
+          - export BUILD_LOG="logs/build-nft-rpms-${ARCH}.log"
+      epilogue:
+        always:
+          commands:
+            - artifact push job logs --destination semaphore/logs || true
+      jobs:
+        - name: "Build/cache nftables RPMs"
+          matrix:
+            - env_var: ARCH
+              values:
+                - amd64
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so that every downstream job can
     # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
@@ -355,7 +392,7 @@ blocks:
       jobs:
         - name: "Cache calico/go-build to GCS"
           commands:
-            - GO_BUILD_VER=$(grep -E '^GO_BUILD_VER[[:space:]]*=' metadata.mk | cut -d'=' -f2 | tr -d '[:space:]')
+            - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
             - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
             - |-
               if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
@@ -368,10 +405,21 @@ blocks:
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
-    # Always build and cache the calico image so that downstream CI blocks can
-    # load it from GCS instead of rebuilding per component. This block is the
-    # sole producer for the "calico" build-cache group — every Go component
-    # block on master restores the module + build cache populated here.
+    # Build and cache the calico image so that downstream CI blocks can load it
+    # from GCS instead of rebuilding per component. This block is the sole
+    # producer for the "calico" build-cache group — every Go component block on
+    # master restores the module + build cache populated here.
+    #
+    # cmd/calico's Go closure already covers felix/typha (registered as
+    # subcommands); the non-go paths close the gap for Felix Build/UT, which
+    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
+    # consumers use .semaphore/load-cached-images, which falls back to a local
+    # build on cache miss.
+    # The process/testing paths trigger this so the win-fv-felix block (which now
+    # installs the locally-built calico image) has it cached in GCS. The libcalico
+    # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
+    # superset of the win-fv-felix block's trigger (felix's full test closure plus
+    # its own CI block), so win-fv-felix never runs without this image in GCS.
     run:
       when: "true"
     dependencies: []
@@ -428,9 +476,17 @@ blocks:
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
     # can depend on the shared producer→GCS→consumer upload pattern.
+    # felix + process/testing paths trigger this so the win-fv-felix block (which
+    # now installs the locally-built node image) has it cached in GCS. felix is a
+    # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
+    # (test + non-Go files) that the win-fv-felix block triggers on as a primary
+    # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
+    # the rest of felix's test closure, keeping this a superset of win-fv-felix so
+    # it never runs without this image in GCS.
     run:
       when: "true"
-    dependencies: []
+    dependencies:
+      - "Build: nftables RPMs"
     task:
       agent:
         machine:
@@ -439,6 +495,13 @@ blocks:
       jobs:
         - name: "Build and cache node image"
           commands:
+            # Load the patched nftables RPMs producer image (built/cached by
+            # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
+            # resolves locally without re-pulling from Docker Hub.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
@@ -599,7 +662,7 @@ blocks:
       jobs:
         - name: "CNI Plugin: CI"
           commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
+            - ../.semaphore/run-and-monitor ci.log make ci-no-prereqs
       epilogue:
         always:
           commands:
@@ -798,6 +861,9 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Envoy Gateway
     run:
       when: >-
@@ -1020,13 +1086,19 @@ blocks:
   - name: "Felix: Windows FV"
     run:
       when: "false or true"
-    dependencies: ["Felix: Build Windows binaries"]
+    dependencies:
+      - "Felix: Build Windows binaries"
+      - "Build: calico image"
+      - "Build: node image"
     task:
       secrets:
         - name: banzai-secrets
         - name: private-repo
       prologue:
         commands:
+          # Load the locally-built calico + node images from the GCS cache so the
+          # local-build install uses images from the commit under test.
+          - .semaphore/load-cached-images
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -1048,6 +1120,12 @@ blocks:
           value: "calico"
         - name: FV_TYPE
           value: "calico-felix"
+        # Install the operator, Linux, and Windows images all built from the
+        # commit under test instead of a cached operator + hashrelease components.
+        - name: RELEASE_STREAM
+          value: "local-build"
+        - name: HASH_RELEASE
+          value: "false"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: CONTAINERD_VERSION
@@ -1157,6 +1235,45 @@ blocks:
             - export FV_FOCUS='_BPF_.*tcp.*ct=true'
             - export NUM_FV_BATCHES=16
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
+  - name: "E2E tests: Gateway API Conformance"
+    run:
+      when: >-
+        true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "node"
+      jobs:
+        - name: "Gateway API: Conformance Tests"
+          commands:
+            # Build the runner, bring up kind+Calico, deploy Envoy Gateway,
+            # run the upstream conformance suite, emit ./report/. Each step
+            # is defined in the root Makefile so this YAML and a local
+            # invocation stay in lockstep.
+            - .semaphore/run-and-monitor gateway-conformance.log make e2e-test-gateway-conformance
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+            - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
+            # Permanent copy in GCS for upstream submission and historical
+            # comparison. Semaphore's job artifacts are GC'd after ~30 days,
+            # which isn't long enough for "go fish out the v3.30 report next
+            # year". PRs are skipped — their Semaphore artifact is plenty,
+            # and PR runs would otherwise flood the bucket.
+            - |-
+              if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
+                ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
+                sha="${SEMAPHORE_GIT_SHA:0:12}"
+                dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+                echo "Publishing conformance report to ${dst}"
+                gcloud storage cp ./report/* "${dst}" || true
+              fi
   - name: Goldmane
     run:
       when: "true"
@@ -1210,6 +1327,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: nftables RPMs"
     task:
       prologue:
         commands:
@@ -1217,6 +1335,12 @@ blocks:
       jobs:
         - name: "Istio: CI"
           commands:
+            # Load the amd64 patched nftables RPMs producer image so the
+            # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
@@ -1225,25 +1349,10 @@ blocks:
               values:
                 - arm64
           commands:
-            # Skip istio ztunnel in this arm64 cross-build job.
-            # ztunnel is built separately in the native arm64 runner block below.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: "true"
-    dependencies:
-      - Istio
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd istio
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
+            # Cross-builds all istio components including ztunnel.
+            # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+            # toolchain (clang + sysroot), no native arm64 runner needed.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: "true"
@@ -1261,11 +1370,11 @@ blocks:
       jobs:
         - name: "kube-controllers: CI"
           commands:
-            - ../.semaphore/run-and-monitor ci.log make ci
+            - ../.semaphore/run-and-monitor ci.log make ci-no-prereqs
         # Run a subset of the kube-controllers CI tests that use the projectcalico.org/v3 API group for CRDs.
         - name: "kube-controllers: CI (projectcalico.org/v3)"
           commands:
-            - ../.semaphore/run-and-monitor ut.log make ut
+            - ../.semaphore/run-and-monitor ut.log make ut-no-prereqs
           env_vars:
             - name: CALICO_API_GROUP
               value: "projectcalico.org/v3"
@@ -1273,6 +1382,55 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "KubeVirt live migration (KIND)"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/kind-kubevirt.yaml"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "KubeVirt live migration (KIND)"
+          commands:
+            # Build e2e test binary
+            - make -C e2e build
+            # Create KIND cluster with Calico
+            - make kind-up
+            # Download and deploy KubeVirt simulation mode
+            - export KUBEVIRT_RELEASE_URL="https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1"
+            - mkdir -p /tmp/kubevirt-manifests
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/ci-deploy-kind.sh" -o /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-operator.yaml" -o /tmp/kubevirt-manifests/kubevirt-operator.yaml
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
+            - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            # Start external BIRD BGP peer container on the KIND Docker network.
+            # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+            - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            # Run KubeVirt e2e tests
+            - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: >-
@@ -1367,6 +1525,7 @@ blocks:
       when: "true"
     dependencies:
       - Prerequisites
+      - "Build: nftables RPMs"
     task:
       prologue:
         commands:
@@ -1380,6 +1539,13 @@ blocks:
                 - ppc64le
                 - s390x
           commands:
+            # Load the per-arch patched nftables RPMs producer image (built/cached
+            # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
+            # resolves locally without re-pulling from Docker Hub.
+            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+            - zstd -d --rm /tmp/nft-rpms.tar.zst
+            - docker load -i /tmp/nft-rpms.tar
+            - rm -f /tmp/nft-rpms.tar
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Node: build Windows archive"
           commands:
@@ -1485,13 +1651,13 @@ blocks:
         - name: "Typha: UT and FV tests"
           commands:
             - export TEST_SUITE_PREFIX="calico/base"
-            - ../.semaphore/run-and-monitor make-ci.log make ci
+            - ../.semaphore/run-and-monitor make-ci.log make ci-no-prereqs
         - name: "Typha: FV tests on UBI-minimal"
           commands:
             - 'export TEST_SUITE_PREFIX="UBI-minimal"'
             # Rebuild the combined image with UBI-minimal as CALICO_BASE,
             # then run Typha FV against it.
-            - ../.semaphore/run-and-monitor make-fv-ubi.log bash -c 'make -C ../cmd/calico clean image && make fv'
+            - ../.semaphore/run-and-monitor make-fv-ubi.log bash -c 'make -C ../cmd/calico clean image && make fv-no-prereqs'
           env_vars:
             - name: USE_UBI_AS_CALICO_BASE
               value: '1'
@@ -1599,6 +1765,8 @@ blocks:
         machine:
           type: f1-standard-2
           os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
       prologue:
         commands:
           - cd networking-calico
@@ -1608,6 +1776,10 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log make tox-caracal
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
+            # Env vars needed for saving performance results.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall

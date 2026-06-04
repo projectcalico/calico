@@ -36,8 +36,8 @@ var _ = describe.CalicoDescribe(
 	func() {
 		f := utils.NewDefaultFramework("hostports")
 		var checker conncheck.ConnectionTester
-		var server *conncheck.Server
-		var client1 *conncheck.Client
+		var server conncheck.Server
+		var client1 conncheck.Client
 
 		ginkgo.BeforeEach(func() {
 			// Define a function to set the HostPort on the server pod.

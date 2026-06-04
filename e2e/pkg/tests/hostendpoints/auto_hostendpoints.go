@@ -149,8 +149,8 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 		ginkgo.Context("with policies in place", func() {
 			var checker conncheck.ConnectionTester
-			var server *conncheck.Server
-			var cliHostNet *conncheck.Client
+			var server conncheck.Server
+			var cliHostNet conncheck.Client
 
 			ginkgo.BeforeEach(func() {
 				checker = conncheck.NewConnectionTester(f)
@@ -241,7 +241,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			})
 
 			ginkgo.Context("with egress policy", func() {
-				var clientPod *conncheck.Client
+				var clientPod conncheck.Client
 
 				ginkgo.BeforeEach(func() {
 					clientNode := getNodeHostname(nodes.Items[1])

@@ -24,9 +24,7 @@ LIBBPF_A=../felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
 ## BUILD_DEPS are intermediate build artifacts needed by the image (also used by clean).
 BUILD_DEPS = $(LIBBPF_A) \
-	     filesystem/usr/lib/calico/bpf \
-	     filesystem/etc/calico/confd/conf.d \
-	     filesystem/etc/calico/confd/templates
+	     filesystem/usr/lib/calico/bpf
 
 ## IMAGE_DEPS lists non-Go files the calico/node image depends on.
 IMAGE_DEPS = ./Dockerfile $(BUILD_DEPS)
@@ -41,16 +39,8 @@ CALICO_API_GROUP ?= projectcalico.org/v3
 ###############################################################################
 include ../lib.Makefile
 
-FIPS ?= false
-
-ifeq ($(FIPS),true)
-NODE_CONTAINER_BIN_DIR=./dist/bin/$(ARCH)-fips
-NODE_CONTAINER_MARKER=$(NODE_CONTAINER_FIPS_CREATED)
-VALIDARCHES=amd64
-else
 NODE_CONTAINER_BIN_DIR=dist/bin
 NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
-endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
 NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
@@ -64,6 +54,11 @@ THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
+
+# Producer image carrying the patched nftables + libnftnl RPMs we install in
+# the runtime stage. The tag is content-addressed so any change to specs,
+# patches, or version pins yields a new tag (see hack/rpms/nftables/Makefile).
+include ../hack/rpms/nftables/image.mk
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
@@ -71,8 +66,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-NODE_CONTAINER_FIPS_CREATED=.calico_node.created-$(ARCH)-fips
-WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
@@ -81,7 +75,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 # Name of the Windows release ZIP archive.
 WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
-WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
+WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
@@ -137,7 +131,15 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from node/deps.txt by lib.Makefile.
+## The node image ships the combined `calico` monobinary built from
+## ../cmd/calico (see $(NODE_CONTAINER_BINARY) below). The monobinary's source
+## closure (felix, confd, etc.) is NOT in node/deps.txt because node's own Go
+## module doesn't import those packages directly — they're pulled in by the
+## `make -C ../cmd/calico` recursion, which deps.txt generation can't see. Fold
+## in the cmd module's local deps so a change to felix (or anything else in the
+## monobinary) rebuilds the node image.
+SRC_FILES += $(call local-deps-go-files,cmd)
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
@@ -175,15 +177,6 @@ clean-windows: clean-windows-builder
 # Building the binary
 ###############################################################################
 build: $(NODE_CONTAINER_MARKER) $(TOOLS_MOUNTNS_BINARY)
-
-# Pull in config from confd.
-filesystem/etc/calico/confd/conf.d: $(shell find ../confd/etc/calico/confd/conf.d -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/conf.d $@
-	chmod +w $@
-
-filesystem/etc/calico/confd/templates: $(shell find ../confd/etc/calico/confd/templates -type f)
-	rm -rf $@ && cp -r ../confd/etc/calico/confd/templates $@
-	chmod +w $@
 
 $(LIBBPF_A): $(shell find ../felix/bpf-gpl/libbpf -type f -name '*.[ch]')
 	make -C ../felix libbpf ARCH=$(ARCH)
@@ -223,15 +216,10 @@ CGO_CFLAGS=""
 endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
-# Forward FIPS so the sub-make produces a boringcrypto-linked binary and writes
-# it to bin/$(ARCH)-fips, which is where we pick it up from below.
 CMD_CALICO_BINDIR = ../cmd/calico/bin
-ifeq ($(FIPS),true)
-CMD_CALICO_BINDIR = ../cmd/calico/bin/$(ARCH)-fips
-endif
 
 $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES) ../go.mod
-	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH) FIPS=$(FIPS)
+	$(MAKE) -C ../cmd/calico build-cgo ARCH=$(ARCH)
 	mkdir -p $(NODE_CONTAINER_BIN_DIR)
 	cp $(CMD_CALICO_BINDIR)/calico-cgo-$(ARCH) $@
 
@@ -256,35 +244,42 @@ endif
 # Building the image
 ###############################################################################
 ## Create the images for all supported ARCHes
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
 
 dist/LICENSE: ../LICENSE.md
 	mkdir -p dist
 	cp ../LICENSE.md $@
 
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
+
+# nft-rpms-image builds (or no-ops on cache hit) the per-arch producer image
+# carrying our patched nftables + libnftnl RPMs. It's an order-only prereq;
+# the consumer build wires it in via --build-context nft-rpms=docker-image://...
+# so buildkit sources it from the local daemon (avoiding `--pull=always`
+# trying to fetch it from a registry where it may not have been pushed yet).
+.PHONY: nft-rpms-image
+# `| register` so binfmt is set up before cross-arch buildx.
+nft-rpms-image: | register
+	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
+
+# Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
+# nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
+# as a registry pull and fails when that tag hasn't been pushed yet (PR
+# builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
+# BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
+$(NODE_CONTAINER_CREATED): DOCKER_PULL :=
+
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
-	touch $@
-
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register
-	$(DOCKER_BUILD) \
-		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
-		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
-		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
-	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 # download BIRD source to include in image.
@@ -292,7 +287,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	curl -sSf -L --retry 5 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 	touch $@
 
 # include GPL felix code in the image.
@@ -343,12 +338,6 @@ dist/calicoctl:
 	mkdir -p dist
 	make -C ../calicoctl build
 	cp ../calicoctl/bin/calicoctl-linux-$(ARCH) $@
-
-dist/calico dist/calico-ipam:
-	mkdir -p dist
-	make -C ../cni-plugin build
-	cp ../cni-plugin/bin/$(ARCH)/calico dist/calico
-	cp ../cni-plugin/bin/$(ARCH)/calico-ipam dist/calico-ipam
 
 # Create images for containers used in the tests
 busybox.tar:
@@ -417,8 +406,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` node images.
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	# Generate the Windows zip archives.
 	$(MAKE) release-windows-archive
 	$(MAKE) $(WINDOWS_INSTALL_SCRIPT)
@@ -433,7 +420,6 @@ release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
@@ -473,14 +459,14 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@ $(WINDOWS_NSSM_URL)
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \

@@ -577,7 +577,7 @@ type resource interface {
 // flakey.
 func isExternallyControlled(key model.Key) bool {
 	switch key.(type) {
-	case model.WireguardKey, model.HostConfigKey, model.HostIPKey:
+	case model.WireguardKey, model.HostConfigKey:
 		return true
 	case model.ResourceKey:
 		switch key.(model.ResourceKey).Kind {

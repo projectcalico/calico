@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,23 +15,51 @@
 package conncheck
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 )
 
-func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) *Server {
+// Server is a traffic destination for connection checks. The default
+// implementation is PodServer; VMServer wraps a KubeVirt VirtualMachineInstance.
+type Server interface {
+	ID() string
+	Name() string
+	Namespace() *v1.Namespace
+	Pod() *v1.Pod
+	Service() *v1.Service
+
+	// Target builders.
+	ClusterIPs(opts ...TargetOption) []Target
+	ClusterIP(opts ...TargetOption) Target
+	ClusterIPv4(opts ...TargetOption) Target
+	ClusterIPv6(opts ...TargetOption) Target
+	HostPorts(port int) []Target
+	NodePortPort() int
+	NodePort(nodeIP string, opts ...TargetOption) Target
+	ICMP() Target
+	ServiceDomain(opts ...TargetOption) Target
+
+	// Lifecycle.
+	Deploy(ctx context.Context, f *framework.Framework) error
+	Cleanup(ctx context.Context, f *framework.Framework) error
+	WaitReady(ctx context.Context, f *framework.Framework) error
+}
+
+func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) Server {
 	if ns == nil {
-		msg := fmt.Sprintf("Namespace is required for server %s", name)
-		framework.Fail(msg, 1)
+		framework.Fail(fmt.Sprintf("Namespace is required for server %s", name), 1)
 	}
 	if name == "" {
-		msg := fmt.Sprintf("Name is required for server in namespace %s", ns.Name)
-		framework.Fail(msg, 1)
+		framework.Fail(fmt.Sprintf("Name is required for server in namespace %s", ns.Name), 1)
 	}
-	s := &Server{
+	s := &PodServer{
 		name:          name,
 		namespace:     ns,
 		ports:         []int{80},
@@ -43,7 +71,8 @@ func NewServer(name string, ns *v1.Namespace, opts ...ServerOption) *Server {
 	return s
 }
 
-type Server struct {
+// PodServer is a pod-backed Server.
+type PodServer struct {
 	name           string
 	namespace      *v1.Namespace
 	ports          []int
@@ -56,9 +85,7 @@ type Server struct {
 	echoServer     bool
 }
 
-// composedPodCustomizer returns a single customizer function that applies all
-// registered pod customizers in order, or nil if none are registered.
-func (s *Server) composedPodCustomizer() func(*v1.Pod) {
+func (s *PodServer) composedPodCustomizer() func(*v1.Pod) {
 	if len(s.podCustomizers) == 0 {
 		return nil
 	}
@@ -69,9 +96,7 @@ func (s *Server) composedPodCustomizer() func(*v1.Pod) {
 	}
 }
 
-// composedSvcCustomizer returns a single customizer function that applies all
-// registered service customizers in order, or nil if none are registered.
-func (s *Server) composedSvcCustomizer() func(*v1.Service) {
+func (s *PodServer) composedSvcCustomizer() func(*v1.Service) {
 	if len(s.svcCustomizers) == 0 {
 		return nil
 	}
@@ -82,33 +107,75 @@ func (s *Server) composedSvcCustomizer() func(*v1.Service) {
 	}
 }
 
-func (s *Server) ID() string {
-	return fmt.Sprintf("%s/%s", s.namespace.Name, s.name)
-}
+func (s *PodServer) ID() string               { return fmt.Sprintf("%s/%s", s.namespace.Name, s.name) }
+func (s *PodServer) Name() string             { return s.name }
+func (s *PodServer) Namespace() *v1.Namespace { return s.namespace }
 
-func (s *Server) Name() string {
-	return s.name
-}
-
-func (s *Server) Pod() *v1.Pod {
+func (s *PodServer) Pod() *v1.Pod {
 	if s.pod == nil {
-		msg := fmt.Sprintf("No pod is running for server %s/%s", s.namespace.Name, s.name)
-		framework.Fail(msg, 1)
+		framework.Fail(fmt.Sprintf("No pod is running for server %s/%s", s.namespace.Name, s.name), 1)
 	}
 	return s.pod
 }
 
-func (s *Server) Service() *v1.Service {
+func (s *PodServer) Service() *v1.Service {
 	if s.service == nil {
-		msg := fmt.Sprintf("No service is running for server %s/%s", s.namespace.Name, s.name)
-		framework.Fail(msg, 1)
+		framework.Fail(fmt.Sprintf("No service is running for server %s/%s", s.namespace.Name, s.name), 1)
 	}
 	return s.service
 }
 
-// ClusterIPs returns a list of targets that can be used to connect to the service's ClusterIPs, if
-// there are multiple (e.g., for dual-stack services).
-func (s *Server) ClusterIPs(opts ...TargetOption) []Target {
+func (s *PodServer) Deploy(ctx context.Context, f *framework.Framework) error {
+	if s.pod != nil {
+		return nil
+	}
+	pod, svc, err := s.create(ctx, f)
+	if err != nil {
+		return err
+	}
+	s.pod = pod
+	s.service = svc
+	return nil
+}
+
+func (s *PodServer) WaitReady(ctx context.Context, f *framework.Framework) error {
+	if s.pod == nil {
+		return fmt.Errorf("PodServer %s/%s: WaitReady called before Deploy", s.namespace.Name, s.name)
+	}
+	if err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, s.pod.Name, s.pod.Namespace, podReadyTimeout(ctx)); err != nil {
+		return err
+	}
+	p, err := f.ClientSet.CoreV1().Pods(s.namespace.Name).Get(ctx, s.pod.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	s.pod = p
+	return nil
+}
+
+func (s *PodServer) Cleanup(ctx context.Context, f *framework.Framework) error {
+	if s.pod != nil {
+		err := f.ClientSet.CoreV1().Pods(s.namespace.Name).Delete(ctx, s.pod.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		if err := e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, s.pod.Name, s.pod.Namespace, deletionTimeout); err != nil {
+			return err
+		}
+		s.pod = nil
+	}
+	if s.service != nil {
+		err := f.ClientSet.CoreV1().Services(s.namespace.Name).Delete(ctx, s.service.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		s.service = nil
+	}
+	return nil
+}
+
+// ClusterIPs returns one target per ClusterIP on the underlying service (dual-stack capable).
+func (s *PodServer) ClusterIPs(opts ...TargetOption) []Target {
 	var targets []Target
 	for _, ip := range s.Service().Spec.ClusterIPs {
 		t := &target{
@@ -124,13 +191,12 @@ func (s *Server) ClusterIPs(opts ...TargetOption) []Target {
 		}
 		targets = append(targets, t)
 	}
-
 	return targets
 }
 
-// ClusterIP returns a target that can be used to connect to the service's Spec.ClusterIP.
-// Most callers should use ClusterIPs() instead in order to test both IPv4 and IPv6 (when enabled).
-func (s *Server) ClusterIP(opts ...TargetOption) Target {
+// ClusterIP returns a target for the service's primary ClusterIP. Most callers
+// should use ClusterIPs() to cover IPv4 and IPv6.
+func (s *PodServer) ClusterIP(opts ...TargetOption) Target {
 	t := &target{
 		server:      s,
 		targetType:  TypeClusterIP,
@@ -145,7 +211,7 @@ func (s *Server) ClusterIP(opts ...TargetOption) Target {
 	return t
 }
 
-func (s *Server) ClusterIPv4(opts ...TargetOption) Target {
+func (s *PodServer) ClusterIPv4(opts ...TargetOption) Target {
 	for _, ip := range s.Service().Spec.ClusterIPs {
 		if strings.Contains(ip, ":") {
 			continue
@@ -163,12 +229,11 @@ func (s *Server) ClusterIPv4(opts ...TargetOption) Target {
 		}
 		return t
 	}
-	msg := fmt.Sprintf("No IPv4 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
-	framework.Fail(msg, 1)
+	framework.Fail(fmt.Sprintf("No IPv4 ClusterIP found for server %s/%s", s.namespace.Name, s.name), 1)
 	return nil
 }
 
-func (s *Server) ClusterIPv6(opts ...TargetOption) Target {
+func (s *PodServer) ClusterIPv6(opts ...TargetOption) Target {
 	for _, ip := range s.Service().Spec.ClusterIPs {
 		if !strings.Contains(ip, ":") {
 			continue
@@ -186,14 +251,12 @@ func (s *Server) ClusterIPv6(opts ...TargetOption) Target {
 		}
 		return t
 	}
-	msg := fmt.Sprintf("No IPv6 ClusterIP found for server %s/%s", s.namespace.Name, s.name)
-	framework.Fail(msg, 1)
+	framework.Fail(fmt.Sprintf("No IPv6 ClusterIP found for server %s/%s", s.namespace.Name, s.name), 1)
 	return nil
 }
 
-// HostPorts returns a list of targets that can be used to connect to the pod's host IPs on the given port.
-// It returns a target for each of the pod's host IPs, at the specified port.
-func (s *Server) HostPorts(port int) []Target {
+// HostPorts returns one target per host IP at the given port.
+func (s *PodServer) HostPorts(port int) []Target {
 	var targets []Target
 	for _, hostIP := range s.Pod().Status.HostIPs {
 		targets = append(targets, &target{
@@ -207,20 +270,15 @@ func (s *Server) HostPorts(port int) []Target {
 	return targets
 }
 
-// NodePortPort returns port number of a NodePort service associated with the server.
-func (s *Server) NodePortPort() int {
+func (s *PodServer) NodePortPort() int {
 	svc := s.Service()
 	if svc.Spec.Type != v1.ServiceTypeNodePort {
-		msg := fmt.Sprintf("Service running for server %s/%s is not NodePort type", s.namespace.Name, s.name)
-		framework.Fail(msg, 1)
+		framework.Fail(fmt.Sprintf("Service running for server %s/%s is not NodePort type", s.namespace.Name, s.name), 1)
 	}
-
 	return int(svc.Spec.Ports[0].NodePort)
 }
 
-// NodePort returns a target that can be used to connect to the service's NodePort.
-// Callers should pass in the IP of a cluster node.
-func (s *Server) NodePort(nodeIP string, opts ...TargetOption) Target {
+func (s *PodServer) NodePort(nodeIP string, opts ...TargetOption) Target {
 	t := &target{
 		server:      s,
 		targetType:  TypeNodePort,
@@ -236,8 +294,7 @@ func (s *Server) NodePort(nodeIP string, opts ...TargetOption) Target {
 	return t
 }
 
-// ICMP returns a target that can be used to connect to the pod's IP directly using ICMP.
-func (s *Server) ICMP() Target {
+func (s *PodServer) ICMP() Target {
 	return &target{
 		server:      s,
 		targetType:  TypePodIP,
@@ -246,8 +303,7 @@ func (s *Server) ICMP() Target {
 	}
 }
 
-// ServiceDomain returns a target that can be used to connect to the service via DNS lookup.
-func (s *Server) ServiceDomain(opts ...TargetOption) Target {
+func (s *PodServer) ServiceDomain(opts ...TargetOption) Target {
 	t := &target{
 		server:      s,
 		targetType:  TypeService,
@@ -262,17 +318,17 @@ func (s *Server) ServiceDomain(opts ...TargetOption) Target {
 	return t
 }
 
-type ServerOption func(*Server) error
+type ServerOption func(*PodServer) error
 
 func WithServerLabels(labels map[string]string) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.labels = labels
 		return nil
 	}
 }
 
 func WithHostNetworking() ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.podCustomizers = append(c.podCustomizers, func(pod *v1.Pod) {
 			pod.Spec.HostNetwork = true
 		})
@@ -281,46 +337,44 @@ func WithHostNetworking() ServerOption {
 }
 
 func WithServerPodCustomizer(customizer func(*v1.Pod)) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.podCustomizers = append(c.podCustomizers, customizer)
 		return nil
 	}
 }
 
 func WithServerSvcCustomizer(customizer func(*v1.Service)) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.svcCustomizers = append(c.svcCustomizers, customizer)
 		return nil
 	}
 }
 
 func WithPorts(ports ...int) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.ports = ports
 		return nil
 	}
 }
 
 func WithAutoCreateService(autoCreate bool) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.autoCreateSvc = autoCreate
 		return nil
 	}
 }
 
-// WithEchoServer configures the server to use the EchoServer (agnhost netexec)
-// image instead of TestWebserver. The EchoServer's /clientip endpoint returns
-// the client address in "IP:port" format, useful for SNAT detection.
+// WithEchoServer switches the server image to agnhost netexec. Its /clientip
+// endpoint returns the client address, useful for SNAT detection.
 func WithEchoServer() ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.echoServer = true
 		return nil
 	}
 }
 
-// WithNodePortService configures the server's service as type NodePort.
 func WithNodePortService() ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.svcCustomizers = append(c.svcCustomizers, func(svc *v1.Service) {
 			svc.Spec.Type = v1.ServiceTypeNodePort
 		})
@@ -328,9 +382,8 @@ func WithNodePortService() ServerOption {
 	}
 }
 
-// WithExternalIP adds an external IP to the server's service.
 func WithExternalIP(ip string) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.svcCustomizers = append(c.svcCustomizers, func(svc *v1.Service) {
 			svc.Spec.ExternalIPs = append(svc.Spec.ExternalIPs, ip)
 		})
@@ -338,9 +391,8 @@ func WithExternalIP(ip string) ServerOption {
 	}
 }
 
-// WithExternalTrafficPolicy sets the external traffic policy on the server's service.
 func WithExternalTrafficPolicy(policy v1.ServiceExternalTrafficPolicy) ServerOption {
-	return func(c *Server) error {
+	return func(c *PodServer) error {
 		c.svcCustomizers = append(c.svcCustomizers, func(svc *v1.Service) {
 			svc.Spec.ExternalTrafficPolicy = policy
 		})

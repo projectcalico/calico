@@ -1472,6 +1472,21 @@ spec:
                         - VPP
                         - Nftables
                       type: string
+                    linuxPodInterfaceType:
+                      description: |-
+                        LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                        creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                        plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                        falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                        dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                        improved throughput and tail-latency under contention; for non-BPF dataplanes
+                        it is functionally equivalent to veth. Only valid when using the Calico CNI
+                        plugin.
+                        Default: Veth
+                      enum:
+                        - Veth
+                        - Netkit
+                      type: string
                     linuxPolicySetupTimeoutSeconds:
                       description: |-
                         LinuxPolicySetupTimeoutSeconds delays new pods from running containers
@@ -7134,9 +7149,8 @@ spec:
                   type: object
                 fipsMode:
                   description: |-
-                    FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                    Only supported for Variant=Calico.
-                    Default: Disabled
+                    Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                    installation degraded.
                   enum:
                     - Enabled
                     - Disabled
@@ -7168,6 +7182,17 @@ spec:
                     Image format:
                        `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                     This option allows configuring the `<imagePrefix>` portion of the above format.
+                  type: string
+                imagePullPolicy:
+                  description: |-
+                    ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                    that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                    This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                    must not be re-pulled from a remote registry.
+                  enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
                   type: string
                 imagePullSecrets:
                   description: |-
@@ -7243,6 +7268,23 @@ spec:
                             - Debug
                           type: string
                       type: object
+                  type: object
+                networkPolicy:
+                  description: |-
+                    NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                    it installs to protect the Calico components it manages.
+                  properties:
+                    managePolicies:
+                      default: Enabled
+                      description: |-
+                        ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                        GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                        Disabled, the operator stops creating or updating these policies and deletes any it has
+                        already created, leaving policy management to the user. Defaults to Enabled.
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
                   type: object
                 nodeMetricsPort:
                   description: |-
@@ -9177,6 +9219,69 @@ spec:
                     prometheus metrics on. By default, metrics are not enabled.
                   format: int32
                   type: integer
+                typhaPodDisruptionBudget:
+                  description: |-
+                    TyphaPodDisruptionBudget configures the PodDisruptionBudget for the calico-typha
+                    Deployment. Fields left unset fall back to the operator's defaults. The PDB's
+                    selector is managed by the operator and cannot be overridden.
+                  properties:
+                    metadata:
+                      description:
+                        Metadata is a subset of a Kubernetes object's metadata
+                        that is added to the PodDisruptionBudget.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Annotations is a map of arbitrary non-identifying metadata. Each of these
+                            key/value pairs are added to the object's annotations provided the key does not
+                            already exist in the object's annotations.
+                          type: object
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Labels is a map of string keys and values that may match replicaset and
+                            service selectors. Each of these key/value pairs are added to the
+                            object's labels provided the key does not already exist in the object's labels.
+                          type: object
+                      type: object
+                    spec:
+                      description: Spec is the specification of the PodDisruptionBudget.
+                      properties:
+                        maxUnavailable:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          description: |-
+                            MaxUnavailable is the maximum number of pods (as an integer or percentage) that
+                            can be unavailable during a disruption. Mutually exclusive with MinAvailable.
+                            If neither MinAvailable nor MaxUnavailable is set, the operator applies its
+                            default (MaxUnavailable=1 for calico-typha).
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          description: |-
+                            MinAvailable is the minimum number of pods (as an integer or percentage) that
+                            must remain available during a disruption. Mutually exclusive with MaxUnavailable.
+                          x-kubernetes-int-or-string: true
+                        unhealthyPodEvictionPolicy:
+                          description: |-
+                            UnhealthyPodEvictionPolicy defines when unhealthy pods should be considered
+                            for eviction. Defaults to IfHealthyBudget (the Kubernetes default) when unset.
+                            See https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy.
+                          enum:
+                            - IfHealthyBudget
+                            - AlwaysAllow
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                        - message: minAvailable and maxUnavailable are mutually exclusive
+                          rule: "!(has(self.minAvailable) && has(self.maxUnavailable))"
+                  type: object
                 variant:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
@@ -10693,6 +10798,21 @@ spec:
                             - BPF
                             - VPP
                             - Nftables
+                          type: string
+                        linuxPodInterfaceType:
+                          description: |-
+                            LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                            creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                            plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                            falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                            dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                            improved throughput and tail-latency under contention; for non-BPF dataplanes
+                            it is functionally equivalent to veth. Only valid when using the Calico CNI
+                            plugin.
+                            Default: Veth
+                          enum:
+                            - Veth
+                            - Netkit
                           type: string
                         linuxPolicySetupTimeoutSeconds:
                           description: |-
@@ -16459,9 +16579,8 @@ spec:
                       type: object
                     fipsMode:
                       description: |-
-                        FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                        Only supported for Variant=Calico.
-                        Default: Disabled
+                        Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                        installation degraded.
                       enum:
                         - Enabled
                         - Disabled
@@ -16493,6 +16612,17 @@ spec:
                         Image format:
                            `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                         This option allows configuring the `<imagePrefix>` portion of the above format.
+                      type: string
+                    imagePullPolicy:
+                      description: |-
+                        ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                        that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                        This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                        must not be re-pulled from a remote registry.
+                      enum:
+                        - Always
+                        - IfNotPresent
+                        - Never
                       type: string
                     imagePullSecrets:
                       description: |-
@@ -16570,6 +16700,23 @@ spec:
                                 - Debug
                               type: string
                           type: object
+                      type: object
+                    networkPolicy:
+                      description: |-
+                        NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                        it installs to protect the Calico components it manages.
+                      properties:
+                        managePolicies:
+                          default: Enabled
+                          description: |-
+                            ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                            GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                            Disabled, the operator stops creating or updating these policies and deletes any it has
+                            already created, leaving policy management to the user. Defaults to Enabled.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
                       type: object
                     nodeMetricsPort:
                       description: |-
@@ -18529,6 +18676,69 @@ spec:
                         serves prometheus metrics on. By default, metrics are not enabled.
                       format: int32
                       type: integer
+                    typhaPodDisruptionBudget:
+                      description: |-
+                        TyphaPodDisruptionBudget configures the PodDisruptionBudget for the calico-typha
+                        Deployment. Fields left unset fall back to the operator's defaults. The PDB's
+                        selector is managed by the operator and cannot be overridden.
+                      properties:
+                        metadata:
+                          description:
+                            Metadata is a subset of a Kubernetes object's
+                            metadata that is added to the PodDisruptionBudget.
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Annotations is a map of arbitrary non-identifying metadata. Each of these
+                                key/value pairs are added to the object's annotations provided the key does not
+                                already exist in the object's annotations.
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Labels is a map of string keys and values that may match replicaset and
+                                service selectors. Each of these key/value pairs are added to the
+                                object's labels provided the key does not already exist in the object's labels.
+                              type: object
+                          type: object
+                        spec:
+                          description: Spec is the specification of the PodDisruptionBudget.
+                          properties:
+                            maxUnavailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: |-
+                                MaxUnavailable is the maximum number of pods (as an integer or percentage) that
+                                can be unavailable during a disruption. Mutually exclusive with MinAvailable.
+                                If neither MinAvailable nor MaxUnavailable is set, the operator applies its
+                                default (MaxUnavailable=1 for calico-typha).
+                              x-kubernetes-int-or-string: true
+                            minAvailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: |-
+                                MinAvailable is the minimum number of pods (as an integer or percentage) that
+                                must remain available during a disruption. Mutually exclusive with MaxUnavailable.
+                              x-kubernetes-int-or-string: true
+                            unhealthyPodEvictionPolicy:
+                              description: |-
+                                UnhealthyPodEvictionPolicy defines when unhealthy pods should be considered
+                                for eviction. Defaults to IfHealthyBudget (the Kubernetes default) when unset.
+                                See https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy.
+                              enum:
+                                - IfHealthyBudget
+                                - AlwaysAllow
+                              type: string
+                          type: object
+                          x-kubernetes-validations:
+                            - message: minAvailable and maxUnavailable are mutually exclusive
+                              rule: "!(has(self.minAvailable) && has(self.maxUnavailable))"
+                      type: object
                     variant:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.

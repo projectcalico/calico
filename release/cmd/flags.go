@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -63,42 +64,47 @@ var (
 	}
 
 	// Git flags for interacting with the git repository
-	orgFlag = &cli.StringFlag{
-		Name:     "org",
+	orgFlagName = "org"
+	orgFlag     = &cli.StringFlag{
+		Name:     orgFlagName,
 		Category: gitCategory,
 		Usage:    "The GitHub organization to use for the release",
-		Sources:  cli.EnvVars("ORGANIZATION"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("ORGANIZATION"), defaults.MK(defaults.KeyOrganization)),
 		Value:    utils.ProjectCalicoOrg,
 	}
-	repoFlag = &cli.StringFlag{
-		Name:     "repo",
+	repoFlagName = "repo"
+	repoFlag     = &cli.StringFlag{
+		Name:     repoFlagName,
 		Category: gitCategory,
 		Usage:    "The GitHub repository to use for the release",
-		Sources:  cli.EnvVars("GIT_REPO"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REPO"), defaults.MK(defaults.KeyGitRepo)),
 		Value:    utils.CalicoRepoName,
 	}
-	repoRemoteFlag = &cli.StringFlag{
-		Name:     "remote",
+	repoRemoteFlagName = "remote"
+	repoRemoteFlag     = &cli.StringFlag{
+		Name:     repoRemoteFlagName,
 		Category: gitCategory,
 		Usage:    "The remote for the git repository",
-		Sources:  cli.EnvVars("GIT_REMOTE"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("GIT_REMOTE"), defaults.MK(defaults.KeyGitRemote)),
 		Value:    utils.DefaultRemote,
 	}
 
 	// Branch/Tag flags are flags used for branch & tag management
-	releaseBranchPrefixFlag = &cli.StringFlag{
-		Name:     "release-branch-prefix",
+	releaseBranchPrefixFlagName = "release-branch-prefix"
+	releaseBranchPrefixFlag     = &cli.StringFlag{
+		Name:     releaseBranchPrefixFlagName,
 		Category: gitCategory,
 		Usage:    "The stardard prefix used to denote release branches",
-		Sources:  cli.EnvVars("RELEASE_BRANCH_PREFIX"),
-		Value:    "release",
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("RELEASE_BRANCH_PREFIX"), defaults.MK(defaults.KeyReleaseBranchPrefix)),
+		Value:    utils.DefaultReleaseBranchPrefix,
 	}
-	devTagSuffixFlag = &cli.StringFlag{
-		Name:     "dev-tag-suffix",
+	devTagSuffixFlagName = "dev-tag-suffix"
+	devTagSuffixFlag     = &cli.StringFlag{
+		Name:     devTagSuffixFlagName,
 		Category: gitCategory,
 		Usage:    "The suffix used to denote development tags",
-		Sources:  cli.EnvVars("DEV_TAG_SUFFIX"),
-		Value:    "0.dev",
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
+		Value:    utils.DefaultDevTagSuffix,
 	}
 	baseBranchFlag = &cli.StringFlag{
 		Name:     "base-branch",
@@ -211,39 +217,45 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	operatorBuildCommandFlags = []cli.Flag{
-		operatorOrgFlag, operatorRepoFlag, operatorBranchFlag,
+	// operatorGitFlags resolve the operator's org/repo/branch. Required on any
+	// command that calls calico.WithOperatorGit or operator.Clone.
+	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
+
+	operatorBuildCommandFlags = append(slices.Clone(operatorGitFlags),
 		operatorReleaseBranchPrefixFlag,
 		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
-	}
+	)
 
-	operatorPublishCommandFlags = []cli.Flag{
+	operatorPublishCommandFlags = append(slices.Clone(operatorGitFlags),
 		operatorFlag(envPublishOperator, envReleaseOperator),
-	}
+	)
 
 	// Operator git flags
-	operatorOrgFlag = &cli.StringFlag{
-		Name:     "operator-org",
+	operatorOrgFlagName = "operator-org"
+	operatorOrgFlag     = &cli.StringFlag{
+		Name:     operatorOrgFlagName,
 		Category: operatorCategory,
 		Usage:    "The GitHub organization to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_ORGANIZATION"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_ORGANIZATION"), defaults.MK(defaults.KeyOperatorOrganization)),
 		Value:    operator.DefaultOrg,
 	}
-	operatorRepoFlag = &cli.StringFlag{
-		Name:     "operator-repo",
+	operatorRepoFlagName = "operator-repo"
+	operatorRepoFlag     = &cli.StringFlag{
+		Name:     operatorRepoFlagName,
 		Category: operatorCategory,
 		Usage:    "The GitHub repository to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_GIT_REPO"),
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_GIT_REPO"), defaults.MK(defaults.KeyOperatorGitRepo)),
 		Value:    operator.DefaultRepoName,
 	}
 	// Branch/Tag management flags
-	operatorBranchFlag = &cli.StringFlag{
-		Name:     "operator-branch",
+	operatorBranchFlagName = "operator-branch"
+	operatorBranchFlag     = &cli.StringFlag{
+		Name:     operatorBranchFlagName,
 		Category: operatorCategory,
 		Usage:    "The branch to use for Tigera operator release",
-		Sources:  cli.EnvVars("OPERATOR_BRANCH"),
-		Value:    operator.DefaultBranchName,
+		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_BRANCH"), defaults.MK(defaults.KeyOperatorBranch)),
+		Value:    operator.DefaultBranch,
 	}
 	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
 		Name:     "operator-release-branch-prefix",
@@ -507,10 +519,10 @@ var (
 			imagesFlag(!hashrelease, envBuildImages, envReleaseImages),
 			archiveImagesFlag(!hashrelease, envArchiveImages, envBuildArchiveImages, envReleaseArchiveImages),
 			binariesFlag,
-			helmChartsFlag(true, envBuildCharts, envReleaseCharts),
+			helmChartsFlag(envBuildCharts, envReleaseCharts),
 			helmIndexFlag(envHelmIndexLegacy, envBuildHelmIndex, envReleaseHelmIndex),
 			tarballFlag,
-			windowsArchiveFlag(true, envBuildWindowsArchive, envReleaseWindowsArchive),
+			windowsArchiveFlag(envBuildWindowsArchive, envReleaseWindowsArchive),
 		}
 		if hashrelease {
 			f = append(f, e2eBinariesFlag, releaseNotesFlag)
@@ -520,7 +532,7 @@ var (
 	publishStepFlags = func(hashrelease bool) []cli.Flag {
 		f := []cli.Flag{
 			imagesFlag(!hashrelease, envPublishImages, envReleaseImages),
-			helmChartsFlag(true, envPublishCharts, envReleaseCharts),
+			helmChartsFlag(envPublishCharts, envReleaseCharts),
 		}
 		if hashrelease {
 			return f
@@ -569,13 +581,13 @@ var (
 			},
 		}
 	}
-	helmChartsFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+	helmChartsFlag = func(envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
 			Name:     helmChartsFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Helm charts in the release step",
 			Sources:  cli.EnvVars(envVars...),
-			Value:    value,
+			Value:    true,
 			Action: func(_ context.Context, c *cli.Command, b bool) error {
 				if b {
 					return nil
@@ -617,29 +629,27 @@ var (
 		Sources:  cli.EnvVars(envBuildReleaseNotes, envReleaseNotes),
 		Value:    true,
 	}
-	manifestsFlagName = "manifests"
-	manifestsFlag     = &cli.BoolWithInverseFlag{
-		Name:     manifestsFlagName,
+	manifestsFlag = &cli.BoolWithInverseFlag{
+		Name:     "manifests",
 		Category: stepControlCategory,
 		Usage:    "Include manifests in the release step",
 		Sources:  cli.EnvVars(envBuildManifests, envReleaseManifests),
 		Value:    true,
 	}
-	ocpBundleFlagName = "ocp-bundle"
-	ocpBundleFlag     = &cli.BoolWithInverseFlag{
-		Name:     ocpBundleFlagName,
+	ocpBundleFlag = &cli.BoolWithInverseFlag{
+		Name:     "ocp-bundle",
 		Category: stepControlCategory,
 		Usage:    "Include OCP bundle in the release step",
 		Sources:  cli.EnvVars(envBuildOCPBundle, envReleaseOCPBundle),
 		Value:    true,
 	}
-	windowsArchiveFlag = func(value bool, envVars ...string) *cli.BoolWithInverseFlag {
+	windowsArchiveFlag = func(envVars ...string) *cli.BoolWithInverseFlag {
 		return &cli.BoolWithInverseFlag{
 			Name:     windowsArchiveFlagName,
 			Category: stepControlCategory,
 			Usage:    "Include Windows archive in the release step",
 			Sources:  cli.EnvVars(envVars...),
-			Value:    value,
+			Value:    true,
 		}
 	}
 	tarballFlag = &cli.BoolWithInverseFlag{
