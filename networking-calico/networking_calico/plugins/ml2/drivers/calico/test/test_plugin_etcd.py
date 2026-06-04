@@ -2622,7 +2622,12 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             m_try_upd.mock_calls,
         )
-
+        # the loop must close its session after each iteration
+        # AND on loop exit, so two calls here: one from the
+        # inner `finally` after _try_to_update_port_status, one
+        # from the outer `finally` when StopIteration propagates.
+        self.assertEqual(2, m_close.call_count)
+          
     def test_try_to_update_port_status(self):
         self.driver._get_db()
 
