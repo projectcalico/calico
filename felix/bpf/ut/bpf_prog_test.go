@@ -914,6 +914,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
+				if topts.ingressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+				}
+
+				if topts.egressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsEgressConnLimitConfigured
+				}
+
 				if topts.workloadSrcSpoofingConfigured {
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 				}
@@ -1299,6 +1307,8 @@ type testOpts struct {
 	natOutExcludeHosts            bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
+	ingressQoSConnLimit           bool
+	egressQoSConnLimit            bool
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
@@ -1373,6 +1383,18 @@ func withIngressQoSPacketRate() testOption {
 func withEgressQoSPacketRate() testOption {
 	return func(o *testOpts) {
 		o.egressQoSPacketRate = true
+	}
+}
+
+func withEgressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.egressQoSConnLimit = true
+	}
+}
+
+func withIngressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.ingressQoSConnLimit = true
 	}
 }
 
