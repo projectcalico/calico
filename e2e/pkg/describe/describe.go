@@ -178,8 +178,9 @@ func RequiresXtables() any {
 // RequiresAmbientPolicyEnforcement marks Istio ambient-mode tests that assert
 // Calico NetworkPolicy is enforced on ambient (ztunnel-redirected) traffic. The
 // BPF dataplane's bpf_redirect bypasses the socket layer that ambient relies on,
-// so Calico policy is not enforced for ambient traffic there. Skip on BPF-mode
-// clusters via --ginkgo.skip=RequiresAmbientPolicyEnforcement. Note this is
+// so Calico policy is not enforced for ambient traffic there. BPF-mode clusters
+// skip these tests via a label exclusion entry in their e2e config (see
+// e2e/config/gcp-bpf.yaml). Note this is
 // narrower than Feature:Istio: Istio tests that don't assert policy enforcement
 // (e.g. L7 log attribution through a waypoint) are dataplane-independent and run
 // on BPF too.
