@@ -63,7 +63,7 @@ build: gen-files examples
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
-	$(MAKE) -C $(REPO_ROOT) build-calico-controller-gen
+	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'

@@ -456,14 +456,19 @@ CONTROLLER_TOOLS_VERSION ?= v0.18.0
 # the version OR editing/adding a patch produces a new path and triggers a
 # rebuild.
 CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
-CALICO_CONTROLLER_GEN := /go-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+# Two views of the same file: the host path Make uses as a build target, and
+# the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
+# invoke it from inside the build containers.
+CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 
-# build-calico-controller-gen builds the patched controller-gen into the shared
-# cache. It must run with the repo root mounted (so build.sh and the patch are
-# visible); components in their own module (api/) reach it via
-# $(MAKE) -C $(REPO_ROOT) build-calico-controller-gen.
-.PHONY: build-calico-controller-gen
-build-calico-controller-gen:
+# Real file target (not .PHONY): Make skips it entirely — no container spin-up —
+# when the binary already exists and build.sh is unchanged. Patch edits are
+# covered by the hash in the filename above (a change yields a new target). The
+# recipe needs the repo root mounted (for build.sh and the patches), so
+# components in their own module (api/) reach it via:
+#   $(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+$(CALICO_CONTROLLER_GEN_BIN): hack/cmd/calico-controller-gen/build.sh
 	$(DOCKER_GO_BUILD) sh -c \
 		'./hack/cmd/calico-controller-gen/build.sh $(CONTROLLER_TOOLS_VERSION) $(CALICO_CONTROLLER_GEN)'
 

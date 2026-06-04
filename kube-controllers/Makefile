@@ -47,7 +47,7 @@ check-copyright:
 ###############################################################################
 .PHONY: gen-files
 gen-files:
-	$(MAKE) -C $(REPO_ROOT) build-calico-controller-gen
+	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
 
 ###############################################################################

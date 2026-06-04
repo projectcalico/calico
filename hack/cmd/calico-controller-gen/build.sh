@@ -30,13 +30,8 @@ OUT="$2"
 # Every *.patch in this directory is applied, in sorted order.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-# Cache hit: the output path is version-stamped by the caller, so an existing
-# binary is already the right build.
-if [ -x "$OUT" ]; then
-    echo "calico-controller-gen already built at $OUT"
-    exit 0
-fi
-
+# Caching is handled by the Makefile file target (build only runs when needed),
+# so always (re)build when invoked.
 mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
