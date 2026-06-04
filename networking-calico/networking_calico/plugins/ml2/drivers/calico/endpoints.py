@@ -80,8 +80,12 @@ NETWORK_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 
 class WorkloadEndpointSyncer(ResourceSyncer):
-    def __init__(self, db, policy_syncer):
-        super(WorkloadEndpointSyncer, self).__init__(db, "WorkloadEndpoint")
+    def __init__(self, db, policy_syncer, inject_per_item_delay_ms=0):
+        super(WorkloadEndpointSyncer, self).__init__(
+            db,
+            "WorkloadEndpoint",
+            inject_per_item_delay_ms=inject_per_item_delay_ms,
+        )
         self.policy_syncer = policy_syncer
         self.keystone = make_keystone_client()
         self.proj_data_cache = {}
