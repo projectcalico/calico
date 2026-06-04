@@ -1,4 +1,3 @@
-# Drop this into the target repo at: .github/workflows/sem-ai-ci-triage.yml
 # Required repo secrets:
 #   SEM_AI_TRIAGE_URL   — endpoint of the triage service
 #   SEM_AI_TRIAGE_TOKEN — bearer token expected by the endpoint
