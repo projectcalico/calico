@@ -126,7 +126,6 @@ local:api/pkg/apis/projectcalico/v3
 local:api/pkg/defaults
 local:api/pkg/lib/numorstring
 local:cni-plugin/cmd/calico
-local:cni-plugin/cmd/install
 local:cni-plugin/internal/pkg/azure
 local:cni-plugin/internal/pkg/utils
 local:cni-plugin/internal/pkg/utils/cri
@@ -134,7 +133,6 @@ local:cni-plugin/pkg/dataplane
 local:cni-plugin/pkg/dataplane/grpc
 local:cni-plugin/pkg/dataplane/grpc/proto
 local:cni-plugin/pkg/dataplane/linux
-local:cni-plugin/pkg/install
 local:cni-plugin/pkg/ipamplugin
 local:cni-plugin/pkg/k8s
 local:cni-plugin/pkg/plugin
@@ -177,5 +175,4 @@ local:libcalico-go/lib/set
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
-local:node/pkg/cni
 local:pkg/buildinfo

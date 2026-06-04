@@ -36,8 +36,8 @@ class SubnetSyncer(ResourceSyncer):
     as a string, i.e. not JSON-decoded into a dict.
     """
 
-    def __init__(self, db, txn_from_context):
-        super(SubnetSyncer, self).__init__(db, txn_from_context, "Subnet")
+    def __init__(self, db):
+        super(SubnetSyncer, self).__init__(db, "Subnet")
         self.region_string = calico_config.get_region_string()
 
     def get_from_neutron(self, context, scope):

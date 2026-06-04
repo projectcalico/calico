@@ -31,6 +31,7 @@ trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "===============
 : "${KUBECTL:=./bin/kubectl}"
 : "${GOMPLATE:=./bin/gomplate}"
 : "${CRANE:=./bin/crane}"
+: "${HELM:=./bin/helm}"
 
 # Use the kubeconfig that was copied from master node
 KUBECONFIG_FILE="./kubeconfig"
@@ -75,13 +76,19 @@ fi
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
 LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../manifests"
 
+# For RELEASE_STREAM=local-build: GIT_VERSION is normally inherited from the
+# Makefile; recompute it the same way as a fallback so the chart filename matches
+# bin/tigera-operator-${GIT_VERSION}.tgz (built at the repo root by 'make chart').
+: "${REPO_ROOT:=$( cd "${SCRIPT_CURRENT_DIR}/../../.." >/dev/null 2>&1 && pwd -P )}"
+: "${GIT_VERSION:=$(git -C "${REPO_ROOT}" describe --tags --dirty --long --always --abbrev=12)}"
+
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
 else
     RELEASE_BASE_URL="https://raw.githubusercontent.com/projectcalico/calico/${RELEASE_STREAM}"
 fi
 
-if [ ${HASH_RELEASE} == 'true' ]; then
+if [[ ${HASH_RELEASE} == 'true' && ${RELEASE_STREAM} != 'local' && ${RELEASE_STREAM} != 'local-build' ]]; then
     if [ -z ${RELEASE_STREAM} ]; then
 	    echo "RELEASE_STREAM not set for HASH release"
 	    exit 1
@@ -94,7 +101,7 @@ if [ ${HASH_RELEASE} == 'true' ]; then
     RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
 fi
 
-if [[ ${RELEASE_STREAM} != 'local' ]]; then
+if [[ ${RELEASE_STREAM} != 'local' && ${RELEASE_STREAM} != 'local-build' ]]; then
     # Check release url
     echo '  RELEASE_BASE_URL='${RELEASE_BASE_URL}
 fi
@@ -106,7 +113,27 @@ if [ ${PRODUCT} == 'calient' ]; then
 fi
 
 # Install Calico on Linux nodes
-if [[ ${RELEASE_STREAM} == 'local' ]]; then
+if [[ ${RELEASE_STREAM} == 'local-build' ]]; then
+    # Install the operator from the locally-built helm chart. The chart installs
+    # the operator only; the Installation/APIServer CRs come from
+    # OSS/custom-resources.yaml below, matching the other install paths.
+    # Component + operator images are ctr-imported onto the nodes at
+    # docker.io/calico/<name>:test-build and the Installation sets
+    # imagePullPolicy: IfNotPresent, so kubelet uses them without a registry pull.
+    CHART="${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz"
+    if [ ! -f "${CHART}" ]; then
+        echo "ERROR: operator chart not found at ${CHART}; run 'make chart' first"
+        exit 1
+    fi
+    # Pin the operator image tag to the one import-images.sh used (test-build by
+    # default), so the chart and the imported images stay in sync.
+    : "${DEV_IMAGE_TAG:=test-build}"
+    ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
+    ${HELM} install calico "${CHART}" \
+        -f "${SCRIPT_CURRENT_DIR}/local-build-values.yaml" \
+        --set tigeraOperator.version="${DEV_IMAGE_TAG}" \
+        -n tigera-operator --create-namespace
+elif [[ ${RELEASE_STREAM} == 'local' ]]; then
     # Use local manifests
     ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
     ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml

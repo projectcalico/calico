@@ -1,4 +1,4 @@
-// Copyright (c) 2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,8 +109,7 @@ func ParseTLSVersion(version string) (uint16, error) {
 	}
 }
 
-// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components. Based on build flags,
-// boringCrypto may be used and fips strict mode may be enforced, which can override the parameters defined in this func.
+// NewTLSConfig returns a tls.Config with the recommended default settings for Calico components.
 func NewTLSConfig() (*tls.Config, error) {
 	env := os.Getenv("TLS_CIPHER_SUITES")
 	ciphers, err := ParseTLSCiphers(env)
