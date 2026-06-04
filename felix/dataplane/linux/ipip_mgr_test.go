@@ -46,9 +46,6 @@ var _ = Describe("IPIPManager", func() {
 
 		opRecorder := logutils.NewSummarizer("test")
 
-		// Mark the mock netlink connection as open (the manager is handed the
-		// handle directly rather than connecting via a factory function) and
-		// seed an "eth0" parent device carrying the host address.
 		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
 		Expect(err).NotTo(HaveOccurred())

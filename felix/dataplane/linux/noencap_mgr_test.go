@@ -46,9 +46,6 @@ var _ = Describe("NoEncap Manager", func() {
 
 		opRecorder := logutils.NewSummarizer("test")
 
-		// Mark the mock netlink connections as open (the managers are handed
-		// the handles directly rather than connecting via a factory function)
-		// and seed an "eth0" parent device carrying the host address.
 		dataplane := mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
 		Expect(err).NotTo(HaveOccurred())

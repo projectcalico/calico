@@ -114,7 +114,7 @@ func init() {
 	}
 
 	// All good, proceed with the sketchy cast...
-	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&ErrLinkNotFound))
+	lnf := (*myLinkNotFoundError)((unsafe.Pointer)(&ErrLinkNotFound))
 	lnf.error = ErrNotFound
 }
 
