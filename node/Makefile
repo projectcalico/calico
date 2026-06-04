@@ -309,6 +309,10 @@ else
 WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
+# tests/k8st holds system tests (Go binaries run against a kind cluster via the
+# pytest harness), not plain unit tests. Skip them in the ginkgo UT/FV run
+UT_PACKAGES_TO_SKIP?=tests/k8st
+
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
@@ -317,7 +321,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
