@@ -104,7 +104,7 @@ function get_logs(){
   echo "================ calico-node (linux) ================"
   cat ./pod-logs/linux-calico-node.log || true
 
-  # Pull Windows-side service logs from the VM. When calico-node.exe crashes
+  # Pull Windows-side service logs from the VM. When calico.exe crashes
   # before Kubernetes can capture container logs (e.g., bad argv parsing), the
   # only trace lives in CalicoWindows/logs on the host.
   echo "================ Windows node CalicoWindows logs ================"
