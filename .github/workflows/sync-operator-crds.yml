@@ -60,6 +60,7 @@ jobs:
         run: make gen-manifests
 
       - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Sync operator CRDs from tigera/operator"
@@ -73,3 +74,21 @@ jobs:
             Triggered by scheduled workflow.
           labels: auto-sync,docs-not-required,release-note-not-required,skip-bot-cherry-pick,merge-when-ready
           delete-branch: true
+
+      # The PR author is github-actions[bot] (the GITHUB_TOKEN identity above), so
+      # it can't approve its own PR, and the Actions token can't approve PRs anyway.
+      # Approve as marvin-tigera (TIGERA_BOT_PAT) so Marvin merges it once CI is green.
+      # branch protection has dismiss_stale_reviews off, so a single approval persists
+      # across the hourly content updates -- the reviewDecision guard keeps reruns quiet.
+      - name: Auto-approve so Marvin merges once CI passes
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh pr view "$PR" -R "$REPO" --json reviewDecision -q .reviewDecision)" = "APPROVED" ]; then
+            echo "PR #$PR already approved; nothing to do."
+            exit 0
+          fi
+          gh pr review "$PR" -R "$REPO" --approve
