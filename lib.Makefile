@@ -435,6 +435,43 @@ RUST_CROSS_ENV := \
 endif
 endif
 
+###############################################################################
+# Calico-patched controller-gen
+#
+# CRD generation uses a controller-gen with Calico-specific patches (see the
+# *.patch files under //hack/cmd/calico-controller-gen): NumOrString/Port/
+# Protocol/DSCP int-or-string union schemas, and nullable slice-of-pointer
+# elements. The projectcalico/toolchain repo bakes a (NumOrString-only) patched
+# binary into the calico/go-build image; we build our own patched binary
+# in-repo instead (download tarball -> apply patches -> go build), so CRD
+# generation owns its patches and does not depend on the image's controller-gen.
+#
+# CONTROLLER_TOOLS_VERSION MUST match the toolchain go-build image
+# (projectcalico/toolchain images/calico-go-build/Dockerfile).
+CONTROLLER_TOOLS_VERSION ?= v0.18.0
+
+# The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
+# every component container, including api/'s isolated mount). It is stamped
+# with both the controller-tools version and a hash of all patches, so bumping
+# the version OR editing/adding a patch produces a new path and triggers a
+# rebuild.
+CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
+# Two views of the same file: the host path Make uses as a build target, and
+# the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
+# invoke it from inside the build containers.
+CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+
+# Real file target (not .PHONY): Make skips it entirely — no container spin-up —
+# when the binary already exists and build.sh is unchanged. Patch edits are
+# covered by the hash in the filename above (a change yields a new target). The
+# recipe needs the repo root mounted (for build.sh and the patches), so
+# components in their own module (api/) reach it via:
+#   $(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+$(CALICO_CONTROLLER_GEN_BIN): hack/cmd/calico-controller-gen/build.sh
+	$(DOCKER_GO_BUILD) sh -c \
+		'./hack/cmd/calico-controller-gen/build.sh $(CONTROLLER_TOOLS_VERSION) $(CALICO_CONTROLLER_GEN)'
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
