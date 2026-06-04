@@ -436,20 +436,21 @@ func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[str
 	}
 }
 
-// reconcileListeners starts a listener for each interface that newly needs one
-// and stops listeners for interfaces that no longer appear in the desired
-// state. On a start failure it re-marks the manager dirty (so the next
-// CompleteDeferredWork retries) and returns the error.
+// reconcileListeners drops listeners that are no longer desired or have failed,
+// then starts one for each desired interface that has no listener, which
+// recreates any failed listener just dropped.
 func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
-	// Drop listeners whose goroutine reported an unrecoverable socket error;
-	// the start loop below recreates a fresh one for any still desired.
+	// Drop listeners that are no longer desired or whose goroutine reported an
+	// unrecoverable socket error.
 	for ifaceName, l := range m.listeners {
-		if l.failed.Load() {
-			logrus.WithField("iface", ifaceName).Info("Recreating failed proxy neighbor listener")
-			l.stop()
-			delete(m.listeners, ifaceName)
+		if _, desired := desiredByIface[ifaceName]; desired && !l.failed.Load() {
+			continue
 		}
+		l.stop()
+		delete(m.listeners, ifaceName)
 	}
+	// Start a listener for each desired interface that doesn't have one (this
+	// recreates any failed listener dropped above).
 	var err error
 	for ifaceName := range desiredByIface {
 		if _, ok := m.listeners[ifaceName]; !ok {
@@ -459,12 +460,6 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 				// and remember the error to surface it to the dataplane loop.
 				m.dirty = true
 			}
-		}
-	}
-	for ifaceName, l := range m.listeners {
-		if _, ok := desiredByIface[ifaceName]; !ok {
-			l.stop()
-			delete(m.listeners, ifaceName)
 		}
 	}
 	return err
