@@ -22,6 +22,7 @@ Common code for Neutron driver UT.
 import contextlib
 import logging
 import sys
+from types import SimpleNamespace
 
 import eventlet
 import mock
@@ -263,6 +264,28 @@ REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
+
+class _AttrDict(dict):
+    """dict subclass that also supports attribute access.
+
+    Used to mock SQLAlchemy row objects returned from bulk queries: the
+    driver code reads these via both r["col"] (dict style) and r.col
+    (attribute style), so the mock must support both.  An optional set
+    of kwargs can be passed to extend the base dict with additional
+    virtual columns (e.g. qos_policy_id).
+    """
+
+    def __init__(self, base=None, **extra):
+        super(_AttrDict, self).__init__(base or {})
+        for k, v in extra.items():
+            self[k] = v
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(key)
 
 
 class Lib(object):
@@ -629,6 +652,13 @@ class Lib(object):
             return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
+        # NB: unknown subnet IDs are filtered out (return list contains only
+        # IDs present in osdb_subnets).  Don't synthesise a "minimal" subnet
+        # to make this match get_subnet()'s fallback -- the narrow-resync
+        # delete-when-gone path needs an empty list for missing IDs to
+        # trigger the delete branch.  The bulk-prefetch in
+        # WorkloadEndpointSyncer already tolerates absent entries via
+        # ``subnets_by_id.get(...)``.
         if not filters:
             return list(self.osdb_subnets)
         if "id" in filters:
@@ -686,20 +716,30 @@ class Lib(object):
 
     def db_query(self, model, **kw):
         m = mock.MagicMock()
+        # Set up both filter_by (per-port, legacy) and filter (bulk,
+        # IN-clause) side effects.  The bulk path returns all relevant
+        # rows across all ports/policies; the caller groups them by the
+        # relevant id (port_id, qos_policy_id, ...) and looks up per
+        # item.  Returning more rows than strictly needed is harmless.
         if "IPAllocation" in str(model.name):
             m.filter_by.side_effect = self.db_query_ip_allocation
+            m.filter.side_effect = self.db_query_ip_allocation_bulk
             return m
         if "FloatingIP" in str(model.name):
             m.filter_by.side_effect = self.db_query_floating_ip
+            m.filter.side_effect = self.db_query_floating_ip_bulk
             return m
         if "Network" in str(model.name):
             m.filter_by.side_effect = self.db_query_network
+            m.filter.side_effect = self.db_query_network_bulk
             return m
         if "QosBandwidthLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
+            m.filter.side_effect = self.db_query_qos_policy_bw_rule_bulk
             return m
         if "QosPacketRateLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
+            m.filter.side_effect = self.db_query_qos_policy_pr_rule_bulk
             return m
         raise Exception("db_query model=%r kw=%r" % (model, kw))
 
@@ -736,6 +776,51 @@ class Lib(object):
         if policy:
             return [r for r in policy["rules"] if r["type"] == "packet_rate_limit"]
         return []
+
+    # Bulk-filter (IN-clause) variants used by the resync prefetch.  Each
+    # returns all rows for the corresponding model; the real code then
+    # groups them by the relevant id.  SimpleNamespace is used so that
+    # attribute-style access (row.port_id, row.name, ...) works as it
+    # would on a real SQLAlchemy model row.
+    def db_query_ip_allocation_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                port_id=p["id"],
+                subnet_id=ip["subnet_id"],
+                ip_address=ip["ip_address"],
+            )
+            for p in self.osdb_ports
+            for ip in p["fixed_ips"]
+        ]
+
+    def db_query_floating_ip_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                fixed_port_id=fip["fixed_port_id"],
+                fixed_ip_address=fip["fixed_ip_address"],
+                floating_ip_address=fip["floating_ip_address"],
+            )
+            for fip in floating_ports
+        ]
+
+    def db_query_network_bulk(self, _expr):
+        return [SimpleNamespace(id=n["id"], name=n["name"]) for n in self.osdb_networks]
+
+    def db_query_qos_policy_bw_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "bandwidth_limit"
+        ]
+
+    def db_query_qos_policy_pr_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "packet_rate_limit"
+        ]
 
 
 class FixedUUID(object):
