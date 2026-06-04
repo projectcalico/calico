@@ -553,6 +553,7 @@ func (l *ifaceListener) runARPListener(ctx context.Context) {
 
 	for {
 		if ctx.Err() != nil {
+			logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled")
 			return
 		}
 
@@ -562,6 +563,10 @@ func (l *ifaceListener) runARPListener(ctx context.Context) {
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
+			if ctx.Err() != nil {
+				logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled during read")
+				return
+			}
 			if err, ok := errors.AsType[net.Error](err); ok && err.Timeout() {
 				continue
 			}
@@ -598,6 +603,7 @@ func (l *ifaceListener) runNDPListener(ctx context.Context) {
 
 	for {
 		if ctx.Err() != nil {
+			logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled")
 			return
 		}
 
@@ -607,6 +613,10 @@ func (l *ifaceListener) runNDPListener(ctx context.Context) {
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
+			if ctx.Err() != nil {
+				logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled during read")
+				return
+			}
 			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 				continue
 			}
