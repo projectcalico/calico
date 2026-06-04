@@ -109,7 +109,7 @@ jobs:
           fi
           # pr.json holds the free-form title; it stays on the runner disk
           # and is read with jq in later steps. It is never routed through
-          # GITHUB_OUTPUT or ${{ }} — those would be a script-injection
+          # GITHUB_OUTPUT or workflow expressions — those would be a script-injection
           # vector for an attacker-chosen PR title.
           gh api "repos/$REPO/pulls/$PR" \
             --jq '{login: .user.login, title: .title, url: .html_url}' > pr.json
@@ -120,7 +120,7 @@ jobs:
         if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
         run: |
           # Read the login from pr.json (not a step output) — keep all
-          # PR-derived text off the ${{ }} interpolation path.
+          # PR-derived text off the workflow-expression interpolation path.
           LOGIN=$(jq -r .login pr.json)
           # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
           # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
@@ -199,7 +199,7 @@ jobs:
           PR: ${{ steps.resolve.outputs.pr }}
           TRIAGE_COMMENT_URL: ${{ steps.triage.outputs.comment_url }}
         run: |
-          # TITLE/URL come from pr.json via jq, never from ${{ }}.
+          # TITLE/URL come from pr.json via jq, never from a workflow expression.
           TITLE=$(jq -r .title pr.json)
           URL=$(jq -r .url pr.json)
 
