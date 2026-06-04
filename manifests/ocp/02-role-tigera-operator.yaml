@@ -370,9 +370,13 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     resourceNames:
+      - envoy-gateway-topology-injector.calico-system
+      # New install lives in calico-system; the .tigera-gateway entry is kept so the
+      # operator can also delete the legacy webhook on upgrade from 3.x.
       - envoy-gateway-topology-injector.tigera-gateway
     verbs:
       - update
+      - delete
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
