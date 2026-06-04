@@ -38,5 +38,7 @@
       version: v3.31.0
     node-windows:
       version: v3.31.0
+    third-party-cni-plugins:
+      version: v3.31.0
     whisker:
       version: v3.31.0
