@@ -125,6 +125,13 @@ def _build_parser() -> argparse.ArgumentParser:
             "harder to parse cleanly."
         ),
     )
+    parser.add_argument(
+        "--inject-per-item-delay-ms",
+        type=int,
+        default=0,
+        metavar="MS",
+        help=argparse.SUPPRESS,  # test-only knob; CORE-12037
+    )
     return parser
 
 
@@ -185,6 +192,7 @@ def main(argv=None) -> int:
         ports=args.ports,
         security_groups=args.security_groups,
         include_security_groups_for_ports=args.include_sgs_for_ports,
+        inject_per_item_delay_ms=args.inject_per_item_delay_ms,
     ).run()
 
     if args.output:

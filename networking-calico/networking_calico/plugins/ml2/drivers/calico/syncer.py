@@ -88,9 +88,13 @@ class ResourceSyncer(object):
     when the syncer read the incorrect data.
     """
 
-    def __init__(self, db, resource_kind):
+    def __init__(self, db, resource_kind, inject_per_item_delay_ms=0):
         self.db = db
         self.resource_kind = resource_kind
+        # Test-only: when non-zero, sleep this many ms after each
+        # iteration of the compare loop below.  Used by the resync-
+        # concurrency test (CORE-12037).  Always 0 in production.
+        self._inject_per_item_delay_secs = inject_per_item_delay_ms / 1000.0
 
     def resync(self, context, scope):
         """Reconcile this resource type's etcd state with Neutron.
@@ -243,6 +247,8 @@ class ResourceSyncer(object):
                         name,
                     )
             # else: name was in scope but neither side has it -- nothing to do.
+            if self._inject_per_item_delay_secs:
+                time.sleep(self._inject_per_item_delay_secs)
         t_compare = time.monotonic()
 
         # Delete any legacy etcd data for this kind of resource.  Only makes sense in
