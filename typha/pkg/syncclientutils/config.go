@@ -34,6 +34,11 @@ type TyphaConfig struct {
 	ReadTimeout    time.Duration
 	WriteTimeout   time.Duration
 
+	// CompressionAlgorithmOrder is a comma-separated list of compression algorithms
+	// the client advertises to Typha, in preference order.  Valid values: "snappy", "zstd".
+	// Example: "zstd,snappy" to prefer zstd.  Leave empty to use the default.
+	CompressionAlgorithmOrder string
+
 	// Client-side TLS config for communication with Typha.  If any of these are
 	// specified, they _all_ must be - except that either CN or URISAN may be left unset.
 	// confd will then initiate a secure (TLS) connection to Typha.  Typha must present a
