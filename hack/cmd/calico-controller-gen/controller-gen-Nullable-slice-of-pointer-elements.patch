@@ -1,0 +1,30 @@
+From 10295ed17c1d9235ffd05b547f38a5fd2e74cf6c Mon Sep 17 00:00:00 2001
+From: Tigera <open-source@tigera.io>
+Date: Thu, 4 Jun 2026 00:00:00 +0000
+Subject: [PATCH] Mark slice-of-pointer (e.g. []*int) elements as nullable
+
+---
+ pkg/crd/schema.go | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/pkg/crd/schema.go b/pkg/crd/schema.go
+index 616141c..bc06c86 100644
+--- a/pkg/crd/schema.go
++++ b/pkg/crd/schema.go
+@@ -341,6 +341,13 @@ func arrayToSchema(ctx *schemaContext, array *ast.ArrayType) *apiext.JSONSchemaP
+ 	// TODO(directxman12): backwards-compat would require access to markers from base info
+ 	items := typeToSchema(ctx.ForInfo(&markers.TypeInfo{}), array.Elt)
+ 
++	// Calico: a slice of pointers (e.g. []*int) can contain null elements, so
++	// mark the items schema nullable. controller-gen otherwise unwraps the
++	// pointer and loses this information.
++	if _, isPointer := array.Elt.(*ast.StarExpr); isPointer {
++		items.Nullable = true
++	}
++
+ 	return &apiext.JSONSchemaProps{
+ 		Type:  "array",
+ 		Items: &apiext.JSONSchemaPropsOrArray{Schema: items},
+-- 
+2.43.0
+
