@@ -6847,7 +6847,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\tipip_mode\x18\x03 \x01(\tR\bipipMode\x12\x1d\n" +
 	"\n" +
 	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\x12!\n" +
-	"\fallowed_uses\x18\x05 \x03(\tR\vallowedUses\"\xab\x01\n" +
+	"\fallowed_uses\x18\x05 \x03(\tR\vallowedUses\"\x81\x01\n" +
 	"\rEncapsulation\x12!\n" +
 	"\fipip_enabled\x18\x01 \x01(\bR\vipipEnabled\x12#\n" +
 	"\rvxlan_enabled\x18\x02 \x01(\bR\fvxlanEnabled\x12(\n" +
