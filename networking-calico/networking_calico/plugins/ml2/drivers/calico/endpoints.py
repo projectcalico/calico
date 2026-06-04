@@ -80,25 +80,67 @@ NETWORK_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 
 class WorkloadEndpointSyncer(ResourceSyncer):
-    def __init__(self, db, txn_from_context, policy_syncer):
-        super(WorkloadEndpointSyncer, self).__init__(
-            db, txn_from_context, "WorkloadEndpoint"
-        )
+    def __init__(self, db, policy_syncer):
+        super(WorkloadEndpointSyncer, self).__init__(db, "WorkloadEndpoint")
         self.policy_syncer = policy_syncer
         self.keystone = make_keystone_client()
         self.proj_data_cache = {}
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
 
+        # Bulk-prefetched per-port data.  Set to a dict for the duration
+        # of a resync by _prefetch_bulk_port_data(); read by
+        # get_extra_port_information() which falls back to per-port
+        # queries when this is None (e.g. postcommit hooks, single-port
+        # writes via write_endpoint()).
+        #
+        # Concurrency note: this cache is process-local and assumes the
+        # resync runs in a different OS process from the API / RPC forks
+        # that handle dynamic postcommit hooks.  That is how the driver
+        # is wired today: CalicoStartupResyncWorker (and the calico-resync
+        # CLI) get their own WorkloadEndpointSyncer instance, distinct
+        # from the one used by the API forks' postcommit handlers, so a
+        # concurrent dynamic update cannot transitively read stale data
+        # from this cache.  If the architecture ever shares a single
+        # syncer instance across resync and postcommit paths in the same
+        # process, this needs revisiting -- a concurrent postcommit could
+        # then read self._bulk and produce a stale WEP write.
+        self._bulk = None
+
         # Prime the project data cache now so that we do not pay a fill
         # penalty the first time we need to annotate a port on a cold start.
         self.cache_port_project_data()
+
+    def resync(self, context, scope):
+        # Clear the bulk-port-data cache after the resync completes.  In
+        # production this is dead code: ``_do_startup_resync`` builds a
+        # fresh syncer instance via ``Scope(self.db).run()`` (no
+        # ``driver=``), and that instance gets GC'd as ``Scope.run()``
+        # returns.  But the test framework reuses the driver's syncer
+        # across resync and postcommit calls (``_trigger_resync(
+        # driver=self.driver)``), and in that scenario a subsequent
+        # ``get_extra_port_information()`` on the postcommit-hook path
+        # would otherwise read stale prefetch data from a previous
+        # resync.  Reset is cheap, test-correct, and defensive against
+        # any future architecture that shares the instance.
+        try:
+            return super(WorkloadEndpointSyncer, self).resync(context, scope)
+        finally:
+            self._bulk = None
 
     def get_from_neutron(self, context, scope):
         if scope.all():
             ports = self.db.get_ports(context)
         else:
             ports = self.db.get_ports(context, filters={"id": list(scope.ids())})
+
+        endpoint_ports = [p for p in ports if _port_is_endpoint_port(p)]
+
+        # Pre-fetch every piece of per-port side data we need during the
+        # compare phase in a handful of bulk queries, indexed by port_id /
+        # network_id / qos_policy_id.  get_extra_port_information() then
+        # uses the cache in O(1) instead of doing N+1 DB round-trips.
+        self._prefetch_bulk_port_data(context, endpoint_ports)
 
         # neutron_map keys carry one of three prefixes:
         #
@@ -115,9 +157,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         #                       dest-side WEP.  Value is (port, dest_host) for
         #                       the same reason as dest-wep.
         neutron_map = {}
-        for port in ports:
-            if not _port_is_endpoint_port(port):
-                continue
+        for port in endpoint_ports:
             neutron_map["wep " + endpoint_name(port)] = port
             # binding:profile may carry migrating_to=None (or be missing entirely) after
             # a migration completes or is cancelled.  Only generate destination-side
@@ -135,6 +175,123 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 neutron_map["lm " + dest_wep_name] = (port, dest_host)
 
         return neutron_map
+
+    def _prefetch_bulk_port_data(self, context, endpoint_ports):
+        """Populate self._bulk with all per-port side data in one pass.
+
+        The five session.query() calls in get_extra_port_information()
+        (plus the plugin-API calls for subnets and SG names) are
+        replaced here by bulk queries indexed by port_id / network_id /
+        policy_id.  get_extra_port_information() then looks them up in
+        O(1) per port from self._bulk.
+        """
+        port_ids = [p["id"] for p in endpoint_ports]
+        network_ids = list({p["network_id"] for p in endpoint_ports})
+        qos_ids = {
+            p.get("qos_policy_id") or p.get("qos_network_policy_id")
+            for p in endpoint_ports
+        }
+        qos_ids.discard(None)
+        qos_ids = list(qos_ids)
+
+        # IPAllocation rows, grouped by port_id.
+        ip_allocs_by_port = {}
+        if port_ids:
+            q = context.session.query(models_v2.IPAllocation).filter(
+                models_v2.IPAllocation.port_id.in_(port_ids)
+            )
+            for ip in q:
+                ip_allocs_by_port.setdefault(ip.port_id, []).append(
+                    {
+                        "subnet_id": ip.subnet_id,
+                        "ip_address": ip.ip_address,
+                    }
+                )
+
+        # FloatingIP rows, grouped by fixed_port_id.
+        float_ips_by_port = {}
+        if port_ids:
+            q = context.session.query(FloatingIP).filter(
+                FloatingIP.fixed_port_id.in_(port_ids)
+            )
+            for fip in q:
+                float_ips_by_port.setdefault(fip.fixed_port_id, []).append(
+                    {
+                        "int_ip": fip.fixed_ip_address,
+                        "ext_ip": fip.floating_ip_address,
+                    }
+                )
+
+        # Network rows, indexed by id.
+        networks_by_id = {}
+        if network_ids:
+            q = context.session.query(models_v2.Network).filter(
+                models_v2.Network.id.in_(network_ids)
+            )
+            for net in q:
+                networks_by_id[net.id] = net
+
+        # SG bindings, grouped by port_id (a port can have multiple SGs).
+        # Use the plugin API (with a list filter) rather than
+        # session.query(SecurityGroupPortBinding) so this path is
+        # consistent with the per-port code that uses the same API.
+        sg_ids_by_port = {}
+        if port_ids:
+            bindings = self.db._get_port_security_group_bindings(
+                context, filters={"port_id": port_ids}
+            )
+            for b in bindings:
+                sg_ids_by_port.setdefault(b["port_id"], []).append(
+                    b["security_group_id"]
+                )
+
+        # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.
+        qos_bw_by_policy = {}
+        qos_pr_by_policy = {}
+        if qos_ids:
+            q = context.session.query(qos_models.QosBandwidthLimitRule).filter(
+                qos_models.QosBandwidthLimitRule.qos_policy_id.in_(qos_ids)
+            )
+            for r in q:
+                qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(r)
+            q = context.session.query(qos_models.QosPacketRateLimitRule).filter(
+                qos_models.QosPacketRateLimitRule.qos_policy_id.in_(qos_ids)
+            )
+            for r in q:
+                qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(r)
+
+        # Subnet rows for every subnet referenced by any fixed IP (for
+        # gateway_ip).
+        subnet_ids = list(
+            {ip["subnet_id"] for ips in ip_allocs_by_port.values() for ip in ips}
+        )
+        subnets_by_id = {}
+        if subnet_ids:
+            for s in self.db.get_subnets(context, filters={"id": subnet_ids}):
+                subnets_by_id[s["id"]] = s
+
+        # Names of every security group referenced by any port.
+        all_sg_ids = list(
+            {sg_id for sg_ids in sg_ids_by_port.values() for sg_id in sg_ids}
+        )
+        sg_names_by_id = {}
+        if all_sg_ids:
+            sgs = self.db.get_security_groups(
+                context, filters={"id": all_sg_ids}, default_sg=True
+            )
+            for sg in sgs:
+                sg_names_by_id[sg["id"]] = sg["name"]
+
+        self._bulk = {
+            "ip_allocs_by_port": ip_allocs_by_port,
+            "float_ips_by_port": float_ips_by_port,
+            "networks_by_id": networks_by_id,
+            "sg_ids_by_port": sg_ids_by_port,
+            "qos_bw_by_policy": qos_bw_by_policy,
+            "qos_pr_by_policy": qos_pr_by_policy,
+            "subnets_by_id": subnets_by_id,
+            "sg_names_by_id": sg_names_by_id,
+        }
 
     def get_from_etcd(self, scope):
         # Scan all WEPs and LMs from etcd.  At scale this is cheap: in our benchmarks
@@ -459,6 +616,8 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         etcd.
         """
         LOG.debug("port = %r", port)
+        if self._bulk is not None:
+            return self._get_extra_port_information_from_bulk(context, port)
         port_extra = PortExtra()
         port_extra.fixed_ips = self.get_fixed_ips_for_port(context, port)
         port_extra.floating_ips = self.get_floating_ips_for_port(context, port)
@@ -469,6 +628,70 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.add_port_interface_name(port, port_extra)
         self.add_port_project_data(port, context, port_extra)
         self.add_port_sg_names(context, port_extra)
+        self.add_port_qos(port, context, port_extra)
+
+        return port_extra
+
+    def _get_extra_port_information_from_bulk(self, context, port):
+        """Build a PortExtra for `port` using self._bulk prefetched data.
+
+        Assumes _prefetch_bulk_port_data() has populated self._bulk at
+        the start of resync.  Produces the same result as the per-port
+        code path, but without any per-port DB round-trips.
+        """
+        bulk = self._bulk
+        port_id = port["id"]
+
+        port_extra = PortExtra()
+
+        # Fixed IPs, with gateway filled in from the subnet cache.  Fall
+        # back to a per-subnet get_subnet() for IDs the bulk prefetch
+        # didn't see -- matches the per-port path in add_port_gateways
+        # which always uses the singular API.
+        port_extra.fixed_ips = []
+        for ip in bulk["ip_allocs_by_port"].get(port_id, []):
+            subnet = bulk["subnets_by_id"].get(ip["subnet_id"])
+            if subnet is None:
+                subnet = self.db.get_subnet(context, ip["subnet_id"])
+            port_extra.fixed_ips.append(
+                {
+                    "subnet_id": ip["subnet_id"],
+                    "ip_address": ip["ip_address"],
+                    "gateway": subnet["gateway_ip"] if subnet else None,
+                }
+            )
+
+        # Floating IPs.
+        port_extra.floating_ips = bulk["float_ips_by_port"].get(port_id, [])
+
+        # Security groups + names.
+        port_extra.security_groups = bulk["sg_ids_by_port"].get(port_id, [])
+        for sg_id in port_extra.security_groups:
+            name = bulk["sg_names_by_id"].get(sg_id)
+            if name is not None:
+                port_extra.security_group_names[sg_id] = (
+                    datamodel_v3.sanitize_label_name_value(name, SG_NAME_MAX_LENGTH)
+                )
+
+        # Network name.
+        network = bulk["networks_by_id"].get(port["network_id"])
+        if network is not None:
+            try:
+                port_extra.network_name = datamodel_v3.sanitize_label_name_value(
+                    network.name,
+                    NETWORK_NAME_MAX_LENGTH,
+                )
+            except Exception:
+                LOG.warning("Failed to sanitize network name for port %s", port_id)
+
+        # Interface name.
+        self.add_port_interface_name(port, port_extra)
+
+        # Project data — still uses the keystone-backed in-process cache;
+        # no DB round-trip in the common case.
+        self.add_port_project_data(port, context, port_extra)
+
+        # QoS — use bulk-prefetched rules.
         self.add_port_qos(port, context, port_extra)
 
         return port_extra
@@ -543,10 +766,20 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         qos_policy_id = port.get("qos_policy_id") or port.get("qos_network_policy_id")
         LOG.debug("QoS Policy ID = %r", qos_policy_id)
         if qos_policy_id:
-            rules = context.session.query(qos_models.QosBandwidthLimitRule).filter_by(
-                qos_policy_id=qos_policy_id
-            )
-            for r in rules:
+            # Prefer bulk-prefetched rules when running inside resync;
+            # otherwise do per-port queries (e.g. on postcommit hooks).
+            if self._bulk is not None:
+                bw_rules = self._bulk["qos_bw_by_policy"].get(qos_policy_id, [])
+                pr_rules = self._bulk["qos_pr_by_policy"].get(qos_policy_id, [])
+            else:
+                bw_rules = context.session.query(
+                    qos_models.QosBandwidthLimitRule
+                ).filter_by(qos_policy_id=qos_policy_id)
+                pr_rules = context.session.query(
+                    qos_models.QosPacketRateLimitRule
+                ).filter_by(qos_policy_id=qos_policy_id)
+
+            for r in bw_rules:
                 LOG.debug("BW rule = %r", r)
                 direction = r.get("direction", "egress")
                 if r["max_kbps"] != 0:
@@ -558,10 +791,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                         r["max_burst_kbps"] * 1000, MINMAX_BW_PEAKRATE
                     )
 
-            rules = context.session.query(qos_models.QosPacketRateLimitRule).filter_by(
-                qos_policy_id=qos_policy_id
-            )
-            for r in rules:
+            for r in pr_rules:
                 LOG.debug("PR rule = %r", r)
                 direction = r.get("direction", "egress")
                 if r["max_kpps"] != 0:

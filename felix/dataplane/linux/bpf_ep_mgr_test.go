@@ -1971,6 +1971,47 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}))
 		})
 
+		It("should reclaim a netkit WEP's index into the netkit jump map allocator", func() {
+			// Regression test for the netkit jump-map index corruption on
+			// Felix restart (CORE-12937). A netkit workload allocates its
+			// policy indices from netkitJumpMapAllocs (see allocJumpIndicesForWEP
+			// / wepStateFillJumps), so start-of-day resync must reclaim its
+			// persisted indices from that same allocator. If they were reclaimed
+			// into the regular jumpMapAllocs instead, the netkit allocator would
+			// believe the index is free and later hand it to another netkit WEP,
+			// leaving two endpoints on one jump map slot and corrupting one of
+			// their policy programs.
+			err := dp.createIface("calinkit0", 50, "netkit")
+			Expect(err).NotTo(HaveOccurred())
+
+			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+				if ifindex == 50 {
+					return &net.Interface{Name: "calinkit0", Index: 50, Flags: net.FlagUp}, nil
+				}
+				return nil, errors.New("no such network interface")
+			}
+
+			// Persisted ifstate from before the restart: a netkit WEP using
+			// policy index 2 on both hooks.
+			_ = ifStateMap.Update(
+				ifstate.NewKey(50).AsBytes(),
+				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgIPv4Ready, "calinkit0",
+					-1, 2, 2, -1, -1, -1, -1, -1).AsBytes(),
+			)
+			genWLUpdate("calinkit0")()
+
+			err = bpfEpMgr.CompleteDeferredWork()
+			Expect(err).NotTo(HaveOccurred())
+
+			// The persisted index must be reclaimed by the netkit allocator...
+			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
+			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
+			// ...and must NOT land in the regular allocator (where the bug put it,
+			// leaving the netkit allocator free to hand index 2 out a second time).
+			Expect(bpfEpMgr.jumpMapAllocs[hook.Ingress].inUse).NotTo(HaveKey(2))
+			Expect(bpfEpMgr.jumpMapAllocs[hook.Egress].inUse).NotTo(HaveKey(2))
+		})
+
 		It("should handle jump map collision: single iface", func() {
 			// This test verifies that we recover if we're started with
 			// bad data in the ifstate map; in particular if two policy
