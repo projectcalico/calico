@@ -2606,16 +2606,19 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             )
 
     def test_loop_writing_port_statuses(self):
-        with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
-            with mock.patch.object(
-                self.driver, "_try_to_update_port_status"
-            ) as m_try_upd:
-                m_queue.get.side_effect = iter([((1, mock.ANY), ("host", "port"))])
-                self.assertRaises(
-                    StopIteration,
-                    self.driver._loop_writing_port_statuses,
-                    self.driver._epoch,
-                )
+        with mock.patch.object(
+            self.driver, "_port_status_queue"
+        ) as m_queue, mock.patch.object(
+            self.driver, "_try_to_update_port_status"
+        ) as m_try_upd, mock.patch.object(
+            mech_calico, "_close_session_safely"
+        ) as m_close:
+            m_queue.get.side_effect = iter([((1, mock.ANY), ("host", "port"))])
+            self.assertRaises(
+                StopIteration,
+                self.driver._loop_writing_port_statuses,
+                self.driver._epoch,
+            )
         self.assertEqual(
             [
                 mock.call(mock.ANY, ("host", "port")),
@@ -3048,5 +3051,6 @@ class TestCloseSessionSafely(unittest.TestCase):
     def test_no_session_attr_is_noop(self):
         class _NoSession:
             pass
+
         # Bare object with no .session attribute -- no raise, no call.
         mech_calico._close_session_safely(_NoSession())
