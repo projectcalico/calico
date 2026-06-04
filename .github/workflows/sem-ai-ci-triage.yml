@@ -1,4 +1,3 @@
-# Drop this into the target repo at: .github/workflows/sem-ai-ci-triage.yml
 # Required repo secrets:
 #   SEM_AI_TRIAGE_URL   — endpoint of the triage service
 #   SEM_AI_TRIAGE_TOKEN — bearer token expected by the endpoint
@@ -187,3 +186,52 @@ jobs:
             echo "posting new comment on PR #$PR"
             gh api -X POST "repos/$REPO/issues/$PR/comments" --input - <<<"$PAYLOAD"
           fi
+
+  # When CI goes green, delete any stale failure-analysis comment left by an
+  # earlier failed run. The triage job only ever upserts on failure/error, so
+  # without this a now-passing PR keeps showing an obsolete failure report.
+  # Mutually exclusive with `triage`: that job requires failure/error, this
+  # one requires success, so exactly one runs per status event.
+  cleanup:
+    if: >-
+      github.event_name == 'status' &&
+      github.event.context == 'ci/semaphoreci/pr: Calico' &&
+      github.event.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.sha }}
+    steps:
+      - name: Resolve PR from SHA
+        id: resolve
+        run: |
+          # Fork-aware lookup — see the triage job for the rationale.
+          PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                 --jq '.items[0].number // empty')
+          if [[ -z "$PR" ]]; then
+            echo "::notice::no open PR for sha=$SHA — nothing to clean up"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Delete stale sem-ai-triage comment
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          PR: ${{ steps.resolve.outputs.pr }}
+        run: |
+          MARKER="<!-- sem-ai-ci-triage -->"
+          IDS=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")))][].id")
+          if [[ -z "$IDS" ]]; then
+            echo "no sem-ai-triage comment on PR #$PR — nothing to delete"
+            exit 0
+          fi
+          # Best-effort: a transient delete failure must not fail the workflow.
+          for ID in $IDS; do
+            echo "deleting stale triage comment $ID on PR #$PR"
+            gh api -X DELETE "repos/$REPO/issues/comments/$ID" \
+              || echo "::warning::failed to delete comment $ID (continuing)"
+          done
