@@ -418,6 +418,7 @@ type FelixConfigurationSpec struct {
 	// VXLANPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
 	// VXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel
 	// device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].
+	// VXLANPortMin must be strictly less than VXLANPortMax.
 	// If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
 	// +optional
 	// +kubebuilder:validation:Minimum=0

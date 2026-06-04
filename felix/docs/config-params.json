@@ -4629,8 +4629,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "The lower bound (inclusive) of the UDP source port range used by Felix for outgoing\nVXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel\ndevice and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].\nIf unset (or zero), the kernel/dataplane default is used.",
-          "DescriptionHTML": "<p>The lower bound (inclusive) of the UDP source port range used by Felix for outgoing\nVXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel\ndevice and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].\nIf unset (or zero), the kernel/dataplane default is used.</p>",
+          "Description": "The lower bound (inclusive) of the UDP source port range used by Felix for outgoing\nVXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel\ndevice and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].\nVXLANPortMin must be strictly less than VXLANPortMax.\nIf unset (or zero), the kernel/dataplane default is used.",
+          "DescriptionHTML": "<p>The lower bound (inclusive) of the UDP source port range used by Felix for outgoing\nVXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel\ndevice and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].\nVXLANPortMin must be strictly less than VXLANPortMax.\nIf unset (or zero), the kernel/dataplane default is used.</p>",
           "UserEditable": true,
           "GoType": "*int"
         },

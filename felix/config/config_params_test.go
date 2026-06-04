@@ -805,14 +805,14 @@ var _ = DescribeTable("Config validation",
 		"RouteTableRanges": "abcde",
 	}, false),
 	Entry("VXLAN port range: both unset", map[string]string{}, true),
-	Entry("VXLAN port range: valid min<=max", map[string]string{
+	Entry("VXLAN port range: valid min<max", map[string]string{
 		"VXLANPortMin": "49152",
 		"VXLANPortMax": "65535",
 	}, true),
 	Entry("VXLAN port range: min==max", map[string]string{
 		"VXLANPortMin": "12345",
 		"VXLANPortMax": "12345",
-	}, true),
+	}, false),
 	Entry("VXLAN port range: only min set", map[string]string{
 		"VXLANPortMin": "49152",
 	}, false),
