@@ -8,7 +8,17 @@ import (
 	"os"
 	"testing"
 
+	csi "github.com/container-storage-interface/spec/lib/go/csi"
 	. "github.com/onsi/gomega"
+)
+
+// Compile-time assertions that the driver satisfies the CSI server interfaces.
+// Since CSI spec v1.10.0 these interfaces require embedding the generated
+// Unimplemented*Server structs (forward compatibility), so these guard against
+// a regression where that embedding is dropped.
+var (
+	_ csi.IdentityServer = (*Driver)(nil)
+	_ csi.NodeServer     = (*Driver)(nil)
 )
 
 func testRetrievePodInfoFromFile(g *WithT, setup podInfoTestSetup, volumeID, credsJSON string, checkErr validateReturnError) {
@@ -18,7 +28,7 @@ func testRetrievePodInfoFromFile(g *WithT, setup podInfoTestSetup, volumeID, cre
 	nodeServiceConfig := ConfigurationOptions{
 		NodeAgentCredentialsHomeDir: "/tmp",
 	}
-	nodeService := &nodeService{&nodeServiceConfig}
+	nodeService := &nodeService{config: &nodeServiceConfig}
 	_, err = nodeService.retrievePodInfoFromFile(volumeID)
 	g.Expect(checkErr(err)).NotTo(HaveOccurred(), "Error check failed")
 }

@@ -66,7 +66,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
@@ -75,7 +75,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 # Name of the Windows release ZIP archive.
 WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
-WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
+WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
@@ -131,7 +131,15 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from node/deps.txt by lib.Makefile.
+## The node image ships the combined `calico` monobinary built from
+## ../cmd/calico (see $(NODE_CONTAINER_BINARY) below). The monobinary's source
+## closure (felix, confd, etc.) is NOT in node/deps.txt because node's own Go
+## module doesn't import those packages directly — they're pulled in by the
+## `make -C ../cmd/calico` recursion, which deps.txt generation can't see. Fold
+## in the cmd module's local deps so a change to felix (or anything else in the
+## monobinary) rebuilds the node image.
+SRC_FILES += $(call local-deps-go-files,cmd)
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(shell find ../felix -name '*.[ch]')
 

@@ -17,6 +17,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 	"time"
@@ -32,6 +33,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -39,11 +43,13 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
+	"github.com/projectcalico/calico/e2e/pkg/utils/bgp"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -58,6 +64,26 @@ const (
 	singleMigrationTimeout     = 5 * time.Minute
 	doubleMigrationTimeout     = 6 * time.Minute
 	eBGPDoubleMigrationTimeout = 6 * time.Minute
+)
+
+// Route convergence constants for KubeVirt live migration tests.
+// Felix elevates the kernel route metric to 512 on the target node during
+// migration; the BIRD import filter maps community (65000,100) to
+// local_pref 2147483135. After LiveMigrationRouteConvergenceTime (~30s),
+// metrics revert to their normal values.
+const (
+	elevatedRouteMetric   = 512
+	normalRouteMetric     = 1024
+	elevatedLocalPref     = 2147483135
+	normalLocalPref       = 100
+	migrationCommunityTag = "(65000,100)"
+
+	// elevatedMetricTimeout is the polling budget for observing the elevated
+	// metric after migration (Felix programs it asynchronously).
+	elevatedMetricTimeout = 20 * time.Second
+	// metricRevertTimeout is the polling budget for the metric to revert
+	// after the convergence window (~30s) expires.
+	metricRevertTimeout = 45 * time.Second
 )
 
 // vmImage returns KUBEVIRT_TEST_VM_IMAGE when set, otherwise images.KubeVirtUbuntu.
@@ -112,10 +138,11 @@ runcmd:
 // passed to operations (Create/Delete/Stop/etc.) so the VM and the API client
 // stay distinct concepts.
 type kubeVirtVM struct {
-	name      string
-	namespace string
-	cloudInit string
-	labels    map[string]string // extra labels propagated to virt-launcher pod
+	name        string
+	namespace   string
+	cloudInit   string
+	labels      map[string]string // extra labels propagated to virt-launcher pod
+	annotations map[string]string // extra annotations propagated to virt-launcher pod
 }
 
 func (v *kubeVirtVM) spec() *kubevirtv1.VirtualMachine {
@@ -127,6 +154,12 @@ func (v *kubeVirtVM) spec() *kubevirtv1.VirtualMachine {
 	for k, val := range v.labels {
 		templateLabels[k] = val
 	}
+	templateAnnotations := map[string]string{
+		"kubevirt.io/allow-pod-bridge-network-live-migration": "true",
+	}
+	for k, val := range v.annotations {
+		templateAnnotations[k] = val
+	}
 	runStrategy := kubevirtv1.RunStrategyAlways
 	return &kubevirtv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,7 +170,7 @@ func (v *kubeVirtVM) spec() *kubevirtv1.VirtualMachine {
 			RunStrategy: &runStrategy,
 			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{"kubevirt.io/allow-pod-bridge-network-live-migration": "true"},
+					Annotations: templateAnnotations,
 					Labels:      templateLabels,
 				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
@@ -317,10 +350,11 @@ func deleteVMIMigration(cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineIn
 	}
 }
 
-// waitForMigrationSuccess polls the VMIM until it reaches MigrationSucceeded
+// expectMigrationSuccess polls the VMIM until it reaches MigrationSucceeded
 // phase. Immediately stops polling with a fatal error if MigrationFailed is
 // observed.
-func waitForMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+func expectMigrationSuccess(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+	GinkgoHelper()
 	By(fmt.Sprintf("Waiting for migration %s to succeed", vmim.Name))
 	Eventually(func() error {
 		got := &kubevirtv1.VirtualMachineInstanceMigration{}
@@ -400,71 +434,15 @@ func countSequenceGaps(lines []string) (gaps, lastSeq int) {
 	return
 }
 
-// runOnTOR runs cmd on the external TOR via SSH and returns stdout plus any
-// wrapped error. Callers wanting fire-and-forget must explicitly drop the error.
-func runOnTOR(tor *externalnode.Client, cmd string) (string, error) {
-	out, err := tor.Exec("sh", "-c", cmd)
+// runOnExternalNode runs cmd on an external node via SSH and returns stdout
+// plus any wrapped error. Used by live_migration.go for non-BIRD operations
+// (ping, kernel route checks, docker run).
+func runOnExternalNode(node *externalnode.Client, cmd string) (string, error) {
+	out, err := node.Exec("sh", "-c", cmd)
 	if err != nil {
-		return out, fmt.Errorf("TOR cmd %q failed: %w (output=%q)", cmd, err, out)
+		return out, fmt.Errorf("SSH cmd %q failed: %w (output=%q)", cmd, err, out)
 	}
 	return out, nil
-}
-
-// torBirdHeaderTemplate is the static header of the TOR BIRD peers config.
-// The %s placeholder is the cluster's IPv4 IPPool CIDR, used to gate the
-// import filter so only pod-network routes are accepted. Filter shape mirrors
-// confd's communities_and_operations bird.cfg.
-const torBirdHeaderTemplate = `function import_community_lp() {
-  if ((65000, 100) ~ bgp_community) then { bgp_local_pref = 2147483135; accept; }
-  accept;
-}
-
-filter import_community_priority {
-  # Only accept routes within the pod CIDR. Reject kernel/direct routes
-  # (0.0.0.0/0, 10.x, 169.254.x, 172.16.x) that would break TOR routing.
-  if (net !~ %s) then reject;
-
-  import_community_lp();
-  if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then
-    preference = 200;
-  accept;
-}
-
-template bgp bgp_template {
-  debug { states };
-  description "BGP peer";
-  local as 65001;
-  multihop;
-  gateway recursive;
-  import filter import_community_priority;
-  export none;
-  source address ip@local;
-  add paths on;
-  graceful restart;
-  connect delay time 2;
-  connect retry time 5;
-  error wait time 5,30;
-}
-
-`
-
-// torBirdPeerTemplate is the per-peer block format. Args: index, peer IP.
-const torBirdPeerTemplate = `protocol bgp node_%d from bgp_template {
-  neighbor %s as 64512;
-  passive on;
-}
-
-`
-
-// generateTORBirdPeersConf renders a BIRD 1.x peers config for the TOR. podCIDR
-// gates the import filter; pass the cluster's IPv4 IPPool CIDR.
-func generateTORBirdPeersConf(podCIDR string, nodeIPs []string) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, torBirdHeaderTemplate, podCIDR)
-	for i, nodeIP := range nodeIPs {
-		sb.WriteString(fmt.Sprintf(torBirdPeerTemplate, i, nodeIP))
-	}
-	return sb.String()
 }
 
 // discoverPodCIDR returns the CIDR of the first IPv4 IPPool found in the
@@ -483,69 +461,48 @@ func discoverPodCIDR(ctx context.Context, lcgc clientv3.Interface) string {
 	return ""
 }
 
-// startBirdOnTOR launches a calico/bird container on the TOR, applies the
-// per-test peer config, and registers cleanup. Lifecycle is owned by the test
-// so different cases can use different BIRD configs.
-func startBirdOnTOR(tor *externalnode.Client, torIP string, peersConf string) {
+// pickUnallocatedIP discovers the cluster's first IPv4 IPPool and returns an
+// IP within that CIDR that is not currently allocated. Fails the test if no
+// unallocated IP can be found.
+func pickUnallocatedIP(ctx context.Context, lcgc clientv3.Interface) string {
 	GinkgoHelper()
-	By("Starting BIRD container on TOR")
-
-	_ = tor.RemoveContainer("tor-bird")
-
-	// The calico/bird image ships with a base bird.conf that defines router
-	// id, protocol kernel, and protocol device, plus an include for
-	// /etc/bird/*.conf so peers.conf is picked up on reload.
-	_, err := tor.RunContainer("tor-bird", images.CalicoBIRD,
-		[]string{"-d", "--privileged", "--network", "host"})
-	Expect(err).NotTo(HaveOccurred(), "failed to start BIRD container on TOR")
-	// Register cleanup before the readiness wait so a panic still removes
-	// the container we just created.
-	DeferCleanup(func() { stopBirdOnTOR(tor) })
-
-	Eventually(func() (bool, error) {
-		return tor.IsContainerRunning("tor-bird")
-	}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tor-bird container is not running")
-
-	// Add "merge paths on" to the kernel protocol block for ECMP support.
-	// With different BIRD preferences (200 for community-tagged, 100 for
-	// default), merge paths only merges routes of equal preference, so the
-	// higher-preference route wins during migration.
-	_, err = tor.RunInContainer("tor-bird", "sed", "-i",
-		"'/protocol kernel {/a merge paths on;'", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(), "failed to enable merge paths in tor-bird")
-
-	peersConf = strings.ReplaceAll(peersConf, "ip@local", torIP)
-	Expect(tor.WriteFileInContainer("tor-bird", "/etc/bird/peers.conf", []byte(peersConf))).
-		To(Succeed(), "failed to write BIRD peers config to TOR")
-
-	By("Reloading BIRD config on TOR")
-	out, err := tor.RunInContainer("tor-bird", "birdcl", "configure")
-	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
-	logrus.Infof("birdcl configure: %s", out)
+	cidr := discoverPodCIDR(ctx, lcgc)
+	_, ipNet, err := net.ParseCIDR(cidr)
+	Expect(err).NotTo(HaveOccurred(), "parse IPPool CIDR %s", cidr)
+	base := cnet.IP{IP: ipNet.IP}
+	ones, bits := ipNet.Mask.Size()
+	numHosts := 1 << (bits - ones) // addresses in the pool (e.g. /24 → 256)
+	for offset := 1; offset < numHosts; offset++ {
+		candidate := cnet.IncrementIP(base, big.NewInt(int64(offset)))
+		_, err := lcgc.IPAM().GetAssignmentAttributes(ctx, candidate)
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			return candidate.String()
+		}
+	}
+	Fail("no unallocated IP found in pool " + cidr)
+	return ""
 }
 
-// stopBirdOnTOR removes the BIRD container from the TOR node.
-func stopBirdOnTOR(tor *externalnode.Client) {
-	By("Stopping BIRD on TOR")
-	_ = tor.RemoveContainer("tor-bird")
-}
+// setupEBGPPeeringCommon configures eBGP peering between an external BIRD peer
+// and the cluster's control-plane calico-node. It:
+//   - discovers the master node and pod CIDR
+//   - generates and applies the BIRD peers config via peer.ConfigureBIRD
+//   - creates a BGPFilter that tags elevated-priority routes with a community
+//   - creates a BGPPeer pointing the master at peer.PeerIP()
+//   - waits for confd to regenerate bird.cfg and the eBGP session to establish
+//
+// All Calico resources are cleaned up via DeferCleanup. filterPrefix and
+// peerPrefix control the random name prefixes for stale-resource sweeping.
+func setupEBGPPeeringCommon(f *framework.Framework, peer bgp.BIRDPeer, filterPrefix, peerPrefix string) {
+	GinkgoHelper()
+	By("Setting up eBGP peering")
 
-// setupEBGPPeering configures eBGP peering between a TOR node and all cluster nodes.
-// It starts a BIRD daemon on the TOR, disables the BGP full mesh, and creates a global
-// BGPPeer resource pointing all nodes at the TOR. All resources are cleaned up via
-// DeferCleanup when the test completes.
-func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
-	By("Setting up eBGP peering between TOR and cluster nodes")
-
-	// Use the libcalico-go client for Calico resources (BGPPeer, BGPConfiguration).
+	// Use the libcalico-go client for Calico resources (BGPPeer, BGPFilter).
 	// The controller-runtime client fails resource discovery when the Calico API
 	// server aggregated endpoint (projectcalico.org/v3) is registered but not running.
 	lcgc := newLibcalicoClient(f)
 	ctx := context.Background()
 
-	// Random suffixes so reruns can't collide if a prior run's cleanup failed.
-	const filterPrefix = "kubevirt-lm-"
-	const peerPrefix = "tor-ebgp-peer-"
 	filterName := utils.GenerateRandomName(filterPrefix)
 	peerName := utils.GenerateRandomName(peerPrefix)
 
@@ -573,11 +530,11 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
 
-	// Pick the control-plane node and its BGP-peering address. Only the master
-	// peers with the TOR; "next hop keep" re-advertises iBGP routes with
-	// per-node next-hops, so the TOR routes directly to each workload's host.
-	// The annotation is in CIDR form, so the BGP subnet falls out of the parse.
-	var masterName, masterAddr string
+	// Find the control-plane node and its BGP address from the Calico annotation.
+	// Only the master peers with the eBGP peer; "next hop keep" re-advertises
+	// iBGP routes with per-node next-hops, so the external peer routes directly
+	// to each workload's host.
+	var masterName, masterBGPIP string
 	for _, node := range nodeList.Items {
 		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; !ok {
 			continue
@@ -587,57 +544,39 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 			continue
 		}
 		masterName = node.Name
-		masterAddr = addr
+		ip, _, err := net.ParseCIDR(addr)
+		Expect(err).NotTo(HaveOccurred(), "failed to parse master BGP address %q", addr)
+		masterBGPIP = ip.String()
 		break
 	}
-	Expect(masterAddr).NotTo(BeEmpty(),
+	Expect(masterBGPIP).NotTo(BeEmpty(),
 		"no control-plane node found with projectcalico.org/IPv4Address annotation")
-
-	masterIP, bgpSubnet, err := net.ParseCIDR(masterAddr)
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to parse master node BGP address %q", masterAddr)
-	masterBGPIP := masterIP.String()
-	logrus.Infof("Master node: %s, BGP IP: %s, BGP subnet: %s", masterName, masterBGPIP, bgpSubnet)
-
-	// Find the TOR's L2TP IP by matching against the discovered BGP subnet.
-	torIPs := tor.IPs()
-	Expect(torIPs).NotTo(BeEmpty(), "could not discover TOR IPs")
-	var torL2tpIP string
-	for _, ip := range torIPs {
-		if bgpSubnet.Contains(net.ParseIP(ip)) {
-			torL2tpIP = ip
-			break
-		}
-	}
-	Expect(torL2tpIP).NotTo(BeEmpty(),
-		"no TOR IP found in BGP subnet %s (TOR IPs: %v)", bgpSubnet, torIPs)
-	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
+	logrus.Infof("Master node: %s, BGP IP: %s", masterName, masterBGPIP)
 
 	// Discover the cluster's pod CIDR from the active IPv4 IPPool so the BIRD
 	// import filter accepts the right network range.
 	podCIDR := discoverPodCIDR(ctx, lcgc)
 	logrus.Infof("Discovered pod CIDR for BIRD import filter: %s", podCIDR)
 
-	// Start BIRD on the TOR with the master as the only peer. startBirdOnTOR
-	// registers its own cleanup.
-	peersConf := generateTORBirdPeersConf(podCIDR, []string{masterBGPIP})
+	// Generate BIRD peers config and apply via the transport-specific peer.
+	peersConf := bgp.GenerateBIRDPeersConf(podCIDR, []string{masterBGPIP})
 	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
-	startBirdOnTOR(tor, torL2tpIP, peersConf)
+	peer.ConfigureBIRD(peersConf)
 
 	// Create a BGPFilter that tags elevated-priority routes with a BGP community
 	// on export to eBGP peers. During KubeVirt live migration, Felix sets
 	// krt_metric=512 (ipv4ElevatedRoutePriority) on the target pod's route.
 	// The filter matches this priority and adds community 65000:100, which the
-	// TOR's import filter reads to set a higher BIRD preference. Routes without
+	// peer's import filter reads to set a higher BIRD preference. Routes without
 	// elevated priority (normal krt_metric=1024) pass through untagged.
 	//
 	// IMPORTANT: Do NOT add a catch-all Accept rule here. In BIRD 1.x, accept/reject
 	// inside a function terminates the entire filter evaluation. A catch-all Accept
 	// would bypass calico_export_to_bgp_peers(), exporting ALL routes from the master's
-	// BIRD table (including kernel/direct routes) to the TOR, breaking SSH connectivity.
+	// BIRD table (including kernel/direct routes) to the peer.
 	By("Creating BGPFilter for KubeVirt live migration community tagging")
 	community := v3.BGPCommunityValue("65000:100")
-	elevatedPriority := 512
+	elevatedPriority := elevatedRouteMetric
 	bgpFilter := &v3.BGPFilter{
 		ObjectMeta: metav1.ObjectMeta{Name: filterName},
 		Spec: v3.BGPFilterSpec{
@@ -663,17 +602,17 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 		}
 	})
 
-	// Create a BGPPeer so the master node peers with the TOR via eBGP.
+	// Create a BGPPeer so the master node peers with the external BIRD via eBGP.
 	// NextHopMode "Keep" preserves the original next-hop from iBGP routes,
-	// so the TOR gets per-node next-hops and routes directly to the node
+	// so the peer gets per-node next-hops and routes directly to the node
 	// hosting each workload — no ECMP, no extra hop through the master.
-	By("Creating BGPPeer for TOR (master only, next-hop-keep, with filter)")
+	By("Creating BGPPeer (master only, next-hop-keep, with filter)")
 	nextHopKeep := v3.NextHopMode("Keep")
 	bgpPeer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: peerName},
 		Spec: v3.BGPPeerSpec{
 			Node:        masterName,
-			PeerIP:      torL2tpIP,
+			PeerIP:      peer.PeerIP(),
 			ASNumber:    numorstring.ASNumber(65001),
 			NextHopMode: &nextHopKeep,
 			Filters:     []string{filterName},
@@ -690,15 +629,13 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 	})
 
 	// Keep the BGP mesh enabled — nodes need iBGP for inter-node routing
-	// (required for KubeVirt live migration). The eBGP peer to the TOR is
-	// additive: the master advertises routes to the TOR via eBGP while all
-	// nodes continue to exchange routes with each other via the iBGP mesh.
+	// (required for KubeVirt live migration). The eBGP peer is additive: the
+	// master advertises routes via eBGP while all nodes continue to exchange
+	// routes with each other via the iBGP mesh.
 
 	// Wait for confd on the master to regenerate bird.cfg with the filter.
-	// Polling for actual contents avoids both a fixed sleep and a noisy
-	// unconditional debug dump.
 	By(fmt.Sprintf("Waiting for confd to regenerate bird.cfg with filter %s on master", filterName))
-	masterPod := waitForMasterCalicoNodePod(f, masterName)
+	masterPod := expectMasterCalicoNodePod(f, masterName)
 	Eventually(func() error {
 		cfg, err := utils.ExecInCalicoNode(masterPod, "cat /etc/calico/confd/config/bird.cfg")
 		if err != nil {
@@ -721,23 +658,69 @@ func setupEBGPPeering(f *framework.Framework, tor *externalnode.Client) {
 
 	By("Waiting for eBGP session to establish")
 	Eventually(func() error {
-		out, err := tor.RunInContainer("tor-bird", "birdcl", "show", "protocols")
+		out, err := peer.CheckBGPSession()
 		if err != nil {
-			return err
+			return fmt.Errorf("birdcl show protocols: %w", err)
 		}
 		if !strings.Contains(out, "Established") {
 			return fmt.Errorf("BGP session not established:\n%s", out)
 		}
 		return nil
 	}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-		"eBGP session not established on TOR")
-	logrus.Info("eBGP peering established on TOR")
+		"eBGP session not established")
+	logrus.Info("eBGP peering established")
 }
 
-// waitForMasterCalicoNodePod polls until the calico-node pod on the
+// setupKubeVirtEBGPPeering configures eBGP peering between a TOR node (via SSH) and
+// the cluster's control-plane calico-node. It discovers the TOR's L2TP IP by
+// matching against the master's BGP subnet, then delegates to
+// setupEBGPPeeringCommon for the shared BGPFilter/BGPPeer/session logic.
+func setupKubeVirtEBGPPeering(f *framework.Framework, tor *externalnode.Client) bgp.BIRDPeer {
+	GinkgoHelper()
+	By("Setting up eBGP peering between TOR and cluster nodes")
+
+	// Discover the TOR's L2TP IP by matching against the master's BGP subnet.
+	nodeList, err := f.ClientSet.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
+	var masterAddr string
+	for _, node := range nodeList.Items {
+		if _, ok := node.Labels["node-role.kubernetes.io/control-plane"]; !ok {
+			continue
+		}
+		if addr := node.Annotations["projectcalico.org/IPv4Address"]; addr != "" {
+			masterAddr = addr
+			break
+		}
+	}
+	Expect(masterAddr).NotTo(BeEmpty(),
+		"no control-plane node found with projectcalico.org/IPv4Address annotation")
+
+	_, bgpSubnet, err := net.ParseCIDR(masterAddr)
+	Expect(err).NotTo(HaveOccurred(),
+		"failed to parse master node BGP address %q", masterAddr)
+
+	torIPs := tor.IPs()
+	Expect(torIPs).NotTo(BeEmpty(), "could not discover TOR IPs")
+	var torL2tpIP string
+	for _, ip := range torIPs {
+		if bgpSubnet.Contains(net.ParseIP(ip)) {
+			torL2tpIP = ip
+			break
+		}
+	}
+	Expect(torL2tpIP).NotTo(BeEmpty(),
+		"no TOR IP found in BGP subnet %s (TOR IPs: %v)", bgpSubnet, torIPs)
+	logrus.Infof("TOR L2TP IP: %s", torL2tpIP)
+
+	adapter := bgp.NewSSHBIRDPeer(tor, torL2tpIP)
+	setupEBGPPeeringCommon(f, adapter, "kubevirt-lm-", "tor-ebgp-peer-")
+	return adapter
+}
+
+// expectMasterCalicoNodePod polls until the calico-node pod on the
 // control-plane node is observable. Returns the pod. Used as a precondition
 // for any test step that needs to exec birdcl on the master.
-func waitForMasterCalicoNodePod(f *framework.Framework, masterName string) *corev1.Pod {
+func expectMasterCalicoNodePod(f *framework.Framework, masterName string) *corev1.Pod {
 	GinkgoHelper()
 	var pod *corev1.Pod
 	Eventually(func() error {
@@ -768,216 +751,42 @@ func logBIRDDiagnostics(masterPod *corev1.Pod, filterName string) {
 	}
 }
 
-// torRouteState captures the parsed state of a /32 route on the TOR's BIRD
-// routing table, including all candidate routes and the kernel next hop.
-type torRouteState struct {
-	Has32         bool           `json:"has32"`
-	Routes        []torBIRDRoute `json:"routes"`
-	KernelNextHop string         `json:"kernelNextHop"`
-}
-
-// torBIRDRoute represents a single BIRD route entry for a /32 prefix.
-type torBIRDRoute struct {
-	NextHop   string `json:"nextHop"`
-	LocalPref int    `json:"localPref"`
-	Community string `json:"community"`
-	Best      bool   `json:"best"`
-}
-
-// torPrefixState captures whether a prefix is present in BIRD and its routes.
-type torPrefixState struct {
-	Present bool           `json:"present"`
-	Routes  []torBIRDRoute `json:"routes"`
-}
-
-// torRouteSnapshot captures the full TOR route picture at a point in time:
-// the /32 host route (elevated during migration), the /26 block route
-// (steady-state subnet route), and the kernel next-hop for the VM IP.
-type torRouteSnapshot struct {
-	Host32    torPrefixState `json:"host32"`
-	Block26   torPrefixState `json:"block26"`
-	KernelVia string         `json:"kernelVia"`
-}
-
-// parseBIRDRouteOutput parses the output of "birdcl show route <prefix> all"
-// and returns the list of routes. Returns nil if the output contains
-// "Network not in table" or is empty.
-func parseBIRDRouteOutput(output string) []torBIRDRoute {
-	if strings.Contains(output, "Network not in table") {
-		return nil
-	}
-
-	var routes []torBIRDRoute
-	var current *torBIRDRoute
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimRight(line, "\r")
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "" || strings.HasPrefix(trimmed, "BIRD") {
-			continue
-		}
-
-		// Route line: contains "via" but is not a BGP attribute.
-		if strings.Contains(line, " via ") && !strings.HasPrefix(trimmed, "BGP.") {
-			r := torBIRDRoute{}
-			if idx := strings.Index(line, " via "); idx >= 0 {
-				fields := strings.Fields(line[idx+5:])
-				if len(fields) > 0 {
-					r.NextHop = fields[0]
-				}
-			}
-			// BIRD marks the active/best route with " * " (space-asterisk-space)
-			// in the output line, e.g.:
-			//   10.244.0.64/32     via 172.16.8.2 on eth0 * [bgp_node0 16:22:38] (100/0) [AS65000i]
-			//                      via 172.16.8.4 on eth0 [bgp_node2 16:21:49] (100/0) [AS65000i]
-			// Match the standalone token rather than substring " * " elsewhere
-			// in the line (e.g. interface names containing "*" or AS-path
-			// expressions) so we never wrongly mark a non-best route as best.
-			r.Best = false
-			for _, tok := range strings.Fields(line) {
-				if tok == "*" {
-					r.Best = true
-					break
-				}
-			}
-			routes = append(routes, r)
-			current = &routes[len(routes)-1]
-			continue
-		}
-
-		// BGP attribute lines.
-		if current != nil {
-			if strings.HasPrefix(trimmed, "BGP.local_pref:") {
-				val := strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.local_pref:"))
-				if _, err := fmt.Sscanf(val, "%d", &current.LocalPref); err != nil {
-					logrus.Warnf("parseBIRDRouteOutput: failed to parse BGP.local_pref %q: %v", val, err)
-				}
-			} else if strings.HasPrefix(trimmed, "BGP.community:") {
-				current.Community = strings.TrimSpace(strings.TrimPrefix(trimmed, "BGP.community:"))
-			}
-		}
-	}
-	return routes
-}
-
-// queryTORRoute returns the /32 BIRD route state plus the kernel next-hop.
-// Called from polling loops, so it does not log per-call: callers log
-// snapshots themselves.
-func queryTORRoute(tor *externalnode.Client, vmIP string) torRouteState {
-	ip := strings.Split(vmIP, "/")[0]
-
-	out, err := runOnTOR(tor, fmt.Sprintf(
-		"sudo docker exec tor-bird birdcl show route %s/32 all 2>&1", ip))
-	if err != nil {
-		logrus.Warnf("queryTORRoute: SSH error: %v", err)
-		return torRouteState{}
-	}
-
-	var state torRouteState
-	state.Routes = parseBIRDRouteOutput(out)
-	state.Has32 = len(state.Routes) > 0
-
-	// Query kernel route for the active next hop.
-	kernOut, _ := runOnTOR(tor, fmt.Sprintf("ip route get %s 2>&1", ip))
-	if idx := strings.Index(kernOut, "via "); idx >= 0 {
-		fields := strings.Fields(kernOut[idx+4:])
-		if len(fields) > 0 {
-			state.KernelNextHop = fields[0]
-		}
-	}
-
-	return state
-}
-
-// queryTORSnapshot queries the TOR's BIRD routing table for both the /32 host
-// route and the /26 block route, plus the kernel next-hop. This captures the
-// full route picture at a point in time with a single SSH call.
-func queryTORSnapshot(tor *externalnode.Client, vmIP string) torRouteSnapshot {
-	ip := strings.Split(vmIP, "/")[0]
-
-	parsed := net.ParseIP(ip).To4()
-	blockIP := net.IPv4(parsed[0], parsed[1], parsed[2], parsed[3]&0xC0)
-	block26 := fmt.Sprintf("%s/26", blockIP)
-
-	// Single SSH call with section markers.
-	cmd := fmt.Sprintf(
-		"echo '=== /32 ==='; sudo docker exec tor-bird birdcl show route %s/32 all 2>&1; "+
-			"echo '=== /26 ==='; sudo docker exec tor-bird birdcl show route %s all 2>&1; "+
-			"echo '=== kernel ==='; ip route get %s 2>&1",
-		ip, block26, ip)
-	out, err := runOnTOR(tor, cmd)
-	if err != nil {
-		logrus.Warnf("queryTORSnapshot: SSH error: %v", err)
-		return torRouteSnapshot{}
-	}
-
-	var snap torRouteSnapshot
-
-	sections := strings.Split(out, "=== ")
-	for _, sec := range sections {
-		switch {
-		case strings.HasPrefix(sec, "/32 ==="):
-			body := strings.TrimPrefix(sec, "/32 ===")
-			routes := parseBIRDRouteOutput(body)
-			snap.Host32 = torPrefixState{Present: len(routes) > 0, Routes: routes}
-		case strings.HasPrefix(sec, "/26 ==="):
-			body := strings.TrimPrefix(sec, "/26 ===")
-			routes := parseBIRDRouteOutput(body)
-			snap.Block26 = torPrefixState{Present: len(routes) > 0, Routes: routes}
-		case strings.HasPrefix(sec, "kernel ==="):
-			body := strings.TrimPrefix(sec, "kernel ===")
-			if idx := strings.Index(body, "via "); idx >= 0 {
-				fields := strings.Fields(body[idx+4:])
-				if len(fields) > 0 {
-					snap.KernelVia = fields[0]
-				}
-			}
-		}
-	}
-
-	logrus.Infof("queryTORSnapshot(%s): /32=%v(%d) /26=%v(%d) kernelVia=%s",
-		ip, snap.Host32.Present, len(snap.Host32.Routes),
-		snap.Block26.Present, len(snap.Block26.Routes), snap.KernelVia)
-	return snap
-}
-
 // queryWorkerMetric queries the kernel route metric for a /32 VM route on a
 // worker node's calico-node pod. Returns the metric value (e.g. 512 for
 // elevated, 1024 for normal) or -1 if the route is not found.
-func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) int {
+// errNoRoute is returned by queryWorkerMetric when no /32 kernel route exists.
+var errNoRoute = fmt.Errorf("no /32 kernel route found")
+
+func queryWorkerMetric(f *framework.Framework, nodeName, vmIP string) (int, error) {
 	ip := strings.Split(vmIP, "/")[0]
 	pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
 	if pod == nil {
-		logrus.Warnf("queryWorkerMetric: no calico-node pod on %s", nodeName)
-		return -1
+		return -1, fmt.Errorf("no calico-node pod on %s", nodeName)
 	}
 	out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("ip route show %s/32", ip))
 	if err != nil {
-		logrus.Warnf("queryWorkerMetric: ip route show failed on %s: %v", nodeName, err)
-		return -1
+		return -1, fmt.Errorf("ip route show failed on %s: %w", nodeName, err)
 	}
 	out = strings.TrimSpace(out)
 	if out == "" {
-		return -1
+		return -1, errNoRoute
 	}
 	if idx := strings.Index(out, "metric "); idx >= 0 {
 		var metric int
 		if _, err := fmt.Sscanf(out[idx:], "metric %d", &metric); err != nil {
-			logrus.Warnf("queryWorkerMetric(%s, %s): failed to parse metric from %q: %v",
-				nodeName, ip, out[idx:], err)
-			return -1
+			return -1, fmt.Errorf("failed to parse metric from %q on %s: %w", out[idx:], nodeName, err)
 		}
 		logrus.Infof("queryWorkerMetric(%s, %s): metric=%d (route: %s)", nodeName, ip, metric, out)
-		return metric
+		return metric, nil
 	}
 	logrus.Infof("queryWorkerMetric(%s, %s): no metric field (route: %s)", nodeName, ip, out)
-	return -1
+	return -1, errNoRoute
 }
 
-// waitForMigrationStatePopulated polls the VMI for a fully populated
+// expectMigrationStatePopulated polls the VMI for a fully populated
 // MigrationState. virt-handler writes it asynchronously after the VMIM phase
 // flips, so a bare read can race.
-func waitForMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
+func expectMigrationStatePopulated(ctx context.Context, cli ctrlclient.Client, namespace, vmiName string) *kubevirtv1.VirtualMachineInstance {
 	GinkgoHelper()
 	vmi := &kubevirtv1.VirtualMachineInstance{}
 	Eventually(func(g Gomega) {
@@ -1020,4 +829,52 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	}
 	Fail(fmt.Sprintf("no third worker node found (node1=%s, node2=%s); need at least 3 schedulable workers for the double-migration eBGP test", node1, node2))
 	return ""
+}
+
+// isMockVirtDeployed returns true if the cluster is running MockVirt (simulated
+// KubeVirt). Detection checks the KubeVirt CR's simulationMode field, which the
+// MockVirt deploy script patches to true.
+func isMockVirtDeployed(f *framework.Framework) bool {
+	GinkgoHelper()
+	dynClient, err := dynamic.NewForConfig(f.ClientConfig())
+	Expect(err).NotTo(HaveOccurred(), "failed to create dynamic client")
+	kvResource := schema.GroupVersionResource{
+		Group:    "kubevirt.io",
+		Version:  "v1",
+		Resource: "kubevirts",
+	}
+	obj, err := dynClient.Resource(kvResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to get KubeVirt CR kubevirt/kubevirt")
+	simMode, found, err := unstructured.NestedBool(obj.Object,
+		"spec", "configuration", "developerConfiguration", "simulationMode")
+	Expect(err).NotTo(HaveOccurred(), "failed to read simulationMode from KubeVirt CR")
+	return found && simMode
+}
+
+// setupMockVirtEBGPPeering configures eBGP peering between a BIRD container on
+// the Docker network and the cluster's control-plane calico-node.
+func setupMockVirtEBGPPeering(f *framework.Framework, bird *bgp.ContainerBIRDPeer) {
+	GinkgoHelper()
+	setupEBGPPeeringCommon(f, bird, "kubevirt-mockvirt-lm-", "mockvirt-ebgp-peer-")
+}
+
+// expectMigrationFailed polls the VMIM until it reaches MigrationFailed
+// phase. Immediately stops polling with a fatal error if MigrationSucceeded is
+// observed (the migration was expected to fail).
+func expectMigrationFailed(ctx context.Context, cli ctrlclient.Client, vmim *kubevirtv1.VirtualMachineInstanceMigration) {
+	GinkgoHelper()
+	By(fmt.Sprintf("Waiting for migration %s to fail", vmim.Name))
+	Eventually(func() error {
+		got := &kubevirtv1.VirtualMachineInstanceMigration{}
+		if err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: vmim.Namespace, Name: vmim.Name}, got); err != nil {
+			return err
+		}
+		if got.Status.Phase == kubevirtv1.MigrationSucceeded {
+			return StopTrying("migration unexpectedly succeeded")
+		}
+		if got.Status.Phase != kubevirtv1.MigrationFailed {
+			return fmt.Errorf("phase is %s", got.Status.Phase)
+		}
+		return nil
+	}, 5*time.Minute, 1*time.Second).Should(Succeed())
 }
