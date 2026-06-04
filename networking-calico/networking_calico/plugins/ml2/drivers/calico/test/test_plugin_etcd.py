@@ -2622,12 +2622,12 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             m_try_upd.mock_calls,
         )
-        # the loop must close its session after each iteration
-        # AND on loop exit, so two calls here: one from the
-        # inner `finally` after _try_to_update_port_status, one
+
+        # The loop must close its session after each iteration AND on loop exit, so two
+        # calls here: one from the inner `finally` after _try_to_update_port_status, one
         # from the outer `finally` when StopIteration propagates.
         self.assertEqual(2, m_close.call_count)
-          
+
     def test_try_to_update_port_status(self):
         self.driver._get_db()
 
@@ -3025,14 +3025,14 @@ def _neutron_rule_from_dict(overrides):
     }
     rule.update(overrides)
     return rule
-    
+
+
 class TestCloseSessionSafely(unittest.TestCase):
     """Unit tests for mech_calico._close_session_safely().
 
-    Verifies the helper closes the admin-context session, swallows
-    exceptions from close() (so a single bad iteration cannot kill
-    the long-lived port-status loop), and is a no-op when the
-    context has no session attribute.
+    Verifies the helper closes the admin-context session, swallows exceptions from
+    close() (so a single bad iteration cannot kill the long-lived port-status loop), and
+    is a no-op when the context has no session attribute.
     """
 
     def test_closes_session(self):
@@ -3050,4 +3050,3 @@ class TestCloseSessionSafely(unittest.TestCase):
             pass
         # Bare object with no .session attribute -- no raise, no call.
         mech_calico._close_session_safely(_NoSession())
-
