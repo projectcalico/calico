@@ -363,8 +363,26 @@ k8s-test:
 	$(MAKE) kind-k8st-run-test
 	$(MAKE) -C $(REPO_ROOT) kind-down
 
+# Compile a standalone test binary for every Go test package under tests/k8st/.
+# The k8st test container has no Go toolchain, so we build in the go-build
+# container, statically linked (CGO_ENABLED=0), into tests/k8st/bin/<pkg>.test
+# (the bin dir is mounted into the run at /code). Discovery is automatic: any
+# package with *_test.go files under tests/k8st/ is built, so adding a new Go
+# test needs no change here. The matching pytest wrapper invokes the binary via
+# tests.k8st.utils.utils.run_go_test("<pkg>.test").
+K8ST_GO_BIN_DIR=tests/k8st/bin
+.PHONY: build-k8st-go-tests
+build-k8st-go-tests:
+	$(DOCKER_GO_BUILD) sh -ec ' \
+	    mkdir -p $(K8ST_GO_BIN_DIR); \
+	    for dir in $$(find tests/k8st -name "*_test.go" -printf "%h\n" | sort -u); do \
+	        name=$$(basename "$$dir"); \
+	        echo "building $$name.test from ./$$dir"; \
+	        CGO_ENABLED=0 go test -c -o "$(K8ST_GO_BIN_DIR)/$$name.test" "./$$dir"; \
+	    done'
+
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) build-k8st-go-tests
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
