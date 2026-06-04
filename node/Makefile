@@ -66,7 +66,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
@@ -75,7 +75,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 # Name of the Windows release ZIP archive.
 WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
-WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
+WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
