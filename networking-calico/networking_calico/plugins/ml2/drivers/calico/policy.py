@@ -41,10 +41,33 @@ SG_NAME_PREFIX = "ossg.default."
 
 class PolicySyncer(ResourceSyncer):
 
-    def __init__(self, db, txn_from_context):
-        super(PolicySyncer, self).__init__(db, txn_from_context, "NetworkPolicy")
+    def __init__(self, db):
+        super(PolicySyncer, self).__init__(db, "NetworkPolicy")
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
+        # When set (during resync), maps each security-group ID to the list
+        # of its rules.  Populated by get_from_neutron() before calling
+        # through to the base class, and read by neutron_to_etcd_write_data()
+        # to avoid per-SG DB round-trips.
+        self._rules_by_sg = None
+
+    def resync(self, context, scope):
+        # The bulk-fetch happens inside get_from_neutron, AFTER the base
+        # class's etcd-first read.  Clear self._rules_by_sg in finally
+        # so a subsequent resync on the same instance starts cold.  In
+        # production this is dead code: each resync runs on a fresh
+        # PolicySyncer constructed by Scope.run() and GC'd when the
+        # resync returns.  But the test framework reuses the driver's
+        # syncer across multiple _trigger_resync() calls, and without
+        # the reset the second call's compare loop would read stale
+        # rules from the first call's snapshot.  The postcommit-hook
+        # path doesn't read self._rules_by_sg at all -- write_sgs_to_etcd
+        # always does a fresh DB query -- so the reset has no effect
+        # there.
+        try:
+            return super(PolicySyncer, self).resync(context, scope)
+        finally:
+            self._rules_by_sg = None
 
     def get_from_neutron(self, context, scope):
         if scope.all():
@@ -53,6 +76,23 @@ class PolicySyncer(ResourceSyncer):
             sgs = self.db.get_security_groups(
                 context, filters={"id": list(scope.ids())}
             )
+
+        # Bulk-fetch the rules for every SG in scope in one query, rather
+        # than one query per SG during the compare loop.  At scale this is
+        # what changes the policy resync DB cost from O(N) round-trips to
+        # O(1).  Done here, after the base class's etcd read, so the rules
+        # we cache reflect a Neutron snapshot taken AFTER our etcd snapshot
+        # -- preserving the etcd-first ordering's CAS-based protection
+        # against concurrent dynamic SG-rule updates.
+        sg_ids = [sg["id"] for sg in sgs]
+        rules_by_sg = {}
+        if sg_ids:
+            for rule in self.db.get_security_group_rules(
+                context, filters={"security_group_id": sg_ids}
+            ):
+                rules_by_sg.setdefault(rule["security_group_id"], []).append(rule)
+        self._rules_by_sg = rules_by_sg
+
         return dict((SG_NAME_PREFIX + sg["id"], sg) for sg in sgs)
 
     def get_from_etcd(self, scope):
@@ -103,9 +143,15 @@ class PolicySyncer(ResourceSyncer):
             # use any information from it, apart from its ID as a key for the
             # following rules.
             pass
-        rules = self.db.get_security_group_rules(
-            context, filters={"security_group_id": [sg["id"]]}
-        )
+        # Use the bulk-prefetched rule cache when running inside resync;
+        # fall back to a per-SG query otherwise (e.g. when called from
+        # write_sgs_to_etcd on a postcommit hook).
+        if self._rules_by_sg is not None:
+            rules = self._rules_by_sg.get(sg["id"], [])
+        else:
+            rules = self.db.get_security_group_rules(
+                context, filters={"security_group_id": [sg["id"]]}
+            )
         return policy_spec(sg["id"], rules)
 
     def write_sgs_to_etcd(self, sgids, context):
