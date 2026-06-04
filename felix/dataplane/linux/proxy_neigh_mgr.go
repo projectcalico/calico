@@ -156,7 +156,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
-			// Set the IPMPV6 filter to only deliver Neighbor Solicitations
+			// Set the ICMPV6 filter to only deliver Neighbor Solicitations
 			var f ipv6.ICMPFilter
 			f.SetAll(true)
 			f.Accept(ipv6.ICMPTypeNeighborSolicitation)
