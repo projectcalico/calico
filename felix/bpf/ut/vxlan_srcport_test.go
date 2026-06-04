@@ -49,14 +49,16 @@ func TestVXLANSrcPortRange(t *testing.T) {
 		}, withVXLANPortRange(min, max))
 	})
 
-	t.Run("single-port range", func(t *testing.T) {
+	t.Run("min==max (rejected by validator, BPF falls back to hash)", func(t *testing.T) {
 		RegisterTestingT(t)
 		const pinned uint16 = 4789
 		runBpfUnitTest(t, "vxlan_srcport_test.c", func(bpfrun bpfProgRunFn) {
 			res, err := bpfrun(pktBytes)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(uint16(res.Retval)).To(Equal(pinned),
-				"when min==max the BPF code should always emit that one port")
+			Expect(uint16(res.Retval)).To(Equal(hash),
+				"min==max is rejected by Felix's config validator; "+
+					"if a degenerate range reaches BPF the guard should fall "+
+					"through to the raw hash rather than pinning to one port")
 		}, withVXLANPortRange(pinned, pinned))
 	})
 
