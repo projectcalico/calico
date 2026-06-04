@@ -3025,3 +3025,29 @@ def _neutron_rule_from_dict(overrides):
     }
     rule.update(overrides)
     return rule
+    
+class TestCloseSessionSafely(unittest.TestCase):
+    """Unit tests for mech_calico._close_session_safely().
+
+    Verifies the helper closes the admin-context session, swallows
+    exceptions from close() (so a single bad iteration cannot kill
+    the long-lived port-status loop), and is a no-op when the
+    context has no session attribute.
+    """
+
+    def test_closes_session(self):
+        ctx = mock.MagicMock()
+        mech_calico._close_session_safely(ctx)
+        ctx.session.close.assert_called_once_with()
+
+    def test_swallows_close_exception(self):
+        ctx = mock.MagicMock()
+        ctx.session.close.side_effect = RuntimeError("boom")
+        mech_calico._close_session_safely(ctx)  # must not raise
+
+    def test_no_session_attr_is_noop(self):
+        class _NoSession:
+            pass
+        # Bare object with no .session attribute -- no raise, no call.
+        mech_calico._close_session_safely(_NoSession())
+
