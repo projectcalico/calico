@@ -175,6 +175,19 @@ func RequiresXtables() any {
 	return framework.WithLabel("RequiresXtables")
 }
 
+// RequiresAmbientPolicyEnforcement marks Istio ambient-mode tests that assert
+// Calico NetworkPolicy is enforced on ambient (ztunnel-redirected) traffic. The
+// BPF dataplane's bpf_redirect bypasses the socket layer that ambient relies on,
+// so Calico policy is not enforced for ambient traffic there. BPF-mode clusters
+// skip these tests via a label exclusion entry in their e2e config (see
+// e2e/config/gcp-bpf.yaml). Note this is
+// narrower than Feature:Istio: Istio tests that don't assert policy enforcement
+// (e.g. L7 log attribution through a waypoint) are dataplane-independent and run
+// on BPF too.
+func RequiresAmbientPolicyEnforcement() any {
+	return framework.WithLabel("RequiresAmbientPolicyEnforcement")
+}
+
 // WithSmokeTest marks tests that are considered smoke tests.
 // A Smoke test must pass in under a minute, and is expected to pass on all platforms regardless of configuration.
 func WithSmokeTest() any {
