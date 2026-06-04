@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -75,6 +76,7 @@ var (
 	globalFelixConfigName     = "default"
 	felixNodeConfigNamePrefix = "node."
 	globalBGPConfigName       = "default"
+	globalIPAMConfigName      = "default"
 )
 
 type runConf struct {
@@ -1361,7 +1363,11 @@ func ensureDefaultConfig(
 		}
 	}
 
-	return ensureDefaultBGPConfigExists(ctx, c)
+	if err := ensureDefaultBGPConfigExists(ctx, c); err != nil {
+		return err
+	}
+
+	return ensureDefaultIPAMConfigExists(ctx, c)
 }
 
 func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error {
@@ -1385,6 +1391,47 @@ func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error
 			log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
 		} else {
 			log.WithError(err).WithField("BGPConfig", newBGPConf).Errorf("Error creating default BGPConfiguration.")
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureDefaultIPAMConfigExists(ctx context.Context, c client.Interface) error {
+	_, err := c.IPAMConfiguration().Get(ctx, globalIPAMConfigName, options.GetOptions{})
+	if err == nil {
+		log.Debug("Default IPAMConfiguration exists.")
+		return nil
+	}
+
+	_, ok := err.(cerrors.ErrorResourceDoesNotExist)
+	if !ok {
+		log.WithError(err).WithField("IPAMConfiguration", globalIPAMConfigName).Errorf("Error getting default IPAMConfiguration.")
+		return err
+	}
+
+	// The meaningful IPAM defaults are not the zero value, so set them
+	// explicitly. The kubebuilder defaults only apply through the apiserver
+	// admission path, not on a direct client Create.
+	newIPAMConf := api.NewIPAMConfiguration()
+	newIPAMConf.Name = globalIPAMConfigName
+	newIPAMConf.Spec.AutoAllocateBlocks = true
+	newIPAMConf.Spec.MaxBlocksPerHost = 0
+	newIPAMConf.Spec.KubeVirtVMAddressPersistence = ptr.To(api.VMAddressPersistenceEnabled)
+
+	// Leave StrictAffinity disabled, matching the previous default. Windows
+	// nodes require it enabled, but it's a single global setting and Windows
+	// clusters are usually mixed with Linux, so we can't pick the right value
+	// from one node at startup without racing the others. Windows clusters
+	// enable it explicitly via "calicoctl ipam configure", and GetIPAMConfig
+	// enforces it for Windows nodes.
+	newIPAMConf.Spec.StrictAffinity = false
+	_, err = c.IPAMConfiguration().Create(ctx, newIPAMConf, options.SetOptions{})
+	if err != nil {
+		if conflict, exists := err.(cerrors.ErrorResourceAlreadyExists); exists {
+			log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+		} else {
+			log.WithError(err).WithField("IPAMConfiguration", newIPAMConf).Errorf("Error creating default IPAMConfiguration.")
 			return err
 		}
 	}
