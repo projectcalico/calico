@@ -1702,11 +1702,33 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 						iface.dpState.v6Readiness = ifaceIsReadyNotAssured
 					}
 				}
+				// Workload interfaces backed by netkit allocate their jump map
+				// indices from netkitJumpMapAllocs rather than jumpMapAllocs (see
+				// allocJumpIndicesForWEP / wepStateFillJumps). Determine the type
+				// here so that we reclaim each persisted index from the same
+				// allocator the apply path will use. If a netkit WEP's index were
+				// reclaimed into the regular allocator, the netkit allocator would
+				// believe that index is free and later hand it to another WEP,
+				// leaving two endpoints sharing one jump map slot and corrupting
+				// one of their policy programs.
+				isNetkit := false
+				if m.isWorkloadIface(netiface.Name) {
+					if link, err := m.dp.getIfaceLink(netiface.Name); err == nil {
+						if t := m.getIfaceTypeFromLink(link); t != IfaceTypeUnknown {
+							iface.info.ifaceType = t
+							isNetkit = t == IfaceTypeNetkit
+						}
+					}
+				}
 				checkAndReclaimIdx := func(idx int, h hook.Hook, indexMap []int) {
 					if idx < 0 {
 						return
 					}
-					if err := m.jumpMapAllocs[h].Assign(idx, netiface.Name); err != nil {
+					allocs := m.jumpMapAllocs
+					if isNetkit && h != hook.XDP {
+						allocs = m.netkitJumpMapAllocs
+					}
+					if err := allocs[h].Assign(idx, netiface.Name); err != nil {
 						// Conflict with another program; need to alloc a new index.
 						logrus.WithError(err).Error("Start of day resync found invalid jump map index, " +
 							"allocate a fresh one.")
