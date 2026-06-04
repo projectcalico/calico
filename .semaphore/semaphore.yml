@@ -342,8 +342,13 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
-    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -352,6 +357,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/10-prerequisites.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-felix.yml',
         '/Makefile',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/defaults/*.go',
@@ -381,7 +387,9 @@ blocks:
         '/confd/pkg/resource/template/*.go',
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
+        '/felix/',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
@@ -390,6 +398,7 @@ blocks:
         '/felix/bpf/asm/*.go',
         '/felix/bpf/bpfdefs/*.go',
         '/felix/bpf/bpfmap/*.go',
+        '/felix/bpf/cmd/*.go',
         '/felix/bpf/conntrack/*.go',
         '/felix/bpf/conntrack/cleanupv1/*.go',
         '/felix/bpf/conntrack/timeouts/*.go',
@@ -423,7 +432,10 @@ blocks:
         '/felix/bpf/xdp/*.go',
         '/felix/cachingmap/*.go',
         '/felix/calc/*.go',
+        '/felix/cmd/calico-bpf/*.go',
         '/felix/cmd/calico-bpf/commands/*.go',
+        '/felix/cmd/calico-felix-docgen/*.go',
+        '/felix/cmd/calico-felix/*.go',
         '/felix/collector/*.go',
         '/felix/collector/flowlog/*.go',
         '/felix/collector/goldmane/*.go',
@@ -449,14 +461,22 @@ blocks:
         '/felix/dispatcher/*.go',
         '/felix/environment/*.go',
         '/felix/ethtool/*.go',
+        '/felix/fv/cgroup/*.go',
+        '/felix/fv/connectivity/*.go',
+        '/felix/fv/pktgen/*.go',
+        '/felix/fv/test-connection/*.go',
+        '/felix/fv/test-workload/*.go',
+        '/felix/fv/utils/*.go',
         '/felix/generictables/*.go',
         '/felix/idalloc/*.go',
+        '/felix/idalloc/collision/*.go',
         '/felix/ifacemonitor/*.go',
         '/felix/ip/*.go',
         '/felix/ipsets/*.go',
         '/felix/iptables/*.go',
         '/felix/iptables/cmdshim/*.go',
         '/felix/jitter/*.go',
+        '/felix/k8sfv/*.go',
         '/felix/k8sutils/*.go',
         '/felix/labelindex/*.go',
         '/felix/labelindex/ipsetmember/*.go',
@@ -554,6 +574,7 @@ blocks:
         '/libcalico-go/lib/selector/parser/*.go',
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
@@ -561,13 +582,20 @@ blocks:
         '/metadata.mk',
         '/node/',
         '/node/**',
+        '/node/pkg/lifecycle/utils/*.go',
         '/pkg/buildinfo/*.go',
         '/pod2daemon/binder/*.go',
+        '/process/testing/aso',
+        '/process/testing/util',
+        '/process/testing/winfv-felix',
         '/typha/pkg/discovery/*.go',
         '/typha/pkg/syncclient/*.go',
         '/typha/pkg/syncclientutils/*.go',
         '/typha/pkg/syncproto/*.go',
         '/typha/pkg/tlsutils/*.go',
+        'felix/**/*Dockerfile*',
+        'felix/Makefile',
+        'felix/deps.txt',
         'istio/**/*Dockerfile*',
         'istio/Makefile',
         'istio/deps.txt'],
@@ -764,6 +792,7 @@ blocks:
         '/docker/calico/',
         '/felix/',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf/*.go',
         '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
@@ -1162,6 +1191,7 @@ blocks:
         '/crypto/pkg/tls/*.go',
         '/felix/',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
@@ -1860,6 +1890,7 @@ blocks:
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf/*.go',
         '/felix/bpf/allowsources/*.go',
         '/felix/bpf/arp/*.go',
@@ -2614,7 +2645,6 @@ blocks:
         '/calicoctl/tests/fv/helper/*.go',
         '/cmd/calico/*.go',
         '/cni-plugin/cmd/calico/*.go',
-        '/cni-plugin/cmd/install/*.go',
         '/cni-plugin/internal/pkg/azure/*.go',
         '/cni-plugin/internal/pkg/utils/*.go',
         '/cni-plugin/internal/pkg/utils/cri/*.go',
@@ -2641,6 +2671,7 @@ blocks:
         '/crypto/pkg/tls/*.go',
         '/e2e/**',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
@@ -4332,6 +4363,218 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "KubeVirt live migration (KIND)"
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
+        '/Makefile',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/app-policy/checker/*.go',
+        '/app-policy/policystore/*.go',
+        '/app-policy/types/*.go',
+        '/cni-plugin/cmd/calico/*.go',
+        '/cni-plugin/cmd/install/*.go',
+        '/cni-plugin/internal/pkg/azure/*.go',
+        '/cni-plugin/internal/pkg/utils/*.go',
+        '/cni-plugin/internal/pkg/utils/cri/*.go',
+        '/cni-plugin/pkg/dataplane/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/*.go',
+        '/cni-plugin/pkg/dataplane/grpc/proto/*.go',
+        '/cni-plugin/pkg/dataplane/linux/*.go',
+        '/cni-plugin/pkg/install/*.go',
+        '/cni-plugin/pkg/ipamplugin/*.go',
+        '/cni-plugin/pkg/k8s/*.go',
+        '/cni-plugin/pkg/plugin/*.go',
+        '/cni-plugin/pkg/types/*.go',
+        '/cni-plugin/pkg/upgrade/*.go',
+        '/cni-plugin/pkg/wait/*.go',
+        '/cni-plugin/tests/*.go',
+        '/confd/*.go',
+        '/confd/etc',
+        '/confd/pkg/backends/*.go',
+        '/confd/pkg/backends/calico/*.go',
+        '/confd/pkg/backends/types/*.go',
+        '/confd/pkg/config/*.go',
+        '/confd/pkg/log/*.go',
+        '/confd/pkg/resource/template/*.go',
+        '/confd/pkg/run/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/e2e/cmd/k8s/*.go',
+        '/e2e/images/rapidclient/*.go',
+        '/e2e/pkg/',
+        '/felix/**',
+        '/felix/bpf-apache',
+        '/felix/bpf-gpl',
+        '/goldmane/pkg/client/*.go',
+        '/goldmane/pkg/goldmane/*.go',
+        '/goldmane/pkg/internal/flowcache/*.go',
+        '/goldmane/pkg/server/*.go',
+        '/goldmane/pkg/storage/*.go',
+        '/goldmane/pkg/stream/*.go',
+        '/goldmane/pkg/types/*.go',
+        '/goldmane/proto/*.go',
+        '/hack/test/certs/',
+        '/hack/test/kind',
+        '/lib.Makefile',
+        '/lib/std/chanutil/*.go',
+        '/lib/std/time/*.go',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/config/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/apis/v1/*.go',
+        '/libcalico-go/lib/apis/v1/unversioned/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/backend/syncersv1/bgpsyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/dedupebuffer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/felixsyncer/*.go',
+        '/libcalico-go/lib/backend/syncersv1/updateprocessors/*.go',
+        '/libcalico-go/lib/backend/watchersyncer/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/consistenthash/*.go',
+        '/libcalico-go/lib/debugserver/*.go',
+        '/libcalico-go/lib/dispatcher/*.go',
+        '/libcalico-go/lib/epstatusfile/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/health/*.go',
+        '/libcalico-go/lib/ipam/*.go',
+        '/libcalico-go/lib/ipam/vmipam/*.go',
+        '/libcalico-go/lib/kubevirt/*.go',
+        '/libcalico-go/lib/logutils/*.go',
+        '/libcalico-go/lib/logutils/logformat/*.go',
+        '/libcalico-go/lib/metricsserver/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/netlinkutils/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/packedmap/*.go',
+        '/libcalico-go/lib/prometheus/*.go',
+        '/libcalico-go/lib/readlogger/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/scope/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/testutils/stacktrace/*.go',
+        '/libcalico-go/lib/validator/v1/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/metadata.mk',
+        '/node/cmd/calico-ipam/*.go',
+        '/node/cmd/calico/*.go',
+        '/node/cmd/mountns/*.go',
+        '/node/pkg/cni/*.go',
+        '/node/pkg/lifecycle/utils/*.go',
+        '/node/windows-packaging/tests/*.go',
+        '/pkg/buildinfo/*.go',
+        '/pod2daemon/binder/*.go',
+        '/typha/pkg/discovery/*.go',
+        '/typha/pkg/syncclient/*.go',
+        '/typha/pkg/syncclientutils/*.go',
+        '/typha/pkg/syncproto/*.go',
+        '/typha/pkg/tlsutils/*.go',
+        'cni-plugin/**/*Dockerfile*',
+        'cni-plugin/Makefile',
+        'cni-plugin/deps.txt',
+        'confd/**/*Dockerfile*',
+        'confd/Makefile',
+        'confd/deps.txt',
+        'e2e/**/*Dockerfile*',
+        'e2e/Makefile',
+        'e2e/deps.txt',
+        'libcalico-go/**/*Dockerfile*',
+        'libcalico-go/Makefile',
+        'libcalico-go/deps.txt',
+        'node/**/*Dockerfile*',
+        'node/Makefile',
+        'node/deps.txt'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/app-policy/**/*_test.go',
+        '/cni-plugin/**/*_test.go',
+        '/confd/**/*_test.go',
+        '/crypto/**/*_test.go',
+        '/e2e/**/*_test.go',
+        '/goldmane/**/*_test.go',
+        '/lib/**/*_test.go',
+        '/libcalico-go/**/*_test.go',
+        '/node/**/*_test.go',
+        '/pkg/**/*_test.go',
+        '/pod2daemon/**/*_test.go',
+        '/typha/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/kind-kubevirt.yaml"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "KubeVirt live migration (KIND)"
+          commands:
+            # Build e2e test binary
+            - make -C e2e build
+            # Create KIND cluster with Calico
+            - make kind-up
+            # Download and deploy KubeVirt simulation mode
+            - export KUBEVIRT_RELEASE_URL="https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1"
+            - mkdir -p /tmp/kubevirt-manifests
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/ci-deploy-kind.sh" -o /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-operator.yaml" -o /tmp/kubevirt-manifests/kubevirt-operator.yaml
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
+            - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            # Start external BIRD BGP peer container on the KIND Docker network.
+            # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+            - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            # Run KubeVirt e2e tests
+            - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: >-
@@ -4449,6 +4692,7 @@ blocks:
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
@@ -4726,6 +4970,7 @@ blocks:
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',
@@ -5043,7 +5288,6 @@ blocks:
         '/calicoctl/tests/fv/helper/*.go',
         '/cmd/calico/*.go',
         '/cni-plugin/cmd/calico/*.go',
-        '/cni-plugin/cmd/install/*.go',
         '/cni-plugin/internal/pkg/azure/*.go',
         '/cni-plugin/internal/pkg/utils/*.go',
         '/cni-plugin/internal/pkg/utils/cri/*.go',
@@ -5069,6 +5313,7 @@ blocks:
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
         '/felix/aws/*.go',
+        '/felix/aws/ec2query/*.go',
         '/felix/bpf-apache',
         '/felix/bpf-gpl',
         '/felix/bpf/*.go',

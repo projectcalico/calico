@@ -24,7 +24,6 @@
 # document at http://docs.projectcalico.org/en/latest/architecture.html).
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
-import contextlib
 import inspect
 import os
 import threading
@@ -57,6 +56,7 @@ from oslo_config import cfg
 import oslo_context
 
 from oslo_db import exception as db_exc
+from oslo_db import options as oslo_db_options
 
 from oslo_log import log
 
@@ -191,6 +191,54 @@ MASTER_TIMEOUT = 60
 PRIORITY_HIGH = 0
 PRIORITY_LOW = 1
 PRIORITY_RETRY = 2
+
+
+def _close_session_safely(context):
+    """Close the session on an admin context, swallowing any error.
+
+    Background threads (currently just _loop_writing_port_statuses)
+    create their own admin contexts and are responsible for cleaning
+    up the session when they're done with it for this cycle.  If we
+    leave it open, GC may eventually trigger a rollback on the
+    eventlet hub greenlet -- which raises an AssertionError from
+    eventlet because the hub is not allowed to do blocking I/O.
+    """
+    try:
+        session = getattr(context, "session", None)
+        if session is not None:
+            session.close()
+    except Exception:
+        LOG.exception("Failed to close admin context session; ignoring.")
+
+
+def _check_mysql_driver():
+    """One-shot validation that the configured MySQL driver is acceptable.
+
+    Reads [database] connection from oslo.config directly so the check works
+    before any context/session exists.  Since 2015 it has been expected
+    that anyone using MySQL also uses the PyMySQL driver, to avoid the
+    problem described in https://bugs.launchpad.net/oslo.db/+bug/1350149.
+
+    Call once per process at start of day -- from
+    CalicoMechanismDriver.initialize() for the driver path, and from
+    networking_calico.resync.cli.main() / Scope.run() for the resync path.
+    """
+    # Ensure the [database] option group is registered.  In neutron-server's
+    # startup, ML2 ``mechanism_manager.initialize()`` runs during plugin
+    # __init__, before anything has imported oslo.db's enginefacade -- which
+    # is what would otherwise side-effect-register this group.  Registering
+    # the opts ourselves is idempotent and decouples us from Neutron's
+    # startup ordering.
+    cfg.CONF.register_opts(oslo_db_options.database_opts, "database")
+    conn_url = (cfg.CONF.database.connection or "").lower()
+    if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
+        msg = (
+            "Unsupported MySQL driver detected in [database] connection: %s.  "
+            "Use the 'mysql+pymysql' driver -- see "
+            "https://bugs.launchpad.net/oslo.db/+bug/1350149 for details." % conn_url
+        )
+        LOG.error(msg)
+        raise RuntimeError(msg)
 
 
 def _trigger_class(trigger):
@@ -332,8 +380,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         We use this hook to subscribe to Neutron's process-AFTER_INIT callback so that
         we get a chance to run code in each worker process we own (see ``get_workers``)
         once it has been forked.
+
+        Also validate the configured MySQL driver up front so a bad
+        ``[database] connection`` fails the worker at startup rather than
+        on the first port operation.
         """
         super(CalicoMechanismDriver, self).initialize()
+        _check_mysql_driver()
         registry.subscribe(
             self.post_fork_initialize,
             resources.PROCESS,
@@ -433,11 +486,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             self._get_db()
 
             # Create syncers.
-            self.subnet_syncer = SubnetSyncer(self.db, self._txn_from_context)
-            self.policy_syncer = PolicySyncer(self.db, self._txn_from_context)
-            self.endpoint_syncer = WorkloadEndpointSyncer(
-                self.db, self._txn_from_context, self.policy_syncer
-            )
+            self.subnet_syncer = SubnetSyncer(self.db)
+            self.policy_syncer = PolicySyncer(self.db)
+            self.endpoint_syncer = WorkloadEndpointSyncer(self.db, self.policy_syncer)
 
             # Admin context used by (only) the thread that updates Felix agent status.
             self._agent_update_context = ctx.get_admin_context()
@@ -646,18 +697,27 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("PORT_STATUS_WRITE")
         LOG.info("Port status write thread started epoch=%s", expected_epoch)
         admin_context = ctx.get_admin_context()
-        while self._epoch == expected_epoch:
-            # Wait for work to do.
-            _, port_status_key = self._port_status_queue.get()
-            # Actually do the update.  Catch all exceptions to avoid
-            # terminating this long-lived loop.
-            try:
-                self._try_to_update_port_status(admin_context, port_status_key)
-            except Exception:
-                LOG.exception(
-                    "Unexpected error updating port status for %s",
-                    port_status_key,
-                )
+        try:
+            while self._epoch == expected_epoch:
+                # Wait for work to do.
+                _, port_status_key = self._port_status_queue.get()
+                # Actually do the update.  Catch all exceptions to avoid
+                # terminating this long-lived loop.
+                try:
+                    self._try_to_update_port_status(admin_context, port_status_key)
+                except Exception:
+                    LOG.exception(
+                        "Unexpected error updating port status for %s",
+                        port_status_key,
+                    )
+                finally:
+                    # Close the session after each update so that its
+                    # connection is returned to the pool promptly.  This
+                    # avoids the GC-on-hub rollback path; the next call
+                    # transparently gets a fresh session from the pool.
+                    _close_session_safely(admin_context)
+        finally:
+            _close_session_safely(admin_context)
 
     def _try_to_update_port_status(self, admin_context, port_status_key):
         """Attempts to update the given port status.
@@ -819,7 +879,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Update the existing ports for this network and which don't have their own
         # qos_policy_id.
         plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="update-network"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             ports = self.db.get_ports(
                 plugin_context,
                 filters={
@@ -843,7 +903,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
-        with db_api.CONTEXT_READER.using(context):
+        with db_api.CONTEXT_WRITER.using(context):
             policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
             # Find ports whose network use this QoS policy and that don't have a
@@ -888,7 +948,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # we're writing the effects of this call into etcd.
         subnet = context.current
         plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="create-subnet"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
                 self.subnet_syncer.write_subnet(subnet, context)
@@ -902,7 +962,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # we're writing the effects of this call into etcd.
         subnet = context.current
         plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="update-subnet"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             subnet = self.db.get_subnet(plugin_context, subnet["id"])
             if subnet["enable_dhcp"]:
                 self.subnet_syncer.write_subnet(subnet, context)
@@ -941,7 +1001,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="create-port"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             self.endpoint_syncer.write_endpoint(port, plugin_context)
 
     def update_port_postcommit(self, context):
@@ -991,7 +1051,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # corresponding data into etcd while still holding the Neutron DB
         # transaction.
         plugin_context = context._plugin_context
-        with self._txn_from_context(plugin_context, tag="update-port"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
 
             # If the port was previously bound, the endpoint should already
             # exist.
@@ -1114,7 +1174,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("UPDATE_FLOATINGIP")
         LOG.info("UPDATE_FLOATINGIP: %s", plugin_context)
 
-        with self._txn_from_context(plugin_context, tag="update_floatingip"):
+        with db_api.CONTEXT_WRITER.using(plugin_context):
             port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
             self._update_port(plugin_context, port)
 
@@ -1166,42 +1226,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         TrackTask("SECURITY_GROUPS_RULE_UPDATED")
         LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
-        with self._txn_from_context(context.plugin_context, tag="sg-update"):
+        with db_api.CONTEXT_WRITER.using(context.plugin_context):
             self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
-
-    @contextlib.contextmanager
-    def _txn_from_context(self, context, tag="<unset>"):
-        """Context manager: opens a DB transaction against the given context.
-
-        If required, this also takes the Neutron-wide db-access semaphore.
-
-        :return: context manager for use with with:.
-        """
-        session = context.session
-        if getattr(session, "bind", None):
-            conn_url = str(session.bind.url).lower()
-        else:
-            conn_url = str(session.connection().engine.url).lower()
-
-        # Since 2015 it has been expected that anyone using MySQL also uses the PyMySQL
-        # driver, to avoid the problem described in
-        # https://bugs.launchpad.net/oslo.db/+bug/1350149.  Assert that here.
-        if conn_url.startswith("mysql:") or conn_url.startswith("mysql+mysqldb:"):
-            LOG.error(
-                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
-                "Please use the 'mysql+pymysql' driver to avoid known issues. "
-                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details.",
-                conn_url,
-            )
-            raise RuntimeError(
-                "Unsupported MySQL driver detected in SQLAlchemy connection URL: %s. "
-                "Please use the 'mysql+pymysql' driver to avoid known issues. "
-                "See https://bugs.launchpad.net/oslo.db/+bug/1350149 for details."
-                % conn_url
-            )
-
-        with context.session.begin(subtransactions=True) as txn:
-            yield txn
 
     def _update_port(self, plugin_context, port):
         """_update_port
@@ -1236,9 +1262,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # (Re)init the DB.  The resync worker is its own OS process and doesn't share
         # connection state with the API/RPC forks.  Scope.run() builds its own
-        # subnet/policy/endpoint syncers from the DB plus its module-level
-        # _txn_from_context helper; we don't need to set the driver's syncer attributes
-        # here because nothing else in this worker process uses them.
+        # subnet/policy/endpoint syncers from the DB; we don't need to set the
+        # driver's syncer attributes here because nothing else in this worker
+        # process uses them.
         self.db = None
         self._get_db()
 

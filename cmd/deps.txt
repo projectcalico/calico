@@ -16,7 +16,6 @@ github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.22
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.22
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.22
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.23
-github.com/aws/aws-sdk-go-v2/service/ec2 v1.297.1
 github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.8
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.22
 github.com/aws/aws-sdk-go-v2/service/signin v1.0.10
@@ -31,7 +30,7 @@ github.com/cespare/xxhash/v2 v2.3.0
 github.com/chai2010/gettext-go v1.0.2
 github.com/clipperhouse/uax29/v2 v2.6.0
 github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5
-github.com/container-storage-interface/spec v1.9.0
+github.com/container-storage-interface/spec v1.12.0
 github.com/containernetworking/cni v1.3.0
 github.com/containernetworking/plugins v1.9.1
 github.com/coreos/go-iptables v0.8.0
@@ -317,6 +316,7 @@ local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
 local:felix/aws
+local:felix/aws/ec2query
 local:felix/bpf
 local:felix/bpf/allowsources
 local:felix/bpf/arp

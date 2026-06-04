@@ -342,8 +342,13 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
-    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
       when: "true"
     dependencies: []
@@ -1377,6 +1382,55 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "KubeVirt live migration (KIND)"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/kind-kubevirt.yaml"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "KubeVirt live migration (KIND)"
+          commands:
+            # Build e2e test binary
+            - make -C e2e build
+            # Create KIND cluster with Calico
+            - make kind-up
+            # Download and deploy KubeVirt simulation mode
+            - export KUBEVIRT_RELEASE_URL="https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1"
+            - mkdir -p /tmp/kubevirt-manifests
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/ci-deploy-kind.sh" -o /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-operator.yaml" -o /tmp/kubevirt-manifests/kubevirt-operator.yaml
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
+            - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            # Start external BIRD BGP peer container on the KIND Docker network.
+            # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+            - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            # Run KubeVirt e2e tests
+            - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: >-

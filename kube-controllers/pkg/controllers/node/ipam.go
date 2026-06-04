@@ -570,7 +570,14 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		currentAllocations[alloc.id()] = true
 
 		// Check if we already know about this allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
+		if existing, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
+			// If the sequence number has changed for an existing allocation, it means
+			// it has been reallocated. Update the allocation in place and mark it as valid.
+			if existing.sequenceNumber != alloc.sequenceNumber {
+				existing.sequenceNumber = alloc.sequenceNumber
+				existing.attrs = alloc.attrs
+				existing.markValid()
+			}
 			continue
 		}
 
