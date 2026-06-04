@@ -411,8 +411,8 @@ rules:
       - mutatingwebhookconfigurations
     resourceNames:
       - envoy-gateway-topology-injector.calico-system
-      # New install lives in calico-system; the .tigera-gateway entry is kept so the
-      # operator can also delete the legacy webhook on upgrade from 3.x.
+      # New install lives in calico-system; the legacy .tigera-gateway entry is kept so the operator can still
+      # update/remove the legacy webhook on upgrade from 3.x.
       - envoy-gateway-topology-injector.tigera-gateway
     verbs:
       - update
