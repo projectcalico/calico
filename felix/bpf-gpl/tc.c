@@ -1422,7 +1422,8 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * CONNLIMIT_INGRESS_REJECTED flags into result.flags. Two cases:
 	 *
 	 *   - INGRESS set: the connection was counted on its first SYN.
-	 *     This is a retransmission of an accepted SYN; allow.
+	 *     This is a retransmission of an accepted SYN; the outer
+	 *     guard below filters it out so we don't re-count.
 	 *   - Otherwise (first SYN, OR retransmission of a previously-
 	 *     rejected SYN with REJECTED set): run
 	 *     qos_connlimit_check_and_increment. If it succeeds we stamp
@@ -1453,49 +1454,35 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * pass (~30s).
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped && INGRESS_CONN_LIMIT_CONFIGURED &&
-			ct_result_is_syn(ctx->state->ct_result.rc)) {
-		__u32 cl_flags = ctx->state->ct_result.flags;
-		bool reject = false;
+			ct_result_is_syn(ctx->state->ct_result.rc) &&
+			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
+		/* First SYN OR retransmission of a previously-rejected SYN. */
+		struct calico_ct_key ck;
+		fill_ct_key(&ck,
+				src_lt_dest(&ctx->state->ip_src, &ctx->state->ip_dst,
+						ctx->state->sport, ctx->state->dport),
+				ctx->state->ip_proto,
+				&ctx->state->ip_src, &ctx->state->ip_dst,
+				ctx->state->sport, ctx->state->dport);
+		struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
 
-		if (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
-			/* Retransmission of accepted SYN — already counted, allow. */
-		} else {
-			/* First SYN OR retransmission of a previously-rejected
-			 * SYN. Re-run the limit check; if it succeeds we stamp
-			 * INGRESS, clearing REJECTED on second-chance accepts. */
-			bool was_rejected = (cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) != 0;
-			bool sltd = src_lt_dest(&ctx->state->ip_src,
-					&ctx->state->ip_dst,
-					ctx->state->sport,
-					ctx->state->dport);
-			struct calico_ct_key ck;
-			fill_ct_key(&ck, sltd, ctx->state->ip_proto,
-					&ctx->state->ip_src, &ctx->state->ip_dst,
-					ctx->state->sport, ctx->state->dport);
-			struct calico_ct_value *cv = cali_ct_lookup_elem(&ck);
-			if (qos_connlimit_check_and_increment(ctx) < 0) {
-				if (was_rejected) {
-					CALI_DEBUG("connlimit: retransmission of rejected SYN, limit still full");
-				} else {
-					CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
-					if (cv) {
-						ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
-					}
-				}
-				reject = true;
-			} else if (cv) {
-				if (was_rejected) {
-					CALI_DEBUG("connlimit: retransmission of rejected SYN now under limit; accepting");
-					ct_value_clear_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
-				}
-				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS);
+		if (qos_connlimit_check_and_increment(ctx) < 0) {
+			CALI_DEBUG("Ingress connection limit exceeded, rejecting with TCP RST");
+			if (cv) {
+				ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
 			}
-		}
-
-		if (reject) {
 			ctx->state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
 			CALI_JUMP_TO(ctx, PROG_INDEX_TCP_RST);
 			goto deny;
+		}
+
+		if (cv) {
+			if ((ctx->state->ct_result.flags &
+				CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) != 0) {
+				CALI_DEBUG("connlimit: retransmission of rejected SYN now under limit; accepting");
+				ct_value_clear_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED);
+			}
+			ct_value_set_flags(cv, CALI_CT_FLAG_CONNLIMIT_INGRESS);
 		}
 	}
 
