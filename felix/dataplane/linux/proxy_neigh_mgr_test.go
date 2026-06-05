@@ -191,7 +191,7 @@ func (c *mockARPClient) resetWrites() {
 
 type mockNDPConn struct {
 	mu     sync.Mutex
-	reads  chan ndp.Message
+	reads  chan ndpRead
 	writes []ndpWrite
 	closed bool
 }
@@ -201,18 +201,25 @@ type ndpWrite struct {
 	dst netip.Addr
 }
 
+// ndpRead is an incoming NDP message plus the source address it arrived from,
+// so tests can drive both unicast solicitations and :: DAD probes.
+type ndpRead struct {
+	msg ndp.Message
+	src netip.Addr
+}
+
 func newMockNDPConn() *mockNDPConn {
 	return &mockNDPConn{
-		reads: make(chan ndp.Message, 10),
+		reads: make(chan ndpRead, 10),
 	}
 }
 
 func (c *mockNDPConn) ReadFrom() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
-	msg, ok := <-c.reads
+	r, ok := <-c.reads
 	if !ok {
 		return nil, nil, netip.Addr{}, fmt.Errorf("closed")
 	}
-	return msg, nil, netip.MustParseAddr("fe80::1"), nil
+	return r.msg, nil, r.src, nil
 }
 
 func (c *mockNDPConn) WriteTo(m ndp.Message, cm *ipv6.ControlMessage, dst netip.Addr) error {
@@ -236,6 +243,12 @@ func (c *mockNDPConn) getWrites() []ndpWrite {
 	result := make([]ndpWrite, len(c.writes))
 	copy(result, c.writes)
 	return result
+}
+
+func (c *mockNDPConn) resetWrites() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.writes = nil
 }
 
 // --- Test helpers ---
@@ -263,6 +276,9 @@ func newTestProxyNeighManagerWithHostname(nl *mockNetlinkForProxyNeigh, arpClien
 	return mgr
 }
 
+// ndpTestHWAddr is the MAC the test NDP listener answers with.
+var ndpTestHWAddr = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x06}
+
 func newTestProxyNDPManager(nl *mockNetlinkForProxyNeigh, ndpConns map[string]*mockNDPConn) *proxyNeighManager {
 	config := Config{
 		RulesConfig: rules.Config{
@@ -271,7 +287,7 @@ func newTestProxyNDPManager(nl *mockNetlinkForProxyNeigh, ndpConns map[string]*m
 	}
 	nf := func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
 		if c, ok := ndpConns[ifaceName]; ok {
-			return c, net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x06}, nil
+			return c, ndpTestHWAddr, nil
 		}
 		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 	}
@@ -363,6 +379,25 @@ func getDesiredIPs(mgr *proxyNeighManager, ifaceName string) set.Set[string] {
 	return *d
 }
 
+// injectARPRequest pushes an ARP "who-has targetIP" request (from senderHW /
+// senderIP) onto the listener's read channel, simulating a request arriving on
+// the wire.
+func injectARPRequest(c *mockARPClient, senderHW net.HardwareAddr, senderIP, targetIP string) {
+	pkt, err := arp.NewPacket(arp.OperationRequest, senderHW, netip.MustParseAddr(senderIP),
+		make(net.HardwareAddr, 6), netip.MustParseAddr(targetIP))
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	c.reads <- pkt
+}
+
+// injectNS pushes an IPv6 Neighbor Solicitation for targetIP, arriving from src,
+// onto the listener's read channel.
+func injectNS(c *mockNDPConn, src, targetIP string) {
+	c.reads <- ndpRead{
+		msg: &ndp.NeighborSolicitation{TargetAddress: netip.MustParseAddr(targetIP)},
+		src: netip.MustParseAddr(src),
+	}
+}
+
 // --- Tests ---
 
 var _ = Describe("Proxy neighbor manager (IPv4)", func() {
@@ -402,12 +437,16 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			Expect(mgr.listeners).To(HaveKey("eth0"))
 		})
 
-		It("should send GARP for the new IP", func() {
+		It("should send a correct gratuitous ARP for the new IP", func() {
 			Eventually(func() int {
 				return len(arpClients["eth0"].getWrites())
-			}).Should(BeNumerically(">=", 1))
-			writes := arpClients["eth0"].getWrites()
-			Expect(writes[0].packet.TargetIP.String()).To(Equal("10.0.0.50"))
+			}).Should(Equal(1))
+			garp := arpClients["eth0"].getWrites()[0]
+			Expect(garp.packet.Operation).To(Equal(arp.OperationRequest))
+			Expect(garp.packet.SenderHardwareAddr).To(Equal(arpClients["eth0"].hwAddr))
+			Expect(garp.packet.SenderIP.String()).To(Equal("10.0.0.50"))
+			Expect(garp.packet.TargetIP.String()).To(Equal("10.0.0.50"))
+			Expect(garp.dest).To(Equal(ethernet.Broadcast))
 		})
 	})
 
@@ -530,6 +569,91 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			Expect(mgr.listeners).To(BeEmpty())
 		})
 	})
+
+	Describe("multiple interfaces", func() {
+		BeforeEach(func() {
+			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			nl.setIfaceAddr("eth1", "10.1.0.1/24")
+			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
+			sendIfaceAddrsUpdate(mgr, "eth1", "10.1.0.1")
+			// One pod in each host interface's subnet.
+			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod-a", "eth0", "10.0.0.50/32"))
+			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod-b", "eth0", "10.1.0.50/32"))
+			Expect(mgr.CompleteDeferredWork()).To(Succeed())
+		})
+
+		It("starts a listener on each interface", func() {
+			Expect(mgr.listeners).To(HaveKey("eth0"))
+			Expect(mgr.listeners).To(HaveKey("eth1"))
+		})
+
+		It("assigns each pod IP only to the interface whose subnet contains it", func() {
+			Expect(getDesiredIPs(mgr, "eth0").Contains("10.0.0.50")).To(BeTrue())
+			Expect(getDesiredIPs(mgr, "eth0").Contains("10.1.0.50")).To(BeFalse())
+			Expect(getDesiredIPs(mgr, "eth1").Contains("10.1.0.50")).To(BeTrue())
+			Expect(getDesiredIPs(mgr, "eth1").Contains("10.0.0.50")).To(BeFalse())
+		})
+
+		It("answers ARP on each interface using that interface's own MAC", func() {
+			requesterHW := net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x99}
+			arpClients["eth0"].resetWrites()
+			arpClients["eth1"].resetWrites()
+
+			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", "10.0.0.50")
+			injectARPRequest(arpClients["eth1"], requesterHW, "10.1.0.200", "10.1.0.50")
+
+			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			Eventually(func() int { return len(arpClients["eth1"].getWrites()) }).Should(Equal(1))
+
+			eth0Reply := arpClients["eth0"].getWrites()[0]
+			Expect(eth0Reply.packet.SenderHardwareAddr).To(Equal(arpClients["eth0"].hwAddr))
+			Expect(eth0Reply.packet.SenderIP.String()).To(Equal("10.0.0.50"))
+
+			eth1Reply := arpClients["eth1"].getWrites()[0]
+			Expect(eth1Reply.packet.SenderHardwareAddr).To(Equal(arpClients["eth1"].hwAddr))
+			Expect(eth1Reply.packet.SenderIP.String()).To(Equal("10.1.0.50"))
+		})
+	})
+
+	Describe("answering ARP requests", func() {
+		const ownedIP = "10.0.0.50"
+		requesterHW := net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x99}
+
+		BeforeEach(func() {
+			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
+			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", ownedIP+"/32"))
+			Expect(mgr.CompleteDeferredWork()).To(Succeed())
+			Expect(getDesiredIPs(mgr, "eth0").Contains(ownedIP)).To(BeTrue())
+			// Drop the gratuitous ARP sent on enable so we only observe replies.
+			arpClients["eth0"].resetWrites()
+		})
+
+		It("replies to a request for an owned IP with the correct packet", func() {
+			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", ownedIP)
+
+			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			reply := arpClients["eth0"].getWrites()[0]
+			Expect(reply.packet.Operation).To(Equal(arp.OperationReply))
+			Expect(reply.packet.SenderHardwareAddr).To(Equal(arpClients["eth0"].hwAddr))
+			Expect(reply.packet.SenderIP.String()).To(Equal(ownedIP))
+			Expect(reply.packet.TargetHardwareAddr).To(Equal(requesterHW))
+			Expect(reply.packet.TargetIP.String()).To(Equal("10.0.0.200"))
+			Expect(reply.dest).To(Equal(requesterHW))
+		})
+
+		It("ignores a request for an IP it does not own", func() {
+			// Send an un-owned request, then an owned one. The listener processes
+			// them in order, so seeing exactly one reply — for the owned IP —
+			// proves the un-owned request was read and ignored.
+			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", "10.0.0.99")
+			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", ownedIP)
+
+			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			Consistently(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			Expect(arpClients["eth0"].getWrites()[0].packet.SenderIP.String()).To(Equal(ownedIP))
+		})
+	})
 })
 
 var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
@@ -603,15 +727,79 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 			Expect(mgr.listeners).To(HaveKey("eth0"))
 		})
 
-		It("should send unsolicited NA", func() {
+		It("should send a correct unsolicited NA", func() {
 			Eventually(func() int {
 				return len(ndpConns["eth0"].getWrites())
-			}).Should(BeNumerically(">=", 1))
-			writes := ndpConns["eth0"].getWrites()
-			na, ok := writes[0].msg.(*ndp.NeighborAdvertisement)
+			}).Should(Equal(1))
+			write := ndpConns["eth0"].getWrites()[0]
+			na, ok := write.msg.(*ndp.NeighborAdvertisement)
 			Expect(ok).To(BeTrue())
 			Expect(na.TargetAddress.String()).To(Equal("fd00::50"))
 			Expect(na.Override).To(BeTrue())
+			Expect(na.Solicited).To(BeFalse()) // unsolicited
+			// Sent to all-nodes multicast, carrying this interface's MAC.
+			Expect(write.dst.String()).To(Equal("ff02::1"))
+			Expect(na.Options).To(HaveLen(1))
+			lla, ok := na.Options[0].(*ndp.LinkLayerAddress)
+			Expect(ok).To(BeTrue())
+			Expect(lla.Direction).To(Equal(ndp.Target))
+			Expect(lla.Addr).To(Equal(ndpTestHWAddr))
+		})
+	})
+
+	Describe("answering Neighbor Solicitations", func() {
+		const ownedIP = "fd00::50"
+
+		BeforeEach(func() {
+			nl.setIfaceAddr("eth0", "fd00::1/64")
+			sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
+			mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", ownedIP+"/128"))
+			Expect(mgr.CompleteDeferredWork()).To(Succeed())
+			Expect(getDesiredIPs(mgr, "eth0").Contains(ownedIP)).To(BeTrue())
+			// Drop the unsolicited NA sent on enable so we only observe replies.
+			ndpConns["eth0"].resetWrites()
+		})
+
+		It("replies to a unicast solicitation with a solicited NA", func() {
+			injectNS(ndpConns["eth0"], "fe80::1234", ownedIP)
+
+			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+			write := ndpConns["eth0"].getWrites()[0]
+			na, ok := write.msg.(*ndp.NeighborAdvertisement)
+			Expect(ok).To(BeTrue())
+			Expect(na.TargetAddress.String()).To(Equal(ownedIP))
+			Expect(na.Solicited).To(BeTrue())
+			Expect(na.Override).To(BeTrue())
+			Expect(write.dst.String()).To(Equal("fe80::1234")) // unicast back to the requester
+			Expect(na.Options).To(HaveLen(1))
+			lla, ok := na.Options[0].(*ndp.LinkLayerAddress)
+			Expect(ok).To(BeTrue())
+			Expect(lla.Addr).To(Equal(ndpTestHWAddr))
+		})
+
+		It("replies to a  Duplicate Address Detection probe (unspecified source) via all-nodes multicast", func() {
+			// A solicitation from :: is Duplicate Address Detection; we can't
+			// unicast back, so the NA goes to ff02::1 with the Solicited flag clear.
+			injectNS(ndpConns["eth0"], "::", ownedIP)
+
+			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+			write := ndpConns["eth0"].getWrites()[0]
+			na, ok := write.msg.(*ndp.NeighborAdvertisement)
+			Expect(ok).To(BeTrue())
+			Expect(na.TargetAddress.String()).To(Equal(ownedIP))
+			Expect(na.Solicited).To(BeFalse())
+			Expect(write.dst.String()).To(Equal("ff02::1"))
+		})
+
+		It("ignores a solicitation for an IP it does not own", func() {
+			injectNS(ndpConns["eth0"], "fe80::1234", "fd00::99")
+			injectNS(ndpConns["eth0"], "fe80::1234", ownedIP)
+
+			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+			Consistently(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+			na, ok := ndpConns["eth0"].getWrites()[0].msg.(*ndp.NeighborAdvertisement)
+			Expect(ok).To(BeTrue())
+			Expect(na.TargetAddress.String()).To(Equal(ownedIP))
 		})
 	})
 })
