@@ -60,7 +60,7 @@ func newNoEncapManagerWithSims(
 	ipVersion uint8,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	nlHandle netlinkshim.Interface,
 ) *noEncapManager {
 
 	m := &noEncapManager{
