@@ -257,6 +257,7 @@ def scenario_on_demand(
     try:
         if not wait_for_endpoints_phase(log_file, deadline_secs=60):
             proc.kill()
+            proc.wait()
             raise RuntimeError(
                 "calico-resync did not reach the endpoints phase within 60s"
             )
@@ -289,6 +290,7 @@ def scenario_on_demand(
     finally:
         if proc.poll() is None:
             proc.kill()
+            proc.wait()
         try:
             os.unlink(output_file.name)
         except OSError:

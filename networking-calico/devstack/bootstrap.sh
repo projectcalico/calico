@@ -235,14 +235,16 @@ python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
 EOF
 
 # Run resync concurrency test.  Prints one RESYNC_CONCURRENCY_RESULT
-# line per scenario.
+# line per scenario.  Non-zero exit (any scenario over the 2x ratio
+# gate) propagates out of the heredoc and fails the bootstrap, so
+# regressions block CI.
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 . openrc admin admin
 
 export ETCD_HOST=${SERVICE_HOST}
 export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
-python3 ../calico/networking-calico/devstack/resync_concurrency_test.py || true
+python3 ../calico/networking-calico/devstack/resync_concurrency_test.py
 EOF
 
 # Run resync scale benchmark.  Prints one RESYNC_SCALE_RESULT line per

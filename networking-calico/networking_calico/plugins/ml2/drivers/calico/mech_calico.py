@@ -161,6 +161,7 @@ calico_opts = [
     cfg.IntOpt(
         "startup_resync_inject_per_item_delay_ms",
         default=0,
+        min=0,
         help=(
             "TEST-ONLY: when non-zero, the start-of-day resync sleeps "
             "this many milliseconds between every step of its endpoints "

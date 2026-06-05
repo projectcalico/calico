@@ -127,12 +127,21 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--inject-per-item-delay-ms",
-        type=int,
+        type=_non_negative_int,
         default=0,
         metavar="MS",
         help=argparse.SUPPRESS,  # test-only knob; CORE-12037
     )
     return parser
+
+
+def _non_negative_int(s):
+    """argparse type: reject negative values up-front rather than letting
+    them flow into the ``time.sleep`` call in the syncer's compare loop."""
+    v = int(s)
+    if v < 0:
+        raise argparse.ArgumentTypeError("must be >= 0, got %d" % v)
+    return v
 
 
 def main(argv=None) -> int:

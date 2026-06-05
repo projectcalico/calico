@@ -91,10 +91,16 @@ class ResourceSyncer(object):
     def __init__(self, db, resource_kind, inject_per_item_delay_ms=0):
         self.db = db
         self.resource_kind = resource_kind
-        # Test-only: when non-zero, sleep this many ms after each
+        # Test-only: when positive, sleep this many ms after each
         # iteration of the compare loop below.  Used by the resync-
-        # concurrency test (CORE-12037).  Always 0 in production.
-        self._inject_per_item_delay_secs = inject_per_item_delay_ms / 1000.0
+        # concurrency test (CORE-12037).  Always 0 in production.  Clamp
+        # to 0 defensively: time.sleep() raises ValueError on a negative
+        # argument, which would silently turn a misconfigured test knob
+        # into a resync failure.  The two call sites (mech_calico's
+        # IntOpt and the calico-resync --inject-per-item-delay-ms flag)
+        # both have their own non-negativity checks, but a single guard
+        # here covers any future caller too.
+        self._inject_per_item_delay_secs = max(0, inject_per_item_delay_ms) / 1000.0
 
     def resync(self, context, scope):
         """Reconcile this resource type's etcd state with Neutron.
