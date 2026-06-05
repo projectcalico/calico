@@ -76,20 +76,6 @@ type ndpConn interface {
 type arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
 type ndpConnFactory func(ifaceName string) (ndpConn, net.HardwareAddr, error)
 
-// ifaceListener manages a raw socket listener for a single host interface.
-type ifaceListener struct {
-	ifaceName string
-	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
-	// and swapped atomically; never mutated after publishing.
-	desired atomic.Pointer[set.Set[string]]
-	arpCli  arpClient // IPv4 only
-	ndpCli  ndpConn   // IPv6 only
-	hwAddr  net.HardwareAddr
-	cancel  context.CancelFunc
-	done    chan struct{}
-	failed  atomic.Bool
-}
-
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
 // It listens on raw sockets and responds directly in userspace.
@@ -529,6 +515,20 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 	m.listeners[ifaceName] = l
 	logrus.WithField("iface", ifaceName).Info("Started proxy neighbor listener")
 	return nil
+}
+
+// ifaceListener manages a raw socket listener for a single host interface.
+type ifaceListener struct {
+	ifaceName string
+	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
+	// and swapped atomically; never mutated after publishing.
+	desired atomic.Pointer[set.Set[string]]
+	arpCli  arpClient // IPv4 only
+	ndpCli  ndpConn   // IPv6 only
+	hwAddr  net.HardwareAddr
+	cancel  context.CancelFunc
+	done    chan struct{}
+	failed  atomic.Bool
 }
 
 // stop cancels the listener goroutine, closes its raw socket, and waits for the
