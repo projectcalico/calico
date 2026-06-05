@@ -489,27 +489,26 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 		done:      make(chan struct{}),
 	}
 
-	ctx, cancel := context.WithCancel(m.ctx)
-	l.cancel = cancel
+	l.ctx, l.cancel = context.WithCancel(m.ctx)
 
 	if m.ipVersion == 4 {
 		client, hwAddr, err := m.arpFactory(ifaceName)
 		if err != nil {
-			cancel()
+			l.cancel()
 			return err
 		}
 		l.arpCli = client
 		l.hwAddr = hwAddr
-		go l.runARPListener(ctx)
+		go l.runARPListener()
 	} else {
 		conn, hwAddr, err := m.ndpFactory(ifaceName)
 		if err != nil {
-			cancel()
+			l.cancel()
 			return err
 		}
 		l.ndpCli = conn
 		l.hwAddr = hwAddr
-		go l.runNDPListener(ctx)
+		go l.runNDPListener()
 	}
 
 	m.listeners[ifaceName] = l
@@ -526,6 +525,7 @@ type ifaceListener struct {
 	arpCli  arpClient // IPv4 only
 	ndpCli  ndpConn   // IPv6 only
 	hwAddr  net.HardwareAddr
+	ctx     context.Context
 	cancel  context.CancelFunc
 	done    chan struct{}
 	failed  atomic.Bool
@@ -553,11 +553,11 @@ func (l *ifaceListener) stop() {
 
 // runARPListener listens for ARP requests on a raw socket and replies for
 // IPs in the desired set.
-func (l *ifaceListener) runARPListener(ctx context.Context) {
+func (l *ifaceListener) runARPListener() {
 	defer close(l.done)
 
 	for {
-		if ctx.Err() != nil {
+		if l.ctx.Err() != nil {
 			logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled")
 			return
 		}
@@ -568,7 +568,7 @@ func (l *ifaceListener) runARPListener(ctx context.Context) {
 
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
-			if ctx.Err() != nil {
+			if l.ctx.Err() != nil {
 				logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled during read")
 				return
 			}
@@ -603,11 +603,11 @@ func (l *ifaceListener) runARPListener(ctx context.Context) {
 
 // runNDPListener listens for Neighbor Solicitations on a raw ICMPv6 socket
 // and replies with Neighbor Advertisements for IPs in the desired set.
-func (l *ifaceListener) runNDPListener(ctx context.Context) {
+func (l *ifaceListener) runNDPListener() {
 	defer close(l.done)
 
 	for {
-		if ctx.Err() != nil {
+		if l.ctx.Err() != nil {
 			logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled")
 			return
 		}
@@ -618,7 +618,7 @@ func (l *ifaceListener) runNDPListener(ctx context.Context) {
 
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
-			if ctx.Err() != nil {
+			if l.ctx.Err() != nil {
 				logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled during read")
 				return
 			}
