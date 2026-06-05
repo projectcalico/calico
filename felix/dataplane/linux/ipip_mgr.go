@@ -80,7 +80,7 @@ func newIPIPManagerWithShims(
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	nlHandle netlinkshim.Interface,
 ) *ipipManager {
 
 	if ipVersion != 4 {
