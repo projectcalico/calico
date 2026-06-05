@@ -35,6 +35,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// testReadTimeout is the per-read deadline used by unit-test managers: small so
+// a listener that loops on a read timeout (and teardown) is near-instant rather
+// than waiting the production readDeadlineInterval.
+const testReadTimeout = 10 * time.Millisecond
+
 func newMockNetlinkForProxyNeigh() *mocknetlink.MockNetlinkDataplane {
 	dp := mocknetlink.New()
 	// ifindex 1 is reserved for "lo" by the shared mock, so number our
@@ -245,7 +250,7 @@ func newTestProxyNeighManagerWithHostname(nl *mocknetlink.MockNetlinkDataplane, 
 		}
 		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 	}
-	mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil)
+	mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout)
 	// Register a default no-encap pool covering the test subnet.
 	sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
 	return mgr
@@ -266,7 +271,7 @@ func newTestProxyNDPManager(nl *mocknetlink.MockNetlinkDataplane, ndpConns map[s
 		}
 		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 	}
-	mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf)
+	mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout)
 	sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
 	return mgr
 }
@@ -856,7 +861,7 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 			created = append(created, c)
 			return c, c.hwAddr, nil
 		}
-		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil)
+		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout)
 		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
 		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")

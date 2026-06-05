@@ -41,9 +41,8 @@ import (
 )
 
 // readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
-// single socket read before waking to re-check for context cancellation
-// (and thus how quickly it stops). A read that hits the deadline simply
-// loops
+// single socket read before waking to re-check for context cancellation.
+// A read that hits the deadline simply loops
 const readDeadlineInterval = 1 * time.Second
 
 // ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
@@ -83,6 +82,10 @@ type proxyNeighManager struct {
 	ipVersion      uint8
 	hostname       string
 	wlIfacesRegexp *regexp.Regexp
+
+	// readTimeout bounds how long each listener blocks in a single socket read
+	// before looping to re-check for cancellation.
+	readTimeout time.Duration
 
 	// hostIfaceToCIDRs maps host interface name to the parsed CIDRs on that interface.
 	hostIfaceToCIDRs map[string][]net.IPNet
@@ -153,7 +156,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			return conn, ifi.HardwareAddr, nil
 		}
 	}
-	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf)
+	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval)
 }
 
 func newProxyNeighManagerWithShims(
@@ -162,6 +165,7 @@ func newProxyNeighManagerWithShims(
 	nl netlinkshim.Interface,
 	af arpClientFactory,
 	nf ndpConnFactory,
+	readTimeout time.Duration,
 ) *proxyNeighManager {
 	wlIfacesPattern := "^(" + strings.Join(dpConfig.RulesConfig.WorkloadIfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -171,6 +175,7 @@ func newProxyNeighManagerWithShims(
 		ipVersion:        ipVersion,
 		hostname:         dpConfig.Hostname,
 		wlIfacesRegexp:   wlIfacesRegexp,
+		readTimeout:      readTimeout,
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
@@ -485,8 +490,9 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 // listener goroutine.
 func (m *proxyNeighManager) startListener(ifaceName string) error {
 	l := &ifaceListener{
-		ifaceName: ifaceName,
-		done:      make(chan struct{}),
+		ifaceName:   ifaceName,
+		readTimeout: m.readTimeout,
+		done:        make(chan struct{}),
 	}
 
 	l.ctx, l.cancel = context.WithCancel(m.ctx)
@@ -521,14 +527,15 @@ type ifaceListener struct {
 	ifaceName string
 	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
 	// and swapped atomically; never mutated after publishing.
-	desired atomic.Pointer[set.Set[string]]
-	arpCli  arpClient // IPv4 only
-	ndpCli  ndpConn   // IPv6 only
-	hwAddr  net.HardwareAddr
-	ctx     context.Context
-	cancel  context.CancelFunc
-	done    chan struct{}
-	failed  atomic.Bool
+	desired     atomic.Pointer[set.Set[string]]
+	arpCli      arpClient // IPv4 only
+	ndpCli      ndpConn   // IPv6 only
+	hwAddr      net.HardwareAddr
+	readTimeout time.Duration
+	ctx         context.Context
+	cancel      context.CancelFunc
+	done        chan struct{}
+	failed      atomic.Bool
 }
 
 // stop cancels the listener goroutine, closes its raw socket, and waits for the
@@ -562,7 +569,7 @@ func (l *ifaceListener) runARPListener() {
 			return
 		}
 
-		if err := l.arpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
+		if err := l.arpCli.SetReadDeadline(time.Now().Add(l.readTimeout)); err != nil {
 			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set ARP read deadline")
 		}
 
@@ -612,7 +619,7 @@ func (l *ifaceListener) runNDPListener() {
 			return
 		}
 
-		if err := l.ndpCli.SetReadDeadline(time.Now().Add(readDeadlineInterval)); err != nil {
+		if err := l.ndpCli.SetReadDeadline(time.Now().Add(l.readTimeout)); err != nil {
 			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set NDP read deadline")
 		}
 
