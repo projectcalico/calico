@@ -744,16 +744,28 @@ func hasPreviousLogs(pod *apiv1.Pod) bool {
 	return false
 }
 
-// bpfDumpCmd builds a diagnostic command that dumps the named calico-bpf map
-// (conntrack, ipsets, nat, routes, ...) in JSON format. The calico-bpf tool
-// gained machine-parseable output via the --json flag, and the diags bundle
-// always collects these dumps as JSON so downstream tooling can parse them
-// directly; the output file therefore carries a .json extension.
-func bpfDumpCmd(curNodeDir, nodeName, namespace, podName, dump string) common.Cmd {
+// bpfJSONCmd builds a diagnostic command that dumps calico-bpf state as JSON,
+// writing <file>.json.
+//
+// Current calico-node runs the combined `calico` binary and exposes the bpf
+// tool as `calico component node bpf <sub>`, with machine-parseable `--json`
+// output. Both that invocation path and the --json flag landed together; older
+// (pre-combined-binary) calico-node has neither — it only understands the
+// legacy `calico-node -bpf <sub>` form, with text output. calicoctl is
+// frequently run against an older cluster, so the command falls back to that
+// legacy text form (writing <file>.txt) when the modern invocation fails,
+// degrading gracefully rather than capturing an "unknown command" error.
+//
+// sub is the bpf subcommand, e.g. "nat dump" or "conntrack stats"; file is the
+// output basename without extension, e.g. "bpf-nat".
+func bpfJSONCmd(curNodeDir, nodeName, namespace, podName, info, sub, file string) common.Cmd {
+	kexec := fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node --", namespace, podName)
 	return common.Cmd{
-		Info:     fmt.Sprintf("Collect eBPF %s for node %s", dump, nodeName),
-		CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf %s dump --json", namespace, podName, dump),
-		FilePath: fmt.Sprintf("%s/bpf-%s.json", curNodeDir, dump),
+		Info:             fmt.Sprintf("Collect eBPF %s for node %s", info, nodeName),
+		CmdStr:           fmt.Sprintf("%s calico component node bpf %s --json", kexec, sub),
+		FilePath:         fmt.Sprintf("%s/%s.json", curNodeDir, file),
+		FallbackCmdStr:   fmt.Sprintf("%s calico-node -bpf %s", kexec, sub),
+		FallbackFilePath: fmt.Sprintf("%s/%s.txt", curNodeDir, file),
 	}
 }
 
@@ -824,33 +836,22 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 	}
 	if bpfEnabled {
 		// eBPF diagnostics. The calico-bpf tool is reached via the combined
-		// calico binary's `component node bpf` subcommand. The map dumps are
+		// calico binary's `component node bpf` subcommand. The dumps are
 		// collected in JSON format (the tool's --json flag) so the bundle
-		// carries machine-parseable output; the bpftool listings below have no
+		// carries machine-parseable output, falling back to plain text against
+		// older calico-node versions. The bpftool listings below have no
 		// equivalent calico-bpf JSON path here and stay as plain text.
 		cmds = append(cmds,
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "conntrack"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "ipsets"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "nat"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "routes"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "counters"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "arp"),
-			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "ifstate"),
-			common.Cmd{
-				Info:     fmt.Sprintf("Collect eBPF conntrack stats for node %s", nodeName),
-				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf conntrack stats --json", namespace, podName),
-				FilePath: fmt.Sprintf("%s/bpf-conntrack-stats.json", curNodeDir),
-			},
-			common.Cmd{
-				Info:     fmt.Sprintf("Collect eBPF nat affinity for node %s", nodeName),
-				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf nat aff --json", namespace, podName),
-				FilePath: fmt.Sprintf("%s/bpf-nat-aff.json", curNodeDir),
-			},
-			common.Cmd{
-				Info:     fmt.Sprintf("Collect eBPF nat maglev table for node %s", nodeName),
-				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf nat maglev --json", namespace, podName),
-				FilePath: fmt.Sprintf("%s/bpf-nat-maglev.json", curNodeDir),
-			},
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack", "conntrack dump", "bpf-conntrack"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ipsets", "ipsets dump", "bpf-ipsets"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat", "nat dump", "bpf-nat"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "routes", "routes dump", "bpf-routes"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "counters", "counters dump", "bpf-counters"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "arp", "arp dump", "bpf-arp"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ifstate", "ifstate dump", "bpf-ifstate"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack stats", "conntrack stats", "bpf-conntrack-stats"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat affinity", "nat aff", "bpf-nat-aff"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat maglev table", "nat maglev", "bpf-nat-maglev"),
 			common.Cmd{
 				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
 				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
