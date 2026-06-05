@@ -48,7 +48,10 @@ GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
 GIT_USE_SSH = true
 
 # The version of BIRD to use for calico/node builds and confd tests.
-BIRD_VERSION=v0.3.3-211-g9111ec3c
+# Built from the official upstream release tarball by bird/ and consumed as
+# calico/bird:$(BIRD_VERSION) (see bird/image.mk).
+BIRD_VERSION=3.3.0
+BIRD_SHA256=0d0240250ea4cfa30eff6e25df18e6fc5a40a030951aa352e79376aaf4cd2558
 
 # DEV_REGISTRIES configures the container image registries which are built from this
 # repository. By default, just build images with calico/. Allow this variable to be overridden,

@@ -77,8 +77,8 @@ const (
 	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
 
-	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
-	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+	// CalicoBIRD: BIRD 3.x. Keep in sync with BIRD_VERSION in metadata.mk.
+	CalicoBIRD = "calico/bird:3.3.0"
 )
 
 // Get client image and powershell command based on windows OS version

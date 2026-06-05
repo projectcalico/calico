@@ -52,7 +52,9 @@ NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-$(ARCH)
 THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party-deps
 
 # Versions and location of dependencies used in the build.
-BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
+# Upstream BIRD image (built by bird/, see bird/image.mk). node/Dockerfile
+# copies the bird/birdcl binaries out of it via FROM ${BIRD_IMAGE}.
+include ../bird/image.mk
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
 
 # Producer image carrying the patched nftables + libnftnl RPMs we install in
@@ -257,6 +259,12 @@ image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER)
 nft-rpms-image: | register
 	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
 
+# bird-image builds (or no-ops if already present locally) the per-arch upstream
+# BIRD image that the runtime stage copies bird/birdcl out of (FROM ${BIRD_IMAGE}).
+.PHONY: bird-image
+bird-image: | register
+	$(MAKE) -C ../bird image ARCH=$(ARCH)
+
 # Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
 # nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
 # as a registry pull and fails when that tag hasn't been pushed yet (PR
@@ -264,7 +272,7 @@ nft-rpms-image: | register
 # BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
 $(NODE_CONTAINER_CREATED): DOCKER_PULL :=
 
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image bird-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
@@ -280,7 +288,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $(BIRD_SOURCE) https://bird.nic.cz/download/bird-$(BIRD_VERSION).tar.gz
 	touch $@
 
 # include GPL felix code in the image.

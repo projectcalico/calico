@@ -61,15 +61,17 @@ template bgp bgp_template {
   description "BGP peer";
   local as 65001;
   multihop;
-  gateway recursive;
-  import filter import_community_priority;
-  export none;
   source address ip@local;
-  add paths on;
   graceful restart;
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv4 {
+    gateway recursive;
+    import filter import_community_priority;
+    export none;
+    add paths on;
+  };
 }
 
 `
@@ -195,7 +197,7 @@ func ParseBIRDRouteOutput(output string) []BIRDRoute {
 	return routes
 }
 
-// GenerateBIRDPeersConf renders a BIRD 1.x peers config. podCIDR gates the
+// GenerateBIRDPeersConf renders a BIRD3 peers config. podCIDR gates the
 // import filter; pass the cluster's IPv4 IPPool CIDR.
 func GenerateBIRDPeersConf(podCIDR string, nodeIPs []string) string {
 	var sb strings.Builder
@@ -210,7 +212,7 @@ func GenerateBIRDPeersConf(podCIDR string, nodeIPs []string) string {
 // ContainerBIRDPeer — local Docker container transport
 // ---------------------------------------------------------------------------
 
-// ContainerBIRDPeer interacts with a pre-existing BIRD 1.x Docker container.
+// ContainerBIRDPeer interacts with a pre-existing BIRD3 Docker container.
 // The container is created by infrastructure setup (e.g. make e2e-test-mockvirt)
 // and its name is passed via the BIRD_BGPPEER_CONTAINER_NAME environment variable.
 // Uses local Docker commands so no external node or SSH credentials are required.
@@ -256,21 +258,19 @@ func (p *ContainerBIRDPeer) CheckBGPSession() (string, error) {
 	return p.exec("birdcl", "show", "protocols")
 }
 
-// ConfigureBIRD writes the peers config, enables merge paths, and reloads BIRD.
+// ConfigureBIRD writes the peers config and reloads BIRD. The bird3 image
+// ships a base /etc/bird/bird.conf (router id, device, kernel with merge paths
+// for ECMP) that includes /etc/bird/peers.conf, so we only need to write the
+// peers config and reload.
 func (p *ContainerBIRDPeer) ConfigureBIRD(peersConf string) {
 	GinkgoHelper()
-
-	// Enable merge paths in the kernel protocol for ECMP support.
-	out, err := p.exec("sed", "-i", "/protocol kernel {/a merge paths on;", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(),
-		"failed to enable merge paths in BIRD: %s", out)
 
 	// Replace the source address placeholder with the container's actual IP.
 	peersConf = strings.ReplaceAll(peersConf, "ip@local", p.containerIP)
 	p.writeFile("/etc/bird/peers.conf", peersConf)
 
 	By("Reloading BIRD config")
-	out, err = p.exec("birdcl", "configure")
+	out, err := p.exec("birdcl", "configure")
 	Expect(err).NotTo(HaveOccurred(), "birdcl configure failed: %s", out)
 	logrus.Infof("birdcl configure: %s", out)
 }
@@ -470,9 +470,10 @@ func (a *SSHBIRDPeer) startBIRD(peersConf string) {
 
 	_ = a.node.RemoveContainer("tor-bird")
 
-	// The calico/bird image ships with a base bird.conf that defines router
-	// id, protocol kernel, and protocol device, plus an include for
-	// /etc/bird/*.conf so peers.conf is picked up on reload.
+	// The bird3 image ships a base bird.conf that defines router id, protocol
+	// kernel (with merge paths on for ECMP), and protocol device, plus an
+	// include for /etc/bird/peers.conf so the peers config is picked up on
+	// reload.
 	_, err := a.node.RunContainer("tor-bird", images.CalicoBIRD,
 		[]string{"-d", "--privileged", "--network", "host"})
 	Expect(err).NotTo(HaveOccurred(), "failed to start BIRD container on SSH node")
@@ -483,14 +484,6 @@ func (a *SSHBIRDPeer) startBIRD(peersConf string) {
 	Eventually(func() (bool, error) {
 		return a.node.IsContainerRunning("tor-bird")
 	}, 30*time.Second, 2*time.Second).Should(BeTrue(), "tor-bird container is not running")
-
-	// Add "merge paths on" to the kernel protocol block for ECMP support.
-	// With different BIRD preferences (200 for community-tagged, 100 for
-	// default), merge paths only merges routes of equal preference, so the
-	// higher-preference route wins during migration.
-	_, err = a.node.RunInContainer("tor-bird", "sed", "-i",
-		"'/protocol kernel {/a merge paths on;'", "/etc/bird.conf")
-	Expect(err).NotTo(HaveOccurred(), "failed to enable merge paths in tor-bird")
 
 	peersConf = strings.ReplaceAll(peersConf, "ip@local", a.peerIP)
 	Expect(a.node.WriteFileInContainer("tor-bird", "/etc/bird/peers.conf", []byte(peersConf))).
