@@ -65,10 +65,9 @@ jobs:
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
       # On a status event these come from the event; on workflow_dispatch
-      # STATE falls through to the input and SHA/TARGET_URL are empty.
+      # STATE falls through to the input and SHA is empty.
       STATE: ${{ github.event.state || inputs.state }}
       SHA: ${{ github.event.sha }}
-      TARGET_URL: ${{ github.event.target_url }}
     steps:
       - name: Skip if not configured
         id: gate
@@ -210,13 +209,13 @@ jobs:
             *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
           esac
 
-          TEXT="$EMOJI CI $WORD on your PR #$PR: $TITLE"$'\n'"$URL"
-          if [[ -n "$TARGET_URL" ]]; then
-            TEXT="$TEXT"$'\n'"CI run: $TARGET_URL"
-          fi
-          # Failure-analysis link from sem-ai-triage, only when it actually
-          # posted one (it skips on PASS or backend hiccups — no promise made).
-          if [[ -n "$TRIAGE_COMMENT_URL" ]]; then
+          # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
+          TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
+          # On failure/error, point at the sem-ai triage analysis on the PR
+          # (which itself links the run), when triage actually posted one (it
+          # skips on PASS or backend hiccups). No raw CI-run link on any
+          # outcome — the PR link above is the lead.
+          if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
             TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
           fi
 
