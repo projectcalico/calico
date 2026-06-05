@@ -48,7 +48,7 @@ ordinals from another node's block, unless `StrictAffinity=true`. Strict affinit
 |---|---|---|
 | CNI plugin | `cni-plugin/pkg/ipamplugin/`, `node/cmd/calico-ipam/` | Pod ADD/DEL. Hot path; latency-sensitive. |
 | Garbage collector | `kube-controllers/pkg/controllers/node/` | Leak detection, handle reconciliation, empty-block release. |
-| Tunnel-address allocator | `node/pkg/allocateip/` | IPIP / VXLAN / Wireguard node tunnel addresses. |
+| Tunnel-address allocator | `node/pkg/allocateip/` | IPIP / VXLAN / WireGuard node tunnel addresses. |
 
 The IPAM GC lives in the *node* controller (`kube-controllers/pkg/controllers/node`), not in `pkg/controllers/ipam`. Confusing, but historical and not worth moving.
 
@@ -66,9 +66,9 @@ Per-topic design docs in this directory. A PR that touches files across multiple
 |---|---|---|
 | [ipam-core-library](./ipam-core-library.md) | `libcalico-go/lib/ipam/**` (excluding `vmipam/`) | ✅ exists |
 | [ipam-datastore](./ipam-datastore.md) | `libcalico-go/lib/backend/**/ipam*`, `libcalico-go/lib/backend/**/block_affinity*` | ✅ exists |
-| [ipam-cni](./ipam-cni.md) | `cni-plugin/pkg/ipamplugin/**`, `node/cmd/calico-ipam/**` | ✅ exists |
+| [ipam-cni](./ipam-cni.md) | `cni-plugin/pkg/ipamplugin/**`, `cni-plugin/pkg/k8s/**`, `node/cmd/calico-ipam/**` | ✅ exists |
 | [ipam-gc](./ipam-gc.md) | `kube-controllers/pkg/controllers/node/ipam*.go`, `kube-controllers/pkg/controllers/node/pool_manager.go`, `kube-controllers/pkg/controllers/node/ipam_allocation.go` | ✅ exists |
-| [ipam-other-callers](./ipam-other-callers.md) | `node/pkg/allocateip/**`, `calicoctl/calicoctl/commands/ipam/**`, `libcalico-go/lib/ipam/vmipam/**`, Felix IPAM read paths | ✅ exists |
+| [ipam-other-callers](./ipam-other-callers.md) | `node/pkg/allocateip/**`, `calicoctl/calicoctl/commands/ipam/**`, `calicoctl/calicoctl/commands/datastore/migrate/**`, `kube-controllers/pkg/controllers/loadbalancer/**`, `kube-controllers/pkg/controllers/flannelmigration/**`, `libcalico-go/lib/ipam/vmipam/**`, Felix IPAM read paths | ✅ exists |
 
 A missing sub-design means the area's invariants have not been written down yet - not that the area has no constraints. Treat absence as "read the code and ask"; don't assume
 anything goes.
@@ -101,8 +101,10 @@ The questions below are the ones that have caught real regressions across the IP
    §Host-scoped lookups](./ipam-datastore.md#host-scoped-lookups).
 5. **In-memory block consistent with what's persisted.** A change that mutates the `*model.AllocationBlock` KVPair before `updateBlock` returns success can persist partial state
    via the retry loop. See [ipam-core-library §CAS retry and sequence numbers](./ipam-core-library.md#cas-retry-and-sequence-numbers).
-6. **Handle-format change updated everywhere it's parsed.** GC classification, `calicoctl ipam check`, and tunnel migration all parse handle prefixes. New handle types need
-   migration code too. See [ipam-core-library §Handle IDs](./ipam-core-library.md#handle-ids).
+6. **Handle-format change updated everywhere it's parsed.** Tunnel handle prefixes are parsed by `calicoctl datastore migrate` (which rewrites them on node rename) - and its prefix
+   list is v4-only today, so it already misses the `*-v6-tunnel-addr-` handles. The GC and `calicoctl ipam check` don't parse the prefix: the GC classifies by `AttributeType`, and
+   `ipam check` reads tunnel IPs off the `Node` spec. A new tunnel handle type therefore needs both an `AttributeType` and a migrate-prefix entry. See [ipam-core-library §Handle
+   IDs](./ipam-core-library.md#handle-ids).
 7. **Operator-side change for new CRDs or RBAC verbs.** A new IPAM CRD or a new verb on an existing one needs a paired `tigera/operator` PR or GC paths fail closed. See
    [ipam-datastore §crd.projectcalico.org/v1 vs projectcalico.org/v3](./ipam-datastore.md#crdprojectcalicoorgv1-vs-projectcalicoorgv3).
 8. **Upgrade path for pre-existing data.** Existing rows may lack a new field (`AffinityType`, per-ordinal sequence number, tunnel handle prefix). Code that assumes the field is

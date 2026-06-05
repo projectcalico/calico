@@ -4,10 +4,16 @@ applyTo:
   - "libcalico-go/lib/backend/**/ipam*"
   - "libcalico-go/lib/backend/**/block_affinity*"
   - "cni-plugin/pkg/ipamplugin/**"
+  - "cni-plugin/pkg/k8s/**"
   - "node/cmd/calico-ipam/**"
+  - "node/pkg/allocateip/**"
   - "kube-controllers/pkg/controllers/node/ipam*.go"
   - "kube-controllers/pkg/controllers/node/pool_manager.go"
   - "kube-controllers/pkg/controllers/node/ipam_allocation.go"
+  - "kube-controllers/pkg/controllers/loadbalancer/**"
+  - "kube-controllers/pkg/controllers/flannelmigration/**"
+  - "calicoctl/calicoctl/commands/ipam/**"
+  - "calicoctl/calicoctl/commands/datastore/migrate/**"
 ---
 
 # IPAM

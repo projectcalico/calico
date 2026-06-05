@@ -14,8 +14,8 @@ Catch-all for IPAM callers that aren't covered by the four primary sub-designs (
 [GC](./ipam-gc.md)). Each section here is intentionally shallow - just enough to point at the right code and call out the handle convention or invariant a reviewer needs to know.
 If a caller grows enough complexity to warrant its own sub-design, lift it out of this file.
 
-The unifying thread: every caller uses a distinct handle convention, and the GC parses handle prefixes to classify allocations. Don't change a handle format in one place without
-checking how the GC and `calicoctl ipam check` interpret it.
+The unifying thread: every caller uses a distinct handle convention. Don't change a handle format in one place without checking the callers that depend on it - `calicoctl datastore
+migrate` parses the tunnel prefixes, and the CNI DEL path releases by both the handle and the workload-ID forms.
 
 ## calicoctl
 
@@ -37,7 +37,7 @@ interface addresses (IPIP, VXLAN, VXLAN-v6, WireGuard, WireGuard-v6). It's wired
 For each tunnel type, per reconcile:
 
 - Tunnel enabled, no address: `AutoAssign` with `Attrs[ipam.AttributeType]` set to the tunnel type and `Hostname` = node name, `IntendedUse = Tunnel`. Handle is
-  `<tunnel>-tunnel-addr-<node>` (with `-ipv6` suffix for v6 variants).
+  `<tunnel>-tunnel-addr-<node>` for v4; the v6 variants put `-v6-` in the middle (`vxlan-v6-tunnel-addr-<node>`, `wireguard-v6-tunnel-addr-<node>`), not a suffix.
 - Tunnel enabled, address exists: `GetAssignmentAttributes` to validate the address is still in a valid pool. If the pool is gone, `ReleaseByHandle` then reassign.
 - Tunnel disabled: `ReleaseByHandle`.
 
@@ -47,8 +47,9 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 **Review notes**
 
 - Pre-handle tunnel allocations exist on upgraded clusters; the release-by-IP-then-reassign path migrates them. Don't break it.
-- Tunnel handle prefixes (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`) are pattern-matched by the GC and by `calicoctl ipam check`. Adding a new tunnel type
-  means updating both.
+- The GC recognizes tunnel allocations by `AttributeType`, and `calicoctl ipam check` reads tunnel IPs off the `Node` spec - neither parses the handle prefix. The prefix is parsed
+  by `calicoctl datastore migrate`, whose list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`) and so already misses the `*-v6-tunnel-addr-`
+  handles. A new tunnel type needs an `AttributeType` and a migrate-prefix entry; if you touch the migrate list, add the v6 prefixes too.
 
 ## Felix
 

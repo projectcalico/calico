@@ -95,8 +95,8 @@ Block release is parallelised per block via a semaphore sized at `GOMAXPROCS`.
 
 ## Handle IDs
 
-A handle ID is an opaque string from the library's point of view, but its **format is a convention every IPAM caller has to follow** because the GC and `calicoctl ipam check` parse
-handle prefixes to classify allocations.
+A handle ID is an opaque string from the library's point of view, but its **format is a convention every IPAM caller has to follow** because `calicoctl datastore migrate` parses
+the tunnel prefixes to rewrite them on node rename.
 
 Conventions in use:
 
@@ -105,8 +105,8 @@ Conventions in use:
 | CNI workload (default) | `<network-name>.<container-id>` via `cni-plugin/internal/pkg/utils.GetHandleID`. For the default network, `<network-name>` is `k8s-pod-network`. |
 | CNI workload (KubeVirt persistent) | `<network-name>.<namespace>-<vm-name>` so live-migrated VMs keep the same handle. |
 | IPIP tunnel | `ipip-tunnel-addr-<node>` |
-| VXLAN tunnel | `vxlan-tunnel-addr-<node>` (IPv6 suffixed `-ipv6`) |
-| WireGuard tunnel | `wireguard-tunnel-addr-<node>` (IPv6 suffixed `-ipv6`) |
+| VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
+| WireGuard tunnel | `wireguard-tunnel-addr-<node>`; IPv6 variant is `wireguard-v6-tunnel-addr-<node>` |
 | Windows-reserved | literal `windows-reserved-ipam-handle` |
 | LoadBalancer | `<namespace>:<service>` |
 
@@ -115,16 +115,20 @@ found - see [`./ipam-cni.md`](./ipam-cni.md).
 
 **Review notes**
 
-- Changing a handle format without updating the GC and `calicoctl ipam check` parsers will leak. Tunnel prefixes (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`,
-  `wireguard-tunnel-addr-`) are pattern-matched at multiple sites.
-- A new handle prefix needs migration code in `calicoctl ipam migrate` - tunnel-type handles are remapped during node renames.
+- The GC and `calicoctl ipam check` classify tunnel allocations by `AttributeType` and `Node` spec respectively, not by the handle prefix - so a handle-format change doesn't touch
+  them, but it does need an `AttributeType` for the GC to recognize it.
+- A new tunnel handle prefix needs migration code in `calicoctl datastore migrate` (`calicoctl/calicoctl/commands/datastore/migrate/migrateipam.go`), which remaps tunnel-type
+  handles on node rename. That parser's prefix list is v4-only today (`ipip-tunnel-addr-`, `vxlan-tunnel-addr-`, `wireguard-tunnel-addr-`), so it already skips the `*-v6-tunnel-addr-`
+  handles - add v6 prefixes there if you touch it.
 - Skipping the workload-ID release on CNI DEL leaks IPs whose container-ID changed under CRI. Don't drop the second release call.
 
 ## IPAMConfig
 
 `IPAMConfig` is a singleton CR. Defaults are applied on read by `GetIPAMConfig` when the CR is missing, so callers can rely on "there is always a config". Writes come from the
-operator reconciling user-facing config and from end users editing the CR directly (v1 `IPAMConfig` or v3 `IPAMConfiguration`). `SetIPAMConfig` is the only validation point - any
-client that bypasses it can persist a config the library will then reject on read. The validator enforces:
+operator reconciling user-facing config and from end users editing the CR directly (v1 `IPAMConfig` or v3 `IPAMConfiguration`). Field-level bounds are enforced by the CRD schema in
+k8s mode (kubebuilder markers on `IPAMConfigurationSpec`: `MaxBlocksPerHost` range, the `KubeVirtVMAddressPersistence` enum), so direct kubectl writes don't bypass those. But the
+cross-field rules below live only in `SetIPAMConfig`, not in the CRD schema - a client that writes the CR directly can persist a config that violates them, which the library then
+rejects on read:
 
 - `StrictAffinity=false` + `AutoAllocateBlocks=false` is rejected (would mean "never allocate anywhere", which is never what the user wants).
 - `MaxBlocksPerHost > 0` requires `StrictAffinity=true`.
@@ -143,8 +147,8 @@ Fields:
 - The default-when-missing behavior is load-bearing. New required fields need a default plus heal-forward; don't add a field that crashes when absent.
 - `MaxBlocksPerHost > 0` only makes sense with `StrictAffinity=true`; the validator enforces this. If you relax the validator, you also need to define what "borrow blocks but cap
   our own" means - it currently isn't defined.
-- `SetIPAMConfig` is the only validation point. End-user kubectl writes hit the CR directly and bypass library checks until next read - new validation rules must live in the
-  library, not as code on a single caller.
+- Field-level checks belong in kubebuilder markers (enforced by the CRD in k8s mode); the cross-field rules live only in `SetIPAMConfig`. A direct kubectl write skips the latter and
+  persists config the library rejects on read, so a new cross-field rule must live in the library, not on a single caller.
 - A new field needs the v3 type, conversion, and operator reconciliation in addition to v1, or it isn't reachable through user-facing config.
 
 ## Error taxonomy
