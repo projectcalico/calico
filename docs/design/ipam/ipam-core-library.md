@@ -108,7 +108,7 @@ Conventions in use:
 | VXLAN tunnel | `vxlan-tunnel-addr-<node>`; IPv6 variant is `vxlan-v6-tunnel-addr-<node>` (note the `-v6-` infix, not a suffix) |
 | WireGuard tunnel | `wireguard-tunnel-addr-<node>`; IPv6 variant is `wireguard-v6-tunnel-addr-<node>` |
 | Windows-reserved | literal `windows-reserved-ipam-handle` |
-| LoadBalancer | `<namespace>:<service>` |
+| LoadBalancer | `lb-<hash>`, where `<hash>` is the sha256 of `<service>-<namespace>-<uid>` (lowercased), truncated to the DNS1123 limit. Built by `createHandle` in `kube-controllers/pkg/controllers/loadbalancer/loadbalancer_controller.go`. Not to be confused with the `virtual:load-balancer` affinity string. |
 
 The CNI plugin also keeps a separate **workload-ID** form (`<namespace>.<pod>`) and releases by both on DEL so that allocations made before a CRI container-ID change can still be
 found - see [`./ipam-cni.md`](./ipam-cni.md).

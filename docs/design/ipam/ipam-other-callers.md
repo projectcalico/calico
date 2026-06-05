@@ -68,7 +68,7 @@ assigns.
 ## LoadBalancer controller
 
 [`kube-controllers/pkg/controllers/loadbalancer/`](../../../kube-controllers/pkg/controllers/loadbalancer/). Allocates IPs for Calico's Service LoadBalancer abstraction. Uses
-`virtual:load-balancer` affinity (not host-anchored), filters pools on `allowedUses: LoadBalancer`, and handles are `<namespace>:<service>`. `AssignIP` for static `loadBalancerIP`,
+`virtual:load-balancer` affinity (not host-anchored), filters pools on `allowedUses: LoadBalancer`, and handles are `lb-<hash>` where `<hash>` is the sha256 of `<service>-<namespace>-<uid>` (see `createHandle`), not the `virtual:load-balancer` affinity string. `AssignIP` for static `loadBalancerIP`,
 `AutoAssign` otherwise; `ReleaseByHandle` on delete.
 
 Cold-start races are the recurring failure mode: the controller needs full block context before assigning, or replicas can hand out duplicate IPs.
@@ -87,7 +87,7 @@ Flannel's host-local IPAM to Calico IPAM. For each node:
 2. `ClaimAffinity` for the equivalent Calico block.
 3. Reassign the existing VXLAN tunnel address with Calico metadata.
 
-Handle convention for the migrated tunnel: `vxlan-<node>` (note the missing `-tunnel-addr-` infix - a quirk preserved from the original migration). Idempotent; runs during cluster
+Handle convention for the migrated tunnel: the standard `vxlan-tunnel-addr-<node>`. Idempotent; runs during cluster
 upgrade only.
 
 **Review notes**
