@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -34,15 +35,10 @@ func TestReadinessBirdDown(t *testing.T) {
 	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird")
 }
 
-// TestReadinessBird6Down is the IPv6 analogue of TestReadinessBirdDown.
-// Mirrors test_health.py:TestReadiness.test_readiness_bird6_down.
-func TestReadinessBird6Down(t *testing.T) {
-	nodes := readinessFixture(t)
-	assertReadiness(t, nodes[0], "bird6", true)
-	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird6")
-	assertReadiness(t, nodes[0], "bird6", false)
-	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird6")
-}
+// NOTE: BIRD3 is a single unified daemon with no
+// separate bird6 service, so the former TestReadinessBird6Down (which
+// stopped the now-nonexistent "bird6" runit service) has been removed. IPv6
+// readiness is covered by the single "bird" service in TestReadinessBirdDown.
 
 // TestReadinessConfdDown stops confd and checks that BIRD's *liveness*
 // flag flips to not-live. (The Python test asserts liveness, not
@@ -87,8 +83,8 @@ func readinessFixture(t *testing.T) []string {
 
 	t.Cleanup(func() {
 		for _, node := range nodes {
-			for _, svc := range []string{"bird", "bird6", "confd", "felix"} {
-				_, _ = utils.ExecInCalicoNode(t, node,
+			for _, svc := range []string{"bird", "confd", "felix"} {
+				_, _ = k8stutils.ExecInCalicoNode(t, node,
 					"sv start /etc/service/enabled/"+svc,
 					utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			}

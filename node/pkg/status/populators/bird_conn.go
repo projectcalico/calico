@@ -38,16 +38,16 @@ func (bc *birdConn) Close() {
 }
 
 // getBirdConn return a connection to bird socket.
+// In BIRD3, a single daemon handles both IPv4 and IPv6, so we always
+// connect to the same socket regardless of IP family.
 func getBirdConn(ipv IPFamily) (*birdConn, error) {
-	birdSuffix := ipv.BirdSuffix()
-
 	// Try connecting to the bird socket in `/var/run/calico/` first to get the data
-	c, err := net.Dial("unix", fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix))
+	c, err := net.Dial("unix", "/var/run/calico/bird.ctl")
 	if err != nil {
 		// If that fails, try connecting to bird socket in `/var/run/bird` (which is the
 		// default socket location for bird install) for non-containerized installs
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
-		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
+		c, err = net.Dial("unix", "/var/run/bird/bird.ctl")
 		if err != nil {
 			return nil, ErrorSocketConnection{Err: err, ipv: ipv}
 		}

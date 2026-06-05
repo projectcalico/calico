@@ -817,11 +817,8 @@ func compareOutput(t *testing.T, outputDir, goldenDir string) {
 
 	goldenFiles := []string{
 		"bird.cfg",
-		"bird6.cfg",
 		"bird_ipam.cfg",
-		"bird6_ipam.cfg",
 		"bird_aggr.cfg",
-		"bird6_aggr.cfg",
 	}
 	for _, f := range goldenFiles {
 		actualPath := filepath.Join(outputDir, f)
@@ -1066,11 +1063,8 @@ func (d *confdDaemon) expectOutput(goldenDir string) {
 
 	goldenFiles := []string{
 		"bird.cfg",
-		"bird6.cfg",
 		"bird_ipam.cfg",
-		"bird6_ipam.cfg",
 		"bird_aggr.cfg",
-		"bird6_aggr.cfg",
 	}
 
 	deadline := time.Now().Add(10 * time.Second)

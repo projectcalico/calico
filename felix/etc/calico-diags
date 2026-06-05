@@ -53,8 +53,13 @@ iptables-save -c > iptables
 ip6tables-save -c > ip6tables
 ipset list > ipset
 ip -6 neigh > ip6neigh
-birdc show protocols > bird_protocols 2>&1
-birdc6 show protocols > bird6_protocols 2>&1
+# BIRD 3 ships a single unified daemon (no separate bird/bird6) with one
+# control socket, queried via birdcl.  A single "show protocols" already lists
+# every protocol across both the IPv4 and IPv6 channels, so both captures below
+# now hit the same daemon and produce the same output; the second is kept only
+# so existing tooling still finds a bird6_protocols file.
+birdcl show protocols > bird_protocols 2>&1
+birdcl show protocols > bird6_protocols 2>&1
 
 service calico-felix status > felix_status 2>&1
 service neutron-server status > neutron_server_status 2>&1
@@ -71,8 +76,9 @@ echo "  copying config files..."
 
 if [ -d /etc/bird ]; then
     cp /etc/bird/bird*.conf /etc/bird/bird*.cfg . 2>/dev/null
+    cp -a /etc/bird/peers6.d peers6.d 2>/dev/null
 elif [ -f /etc/bird.conf ]; then
-    cp /etc/bird.conf /etc/bird6.conf . 2>/dev/null
+    cp /etc/bird.conf . 2>/dev/null
 fi
 
 cp -a "$CALICO_CFG" etc_calico

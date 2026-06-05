@@ -36,7 +36,8 @@ type BirdBGPConfig struct {
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string
-	NormalRoutePriority               int // IPv4 or IPv6 normal route priority (default 1024)
+	IPIPTunnelRoutes                  []string // IPIP tunnel endpoint static routes (e.g. "10.0.0.1/32 via \"tunl0\"")
+	NormalRoutePriority               int      // IPv4 or IPv6 normal route priority (default 1024)
 }
 
 // BirdBGPPeer represents a processed BGP peer configuration

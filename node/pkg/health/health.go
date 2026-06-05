@@ -104,18 +104,20 @@ func RunOutput(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thr
 
 	if bird6Live {
 		g.Go(func() error {
-			if err := checkServiceIsLive([]string{"confd", "bird6"}); err != nil {
-				return fmt.Errorf("calico/node is not ready: bird6/confd is not live: %+v", err)
+			// In BIRD3 a single daemon serves both IPv4 and IPv6, so the
+			// bird6 liveness check targets the same service and socket as bird.
+			if err := checkServiceIsLive([]string{"confd", "bird"}); err != nil {
+				return fmt.Errorf("calico/node is not ready: bird/confd is not live: %+v", err)
 			}
 
 			// Check that BIRD is actually responding to commands.
-			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird6.ctl", "show", "status").Output()
+			out, err := exec.Command("/bin/birdcl", "-s", "/var/run/calico/bird.ctl", "show", "status").Output()
 			if err != nil {
-				return fmt.Errorf("calico/node is not ready: bird6 is not live: %+v", err)
+				return fmt.Errorf("calico/node is not ready: bird is not live: %+v", err)
 			}
 			cmdOutput := string(out)
 			if !strings.HasPrefix(cmdOutput, "BIRD") {
-				return fmt.Errorf("calico/node is not ready: bad response from bird6: %s", cmdOutput)
+				return fmt.Errorf("calico/node is not ready: bad response from bird: %s", cmdOutput)
 			}
 			return nil
 		})

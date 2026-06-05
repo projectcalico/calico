@@ -13,14 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The bird config file path is different for Red Hat and Debian/Ubuntu.
-if [ -f /etc/bird6.conf ]; then
-    BIRD_CONF=/etc/bird6.conf
-else
-    BIRD_CONF=/etc/bird/bird6.conf
-fi
+# BIRD 3 is a single unified daemon: the IPv4 generator writes the main
+# /etc/bird config (router id, kernel/device/direct/filters for both address
+# families) which includes /etc/bird/peers6.d/*.conf. This script only needs to
+# (re)generate the IPv6 BGP peer protocol into that include directory and
+# reload the single "bird" service.
+PEERS6_DIR=/etc/bird/peers6.d
+PEERS6_CONF=$PEERS6_DIR/calico-rr.conf
 
-BIRD_CONF_TEMPLATE=/usr/share/calico/bird/calico-bird6.conf.template
 BIRD_CONF_PEER_TEMPLATE=/usr/share/calico/bird/calico-bird6-peer.conf.template
 
 # Require 4 arguments.
@@ -46,22 +46,17 @@ my_ipv6_address=$2
 rr_ipv6_address=$3
 as_number=$4
 
-# Generate peer-independent BIRD config.
-mkdir -p $(dirname $BIRD_CONF)
-sed -e "
-s/@MY_IPV4_ADDRESS@/$my_ipv4_address/;
-" < $BIRD_CONF_TEMPLATE > $BIRD_CONF
-
-# Generate config to peer with route reflector.
+# Generate the IPv6 route-reflector peering config into the include directory.
+mkdir -p $PEERS6_DIR
 sed -e "
 s/@ID@/N1/;
 s/@DESCRIPTION@/Connection to BGP route reflector/;
 s/@MY_IPV6_ADDRESS@/$my_ipv6_address/;
 s/@PEER_IPV6_ADDRESS@/$rr_ipv6_address/;
 s/@AS_NUMBER@/$as_number/;
-" < $BIRD_CONF_PEER_TEMPLATE >> $BIRD_CONF
+" < $BIRD_CONF_PEER_TEMPLATE > $PEERS6_CONF
 
-echo BIRD6 configuration generated at $BIRD_CONF
+echo "BIRD IPv6 peer configuration generated at $PEERS6_CONF"
 
-service bird6 restart
-echo BIRD6 restarted
+service bird restart
+echo "BIRD restarted"

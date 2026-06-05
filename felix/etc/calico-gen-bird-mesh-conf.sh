@@ -47,6 +47,9 @@ peer_ips="$@"
 
 # Generate peer-independent BIRD config.
 mkdir -p $(dirname $BIRD_CONF)
+# Ensure the IPv6 peers include directory exists so the glob include in the
+# main config is valid even when there are no IPv6 peers (BIRD 3 single daemon).
+mkdir -p /etc/bird/peers6.d
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 " < $BIRD_CONF_TEMPLATE > $BIRD_CONF

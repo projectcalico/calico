@@ -7,6 +7,8 @@ keys = [
     "/bgp/v1/host",
     "/bgp/v1/global",
     "/ipam/v2/host//NODENAME/ipv4/block",
+    "/ipam/v2/host//NODENAME/ipv6/block",
     "/staticroutes",
+    "/staticroutesv6",
 ]
 reload_cmd = "sv hup bird || true"

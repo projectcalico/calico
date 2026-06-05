@@ -5,10 +5,12 @@ protocol bgp '@ID@' {
   local as @AS_NUMBER@;
   neighbor @PEER_IP_ADDRESS@ as @AS_NUMBER@;
   multihop;
-  import filter import_bgp;
   graceful restart;
-  export filter export_bgp;
-  next hop self;    # Disable next hop processing and always advertise our
-                    # local address as nexthop
   source address @MY_IP_ADDRESS@;  # The local address we use for the TCP connection
+  ipv4 {
+    import filter import_bgp;
+    export filter export_bgp;
+    next hop self;    # Disable next hop processing and always advertise our
+                      # local address as nexthop
+  };
 }

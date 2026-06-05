@@ -26,7 +26,7 @@ from kubernetes import client, config
 
 _log = logging.getLogger(__name__)
 
-ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:latest")
+ROUTER_IMAGE = os.getenv("ROUTER_IMAGE", "calico/bird:3.3.0")
 NGINX_IMAGE = os.getenv("NGINX_IMAGE", "nginx:1")
 
 
@@ -68,15 +68,10 @@ class DiagsCollector(object):
                 continue
             calicoPod = calicoPod.strip()
 
-            # v4 files.
+            # BIRD3 uses a single unified config (both IPv4 and IPv6).
             kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird.cfg" % calicoPod)
             kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird_aggr.cfg" % calicoPod)
             kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird_ipam.cfg" % calicoPod)
-
-            # And for v6.
-            kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird6.cfg" % calicoPod)
-            kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird6_aggr.cfg" % calicoPod)
-            kubectl("exec -n calico-system %s -- cat /etc/calico/confd/config/bird6_ipam.cfg" % calicoPod)
 
 def exec_in_calico_node(node, command):
     calicoPod = kubectl("-n calico-system get pods -o wide | grep calico-node | grep '%s '| cut -d' ' -f1" % node)
@@ -103,12 +98,11 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
     # Set ECMP hash algorithm to L4 for a proper load balancing between nodes.
     run("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1" % name)
 
-    # Add "merge paths on" to the BIRD config.
-    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf" % name)
-    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird6.conf" % name)
-
+    # BIRD 3.x is a single unified daemon (one bird, one birdcl, one config that
+    # already enables "merge paths on" in its kernel protocol). The peer config
+    # (IPv4 or IPv6) is written to /etc/bird/peers.conf and reloaded with birdcl.
     if bird_peer_config:
-        # Install desired peer config.
+        # Install desired IPv4 peer config.
         output = run("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s" % name)
         birdy_ip = output.strip()
         with open('peers.conf', 'w') as peerconfig:
@@ -118,7 +112,7 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
         run("docker exec %s birdcl configure" % name)
 
     elif bird6_peer_config:
-        # Install desired peer config.
+        # Install desired IPv6 peer config.
         birdy_ip = "2001:20::20"
         run("docker exec %s sysctl -w net.ipv6.conf.all.disable_ipv6=0" % name)
         run("docker exec %s sysctl -w net.ipv6.conf.all.forwarding=1" % name)
@@ -134,9 +128,9 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
         run("docker exec %s ip -6 a a %s/64 dev eth0" % (name, birdy_ip))
         with open('peers.conf', 'w') as peerconfig:
             peerconfig.write(bird6_peer_config.replace("ip@local", birdy_ip))
-        run("docker cp peers.conf %s:/etc/bird6/peers.conf" % name)
+        run("docker cp peers.conf %s:/etc/bird/peers.conf" % name)
         run("rm peers.conf")
-        run("docker exec %s birdcl6 configure" % name)
+        run("docker exec %s birdcl configure" % name)
 
     return birdy_ip
 

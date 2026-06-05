@@ -77,10 +77,12 @@ var (
 func Test_processIPPoolsV4(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
+		// In BIRD3, IPIP is handled via recursive nexthop resolution through
+		// static /32 routes to tunl0, not via krt_tunnel in the kernel filter.
+		`  if (net ~ 10.10.0.0/16) then { accept; }`,
+		`  if (net ~ 10.11.0.0/16) then { accept; }`,
+		`  if (net ~ 10.12.0.0/16) then { accept; }`,
+		`  if (net ~ 10.13.0.0/16) then { accept; }`,
 		// IPv4 No-Encapsulation case.
 		`  if (net ~ 10.14.0.0/16) then { accept; }`,
 		`  if (net ~ 10.15.0.0/16) then { accept; }`,
@@ -147,6 +149,25 @@ func Test_processIPPoolsV4(t *testing.T) {
 }
 
 func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
+	// In BIRD3 the IPv4 kernel filter is independent of the local host subnet
+	// (IPIP routing uses recursive nexthop resolution via static tunnel routes,
+	// not krt_tunnel cross-subnet logic). So even without a configured local
+	// subnet the kernel filter is still generated, identical to the case where
+	// one is present.
+	forKernelStatements := []string{
+		`  if (net ~ 10.10.0.0/16) then { accept; }`,
+		`  if (net ~ 10.11.0.0/16) then { accept; }`,
+		`  if (net ~ 10.12.0.0/16) then { accept; }`,
+		`  if (net ~ 10.13.0.0/16) then { accept; }`,
+		`  if (net ~ 10.14.0.0/16) then { accept; }`,
+		`  if (net ~ 10.15.0.0/16) then { accept; }`,
+		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
+	}
+	slices.Sort(forKernelStatements)
+
 	forExportStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
 		`  if (net ~ 10.10.0.0/16) then { accept; }`,
@@ -181,8 +202,9 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
-	if config.KernelFilterForIPPools != nil {
-		t.Errorf("Expected BIRD filter for programming kernel to be nil")
+	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
+		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
+			config.KernelFilterForIPPools, forKernelStatements)
 	}
 
 	expected := filterExpectedStatements(forExportStatements, "reject")
