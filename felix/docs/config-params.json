@@ -1930,7 +1930,7 @@
           "ParsedDefault": "23",
           "ParsedDefaultJSON": "23",
           "ParsedType": "numorstring.DSCP",
-          "YAMLType": "integer",
+          "YAMLType": "integer or string",
           "YAMLSchema": "String.",
           "YAMLEnumValues": null,
           "YAMLSchemaHTML": "String.",
