@@ -641,7 +641,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							fc = api.NewFelixConfiguration()
 						}
 						fc.Name = "default"
-						mark := uint32(0x0ffff000)
+						mark := int64(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
 						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
@@ -664,7 +664,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							fc = api.NewFelixConfiguration()
 						}
 						fc.Name = "default"
-						mark := uint32(0xfff00000)
+						mark := int64(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
 						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
@@ -2626,9 +2626,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var testSvc *v1.Service
 					tgtPort := 8055
 					externalIP := []string{extIP}
-					srcIPRange := []string{"10.65.1.3/24"}
+					srcIPRange := []string{"10.65.1.0/24"}
 					if testOpts.ipv6 {
-						srcIPRange = []string{"dead:beef::1:3/120"}
+						srcIPRange = []string{"dead:beef::1:0/120"}
 					}
 					testSvcName := "test-lb-service-extip"
 					var ip []string
@@ -2731,10 +2731,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					var srcIPRange []string
 					BeforeEach(func() {
 						ipRoute := []string{"ip"}
-						srcIPRange = []string{"10.65.1.3/24"}
+						srcIPRange = []string{"10.65.1.0/24"}
 						if testOpts.ipv6 {
 							ipRoute = append(ipRoute, "-6")
-							srcIPRange = []string{"dead:beef::1:3/120"}
+							srcIPRange = []string{"dead:beef::1:0/120"}
 						}
 
 						cmd := append(ipRoute[:len(ipRoute):len(ipRoute)],

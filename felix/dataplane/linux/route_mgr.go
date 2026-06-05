@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 )
@@ -62,7 +63,7 @@ type routeManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty   bool
-	nlHandle      netlinkHandle
+	nlHandle      netlinkshim.Interface
 	dpConfig      Config
 	routeProtocol netlink.RouteProtocol
 
@@ -88,7 +89,7 @@ func newRouteManager(
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
 		hostname:             dpConfig.Hostname,

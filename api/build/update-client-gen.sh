@@ -69,3 +69,9 @@ informer-gen "$@" \
 		--output-dir "${REPO_ROOT}/pkg/client/informers_generated" \
 		--output-pkg "github.com/projectcalico/api/pkg/client/informers_generated" \
 		"github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+
+# Patch informer-gen bug (see patches/0004-*): the WithInformerName(gvr)
+# resource name is built with a naive plural that doesn't match the real
+# API plural for 7 v3 types. Will fail loudly once upstream is fixed and
+# the patch becomes a no-op.
+patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0004-Fix-informer-GVR-plural-strings.patch"
