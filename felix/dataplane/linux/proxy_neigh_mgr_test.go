@@ -35,11 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-type mockNetlinkForProxyNeigh struct {
-	*mocknetlink.MockNetlinkDataplane
-}
-
-func newMockNetlinkForProxyNeigh() *mockNetlinkForProxyNeigh {
+func newMockNetlinkForProxyNeigh() *mocknetlink.MockNetlinkDataplane {
 	dp := mocknetlink.New()
 	// ifindex 1 is reserved for "lo" by the shared mock, so number our
 	// interfaces from 2 upwards.
@@ -48,17 +44,17 @@ func newMockNetlinkForProxyNeigh() *mockNetlinkForProxyNeigh {
 	// Mark the handle "open" so the NetlinkOpen assertions in LinkByName /
 	// AddrList pass (the manager is handed an already-opened handle).
 	dp.NetlinkOpen = true
-	return &mockNetlinkForProxyNeigh{dp}
+	return dp
 }
 
 // setIfaceAddr sets (replacing any existing) the address that AddrList reports
-// for the named interface.
-func (m *mockNetlinkForProxyNeigh) setIfaceAddr(name, cidr string) {
+// for the named interface on the mock netlink dataplane.
+func setIfaceAddr(nl *mocknetlink.MockNetlinkDataplane, name, cidr string) {
 	ip, ipnet, _ := net.ParseCIDR(cidr)
 	if ip != nil {
 		ipnet.IP = ip
 	}
-	m.NameToLink[name].Addrs = []netlink.Addr{{IPNet: ipnet}}
+	nl.NameToLink[name].Addrs = []netlink.Addr{{IPNet: ipnet}}
 }
 
 // readTimeoutError mimics the net.Error a real arp/ndp socket returns when its
@@ -232,11 +228,11 @@ func (c *mockNDPConn) resetWrites() {
 
 // --- Test helpers ---
 
-func newTestProxyNeighManager(nl *mockNetlinkForProxyNeigh, arpClients map[string]*mockARPClient) *proxyNeighManager {
+func newTestProxyNeighManager(nl *mocknetlink.MockNetlinkDataplane, arpClients map[string]*mockARPClient) *proxyNeighManager {
 	return newTestProxyNeighManagerWithHostname(nl, arpClients, "test-node")
 }
 
-func newTestProxyNeighManagerWithHostname(nl *mockNetlinkForProxyNeigh, arpClients map[string]*mockARPClient, hostname string) *proxyNeighManager {
+func newTestProxyNeighManagerWithHostname(nl *mocknetlink.MockNetlinkDataplane, arpClients map[string]*mockARPClient, hostname string) *proxyNeighManager {
 	config := Config{
 		Hostname: hostname,
 		RulesConfig: rules.Config{
@@ -258,7 +254,7 @@ func newTestProxyNeighManagerWithHostname(nl *mockNetlinkForProxyNeigh, arpClien
 // ndpTestHWAddr is the MAC the test NDP listener answers with.
 var ndpTestHWAddr = net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x06}
 
-func newTestProxyNDPManager(nl *mockNetlinkForProxyNeigh, ndpConns map[string]*mockNDPConn) *proxyNeighManager {
+func newTestProxyNDPManager(nl *mocknetlink.MockNetlinkDataplane, ndpConns map[string]*mockNDPConn) *proxyNeighManager {
 	config := Config{
 		RulesConfig: rules.Config{
 			WorkloadIfacePrefixes: []string{"cali"},
@@ -359,9 +355,9 @@ func getDesiredIPs(mgr *proxyNeighManager, ifaceName string) set.Set[string] {
 }
 
 // injectARPRequest pushes an ARP "who-has targetIP" request (from senderHW /
-// senderIP) onto the listener's read channel, simulating a request arriving on
+// senderIP) onto the client's read channel, simulating a request arriving on
 // the wire.
-func injectARPRequest(c *mockARPClient, senderHW net.HardwareAddr, senderIP, targetIP string) {
+func (c *mockARPClient) injectARPRequest(senderHW net.HardwareAddr, senderIP, targetIP string) {
 	pkt, err := arp.NewPacket(arp.OperationRequest, senderHW, netip.MustParseAddr(senderIP),
 		make(net.HardwareAddr, 6), netip.MustParseAddr(targetIP))
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
@@ -369,8 +365,8 @@ func injectARPRequest(c *mockARPClient, senderHW net.HardwareAddr, senderIP, tar
 }
 
 // injectNS pushes an IPv6 Neighbor Solicitation for targetIP, arriving from src,
-// onto the listener's read channel.
-func injectNS(c *mockNDPConn, src, targetIP string) {
+// onto the conn's read channel.
+func (c *mockNDPConn) injectNS(src, targetIP string) {
 	c.reads <- ndpRead{
 		msg: &ndp.NeighborSolicitation{TargetAddress: netip.MustParseAddr(targetIP)},
 		src: netip.MustParseAddr(src),
@@ -382,7 +378,7 @@ func injectNS(c *mockNDPConn, src, targetIP string) {
 var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 	var (
 		mgr        *proxyNeighManager
-		nl         *mockNetlinkForProxyNeigh
+		nl         *mocknetlink.MockNetlinkDataplane
 		arpClients map[string]*mockARPClient
 	)
 
@@ -401,7 +397,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("basic enable", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -431,7 +427,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("workload removed", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -449,7 +445,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("multiple pods same interface", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod2", "eth0", "10.0.0.51/32"))
@@ -465,7 +461,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("no match - pod outside any host subnet", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "192.168.1.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -478,7 +474,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("workload interface filtered", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "cali12345", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -491,7 +487,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("GARP not sent for existing IPs on second reconciliation", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -511,7 +507,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("interface removed", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -529,7 +525,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("encapsulated pool filtered", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			// Remove the default no-encap pool and add a VXLAN pool.
 			mgr.OnUpdate(&proto.IPAMPoolRemove{Id: "default-test-pool"})
@@ -551,8 +547,8 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 
 	Describe("multiple interfaces", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
-			nl.setIfaceAddr("eth1", "10.1.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth1", "10.1.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			sendIfaceAddrsUpdate(mgr, "eth1", "10.1.0.1")
 			// One pod in each host interface's subnet.
@@ -578,8 +574,8 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			arpClients["eth0"].resetWrites()
 			arpClients["eth1"].resetWrites()
 
-			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", "10.0.0.50")
-			injectARPRequest(arpClients["eth1"], requesterHW, "10.1.0.200", "10.1.0.50")
+			arpClients["eth0"].injectARPRequest(requesterHW, "10.0.0.200", "10.0.0.50")
+			arpClients["eth1"].injectARPRequest(requesterHW, "10.1.0.200", "10.1.0.50")
 
 			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
 			Eventually(func() int { return len(arpClients["eth1"].getWrites()) }).Should(Equal(1))
@@ -599,7 +595,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 		requesterHW := net.HardwareAddr{0x02, 0x00, 0x00, 0x00, 0x00, 0x99}
 
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", ownedIP+"/32"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -609,7 +605,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 		})
 
 		It("replies to a request for an owned IP with the correct packet", func() {
-			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", ownedIP)
+			arpClients["eth0"].injectARPRequest(requesterHW, "10.0.0.200", ownedIP)
 
 			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
 			reply := arpClients["eth0"].getWrites()[0]
@@ -625,8 +621,8 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			// Send an un-owned request, then an owned one. The listener processes
 			// them in order, so seeing exactly one reply — for the owned IP —
 			// proves the un-owned request was read and ignored.
-			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", "10.0.0.99")
-			injectARPRequest(arpClients["eth0"], requesterHW, "10.0.0.200", ownedIP)
+			arpClients["eth0"].injectARPRequest(requesterHW, "10.0.0.200", "10.0.0.99")
+			arpClients["eth0"].injectARPRequest(requesterHW, "10.0.0.200", ownedIP)
 
 			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
 			Consistently(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
@@ -649,7 +645,7 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 			sendHostMetadata(mgr, "node-a", "1.1.1.1")
 			sendHostMetadata(mgr, "node-b", "1.1.1.2")
 			sendHostMetadata(mgr, "node-c", "1.1.1.3")
-			nl.setIfaceAddr("eth0", "10.0.0.1/24")
+			setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 			sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 			mgr.OnUpdate(svcUpdate("my-svc", "default", "LoadBalancer", vip))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -673,7 +669,7 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 var _ = Describe("Proxy NDP manager (IPv6)", func() {
 	var (
 		mgr      *proxyNeighManager
-		nl       *mockNetlinkForProxyNeigh
+		nl       *mocknetlink.MockNetlinkDataplane
 		ndpConns map[string]*mockNDPConn
 	)
 
@@ -691,7 +687,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 
 	Describe("basic IPv6 proxy NDP entry", func() {
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "fd00::1/64")
+			setIfaceAddr(nl, "eth0", "fd00::1/64")
 			sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
 			mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", "fd00::50/128"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -730,7 +726,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 		const ownedIP = "fd00::50"
 
 		BeforeEach(func() {
-			nl.setIfaceAddr("eth0", "fd00::1/64")
+			setIfaceAddr(nl, "eth0", "fd00::1/64")
 			sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
 			mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", ownedIP+"/128"))
 			Expect(mgr.CompleteDeferredWork()).To(Succeed())
@@ -740,7 +736,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 		})
 
 		It("replies to a unicast solicitation with a solicited NA", func() {
-			injectNS(ndpConns["eth0"], "fe80::1234", ownedIP)
+			ndpConns["eth0"].injectNS("fe80::1234", ownedIP)
 
 			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
 			write := ndpConns["eth0"].getWrites()[0]
@@ -759,7 +755,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 		It("replies to a  Duplicate Address Detection probe (unspecified source) via all-nodes multicast", func() {
 			// A solicitation from :: is Duplicate Address Detection; we can't
 			// unicast back, so the NA goes to ff02::1 with the Solicited flag clear.
-			injectNS(ndpConns["eth0"], "::", ownedIP)
+			ndpConns["eth0"].injectNS("::", ownedIP)
 
 			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
 			write := ndpConns["eth0"].getWrites()[0]
@@ -771,8 +767,8 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 		})
 
 		It("ignores a solicitation for an IP it does not own", func() {
-			injectNS(ndpConns["eth0"], "fe80::1234", "fd00::99")
-			injectNS(ndpConns["eth0"], "fe80::1234", ownedIP)
+			ndpConns["eth0"].injectNS("fe80::1234", "fd00::99")
+			ndpConns["eth0"].injectNS("fe80::1234", ownedIP)
 
 			Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
 			Consistently(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
@@ -786,7 +782,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 var _ = Describe("Proxy neighbor manager - live migration", func() {
 	var (
 		mgr        *proxyNeighManager
-		nl         *mockNetlinkForProxyNeigh
+		nl         *mocknetlink.MockNetlinkDataplane
 		arpClients map[string]*mockARPClient
 	)
 
@@ -796,7 +792,7 @@ var _ = Describe("Proxy neighbor manager - live migration", func() {
 			"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
 		}
 		mgr = newTestProxyNeighManager(nl, arpClients)
-		nl.setIfaceAddr("eth0", "10.0.0.1/24")
+		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 	})
 
@@ -841,7 +837,7 @@ var _ = Describe("Proxy neighbor manager - live migration", func() {
 var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 	var (
 		mgr     *proxyNeighManager
-		nl      *mockNetlinkForProxyNeigh
+		nl      *mocknetlink.MockNetlinkDataplane
 		created []*mockARPClient
 	)
 
@@ -862,7 +858,7 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 		}
 		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil)
 		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
-		nl.setIfaceAddr("eth0", "10.0.0.1/24")
+		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
 		mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 		Expect(mgr.CompleteDeferredWork()).To(Succeed())
