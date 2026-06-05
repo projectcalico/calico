@@ -107,6 +107,7 @@ class Scope:
         ports=None,
         security_groups=None,
         include_security_groups_for_ports=False,
+        inject_per_item_delay_ms=0,
     ):
         self.db = db
         self.driver = driver
@@ -116,6 +117,12 @@ class Scope:
         self.ports = set(ports or [])
         self.security_groups = set(security_groups or [])
         self.include_security_groups_for_ports = include_security_groups_for_ports
+        # Test-only: when non-zero, sleep this many ms between every step of
+        # the endpoints-phase compare loop.  Used by the resync-concurrency
+        # test (CORE-12037) to stretch the endpoints phase to a known
+        # duration so dynamic operations can be timed against it.  Always 0
+        # in production.
+        self.inject_per_item_delay_ms = inject_per_item_delay_ms
 
     def all(self):
         return not (self.networks or self.subnets or self.ports or self.security_groups)
@@ -147,7 +154,11 @@ class Scope:
             else:
                 subnet_syncer = SubnetSyncer(self.db)
                 policy_syncer = PolicySyncer(self.db)
-                endpoint_syncer = WorkloadEndpointSyncer(self.db, policy_syncer)
+                endpoint_syncer = WorkloadEndpointSyncer(
+                    self.db,
+                    policy_syncer,
+                    inject_per_item_delay_ms=self.inject_per_item_delay_ms,
+                )
 
             phases["expand"] = _run_phase(self.expand)
             phases["subnets"] = _run_phase(
