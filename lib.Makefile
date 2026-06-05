@@ -446,31 +446,38 @@ endif
 # in-repo instead (download tarball -> apply patches -> go build), so CRD
 # generation owns its patches and does not depend on the image's controller-gen.
 #
-# CONTROLLER_TOOLS_VERSION MUST match the toolchain go-build image
-# (projectcalico/toolchain images/calico-go-build/Dockerfile).
-CONTROLLER_TOOLS_VERSION ?= v0.18.0
+# The controller-tools version is pinned inside build.sh (its VERSION line, the
+# single source of truth). build.sh checks it against the controller-gen baked
+# into the calico/go-build image and, on a mismatch, rewrites that line and
+# fails so the bump is committed deliberately. We read the pin here cheaply (no
+# container) for the cache key.
+CONTROLLER_TOOLS_VERSION := $(shell sed -n 's/^VERSION="\(v[0-9][0-9.]*\)".*/\1/p' $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh | head -1)
+CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
 
 # The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
 # every component container, including api/'s isolated mount). It is stamped
-# with both the controller-tools version and a hash of all patches, so bumping
-# the version OR editing/adding a patch produces a new path and triggers a
-# rebuild.
+# with the go-build image version, the controller-tools version, and a hash of
+# all patches: bumping the image (which may carry a new controller-gen), the
+# pinned version, or a patch yields a new path and triggers a rebuild — and a
+# rebuild re-runs the image-vs-pin check in build.sh.
 CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
+CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
 # Two views of the same file: the host path Make uses as a build target, and
 # the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
 # invoke it from inside the build containers.
-CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
-CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
+CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
 
 # Real file target (not .PHONY): Make skips it entirely — no container spin-up —
-# when the binary already exists and build.sh is unchanged. Patch edits are
-# covered by the hash in the filename above (a change yields a new target). The
-# recipe needs the repo root mounted (for build.sh and the patches), so
-# components in their own module (api/) reach it via:
+# when the binary already exists and build.sh is unchanged. Patch edits and
+# version-pin bumps both land in the filename above (via the hash and the
+# pinned version), so they yield a new target and trigger a rebuild. The recipe
+# needs the repo root mounted (for build.sh and the patches), so components in
+# their own module (api/) reach it via:
 #   $(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 $(CALICO_CONTROLLER_GEN_BIN): hack/cmd/calico-controller-gen/build.sh
 	$(DOCKER_GO_BUILD) sh -c \
-		'./hack/cmd/calico-controller-gen/build.sh $(CONTROLLER_TOOLS_VERSION) $(CALICO_CONTROLLER_GEN)'
+		'./hack/cmd/calico-controller-gen/build.sh $(CALICO_CONTROLLER_GEN)'
 
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \

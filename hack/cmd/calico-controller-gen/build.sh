@@ -15,23 +15,46 @@
 
 # Builds the Calico-patched controller-gen binary the same way the
 # projectcalico/toolchain repo bakes it into the calico/go-build image
-# (see images/calico-go-build/Dockerfile): download the pinned
-# controller-tools tarball, apply the NumOrString patch, and `go build`.
+# (see images/calico-go-build/Dockerfile): download the pinned controller-tools
+# tarball, apply the Calico patches, and `go build`.
 #
-# Usage: build.sh <controller-tools-version> <output-binary-path>
+# Usage: build.sh <output-binary-path>
 #
-# Run from the repository root (the patch is resolved relative to this script).
+# Must run inside the calico/go-build container (where controller-gen is on
+# PATH) from the repository root.
 set -eu
 
-VERSION="$1"
-OUT="$2"
+# Pinned controller-tools version. This is the single source of truth and is
+# kept in sync with the controller-gen baked into the calico/go-build image: if
+# this script detects a mismatch it rewrites the line below, then fails so the
+# bump is committed deliberately (see the check further down).
+VERSION="v0.18.0"
+
+OUT="$1"
 
 # Resolve the patches next to this script so the build works regardless of CWD.
 # Every *.patch in this directory is applied, in sorted order.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+SELF="$SCRIPT_DIR/build.sh"
 
-# Caching is handled by the Makefile file target (build only runs when needed),
-# so always (re)build when invoked.
+# Primary source: the controller-gen baked into the go-build image. If it
+# reports a different version than the pin above, update the pin in this script
+# and fail, so the change is reviewed and committed rather than silently built.
+# When controller-gen is absent (e.g. once it is dropped from the image), fall
+# back to the pinned VERSION.
+if command -v controller-gen >/dev/null 2>&1; then
+    IMAGE_VERSION=$(controller-gen --version 2>/dev/null \
+        | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+    if [ -n "$IMAGE_VERSION" ] && [ "$IMAGE_VERSION" != "$VERSION" ]; then
+        sed -i 's/^VERSION="v[0-9][0-9.]*"/VERSION="'"$IMAGE_VERSION"'"/' "$SELF"
+        echo "ERROR: controller-tools version changed: pin was $VERSION, go-build image has $IMAGE_VERSION." >&2
+        echo "       The pin in hack/cmd/calico-controller-gen/build.sh has been updated to $IMAGE_VERSION." >&2
+        echo "       Before committing: verify the Calico patches in that directory still apply cleanly" >&2
+        echo "       against $IMAGE_VERSION (adjust them if not). Then commit the change and re-run." >&2
+        exit 1
+    fi
+fi
+
 mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
