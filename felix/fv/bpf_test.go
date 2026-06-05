@@ -641,7 +641,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							fc = api.NewFelixConfiguration()
 						}
 						fc.Name = "default"
-						mark := uint32(0x0ffff000)
+						mark := int64(0x0ffff000)
 						fc.Spec.IptablesMarkMask = &mark
 						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
@@ -664,7 +664,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							fc = api.NewFelixConfiguration()
 						}
 						fc.Name = "default"
-						mark := uint32(0xfff00000)
+						mark := int64(0xfff00000)
 						fc.Spec.IptablesMarkMask = &mark
 						fc.Spec.NftablesMarkMask = &mark
 						if felixConfigExists {
