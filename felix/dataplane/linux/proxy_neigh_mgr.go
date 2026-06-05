@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -27,10 +28,12 @@ import (
 	"github.com/mdlayher/arp"
 	"github.com/mdlayher/ethernet"
 	"github.com/mdlayher/ndp"
+	"github.com/mdlayher/packet"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
+	"golang.org/x/sys/unix"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/felix/netlinkshim"
@@ -47,6 +50,10 @@ const readDeadlineInterval = 1 * time.Second
 
 // ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
 const ipv6AllNodesMulticast = "ff02::1"
+
+// etherTypeARP is the EtherType for ARP. We open the raw ARP socket directly
+// (rather than via arp.Dial) so we can set PACKET_IGNORE_OUTGOING on it.
+const etherTypeARP = 0x0806
 
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
@@ -129,8 +136,23 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
-			c, err := arp.Dial(ifi)
+			// Open the raw ARP socket ourselves (rather than arp.Dial) so we can
+			// set PACKET_IGNORE_OUTGOING: that makes the kernel drop this
+			// socket's own outgoing frames — notably the gratuitous ARPs we
+			// send — before they reach userspace, so the listener never answers
+			// its own GARP. Best-effort; on kernels that lack the option the
+			// self-MAC check in runARPListener still filters them.
+			conn, err := packet.Listen(ifi, packet.Raw, etherTypeARP, nil)
 			if err != nil {
+				return nil, nil, err
+			}
+			if err := setIgnoreOutgoing(conn); err != nil {
+				logrus.WithError(err).WithField("iface", ifaceName).Debug(
+					"Failed to set PACKET_IGNORE_OUTGOING; falling back to userspace filtering")
+			}
+			c, err := arp.New(ifi, conn)
+			if err != nil {
+				_ = conn.Close()
 				return nil, nil, err
 			}
 			return c, ifi.HardwareAddr, nil
@@ -157,6 +179,25 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 		}
 	}
 	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval)
+}
+
+// setIgnoreOutgoing sets PACKET_IGNORE_OUTGOING on the raw socket so the kernel
+// doesn't deliver this socket's own outgoing frames back to us, stopping the
+// ARP listener from receiving — and answering — the gratuitous ARPs it sends.
+// Returns an error on kernels older than 4.20, which lack the option.
+func setIgnoreOutgoing(conn *packet.Conn) error {
+	rc, err := conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var serr error
+	err = rc.Control(func(fd uintptr) {
+		serr = unix.SetsockoptInt(int(fd), unix.SOL_PACKET, unix.PACKET_IGNORE_OUTGOING, 1)
+	})
+	if err != nil {
+		return err
+	}
+	return serr
 }
 
 func newProxyNeighManagerWithShims(
@@ -590,6 +631,13 @@ func (l *ifaceListener) runARPListener() {
 		}
 
 		if pkt.Operation != arp.OperationRequest {
+			continue
+		}
+
+		// Ignore our own frames: the raw socket also receives what we send
+		// and we must not answer those. The kernel normally filters them via PACKET_IGNORE_OUTGOING
+		// this guards kernels that lack the option.
+		if bytes.Equal(pkt.SenderHardwareAddr, l.hwAddr) {
 			continue
 		}
 

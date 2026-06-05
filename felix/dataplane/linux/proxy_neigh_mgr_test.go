@@ -633,6 +633,15 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 			Consistently(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
 			Expect(arpClients["eth0"].getWrites()[0].packet.SenderIP.String()).To(Equal(ownedIP))
 		})
+
+		It("ignores its own gratuitous ARP (sender MAC is the device's own)", func() {
+			arpClients["eth0"].injectARPRequest(arpClients["eth0"].hwAddr, ownedIP, ownedIP)
+			arpClients["eth0"].injectARPRequest(requesterHW, "10.0.0.200", ownedIP)
+
+			Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			Consistently(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+			Expect(arpClients["eth0"].getWrites()[0].packet.TargetHardwareAddr).To(Equal(requesterHW))
+		})
 	})
 })
 
