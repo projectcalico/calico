@@ -22,8 +22,8 @@ here. A few methods carry design-relevant constraints worth calling out:
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
-- **`GetIPAMConfig` / `SetIPAMConfig`** read and write the v1 `IPAMConfig` / v3 `IPAMConfiguration` singleton. The library is the only validation point - end-user kubectl writes
-  against the CRD bypass it until next read.
+- **`GetIPAMConfig` / `SetIPAMConfig`** read and write the v1 `IPAMConfig` / v3 `IPAMConfiguration` singleton. Field-level bounds are enforced by the CRD schema in k8s mode, but the
+  cross-field rules live only in `SetIPAMConfig` - a direct CRD write can persist a config that violates them, which the library rejects on read (see [IPAMConfig](#ipamconfig)).
 
 **Review notes**
 
