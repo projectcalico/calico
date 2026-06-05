@@ -15,11 +15,12 @@
 
 # BIRD 3 is a single unified daemon: the IPv4 generator writes the main
 # /etc/bird config (router id, kernel/device/direct/filters for both address
-# families) which includes /etc/bird/peers6.d/*.conf. This script only needs to
-# (re)generate the IPv6 BGP peer protocols into that include directory and
-# reload the single "bird" service.
-PEERS6_DIR=/etc/bird/peers6.d
-PEERS6_CONF=$PEERS6_DIR/calico-mesh.conf
+# families) which includes /etc/bird/conf.d/*.conf. This script only needs to
+# (re)generate the IPv6 BGP peer protocols into that shared include directory
+# (AFI-prefixed "ipv6-" so it never clashes with the IPv4 generator's files)
+# and reload the single "bird" service.
+CONF_DIR=/etc/bird/conf.d
+PEER_CONF=$CONF_DIR/ipv6-calico-mesh.conf
 
 TEMPLATE_DIR=${TEMPLATE_DIR:-/usr/share/calico/bird}
 BIRD_CONF_PEER_TEMPLATE=${TEMPLATE_DIR}/calico-bird6-peer.conf.template
@@ -48,9 +49,9 @@ as_number=$1
 shift
 peer_ips="$@"
 
-# Generate the IPv6 peering config into the include directory.
-mkdir -p $PEERS6_DIR
-> $PEERS6_CONF
+# Generate the IPv6 peering config into the shared include directory.
+mkdir -p $CONF_DIR
+> $PEER_CONF
 for peer_ip in $peer_ips; do
     sed -e "
 s/@ID@/$peer_ip/;
@@ -58,10 +59,10 @@ s/@DESCRIPTION@/Connection to $peer_ip/;
 s/@MY_IPV6_ADDRESS@/$my_ipv6_address/;
 s/@PEER_IPV6_ADDRESS@/$peer_ip/;
 s/@AS_NUMBER@/$as_number/;
-" < $BIRD_CONF_PEER_TEMPLATE >> $PEERS6_CONF
+" < $BIRD_CONF_PEER_TEMPLATE >> $PEER_CONF
 done
 
-echo "BIRD IPv6 peer configuration generated at $PEERS6_CONF"
+echo "BIRD IPv6 peer configuration generated at $PEER_CONF"
 
 service bird restart
 echo "BIRD restarted"

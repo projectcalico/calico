@@ -46,21 +46,23 @@ as_number=$3
 
 # Generate peer-independent BIRD config.
 mkdir -p $(dirname $BIRD_CONF)
-# Ensure the IPv6 peers include directory exists so the glob include in the
-# main config is valid even when there are no IPv6 peers (BIRD 3 single daemon).
-mkdir -p /etc/bird/peers6.d
+# Ensure the shared peers include directory exists so the glob include in the
+# main config is valid even when there are no peers yet (BIRD 3 single daemon).
+mkdir -p /etc/bird/conf.d
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 " < $BIRD_CONF_TEMPLATE > $BIRD_CONF
 
-# Generate config to peer with route reflector.
+# Generate config to peer with route reflector into the shared peers include
+# directory. The file is AFI-prefixed ("ipv4-") so the IPv4 and IPv6 generators
+# write disjoint files and never interfere.
 sed -e "
 s/@ID@/N1/;
 s/@DESCRIPTION@/Connection to BGP route reflector/;
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 s/@PEER_IP_ADDRESS@/$rr_ip_address/;
 s/@AS_NUMBER@/$as_number/;
-" < $BIRD_CONF_PEER_TEMPLATE >> $BIRD_CONF
+" < $BIRD_CONF_PEER_TEMPLATE > /etc/bird/conf.d/ipv4-calico-rr.conf
 
 echo BIRD configuration generated at $BIRD_CONF
 
