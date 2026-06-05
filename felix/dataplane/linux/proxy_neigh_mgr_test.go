@@ -29,89 +29,36 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/ipv6"
 
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// --- Mock netlink (only used for updateHostIfaceCIDRs / AddrList) ---
-
 type mockNetlinkForProxyNeigh struct {
-	netlinkshimStub
-	links      map[string]*netlink.Dummy
-	ifaceAddrs map[string][]netlink.Addr
+	*mocknetlink.MockNetlinkDataplane
 }
-
-type netlinkshimStub struct{}
-
-func (s netlinkshimStub) LinkByName(name string) (netlink.Link, error) {
-	return nil, fmt.Errorf("not found")
-}
-func (s netlinkshimStub) LinkList() ([]netlink.Link, error) { return nil, nil }
-func (s netlinkshimStub) LinkAdd(link netlink.Link) error   { return nil }
-func (s netlinkshimStub) LinkDel(link netlink.Link) error   { return nil }
-func (s netlinkshimStub) LinkSetMTU(link netlink.Link, mtu int) error {
-	return nil
-}
-func (s netlinkshimStub) LinkSetUp(link netlink.Link) error { return nil }
-func (s netlinkshimStub) RouteListFiltered(family int, filter *netlink.Route, filterMask uint64) ([]netlink.Route, error) {
-	return nil, nil
-}
-func (s netlinkshimStub) RouteListFilteredIter(family int, filter *netlink.Route, filterMask uint64, f func(netlink.Route) (cont bool)) error {
-	return nil
-}
-func (s netlinkshimStub) RouteAdd(route *netlink.Route) error     { return nil }
-func (s netlinkshimStub) RouteReplace(route *netlink.Route) error { return nil }
-func (s netlinkshimStub) RouteDel(route *netlink.Route) error     { return nil }
-func (s netlinkshimStub) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	return nil, nil
-}
-func (s netlinkshimStub) AddrAdd(link netlink.Link, addr *netlink.Addr) error { return nil }
-func (s netlinkshimStub) AddrDel(link netlink.Link, addr *netlink.Addr) error { return nil }
-func (s netlinkshimStub) RuleList(family int) ([]netlink.Rule, error)         { return nil, nil }
-func (s netlinkshimStub) RuleAdd(rule *netlink.Rule) error                    { return nil }
-func (s netlinkshimStub) RuleDel(rule *netlink.Rule) error                    { return nil }
-func (s netlinkshimStub) Delete()                                             {}
-func (s netlinkshimStub) NeighAdd(neigh *netlink.Neigh) error                 { return nil }
-func (s netlinkshimStub) NeighList(linkIndex, family int) ([]netlink.Neigh, error) {
-	return nil, nil
-}
-func (s netlinkshimStub) NeighSet(a *netlink.Neigh) error         { return nil }
-func (s netlinkshimStub) NeighDel(a *netlink.Neigh) error         { return nil }
-func (s netlinkshimStub) SetSocketTimeout(to time.Duration) error { return nil }
-func (s netlinkshimStub) SetStrictCheck(b bool) error             { return nil }
 
 func newMockNetlinkForProxyNeigh() *mockNetlinkForProxyNeigh {
-	return &mockNetlinkForProxyNeigh{
-		links: map[string]*netlink.Dummy{
-			"eth0": {LinkAttrs: netlink.LinkAttrs{Index: 1, Name: "eth0"}},
-			"eth1": {LinkAttrs: netlink.LinkAttrs{Index: 2, Name: "eth1"}},
-		},
-		ifaceAddrs: make(map[string][]netlink.Addr),
-	}
+	dp := mocknetlink.New()
+	// ifindex 1 is reserved for "lo" by the shared mock, so number our
+	// interfaces from 2 upwards.
+	dp.AddIface(2, "eth0", true, true)
+	dp.AddIface(3, "eth1", true, true)
+	// Mark the handle "open" so the NetlinkOpen assertions in LinkByName /
+	// AddrList pass (the manager is handed an already-opened handle).
+	dp.NetlinkOpen = true
+	return &mockNetlinkForProxyNeigh{dp}
 }
 
-func (m *mockNetlinkForProxyNeigh) LinkByName(name string) (netlink.Link, error) {
-	if link, ok := m.links[name]; ok {
-		return link, nil
-	}
-	return nil, fmt.Errorf("unknown network %s", name)
-}
-
-func (m *mockNetlinkForProxyNeigh) AddrList(link netlink.Link, family int) ([]netlink.Addr, error) {
-	name := link.Attrs().Name
-	if addrs, ok := m.ifaceAddrs[name]; ok {
-		return addrs, nil
-	}
-	return nil, nil
-}
-
+// setIfaceAddr sets (replacing any existing) the address that AddrList reports
+// for the named interface.
 func (m *mockNetlinkForProxyNeigh) setIfaceAddr(name, cidr string) {
 	ip, ipnet, _ := net.ParseCIDR(cidr)
 	if ip != nil {
 		ipnet.IP = ip
 	}
-	m.ifaceAddrs[name] = []netlink.Addr{{IPNet: ipnet}}
+	m.NameToLink[name].Addrs = []netlink.Addr{{IPNet: ipnet}}
 }
 
 // readTimeoutError mimics the net.Error a real arp/ndp socket returns when its
