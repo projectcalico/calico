@@ -21,7 +21,6 @@ package k8stests
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,8 +61,7 @@ func TestGracefulRestart(t *testing.T) {
 	defer k8stutils.CollectDiagsOnFailure(t)()
 
 	restart := func(state *restartChurnState) {
-		k8stutils.MustRun(t, fmt.Sprintf(
-			"kubectl delete po %s -n calico-system", state.restartPodName))
+		k8stutils.DeletePodAndWait(t, "calico-system", state.restartPodName, 2*time.Minute)
 
 		// Wait until a replacement calico-node pod has been created.
 		err := k8stutils.RetryUntilSuccess(t, 15*time.Second, func() error {
@@ -72,9 +70,7 @@ func TestGracefulRestart(t *testing.T) {
 		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "replacement calico-node pod did not appear within 15s")
 
 		// Wait until it is ready, before returning.
-		k8stutils.MustRun(t, fmt.Sprintf(
-			"kubectl wait po %s -n calico-system --timeout=2m --for=condition=ready",
-			state.restartPodName))
+		k8stutils.WaitForPodReady(t, "calico-system", state.restartPodName, 2*time.Minute)
 	}
 
 	runRestartChurnTest(t, 3, restart, false)
@@ -91,19 +87,16 @@ type restartChurnState struct {
 
 func (s *restartChurnState) refreshRestartPodName(t testing.TB) error {
 	t.Helper()
-	out, err := k8stutils.Kubectl(t, fmt.Sprintf(
-		"get po -n calico-system -l k8s-app=calico-node "+
-			"--field-selector status.podIP=%s "+
-			"-o jsonpath='{.items[*].metadata.name}'", s.restartNodeIP),
-		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	// calico-node is host-networked, so the pod IP equals the node IP.
+	names, err := k8stutils.PodNames(t, "calico-system",
+		"k8s-app=calico-node", "status.podIP="+s.restartNodeIP)
 	if err != nil {
 		return err
 	}
-	name := strings.TrimSpace(out)
-	if name == "" {
+	if len(names) == 0 {
 		return errors.New("calico-node pod name not yet observable")
 	}
-	s.restartPodName = name
+	s.restartPodName = names[0]
 	return nil
 }
 

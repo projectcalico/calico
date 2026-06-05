@@ -13,9 +13,9 @@
 // limitations under the License.
 
 // Package k8stutils is the Go port of node/tests/k8st/utils and test_base.py.
-// It provides shell-out helpers for kubectl/calicoctl/docker plus typed
-// client-go helpers for the cases where typed CRUD is cleaner than
-// shelling out.
+// All Kubernetes interaction goes through native client-go (typed CRUD,
+// SPDY exec, log streaming); shell-out helpers remain only for docker and
+// calicoctl, which have no Go client equivalent here.
 package k8stutils
 
 import (
@@ -30,9 +30,15 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/utils/ptr"
 )
 
 // RouterImage is the BIRD image used to stand up external BGP routers in
@@ -63,9 +69,9 @@ func envOr(key, fallback string) string {
 // ----------------------------------------------------------------------------
 // Shell-out helpers.
 
-// RunOptions controls Run/Kubectl/Calicoctl behaviour. Mirrors the keyword
-// arguments on utils.py:run. Zero value = defaults (log on failure, fail
-// the test on non-zero exit, return stdout).
+// RunOptions controls Run/Calicoctl/ExecInPod behaviour. Mirrors the
+// keyword arguments on utils.py:run. Zero value = defaults (log on
+// failure, fail the test on non-zero exit, return stdout).
 type RunOptions struct {
 	// AllowFail makes a non-zero exit return (with a non-nil error)
 	// instead of fatally failing the test.
@@ -128,41 +134,6 @@ func MustRun(t testing.TB, command string, opts ...RunOptions) string {
 	out, err := Run(t, command, opts...)
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
-	}
-	return out
-}
-
-// Kubectl is Run("kubectl " + args). It mirrors utils.py:kubectl: when
-// timeout is non-zero, the command is wrapped in `timeout -s <sec>` so the
-// elapsed Kubernetes-side deadline matches the Python helper exactly.
-func Kubectl(t testing.TB, args string, opts ...RunOptions) (string, error) {
-	t.Helper()
-	o := mergeRunOptions(opts)
-	cmd := "kubectl " + args
-	if o.Timeout > 0 {
-		// Use the external `timeout` binary so the kubectl process itself
-		// receives SIGTERM at exactly the requested wall-clock deadline
-		// (some kubectl subcommands ignore Go context cancellation).
-		// utils.py:kubectl uses `timeout -s %d kubectl`, which is a latent
-		// bug — `-s` is the signal to send, not the duration — but it
-		// never fires there because no Python test passes a timeout. The
-		// correct invocation is `timeout <DURATION> kubectl ...`.
-		secs := int(o.Timeout.Seconds())
-		if secs < 1 {
-			secs = 1
-		}
-		cmd = fmt.Sprintf("timeout %d kubectl %s", secs, args)
-		o.Timeout = 0
-	}
-	return Run(t, cmd, o)
-}
-
-// MustKubectl is Kubectl that calls t.Fatalf on any error.
-func MustKubectl(t testing.TB, args string, opts ...RunOptions) string {
-	t.Helper()
-	out, err := Kubectl(t, args, opts...)
-	if err != nil {
-		t.Fatalf("kubectl %s failed: %v", args, err)
 	}
 	return out
 }
@@ -249,12 +220,27 @@ func RetryUntilSuccess(t testing.TB, timeout time.Duration, fn func() error) err
 var (
 	clientOnce sync.Once
 	clientSet  *kubernetes.Clientset
+	restConfig *rest.Config
 	clientErr  error
 )
 
 // K8sClient returns a singleton clientset loaded from $KUBECONFIG (or the
 // default loading rules if unset). Mirrors test_base.py:k8s_client.
 func K8sClient(t testing.TB) *kubernetes.Clientset {
+	t.Helper()
+	initK8sClient(t)
+	return clientSet
+}
+
+// K8sRestConfig returns the rest.Config behind K8sClient. Needed by the
+// SPDY executor in ExecInPod.
+func K8sRestConfig(t testing.TB) *rest.Config {
+	t.Helper()
+	initK8sClient(t)
+	return restConfig
+}
+
+func initK8sClient(t testing.TB) {
 	t.Helper()
 	clientOnce.Do(func() {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -267,12 +253,12 @@ func K8sClient(t testing.TB) *kubernetes.Clientset {
 			clientErr = err
 			return
 		}
+		restConfig = cfg
 		clientSet, clientErr = kubernetes.NewForConfig(cfg)
 	})
 	if clientErr != nil {
 		t.Fatalf("could not build Kubernetes client: %v", clientErr)
 	}
-	return clientSet
 }
 
 // NodeInfo returns (nodes, IPv4s, IPv6s). The first entry is the control-plane
@@ -325,14 +311,11 @@ func nodeAddress(n corev1.Node) string {
 // node. Mirrors utils.py:calico_node_pod_name.
 func CalicoNodePodName(t testing.TB, nodeName string) string {
 	t.Helper()
-	out, err := Kubectl(t, fmt.Sprintf(
-		"get po -n calico-system -l k8s-app=calico-node "+
-			"--field-selector spec.nodeName=%s "+
-			"-o jsonpath='{.items[0].metadata.name}'", nodeName))
+	pod, err := lookupCalicoNodePod(t, nodeName)
 	if err != nil {
 		t.Fatalf("looking up calico-node pod on %s: %v", nodeName, err)
 	}
-	return strings.TrimSpace(out)
+	return pod.Name
 }
 
 // ExecInCalicoNode runs the given command inside the calico-node pod
@@ -343,7 +326,7 @@ func ExecInCalicoNode(t testing.TB, nodeName, command string, opts ...RunOptions
 	if err != nil {
 		return "", err
 	}
-	return Kubectl(t, fmt.Sprintf("exec -n calico-system %s -- %s", pod, command), opts...)
+	return execInPod(t, pod, command, opts...)
 }
 
 // MustExecInCalicoNode is ExecInCalicoNode that fails the test on error.
@@ -356,22 +339,104 @@ func MustExecInCalicoNode(t testing.TB, nodeName, command string, opts ...RunOpt
 	return out
 }
 
-func lookupCalicoNodePod(t testing.TB, nodeName string) (string, error) {
+func lookupCalicoNodePod(t testing.TB, nodeName string) (*corev1.Pod, error) {
 	t.Helper()
-	// Mirror utils.py which scrapes wide output. The kubectl jsonpath form
-	// is cleaner and avoids the ambiguity of grepping pod names.
-	out, err := Kubectl(t, fmt.Sprintf(
-		"-n calico-system get pods -l k8s-app=calico-node "+
-			"--field-selector spec.nodeName=%s "+
-			"-o jsonpath='{.items[0].metadata.name}'", nodeName))
+	cs := K8sClient(t)
+	pods, err := cs.CoreV1().Pods("calico-system").List(context.Background(), metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", nodeName).String(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("no calico-node pod found on node %s", nodeName)
+	}
+	return &pods.Items[0], nil
+}
+
+// ExecInPod runs the given space-separated command inside the named pod
+// (first container) over a native SPDY exec session — the client-go
+// equivalent of `kubectl exec`. The remote process's stdout is returned;
+// a non-zero remote exit surfaces as a non-nil error, following the same
+// RunOptions semantics as Run.
+func ExecInPod(t testing.TB, namespace, podName, command string, opts ...RunOptions) (string, error) {
+	t.Helper()
+	cs := K8sClient(t)
+	pod, err := cs.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
-	name := strings.TrimSpace(out)
-	if name == "" {
-		return "", fmt.Errorf("no calico-node pod found on node %s", nodeName)
+	return execInPod(t, pod, command, opts...)
+}
+
+func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions) (string, error) {
+	t.Helper()
+	o := mergeRunOptions(opts)
+
+	t.Logf("[%s] exec in %s/%s: %s", time.Now().Format(time.RFC3339), pod.Namespace, pod.Name, command)
+
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if o.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, o.Timeout)
+		defer cancel()
 	}
-	return name, nil
+
+	// Pick the first container explicitly: PodExecOptions requires a
+	// container name when the pod has more than one and no default-container
+	// annotation.
+	if len(pod.Spec.Containers) == 0 {
+		return "", fmt.Errorf("pod %s/%s has no containers", pod.Namespace, pod.Name)
+	}
+	container := pod.Spec.Containers[0].Name
+
+	cs := K8sClient(t)
+	req := cs.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			// Match `kubectl exec -- <command>` after shell word
+			// splitting: the Python helper passed the command unquoted, so
+			// plain whitespace splitting is the semantic it relied on.
+			Command: strings.Fields(command),
+			Stdout:  true,
+			Stderr:  true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(K8sRestConfig(t), "POST", req.URL())
+	if err != nil {
+		return "", fmt.Errorf("building SPDY executor: %w", err)
+	}
+
+	var stdout, stderr strings.Builder
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	out := stdout.String()
+	errOut := stderr.String()
+	t.Logf("Out:\n%s", out)
+	t.Logf("Err:\n%s", errOut)
+
+	if err != nil {
+		if !o.SuppressErrLog {
+			t.Logf("Failure output:\n%s\nerr:\n%s", out, errOut)
+		}
+		if !o.AllowFail {
+			return out, fmt.Errorf("exec %q in pod %s/%s failed: %w (stderr: %s)",
+				command, pod.Namespace, pod.Name, err, errOut)
+		}
+		if o.ReturnErr {
+			return errOut, err
+		}
+		return out, err
+	}
+	return out, nil
 }
 
 // ----------------------------------------------------------------------------
@@ -409,8 +474,8 @@ func dumpDiags(t testing.TB) {
 	// All these calls allow failure: diag collection must never mask the
 	// real test failure.
 	allow := RunOptions{AllowFail: true, SuppressErrLog: true}
-	_, _ = Kubectl(t, "version", allow)
-	_, _ = Kubectl(t, "get deployments,pods,svc,endpoints --all-namespaces -o wide", allow)
+	logServerVersion(t)
+	logClusterSnapshot(t)
 	for _, resource := range []string{"node", "bgpconfig", "bgppeer", "gnp", "felixconfig"} {
 		_, _ = Calicoctl(t, "get "+resource+" -o yaml", allow)
 	}
@@ -419,7 +484,7 @@ func dumpDiags(t testing.TB) {
 		_, _ = Run(t, "docker exec "+node+" ip r", allow)
 		_, _ = Run(t, "docker exec "+node+" ip -6 r", allow)
 	}
-	_, _ = Kubectl(t, "logs -n calico-system -l k8s-app=calico-node", allow)
+	logCalicoNodeLogs(t)
 	printConfdTemplates(t, nodes)
 	t.Logf("===================================================")
 	t.Logf("============= COLLECTED DIAGS FOR TEST ============")
@@ -431,17 +496,101 @@ func printConfdTemplates(t testing.TB, nodes []string) {
 	allow := RunOptions{AllowFail: true, SuppressErrLog: true}
 	for _, node := range nodes {
 		pod, err := lookupCalicoNodePod(t, node)
-		if err != nil || pod == "" {
+		if err != nil {
 			continue
 		}
 		for _, f := range []string{
 			"bird.cfg", "bird_aggr.cfg", "bird_ipam.cfg",
 			"bird6.cfg", "bird6_aggr.cfg", "bird6_ipam.cfg",
 		} {
-			_, _ = Kubectl(t, fmt.Sprintf(
-				"exec -n calico-system %s -- cat /etc/calico/confd/config/%s",
-				pod, f), allow)
+			_, _ = execInPod(t, pod, "cat /etc/calico/confd/config/"+f, allow)
 		}
+	}
+}
+
+// logServerVersion logs the Kubernetes server version (the client-go
+// replacement for `kubectl version` in the diags dump).
+func logServerVersion(t testing.TB) {
+	t.Helper()
+	v, err := K8sClient(t).Discovery().ServerVersion()
+	if err != nil {
+		t.Logf("could not fetch server version: %v", err)
+		return
+	}
+	t.Logf("Kubernetes server version: %s", v.GitVersion)
+}
+
+// logClusterSnapshot logs a one-line summary of every deployment, pod,
+// service and endpoints object across all namespaces — the client-go
+// replacement for `kubectl get deployments,pods,svc,endpoints
+// --all-namespaces -o wide` in the diags dump.
+func logClusterSnapshot(t testing.TB) {
+	t.Helper()
+	cs := K8sClient(t)
+	ctx := context.Background()
+
+	if deps, err := cs.AppsV1().Deployments(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err != nil {
+		t.Logf("could not list deployments: %v", err)
+	} else {
+		for _, d := range deps.Items {
+			t.Logf("deployment %s/%s: %d/%d replicas ready", d.Namespace, d.Name,
+				d.Status.ReadyReplicas, d.Status.Replicas)
+		}
+	}
+
+	if pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err != nil {
+		t.Logf("could not list pods: %v", err)
+	} else {
+		for _, p := range pods.Items {
+			t.Logf("pod %s/%s: phase=%s ip=%s node=%s", p.Namespace, p.Name,
+				p.Status.Phase, p.Status.PodIP, p.Spec.NodeName)
+		}
+	}
+
+	if svcs, err := cs.CoreV1().Services(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err != nil {
+		t.Logf("could not list services: %v", err)
+	} else {
+		for _, s := range svcs.Items {
+			t.Logf("service %s/%s: type=%s clusterIPs=%v externalIPs=%v", s.Namespace, s.Name,
+				s.Spec.Type, s.Spec.ClusterIPs, s.Spec.ExternalIPs)
+		}
+	}
+
+	if eps, err := cs.CoreV1().Endpoints(metav1.NamespaceAll).List(ctx, metav1.ListOptions{}); err != nil {
+		t.Logf("could not list endpoints: %v", err)
+	} else {
+		for _, e := range eps.Items {
+			t.Logf("endpoints %s/%s: %v", e.Namespace, e.Name, e.Subsets)
+		}
+	}
+}
+
+// logCalicoNodeLogs logs the tail of every calico-node pod's logs — the
+// client-go replacement for `kubectl logs -n calico-system -l
+// k8s-app=calico-node` in the diags dump.
+func logCalicoNodeLogs(t testing.TB) {
+	t.Helper()
+	cs := K8sClient(t)
+	ctx := context.Background()
+	pods, err := cs.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-node",
+	})
+	if err != nil {
+		t.Logf("could not list calico-node pods for logs: %v", err)
+		return
+	}
+	for _, p := range pods.Items {
+		// Bound the tail so a long-running soak doesn't dump megabytes per
+		// pod into the test log. (kubectl's selector form defaulted to 10
+		// lines per pod; 100 gives more context at still-reasonable cost.)
+		raw, err := cs.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{
+			TailLines: ptr.To(int64(100)),
+		}).Do(ctx).Raw()
+		if err != nil {
+			t.Logf("could not fetch logs for %s/%s: %v", p.Namespace, p.Name, err)
+			continue
+		}
+		t.Logf("logs for %s/%s:\n%s", p.Namespace, p.Name, raw)
 	}
 }
 
@@ -460,12 +609,145 @@ func CheckPodStatus(t testing.TB, namespace string) {
 	for _, p := range pods.Items {
 		t.Logf("%s\t%s\t%s", p.Name, p.Namespace, p.Status.Phase)
 		if p.Status.Phase != corev1.PodRunning {
-			// Surface describe output to help debug.
-			_, _ = Kubectl(t, fmt.Sprintf("describe po %s -n %s", p.Name, p.Namespace),
-				RunOptions{AllowFail: true})
+			// Surface conditions, container statuses and events to help
+			// debug (the client-go replacement for `kubectl describe po`).
+			logPodDebug(t, &p)
 			t.Fatalf("pod %s/%s is in phase %s, expected Running",
 				p.Namespace, p.Name, p.Status.Phase)
 		}
+	}
+}
+
+// logPodDebug logs the pod's conditions, container statuses and events.
+func logPodDebug(t testing.TB, pod *corev1.Pod) {
+	t.Helper()
+	for _, c := range pod.Status.Conditions {
+		t.Logf("pod %s/%s condition %s=%s reason=%q message=%q",
+			pod.Namespace, pod.Name, c.Type, c.Status, c.Reason, c.Message)
+	}
+	for _, c := range pod.Status.ContainerStatuses {
+		t.Logf("pod %s/%s container %s: ready=%v restarts=%d state=%+v",
+			pod.Namespace, pod.Name, c.Name, c.Ready, c.RestartCount, c.State)
+	}
+	events, err := K8sClient(t).CoreV1().Events(pod.Namespace).List(context.Background(), metav1.ListOptions{
+		FieldSelector: fields.AndSelectors(
+			fields.OneTermEqualSelector("involvedObject.name", pod.Name),
+			fields.OneTermEqualSelector("involvedObject.namespace", pod.Namespace),
+		).String(),
+	})
+	if err != nil {
+		t.Logf("could not list events for pod %s/%s: %v", pod.Namespace, pod.Name, err)
+		return
+	}
+	for _, e := range events.Items {
+		t.Logf("pod %s/%s event %s %s: %s", pod.Namespace, pod.Name, e.Type, e.Reason, e.Message)
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Pod lifecycle helpers (the client-go equivalents of `kubectl wait` and
+// `kubectl delete po`).
+
+// PodNames returns the names of the pods in namespace matching the given
+// label and field selectors (either may be empty).
+func PodNames(t testing.TB, namespace, labelSelector, fieldSelector string) ([]string, error) {
+	t.Helper()
+	pods, err := K8sClient(t).CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: labelSelector,
+		FieldSelector: fieldSelector,
+	})
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(pods.Items))
+	for _, p := range pods.Items {
+		names = append(names, p.Name)
+	}
+	return names, nil
+}
+
+// WaitForPodsReady blocks until every pod in the namespace matching
+// labelSelector (empty = all pods) has a Ready condition of True, fatally
+// failing the test on timeout. The client-go equivalent of
+// `kubectl wait --for=condition=Ready pods`.
+func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout time.Duration) {
+	t.Helper()
+	cs := K8sClient(t)
+	err := RetryUntilSuccess(t, timeout, func() error {
+		pods, err := cs.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+			LabelSelector: labelSelector,
+		})
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) == 0 {
+			return fmt.Errorf("no pods found in namespace %s", namespace)
+		}
+		for _, p := range pods.Items {
+			if !podIsReady(&p) {
+				return fmt.Errorf("pod %s/%s is not ready", p.Namespace, p.Name)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("pods in %s did not become ready within %s: %v", namespace, timeout, err)
+	}
+}
+
+// WaitForPodReady blocks until the named pod has a Ready condition of
+// True, fatally failing the test on timeout.
+func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration) {
+	t.Helper()
+	cs := K8sClient(t)
+	err := RetryUntilSuccess(t, timeout, func() error {
+		pod, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if !podIsReady(pod) {
+			return fmt.Errorf("pod %s/%s is not ready", namespace, name)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("pod %s/%s did not become ready within %s: %v", namespace, name, timeout, err)
+	}
+}
+
+func podIsReady(pod *corev1.Pod) bool {
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+// DeletePodAndWait deletes the named pod and blocks until it is fully gone
+// from the API, fatally failing the test on timeout. Waiting matters: the
+// graceful-restart tests look up the replacement pod by IP, and the old
+// terminating pod would match the same selector. (kubectl delete waits for
+// finalization by default; client-go Delete returns immediately.)
+func DeletePodAndWait(t testing.TB, namespace, name string, timeout time.Duration) {
+	t.Helper()
+	cs := K8sClient(t)
+	err := cs.CoreV1().Pods(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		t.Fatalf("deleting pod %s/%s: %v", namespace, name, err)
+	}
+	err = RetryUntilSuccess(t, timeout, func() error {
+		_, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("pod %s/%s still exists", namespace, name)
+	})
+	if err != nil {
+		t.Fatalf("pod %s/%s was not deleted within %s: %v", namespace, name, timeout, err)
 	}
 }
 
