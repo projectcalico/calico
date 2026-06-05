@@ -64,7 +64,6 @@ gen-crds:
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/lib/apis/internalapi"'
 

@@ -1448,7 +1448,7 @@ number with at least 8 bits set, none of which clash with any other mark bits in
 | Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `iptablesMarkMask` (YAML) `IptablesMarkMask` (Go API) |
-| `FelixConfiguration` schema | Unsigned 32-bit integer. |
+| `FelixConfiguration` schema | `integer` |
 | Default value (YAML) | `0xffff0000` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
@@ -1593,7 +1593,7 @@ number with at least 8 bits set, none of which clash with any other mark bits in
 | Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `nftablesMarkMask` (YAML) `NftablesMarkMask` (Go API) |
-| `FelixConfiguration` schema | Unsigned 32-bit integer. |
+| `FelixConfiguration` schema | `integer` |
 | Default value (YAML) | `0xffff0000` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
