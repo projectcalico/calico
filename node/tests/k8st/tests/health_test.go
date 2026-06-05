@@ -80,9 +80,7 @@ func readinessFixture(t *testing.T) []string {
 	// Wait for all Calico pods to be ready before exercising the health
 	// flags — otherwise the "before" assertion can spuriously fail on
 	// slow CI nodes.
-	k8stutils.MustKubectl(t,
-		"wait --for=condition=Ready pods --all -n calico-system --timeout=120s",
-		k8stutils.RunOptions{Timeout: 130 * time.Second})
+	k8stutils.WaitForPodsReady(t, "calico-system", "", 120*time.Second)
 
 	nodes, _, _ := k8stutils.NodeInfo(t)
 	NewWithT(t).Expect(nodes).NotTo(BeEmpty(), "no nodes returned from NodeInfo")
