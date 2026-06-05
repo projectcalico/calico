@@ -32,6 +32,20 @@ func init() {
 	logutils.ConfigureFormatter("test")
 }
 
+func TestBpfDumpCmd_CollectsJSON(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Every calico-bpf dump in the diags bundle must request JSON output and
+	// land in a .json file so downstream tooling can parse it directly.
+	for _, dump := range []string{"conntrack", "ipsets", "nat", "routes"} {
+		cmd := bpfDumpCmd("/node-dir", "nodeA", "calico-system", "calico-node-xyz", dump)
+		Expect(cmd.CmdStr).To(ContainSubstring(fmt.Sprintf("calico component node bpf %s dump", dump)))
+		Expect(cmd.CmdStr).To(HaveSuffix("--json"),
+			"bpf %s dump must be collected in JSON format", dump)
+		Expect(cmd.FilePath).To(Equal(fmt.Sprintf("/node-dir/bpf-%s.json", dump)))
+	}
+}
+
 func TestDiags(t *testing.T) {
 	RegisterTestingT(t)
 	test := func(invocation string, expectedErr error, expectedOutput string, expectedOpts *diagOpts) {
