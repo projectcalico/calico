@@ -81,9 +81,11 @@ github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/netlink v1.7.2
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
+github.com/moby/spdystream v0.5.1
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
+github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
 github.com/natefinch/atomic v1.0.1
 github.com/onsi/gomega v1.39.1
 github.com/opencontainers/go-digest v1.0.0
