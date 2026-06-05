@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
 )
@@ -46,7 +46,7 @@ func TestGracefulRestartMethodology(t *testing.T) {
 				k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			return err
 		})
-		require.NoError(t, err, "BIRD did not restart within 15s")
+		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "BIRD did not restart within 15s")
 		time.Sleep(5 * time.Second)
 	}
 
@@ -69,7 +69,7 @@ func TestGracefulRestart(t *testing.T) {
 		err := k8stutils.RetryUntilSuccess(t, 15*time.Second, func() error {
 			return state.refreshRestartPodName(t)
 		})
-		require.NoError(t, err, "replacement calico-node pod did not appear within 15s")
+		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "replacement calico-node pod did not appear within 15s")
 
 		// Wait until it is ready, before returning.
 		k8stutils.MustRun(t, fmt.Sprintf(
@@ -114,8 +114,9 @@ func (s *restartChurnState) refreshRestartPodName(t testing.TB) error {
 // be non-empty; otherwise it must be empty.
 func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartChurnState), expectChurn bool) {
 	t.Helper()
+	g := NewWithT(t)
 	nodes, ips, _ := k8stutils.NodeInfo(t)
-	require.Greater(t, len(nodes), 2, "need at least one control-plane and two workers")
+	g.Expect(len(nodes)).To(BeNumerically(">", 2), "need at least one control-plane and two workers")
 
 	monitorNode := nodes[1]
 	state := &restartChurnState{
@@ -133,7 +134,7 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 			"stdbuf -oL grep -v fd00:10:244 > rmon.txt'", monitorNode))
 
 	// Find the name of the calico-node pod on the restart node.
-	require.NoError(t, state.refreshRestartPodName(t),
+	g.Expect(state.refreshRestartPodName(t)).NotTo(HaveOccurred(),
 		"could not find calico-node pod on %s", state.restartNode)
 
 	for i := 0; i < numRepeats; i++ {
@@ -146,9 +147,9 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 	monitorOutput := k8stutils.MustRun(t, "docker exec "+monitorNode+" cat rmon.txt")
 
 	if expectChurn {
-		require.NotEmpty(t, monitorOutput, "expected route churn but observed none")
+		g.Expect(monitorOutput).NotTo(BeEmpty(), "expected route churn but observed none")
 	} else {
-		require.Empty(t, monitorOutput, "expected no route churn but observed: %s", monitorOutput)
+		g.Expect(monitorOutput).To(BeEmpty(), "expected no route churn but observed: %s", monitorOutput)
 	}
 }
 

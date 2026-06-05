@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
 )
@@ -85,7 +85,7 @@ func readinessFixture(t *testing.T) []string {
 		k8stutils.RunOptions{Timeout: 130 * time.Second})
 
 	nodes, _, _ := k8stutils.NodeInfo(t)
-	require.NotEmpty(t, nodes, "no nodes returned from NodeInfo")
+	NewWithT(t).Expect(nodes).NotTo(BeEmpty(), "no nodes returned from NodeInfo")
 
 	t.Cleanup(func() {
 		for _, node := range nodes {
@@ -108,10 +108,11 @@ func assertReadiness(t *testing.T, node, flag string, ready bool) {
 	cmd := "/usr/bin/calico component node health --" + flag + "-ready"
 	_, err := k8stutils.ExecInCalicoNode(t, node, cmd,
 		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	g := NewWithT(t)
 	if ready {
-		require.NoError(t, err, "expected %s to be ready", flag)
+		g.Expect(err).NotTo(HaveOccurred(), "expected %s to be ready", flag)
 	} else {
-		require.Error(t, err, "expected %s NOT to be ready", flag)
+		g.Expect(err).To(HaveOccurred(), "expected %s NOT to be ready", flag)
 	}
 }
 
@@ -122,9 +123,10 @@ func assertLiveness(t *testing.T, node, flag string, live bool) {
 	cmd := "/usr/bin/calico component node health --" + flag + "-live"
 	_, err := k8stutils.ExecInCalicoNode(t, node, cmd,
 		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	g := NewWithT(t)
 	if live {
-		require.NoError(t, err, "expected %s to be live", flag)
+		g.Expect(err).NotTo(HaveOccurred(), "expected %s to be live", flag)
 	} else {
-		require.Error(t, err, "expected %s NOT to be live", flag)
+		g.Expect(err).To(HaveOccurred(), "expected %s NOT to be live", flag)
 	}
 }
