@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package proxyneigh holds a kind-only system test for Felix's
+// proxy_neigh_test.go is a kind-only system test for Felix's
 // LocalSubnetL2Reachability feature (proxy ARP/NDP). It verifies that an
 // L2-adjacent client outside the cluster can reach a pod IP or LoadBalancer VIP
 // that lives in the host's L2 subnet — which only works if Felix answers the
@@ -23,11 +23,12 @@
 // daemon (to attach an L2-adjacent peer to the "kind" docker network), which
 // the e2e suite (run against arbitrary clusters via kubeconfig) cannot provide.
 //
-// It is built into a standalone test binary and invoked by the k8st pytest
-// harness (tests/test_proxy_neigh.py), which provides the kind cluster, the
-// docker socket, and the kubeconfig. Run directly with:
+// Like the rest of the k8st Go suite it is compiled into node/bin/k8st.test and
+// run against a live kind cluster by `make -C node kind-k8st-run-test` (select
+// it on its own with K8ST_GO_TO_RUN=TestProxyNeigh). Run directly against an
+// existing cluster with:
 //
-//	KUBECONFIG=... go test ./node/tests/k8st/proxyneigh -run TestProxyNeigh -v
+//	KUBECONFIG=... go test ./node/tests/k8st/tests -run TestProxyNeigh -v
 //
 // Topology (all on the "kind" docker network, sharing one L2 segment):
 //
@@ -35,7 +36,8 @@
 //	| node |  | node |  | node |  | extL2 peer (us) |
 //	+------+  +------+  +------+   +-----------------+
 //	   pod IP / LB VIP from host-subnet pools     arping / NDP / curl
-package proxyneigh
+
+package k8stests
 
 import (
 	"context"
@@ -48,7 +50,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -58,6 +60,8 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
 )
 
 const (
@@ -91,7 +95,9 @@ func TestProxyNeigh(t *testing.T) {
 }
 
 func runFamily(t *testing.T, family corev1.IPFamily) {
-	g := gomega.NewWithT(t)
+	defer k8stutils.CollectDiagsOnFailure(t)()
+
+	g := NewWithT(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
 
@@ -100,27 +106,27 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	// Find the docker network the cluster's nodes are on (kind defaults to "kind"
 	// but honours KIND_EXPERIMENTAL_DOCKER_NETWORK, so it isn't fixed) and derive
 	// the two pool CIDRs from its subnet for this family.
-	network, err := detectKindNetwork(ctx, cli)
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "detecting the cluster's docker network")
+	network, err := detectKindNetwork(t)
+	g.Expect(err).NotTo(HaveOccurred(), "detecting the cluster's docker network")
 
-	v4Net, v6Net, err := detectKindNetworkSubnets(network)
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "detecting docker network subnets")
+	v4Net, v6Net, err := detectKindNetworkSubnets(t, network)
+	g.Expect(err).NotTo(HaveOccurred(), "detecting docker network subnets")
 
 	var workloadCIDR, lbCIDR, poolAnnotation, lbPoolAnnotation string
 	if family == corev1.IPv4Protocol {
-		g.Expect(v4Net).NotTo(gomega.BeNil(), "kind network has no IPv4 subnet")
+		g.Expect(v4Net).NotTo(BeNil(), "kind network has no IPv4 subnet")
 		workloadCIDR, err = v4SubnetOffset(v4Net, v4WorkloadOffset)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "deriving workload v4 CIDR")
+		g.Expect(err).NotTo(HaveOccurred(), "deriving workload v4 CIDR")
 		lbCIDR, err = v4SubnetOffset(v4Net, v4LBOffset)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "deriving LB v4 CIDR")
+		g.Expect(err).NotTo(HaveOccurred(), "deriving LB v4 CIDR")
 		poolAnnotation = "cni.projectcalico.org/ipv4pools"
 		lbPoolAnnotation = "projectcalico.org/ipv4pools"
 	} else {
-		g.Expect(v6Net).NotTo(gomega.BeNil(), "kind network has no IPv6 subnet (recreate the cluster dual-stack to run NDP tests)")
+		g.Expect(v6Net).NotTo(BeNil(), "kind network has no IPv6 subnet (recreate the cluster dual-stack to run NDP tests)")
 		workloadCIDR, err = v6SubnetWithSuffix(v6Net, v6WorkloadSuffix)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "deriving workload v6 CIDR")
+		g.Expect(err).NotTo(HaveOccurred(), "deriving workload v6 CIDR")
 		lbCIDR, err = v6SubnetWithSuffix(v6Net, v6LBSuffix)
-		g.Expect(err).NotTo(gomega.HaveOccurred(), "deriving LB v6 CIDR")
+		g.Expect(err).NotTo(HaveOccurred(), "deriving LB v6 CIDR")
 		poolAnnotation = "cni.projectcalico.org/ipv6pools"
 		lbPoolAnnotation = "projectcalico.org/ipv6pools"
 	}
@@ -130,7 +136,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	nsName := "proxy-neigh-" + suffix
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
-	g.Expect(cli.Create(ctx, ns)).To(gomega.Succeed(), "creating namespace")
+	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	// Manual assignment mode keeps these host-subnet IPs from being auto-assigned
@@ -146,7 +152,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 			AllowedUses:    []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload},
 		},
 	}
-	g.Expect(cli.Create(ctx, workloadPool)).To(gomega.Succeed(), "creating workload IPPool")
+	g.Expect(cli.Create(ctx, workloadPool)).To(Succeed(), "creating workload IPPool")
 	t.Cleanup(func() { deletePool(cli, workloadPool.Name) })
 
 	lbPool := &v3.IPPool{
@@ -159,7 +165,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 			AllowedUses:    []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
 		},
 	}
-	g.Expect(cli.Create(ctx, lbPool)).To(gomega.Succeed(), "creating LoadBalancer IPPool")
+	g.Expect(cli.Create(ctx, lbPool)).To(Succeed(), "creating LoadBalancer IPPool")
 	t.Cleanup(func() { deletePool(cli, lbPool.Name) })
 
 	// Turn on the feature under test, restoring the original value afterwards.
@@ -167,8 +173,8 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Cleanup(restore)
 
 	// Spawn the L2-adjacent peer on the kind network.
-	peer, err := newExtL2Peer("proxy-neigh-extl2-"+suffix, network)
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "spawning L2 peer")
+	peer, err := newExtL2Peer(t, "proxy-neigh-extl2-"+suffix, network)
+	g.Expect(err).NotTo(HaveOccurred(), "spawning L2 peer")
 	t.Cleanup(func() { _ = peer.Close() })
 
 	// Deploy an echo server pinned to the workload pool, plus a LoadBalancer
@@ -190,7 +196,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 			}},
 		},
 	}
-	g.Expect(cli.Create(ctx, pod)).To(gomega.Succeed(), "creating server pod")
+	g.Expect(cli.Create(ctx, pod)).To(Succeed(), "creating server pod")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), pod) })
 
 	svc := &corev1.Service{
@@ -213,7 +219,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 			LoadBalancerClass: new("calico"),
 		},
 	}
-	g.Expect(cli.Create(ctx, svc)).To(gomega.Succeed(), "creating LoadBalancer service")
+	g.Expect(cli.Create(ctx, svc)).To(Succeed(), "creating LoadBalancer service")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), svc) })
 
 	podIP := waitForPodIP(ctx, g, cli, pod, family)
@@ -225,49 +231,39 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	// peer even though the peer has no route to the pod IP — the only way it
 	// succeeds is if Felix answers the ARP/NDP request for the hosting node.
 	t.Run("pod_ip", func(t *testing.T) {
-		probe(gomega.NewWithT(t), peer, family, podIP)
+		probe(NewWithT(t), peer, family, podIP)
 	})
 
 	// LoadBalancer VIPs take the same path, except the manager hash-picks a
 	// single node to answer for each VIP. We assert only that *some* node
 	// answers and traffic flows, not which one.
-	//
-	// NOTE: on IPVS-mode clusters (like this one) kube-proxy binds the VIP to
-	// kube-ipvs0 on every node, so for IPv4 the kernel answers ARP for it from
-	// every node regardless of proxy-neigh (weak host model) — this subtest can
-	// pass via kube-proxy alone unless kube-proxy strictARP is enabled. So treat
-	// the IPv4 case as an end-to-end reachability check: proxy-neigh's IPv4
-	// answering is actually guarded by the pod_ip subtest (a pod IP is not bound
-	// to kube-ipvs0) plus the unit tests, while the IPv6 lb_vip subtest exercises
-	// the VIP path through proxy-neigh cleanly (the strict IPv6 host model means
-	// the kernel does not answer NS for a kube-ipvs0 address).
 	t.Run("lb_vip", func(t *testing.T) {
-		probe(gomega.NewWithT(t), peer, family, vip)
+		probe(NewWithT(t), peer, family, vip)
 	})
 }
 
 // probe sends an ARP (IPv4) or NDP (IPv6) request for ip from the peer, then
 // confirms end-to-end reachability with an HTTP GET.
-func probe(g *gomega.WithT, peer *extL2Peer, family corev1.IPFamily, ip string) {
+func probe(g *WithT, peer *extL2Peer, family corev1.IPFamily, ip string) {
 	parsed := net.ParseIP(ip)
-	g.Expect(parsed).NotTo(gomega.BeNil(), "parsing target IP %q", ip)
+	g.Expect(parsed).NotTo(BeNil(), "parsing target IP %q", ip)
 
 	if family == corev1.IPv4Protocol {
 		g.Eventually(func() error {
 			_, err := peer.Arping(parsed, 3)
 			return err
-		}, "60s", "2s").Should(gomega.Succeed(), "ARP probe for %s never got a reply", ip)
+		}, "60s", "2s").Should(Succeed(), "ARP probe for %s never got a reply", ip)
 	} else {
 		g.Eventually(func() error {
 			_, err := peer.NeighborSolicit(parsed)
 			return err
-		}, "60s", "2s").Should(gomega.Succeed(), "NDP probe for %s never got an advertisement", ip)
+		}, "60s", "2s").Should(Succeed(), "NDP probe for %s never got an advertisement", ip)
 	}
 
 	g.Eventually(func() error {
 		_, err := peer.Curl(httpURL(ip))
 		return err
-	}, "30s", "2s").Should(gomega.Succeed(), "HTTP request to %s never succeeded", ip)
+	}, "30s", "2s").Should(Succeed(), "HTTP request to %s never succeeded", ip)
 }
 
 // httpURL builds the echo-server URL; net.JoinHostPort brackets IPv6 literals.
@@ -279,16 +275,16 @@ func httpURL(ip string) string {
 
 // newClient builds a controller-runtime client for k8s core + projectcalico.org/v3
 // from the ambient kubeconfig (KUBECONFIG / ~/.kube/config / in-cluster).
-func newClient(g *gomega.WithT) ctrlclient.Client {
+func newClient(g *WithT) ctrlclient.Client {
 	cfg, err := ctrlconfig.GetConfig()
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "loading kubeconfig")
+	g.Expect(err).NotTo(HaveOccurred(), "loading kubeconfig")
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(v3.AddToScheme(scheme))
 
 	cli, err := ctrlclient.New(cfg, ctrlclient.Options{Scheme: scheme})
-	g.Expect(err).NotTo(gomega.HaveOccurred(), "creating controller-runtime client")
+	g.Expect(err).NotTo(HaveOccurred(), "creating controller-runtime client")
 	return cli
 }
 
@@ -305,9 +301,9 @@ func deletePool(cli ctrlclient.Client, name string) {
 
 // setLocalSubnetL2Reachability flips the default FelixConfiguration into the
 // requested mode and returns an idempotent restore function.
-func setLocalSubnetL2Reachability(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, mode v3.LocalSubnetL2ReachabilityMode) func() {
+func setLocalSubnetL2Reachability(ctx context.Context, g *WithT, cli ctrlclient.Client, mode v3.LocalSubnetL2ReachabilityMode) func() {
 	cfg := &v3.FelixConfiguration{}
-	g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, cfg)).To(gomega.Succeed(), "fetching default FelixConfiguration")
+	g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, cfg)).To(Succeed(), "fetching default FelixConfiguration")
 
 	var original *v3.LocalSubnetL2ReachabilityMode
 	if cfg.Spec.LocalSubnetL2Reachability != nil {
@@ -316,7 +312,7 @@ func setLocalSubnetL2Reachability(ctx context.Context, g *gomega.WithT, cli ctrl
 	}
 
 	cfg.Spec.LocalSubnetL2Reachability = new(mode)
-	g.Expect(cli.Update(ctx, cfg)).To(gomega.Succeed(), "setting LocalSubnetL2Reachability=%s", mode)
+	g.Expect(cli.Update(ctx, cfg)).To(Succeed(), "setting LocalSubnetL2Reachability=%s", mode)
 
 	restored := false
 	return func() {
@@ -335,13 +331,13 @@ func setLocalSubnetL2Reachability(ctx context.Context, g *gomega.WithT, cli ctrl
 			}
 			cur.Spec.LocalSubnetL2Reachability = original
 			return cli.Update(rctx, cur)
-		}, "20s", "2s").Should(gomega.Succeed(), "restoring original LocalSubnetL2Reachability")
+		}, "20s", "2s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
 	}
 }
 
 // waitForPodIP waits for the pod to be Running and returns its IP of the
 // requested family. The pod is dual-stack, so we pick the matching family.
-func waitForPodIP(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, pod *corev1.Pod, family corev1.IPFamily) string {
+func waitForPodIP(ctx context.Context, g *WithT, cli ctrlclient.Client, pod *corev1.Pod, family corev1.IPFamily) string {
 	wantV6 := family == corev1.IPv6Protocol
 	var ip string
 	g.Eventually(func() error {
@@ -359,13 +355,13 @@ func waitForPodIP(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, p
 			}
 		}
 		return fmt.Errorf("pod %s has no %s IP yet", pod.Name, family)
-	}, "120s", "2s").Should(gomega.Succeed(), "server pod never got a %s IP", family)
+	}, "120s", "2s").Should(Succeed(), "server pod never got a %s IP", family)
 	return ip
 }
 
 // waitForLBVIP waits for Calico's service-IP allocator to populate the
 // LoadBalancer ingress IP. The Service is single-stack, so there's exactly one.
-func waitForLBVIP(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, svc *corev1.Service) string {
+func waitForLBVIP(ctx context.Context, g *WithT, cli ctrlclient.Client, svc *corev1.Service) string {
 	var vip string
 	g.Eventually(func() error {
 		got := &corev1.Service{}
@@ -378,7 +374,7 @@ func waitForLBVIP(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, s
 		}
 		vip = ingress[0].IP
 		return nil
-	}, "120s", "2s").Should(gomega.Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
+	}, "120s", "2s").Should(Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
 	return vip
 }
 
@@ -390,15 +386,14 @@ func waitForLBVIP(ctx context.Context, g *gomega.WithT, cli ctrlclient.Client, s
 // than guess, we read it back from a node: in kind the docker container name
 // equals the Kubernetes node name, so we inspect the first node's container and
 // return its single non-default docker network.
-func detectKindNetwork(ctx context.Context, cli ctrlclient.Client) (string, error) {
-	nodes := &corev1.NodeList{}
-	if err := cli.List(ctx, nodes); err != nil {
-		return "", fmt.Errorf("listing nodes: %w", err)
-	}
-	if len(nodes.Items) == 0 {
+func detectKindNetwork(t testing.TB) (string, error) {
+	// In kind the docker container name equals the Kubernetes node name, so
+	// inspect the (control-plane) node's container for its docker networks.
+	nodes, _, _ := k8stutils.NodeInfo(t)
+	if len(nodes) == 0 {
 		return "", fmt.Errorf("cluster reports no nodes")
 	}
-	node := nodes.Items[0].Name
+	node := nodes[0]
 	out, err := exec.Command("docker", "inspect", "--type", "container", node,
 		"--format", `{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}`).Output()
 	if err != nil {
@@ -422,8 +417,8 @@ func detectKindNetwork(ctx context.Context, cli ctrlclient.Client) (string, erro
 
 // detectKindNetworkSubnets returns the IPv4 and IPv6 subnets configured on the
 // given docker network. Either may be nil if the network lacks that family.
-func detectKindNetworkSubnets(networkName string) (v4, v6 *net.IPNet, err error) {
-	out, err := exec.Command("docker", "network", "inspect", networkName).Output()
+func detectKindNetworkSubnets(t testing.TB, networkName string) (v4, v6 *net.IPNet, err error) {
+	out, err := k8stutils.Run(t, "docker network inspect "+networkName, k8stutils.RunOptions{AllowFail: true})
 	if err != nil {
 		return nil, nil, fmt.Errorf("docker network inspect %s: %w", networkName, err)
 	}
@@ -434,7 +429,7 @@ func detectKindNetworkSubnets(networkName string) (v4, v6 *net.IPNet, err error)
 			}
 		}
 	}
-	if err := json.Unmarshal(out, &inspected); err != nil {
+	if err := json.Unmarshal([]byte(out), &inspected); err != nil {
 		return nil, nil, fmt.Errorf("parsing docker network inspect output: %w", err)
 	}
 	if len(inspected) == 0 {
@@ -504,30 +499,26 @@ func v6SubnetWithSuffix(parent *net.IPNet, suffixCIDR string) (string, error) {
 // ARP/NDP sockets) and NET_ADMIN, and runs `sleep infinity` so we can exec into
 // it. Callers must Close() it.
 type extL2Peer struct {
+	t    testing.TB
 	name string
 }
 
-func newExtL2Peer(name, network string) (*extL2Peer, error) {
+func newExtL2Peer(t testing.TB, name, network string) (*extL2Peer, error) {
 	if network == "" {
 		return nil, fmt.Errorf("newExtL2Peer: network must not be empty")
 	}
-	if err := dockerRun("network", "inspect", network); err != nil {
+	allow := k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true}
+	if _, err := k8stutils.Run(t, "docker network inspect "+network, allow); err != nil {
 		return nil, fmt.Errorf("docker network %q not reachable: %w", network, err)
 	}
 	// Best-effort cleanup of a stale container with the same name.
-	_ = dockerRun("rm", "-f", name)
-	if err := dockerRun(
-		"run", "-d",
-		"--name", name,
-		"--network", network,
-		"--cap-add", "NET_RAW",
-		"--cap-add", "NET_ADMIN",
-		netshootImage,
-		"sleep", "infinity",
-	); err != nil {
+	_, _ = k8stutils.Run(t, "docker rm -f "+name, allow)
+	if _, err := k8stutils.Run(t, fmt.Sprintf(
+		"docker run -d --name %s --network %s --cap-add NET_RAW --cap-add NET_ADMIN %s sleep infinity",
+		name, network, netshootImage), k8stutils.RunOptions{AllowFail: true}); err != nil {
 		return nil, fmt.Errorf("docker run for %q failed: %w", name, err)
 	}
-	return &extL2Peer{name: name}, nil
+	return &extL2Peer{t: t, name: name}, nil
 }
 
 // Close removes the container. Safe to call multiple times.
@@ -535,7 +526,7 @@ func (p *extL2Peer) Close() error {
 	if p == nil || p.name == "" {
 		return nil
 	}
-	err := dockerRun("rm", "-f", p.name)
+	_, err := k8stutils.Run(p.t, "docker rm -f "+p.name, k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	p.name = ""
 	return err
 }
@@ -597,18 +588,15 @@ func (p *extL2Peer) Curl(url string) (string, error) {
 	return out, nil
 }
 
+// exec runs a command inside the peer via `docker exec`. Unlike the rest of the
+// docker plumbing (which goes through k8stutils.Run), this uses exec.Command so
+// caller-supplied args — IPv6 literals, bracketed URLs — pass straight through
+// as argv with no shell-quoting hazard. Returns combined stdout+stderr, which
+// callers parse for arping/NDP/curl output.
 func (p *extL2Peer) exec(argv ...string) (string, error) {
 	if p == nil || p.name == "" {
 		return "", fmt.Errorf("extL2Peer: container has been closed")
 	}
 	out, err := exec.Command("docker", append([]string{"exec", p.name}, argv...)...).CombinedOutput()
 	return string(out), err
-}
-
-func dockerRun(args ...string) error {
-	out, err := exec.Command("docker", args...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("docker %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-	return nil
 }
