@@ -174,6 +174,8 @@ promotions:
     pipeline_file: push-images/node.yml
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
+  - name: Push third-party-cni-plugins images
+    pipeline_file: push-images/third-party-cni-plugins.yml
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
   - name: Push Whisker images
@@ -4380,7 +4382,6 @@ blocks:
         '/app-policy/policystore/*.go',
         '/app-policy/types/*.go',
         '/cni-plugin/cmd/calico/*.go',
-        '/cni-plugin/cmd/install/*.go',
         '/cni-plugin/internal/pkg/azure/*.go',
         '/cni-plugin/internal/pkg/utils/*.go',
         '/cni-plugin/internal/pkg/utils/cri/*.go',
@@ -4388,7 +4389,6 @@ blocks:
         '/cni-plugin/pkg/dataplane/grpc/*.go',
         '/cni-plugin/pkg/dataplane/grpc/proto/*.go',
         '/cni-plugin/pkg/dataplane/linux/*.go',
-        '/cni-plugin/pkg/install/*.go',
         '/cni-plugin/pkg/ipamplugin/*.go',
         '/cni-plugin/pkg/k8s/*.go',
         '/cni-plugin/pkg/plugin/*.go',
@@ -4483,7 +4483,6 @@ blocks:
         '/node/cmd/calico-ipam/*.go',
         '/node/cmd/calico/*.go',
         '/node/cmd/mountns/*.go',
-        '/node/pkg/cni/*.go',
         '/node/pkg/lifecycle/utils/*.go',
         '/node/windows-packaging/tests/*.go',
         '/pkg/buildinfo/*.go',
@@ -5730,6 +5729,32 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
             - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
+  - name: Third-party CNI plugins image
+    run:
+      when: >-
+        false or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/cni-plugins
+      jobs:
+        - name: "Third-party CNI plugins: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Third-party CNI plugins: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Tools (hack directory)"
     run:
       when: >-

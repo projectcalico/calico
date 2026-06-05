@@ -46,6 +46,8 @@ promotions:
     pipeline_file: push-images/node.yml
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
+  - name: Push third-party-cni-plugins images
+    pipeline_file: push-images/third-party-cni-plugins.yml
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
   - name: Push Whisker images
