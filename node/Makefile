@@ -317,6 +317,10 @@ else
 WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
+# Packages to exclude from the UT run. tests/k8st holds the Go k8st system
+# tests, which need a live kind cluster (run via kind-k8st-run-test).
+UT_PACKAGES_TO_SKIP?=tests/k8st
+
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
@@ -325,7 +329,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -371,8 +375,22 @@ k8s-test:
 	$(MAKE) kind-k8st-run-test
 	$(MAKE) -C $(REPO_ROOT) kind-down
 
+# Selector for Go-side k8st tests (e.g. K8ST_GO_TO_RUN='TestReadiness').
+# Defaults to running every Go test in the suite.
+K8ST_GO_TO_RUN?=.
+
+# Build the Go k8st test binary. Static (CGO disabled) so it runs inside
+# the Alpine-based calico/test container with no extra runtime deps. The
+# .PHONY marker means `make` always reinvokes `go test -c` and relies on
+# Go's own build cache for incremental rebuilds — matching the felix FV
+# pattern (felix/fv/fv.test) and avoiding a brittle hand-maintained
+# Makefile dependency list across libcalico-go / api / lib subtrees.
+.PHONY: bin/k8st.test
+bin/k8st.test:
+	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go test -c -o $@ ./tests/k8st/tests'
+
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
@@ -380,12 +398,18 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
 	    -v $(KUBECTL):/bin/kubectl \
 	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
+	    -e KUBECONFIG=/root/.kube/config \
 	    -e PYTHONDONTWRITEBYTECODE=1 \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
+	     cd /code/tests/k8st && \
+	     go_rc=0; py_rc=0; \
+	     /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)" || go_rc=$$?; \
+	     pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)" || py_rc=$$?; \
+	     echo "Go suite rc=$$go_rc, Python suite rc=$$py_rc"; \
+	     [ $$go_rc -eq 0 ] && [ $$py_rc -eq 0 ]'
 
 ###############################################################################
 # CI/CD
