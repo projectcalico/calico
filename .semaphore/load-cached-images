@@ -33,3 +33,4 @@ load_image() {
 load_image "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
 load_image "calico/node"    "node-image.tar.zst"    "${REPO_ROOT}/node/.image.created-${ARCH}"
 load_image "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whisker/.image.created-${ARCH}"
+load_image "calico/bird"    "bird-image-${ARCH}.tar.zst" ""

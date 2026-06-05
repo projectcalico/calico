@@ -428,6 +428,39 @@ blocks:
                 - s390x
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
+  - name: "Build: bird image"
+    # Producer for the upstream calico/bird image (built by bird/ from the
+    # official BIRD release tarball). calico/node copies bird/birdcl out of it
+    # (FROM ${BIRD_IMAGE}); the e2e / k8st / kubevirt suites run it as an external
+    # BGP test peer. On cache hit this is a pull + GCS upload of the existing
+    # tarball; on cache miss it builds (BIRD compiles in well under a minute).
+    run:
+      when: "true"
+    dependencies: []
+    task:
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - mkdir logs
+          - export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+      epilogue:
+        always:
+          commands:
+            - artifact push job logs --destination semaphore/logs || true
+      jobs:
+        - name: "Build/cache bird image"
+          matrix:
+            - env_var: ARCH
+              values:
+                - amd64
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - .semaphore/scripts/build-bird-image.sh "${ARCH}"
   - name: "Pull: go-build image"
     # Populate the GCS cache of calico/go-build so it can serve as a fallback when
     # a Docker Hub pull fails (which we still see occasionally even with an
@@ -1454,6 +1487,7 @@ blocks:
       - Prerequisites
       - "Build: calico image"
       - "Build: node image"
+      - "Build: bird image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1486,7 +1520,7 @@ blocks:
             # Start external BIRD BGP peer container on the KIND Docker network.
             # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
             - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
-            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:3.3.0
             # Run KubeVirt e2e tests
             - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
       epilogue:
