@@ -833,6 +833,14 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "ipsets"),
 			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "nat"),
 			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "routes"),
+			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "counters"),
+			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "arp"),
+			bpfDumpCmd(curNodeDir, nodeName, namespace, podName, "ifstate"),
+			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF conntrack stats for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf conntrack stats --json", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-conntrack-stats.json", curNodeDir),
+			},
 			common.Cmd{
 				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
 				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
