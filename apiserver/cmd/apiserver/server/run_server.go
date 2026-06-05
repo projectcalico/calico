@@ -44,8 +44,11 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 		opts.StopCh = make(chan struct{})
 	}
 
-	// Calico's aggregated apiserver does not need to re-evaluate MutatingAdmissionPolicy —
-	// kube-apiserver already enforces this on inbound requests before delegation.
+	// MAP plugin hard-coded disable — enabling here would break on k8s < 1.36
+	// (v1.MutatingAdmissionPolicy doesn't exist on the cluster). As a result,
+	// user-defined MAPs against projectcalico.org/v3 won't fire here. To use
+	// MAP, Calico should be installed without calico-apiserver, where
+	// kube-apiserver serves v3 as CRDs and enforces MAPs directly.
 	disabledPlugins := []string{mutating.PluginName}
 	klog.Infof("Enabling ValidatingAdmissionPolicy: %v", opts.EnableValidatingAdmissionPolicy)
 	if !opts.EnableValidatingAdmissionPolicy {
