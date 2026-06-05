@@ -66,7 +66,7 @@ TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
 # Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
-WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node.exe
+WINDOWS_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico.exe
 TOOLS_MOUNTNS_BINARY = $(NODE_CONTAINER_BIN_DIR)/mountns-$(ARCH)
 
 WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
@@ -75,7 +75,7 @@ WINDOWS_INSTALL_SCRIPT := dist/install-calico-windows.ps1
 # Name of the Windows release ZIP archive.
 WINDOWS_PACKAGING_ROOT := windows-packaging
 WINDOWS_ARCHIVE_ROOT := windows-packaging/CalicoWindows
-WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico-node.exe
+WINDOWS_ARCHIVE_BINARY := $(WINDOWS_ARCHIVE_ROOT)/calico.exe
 WINDOWS_ARCHIVE_TAG?=$(GIT_VERSION)
 WINDOWS_ARCHIVE := dist/calico-windows-$(WINDOWS_ARCHIVE_TAG).zip
 # Version of NSSM to download.
@@ -131,7 +131,15 @@ NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-## SRC_FILES is auto-populated from deps.txt by lib.Makefile.
+## SRC_FILES is auto-populated from node/deps.txt by lib.Makefile.
+## The node image ships the combined `calico` monobinary built from
+## ../cmd/calico (see $(NODE_CONTAINER_BINARY) below). The monobinary's source
+## closure (felix, confd, etc.) is NOT in node/deps.txt because node's own Go
+## module doesn't import those packages directly — they're pulled in by the
+## `make -C ../cmd/calico` recursion, which deps.txt generation can't see. Fold
+## in the cmd module's local deps so a change to felix (or anything else in the
+## monobinary) rebuilds the node image.
+SRC_FILES += $(call local-deps-go-files,cmd)
 ## Append non-Go sources that also affect the build.
 SRC_FILES += $(shell find ../felix -name '*.[ch]')
 
@@ -309,8 +317,8 @@ else
 WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
-# tests/k8st holds system tests (Go binaries run against a kind cluster via the
-# pytest harness), not plain unit tests. Skip them in the ginkgo UT/FV run
+# Packages to exclude from the UT run. tests/k8st holds the Go k8st system
+# tests, which need a live kind cluster (run via kind-k8st-run-test).
 UT_PACKAGES_TO_SKIP?=tests/k8st
 
 ## Run the ginkgo tests.
@@ -321,7 +329,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -367,26 +375,22 @@ k8s-test:
 	$(MAKE) kind-k8st-run-test
 	$(MAKE) -C $(REPO_ROOT) kind-down
 
-# Compile a standalone test binary for every Go test package under tests/k8st/.
-# The k8st test container has no Go toolchain, so we build in the go-build
-# container, statically linked (CGO_ENABLED=0), into tests/k8st/bin/<pkg>.test
-# (the bin dir is mounted into the run at /code). Discovery is automatic: any
-# package with *_test.go files under tests/k8st/ is built, so adding a new Go
-# test needs no change here. The matching pytest wrapper invokes the binary via
-# tests.k8st.utils.utils.run_go_test("<pkg>.test").
-K8ST_GO_BIN_DIR=tests/k8st/bin
-.PHONY: build-k8st-go-tests
-build-k8st-go-tests:
-	$(DOCKER_GO_BUILD) sh -ec ' \
-	    mkdir -p $(K8ST_GO_BIN_DIR); \
-	    for dir in $$(find tests/k8st -name "*_test.go" -printf "%h\n" | sort -u); do \
-	        name=$$(basename "$$dir"); \
-	        echo "building $$name.test from ./$$dir"; \
-	        CGO_ENABLED=0 go test -c -o "$(K8ST_GO_BIN_DIR)/$$name.test" "./$$dir"; \
-	    done'
+# Selector for Go-side k8st tests (e.g. K8ST_GO_TO_RUN='TestReadiness').
+# Defaults to running every Go test in the suite.
+K8ST_GO_TO_RUN?=.
+
+# Build the Go k8st test binary. Static (CGO disabled) so it runs inside
+# the Alpine-based calico/test container with no extra runtime deps. The
+# .PHONY marker means `make` always reinvokes `go test -c` and relies on
+# Go's own build cache for incremental rebuilds — matching the felix FV
+# pattern (felix/fv/fv.test) and avoiding a brittle hand-maintained
+# Makefile dependency list across libcalico-go / api / lib subtrees.
+.PHONY: bin/k8st.test
+bin/k8st.test:
+	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go test -c -o $@ ./tests/k8st/tests'
 
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) build-k8st-go-tests
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
@@ -394,12 +398,18 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) build-k8st-go-tests
 	    -v $(KUBECTL):/bin/kubectl \
 	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
+	    -e KUBECONFIG=/root/.kube/config \
 	    -e PYTHONDONTWRITEBYTECODE=1 \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
-	     cd /code/tests/k8st && pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)"'
+	     cd /code/tests/k8st && \
+	     go_rc=0; py_rc=0; \
+	     /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)" || go_rc=$$?; \
+	     pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)" || py_rc=$$?; \
+	     echo "Go suite rc=$$go_rc, Python suite rc=$$py_rc"; \
+	     [ $$go_rc -eq 0 ] && [ $$py_rc -eq 0 ]'
 
 ###############################################################################
 # CI/CD

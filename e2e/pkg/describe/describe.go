@@ -78,6 +78,23 @@ var features = map[string]bool{
 	"KubeVirt":        true,
 }
 
+// RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
+// actual QEMU-backed VMs. Tests with this label require a guest OS that boots
+// and runs services (e.g., TCP servers via cloud-init) and cannot run against
+// MockVirt/simulated KubeVirt on KIND clusters.
+func RequiresRealKubeVirt() any {
+	return framework.WithLabel("RequiresRealKubeVirt")
+}
+
+// RequiresMockVirt marks tests that can only run on clusters with MockVirt
+// (simulated KubeVirt). These tests use MockVirt-specific infrastructure such
+// as local Docker containers for eBGP peering and only validate ICMP-level
+// connectivity (no guest OS). Exclude on real KubeVirt clusters via the
+// RequiresMockVirt label in the test config.
+func RequiresMockVirt() any {
+	return framework.WithLabel("RequiresMockVirt")
+}
+
 // RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
 // server (calico-apiserver) being deployed. In v3 CRD mode, Calico resources
 // are served directly by the K8s CRD controller, and GET/LIST/WATCH requests

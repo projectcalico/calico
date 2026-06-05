@@ -1,0 +1,242 @@
+# DMs a PR author on Slack when their PR's Semaphore CI finishes.
+#
+# Opt-in is a repo *variable* (not a secret — Slack member IDs aren't
+# sensitive): CI_NOTIFY_MAP, a comma-separated list of
+#   <github-login>:<slack-member-id>
+# pairs, e.g.
+#   CI_NOTIFY_MAP = "tomastigera:U01ABCD2EFG, alice:U09ZYX8WVUT"
+# Set it with:  gh variable set CI_NOTIFY_MAP --body 'login:Uxxxx,...'
+#
+# Delivery uses the gh-pr-monitor Slack bot. Its token is a repo secret
+# GH_PR_MONITOR_BOT_TOKEN; the bot needs chat:write + im:write scopes so
+# chat.postMessage can open a DM to the author's Slack member ID.
+#
+# The workflow is a no-op (never fails noisily) if the variable/secret
+# are unset, the author hasn't opted in, or Slack is unreachable.
+
+name: CI finished Slack notify
+
+on:
+  status: {}
+  # Manual test path: simulate a finished-CI status for a given PR, so the
+  # full chain (resolve -> opt-in lookup -> DM) can be exercised on demand
+  # without waiting for real CI. Dispatchable only once this file is on the
+  # default branch (a GitHub limitation), so it's for post-merge sanity
+  # checks, not pre-merge testing.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to notify about"
+        required: true
+        type: string
+      state:
+        description: "Simulated CI outcome"
+        required: false
+        default: success
+        type: choice
+        options: [success, failure, error]
+
+# SHA-keyed for status events; PR-keyed for manual runs. A force-push gets a
+# new SHA in its own group, so a notify for an earlier push is not cancelled.
+concurrency:
+  group: ci-notify-${{ github.event.sha || inputs.pr_number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  notify:
+    # Fire once when the aggregate Semaphore status reaches a terminal
+    # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # Manual workflow_dispatch runs always proceed (state comes from input).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.context == 'ci/semaphoreci/pr: Calico' &&
+       (github.event.state == 'success' ||
+        github.event.state == 'failure' ||
+        github.event.state == 'error'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
+      SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
+      # On a status event these come from the event; on workflow_dispatch
+      # STATE falls through to the input and SHA/TARGET_URL are empty.
+      STATE: ${{ github.event.state || inputs.state }}
+      SHA: ${{ github.event.sha }}
+      TARGET_URL: ${{ github.event.target_url }}
+    steps:
+      - name: Skip if not configured
+        id: gate
+        run: |
+          if [[ -z "${CI_NOTIFY_MAP}" || -z "${SLACK_BOT_TOKEN}" ]]; then
+            echo "::notice::CI_NOTIFY_MAP variable or GH_PR_MONITOR_BOT_TOKEN secret missing — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve PR + author
+        id: resolve
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
+        run: |
+          if [[ -n "$INPUT_PR" ]]; then
+            # Manual run: trust only a numeric PR number (guards against
+            # injection via the free-form dispatch input).
+            if [[ ! "$INPUT_PR" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number must be numeric, got '$INPUT_PR'"
+              exit 1
+            fi
+            PR="$INPUT_PR"
+          else
+            # Status event: resolve PR from SHA. Use the search API rather
+            # than repos/$REPO/commits/$SHA/pulls — the latter does not
+            # return PRs whose head commit lives on a fork, and
+            # projectcalico/calico PRs all come from forks.
+            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                   --jq '.items[0].number // empty')
+            if [[ -z "$PR" ]]; then
+              echo "::notice::no open PR for sha=$SHA — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          # pr.json holds the free-form title; it stays on the runner disk
+          # and is read with jq in later steps. It is never routed through
+          # GITHUB_OUTPUT or workflow expressions — those would be a script-injection
+          # vector for an attacker-chosen PR title.
+          gh api "repos/$REPO/pulls/$PR" \
+            --jq '{login: .user.login, title: .title, url: .html_url}' > pr.json
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Look up author's Slack ID
+        id: lookup
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        run: |
+          # Read the login from pr.json (not a step output) — keep all
+          # PR-derived text off the workflow-expression interpolation path.
+          LOGIN=$(jq -r .login pr.json)
+          # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
+          # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
+          # is an unambiguous delimiter.
+          SLACK_ID=$(printf '%s' "$CI_NOTIFY_MAP" \
+            | tr ',' '\n' | tr -d '[:space:]' \
+            | awk -F: -v u="$LOGIN" '$1==u {print $2; exit}')
+          if [[ -z "$SLACK_ID" ]]; then
+            echo "::notice::author '$LOGIN' not in CI_NOTIFY_MAP — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+      # On failure/error, sem-ai-ci-triage posts a failure-analysis comment
+      # — but it runs concurrently on the same status event and only after
+      # its LLM backend responds, so the comment usually isn't there yet.
+      # Poll briefly for it so the DM can deep-link to the analysis. Success
+      # never gets a triage comment, so we skip the poll entirely there.
+      - name: Wait for sem-ai-triage comment
+        id: triage
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true' &&
+          env.STATE != 'success'
+        env:
+          PR: ${{ steps.resolve.outputs.pr }}
+          # When CI finished, per GitHub (status events only; empty on a
+          # manual workflow_dispatch). Used as the freshness reference below.
+          EVENT_CREATED_AT: ${{ github.event.created_at }}
+        run: |
+          MARKER="<!-- sem-ai-ci-triage -->"
+          COMMENT_URL=""
+
+          # Freshness gate: triage upserts a single comment per PR, so a
+          # comment from an *earlier* failure can already exist. Accept it
+          # only if it was updated after this CI run finished — i.e. triage
+          # (which is triggered by the same status event) has rewritten it
+          # for the current run. Compare GitHub-server timestamps on both
+          # sides (event created_at vs comment updated_at); ISO-8601 UTC
+          # sorts lexicographically, so a string '>' is a time comparison.
+          # If triage lags we keep polling; if it skips the run entirely the
+          # comment never goes fresh and we correctly omit the link. On a
+          # manual run there is no event time, so skip the gate.
+          REF="$EVENT_CREATED_AT"
+          if [[ -n "$REF" ]]; then
+            FRESH="and (.updated_at > \"$REF\")"
+          else
+            FRESH=""
+          fi
+
+          # Bound the query with `since` (filters by updated_at): triage's
+          # comment is always recent, so a 2h window keeps the result to
+          # ~1 page instead of walking every comment 12 times — avoids the
+          # API churn/rate-limit risk of an unbounded --paginate in a loop.
+          SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # ~120s budget (12 x 10s). Triage typically comments well within
+          # this; if not, we just omit the analysis link from the DM.
+          for _ in $(seq 1 12); do
+            COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
+              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH)][-1].html_url // empty")
+            [[ -n "$COMMENT_URL" ]] && break
+            sleep 10
+          done
+          # html_url is a github.com URL (safe charset) — OK via GITHUB_OUTPUT.
+          echo "comment_url=$COMMENT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack DM
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true'
+        env:
+          SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
+          PR: ${{ steps.resolve.outputs.pr }}
+          TRIAGE_COMMENT_URL: ${{ steps.triage.outputs.comment_url }}
+        run: |
+          # TITLE/URL come from pr.json via jq, never from a workflow expression.
+          TITLE=$(jq -r .title pr.json)
+          URL=$(jq -r .url pr.json)
+
+          case "$STATE" in
+            success) EMOJI=":white_check_mark:" WORD="passed" ;;
+            failure) EMOJI=":x:"                WORD="failed" ;;
+            error)   EMOJI=":warning:"          WORD="errored" ;;
+            *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
+          esac
+
+          TEXT="$EMOJI CI $WORD on your PR #$PR: $TITLE"$'\n'"$URL"
+          if [[ -n "$TARGET_URL" ]]; then
+            TEXT="$TEXT"$'\n'"CI run: $TARGET_URL"
+          fi
+          # Failure-analysis link from sem-ai-triage, only when it actually
+          # posted one (it skips on PASS or backend hiccups — no promise made).
+          if [[ -n "$TRIAGE_COMMENT_URL" ]]; then
+            TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+          fi
+
+          jq -n --arg c "$SLACK_ID" --arg t "$TEXT" \
+            '{channel: $c, text: $t, unfurl_links: false}' > payload.json
+
+          # Soft-fail: never break on a transient Slack issue.
+          set +e
+          RESP=$(curl -sS --max-time 30 -X POST \
+            https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            --data-binary @payload.json)
+          set -e
+
+          # jq stderr suppressed: an empty/non-JSON $RESP (Slack unreachable)
+          # is already non-fatal here — the [[ ]] just takes the warning
+          # branch — but silencing jq keeps a transient failure out of the log.
+          if [[ "$(printf '%s' "$RESP" | jq -r '.ok // false' 2>/dev/null)" != "true" ]]; then
+            echo "::warning::Slack DM failed: $(printf '%s' "$RESP" | jq -r '.error // "unknown"' 2>/dev/null)"
+          else
+            echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+          fi

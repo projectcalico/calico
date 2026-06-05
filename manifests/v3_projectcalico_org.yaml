@@ -17564,9 +17564,8 @@ spec:
                   type: object
                 fipsMode:
                   description: |-
-                    FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                    Only supported for Variant=Calico.
-                    Default: Disabled
+                    Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                    installation degraded.
                   enum:
                     - Enabled
                     - Disabled
@@ -17684,6 +17683,23 @@ spec:
                             - Debug
                           type: string
                       type: object
+                  type: object
+                networkPolicy:
+                  description: |-
+                    NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                    it installs to protect the Calico components it manages.
+                  properties:
+                    managePolicies:
+                      default: Enabled
+                      description: |-
+                        ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                        GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                        Disabled, the operator stops creating or updating these policies and deletes any it has
+                        already created, leaving policy management to the user. Defaults to Enabled.
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
                   type: object
                 nodeMetricsPort:
                   description: |-
@@ -26978,9 +26994,8 @@ spec:
                       type: object
                     fipsMode:
                       description: |-
-                        FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                        Only supported for Variant=Calico.
-                        Default: Disabled
+                        Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                        installation degraded.
                       enum:
                         - Enabled
                         - Disabled
@@ -27100,6 +27115,23 @@ spec:
                                 - Debug
                               type: string
                           type: object
+                      type: object
+                    networkPolicy:
+                      description: |-
+                        NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                        it installs to protect the Calico components it manages.
+                      properties:
+                        managePolicies:
+                          default: Enabled
+                          description: |-
+                            ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                            GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                            Disabled, the operator stops creating or updating these policies and deletes any it has
+                            already created, leaving policy management to the user. Defaults to Enabled.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
                       type: object
                     nodeMetricsPort:
                       description: |-
