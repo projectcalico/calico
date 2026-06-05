@@ -368,6 +368,16 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 	return err
 }
 
+// Stop tears down every listener (cancelling its goroutine and closing its raw
+// socket) and cancels the manager's context. Used for clean shutdown by tests
+func (m *proxyNeighManager) Stop() {
+	for ifaceName, l := range m.listeners {
+		l.stop()
+		delete(m.listeners, ifaceName)
+	}
+	m.cancel()
+}
+
 // hasFailedListener reports whether any listener goroutine has flagged itself
 // failed (and so needs dropping and recreating by reconcileListeners).
 func (m *proxyNeighManager) hasFailedListener() bool {

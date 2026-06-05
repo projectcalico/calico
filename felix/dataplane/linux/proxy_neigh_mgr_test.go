@@ -114,15 +114,34 @@ func (m *mockNetlinkForProxyNeigh) setIfaceAddr(name, cidr string) {
 	m.ifaceAddrs[name] = []netlink.Addr{{IPNet: ipnet}}
 }
 
+// readTimeoutError mimics the net.Error a real arp/ndp socket returns when its
+// read deadline expires, so the mock listeners exercise the same
+// timeout-then-recheck-context loop as production rather than blocking forever.
+type readTimeoutError struct{}
+
+func (readTimeoutError) Error() string   { return "read timeout" }
+func (readTimeoutError) Timeout() bool   { return true }
+func (readTimeoutError) Temporary() bool { return true }
+
+// deadlineCh returns a channel that fires at deadline, or nil (blocks forever)
+// when the deadline is unset — mirroring a socket with no read deadline set.
+func deadlineCh(deadline time.Time) <-chan time.Time {
+	if deadline.IsZero() {
+		return nil
+	}
+	return time.After(time.Until(deadline))
+}
+
 // --- Mock ARP client ---
 
 type mockARPClient struct {
-	mu      sync.Mutex
-	reads   chan *arp.Packet
-	readErr chan error
-	writes  []arpWrite
-	hwAddr  net.HardwareAddr
-	closed  bool
+	mu           sync.Mutex
+	reads        chan *arp.Packet
+	readErr      chan error
+	writes       []arpWrite
+	hwAddr       net.HardwareAddr
+	readDeadline time.Time
+	closed       bool
 }
 
 type arpWrite struct {
@@ -147,6 +166,8 @@ func (c *mockARPClient) Read() (*arp.Packet, *ethernet.Frame, error) {
 			return nil, nil, fmt.Errorf("closed")
 		}
 		return pkt, nil, nil
+	case <-deadlineCh(c.readDeadline):
+		return nil, nil, readTimeoutError{}
 	}
 }
 
@@ -165,7 +186,10 @@ func (c *mockARPClient) WriteTo(p *arp.Packet, addr net.HardwareAddr) error {
 	return nil
 }
 
-func (c *mockARPClient) SetReadDeadline(t time.Time) error { return nil }
+func (c *mockARPClient) SetReadDeadline(t time.Time) error {
+	c.readDeadline = t
+	return nil
+}
 
 func (c *mockARPClient) Close() error {
 	c.closed = true
@@ -190,10 +214,11 @@ func (c *mockARPClient) resetWrites() {
 // --- Mock NDP conn ---
 
 type mockNDPConn struct {
-	mu     sync.Mutex
-	reads  chan ndpRead
-	writes []ndpWrite
-	closed bool
+	mu           sync.Mutex
+	reads        chan ndpRead
+	writes       []ndpWrite
+	readDeadline time.Time
+	closed       bool
 }
 
 type ndpWrite struct {
@@ -215,11 +240,15 @@ func newMockNDPConn() *mockNDPConn {
 }
 
 func (c *mockNDPConn) ReadFrom() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
-	r, ok := <-c.reads
-	if !ok {
-		return nil, nil, netip.Addr{}, fmt.Errorf("closed")
+	select {
+	case r, ok := <-c.reads:
+		if !ok {
+			return nil, nil, netip.Addr{}, fmt.Errorf("closed")
+		}
+		return r.msg, nil, r.src, nil
+	case <-deadlineCh(c.readDeadline):
+		return nil, nil, netip.Addr{}, readTimeoutError{}
 	}
-	return r.msg, nil, r.src, nil
 }
 
 func (c *mockNDPConn) WriteTo(m ndp.Message, cm *ipv6.ControlMessage, dst netip.Addr) error {
@@ -229,7 +258,10 @@ func (c *mockNDPConn) WriteTo(m ndp.Message, cm *ipv6.ControlMessage, dst netip.
 	return nil
 }
 
-func (c *mockNDPConn) SetReadDeadline(t time.Time) error { return nil }
+func (c *mockNDPConn) SetReadDeadline(t time.Time) error {
+	c.readDeadline = t
+	return nil
+}
 
 func (c *mockNDPConn) Close() error {
 	c.closed = true
@@ -417,7 +449,7 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 	})
 
 	AfterEach(func() {
-		mgr.cancel()
+		mgr.Stop()
 	})
 
 	Describe("basic enable", func() {
@@ -685,7 +717,7 @@ var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
 				// Non-owning nodes don't open a listener for it at all.
 				Expect(mgr.listeners).To(BeEmpty())
 			}
-			mgr.cancel()
+			mgr.Stop()
 		}
 		Expect(answering).To(Equal(1)) // exactly one node owns the VIP
 	})
@@ -707,7 +739,7 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 	})
 
 	AfterEach(func() {
-		mgr.cancel()
+		mgr.Stop()
 	})
 
 	Describe("basic IPv6 proxy NDP entry", func() {
@@ -822,7 +854,7 @@ var _ = Describe("Proxy neighbor manager - live migration", func() {
 	})
 
 	AfterEach(func() {
-		mgr.cancel()
+		mgr.Stop()
 	})
 
 	It("should not respond for SOURCE migration role", func() {
@@ -891,7 +923,7 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 		Expect(created).To(HaveLen(1))
 	})
 
-	AfterEach(func() { mgr.cancel() })
+	AfterEach(func() { mgr.Stop() })
 
 	It("recreates a listener after an unrecoverable read error", func() {
 		first := mgr.listeners["eth0"]
