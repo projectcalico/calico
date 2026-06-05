@@ -317,6 +317,10 @@ else
 WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
 endif
 
+# tests/k8st holds system tests (Go binaries run against a kind cluster via the
+# pytest harness), not plain unit tests. Skip them in the ginkgo UT/FV run
+UT_PACKAGES_TO_SKIP?=tests/k8st
+
 ## Run the ginkgo tests.
 ut fv: $(LIBBPF_A) run-k8s-apiserver
 	mkdir -p report
@@ -325,7 +329,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r -skip-package $(UT_PACKAGES_TO_SKIP) --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -371,8 +375,26 @@ k8s-test:
 	$(MAKE) kind-k8st-run-test
 	$(MAKE) -C $(REPO_ROOT) kind-down
 
+# Compile a standalone test binary for every Go test package under tests/k8st/.
+# The k8st test container has no Go toolchain, so we build in the go-build
+# container, statically linked (CGO_ENABLED=0), into tests/k8st/bin/<pkg>.test
+# (the bin dir is mounted into the run at /code). Discovery is automatic: any
+# package with *_test.go files under tests/k8st/ is built, so adding a new Go
+# test needs no change here. The matching pytest wrapper invokes the binary via
+# tests.k8st.utils.utils.run_go_test("<pkg>.test").
+K8ST_GO_BIN_DIR=tests/k8st/bin
+.PHONY: build-k8st-go-tests
+build-k8st-go-tests:
+	$(DOCKER_GO_BUILD) sh -ec ' \
+	    mkdir -p $(K8ST_GO_BIN_DIR); \
+	    for dir in $$(find tests/k8st -name "*_test.go" -printf "%h\n" | sort -u); do \
+	        name=$$(basename "$$dir"); \
+	        echo "building $$name.test from ./$$dir"; \
+	        CGO_ENABLED=0 go test -c -o "$(K8ST_GO_BIN_DIR)/$$name.test" "./$$dir"; \
+	    done'
+
 .PHONY: kind-k8st-run-test
-kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG)
+kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) build-k8st-go-tests
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
