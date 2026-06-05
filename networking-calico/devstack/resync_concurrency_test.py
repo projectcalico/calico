@@ -143,28 +143,28 @@ def median(measurements):
     return statistics.median(m["elapsed_secs"] for m in measurements)
 
 
-def _take_warmup_then_measure(conn, network, subnet, sg, host, count):
+def _take_warmup_then_measure(conn, network, subnet, sg, host, count, label):
     """Create one warm-up port (discarded from the median) then ``count``
-    measured ports.  Returns ``(warmup_list, measured_list)``.
+    measured ports under ``label``.  Returns ``(warmup_list, measured_list)``.
 
-    Discarding one warm-up sample matters most in the startup scenario,
-    where the API workers have just come back up after a neutron-server
-    restart and the first port-create pays for cold DB-connection pools
-    and plugin caches.  We do it consistently in both scenarios so the
-    reported medians remain directly comparable.  The warm-up sample is
-    still included in the timing summary so a reviewer can see what it
-    cost.
+    Warm-up discard matters most in the startup scenario, where the API
+    workers have just come back up after a neutron-server restart and the
+    first port-create pays for cold DB-connection pools and plugin caches.
+    Applied symmetrically to both baseline and in-resync bursts so the two
+    medians come from comparably-trimmed samples -- trimming only one side
+    would bias the ``in_resync / baseline`` ratio (typically toward making
+    the test more lenient, since the first sample is usually the slowest).
+    The warm-up sample is still included in the timing summary so a
+    reviewer can see what it cost.
     """
-    warmup = measure_port_create_burst(
-        conn, network, subnet, sg, host, 1, "in_resync_warmup"
-    )
+    warmup_label = "%s_warmup" % label
+    warmup = measure_port_create_burst(conn, network, subnet, sg, host, 1, warmup_label)
     LOG.info(
-        "In-resync warm-up port (discarded from median): %.3fs",
+        "%s warm-up port (discarded from median): %.3fs",
+        label,
         warmup[0]["elapsed_secs"],
     )
-    measured = measure_port_create_burst(
-        conn, network, subnet, sg, host, count, "in_resync"
-    )
+    measured = measure_port_create_burst(conn, network, subnet, sg, host, count, label)
     return warmup, measured
 
 
@@ -173,10 +173,14 @@ def _take_warmup_then_measure(conn, network, subnet, sg, host, count):
 # ---------------------------------------------------------------------------
 
 
-# Marker logged by ResourceSyncer when the endpoints phase begins.  Test waits
-# for this in the calico-resync log file before firing the in-resync burst,
-# so we know the per-item delay loop is actively running.
-_ENDPOINTS_PHASE_MARKER = "Starting resync for WorkloadEndpoint"
+# Marker logged by ResourceSyncer at the top of the WorkloadEndpoint resync's
+# compare loop -- i.e. AFTER the etcd read and the CONTEXT_WRITER-held neutron
+# read, immediately before the per-item delay loop begins.  The test waits for
+# this line so the in-resync burst lands inside the stretched delay window,
+# not during the (held writer) neutron read that precedes it.  Pinning the
+# marker to the compare-loop start is what lets the in-resync median actually
+# reflect the stretched phase the test is trying to measure.
+_ENDPOINTS_PHASE_MARKER = "Resync for WorkloadEndpoint: starting compare loop"
 
 
 def wait_for_endpoints_phase(log_path, deadline_secs):
@@ -213,12 +217,15 @@ def scenario_on_demand(
     # Truncate the log file so the marker poll starts from a known state.
     open(log_file, "w").close()
 
-    # Baseline: measure without a concurrent resync.
+    # Baseline: measure without a concurrent resync.  Take a warm-up port
+    # first and discard it from the median, so the baseline is trimmed the
+    # same way the in-resync burst is (see _take_warmup_then_measure).
     LOG.info("Baseline: creating %d ports, no concurrent resync", test_ports)
-    baseline = measure_port_create_burst(
+    baseline_warmup, baseline_main = _take_warmup_then_measure(
         conn, network, subnet, sg, host, test_ports, "baseline"
     )
-    baseline_median = median(baseline)
+    baseline = baseline_warmup + baseline_main
+    baseline_median = median(baseline_main)
     LOG.info("Baseline median: %.3fs", baseline_median)
 
     # Run calico-resync with the per-item delay.  Capture its JSON output for
@@ -240,7 +247,12 @@ def scenario_on_demand(
     ]
     LOG.info("Starting calico-resync (per-item delay=%dms)", per_item_delay_ms)
     LOG.info("  %s", " ".join(cmd))
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # Discard stdout/stderr rather than piping them: with PIPE and no reader,
+    # a Python warning or stray traceback could fill the ~64KB OS pipe buffer
+    # and deadlock proc.wait().  All oslo logging is routed to log_file via
+    # extra_conf, and the JSON ResyncResult is written to --output, so nothing
+    # we care about is being thrown away.
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     try:
         if not wait_for_endpoints_phase(log_file, deadline_secs=60):
@@ -254,7 +266,7 @@ def scenario_on_demand(
         # phase.  We always discard the first sample as a warm-up (see
         # _take_warmup_then_measure for rationale).
         warmup, in_resync_main = _take_warmup_then_measure(
-            conn, network, subnet, sg, host, test_ports
+            conn, network, subnet, sg, host, test_ports, "in_resync"
         )
         in_resync = warmup + in_resync_main
         in_resync_median = median(in_resync_main)
@@ -332,7 +344,12 @@ def wait_for_log_text_in_journal(text, since_dt, deadline_secs):
 
     ``since_dt`` is a naive ``datetime.datetime`` in UTC; we format it as
     ``YYYY-MM-DD HH:MM:SS`` for ``journalctl --since``, which doesn't
-    accept ISO 8601's ``T``/``Z`` punctuation.
+    accept ISO 8601's ``T``/``Z`` punctuation.  ``--utc`` tells journalctl
+    to interpret ``--since`` (and display its output) in UTC, so the test
+    runs identically on UTC and non-UTC hosts -- without ``--utc`` the
+    bare timestamp is interpreted as local time, which off a non-UTC box
+    would either match nothing (timestamp in the future) or a prior run's
+    marker (timestamp too far back).
     """
     since_journal = since_dt.strftime("%Y-%m-%d %H:%M:%S")
     t_end = time.monotonic() + deadline_secs
@@ -343,6 +360,7 @@ def wait_for_log_text_in_journal(text, since_dt, deadline_secs):
                 "journalctl",
                 "-u",
                 "devstack@q-svc",
+                "--utc",
                 "--since",
                 since_journal,
                 "-q",
@@ -403,7 +421,7 @@ def scenario_startup(
         # endpoints phase.  We always discard the first sample as a warm-up
         # (see _take_warmup_then_measure for rationale).
         warmup, in_resync_main = _take_warmup_then_measure(
-            conn, network, subnet, sg, host, test_ports
+            conn, network, subnet, sg, host, test_ports, "in_resync"
         )
         in_resync = warmup + in_resync_main
         in_resync_median = median(in_resync_main)
@@ -433,12 +451,14 @@ def scenario_startup(
         )
 
     # Baseline AFTER the resync has finished -- the cleanest "no concurrent
-    # resync" state we can get without another restart.
+    # resync" state we can get without another restart.  Symmetric warm-up
+    # with the in-resync burst (see _take_warmup_then_measure).
     LOG.info("Baseline: creating %d ports, no concurrent resync", test_ports)
-    baseline = measure_port_create_burst(
+    baseline_warmup, baseline_main = _take_warmup_then_measure(
         conn, network, subnet, sg, host, test_ports, "baseline"
     )
-    baseline_median = median(baseline)
+    baseline = baseline_warmup + baseline_main
+    baseline_median = median(baseline_main)
     LOG.info("Baseline median: %.3fs", baseline_median)
 
     return {

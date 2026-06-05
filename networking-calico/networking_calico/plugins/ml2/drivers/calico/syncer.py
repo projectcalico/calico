@@ -179,6 +179,12 @@ class ResourceSyncer(object):
         def _iter_order(n):
             return (0 if n.startswith("lm ") else 1, n)
 
+        # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
+        # for this line in the resync log before firing its in-resync burst, so
+        # the burst lands inside the test-injected per-item delay window rather
+        # than during the etcd read or the CONTEXT_WRITER-held neutron read.
+        LOG.info("Resync for %s: starting compare loop", self.resource_kind)
+
         for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
             in_etcd = name in etcd_map
             in_neutron = name in neutron_map
