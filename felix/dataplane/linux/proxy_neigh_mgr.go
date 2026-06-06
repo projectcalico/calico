@@ -75,6 +75,8 @@ type arpClient interface {
 type ndpConn interface {
 	ReadFrom() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error)
 	WriteTo(ndp.Message, *ipv6.ControlMessage, netip.Addr) error
+	JoinGroup(group netip.Addr) error
+	LeaveGroup(group netip.Addr) error
 	SetReadDeadline(time.Time) error
 	Close() error
 }
@@ -517,11 +519,20 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 			continue
 		}
 		// Atomically swap in the new desired set; the previous pointer tells
-		// us which IPs are new and need a GARP/UNA.
+		// us which IPs are new and which are gone.
 		old := l.desired.Swap(&desired)
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
+				l.joinNDPGroup(ip)
 				l.sendGARP(ip)
+			}
+		}
+		// Drop multicast subscriptions for IPs we no longer answer for.
+		if old != nil {
+			for ip := range (*old).All() {
+				if !desired.Contains(ip) {
+					l.leaveNDPGroup(ip)
+				}
 			}
 		}
 	}
@@ -788,6 +799,56 @@ func (l *ifaceListener) sendGARPV6(addr netip.Addr) {
 			"ip":    addr,
 		}).Debug("Sent unsolicited NA")
 	}
+}
+
+// joinNDPGroup subscribes the IPv6 listener's socket to the solicited-node
+// multicast group for ipStr, so the kernel delivers Neighbor Solicitations for
+// it to runNDPListener. The kernel only auto-joins solicited-node groups for
+// addresses assigned to the interface; our proxied IPs are not, so without this
+// the listener never receives — and so never answers — solicitations for them.
+func (l *ifaceListener) joinNDPGroup(ipStr string) {
+	if l.ndpCli == nil {
+		return
+	}
+	group, err := solicitedNodeGroup(ipStr)
+	if err != nil {
+		logrus.WithError(err).WithField("ip", ipStr).Warn("Proxy neighbor manager: bad IP, not joining NDP group")
+		return
+	}
+	if err := l.ndpCli.JoinGroup(group); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    ipStr,
+		}).Warn("Failed to join solicited-node multicast group; NDP for this IP may go unanswered")
+	}
+}
+
+// leaveNDPGroup is the counterpart to joinNDPGroup, called when an IP drops out
+// of the desired set.
+func (l *ifaceListener) leaveNDPGroup(ipStr string) {
+	if l.ndpCli == nil {
+		return
+	}
+	group, err := solicitedNodeGroup(ipStr)
+	if err != nil {
+		return
+	}
+	if err := l.ndpCli.LeaveGroup(group); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"iface": l.ifaceName,
+			"ip":    ipStr,
+		}).Debug("Failed to leave solicited-node multicast group")
+	}
+}
+
+// solicitedNodeGroup returns the solicited-node multicast address for ipStr,
+// e.g. 2001:db8::ff00:a -> ff02::1:ff00:a.
+func solicitedNodeGroup(ipStr string) (netip.Addr, error) {
+	ip, err := netip.ParseAddr(ipStr)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	return ndp.SolicitedNodeMulticast(ip)
 }
 
 // selectNodeForIP reports whether this node is the one the hash ring assigns to

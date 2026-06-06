@@ -165,6 +165,8 @@ type mockNDPConn struct {
 	mu           sync.Mutex
 	reads        chan ndpRead
 	writes       []ndpWrite
+	joinedGroups []netip.Addr
+	leftGroups   []netip.Addr
 	readDeadline time.Time
 	closed       bool
 }
@@ -204,6 +206,36 @@ func (c *mockNDPConn) WriteTo(m ndp.Message, cm *ipv6.ControlMessage, dst netip.
 	defer c.mu.Unlock()
 	c.writes = append(c.writes, ndpWrite{msg: m, dst: dst})
 	return nil
+}
+
+func (c *mockNDPConn) JoinGroup(group netip.Addr) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.joinedGroups = append(c.joinedGroups, group)
+	return nil
+}
+
+func (c *mockNDPConn) LeaveGroup(group netip.Addr) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.leftGroups = append(c.leftGroups, group)
+	return nil
+}
+
+func (c *mockNDPConn) getJoinedGroups() []netip.Addr {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]netip.Addr, len(c.joinedGroups))
+	copy(out, c.joinedGroups)
+	return out
+}
+
+func (c *mockNDPConn) getLeftGroups() []netip.Addr {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]netip.Addr, len(c.leftGroups))
+	copy(out, c.leftGroups)
+	return out
 }
 
 func (c *mockNDPConn) SetReadDeadline(t time.Time) error {
@@ -733,6 +765,27 @@ var _ = Describe("Proxy NDP manager (IPv6)", func() {
 			Expect(ok).To(BeTrue())
 			Expect(lla.Direction).To(Equal(ndp.Target))
 			Expect(lla.Addr).To(Equal(ndpTestHWAddr))
+		})
+
+		It("joins the desired IP's solicited-node multicast group", func() {
+			// Without joining this group the kernel never delivers Neighbor
+			// Solicitations for the proxied IP to the listener, so it could
+			// never answer them.
+			want, err := ndp.SolicitedNodeMulticast(netip.MustParseAddr("fd00::50"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ndpConns["eth0"].getJoinedGroups()).To(ContainElement(want))
+		})
+
+		It("leaves the solicited-node multicast group when the IP is no longer desired", func() {
+			// Move the pod to a different host-subnet IP: fd00::50 drops out of
+			// the desired set, so its group should be left.
+			mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", "fd00::51/128"))
+			Expect(mgr.CompleteDeferredWork()).To(Succeed())
+			Expect(getDesiredIPs(mgr, "eth0").Contains("fd00::50")).To(BeFalse())
+
+			left, err := ndp.SolicitedNodeMulticast(netip.MustParseAddr("fd00::50"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ndpConns["eth0"].getLeftGroups()).To(ContainElement(left))
 		})
 	})
 
