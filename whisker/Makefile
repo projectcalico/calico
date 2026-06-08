@@ -17,7 +17,7 @@ BUILD_IMAGE_NAME=node:22.15
 ###############################################################################
 include ../lib.Makefile
 
-DOCKER_RUN_RM:=docker run --rm \
+DOCKER_RUN_RM:=$(DOCKER_RUN_CMD) --rm \
 	--env CYPRESS_CACHE_FOLDER=/code/.cache/Cypress \
 	--env NPM_TOKEN=${NPM_TOKEN} \
 	--user $(shell id -u):$(shell id -g) \

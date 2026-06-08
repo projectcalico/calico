@@ -40,6 +40,25 @@ GIT_REPO_SLUG ?= $(ORGANIZATION)/$(GIT_REPO)
 # Configure git to access repositories using SSH.
 GIT_USE_SSH = true
 
+# On hosts with SELinux enabled (e.g. Fedora) and Docker's SELinux support
+# turned on, confined containers are denied access to bind mounts unless the
+# files are relabelled (":z"). Relabelling the whole repo is slow and mutates
+# host file labels, so instead run our build/test containers with SELinux
+# label confinement disabled. The flag is harmless when Docker's SELinux
+# support is off, and is omitted entirely on hosts without SELinux.
+ifneq ($(wildcard /sys/fs/selinux),)
+DOCKER_SELINUX_ARGS := --security-opt label=disable
+EXTRA_DOCKER_ARGS += $(DOCKER_SELINUX_ARGS)
+endif
+
+# Ad-hoc containers that bind-mount host files but don't go through the
+# $(DOCKER_RUN)/$(EXTRA_DOCKER_ARGS) build-container wrappers should invoke
+# $(DOCKER_RUN_CMD) in place of a bare `docker run`. It carries the flags that
+# every container run needs regardless of purpose (currently just SELinux
+# handling); keeping it separate from EXTRA_DOCKER_ARGS, which is scoped to the
+# build containers (ssh-agent, module cache, CPU caps, ...).
+DOCKER_RUN_CMD := docker run $(DOCKER_SELINUX_ARGS)
+
 # The version of BIRD to use for calico/node builds and confd tests.
 BIRD_VERSION=v0.3.3-211-g9111ec3c
 

@@ -135,7 +135,7 @@ st: bin/calicoctl-linux-$(ARCH) version-helper
 # to keep them separate.
 run-kubernetes-control-plane: stop-kubernetes-control-plane
 	# Run a Kubernetes apiserver using Docker.
-	docker run --net=host --detach \
+	$(DOCKER_RUN_CMD) --net=host --detach \
 		--name st-apiserver-${KUBE_APISERVER_PORT} \
 		-v $(CURDIR):/code \
 		-v $(CURDIR)/../:/go/src/github.com/projectcalico/calico \
@@ -163,7 +163,7 @@ run-kubernetes-control-plane: stop-kubernetes-control-plane
 	while ! docker exec st-apiserver-${KUBE_APISERVER_PORT} kubectl --server=https://127.0.0.1:${KUBE_APISERVER_PORT} get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
 	# And run the controller manager.
-	docker run --detach --net=host \
+	$(DOCKER_RUN_CMD) --detach --net=host \
 	  --name st-controller-manager-${KUBE_APISERVER_PORT} \
 	  -v $(CERTS_PATH):/home/user/certs \
 	  $(CALICO_BUILD) kube-controller-manager \

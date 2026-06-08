@@ -57,7 +57,7 @@ gen-crds:
 	# Add K8S ClusterNetworkPolicy CRD
 	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
 	# Run prettier to fix indentation
-	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	$(DOCKER_RUN_CMD) --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 
 ./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
@@ -162,7 +162,7 @@ cluster-create: kind-cluster-create
 run-etcd-tls: stop-etcd-tls
 	# TODO: We shouldn't need to enable the v2 API, but some of our test code
 	# still relies on it.
-	docker run --detach \
+	$(DOCKER_RUN_CMD) --detach \
 		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
 		--entrypoint=/usr/local/bin/etcd \
@@ -184,7 +184,7 @@ stop-etcd-tls:
 	-docker rm -f calico-etcd-tls
 
 run-coredns: stop-coredns
-	docker run \
+	$(DOCKER_RUN_CMD) \
 		--detach \
 		--name coredns \
 		--rm \

@@ -710,7 +710,7 @@ endif
 ifdef LOCAL_PYTHON
 PYTHON3_CMD       = python3
 else
-PYTHON3_CMD       = docker run --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
+PYTHON3_CMD       = $(DOCKER_RUN_CMD) --rm -e QUAY_API_TOKEN -v $(REPO_ROOT):$(REPO_ROOT) -w $(REPO_ROOT) python:3.13 python3.13
 endif
 
 GIT_CMD           = git
@@ -1533,7 +1533,7 @@ run-k8s-apiserver: run-etcd
 	@if docker inspect $(APISERVER_NAME) >/dev/null 2>&1; then \
 		echo "$(APISERVER_NAME) already running"; \
 	else \
-		docker run --detach --net=host \
+		$(DOCKER_RUN_CMD) --detach --net=host \
 			--name $(APISERVER_NAME) \
 			-v $(REPO_ROOT):/go/src/github.com/projectcalico/calico \
 			-v $(CERTS_PATH):/home/user/certs \
@@ -1585,7 +1585,7 @@ run-k8s-controller-manager: run-k8s-apiserver
 	@if docker inspect $(CONTROLLER_MANAGER_NAME) >/dev/null 2>&1; then \
 		echo "$(CONTROLLER_MANAGER_NAME) already running"; \
 	else \
-		docker run --detach --net=host \
+		$(DOCKER_RUN_CMD) --detach --net=host \
 			--name $(CONTROLLER_MANAGER_NAME) \
 			-v $(CERTS_PATH):/home/user/certs \
 			$(CALICO_BUILD) kube-controller-manager \
