@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package k8stutils is the Go port of node/tests/k8st/utils and test_base.py.
+// Package utils is the Go port of node/tests/k8st/utils and test_base.py.
 // All Kubernetes interaction goes through native client-go (typed CRUD,
 // SPDY exec, log streaming); shell-out helpers remain only for docker and
 // calicoctl, which have no Go client equivalent here.
-package k8stutils
+package utils
 
 import (
 	"context"
@@ -363,7 +363,11 @@ func lookupCalicoNodePod(t testing.TB, nodeName string) (*corev1.Pod, error) {
 func ExecInPod(t testing.TB, namespace, podName, command string, opts ...RunOptions) (string, error) {
 	t.Helper()
 	cs := K8sClient(t)
-	pod, err := cs.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	defer cancel()
+
+	pod, err := cs.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -449,7 +453,7 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 // Usage:
 //
 //	func TestSomething(t *testing.T) {
-//	    defer k8stutils.CollectDiagsOnFailure(t)()
+//	    defer utils.CollectDiagsOnFailure(t)()
 //	    ...
 //	}
 //
@@ -674,7 +678,10 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 	t.Helper()
 	cs := K8sClient(t)
 	err := RetryUntilSuccess(t, timeout, func() error {
-		pods, err := cs.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: labelSelector,
 		})
 		if err != nil {
