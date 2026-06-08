@@ -496,7 +496,7 @@ bin/k8sfv.test: $(K8SFV_GO_FILES)
 run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)
 	FELIX_IP=`$(GET_CONTAINER_IP) k8sfv-felix` && \
 	sed "s/__FELIX_IP__/$${FELIX_IP}/" < $(K8SFV_DIR)/prometheus/prometheus.yml.in > $(K8SFV_DIR)/prometheus/prometheus.yml
-	docker run --detach --name k8sfv-prometheus \
+	$(DOCKER_RUN_CMD) --detach --name k8sfv-prometheus \
 	-v $(CURDIR)/$(K8SFV_DIR)/prometheus/prometheus.yml:/etc/prometheus.yml \
 	-v $(K8SFV_PROMETHEUS_DATA_DIR):/prometheus \
 	prom/prometheus \
@@ -508,7 +508,7 @@ stop-prometheus:
 	sleep 2
 
 run-grafana: stop-grafana run-prometheus
-	docker run --detach --name k8sfv-grafana -p 3000:3000 \
+	$(DOCKER_RUN_CMD) --detach --name k8sfv-grafana -p 3000:3000 \
 	-v $(CURDIR)/$(K8SFV_DIR)/grafana:/etc/grafana \
 	-v $(CURDIR)/$(K8SFV_DIR)/grafana-dashboards:/etc/grafana-dashboards \
 	grafana/grafana:$(GRAFANA_VERSION) --config /etc/grafana/grafana.ini

@@ -69,7 +69,7 @@ hack-lib:
 ## Run a local kubernetes server with API in a container.
 run-kubernetes-server: run-k8s-controller-manager
 	# Create a Node in the API for the tests to use.
-	docker run \
+	$(DOCKER_RUN_CMD) \
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \
@@ -80,7 +80,7 @@ run-kubernetes-server: run-k8s-controller-manager
 
 	# Create Namespaces required by namespaced Calico `NetworkPolicy`
 	# tests from the manifests namespaces.yaml.
-	docker run \
+	$(DOCKER_RUN_CMD) \
 		--net=host \
 		--rm \
 		-v  $(CURDIR):/manifests \

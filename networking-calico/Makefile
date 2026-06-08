@@ -9,7 +9,7 @@ export BUILDKIT_PROGRESS=plain
 build-test-container:
 	docker build -t networking-calico-test .
 
-RUN_TEST_CONTAINER = docker run -i --user `id -u`:`id -g` -v `pwd`:/code -w /code -e HOME=/code -e PIP_CONSTRAINT --rm networking-calico-test
+RUN_TEST_CONTAINER = $(DOCKER_RUN_CMD) -i --user `id -u`:`id -g` -v `pwd`:/code -w /code -e HOME=/code -e PIP_CONSTRAINT --rm networking-calico-test
 
 tox: build-test-container
 	$(RUN_TEST_CONTAINER) tox -e py38

@@ -67,8 +67,12 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./pkg/apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
-	# Run prettier to fix indentation
-	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
+	# Run prettier to fix indentation.
+	# Use the bare flag rather than $(DOCKER_RUN_CMD): this Makefile is also
+	# used in the exported standalone projectcalico/api repo, whose metadata.mk
+	# may not define DOCKER_RUN_CMD. An undefined DOCKER_SELINUX_ARGS expands to
+	# nothing (harmless); an undefined DOCKER_RUN_CMD would break the recipe.
+	docker run $(DOCKER_SELINUX_ARGS) --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
 	# Remove the profiles CRD. Profiles are backed by Namespaces in Kubernetes and the CRD is not needed.
 	rm -f config/crd/*.orig config/crd/projectcalico.org_profiles.yaml
 

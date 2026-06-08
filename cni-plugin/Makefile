@@ -123,8 +123,8 @@ $(BIN)/flannel: $(FLANNEL_CNI_PLUGIN_CLONED)
 	cp flannel-cni-plugin/dist/flannel-$(ARCH) $(BIN)/flannel
 
 $(WINDOWS_BIN)/flannel.exe: $(FLANNEL_CNI_PLUGIN_CLONED)
-	docker run \
-		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin:z \
+	$(DOCKER_RUN_CMD) \
+		-v $(CURDIR)/flannel-cni-plugin:/go/src/github.com/flannel-io/cni-plugin \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) -w /go/src/github.com/flannel-io/cni-plugin --rm $(CALICO_BUILD) \
 		/bin/sh -xe -c ' \
 			ARCH=$(ARCH) VERSION=$(FLANNEL_VERSION) make build_windows'
