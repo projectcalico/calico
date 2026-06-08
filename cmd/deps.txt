@@ -92,6 +92,7 @@ github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/kelseyhightower/memkv v0.1.1
 github.com/klauspost/compress v1.18.5
+github.com/klauspost/cpuid/v2 v2.2.10
 github.com/kylelemons/godebug v1.1.0
 github.com/leodido/go-urn v1.4.0
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
@@ -99,8 +100,12 @@ github.com/lithammer/dedent v1.1.0
 github.com/mailru/easyjson v0.9.0
 github.com/mattn/go-runewidth v0.0.19
 github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
+github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
+github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
+github.com/mdlayher/ndp v1.1.0
 github.com/mdlayher/netlink v1.7.2
+github.com/mdlayher/packet v1.1.2
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/mitchellh/go-wordwrap v1.0.1
@@ -150,6 +155,7 @@ github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
 github.com/xlab/treeprint v1.2.0
+github.com/zeebo/xxh3 v1.1.0
 go.etcd.io/etcd/api/v3 v3.6.10
 go.etcd.io/etcd/client/pkg/v3 v3.6.10
 go.etcd.io/etcd/client/v3 v3.6.10
@@ -464,6 +470,7 @@ local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
+local:lib/datastructures/hashring
 local:lib/httpmachinery/pkg/apiutil
 local:lib/httpmachinery/pkg/codec
 local:lib/httpmachinery/pkg/context
