@@ -158,6 +158,19 @@ calico_opts = [
         ),
         help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
     ),
+    cfg.IntOpt(
+        "startup_resync_inject_per_item_delay_ms",
+        default=0,
+        min=0,
+        help=(
+            "TEST-ONLY: when non-zero, the start-of-day resync sleeps "
+            "this many milliseconds between every step of its endpoints "
+            "compare loop.  Used by the resync-concurrency test "
+            "(CORE-12037) to stretch the resync to a known duration "
+            "while dynamic operations are timed against it.  Never set "
+            "this in production."
+        ),
+    ),
 ]
 cfg.CONF.register_opts(calico_opts, "calico")
 
@@ -1268,7 +1281,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         self.db = None
         self._get_db()
 
-        result = resync.Scope(self.db).run()
+        result = resync.Scope(
+            self.db,
+            inject_per_item_delay_ms=(
+                cfg.CONF.calico.startup_resync_inject_per_item_delay_ms
+            ),
+        ).run()
         if result.ok:
             LOG.info("One-shot resync done: %s", result.to_dict())
         else:
