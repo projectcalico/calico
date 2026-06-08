@@ -196,7 +196,8 @@ func subnetOffset(parent *net.IPNet, offset string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	pip, oip := parent.IP, offIP
+	pip := parent.IP
+	var oip net.IP
 	if p4 := pip.To4(); p4 != nil {
 		pip, oip = p4, offIP.To4()
 	} else {
