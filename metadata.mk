@@ -56,7 +56,7 @@ endif
 # $(DOCKER_RUN_CMD) in place of a bare `docker run`. It carries the flags that
 # every container run needs regardless of purpose (currently just SELinux
 # handling); keeping it separate from EXTRA_DOCKER_ARGS, which is scoped to the
-# go-build containers (ssh-agent, module cache, CPU caps, ...).
+# build containers (ssh-agent, module cache, CPU caps, ...).
 DOCKER_RUN_CMD := docker run $(DOCKER_SELINUX_ARGS)
 
 # The version of BIRD to use for calico/node builds and confd tests.
