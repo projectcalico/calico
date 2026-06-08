@@ -18,11 +18,6 @@
 // that lives in the host's L2 subnet — which only works if Felix answers the
 // ARP (IPv4) / NDP (IPv6) request on behalf of the hosting/owning node.
 //
-// This deliberately lives in the kind "k8st" system-test suite rather than the
-// cross-platform e2e suite: it requires direct access to the local docker
-// daemon (to attach an L2-adjacent peer to the "kind" docker network), which
-// the e2e suite (run against arbitrary clusters via kubeconfig) cannot provide.
-//
 // Like the rest of the k8st Go suite it is compiled into node/bin/k8st.test and
 // run against a live kind cluster by `make -C node kind-k8st-run-test` (select
 // it on its own with K8ST_GO_TO_RUN=TestProxyNeigh). Run directly against an
