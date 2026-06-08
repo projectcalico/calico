@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.7.0
+ENVOY_GATEWAY_VERSION=v1.8.0
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -46,10 +46,22 @@ LD_FLAGS = \
 	-X github.com/envoyproxy/gateway/internal/cmd/version.envoyGatewayVersion=$(ENVOY_GATEWAY_VERSION) \
 	-X github.com/envoyproxy/gateway/internal/cmd/version.gitCommitID=$(GIT_COMMIT)
 
+# Upstream envoy-gateway at v1.8.0 requires Go >= 1.26.3 in its go.mod `go`
+# directive. release-v3.31 still pins GO_VERSION=1.25.x for the rest of the
+# tree, so we need GOTOOLCHAIN here to let Go auto-download a newer toolchain
+# inside the build container.
+#
+# Pin minimum 1.26.4 (not bare `auto`) for defensive parity: plain `auto`
+# resolves to upstream's exact `go` directive (today 1.26.3), so pinning a
+# floor protects us if a future v1.8.x/v1.9.x cut regresses that directive.
+# The `+auto` suffix still lets a higher go.mod directive win without editing
+# this line.
+#
+# Remove this override once release-v3.31 picks up GO_VERSION >= 1.26.4.
 bin/envoy-gateway-$(ARCH): init-source
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
-			CGO_ENABLED=0 go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
+			CGO_ENABLED=0 GOTOOLCHAIN=go1.26.4+auto go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
 
 .PHONY: clean
 clean:
