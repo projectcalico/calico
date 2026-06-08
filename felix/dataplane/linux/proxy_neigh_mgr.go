@@ -51,10 +51,6 @@ const readDeadlineInterval = 1 * time.Second
 // ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
 const ipv6AllNodesMulticast = "ff02::1"
 
-// etherTypeARP is the EtherType for ARP. We open the raw ARP socket directly
-// (rather than via arp.Dial) so we can set PACKET_IGNORE_OUTGOING on it.
-const etherTypeARP = 0x0806
-
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
 type serviceID struct {
@@ -144,7 +140,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			// send — before they reach userspace, so the listener never answers
 			// its own GARP. Best-effort; on kernels that lack the option the
 			// self-MAC check in runARPListener still filters them.
-			conn, err := packet.Listen(ifi, packet.Raw, etherTypeARP, nil)
+			conn, err := packet.Listen(ifi, packet.Raw, int(ethernet.EtherTypeARP), nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -519,12 +515,14 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		old := l.desired.Swap(&desired)
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
-				l.joinNDPGroup(ip)
+				if m.ipVersion == 6 {
+					l.joinNDPGroup(ip)
+				}
 				l.sendGARP(ip)
 			}
 		}
 		// Drop multicast subscriptions for IPs we no longer answer for.
-		if old != nil {
+		if old != nil && m.ipVersion == 6 {
 			for ip := range (*old).All() {
 				if !desired.Contains(ip) {
 					l.leaveNDPGroup(ip)
@@ -803,9 +801,6 @@ func (l *ifaceListener) sendGARPV6(addr netip.Addr) {
 // addresses assigned to the interface; our proxied IPs are not, so without this
 // the listener never receives — and so never answers — solicitations for them.
 func (l *ifaceListener) joinNDPGroup(ipStr string) {
-	if l.ndpCli == nil {
-		return
-	}
 	group, err := solicitedNodeGroup(ipStr)
 	if err != nil {
 		logrus.WithError(err).WithField("ip", ipStr).Warn("Proxy neighbor manager: bad IP, not joining NDP group")
@@ -822,9 +817,6 @@ func (l *ifaceListener) joinNDPGroup(ipStr string) {
 // leaveNDPGroup is the counterpart to joinNDPGroup, called when an IP drops out
 // of the desired set.
 func (l *ifaceListener) leaveNDPGroup(ipStr string) {
-	if l.ndpCli == nil {
-		return
-	}
 	group, err := solicitedNodeGroup(ipStr)
 	if err != nil {
 		return
