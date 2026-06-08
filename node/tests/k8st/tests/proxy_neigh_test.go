@@ -30,7 +30,7 @@
 //	+------+  +------+  +------+   +-----------------+
 //	| node |  | node |  | node |  | extL2 peer (us) |
 //	+------+  +------+  +------+   +-----------------+
-//	   pod IP / LB VIP from host-subnet pools     arping / NDP / curl
+//	   pod IP / LB VIP from host-subnet pools                    curl
 
 package k8stests
 
@@ -60,13 +60,10 @@ import (
 )
 
 const (
-	// extL2Iface is the interface name inside the netshoot peer container.
-	extL2Iface = "eth0"
-
 	// kindNetworkName is the docker network kind attaches its nodes to.
 	kindNetworkName = "kind"
 
-	// netshootImage carries arping, ping6/ip (for NDP) and curl for the L2 peer.
+	// netshootImage carries curl for the L2 peer.
 	netshootImage = "docker.io/nicolaka/netshoot:v0.13"
 	// echoImage serves /clientip over HTTP; agnhost is the standard k8s test image.
 	echoImage = "registry.k8s.io/e2e-test-images/agnhost:2.45"
@@ -225,39 +222,25 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	// peer even though the peer has no route to the pod IP — the only way it
 	// succeeds is if Felix answers the ARP/NDP request for the hosting node.
 	t.Run("pod_ip", func(t *testing.T) {
-		probe(NewWithT(t), peer, family, podIP)
+		probe(NewWithT(t), peer, podIP)
 	})
 
 	// LoadBalancer VIPs take the same path, except the manager hash-picks a
 	// single node to answer for each VIP. We assert only that *some* node
 	// answers and traffic flows, not which one.
 	t.Run("lb_vip", func(t *testing.T) {
-		probe(NewWithT(t), peer, family, vip)
+		probe(NewWithT(t), peer, vip)
 	})
 }
 
-// probe sends an ARP (IPv4) or NDP (IPv6) request for ip from the peer, then
-// confirms end-to-end reachability with an HTTP GET.
-func probe(g *WithT, peer *extL2Peer, family corev1.IPFamily, ip string) {
-	parsed := net.ParseIP(ip)
-	g.Expect(parsed).NotTo(BeNil(), "parsing target IP %q", ip)
-
-	if family == corev1.IPv4Protocol {
-		g.Eventually(func() error {
-			_, err := peer.Arping(parsed, 3)
-			return err
-		}, "60s", "2s").Should(Succeed(), "ARP probe for %s never got a reply", ip)
-	} else {
-		g.Eventually(func() error {
-			_, err := peer.NeighborSolicit(parsed)
-			return err
-		}, "60s", "2s").Should(Succeed(), "NDP probe for %s never got an advertisement", ip)
-	}
-
+// probe confirms the L2-adjacent peer can reach ip over HTTP. The peer has no
+// route to ip, so the connection only succeeds if Felix answered the ARP (v4) /
+// Neighbor Solicitation (v6) for it and then routed the traffic.
+func probe(g *WithT, peer *extL2Peer, ip string) {
 	g.Eventually(func() error {
 		_, err := peer.Curl(httpURL(ip))
 		return err
-	}, "30s", "2s").Should(Succeed(), "HTTP request to %s never succeeded", ip)
+	}, "60s", "2s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
 }
 
 // httpURL builds the echo-server URL; net.JoinHostPort brackets IPv6 literals.
@@ -490,54 +473,6 @@ func (p *extL2Peer) Close() error {
 	return err
 }
 
-// Arping sends count ARP requests for ip via arping(8) and reports whether at
-// least one host answered. Like the IPv6 neighbor check, this asserts only that
-// *some* node answers for the target and not which one: for a LoadBalancer VIP
-// the manager picks a single owner, but we don't pin the test to that here (the
-// unit tests cover single-owner selection). iputils arping exits non-zero when
-// more than one host replies, so we key success off a reply line in the output
-// rather than the exit status, and only fail when no reply arrived at all.
-func (p *extL2Peer) Arping(ip net.IP, count int) (string, error) {
-	if ip.To4() == nil {
-		return "", fmt.Errorf("arping requires an IPv4 address, got %s", ip)
-	}
-	out, err := p.exec("arping", "-c", fmt.Sprint(count), "-w", "5", "-I", extL2Iface, ip.String())
-	if strings.Contains(out, "reply from") {
-		return out, nil
-	}
-	if err != nil {
-		return out, fmt.Errorf("arping %s failed: %w (output: %s)", ip, err, strings.TrimSpace(out))
-	}
-	return out, fmt.Errorf("arping %s got no replies (output: %s)", ip, strings.TrimSpace(out))
-}
-
-// NeighborSolicit triggers IPv6 neighbor discovery for ip and reports whether
-// the peer learned a link-layer address for it — i.e. some node answered the
-// Neighbor Solicitation with a Neighbor Advertisement. netshoot ships no
-// ndisc6, so we drive the kernel's own NDP instead: drop any cached entry,
-// prime resolution with a best-effort ping (the echo itself may go unanswered —
-// service VIPs don't reply to ICMP — but the NS/NA exchange still populates the
-// neighbor table), then read the entry back.
-func (p *extL2Peer) NeighborSolicit(ip net.IP) (string, error) {
-	if ip.To4() != nil {
-		return "", fmt.Errorf("NeighborSolicit requires an IPv6 address, got %s", ip)
-	}
-	// Force a fresh solicitation on every attempt; ignore "no such entry".
-	_, _ = p.exec("ip", "-6", "neigh", "del", ip.String(), "dev", extL2Iface)
-	_, _ = p.exec("ping6", "-c", "2", "-W", "2", "-I", extL2Iface, ip.String())
-	out, err := p.exec("ip", "-6", "neigh", "show", ip.String(), "dev", extL2Iface)
-	if err != nil {
-		return out, fmt.Errorf("ip -6 neigh show %s failed: %w (output: %s)", ip, err, strings.TrimSpace(out))
-	}
-	// Resolved: "<ip> dev eth0 lladdr <mac> REACHABLE|STALE|DELAY".
-	// Unresolved: "<ip> dev eth0 FAILED|INCOMPLETE", or empty.
-	neigh := strings.TrimSpace(out)
-	if !strings.Contains(neigh, "lladdr") || strings.Contains(neigh, "FAILED") || strings.Contains(neigh, "INCOMPLETE") {
-		return neigh, fmt.Errorf("no neighbor advertisement for %s (neigh table: %q)", ip, neigh)
-	}
-	return neigh, nil
-}
-
 // Curl performs an HTTP GET against url with a short timeout.
 func (p *extL2Peer) Curl(url string) (string, error) {
 	out, err := p.exec("curl", "--silent", "--show-error", "--max-time", "5", url)
@@ -551,7 +486,7 @@ func (p *extL2Peer) Curl(url string) (string, error) {
 // docker plumbing (which goes through k8stutils.Run), this uses exec.Command so
 // caller-supplied args — IPv6 literals, bracketed URLs — pass straight through
 // as argv with no shell-quoting hazard. Returns combined stdout+stderr, which
-// callers parse for arping/NDP/curl output.
+// the caller parses for curl output.
 func (p *extL2Peer) exec(argv ...string) (string, error) {
 	if p == nil || p.name == "" {
 		return "", fmt.Errorf("extL2Peer: container has been closed")
