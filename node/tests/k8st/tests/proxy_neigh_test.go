@@ -63,10 +63,8 @@ const (
 	// kindNetworkName is the docker network kind attaches its nodes to.
 	kindNetworkName = "kind"
 
-	// netshootImage carries curl for the L2 peer.
-	netshootImage = "docker.io/nicolaka/netshoot:v0.13"
-	// echoImage serves /clientip over HTTP; agnhost is the standard k8s test image.
-	echoImage = "registry.k8s.io/e2e-test-images/agnhost:2.45"
+	// nginxListenV6Cmd patches the server pod's nginx to also listen on IPv6.
+	nginxListenV6Cmd = `sed -ri 's/listen[[:space:]]+80;/listen 80;\n    listen [::]:80;/' /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'`
 
 	// CIDRs carved out of the kind network for the two test pools. We use the
 	// high end of the kind range so we don't collide with docker-assigned node
@@ -168,7 +166,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	g.Expect(err).NotTo(HaveOccurred(), "spawning L2 peer")
 	t.Cleanup(func() { _ = peer.Close() })
 
-	// Deploy an echo server pinned to the workload pool, plus a LoadBalancer
+	// Deploy an nginx server pinned to the workload pool, plus a LoadBalancer
 	// service in front of it.
 	appLabels := map[string]string{"app": "proxy-neigh-" + suffix}
 	pod := &corev1.Pod{
@@ -180,10 +178,10 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
-				Name:  "echo",
-				Image: echoImage,
-				Args:  []string{"netexec", "--http-port=80"},
-				Ports: []corev1.ContainerPort{{ContainerPort: 80}},
+				Name:    "nginx",
+				Image:   k8stutils.NginxImage,
+				Command: []string{"sh", "-c", nginxListenV6Cmd},
+				Ports:   []corev1.ContainerPort{{ContainerPort: 80}},
 			}},
 		},
 	}
@@ -243,9 +241,8 @@ func probe(g *WithT, peer *extL2Peer, ip string) {
 	}, "60s", "2s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
 }
 
-// httpURL builds the echo-server URL; net.JoinHostPort brackets IPv6 literals.
 func httpURL(ip string) string {
-	return fmt.Sprintf("http://%s/clientip", net.JoinHostPort(ip, "80"))
+	return fmt.Sprintf("http://%s/", net.JoinHostPort(ip, "80"))
 }
 
 // --- Cluster client + resource helpers ---
@@ -435,11 +432,9 @@ func v6SubnetWithSuffix(parent *net.IPNet, suffixCIDR string) (string, error) {
 
 // --- L2-adjacent docker peer (carried over from the former e2e test) ---
 
-// extL2Peer wraps a single netshoot container attached to a docker bridge
-// network, used to send ARP/NDP probes from a point that is layer-2 adjacent to
-// the cluster nodes but is not itself a cluster node. It is given NET_RAW (raw
-// ARP/NDP sockets) and NET_ADMIN, and runs `sleep infinity` so we can exec into
-// it. Callers must Close() it.
+// extL2Peer wraps a single container on a docker bridge network — layer-2
+// adjacent to the cluster nodes but not itself a cluster node — that we curl
+// cluster IPs from.
 type extL2Peer struct {
 	t    testing.TB
 	name string
@@ -457,7 +452,7 @@ func newExtL2Peer(t testing.TB, name, network string) (*extL2Peer, error) {
 	_, _ = k8stutils.Run(t, "docker rm -f "+name, allow)
 	if _, err := k8stutils.Run(t, fmt.Sprintf(
 		"docker run -d --name %s --network %s --cap-add NET_RAW --cap-add NET_ADMIN %s sleep infinity",
-		name, network, netshootImage), k8stutils.RunOptions{AllowFail: true}); err != nil {
+		name, network, k8stutils.NginxImage), k8stutils.RunOptions{AllowFail: true}); err != nil {
 		return nil, fmt.Errorf("docker run for %q failed: %w", name, err)
 	}
 	return &extL2Peer{t: t, name: name}, nil
