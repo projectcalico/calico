@@ -233,9 +233,7 @@ func pickIPInPool(poolCIDR string, idx int) (string, error) {
 	return out.String(), nil
 }
 
-// createNoEncapPool creates an IPPool with the given CIDR, AllowedUses and no
-// encapsulation. proxy_neigh_mgr.isNoEncapPool requires both ipipMode and
-// vxlanMode to be Never.
+// createNoEncapPool creates an IPPool with the given CIDR, AllowedUses and no encapsulation.
 func createNoEncapPool(c client.Interface, name, cidr string, uses []api.IPPoolAllowedUse) {
 	pool := api.NewIPPool()
 	pool.Name = name
