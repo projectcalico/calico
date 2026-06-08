@@ -577,3 +577,4 @@ local:whisker-backend/cmd/whiskerbackend
 local:whisker-backend/pkg/apis/v1
 local:whisker-backend/pkg/config
 local:whisker-backend/pkg/handlers/v1
+local:whisker-backend/pkg/upstream/goldmane
