@@ -63,9 +63,6 @@ const (
 	// kindNetworkName is the docker network kind attaches its nodes to.
 	kindNetworkName = "kind"
 
-	// nginxListenV6Cmd patches the server pod's nginx to also listen on IPv6.
-	nginxListenV6Cmd = `sed -ri 's/listen[[:space:]]+80;/listen 80;\n    listen [::]:80;/' /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'`
-
 	// CIDRs carved out of the kind network for the two test pools. We use the
 	// high end of the kind range so we don't collide with docker-assigned node
 	// addresses (which start at .0.2). Pools must be >= Calico's default block
@@ -166,7 +163,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	g.Expect(err).NotTo(HaveOccurred(), "spawning L2 peer")
 	t.Cleanup(func() { _ = peer.Close() })
 
-	// Deploy an nginx server pinned to the workload pool, plus a LoadBalancer
+	// Deploy an echo server pinned to the workload pool, plus a LoadBalancer
 	// service in front of it.
 	appLabels := map[string]string{"app": "proxy-neigh-" + suffix}
 	pod := &corev1.Pod{
@@ -178,10 +175,10 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
-				Name:    "nginx",
-				Image:   k8stutils.NginxImage,
-				Command: []string{"sh", "-c", nginxListenV6Cmd},
-				Ports:   []corev1.ContainerPort{{ContainerPort: 80}},
+				Name:  "echo",
+				Image: k8stutils.Agnhost,
+				Args:  []string{"netexec", "--http-port=80"},
+				Ports: []corev1.ContainerPort{{ContainerPort: 80}},
 			}},
 		},
 	}
@@ -242,7 +239,7 @@ func probe(g *WithT, peer *extL2Peer, ip string) {
 }
 
 func httpURL(ip string) string {
-	return fmt.Sprintf("http://%s/", net.JoinHostPort(ip, "80"))
+	return fmt.Sprintf("http://%s/clientip", net.JoinHostPort(ip, "80"))
 }
 
 // --- Cluster client + resource helpers ---
@@ -451,8 +448,8 @@ func newExtL2Peer(t testing.TB, name, network string) (*extL2Peer, error) {
 	// Best-effort cleanup of a stale container with the same name.
 	_, _ = k8stutils.Run(t, "docker rm -f "+name, allow)
 	if _, err := k8stutils.Run(t, fmt.Sprintf(
-		"docker run -d --name %s --network %s --cap-add NET_RAW --cap-add NET_ADMIN %s sleep infinity",
-		name, network, k8stutils.NginxImage), k8stutils.RunOptions{AllowFail: true}); err != nil {
+		"docker run -d --name %s --network %s --cap-add NET_RAW --cap-add NET_ADMIN %s pause",
+		name, network, k8stutils.Agnhost), k8stutils.RunOptions{AllowFail: true}); err != nil {
 		return nil, fmt.Errorf("docker run for %q failed: %w", name, err)
 	}
 	return &extL2Peer{t: t, name: name}, nil
