@@ -95,11 +95,26 @@ func KubectlExists() error {
 
 // Cmd is a struct to hold a command to execute, info description to print and a
 // filepath location for where output should be written to.
+//
+// Set exactly one of CmdStr or CmdArgs.  CmdStr is convenient for simple
+// commands whose tokenisation matches whitespace splitting.  Use CmdArgs when
+// any individual argument contains whitespace (e.g. a kubectl label selector
+// like "k8s-app in (a,b,c)") — strings.Fields would otherwise mangle it.
 type Cmd struct {
 	Info     string
 	CmdStr   string
+	CmdArgs  []string
 	FilePath string
 	SymLink  string
+}
+
+// resolved returns the argv to execute and a human-readable rendering for
+// logs, deriving whichever of CmdStr / CmdArgs wasn't supplied.
+func (c Cmd) resolved() (args []string, display string) {
+	if c.CmdArgs != nil {
+		return c.CmdArgs, strings.Join(c.CmdArgs, " ")
+	}
+	return strings.Fields(c.CmdStr), c.CmdStr
 }
 
 // ExecCmdWriteToFile executes the provided command c and outputs the result to a
@@ -119,13 +134,13 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 		return
 	}
 
-	parts := strings.Fields(c.CmdStr)
+	parts, display := c.resolved()
 	logCtx.Debugf("cmd tokens: [%+v]", parts)
 
-	logCtx.Debugf("Executing command: %+v ... ", c.CmdStr)
+	logCtx.Debugf("Executing command: %+v ... ", display)
 	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
 	if err != nil {
-		fmt.Printf("%s Failed to run command: %s\nError: %s\n", logPrefix, c.CmdStr, string(content))
+		fmt.Printf("%s Failed to run command: %s\nError: %s\n", logPrefix, display, string(content))
 	}
 
 	// This is for the commands we want to run but don't want to save the output
