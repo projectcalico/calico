@@ -213,11 +213,16 @@
   # build on cache miss.
   # The process/testing paths trigger this so the win-fv-felix block (which now
   # installs the locally-built calico image) has it cached in GCS. The libcalico
-  # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
+  # ipam/testutils paths and the 20-felix.yml self-trigger keep this block a
   # superset of the win-fv-felix block's trigger (felix's full test closure plus
   # its own CI block), so win-fv-felix never runs without this image in GCS.
+  # libcalico-go/lib/testutils is covered in full (not just its stacktrace
+  # subdirectory): it is a test-only dependency of several component blocks
+  # (e.g. kube-controllers, whose ci-no-prereqs requires the cached image), so
+  # it triggers those blocks via their Go test closure without being in
+  # cmd/calico's production closure.
   run:
-    when: "${CHANGE_IN(cmd/calico,non-go:/felix/,non-go:/typha/,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN(cmd/calico,non-go:/felix/,non-go:/typha/,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies: []
   task:
     env_vars:
