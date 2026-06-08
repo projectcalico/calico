@@ -2,3 +2,6 @@
 Run 'make gen-deps-files' to regenerate.
 
 go 1.26.3
+github.com/projectcalico/calico
+
+local:third_party/cni-plugins/cmd/install

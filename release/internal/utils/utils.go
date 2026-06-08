@@ -115,6 +115,7 @@ var (
 		"cmd/calico",
 		"istio",
 		"node",
+		"third_party/cni-plugins",
 		"third_party/envoy-gateway",
 		"third_party/envoy-proxy",
 		"third_party/envoy-ratelimit",
