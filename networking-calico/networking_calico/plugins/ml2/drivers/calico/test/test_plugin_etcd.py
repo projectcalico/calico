@@ -1003,6 +1003,15 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
 
+        # Resync with QoSControls populated from a port-level QoS policy.
+        # Regression check for a customer report against 3.30.7 where the
+        # resync was dropping qosControls from the WorkloadEndpoint, which
+        # in turn caused Felix to remove the corresponding TC qdisc.
+        _log.info("Resync with all qosControls fields populated")
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
+
         # Reset for future tests.
         lib.m_compat.cfg.CONF.calico.max_ingress_connections_per_port = 0
         lib.m_compat.cfg.CONF.calico.max_egress_connections_per_port = 0
@@ -1029,6 +1038,13 @@ class TestPluginEtcdBase(_TestEtcdBase):
             sg_1_key_v3: sg_1_value_v3,
         }
         self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set())
+
+        # Resync with QoSControls populated from a network-level QoS policy
+        # (different lookup path than the port-level case above).
+        _log.info("Resync with qosControls from network-level policy")
+        self.simulated_time_advance(mech_calico.DEFAULT_RESYNC_INTERVAL_SECS)
+        self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
         # Remove the QoS policy from the network again.
