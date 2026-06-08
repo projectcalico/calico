@@ -324,6 +324,20 @@ rules:
       - envoy-gateway-topology-injector.tigera-gateway
     verbs:
       - update
+  # The operator manages ValidatingAdmissionPolicy resources for the Gateway API
+  # safe-upgrades policy shipped by Envoy Gateway v1.8+.
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Needed for operator lock
   - apiGroups:
       - coordination.k8s.io
@@ -510,7 +524,7 @@ rules:
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
-      - xlistenersets.gateway.networking.x-k8s.io
+      - listenersets.gateway.networking.k8s.io
       - xmeshes.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
