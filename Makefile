@@ -82,7 +82,7 @@ check-ocp-no-crds:
 	@CRD_FILES_IN_OCP_DIR=$$(grep "^kind: CustomResourceDefinition" manifests/ocp/* -l || true); if [ ! -z "$$CRD_FILES_IN_OCP_DIR" ]; then echo "ERROR: manifests/ocp should not have any CustomResourceDefinitions, these files should be removed:"; echo "$$CRD_FILES_IN_OCP_DIR"; exit 1; fi
 
 yaml-lint:
-	@docker run --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
+	@$(DOCKER_RUN_CMD) --rm $$(tty -s && echo "-it" || echo) -v $(PWD):/data cytopia/yamllint:latest .
 
 protobuf:
 	$(MAKE) -C app-policy protobuf
@@ -449,7 +449,7 @@ endif
 	@echo "This file is auto-generated based on commit records reported" >> AUTHORS.md
 	@echo "by git for the projectcalico/calico repository. It is ordered alphabetically." >> AUTHORS.md
 	@echo "" >> AUTHORS.md
-	@docker run -ti --rm --net=host \
+	@$(DOCKER_RUN_CMD) -ti --rm --net=host \
 		-v $(REPO_ROOT):/code \
 		-w /code \
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
