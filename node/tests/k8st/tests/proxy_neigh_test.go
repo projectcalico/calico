@@ -63,6 +63,9 @@ const (
 	// extL2Iface is the interface name inside the netshoot peer container.
 	extL2Iface = "eth0"
 
+	// kindNetworkName is the docker network kind attaches its nodes to.
+	kindNetworkName = "kind"
+
 	// netshootImage carries arping, ping6/ip (for NDP) and curl for the L2 peer.
 	netshootImage = "docker.io/nicolaka/netshoot:v0.13"
 	// echoImage serves /clientip over HTTP; agnhost is the standard k8s test image.
@@ -98,13 +101,9 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 
 	cli := newClient(g)
 
-	// Find the docker network the cluster's nodes are on (kind defaults to "kind"
-	// but honours KIND_EXPERIMENTAL_DOCKER_NETWORK, so it isn't fixed) and derive
+	// The cluster's nodes (and our L2 peer) sit on kind's docker network; derive
 	// the two pool CIDRs from its subnet for this family.
-	network, err := detectKindNetwork(t)
-	g.Expect(err).NotTo(HaveOccurred(), "detecting the cluster's docker network")
-
-	v4Net, v6Net, err := detectKindNetworkSubnets(t, network)
+	v4Net, v6Net, err := detectKindNetworkSubnets(t, kindNetworkName)
 	g.Expect(err).NotTo(HaveOccurred(), "detecting docker network subnets")
 
 	var workloadCIDR, lbCIDR, poolAnnotation, lbPoolAnnotation string
@@ -168,7 +167,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Cleanup(restore)
 
 	// Spawn the L2-adjacent peer on the kind network.
-	peer, err := newExtL2Peer(t, "proxy-neigh-extl2-"+suffix, network)
+	peer, err := newExtL2Peer(t, "proxy-neigh-extl2-"+suffix, kindNetworkName)
 	g.Expect(err).NotTo(HaveOccurred(), "spawning L2 peer")
 	t.Cleanup(func() { _ = peer.Close() })
 
@@ -374,41 +373,6 @@ func waitForLBVIP(ctx context.Context, g *WithT, cli ctrlclient.Client, svc *cor
 }
 
 // --- Kind-network subnet math (carried over from the former e2e test) ---
-
-// detectKindNetwork returns the name of the docker network the cluster's nodes
-// are attached to. kind defaults to a network called "kind" but honours the
-// KIND_EXPERIMENTAL_DOCKER_NETWORK override, so the name isn't fixed. Rather
-// than guess, we read it back from a node: in kind the docker container name
-// equals the Kubernetes node name, so we inspect the first node's container and
-// return its single non-default docker network.
-func detectKindNetwork(t testing.TB) (string, error) {
-	// In kind the docker container name equals the Kubernetes node name, so
-	// inspect the (control-plane) node's container for its docker networks.
-	nodes, _, _ := k8stutils.NodeInfo(t)
-	if len(nodes) == 0 {
-		return "", fmt.Errorf("cluster reports no nodes")
-	}
-	node := nodes[0]
-	out, err := exec.Command("docker", "inspect", "--type", "container", node,
-		"--format", `{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}`).Output()
-	if err != nil {
-		return "", fmt.Errorf("docker inspect node container %q (is this a kind cluster?): %w", node, err)
-	}
-	var candidates []string
-	for _, n := range strings.Fields(string(out)) {
-		switch n {
-		case "bridge", "host", "none":
-			// docker built-ins — never the kind L2 segment.
-		default:
-			candidates = append(candidates, n)
-		}
-	}
-	if len(candidates) != 1 {
-		return "", fmt.Errorf("node %q is on %d non-default docker networks %v; cannot pick the L2 segment unambiguously",
-			node, len(candidates), candidates)
-	}
-	return candidates[0], nil
-}
 
 // detectKindNetworkSubnets returns the IPv4 and IPv6 subnets configured on the
 // given docker network. Either may be nil if the network lacks that family.
