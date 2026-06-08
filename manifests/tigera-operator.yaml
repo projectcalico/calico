@@ -480,6 +480,20 @@ rules:
       - get
       - list
       - watch
+  # The operator manages ValidatingAdmissionPolicy resources protecting built-in
+  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs (k8s 1.30+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
