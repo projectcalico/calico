@@ -959,6 +959,17 @@ spec:
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
                   type: string
+                localSubnetL2Reachability:
+                  description: |-
+                    LocalSubnetL2Reachability controls whether Felix automatically responds to
+                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+                    selected LoadBalancer VIPs that fall within the same subnet as the host
+                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
                 logActionRateLimit:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
