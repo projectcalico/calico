@@ -52,6 +52,10 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
+	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
+	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
+	github.com/mdlayher/ndp v1.1.0
+	github.com/mdlayher/packet v1.1.2
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/natefinch/atomic v1.0.1
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
@@ -60,6 +64,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/projectcalico/api v0.0.0-20220722155641-439a754a988b
+	github.com/projectcalico/calico/lib/datastructures v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
@@ -390,8 +395,14 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 )
 
+require (
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
+	github.com/zeebo/xxh3 v1.1.0 // indirect
+)
+
 replace (
 	github.com/projectcalico/api => ./api
+	github.com/projectcalico/calico/lib/datastructures => ./lib/datastructures
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
 	github.com/projectcalico/calico/lib/std => ./lib/std
 
