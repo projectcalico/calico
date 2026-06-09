@@ -18,13 +18,6 @@
 // that lives in the host's L2 subnet — which only works if Felix answers the
 // ARP (IPv4) / NDP (IPv6) request on behalf of the hosting/owning node.
 //
-// Like the rest of the k8st Go suite it is compiled into node/bin/k8st.test and
-// run against a live kind cluster by `make -C node kind-k8st-run-test` (select
-// it on its own with K8ST_GO_TO_RUN=TestProxyNeigh). Run directly against an
-// existing cluster with:
-//
-//	KUBECONFIG=... go test ./node/tests/k8st/tests -run TestProxyNeigh -v
-//
 // Topology (all on the "kind" docker network, sharing one L2 segment):
 //
 //	+------+  +------+  +------+   +-----------------+
