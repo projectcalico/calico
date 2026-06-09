@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +32,10 @@ const (
 	minTokenRetryDuration          = 5 * time.Second
 	defaultRefreshFraction         = 4
 	kubeconfigPath                 = "/host/etc/cni/net.d/calico-kubeconfig"
+
+	// coalesceWindow is how long the file notifier waits for activity to
+	// stop before emitting one coalesced "directory changed" event.
+	coalesceWindow = 50 * time.Millisecond
 )
 
 type TokenRefresher struct {
@@ -39,13 +46,23 @@ type TokenRefresher struct {
 	minTokenRetryDuration  time.Duration
 	defaultRefreshFraction time.Duration
 
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 
 	namespace          string
 	serviceAccountName string
 
+	// tokenFilePath is the path to the in-pod projected service account token
+	// that this TokenRefresher uses.
+	tokenFilePath string
+
+	// notifier delivers a coalesced "token directory changed" signal so the
+	// refresh loop can wake up promptly on a rotation. Tests assign a fake;
+	// if nil at Run time, a default fsnotify-backed one is created.
+	notifier FileNotifier
+
 	tokenChan chan TokenUpdate
 	stopChan  chan struct{}
+	stopOnce  sync.Once
 }
 
 type TokenUpdate struct {
@@ -61,7 +78,7 @@ func NamespaceOfUsedServiceAccount() string {
 	return string(namespace)
 }
 
-func BuildClientSet() (*kubernetes.Clientset, error) {
+func BuildClientSet() (kubernetes.Interface, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	cfg, err := winutils.BuildConfigFromFlags("", kubeconfig)
 	logrus.WithFields(logrus.Fields{"KUBECONFIG": kubeconfig, "cfg": cfg}).Debug("running cni.BuildClientSet")
@@ -71,12 +88,12 @@ func BuildClientSet() (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(cfg)
 }
 
-func NewTokenRefresher(clientset *kubernetes.Clientset, namespace string, serviceAccountName string) *TokenRefresher {
+func NewTokenRefresher(clientset kubernetes.Interface, namespace string, serviceAccountName string) *TokenRefresher {
 	return NewTokenRefresherWithCustomTiming(clientset, namespace, serviceAccountName, defaultCNITokenValiditySeconds, minTokenRetryDuration, defaultRefreshFraction)
 }
 
-func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
-	return &TokenRefresher{
+func NewTokenRefresherWithCustomTiming(clientset kubernetes.Interface, namespace string, serviceAccountName string, tokenValiditySeconds int64, minTokenRetryDuration time.Duration, defaultRefreshFraction time.Duration) *TokenRefresher {
+	t := &TokenRefresher{
 		tokenSupported:         false,
 		tokenOnce:              &sync.Once{},
 		tokenValiditySeconds:   tokenValiditySeconds,
@@ -85,9 +102,11 @@ func NewTokenRefresherWithCustomTiming(clientset *kubernetes.Clientset, namespac
 		clientset:              clientset,
 		namespace:              namespace,
 		serviceAccountName:     serviceAccountName,
+		tokenFilePath:          winutils.GetHostPath(tokenFile),
 		tokenChan:              make(chan TokenUpdate),
 		stopChan:               make(chan struct{}),
 	}
+	return t
 }
 
 func (t *TokenRefresher) UpdateToken() (TokenUpdate, error) {
@@ -119,11 +138,32 @@ func (t *TokenRefresher) TokenChan() <-chan TokenUpdate {
 	return t.tokenChan
 }
 
+// Stop signals Run to exit. Idempotent (sync.Once), so a second call
+// is safe and won't panic on close-of-closed-channel.
 func (t *TokenRefresher) Stop() {
-	close(t.stopChan)
+	t.stopOnce.Do(func() {
+		close(t.stopChan)
+	})
 }
 
 func (t *TokenRefresher) Run() {
+	// Wake up immediately when kubelet rotates our projected SA token,
+	// without waiting for the next timer tick (up to ~12 h with default
+	// settings). Particularly relevant on signing-key rotation, which
+	// invalidates every previously-issued token while their exp claim is
+	// still in the future.
+	if t.notifier == nil {
+		n, err := NewFsnotifyFileNotifier(filepath.Dir(t.tokenFilePath))
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to set up CNI token directory watcher; refresh will rely on timer only")
+			t.notifier = noopFileNotifier{}
+		} else {
+			t.notifier = n
+		}
+	}
+	defer t.notifier.Close()
+	rotated := t.notifier.Events()
+
 	var nextExpiration time.Time
 	for {
 		tu, err := t.UpdateToken()
@@ -145,13 +185,143 @@ func (t *TokenRefresher) Run() {
 		if logrus.IsLevelEnabled(logrus.DebugLevel) {
 			logrus.Debugf("Going to sleep for %s", sleepTime.String())
 		}
+		timer := time.NewTimer(sleepTime)
 		select {
-		case <-time.After(sleepTime):
+		case <-timer.C:
+		case _, ok := <-rotated:
+			if !timer.Stop() {
+				<-timer.C
+			}
+			if !ok {
+				logrus.Warn("Token directory watcher channel closed unexpectedly; falling back to timer-only refresh")
+				rotated = nil
+			} else {
+				logrus.Info("Projected service account token changed; refreshing CNI kubeconfig immediately")
+			}
 		case <-t.stopChan:
+			if !timer.Stop() {
+				<-timer.C
+			}
 			return
 		}
 	}
 }
+
+// FileNotifier delivers a coalesced "watched directory changed" signal:
+// one channel send per logical change, regardless of how many raw
+// filesystem events the OS produced (kubelet's atomic-writer fires ~5
+// per rotation).
+type FileNotifier interface {
+	// Events returns a receive-only channel. A nil channel means the
+	// notifier is inert (e.g. unsupported platform); callers should
+	// rely on their timer.
+	Events() <-chan struct{}
+	// Close releases resources. Idempotent.
+	Close()
+}
+
+// NewFsnotifyFileNotifier watches dir with fsnotify and emits one event per
+// coalesceWindow of activity. Windows projected-SA volumes don't follow the
+// kubelet atomic-writer pattern, so we return a no-op notifier there and
+// consumers fall back to their timer.
+func NewFsnotifyFileNotifier(dir string) (FileNotifier, error) {
+	if runtime.GOOS == "windows" {
+		logrus.Info("fsnotify-based CNI token fast path is disabled on Windows; refresh will rely on timer only")
+		return noopFileNotifier{}, nil
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("create fsnotify watcher: %w", err)
+	}
+	if err := watcher.Add(dir); err != nil {
+		_ = watcher.Close()
+		return nil, fmt.Errorf("add %q to fsnotify watcher: %w", dir, err)
+	}
+	logrus.WithField("dir", dir).Info("Watching service account token directory for rotation")
+	n := &fsnotifyFileNotifier{
+		dir:     dir,
+		watcher: watcher,
+		events:  make(chan struct{}, 1),
+		done:    make(chan struct{}),
+	}
+	go n.run()
+	return n, nil
+}
+
+type fsnotifyFileNotifier struct {
+	dir       string
+	watcher   *fsnotify.Watcher
+	events    chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
+}
+
+func (n *fsnotifyFileNotifier) Events() <-chan struct{} { return n.events }
+
+func (n *fsnotifyFileNotifier) Close() {
+	n.closeOnce.Do(func() {
+		close(n.done)
+		_ = n.watcher.Close()
+	})
+}
+
+// run waits for the watcher to fall silent for coalesceWindow before
+// emitting a single "directory changed" event, so cluster-wide SA
+// signing-key rotation doesn't multiply at kube-apiserver.
+func (n *fsnotifyFileNotifier) run() {
+	defer close(n.events)
+	// settle is non-nil only while inside a coalesce window.
+	var settle *time.Timer
+	settleC := func() <-chan time.Time {
+		if settle == nil {
+			return nil
+		}
+		return settle.C
+	}
+	for {
+		select {
+		case <-n.done:
+			return
+		case _, ok := <-n.watcher.Events:
+			if !ok {
+				return
+			}
+			// First event of a burst: arm the timer.
+			// Subsequent events: slide the window forward.
+			if settle == nil {
+				settle = time.NewTimer(coalesceWindow)
+			} else {
+				if !settle.Stop() {
+					<-settle.C
+				}
+				settle.Reset(coalesceWindow)
+			}
+		case err, ok := <-n.watcher.Errors:
+			// fsnotify requires both channels to be drained; leaving
+			// Errors unread can block the watcher's internal goroutine.
+			if !ok {
+				return
+			}
+			logrus.WithError(err).WithField("dir", n.dir).Warn("fsnotify error on service account token directory")
+		case <-settleC():
+			// Burst is over; emit one coalesced event. If the previous
+			// send is still pending, drop this one (the consumer will
+			// see the latest state on its next read).
+			select {
+			case n.events <- struct{}{}:
+			default:
+			}
+			settle = nil
+		}
+	}
+}
+
+// noopFileNotifier is used when directory watching isn't viable (e.g.
+// Windows projected-SA volumes) or when fsnotify setup fails.
+type noopFileNotifier struct{}
+
+func (noopFileNotifier) Events() <-chan struct{} { return nil }
+func (noopFileNotifier) Close()                  {}
 
 func (t *TokenRefresher) getSleepTime(nextExpiration *time.Time) time.Duration {
 	now := time.Now()
@@ -176,7 +346,7 @@ func (t *TokenRefresher) getSleepTime(nextExpiration *time.Time) time.Duration {
 	return sleepTime
 }
 
-func (t *TokenRefresher) tokenRequestSupported(clientset *kubernetes.Clientset) bool {
+func (t *TokenRefresher) tokenRequestSupported(clientset kubernetes.Interface) bool {
 	t.tokenOnce.Do(func() {
 		resources, err := clientset.Discovery().ServerResourcesForGroupVersion("v1")
 		if err != nil {
@@ -198,6 +368,13 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		logrus.WithError(err).Error("Failed to read service account token file")
 		return TokenUpdate{}, err
 	}
+	return parseTokenUpdate(tokenBytes)
+}
+
+// parseTokenUpdate decodes a JWT-formatted service account token into a
+// TokenUpdate and returns an error if it is invalid or doesn't meet our
+// requirements.
+func parseTokenUpdate(tokenBytes []byte) (TokenUpdate, error) {
 	token := string(tokenBytes)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != 3 {
@@ -216,14 +393,25 @@ func tokenUpdateFromFile() (TokenUpdate, error) {
 		return TokenUpdate{}, err
 	}
 	var claimMap map[string]any
-	err = json.Unmarshal(decodedClaims, &claimMap)
-	if err != nil {
+	if err := json.Unmarshal(decodedClaims, &claimMap); err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal service account token claims")
+		return TokenUpdate{}, err
+	}
+	expRaw, ok := claimMap["exp"]
+	if !ok {
+		err := fmt.Errorf("token claims are missing 'exp'")
+		logrus.WithError(err).Error("Service account token has no expiration claim")
+		return TokenUpdate{}, err
+	}
+	expFloat, ok := expRaw.(float64)
+	if !ok {
+		err := fmt.Errorf("token claims 'exp' has unexpected type %T", expRaw)
+		logrus.WithError(err).Error("Service account token expiration claim is not a number")
 		return TokenUpdate{}, err
 	}
 	return TokenUpdate{
 		Token:          token,
-		ExpirationTime: time.Unix(int64(claimMap["exp"].(float64)), 0),
+		ExpirationTime: time.Unix(int64(expFloat), 0),
 	}, nil
 }
 
