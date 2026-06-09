@@ -38,6 +38,7 @@ func init() {
 		"group frontends that share the same service ID and print their backends once per group")
 	natCmd.AddCommand(natDumpCmd)
 	natCmd.AddCommand(natAffDumpCmd)
+	natCmd.AddCommand(natMaglevDumpCmd)
 
 	natSetCmd.AddCommand(newNatSetFrontend())
 	natSetCmd.AddCommand(newNatSetBackend())
@@ -84,6 +85,16 @@ var natAffDumpCmd = &cobra.Command{
 	},
 }
 
+var natMaglevDumpCmd = &cobra.Command{
+	Use:   "maglev",
+	Short: "dumps the maglev consistent-hash backend table",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := dumpMaglev(cmd); err != nil {
+			log.WithError(err).Error("Failed to dump maglev map")
+		}
+	},
+}
+
 var natSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "sets an entry in the NAT tables",
@@ -94,17 +105,66 @@ var natDelCmd = &cobra.Command{
 	Short: "deletes an entry from the NAT tables",
 }
 
-func dumpAff(cmd *cobra.Command) (err error) {
+func dumpAff(cmd *cobra.Command) error {
+	if ipv6 != nil && *ipv6 {
+		affMap, err := nat.LoadAffinityMapV6(nat.AffinityMapV6())
+		if err != nil {
+			return err
+		}
+		return writeAff(cmd, makeAffinityJSON(affMap))
+	}
+
 	affMap, err := nat.LoadAffinityMap(nat.AffinityMap())
 	if err != nil {
 		return err
 	}
+	return writeAff(cmd, makeAffinityJSON(affMap))
+}
 
-	for k, v := range affMap {
-		cmd.Printf("%-40s %s\n", k, v)
+func writeAff(cmd *cobra.Command, entries []affinityEntryJSON) error {
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
 	}
 
+	for _, e := range entries {
+		cmd.Printf("client %s svc proto %d %s -> %s ts %s\n",
+			e.ClientIP, e.Proto, net.JoinHostPort(e.Addr, fmt.Sprint(e.Port)),
+			net.JoinHostPort(e.Backend.Addr, fmt.Sprint(e.Backend.Port)), e.Timestamp)
+	}
 	cmd.Printf("\n")
+
+	return nil
+}
+
+func dumpMaglev(cmd *cobra.Command) error {
+	if ipv6 != nil && *ipv6 {
+		mglvMap, err := nat.LoadMaglevMapV6(nat.MaglevMapV6())
+		if err != nil {
+			return err
+		}
+		return writeMaglev(cmd, makeMaglevJSON(mglvMap))
+	}
+
+	mglvMap, err := nat.LoadMaglevMap(nat.MaglevMap())
+	if err != nil {
+		return err
+	}
+	return writeMaglev(cmd, makeMaglevJSON(mglvMap))
+}
+
+func writeMaglev(cmd *cobra.Command, entries []maglevEntryJSON) error {
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
+	}
+
+	for _, e := range entries {
+		cmd.Printf("svc %d ordinal %d -> %s\n",
+			e.SvcID, e.Ordinal, net.JoinHostPort(e.Addr, fmt.Sprint(e.Port)))
+	}
 
 	return nil
 }
@@ -365,6 +425,87 @@ type natServiceGroupJSON struct {
 	ID        uint32            `json:"id"`
 	Frontends []natFrontendJSON `json:"frontends"`
 	Backends  []natBackendJSON  `json:"backends"`
+}
+
+// maglevEntryJSON is one (service, ordinal) -> backend slot of the maglev
+// consistent-hash table.
+type maglevEntryJSON struct {
+	SvcID   uint32 `json:"svc_id"`
+	Ordinal uint32 `json:"ordinal"`
+	Addr    string `json:"addr"`
+	Port    uint16 `json:"port"`
+}
+
+// maglevKey is the constraint for a maglev map key: comparable (so it can be a
+// Go map key) and exposing the maglev key accessors.
+type maglevKey interface {
+	comparable
+	nat.MaglevBackendKeyInterface
+}
+
+func makeMaglevJSON[K maglevKey, V nat.BackendValueInterface](m map[K]V) []maglevEntryJSON {
+	entries := make([]maglevEntryJSON, 0, len(m))
+	for k, v := range m {
+		entries = append(entries, maglevEntryJSON{
+			SvcID:   k.SvcID(),
+			Ordinal: k.Ordinal(),
+			Addr:    v.Addr().String(),
+			Port:    v.Port(),
+		})
+	}
+	// Sort by (service, ordinal) for deterministic output.
+	slices.SortFunc(entries, func(a, b maglevEntryJSON) int {
+		if a.SvcID != b.SvcID {
+			return cmp.Compare(a.SvcID, b.SvcID)
+		}
+		return cmp.Compare(a.Ordinal, b.Ordinal)
+	})
+	return entries
+}
+
+// affinityEntryJSON is one client -> backend affinity entry, keyed by the
+// client IP and the frontend service it is sticky to.
+type affinityEntryJSON struct {
+	ClientIP  string         `json:"client_ip"`
+	Proto     uint8          `json:"proto"`
+	Addr      string         `json:"addr"`
+	Port      uint16         `json:"port"`
+	Backend   natBackendJSON `json:"backend"`
+	Timestamp string         `json:"timestamp"`
+}
+
+// affinityKey is the constraint for an affinity map key: comparable and
+// exposing the affinity key accessors.
+type affinityKey interface {
+	comparable
+	nat.AffinityKeyInterface
+}
+
+func makeAffinityJSON[K affinityKey, V nat.AffinityValueInterface](m map[K]V) []affinityEntryJSON {
+	entries := make([]affinityEntryJSON, 0, len(m))
+	for k, v := range m {
+		fe := k.FrontendAffinityKey()
+		be := v.Backend()
+		entries = append(entries, affinityEntryJSON{
+			ClientIP:  k.ClientIP().String(),
+			Proto:     fe.Proto(),
+			Addr:      fe.Addr().String(),
+			Port:      fe.Port(),
+			Backend:   natBackendJSON{Addr: be.Addr().String(), Port: be.Port()},
+			Timestamp: v.Timestamp().String(),
+		})
+	}
+	// Sort by (service addr, port, client) for deterministic output.
+	slices.SortFunc(entries, func(a, b affinityEntryJSON) int {
+		if c := cmp.Compare(a.Addr, b.Addr); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Port, b.Port); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ClientIP, b.ClientIP)
+	})
+	return entries
 }
 
 func dumpNATJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](

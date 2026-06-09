@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -37,6 +38,58 @@ func TestNATDump(t *testing.T) {
 	}
 
 	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back, false)
+}
+
+// TestMaglevDumpJSON checks that makeMaglevJSON flattens the maglev map into
+// (svc, ordinal) -> backend entries, sorted deterministically, and that the
+// result marshals to JSON.
+func TestMaglevDumpJSON(t *testing.T) {
+	m := nat2.MaglevMapMem{
+		nat2.NewMaglevBackendKey(35, 1): nat2.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 8080),
+		nat2.NewMaglevBackendKey(35, 0): nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 8080),
+		nat2.NewMaglevBackendKey(12, 0): nat2.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 90),
+	}
+
+	entries := makeMaglevJSON(m)
+
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d: %+v", len(entries), entries)
+	}
+	// Sorted by (svc, ordinal): (12,0), (35,0), (35,1).
+	if entries[0].SvcID != 12 || entries[1].SvcID != 35 || entries[1].Ordinal != 0 || entries[2].Ordinal != 1 {
+		t.Fatalf("entries not sorted by (svc, ordinal): %+v", entries)
+	}
+	if entries[1].Addr != "5.5.5.5" || entries[1].Port != 8080 {
+		t.Fatalf("unexpected backend for (35,0): %+v", entries[1])
+	}
+	if _, err := json.Marshal(entries); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+}
+
+// TestAffinityDumpJSON checks that makeAffinityJSON exposes the client, the
+// frontend service tuple, and the chosen backend as structured fields.
+func TestAffinityDumpJSON(t *testing.T) {
+	m := nat2.AffinityMapMem{
+		nat2.NewAffinityKey(net.IPv4(10, 0, 0, 1), nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 8080)),
+	}
+
+	entries := makeAffinityJSON(m)
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %+v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.ClientIP != "10.0.0.1" || e.Addr != "1.1.1.1" || e.Port != 80 || e.Proto != 6 {
+		t.Fatalf("unexpected affinity key fields: %+v", e)
+	}
+	if e.Backend.Addr != "5.5.5.5" || e.Backend.Port != 8080 {
+		t.Fatalf("unexpected backend: %+v", e.Backend)
+	}
+	if _, err := json.Marshal(entries); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 }
 
 // TestDumpNiceGrouping verifies that dumpNiceGrouped groups frontends sharing the
