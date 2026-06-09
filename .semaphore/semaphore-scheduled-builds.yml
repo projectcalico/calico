@@ -414,11 +414,22 @@ blocks:
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
-    # cmd/calico's Go closure already covers felix/typha (registered as
-    # subcommands); the non-go paths close the gap for Felix Build/UT, which
-    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
-    # consumers use .semaphore/load-cached-images, which falls back to a local
-    # build on cache miss.
+    # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
+    # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
+    # producer must run whenever they do — including on felix-test-only PRs.
+    #
+    # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
+    # test-file exclusion, but for every *secondary*/dependency package it adds a
+    # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
+    # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
+    # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
+    # while skipping this producer — leaving the artifacts unuploaded. Putting felix
+    # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
+    # cmd/calico stays as a secondary so the calico image still rebuilds on changes
+    # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
+    #
     # The process/testing paths trigger this so the win-fv-felix block (which now
     # installs the locally-built calico image) has it cached in GCS. The libcalico
     # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a

@@ -682,11 +682,22 @@ blocks:
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
-    # cmd/calico's Go closure already covers felix/typha (registered as
-    # subcommands); the non-go paths close the gap for Felix Build/UT, which
-    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
-    # consumers use .semaphore/load-cached-images, which falls back to a local
-    # build on cache miss.
+    # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
+    # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
+    # producer must run whenever they do — including on felix-test-only PRs.
+    #
+    # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
+    # test-file exclusion, but for every *secondary*/dependency package it adds a
+    # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
+    # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
+    # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
+    # while skipping this producer — leaving the artifacts unuploaded. Putting felix
+    # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
+    # cmd/calico stays as a secondary so the calico image still rebuilds on changes
+    # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
+    #
     # The process/testing paths trigger this so the win-fv-felix block (which now
     # installs the locally-built calico image) has it cached in GCS. The libcalico
     # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
@@ -770,7 +781,7 @@ blocks:
         '/calicoctl/calicoctl/resourcemgr/*.go',
         '/calicoctl/calicoctl/util/*.go',
         '/calicoctl/calicoctl/util/yaml/*.go',
-        '/cmd/calico/**',
+        '/cmd/calico/*.go',
         '/cni-plugin/internal/pkg/azure/*.go',
         '/cni-plugin/internal/pkg/utils/*.go',
         '/cni-plugin/internal/pkg/utils/cri/*.go',
@@ -794,7 +805,7 @@ blocks:
         '/confd/pkg/run/*.go',
         '/crypto/pkg/tls/*.go',
         '/docker/calico/',
-        '/felix/',
+        '/felix/**',
         '/felix/aws/*.go',
         '/felix/aws/ec2query/*.go',
         '/felix/bpf/*.go',
@@ -987,6 +998,7 @@ blocks:
         '/libcalico-go/lib/hash/*.go',
         '/libcalico-go/lib/health/*.go',
         '/libcalico-go/lib/ipam/',
+        '/libcalico-go/lib/ipam/*.go',
         '/libcalico-go/lib/ipam/vmipam/*.go',
         '/libcalico-go/lib/kubevirt/*.go',
         '/libcalico-go/lib/logutils/*.go',
@@ -1008,6 +1020,7 @@ blocks:
         '/libcalico-go/lib/selector/tokenizer/*.go',
         '/libcalico-go/lib/set/*.go',
         '/libcalico-go/lib/testutils/stacktrace/',
+        '/libcalico-go/lib/testutils/stacktrace/*.go',
         '/libcalico-go/lib/validator/v1/*.go',
         '/libcalico-go/lib/validator/v3/*.go',
         '/libcalico-go/lib/watch/*.go',
@@ -1042,7 +1055,7 @@ blocks:
         '/process/testing/aso',
         '/process/testing/util',
         '/process/testing/winfv-felix',
-        '/typha/',
+        '/typha/cmd/typha-client/*.go',
         '/typha/cmd/typha/*.go',
         '/typha/pkg/calc/*.go',
         '/typha/pkg/config/*.go',
@@ -1065,7 +1078,13 @@ blocks:
         '/whisker-backend/cmd/whiskerbackend/*.go',
         '/whisker-backend/pkg/apis/v1/*.go',
         '/whisker-backend/pkg/config/*.go',
-        '/whisker-backend/pkg/handlers/v1/*.go'],
+        '/whisker-backend/pkg/handlers/v1/*.go',
+        'cmd/calico/**/*Dockerfile*',
+        'cmd/calico/Makefile',
+        'cmd/calico/deps.txt',
+        'typha/**/*Dockerfile*',
+        'typha/Makefile',
+        'typha/deps.txt'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
         '/**/AUTHORS*',
@@ -1078,10 +1097,10 @@ blocks:
         '/apiserver/**/*_test.go',
         '/app-policy/**/*_test.go',
         '/calicoctl/**/*_test.go',
+        '/cmd/**/*_test.go',
         '/cni-plugin/**/*_test.go',
         '/confd/**/*_test.go',
         '/crypto/**/*_test.go',
-        '/felix/**/*_test.go',
         '/goldmane/**/*_test.go',
         '/guardian/**/*_test.go',
         '/key-cert-provisioner/**/*_test.go',
