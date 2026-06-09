@@ -684,6 +684,12 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
 	// floating IPs are always programmed, regardless of this setting.)
 	FloatingIPs *projectcalicov3.FloatingIPType `json:"floatingIPs,omitempty"`
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	LocalSubnetL2Reachability *projectcalicov3.LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty"`
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	WindowsManageFirewallRules *projectcalicov3.WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty"`
 	// GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is
@@ -2171,6 +2177,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithMTUIfacePattern(value str
 // If called multiple times, the FloatingIPs field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithFloatingIPs(value projectcalicov3.FloatingIPType) *FelixConfigurationSpecApplyConfiguration {
 	b.FloatingIPs = &value
+	return b
+}
+
+// WithLocalSubnetL2Reachability sets the LocalSubnetL2Reachability field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LocalSubnetL2Reachability field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLocalSubnetL2Reachability(value projectcalicov3.LocalSubnetL2ReachabilityMode) *FelixConfigurationSpecApplyConfiguration {
+	b.LocalSubnetL2Reachability = &value
 	return b
 }
 
