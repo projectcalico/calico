@@ -136,6 +136,10 @@ endif
 	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
+	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
+	# patch. The reset keeps this idempotent across repeated incremental builds.
+	cd $(REGISTRAR_IMAGE) && git checkout -- go.mod go.sum
+	patch -d $(REGISTRAR_IMAGE) -p1 < node-driver-registrar-patches/0001-CVE-dependency-fixes.patch
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)
