@@ -614,49 +614,26 @@ func (l *ifaceListener) stop() {
 // runARPListener listens for ARP requests on a raw socket and replies for
 // IPs in the desired set.
 func (l *ifaceListener) runARPListener() {
-	defer close(l.done)
-
-	for {
-		if l.ctx.Err() != nil {
-			logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled")
-			return
-		}
-
-		if err := l.arpCli.SetReadDeadline(time.Now().Add(l.readTimeout)); err != nil {
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set ARP read deadline")
-		}
-
+	l.runListener("ARP", l.arpCli.SetReadDeadline, func() error {
 		pkt, _, err := l.arpCli.Read()
 		if err != nil {
-			if l.ctx.Err() != nil {
-				logrus.WithField("iface", l.ifaceName).Debug("ARP listener stopping: context cancelled during read")
-				return
-			}
-			if err, ok := errors.AsType[net.Error](err); ok && err.Timeout() {
-				continue
-			}
-			// Unrecoverable socket error: flag this listener so the manager
-			// drops it and recreates a fresh one on the next reconcile.
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("ARP listener read failed; recreating listener")
-			l.failed.Store(true)
-			return
+			return err
 		}
 
 		if pkt.Operation != arp.OperationRequest {
-			continue
+			return nil
 		}
 
 		// Ignore our own frames: the raw socket also receives what we send
-		// and we must not answer those. The kernel normally filters them via PACKET_IGNORE_OUTGOING
-		// this guards kernels that lack the option.
+		// and we must not answer those. The kernel normally filters them via
+		// PACKET_IGNORE_OUTGOING; this guards kernels that lack the option.
 		if bytes.Equal(pkt.SenderHardwareAddr, l.hwAddr) {
-			continue
+			return nil
 		}
 
 		targetIP := pkt.TargetIP.String()
-		desired := l.desired.Load()
-		if desired == nil || !(*desired).Contains(targetIP) {
-			continue
+		if !l.wantsIP(targetIP) {
+			return nil
 		}
 
 		if err := l.arpCli.Reply(pkt, l.hwAddr, pkt.TargetIP); err != nil {
@@ -665,49 +642,27 @@ func (l *ifaceListener) runARPListener() {
 				"ip":    targetIP,
 			}).Warn("ARP listener: failed to send reply")
 		}
-	}
+		return nil
+	})
 }
 
 // runNDPListener listens for Neighbor Solicitations on a raw ICMPv6 socket
 // and replies with Neighbor Advertisements for IPs in the desired set.
 func (l *ifaceListener) runNDPListener() {
-	defer close(l.done)
-
-	for {
-		if l.ctx.Err() != nil {
-			logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled")
-			return
-		}
-
-		if err := l.ndpCli.SetReadDeadline(time.Now().Add(l.readTimeout)); err != nil {
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to set NDP read deadline")
-		}
-
+	l.runListener("NDP", l.ndpCli.SetReadDeadline, func() error {
 		msg, _, srcAddr, err := l.ndpCli.ReadFrom()
 		if err != nil {
-			if l.ctx.Err() != nil {
-				logrus.WithField("iface", l.ifaceName).Debug("NDP listener stopping: context cancelled during read")
-				return
-			}
-			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
-				continue
-			}
-			// Unrecoverable socket error: flag this listener so the manager
-			// drops it and recreates a fresh one on the next reconcile.
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("NDP listener read failed; recreating listener")
-			l.failed.Store(true)
-			return
+			return err
 		}
 
 		ns, ok := msg.(*ndp.NeighborSolicitation)
 		if !ok {
-			continue
+			return nil
 		}
 
 		targetIP := ns.TargetAddress.String()
-		desired := l.desired.Load()
-		if desired == nil || !(*desired).Contains(targetIP) {
-			continue
+		if !l.wantsIP(targetIP) {
+			return nil
 		}
 
 		// If the NS source is the unspecified address (::), this is a
@@ -738,7 +693,48 @@ func (l *ifaceListener) runNDPListener() {
 				"ip":    targetIP,
 			}).Debug("NDP listener: failed to send NA")
 		}
+		return nil
+	})
+}
+
+// runListener is the read loop shared by the ARP and NDP listeners, handling
+// context cancellation, read deadlines, timeouts and listener recreation on
+// unrecoverable errors, while readAndRespond does the protocol-specific read
+// and reply.
+func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) error, readAndRespond func() error) {
+	defer close(l.done)
+
+	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})
+	for {
+		if l.ctx.Err() != nil {
+			logCtx.Debug("Listener stopping: context cancelled")
+			return
+		}
+
+		if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
+			logCtx.WithError(err).Warn("Failed to set read deadline")
+		}
+
+		if err := readAndRespond(); err != nil {
+			if l.ctx.Err() != nil {
+				logCtx.Debug("Listener stopping: context cancelled during read")
+				return
+			}
+			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+				continue
+			}
+			// Unrecoverable socket error: flag this listener so the manager
+			// drops it and recreates a fresh one on the next reconcile.
+			logCtx.WithError(err).Warn("Listener read failed; recreating listener")
+			l.failed.Store(true)
+			return
+		}
 	}
+}
+
+func (l *ifaceListener) wantsIP(targetIP string) bool {
+	desired := l.desired.Load()
+	return desired != nil && (*desired).Contains(targetIP)
 }
 
 // sendGARP sends a gratuitous ARP for ip using the listener's raw socket.
