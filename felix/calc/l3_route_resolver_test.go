@@ -305,7 +305,7 @@ var _ = Describe("L3RouteResolver", func() {
 			},
 		})
 
-		remoteAffinity := "host:remote-host"
+		remoteAffinity := "virtual:loadbalancer"
 		blockCIDR := net.MustParseCIDR("10.96.1.0/26")
 		l3RR.OnBlockUpdate(api.Update{
 			KVPair: model.KVPair{
