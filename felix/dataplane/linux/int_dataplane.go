@@ -188,6 +188,8 @@ type Config struct {
 
 	FloatingIPsEnabled bool
 
+	LocalSubnetL2Reachability string
+
 	Wireguard wireguard.Config
 
 	NetlinkTimeout time.Duration
@@ -745,6 +747,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.noEncapParentIfaceCV6,
 			)
 			dp.RegisterManager(dp.noEncapManagerV6)
+		}
+	}
+
+	// Register the proxy neighbor managers when enabled. They listen on raw sockets
+	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
+	// within the same subnet as a host physical interface.
+	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
+		proxyNeighMgr4 := newProxyNeighManager(config, 4)
+		dp.RegisterManager(proxyNeighMgr4)
+		if config.IPv6Enabled {
+			proxyNeighMgr6 := newProxyNeighManager(config, 6)
+			dp.RegisterManager(proxyNeighMgr6)
 		}
 	}
 

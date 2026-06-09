@@ -45,9 +45,10 @@ import (
 // tests. Overridable via $ROUTER_IMAGE to match utils.py.
 var RouterImage = envOr("ROUTER_IMAGE", "calico/bird:latest")
 
-// NginxImage is the nginx image used by tests that need a simple HTTP
-// backend. Overridable via $NGINX_IMAGE to match utils.py.
-var NginxImage = envOr("NGINX_IMAGE", "nginx:1")
+// Agnhost is Kubernetes' swiss-army e2e image. Used via `netexec` for
+// multi-protocol servers (HTTP/UDP/SCTP on one pod) and via other
+// subcommands for common test helpers.
+const Agnhost = "registry.k8s.io/e2e-test-images/agnhost:2.47"
 
 // ipv6Map maps each kind node name to its static IPv6 address. Kubernetes
 // does not yet expose an IPv6 field on Node, so the value here must match
