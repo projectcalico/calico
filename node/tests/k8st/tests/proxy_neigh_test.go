@@ -49,7 +49,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
-	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
+	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
 const (
@@ -78,7 +78,7 @@ func TestProxyNeigh(t *testing.T) {
 }
 
 func runFamily(t *testing.T, family corev1.IPFamily) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
+	defer utils.CollectDiagsOnFailure(t)()
 
 	g := NewWithT(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -169,7 +169,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{
 				Name:  "echo",
-				Image: k8stutils.Agnhost,
+				Image: utils.Agnhost,
 				Args:  []string{"netexec", "--http-port=80"},
 				Ports: []corev1.ContainerPort{{ContainerPort: 80}},
 			}},
@@ -347,7 +347,7 @@ func waitForLBVIP(ctx context.Context, g *WithT, cli ctrlclient.Client, svc *cor
 // detectKindNetworkSubnets returns the IPv4 and IPv6 subnets configured on the
 // given docker network. Either may be nil if the network lacks that family.
 func detectKindNetworkSubnets(t testing.TB, networkName string) (v4, v6 *net.IPNet, err error) {
-	out, err := k8stutils.Run(t, "docker network inspect "+networkName, k8stutils.RunOptions{AllowFail: true})
+	out, err := utils.Run(t, "docker network inspect "+networkName, utils.RunOptions{AllowFail: true})
 	if err != nil {
 		return nil, nil, fmt.Errorf("docker network inspect %s: %w", networkName, err)
 	}
@@ -434,15 +434,15 @@ func newExtL2Peer(t testing.TB, name, network string) (*extL2Peer, error) {
 	if network == "" {
 		return nil, fmt.Errorf("newExtL2Peer: network must not be empty")
 	}
-	allow := k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true}
-	if _, err := k8stutils.Run(t, "docker network inspect "+network, allow); err != nil {
+	allow := utils.RunOptions{AllowFail: true, SuppressErrLog: true}
+	if _, err := utils.Run(t, "docker network inspect "+network, allow); err != nil {
 		return nil, fmt.Errorf("docker network %q not reachable: %w", network, err)
 	}
 	// Best-effort cleanup of a stale container with the same name.
-	_, _ = k8stutils.Run(t, "docker rm -f "+name, allow)
-	if _, err := k8stutils.Run(t, fmt.Sprintf(
+	_, _ = utils.Run(t, "docker rm -f "+name, allow)
+	if _, err := utils.Run(t, fmt.Sprintf(
 		"docker run -d --name %s --network %s --cap-add NET_RAW --cap-add NET_ADMIN %s pause",
-		name, network, k8stutils.Agnhost), k8stutils.RunOptions{AllowFail: true}); err != nil {
+		name, network, utils.Agnhost), utils.RunOptions{AllowFail: true}); err != nil {
 		return nil, fmt.Errorf("docker run for %q failed: %w", name, err)
 	}
 	return &extL2Peer{t: t, name: name}, nil
@@ -453,7 +453,7 @@ func (p *extL2Peer) Close() error {
 	if p == nil || p.name == "" {
 		return nil
 	}
-	_, err := k8stutils.Run(p.t, "docker rm -f "+p.name, k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	_, err := utils.Run(p.t, "docker rm -f "+p.name, utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	p.name = ""
 	return err
 }
