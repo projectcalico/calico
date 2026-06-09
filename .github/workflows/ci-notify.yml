@@ -36,10 +36,12 @@ on:
         type: choice
         options: [success, failure, error]
 
-# SHA-keyed for status events; PR-keyed for manual runs. A force-push gets a
-# new SHA in its own group, so a notify for an earlier push is not cancelled.
+# Keyed by (commit, state) — Semaphore re-posts the same terminal status
+# several times, so the duplicate events land in one group. cancel-in-progress
+# is false so they SERIALIZE: the first run sends + records a cache marker, and
+# the queued duplicates then see the marker and skip (see the dedup gate below).
 concurrency:
-  group: ci-notify-${{ github.event.sha || inputs.pr_number || github.run_id }}
+  group: ci-notify-${{ github.event.sha || inputs.pr_number || github.run_id }}-${{ github.event.state || inputs.state }}
   cancel-in-progress: false
 
 permissions:
@@ -65,16 +67,33 @@ jobs:
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
       # On a status event these come from the event; on workflow_dispatch
-      # STATE falls through to the input and SHA/TARGET_URL are empty.
+      # STATE falls through to the input and SHA is empty.
       STATE: ${{ github.event.state || inputs.state }}
       SHA: ${{ github.event.sha }}
-      TARGET_URL: ${{ github.event.target_url }}
     steps:
-      - name: Skip if not configured
+      # Dedup: a marker cached under (commit, state) means a previous run for
+      # this same terminal status already DM'd. lookup-only — we only need the
+      # hit/miss, not the file. Status events only; manual runs (no SHA) always
+      # proceed so the workflow_dispatch test path is never suppressed.
+      - name: Check if already notified
+        id: dedup
+        if: env.SHA != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-notify-marker
+          key: ci-notify-sent-${{ github.event.sha }}-${{ github.event.state }}
+          lookup-only: true
+
+      - name: Skip if not configured or already notified
         id: gate
+        env:
+          DEDUP_HIT: ${{ steps.dedup.outputs.cache-hit }}
         run: |
           if [[ -z "${CI_NOTIFY_MAP}" || -z "${SLACK_BOT_TOKEN}" ]]; then
             echo "::notice::CI_NOTIFY_MAP variable or GH_PR_MONITOR_BOT_TOKEN secret missing — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$DEDUP_HIT" == "true" ]]; then
+            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -210,13 +229,13 @@ jobs:
             *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
           esac
 
-          TEXT="$EMOJI CI $WORD on your PR #$PR: $TITLE"$'\n'"$URL"
-          if [[ -n "$TARGET_URL" ]]; then
-            TEXT="$TEXT"$'\n'"CI run: $TARGET_URL"
-          fi
-          # Failure-analysis link from sem-ai-triage, only when it actually
-          # posted one (it skips on PASS or backend hiccups — no promise made).
-          if [[ -n "$TRIAGE_COMMENT_URL" ]]; then
+          # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
+          TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
+          # On failure/error, point at the sem-ai triage analysis on the PR
+          # (which itself links the run), when triage actually posted one (it
+          # skips on PASS or backend hiccups). No raw CI-run link on any
+          # outcome — the PR link above is the lead.
+          if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
             TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
           fi
 
@@ -240,3 +259,28 @@ jobs:
           else
             echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
           fi
+
+      # Record that this (commit, state) was notified, so the serialized
+      # duplicate status events for the same outcome skip at the dedup gate.
+      # Status events only; never on the manual test path.
+      - name: Record notification marker
+        if: >-
+          env.SHA != '' &&
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true'
+        run: echo notified > .ci-notify-marker
+
+      - name: Save notification marker
+        if: >-
+          env.SHA != '' &&
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true'
+        # A cache hiccup (e.g. key already saved in a rare race) must never
+        # fail the notifier — the DM has already gone out.
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .ci-notify-marker
+          key: ci-notify-sent-${{ github.event.sha }}-${{ github.event.state }}

@@ -49,6 +49,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -100,6 +101,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed

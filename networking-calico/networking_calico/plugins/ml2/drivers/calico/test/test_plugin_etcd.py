@@ -368,6 +368,14 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
+        # Set the resync-concurrency injection knob explicitly to 0 so the
+        # syncer's ``max(0, inject_per_item_delay_ms)`` clamp gets a real
+        # int -- without this, the attribute is the default MagicMock,
+        # which raises TypeError on `>` comparison with int.  (Before the
+        # clamp landed, the auto-generated MagicMock.__float__ silently
+        # coerced this into a real time.sleep(1.0) per compare-loop item,
+        # adding ~70s of dead sleep to the suite.)
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync_inject_per_item_delay_ms = 0
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
