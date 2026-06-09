@@ -515,10 +515,17 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 		old := l.desired.Swap(&desired)
 		for ip := range desired.All() {
 			if old == nil || !(*old).Contains(ip) {
+				addr, err := netip.ParseAddr(ip)
+				if err != nil {
+					logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for GARP")
+					continue
+				}
 				if m.ipVersion == 6 {
 					l.joinNDPGroup(ip)
+					l.sendUNA(addr)
+				} else {
+					l.sendGARP(addr)
 				}
-				l.sendGARP(ip)
 			}
 		}
 		// Drop multicast subscriptions for IPs we no longer answer for.
@@ -734,23 +741,8 @@ func (l *ifaceListener) runNDPListener() {
 	}
 }
 
-// sendGARP parses ipStr and dispatches to the IPv4 (gratuitous ARP) or IPv6
-// (unsolicited NA) sender, based on which raw socket this listener holds.
-func (l *ifaceListener) sendGARP(ipStr string) {
-	addr, err := netip.ParseAddr(ipStr)
-	if err != nil {
-		logrus.WithError(err).WithField("ip", ipStr).Debug("Failed to parse IP for GARP")
-		return
-	}
-	if l.arpCli != nil {
-		l.sendGARPV4(addr)
-	} else {
-		l.sendGARPV6(addr)
-	}
-}
-
-// sendGARPV4 sends a gratuitous ARP for ip using the listener's raw socket.
-func (l *ifaceListener) sendGARPV4(ip netip.Addr) {
+// sendGARP sends a gratuitous ARP for ip using the listener's raw socket.
+func (l *ifaceListener) sendGARP(ip netip.Addr) {
 	pkt, err := arp.NewPacket(arp.OperationRequest, l.hwAddr, ip, ethernet.Broadcast, ip)
 	if err != nil {
 		logrus.WithError(err).WithField("ip", ip).Debug("Failed to create GARP packet")
@@ -769,9 +761,9 @@ func (l *ifaceListener) sendGARPV4(ip netip.Addr) {
 	}
 }
 
-// sendGARPV6 sends an unsolicited Neighbor Advertisement for addr using the
+// sendUNA sends an unsolicited Neighbor Advertisement for addr using the
 // listener's raw socket.
-func (l *ifaceListener) sendGARPV6(addr netip.Addr) {
+func (l *ifaceListener) sendUNA(addr netip.Addr) {
 	na := &ndp.NeighborAdvertisement{
 		Override:      true,
 		TargetAddress: addr,
