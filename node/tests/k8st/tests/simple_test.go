@@ -15,19 +15,18 @@
 // Package k8stests is the Go port of node/tests/k8st/tests. Each Test*
 // function corresponds to one Python test method. Shared fixtures live in
 // per-file helper functions; cross-file infrastructure is in
-// node/tests/k8st/k8stutils.
+// node/tests/k8st/utils.
 package k8stests
 
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
+	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
 // TestGracefulRestartMethodology verifies that the route-churn methodology
@@ -37,13 +36,13 @@ import (
 //
 // Port of test_simple.py:TestGracefulRestart.test_methodology.
 func TestGracefulRestartMethodology(t *testing.T) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
+	defer utils.CollectDiagsOnFailure(t)()
 
 	restart := func(state *restartChurnState) {
-		k8stutils.MustRun(t, "docker exec "+state.restartNode+" pkill bird")
-		err := k8stutils.RetryUntilSuccess(t, 15*time.Second, func() error {
-			_, err := k8stutils.Run(t, "docker exec "+state.restartNode+" pgrep bird",
-				k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+		utils.MustRun(t, "docker exec "+state.restartNode+" pkill bird")
+		err := utils.RetryUntilSuccess(t, 15*time.Second, func() error {
+			_, err := utils.Run(t, "docker exec "+state.restartNode+" pgrep bird",
+				utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			return err
 		})
 		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "BIRD did not restart within 15s")
@@ -59,22 +58,19 @@ func TestGracefulRestartMethodology(t *testing.T) {
 //
 // Port of test_simple.py:TestGracefulRestart.test_graceful_restart.
 func TestGracefulRestart(t *testing.T) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
+	defer utils.CollectDiagsOnFailure(t)()
 
 	restart := func(state *restartChurnState) {
-		k8stutils.MustRun(t, fmt.Sprintf(
-			"kubectl delete po %s -n calico-system", state.restartPodName))
+		utils.DeletePodAndWait(t, "calico-system", state.restartPodName, 2*time.Minute)
 
 		// Wait until a replacement calico-node pod has been created.
-		err := k8stutils.RetryUntilSuccess(t, 15*time.Second, func() error {
+		err := utils.RetryUntilSuccess(t, 15*time.Second, func() error {
 			return state.refreshRestartPodName(t)
 		})
 		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "replacement calico-node pod did not appear within 15s")
 
 		// Wait until it is ready, before returning.
-		k8stutils.MustRun(t, fmt.Sprintf(
-			"kubectl wait po %s -n calico-system --timeout=2m --for=condition=ready",
-			state.restartPodName))
+		utils.WaitForPodReady(t, "calico-system", state.restartPodName, 2*time.Minute)
 	}
 
 	runRestartChurnTest(t, 3, restart, false)
@@ -91,19 +87,16 @@ type restartChurnState struct {
 
 func (s *restartChurnState) refreshRestartPodName(t testing.TB) error {
 	t.Helper()
-	out, err := k8stutils.Kubectl(t, fmt.Sprintf(
-		"get po -n calico-system -l k8s-app=calico-node "+
-			"--field-selector status.podIP=%s "+
-			"-o jsonpath='{.items[*].metadata.name}'", s.restartNodeIP),
-		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	// calico-node is host-networked, so the pod IP equals the node IP.
+	names, err := utils.PodNames(t, "calico-system",
+		"k8s-app=calico-node", "status.podIP="+s.restartNodeIP)
 	if err != nil {
 		return err
 	}
-	name := strings.TrimSpace(out)
-	if name == "" {
+	if len(names) == 0 {
 		return errors.New("calico-node pod name not yet observable")
 	}
-	s.restartPodName = name
+	s.restartPodName = names[0]
 	return nil
 }
 
@@ -115,7 +108,7 @@ func (s *restartChurnState) refreshRestartPodName(t testing.TB) error {
 func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartChurnState), expectChurn bool) {
 	t.Helper()
 	g := NewWithT(t)
-	nodes, ips, _ := k8stutils.NodeInfo(t)
+	nodes, ips, _ := utils.NodeInfo(t)
 	g.Expect(len(nodes)).To(BeNumerically(">", 2), "need at least one control-plane and two workers")
 
 	monitorNode := nodes[1]
@@ -129,7 +122,7 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 	// currently flap on block-host restart for reasons that are not yet
 	// understood and that aren't what this test is exercising. See
 	// https://marc.info/?l=bird-users&m=158298182509702&w=2.
-	k8stutils.MustRun(t, fmt.Sprintf(
+	utils.MustRun(t, fmt.Sprintf(
 		"docker exec -d %s sh -c 'stdbuf -oL ip -ts monitor route | "+
 			"stdbuf -oL grep -v fd00:10:244 > rmon.txt'", monitorNode))
 
@@ -143,8 +136,8 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 	}
 
 	// Kill the ip monitor process and dump its output.
-	k8stutils.MustRun(t, "docker exec "+monitorNode+" pkill ip")
-	monitorOutput := k8stutils.MustRun(t, "docker exec "+monitorNode+" cat rmon.txt")
+	utils.MustRun(t, "docker exec "+monitorNode+" pkill ip")
+	monitorOutput := utils.MustRun(t, "docker exec "+monitorNode+" cat rmon.txt")
 
 	if expectChurn {
 		g.Expect(monitorOutput).NotTo(BeEmpty(), "expected route churn but observed none")
@@ -158,8 +151,8 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 //
 // Port of test_simple.py:TestAllRunning.test_calicosystem_pods_running.
 func TestCalicoSystemPodsRunning(t *testing.T) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
-	k8stutils.CheckPodStatus(t, "calico-system")
+	defer utils.CollectDiagsOnFailure(t)()
+	utils.CheckPodStatus(t, "calico-system")
 }
 
 // TestDefaultPodsRunning fails if any pod in the default namespace is not
@@ -167,8 +160,8 @@ func TestCalicoSystemPodsRunning(t *testing.T) {
 //
 // Port of test_simple.py:TestAllRunning.test_default_pods_running.
 func TestDefaultPodsRunning(t *testing.T) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
-	k8stutils.CheckPodStatus(t, "default")
+	defer utils.CollectDiagsOnFailure(t)()
+	utils.CheckPodStatus(t, "default")
 }
 
 // TestCalicoMonitoringPodsRunning fails if any pod in the calico-monitoring
@@ -176,6 +169,6 @@ func TestDefaultPodsRunning(t *testing.T) {
 //
 // Port of test_simple.py:TestAllRunning.test_calico_monitoring_pods_running.
 func TestCalicoMonitoringPodsRunning(t *testing.T) {
-	defer k8stutils.CollectDiagsOnFailure(t)()
-	k8stutils.CheckPodStatus(t, "calico-monitoring")
+	defer utils.CollectDiagsOnFailure(t)()
+	utils.CheckPodStatus(t, "calico-monitoring")
 }

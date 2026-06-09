@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
+	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
 // TestReadinessBirdDown stops the bird runit service on one node and
@@ -29,9 +29,9 @@ import (
 func TestReadinessBirdDown(t *testing.T) {
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "bird", true)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird")
 	assertReadiness(t, nodes[0], "bird", false)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird")
 }
 
 // TestReadinessBird6Down is the IPv6 analogue of TestReadinessBirdDown.
@@ -39,9 +39,9 @@ func TestReadinessBirdDown(t *testing.T) {
 func TestReadinessBird6Down(t *testing.T) {
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "bird6", true)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird6")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/bird6")
 	assertReadiness(t, nodes[0], "bird6", false)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird6")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/bird6")
 }
 
 // TestReadinessConfdDown stops confd and checks that BIRD's *liveness*
@@ -52,9 +52,9 @@ func TestReadinessBird6Down(t *testing.T) {
 func TestReadinessConfdDown(t *testing.T) {
 	nodes := readinessFixture(t)
 	assertLiveness(t, nodes[0], "bird", true)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/confd")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/confd")
 	assertLiveness(t, nodes[0], "bird", false)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/confd")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/confd")
 }
 
 // TestFelixDown stops felix and confirms that its readiness flag flips
@@ -62,9 +62,9 @@ func TestReadinessConfdDown(t *testing.T) {
 func TestFelixDown(t *testing.T) {
 	nodes := readinessFixture(t)
 	assertReadiness(t, nodes[0], "felix", true)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/felix")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv stop /etc/service/enabled/felix")
 	assertReadiness(t, nodes[0], "felix", false)
-	k8stutils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/felix")
+	utils.MustExecInCalicoNode(t, nodes[0], "sv start /etc/service/enabled/felix")
 }
 
 // readinessFixture is the shared per-test setup + teardown for
@@ -75,24 +75,22 @@ func TestFelixDown(t *testing.T) {
 // test_health.py:TestReadiness.
 func readinessFixture(t *testing.T) []string {
 	t.Helper()
-	defer k8stutils.CollectDiagsOnFailure(t)()
+	defer utils.CollectDiagsOnFailure(t)()
 
 	// Wait for all Calico pods to be ready before exercising the health
 	// flags — otherwise the "before" assertion can spuriously fail on
 	// slow CI nodes.
-	k8stutils.MustKubectl(t,
-		"wait --for=condition=Ready pods --all -n calico-system --timeout=120s",
-		k8stutils.RunOptions{Timeout: 130 * time.Second})
+	utils.WaitForPodsReady(t, "calico-system", "", 120*time.Second)
 
-	nodes, _, _ := k8stutils.NodeInfo(t)
+	nodes, _, _ := utils.NodeInfo(t)
 	NewWithT(t).Expect(nodes).NotTo(BeEmpty(), "no nodes returned from NodeInfo")
 
 	t.Cleanup(func() {
 		for _, node := range nodes {
 			for _, svc := range []string{"bird", "bird6", "confd", "felix"} {
-				_, _ = k8stutils.ExecInCalicoNode(t, node,
+				_, _ = utils.ExecInCalicoNode(t, node,
 					"sv start /etc/service/enabled/"+svc,
-					k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+					utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			}
 		}
 	})
@@ -106,8 +104,8 @@ func readinessFixture(t *testing.T) []string {
 func assertReadiness(t *testing.T, node, flag string, ready bool) {
 	t.Helper()
 	cmd := "/usr/bin/calico component node health --" + flag + "-ready"
-	_, err := k8stutils.ExecInCalicoNode(t, node, cmd,
-		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	_, err := utils.ExecInCalicoNode(t, node, cmd,
+		utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	g := NewWithT(t)
 	if ready {
 		g.Expect(err).NotTo(HaveOccurred(), "expected %s to be ready", flag)
@@ -121,8 +119,8 @@ func assertReadiness(t *testing.T, node, flag string, ready bool) {
 func assertLiveness(t *testing.T, node, flag string, live bool) {
 	t.Helper()
 	cmd := "/usr/bin/calico component node health --" + flag + "-live"
-	_, err := k8stutils.ExecInCalicoNode(t, node, cmd,
-		k8stutils.RunOptions{AllowFail: true, SuppressErrLog: true})
+	_, err := utils.ExecInCalicoNode(t, node, cmd,
+		utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	g := NewWithT(t)
 	if live {
 		g.Expect(err).NotTo(HaveOccurred(), "expected %s to be live", flag)
