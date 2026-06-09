@@ -645,9 +645,6 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 // to them should still be masqueraded (not exempted from SNAT via the
 // FlagInIPAMPool BPF route flag or the network-ip-pools ipset).
 func isLoadBalancerOnlyPool(pool *model.IPPool) bool {
-	if len(pool.AllowedUses) == 0 {
-		return false
-	}
 	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, apiv3.IPPoolAllowedUseLoadBalancer)
 }
 
