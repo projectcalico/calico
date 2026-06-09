@@ -375,9 +375,9 @@ type Config struct {
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
-	// LocalSubnetL2Reachability controls whether Felix programs per-IP proxy ARP/NDP
-	// neighbor entries on host interfaces for local pod IPs and LB VIPs that overlap the
-	// host subnet. [Default: Disabled]
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that overlap the host subnet. [Default: Disabled]
 	LocalSubnetL2Reachability string `config:"oneof(Disabled,PodsAndLoadBalancers);Disabled"`
 
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
