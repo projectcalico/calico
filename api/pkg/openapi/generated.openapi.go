@@ -526,9 +526,17 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
