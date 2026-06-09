@@ -644,6 +644,8 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 // their CIDRs do not represent workload/tunnel addresses and traffic destined
 // to them should still be masqueraded (not exempted from SNAT via the
 // FlagInIPAMPool BPF route flag or the network-ip-pools ipset).
+//
+// NOTE: keep in sync with isLoadBalancerOnly in felix/dataplane/linux/masq_mgr.go.
 func isLoadBalancerOnlyPool(pool *model.IPPool) bool {
 	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, apiv3.IPPoolAllowedUseLoadBalancer)
 }
