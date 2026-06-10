@@ -77,8 +77,10 @@ type ndpConn interface {
 	Close() error
 }
 
-type arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
-type ndpConnFactory func(ifaceName string) (ndpConn, net.HardwareAddr, error)
+type (
+	arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
+	ndpConnFactory   func(ifaceName string) (ndpConn, net.HardwareAddr, error)
+)
 
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
@@ -503,9 +505,7 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 
 // publishDesiredIPs hands each listener its latest desired IP set and wakes its
 // goroutine to reconcile. The listener goroutine owns the raw socket and
-// performs every write itself — gratuitous ARP (IPv4) / unsolicited NA +
-// solicited-node group join (IPv6) for newly desired IPs, and group leave for
-// IPs that dropped out — so this method does no socket I/O.
+// performs every write itself.
 func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[string]) {
 	for ifaceName, desired := range desiredByIface {
 		l, ok := m.listeners[ifaceName]
@@ -559,25 +559,29 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 // ifaceListener manages a raw socket listener for a single host interface.
 //
 // The listener goroutine is the sole owner of the raw socket: it performs all
-// reads, replies, announcements (GARP / unsolicited NA), multicast group
+// reads, replies, announcements, multicast group
 // join/leave, and the final close. The manager never touches the socket — it
 // hands off a new desired set via the atomic desired pointer and wakes the
 // goroutine through the reconcile channel.
 type ifaceListener struct {
 	ifaceName string
+
 	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
 	// and swapped atomically by the manager; read by both the goroutine's
 	// reply path and applyDesiredState. Never mutated after publishing.
 	desired atomic.Pointer[set.Set[string]]
-	// reconcile wakes the goroutine to apply a freshly published desired set.
-	// Buffered (size 1) and coalescing: a single pending signal suffices since
-	// applyDesiredState always reads the latest desired set.
+
+	// reconcile signals the goroutine to apply the latest desired set. Only one
+	// signal is buffered; extra ones are dropped, which is fine because
+	// applyDesiredState always reads the newest set.
 	reconcile chan struct{}
+
 	// announced tracks the IPs the goroutine has already announced/joined for,
 	// so it can compute the delta against a new desired set. Goroutine-local:
 	// only ever touched by the listener goroutine, so it needs no
 	// synchronization.
-	announced   set.Set[string]
+	announced set.Set[string]
+
 	arpCli      arpClient // IPv4 only
 	ndpCli      ndpConn   // IPv6 only
 	hwAddr      net.HardwareAddr
@@ -601,10 +605,7 @@ func (l *ifaceListener) stop() {
 }
 
 // signalReconcile queues a request for the listener goroutine to apply the
-// latest desired set. Non-blocking: the buffered channel coalesces signals,
-// which is safe because applyDesiredState always reads the freshest desired
-// set. Pair with wake() to interrupt the goroutine's in-flight read so it acts
-// on the signal promptly.
+// latest desired set.
 func (l *ifaceListener) signalReconcile() {
 	select {
 	case l.reconcile <- struct{}{}:
@@ -668,8 +669,7 @@ func (l *ifaceListener) applyDesiredState() {
 		}
 	}
 
-	// IPs that dropped out of the desired set: release the multicast
-	// subscription (IPv6 only; there is nothing to undo for IPv4).
+	// Release the multicast subscription for IPs that dropped out of the desired set.
 	for ip := range l.announced.All() {
 		if desired.Contains(ip) {
 			continue

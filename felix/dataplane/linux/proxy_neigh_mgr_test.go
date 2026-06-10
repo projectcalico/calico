@@ -93,7 +93,6 @@ type mockARPClient struct {
 	// called, so a blocked Read re-evaluates against the new deadline — as a
 	// real socket does when SetReadDeadline is called concurrently with Read.
 	deadlineChanged chan struct{}
-	closed          bool
 }
 
 type arpWrite struct {
@@ -157,7 +156,6 @@ func (c *mockARPClient) SetReadDeadline(t time.Time) error {
 }
 
 func (c *mockARPClient) Close() error {
-	c.closed = true
 	close(c.reads)
 	return nil
 }
@@ -189,7 +187,6 @@ type mockNDPConn struct {
 	// called, so a blocked ReadFrom re-evaluates against the new deadline — as
 	// a real socket does when SetReadDeadline races a read.
 	deadlineChanged chan struct{}
-	closed          bool
 }
 
 type ndpWrite struct {
@@ -278,7 +275,6 @@ func (c *mockNDPConn) SetReadDeadline(t time.Time) error {
 }
 
 func (c *mockNDPConn) Close() error {
-	c.closed = true
 	close(c.reads)
 	return nil
 }
@@ -723,7 +719,6 @@ var _ = Describe("Proxy neighbor manager (IPv4)", func() {
 })
 
 var _ = Describe("Proxy neighbor manager - LoadBalancer IPs", func() {
-
 	It("is claimed by exactly one node, which answers and GARPs for it", func() {
 		const vip = "10.0.0.100"
 		answering := 0
