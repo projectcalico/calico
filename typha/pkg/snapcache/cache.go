@@ -16,6 +16,7 @@ package snapcache
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -493,6 +494,20 @@ type Breadcrumb struct {
 
 	counterBreadcrumbNonBlock prometheus.Counter
 	counterBreadcrumbBlock    prometheus.Counter
+}
+
+// String renders the stable, owned fields of the Breadcrumb.  It deliberately
+// omits the internal linked-list pointer (next), which is mutated with an
+// atomic store by publishBreadcrumbs after the Breadcrumb has been handed out
+// to readers; reflecting over it (as the default fmt formatter would when a
+// Breadcrumb is logged) races with that store.  Providing String() makes
+// logging a Breadcrumb safe.
+func (b *Breadcrumb) String() string {
+	if b == nil {
+		return "Breadcrumb(<nil>)"
+	}
+	return fmt.Sprintf("Breadcrumb(seq=%d ts=%s status=%s numKVs=%d numDeltas=%d)",
+		b.SequenceNumber, b.Timestamp, b.SyncStatus, b.KVs.Len(), len(b.Deltas))
 }
 
 func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
