@@ -145,10 +145,14 @@ jobs:
           LOGIN=$(jq -r .login pr.json)
           # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
           # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
-          # is an unambiguous delimiter.
+          # is an unambiguous delimiter. Split entries on ',' (one per line),
+          # then strip whitespace *inside awk per record* — a global
+          # `tr -d '[:space:]'` would also delete the newlines and re-join
+          # every entry into one line, concatenating an ID with the next
+          # entry's login (e.g. "Uxxxxnextlogin").
           SLACK_ID=$(printf '%s' "$CI_NOTIFY_MAP" \
-            | tr ',' '\n' | tr -d '[:space:]' \
-            | awk -F: -v u="$LOGIN" '$1==u {print $2; exit}')
+            | tr ',' '\n' \
+            | awk -F: -v u="$LOGIN" '{gsub(/[[:space:]]/, "")} $1==u {print $2; exit}')
           if [[ -z "$SLACK_ID" ]]; then
             echo "::notice::author '$LOGIN' not in CI_NOTIFY_MAP — skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
