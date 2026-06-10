@@ -193,8 +193,15 @@ type SyncerClient struct {
 	// cancel cancels the context derived from the one passed to Start().
 	// It is populated by Start() and used by Stop() to trigger a clean
 	// shutdown.  Protected by cancelLock.
+	//
+	// connCancel cancels just the *current* connection's context (set each time
+	// startOneConnection spins up a connection).  RestartConnection() uses it to
+	// drop and reconnect without tearing down the whole client, so the outer
+	// restart loop in Start() re-fires OnTyphaConnectionRestarted and pulls a
+	// fresh snapshot.  Also protected by cancelLock.
 	cancelLock sync.Mutex
 	cancel     context.CancelFunc
+	connCancel context.CancelFunc
 }
 
 type RestartAwareCallbacks interface {
@@ -276,6 +283,30 @@ func (s *SyncerClient) Stop() {
 	s.Finished.Wait()
 }
 
+// RestartConnection drops the current connection (if any) and lets the client's
+// restart loop reconnect, without tearing the whole client down.  Cancelling the
+// per-connection context makes loop() return; the outer "for cxt.Err()==nil"
+// loop in Start() then fires OnTyphaConnectionRestarted on a restart-aware sink
+// and pulls a fresh snapshot.  This is the remediation path for a confirmed
+// checksum mismatch (the dedupe buffer reconciles against the new snapshot).
+//
+// It is safe to call from any goroutine and at any time: if no connection is
+// currently active (e.g. we're mid-reconnect) it is a no-op.  Calling it on a
+// client that is not restart-aware would tear the client down for good, so the
+// caller must only use it with a restart-aware sink (the chained-Typha dedupe
+// buffer always is).
+func (s *SyncerClient) RestartConnection() {
+	s.cancelLock.Lock()
+	connCancel := s.connCancel
+	s.cancelLock.Unlock()
+	if connCancel == nil {
+		// Never connected yet, or already torn down.
+		return
+	}
+	s.logCxt.Info("Forcing reconnect of Typha client connection.")
+	connCancel()
+}
+
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
 	// Defensive: in case there's a bug in NextAddr() and it never stops returning values,
 	// set a sanity limit on the number of tries.
@@ -305,6 +336,11 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
 	// manage shutdown.
 	connCtx, cancelFn := context.WithCancel(cxt)
+	// Record the per-connection cancel so RestartConnection() can drop just this
+	// connection.  The restart loop in Start() will then reconnect.
+	s.cancelLock.Lock()
+	s.connCancel = cancelFn
+	s.cancelLock.Unlock()
 	connFinished.Add(1)
 	go s.loop(connCtx, cancelFn, connFinished)
 
