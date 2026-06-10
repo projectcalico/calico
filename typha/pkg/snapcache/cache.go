@@ -32,6 +32,7 @@ import (
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/promutils"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
@@ -130,6 +131,11 @@ type Cache struct {
 	// kvs contains the current state of the datastore.  Its keys are the serialized form of our model keys
 	// and the values are SerializedUpdate objects.
 	kvs *btree.BTreeG[syncproto.SerializedUpdate]
+	// checksum is the rolling integrity checksum over the live entries in kvs.  It is maintained
+	// incrementally in publishBreadcrumb() alongside the B-tree mutations and snapshotted onto each
+	// Breadcrumb so that per-client goroutines can read a consistent value without locks.  See
+	// typha/pkg/synccheck.
+	checksum synccheck.Checksum
 	// breadcrumbCond is the condition variable used to signal when a new breadcrumb is available.
 	breadcrumbCond *sync.Cond
 	// lastBroadcast is the last time we did a broadcast to wake up breadcrumb followers.
@@ -432,6 +438,11 @@ func (c *Cache) publishBreadcrumb() {
 			// didn't have that key before because we need to pass through the UpdateType for Felix to
 			// correctly calculate its stats.
 			c.kvs.Delete(newUpd)
+			if exists {
+				// Only adjust the checksum if the key was actually present; a delete of an
+				// absent key is a no-op for the live-entry set.
+				c.checksum.Remove(oldUpd.Key, oldUpd.Value)
+			}
 		} else {
 			if exists && newUpd.WouldBeNoOp(oldUpd) {
 				log.WithField("key", newUpd.Key).Debug("Skipping update to unchanged key")
@@ -444,6 +455,15 @@ func (c *Cache) publishBreadcrumb() {
 			updToStore := newUpd
 			updToStore.UpdateType = api.UpdateTypeKVNew
 			c.kvs.ReplaceOrInsert(updToStore)
+			// Maintain the rolling checksum.  We checksum the wire Key/Value bytes only (the same
+			// bytes the client receives), so UpdateType differences between newUpd and updToStore
+			// don't matter.  WouldBeNoOp above filters out dedupe-skipped writes that don't change
+			// the value, so a Replace here always reflects a real value change.
+			if exists {
+				c.checksum.Replace(newUpd.Key, oldUpd.Value, newUpd.Value)
+			} else {
+				c.checksum.Add(newUpd.Key, newUpd.Value)
+			}
 		}
 
 		// Record the update in the new Breadcrumb so that clients following the chain of
@@ -462,8 +482,10 @@ func (c *Cache) publishBreadcrumb() {
 	}
 
 	c.gaugeSnapSize.Set(float64(c.kvs.Len()))
-	// Add the new read-only snapshot to the new crumb.
+	// Add the new read-only snapshot to the new crumb, along with the rolling checksum as of this
+	// snapshot.  Both are immutable after publication so clients can read them lock-free.
 	newCrumb.KVs = c.kvs.Clone()
+	newCrumb.Checksum = c.checksum
 
 	// Replace the Breadcrumb and link the old Breadcrumb to the new so that clients can follow
 	// the trail.
@@ -489,6 +511,11 @@ type Breadcrumb struct {
 	Deltas     []syncproto.SerializedUpdate
 	SyncStatus api.SyncStatus
 
+	// Checksum is the integrity checksum (and KV count) over the live entries in KVs as of this
+	// Breadcrumb.  It is immutable once the Breadcrumb is published, so server-side per-client
+	// goroutines can read it lock-free.  See typha/pkg/synccheck.
+	Checksum synccheck.Checksum
+
 	nextCond *sync.Cond
 	next     unsafe.Pointer
 
@@ -506,8 +533,9 @@ func (b *Breadcrumb) String() string {
 	if b == nil {
 		return "Breadcrumb(<nil>)"
 	}
-	return fmt.Sprintf("Breadcrumb(seq=%d ts=%s status=%s numKVs=%d numDeltas=%d)",
-		b.SequenceNumber, b.Timestamp, b.SyncStatus, b.KVs.Len(), len(b.Deltas))
+	return fmt.Sprintf("Breadcrumb(seq=%d ts=%s status=%s numKVs=%d numDeltas=%d checksum=%#x count=%d)",
+		b.SequenceNumber, b.Timestamp, b.SyncStatus, b.KVs.Len(), len(b.Deltas),
+		b.Checksum.XOR, b.Checksum.KVCount)
 }
 
 func (b *Breadcrumb) Next(ctx context.Context) (*Breadcrumb, error) {
