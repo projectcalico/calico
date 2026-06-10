@@ -1604,6 +1604,17 @@ func createTyphaDiscoverer(configParams *config.Config, k8sClientSet kubernetes.
 		discovery.WithKubeService(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName),
 		discovery.WithKubeClient(k8sClientSet),
 		discovery.WithNodeAffinity(configParams.FelixHostname),
+		// Hierarchical Typha (WS-E): classify discovered Typhas by tier and apply
+		// the client connection-preference policy.  This is automatic — the per-tier
+		// Services double as the tier-information channel; when they don't exist (a
+		// non-hierarchical deployment) classification is a no-op and every Typha is
+		// usable, so this is safe to enable unconditionally.  Tier-2 (leaf) Typhas
+		// are preferred off-node when tiering is active; a same-node Typha is always
+		// preferred whatever its tier.
+		discovery.WithTierServices(
+			configParams.TyphaK8sLeaderServiceName,
+			configParams.TyphaK8sTier1ServiceName,
+		),
 	)
 	return typhaDiscoverer
 }

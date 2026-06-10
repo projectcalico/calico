@@ -168,6 +168,23 @@ the other TLS parameters must also be specified.
 | Default value (above encoding) | none |
 | Notes | Config file / env var only. | 
 
+### `TyphaK8sLeaderServiceName` (config file / env var only)
+
+Names the Kubernetes Service that selects the leader
+Typha in a hierarchical (two-tier) Typha deployment. Felix watches it in
+addition to the main TyphaK8sServiceName so it can classify discovered Typha
+endpoints by tier and apply the client connection-preference policy (off-node
+clients use only tier-2 Typhas when tiering is active; a same-node Typha is
+always preferred). When the Service does not exist (non-hierarchical
+deployment) classification is a no-op and every Typha is usable.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_TyphaK8sLeaderServiceName` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `calico-typha-leader` |
+| Notes | Config file / env var only. | 
+
 ### `TyphaK8sNamespace` (config file / env var only)
 
 Namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
@@ -189,6 +206,21 @@ Service in namespace specified by TyphaK8sNamespace.
 | Environment variable | `FELIX_TyphaK8sServiceName` |
 | Encoding (env var/config file) | String |
 | Default value (above encoding) | none |
+| Notes | Config file / env var only. | 
+
+### `TyphaK8sTier1ServiceName` (config file / env var only)
+
+Names the Kubernetes Service that selects the tier-1
+Typhas in a hierarchical (two-tier) Typha deployment. Felix watches it
+alongside TyphaK8sLeaderServiceName to classify discovered Typha endpoints by
+tier (see TyphaK8sLeaderServiceName). When the Service does not exist
+classification is a no-op and every Typha is usable.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_TyphaK8sTier1ServiceName` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `calico-typha-tier1` |
 | Notes | Config file / env var only. | 
 
 ### `TyphaKeyFile` (config file / env var only)

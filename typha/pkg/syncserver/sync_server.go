@@ -98,6 +98,7 @@ const (
 	defaultMaxMessageSize                 = 100
 	defaultMaxFallBehind                  = 300 * time.Second
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
+	defaultChecksumInterval               = 30 * time.Second
 
 	// maxInboundMessageBytes is the maximum number of bytes we'll read from a
 	// client for a single gob message. Client messages (MsgClientHello, MsgPong,
@@ -157,16 +158,25 @@ type Config struct {
 	HandshakeTimeout               time.Duration
 	WriteTimeout                   time.Duration
 	DropInterval                   time.Duration
-	ShutdownTimeout                time.Duration
-	ShutdownMaxDropInterval        time.Duration
-	MaxConns                       int
-	HealthAggregator               *health.HealthAggregator
-	KeyFile                        string
-	CertFile                       string
-	CAFile                         string
-	ClientCN                       string
-	ClientURISAN                   string
-	WriteBufferSize                int
+	// ChecksumInterval is the minimum gap between periodic MsgChecksum messages sent to a client
+	// after the initial in-sync checksum.  Only relevant for clients that advertised SupportsChecksum.
+	ChecksumInterval        time.Duration
+	ShutdownTimeout         time.Duration
+	ShutdownMaxDropInterval time.Duration
+	MaxConns                int
+	HealthAggregator        *health.HealthAggregator
+	KeyFile                 string
+	CertFile                string
+	CAFile                  string
+	ClientCN                string
+	ClientURISAN            string
+	WriteBufferSize         int
+
+	// NodeName is this Typha's own node name (downward API).  Used by
+	// DrainOffNodeClients to distinguish same-node clients (kept) from off-node
+	// clients (dropped) on promotion out of tier-2.  Empty disables the same-node
+	// distinction (all clients treated as off-node).
+	NodeName string
 
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
@@ -191,6 +201,7 @@ func (c Config) LogFields() log.Fields {
 		"handshakeTimeout":               c.HandshakeTimeout,
 		"writeTimeout":                   c.WriteTimeout,
 		"dropInterval":                   c.DropInterval,
+		"checksumInterval":               c.ChecksumInterval,
 		"shutdownTimeout":                c.ShutdownTimeout,
 		"shutdownMaxDropInterval":        c.ShutdownMaxDropInterval,
 		"maxConns":                       c.MaxConns,
@@ -272,6 +283,13 @@ func (c *Config) ApplyDefaults() {
 			"default": defaultDropInterval,
 		}).Info("Defaulting DropInterval.")
 		c.DropInterval = defaultDropInterval
+	}
+	if c.ChecksumInterval <= 0 {
+		log.WithFields(log.Fields{
+			"value":   c.ChecksumInterval,
+			"default": defaultChecksumInterval,
+		}).Info("Defaulting ChecksumInterval.")
+		c.ChecksumInterval = defaultChecksumInterval
 	}
 	if c.ShutdownMaxDropInterval <= 0 {
 		log.WithFields(log.Fields{
@@ -676,6 +694,37 @@ func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) boo
 	return false
 }
 
+// DrainOffNodeClients drops every current client connection whose hostname does
+// not match this Typha's node name, leaving same-node clients connected.  Used
+// by the role manager when this Typha is promoted out of tier-2: off-node leaf
+// clients should re-discover and land on a tier-2 Typha, while a same-node
+// client always prefers its local Typha whatever its tier and so is kept.
+//
+// Unlike graceful shutdown this does NOT set shuttingDown; the server stays up.
+// Dropped clients reconnect and the dedupe buffer rides the resync.  Connections
+// with an empty hostname (very old clients) are treated as off-node and dropped,
+// which is safe — they re-discover like any other client.
+func (s *Server) DrainOffNodeClients(reason string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	myNode := s.config.NodeName
+	dropped := 0
+	for connID, conn := range s.connIDToConn {
+		if myNode != "" && conn.clientHostname == myNode {
+			continue // Same-node client; keep it.
+		}
+		log.WithFields(log.Fields{
+			"connID":         connID,
+			"clientHostname": conn.clientHostname,
+			"reason":         reason,
+		}).Info("Draining off-node client connection.")
+		conn.cancelCxt()
+		dropped++
+	}
+	log.WithFields(log.Fields{"dropped": dropped, "node": myNode}).Info(
+		"Drained off-node client connections after tier change.")
+}
+
 func (s *Server) reportHealth() {
 	if s.config.HealthAggregator != nil {
 		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
@@ -729,6 +778,11 @@ type connection struct {
 	logCxt                       *log.Entry
 	chosenCompression            syncproto.CompressionAlgorithm
 	clientSupportsDecoderRestart bool
+	clientSupportsChecksum       bool
+	// clientHostname is the Hostname the client supplied in its hello (for Felix,
+	// its node name).  Used by DrainOffNodeClients to keep same-node clients while
+	// dropping off-node ones on promotion out of tier-2.
+	clientHostname string
 
 	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
 	// of them to the unnamed field after the handshake.
@@ -999,6 +1053,8 @@ func (h *connection) doHandshake() error {
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
+	h.clientSupportsChecksum = hello.SupportsChecksum
+	h.clientHostname = hello.Hostname
 	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
 		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
@@ -1018,7 +1074,11 @@ func (h *connection) doHandshake() error {
 		// clients will ignore.
 		SyncerType:                  syncerType,
 		SupportsNodeResourceUpdates: true,
-		ServerConnID:                h.ID,
+		// Echo checksum support only when the client asked for it; the server always supports it, so
+		// the client's flag is the deciding factor.  This keeps checksum traffic off connections from
+		// clients that don't understand MsgChecksum.
+		SupportsChecksum: hello.SupportsChecksum,
+		ServerConnID:     h.ID,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")
@@ -1152,7 +1212,11 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 
 	// Track the sync status reported in each Breadcrumb so we can send an update if it changes.
 	var lastSentStatus api.SyncStatus
+	// justBecameInSync is set by maybeSendStatus when it sends an InSync status, so we can emit the
+	// initial checksum at exactly that stream position.
+	var justBecameInSync bool
 	maybeSendStatus := func() (err error) {
+		justBecameInSync = false
 		if lastSentStatus != breadcrumb.SyncStatus {
 			logCxt.WithField("newStatus", breadcrumb.SyncStatus).Info(
 				"Status update to send.")
@@ -1163,14 +1227,56 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 				logCxt.WithError(err).Info("Failed to send status to client")
 				return
 			}
+			if breadcrumb.SyncStatus == api.InSync {
+				justBecameInSync = true
+			}
 			lastSentStatus = breadcrumb.SyncStatus
 		}
 		return
 	}
 
+	// maybeSendChecksum sends the current breadcrumb's checksum to the client, but only if the client
+	// advertised support for it.  It is rate-limited to ChecksumInterval unless force is set (used for
+	// the initial in-sync checksum).  The stream position ties the checksum to "the state after
+	// everything sent so far": it is called only after the deltas and status for the current breadcrumb
+	// have been sent.
+	var lastChecksumSent time.Time
+	maybeSendChecksum := func(force bool) (err error) {
+		if !h.clientSupportsChecksum {
+			return nil
+		}
+		if !force && time.Since(lastChecksumSent) < h.config.ChecksumInterval {
+			return nil
+		}
+		cs := breadcrumb.Checksum
+		logCxt.WithFields(log.Fields{
+			"seqNo":    breadcrumb.SequenceNumber,
+			"checksum": cs.XOR,
+			"kvCount":  cs.KVCount,
+			"forced":   force,
+		}).Debug("Sending checksum to client.")
+		err = h.sendMsg(syncproto.MsgChecksum{
+			Checksum: cs.XOR,
+			KVCount:  cs.KVCount,
+		})
+		if err != nil {
+			logCxt.WithError(err).Info("Failed to send checksum to client")
+			return
+		}
+		lastChecksumSent = time.Now()
+		return nil
+	}
+
 	// The first Breadcrumb may have changed the status.  Send an update if so.
 	if err := maybeSendStatus(); err != nil {
 		return
+	}
+	// If we went in-sync on the very first breadcrumb (e.g. the snapshot was already in-sync), send the
+	// initial checksum now.
+	if justBecameInSync {
+		if err := maybeSendChecksum(true); err != nil {
+			return
+		}
 	}
 
 	loggedClientBehind := false
@@ -1274,6 +1380,15 @@ func (h *connection) sendDeltaUpdatesToClient(logCxt *log.Entry, breadcrumb *sna
 
 		// Newest breadcrumb may have updated the sync status, send an update if so.
 		if err := maybeSendStatus(); err != nil {
+			return
+		}
+
+		// Send the checksum for the last breadcrumb in this batch.  We force it the moment we go
+		// in-sync (so the client gets an unambiguous end-of-initial-sync checksum) and otherwise
+		// emit at most once per ChecksumInterval.  Because we coalesce deltas from multiple
+		// breadcrumbs into one batch when the client lags, breadcrumb here is the LAST one included,
+		// so its checksum correctly describes the state after applying everything just sent.
+		if err := maybeSendChecksum(justBecameInSync); err != nil {
 			return
 		}
 	}

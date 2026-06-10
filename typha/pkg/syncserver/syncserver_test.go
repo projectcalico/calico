@@ -43,6 +43,7 @@ var _ = Describe("With zero config", func() {
 			PongTimeout:                    60 * time.Second,
 			HandshakeTimeout:               10 * time.Second,
 			DropInterval:                   time.Second,
+			ChecksumInterval:               30 * time.Second,
 			ShutdownTimeout:                300 * time.Second,
 			ShutdownMaxDropInterval:        time.Second,
 			MaxConns:                       math.MaxInt32,

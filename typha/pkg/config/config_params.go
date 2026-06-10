@@ -159,6 +159,97 @@ type Config struct {
 	K8sServiceName                        string        `config:"string;calico-typha"`
 	K8sPortName                           string        `config:"string;calico-typha"`
 
+	// Hierarchical ("chained") Typha config.  When HierarchyEnabled is true,
+	// this Typha sources its syncer pipelines from an upstream Typha instead of
+	// the datastore.  See typha/DESIGN.md, "Hierarchical mode".  All default
+	// off/empty so the standard deployment is byte-for-byte unchanged.
+	HierarchyEnabled bool `config:"bool;false"`
+
+	// UpstreamAddr is a static upstream Typha host:port override (mutually
+	// exclusive with the UpstreamK8s* service-discovery params; mirrors Felix's
+	// TyphaAddr).
+	UpstreamAddr string `config:"authority;"`
+	// UpstreamK8sServiceName / UpstreamK8sNamespace / UpstreamK8sPortName select
+	// the upstream Typha service to discover via EndpointSlices.
+	UpstreamK8sServiceName string `config:"string;"`
+	UpstreamK8sNamespace   string `config:"string;"`
+	UpstreamK8sPortName    string `config:"string;calico-typha"`
+
+	// Client-side TLS for connecting to the upstream Typha (binding decision 4).
+	// If any are set, ClientKeyFile/ClientCertFile/ClientCAFile must all be set
+	// and at least one of UpstreamServerCN/UpstreamServerURISAN.
+	ClientKeyFile        string        `config:"file(must-exist);;local"`
+	ClientCertFile       string        `config:"file(must-exist);;local"`
+	ClientCAFile         string        `config:"file(must-exist);;local"`
+	UpstreamServerCN     string        `config:"string;"`
+	UpstreamServerURISAN string        `config:"string;"`
+	UpstreamReadTimeout  time.Duration `config:"seconds;30"`
+	UpstreamWriteTimeout time.Duration `config:"seconds;10"`
+
+	// Snapshot integrity checksum (WS-D).  When ChecksumEnabled is true, a
+	// follower Typha verifies the snapshot it reconstructs from its upstream
+	// against a checksum the upstream reports, detecting data lost/duplicated by
+	// an intermediate hop.  The server side always supports the protocol (gated
+	// per-connection by the client's hello flag), so this knob only controls the
+	// follower's client-side verification.  Default on; harmless when not in
+	// hierarchical mode (no upstream connection to verify).  See
+	// typha/pkg/synccheck and typha/DESIGN.md "Snapshot integrity checking".
+	ChecksumEnabled bool `config:"bool;true"`
+	// ChecksumMismatchAction selects remediation on a confirmed mismatch:
+	// "reconnect" (default) forces a clean re-sync via the existing restart path
+	// (rate-limited); "log" only alarms and keeps serving the current cache.
+	ChecksumMismatchAction string `config:"oneof(log,reconnect);reconnect"`
+	// ChecksumInterval is how often the upstream emits a periodic checksum after
+	// the initial in-sync checksum.
+	ChecksumInterval time.Duration `config:"seconds;30"`
+
+	// Pod identity — injected via downward-API env vars in the chart.
+	// Used by leader election (identity) and WS-C/E (node-affinity routing).
+	PodName      string `config:"string;"`
+	PodNamespace string `config:"string;"`
+	NodeName     string `config:"string;"`
+
+	// Leader election (Kubernetes-datastore mode only).
+	// Durations default to 0 here; the leaderelection package substitutes
+	// the client-go recommended ratios (15s / 10s / 2s) when zero is supplied.
+	// Disabled by default so standard deployments are byte-for-byte unchanged.
+	LeaderElectionEnabled  bool          `config:"bool;false"`
+	LeaseName              string        `config:"string;calico-typha-leader"`
+	LeaseNamespace         string        `config:"string;"` // defaults to PodNamespace at runtime
+	LeaderElectionDuration time.Duration `config:"seconds;15"`
+	LeaderRenewDeadline    time.Duration `config:"seconds;10"`
+	LeaderRetryPeriod      time.Duration `config:"seconds;2"`
+
+	// RoleTransitionDebounce is how long the desired role must be stable before
+	// the role manager (WS-C) acts on it.  This protects against rapid election
+	// flapping triggering a storm of source swaps.  A transition already in
+	// flight is never interrupted; the debounce only gates *starting* one.
+	RoleTransitionDebounce time.Duration `config:"seconds;2"`
+
+	// LeaderServiceName / LeaderServicePortName select the headless Service that
+	// selects the current leader Typha pod (via the projectcalico.org/typha-tier
+	// label that the leader applies to itself).  Tier-1 typhas (and, in
+	// single-tier mode, tier-2 typhas) discover their upstream through this
+	// Service.
+	LeaderServiceName     string `config:"string;calico-typha-leader"`
+	LeaderServicePortName string `config:"string;calico-typha"`
+
+	// Two-tier fan-out (WS-E).  Tier1Count is the number of tier-1 fan-out slots
+	// (N).  Default 0 = single-tier (M2/WS-C) behaviour: only the leader slot
+	// exists and tier-2 typhas connect straight to the leader.  When >0, N tier-1
+	// Leases (calico-typha-tier1-0..N-1) are elected; tier-1 typhas connect to the
+	// leader and tier-2 typhas connect to the tier-1 Service.
+	Tier1Count int `config:"int(0,);0"`
+	// Tier1ServiceName / Tier1ServicePortName select the Service that selects the
+	// tier-1 Typha pods (via projectcalico.org/typha-tier=1).  Tier-2 typhas
+	// discover their upstream through this Service when Tier1Count>0.
+	Tier1ServiceName     string `config:"string;calico-typha-tier1"`
+	Tier1ServicePortName string `config:"string;calico-typha"`
+	// SlotWatchInterval is how often a typha holding no slot lists the Leases to
+	// look for an acquirable slot ("lazy candidacy" — see typha/pkg/slotacquirer).
+	// This bounds the steady-state API-server load from idle candidates.
+	SlotWatchInterval time.Duration `config:"seconds;10"`
+
 	// State tracking.
 
 	// nameToSource tracks where we loaded each config param from.
@@ -317,6 +408,27 @@ func (config *Config) requiringTLS() bool {
 	return config.ServerKeyFile+config.ServerCertFile+config.CAFile+config.ClientCN+config.ClientURISAN != ""
 }
 
+// upstreamConfigured returns true if any upstream Typha location is configured
+// (static address or k8s service).
+func (config *Config) upstreamConfigured() bool {
+	return config.UpstreamConfigured()
+}
+
+// UpstreamConfigured returns true if any static upstream Typha location is
+// configured (static address or k8s service).  When set, this Typha is pinned
+// as a follower of that upstream (WS-A manual chaining); election-driven
+// promotion/demotion is only used when no static upstream is configured.
+func (config *Config) UpstreamConfigured() bool {
+	return config.UpstreamAddr != "" || config.UpstreamK8sServiceName != ""
+}
+
+// requiringUpstreamTLS is true if any of the client-side (upstream) TLS
+// parameters are set.
+func (config *Config) requiringUpstreamTLS() bool {
+	return config.ClientKeyFile+config.ClientCertFile+config.ClientCAFile+
+		config.UpstreamServerCN+config.UpstreamServerURISAN != ""
+}
+
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
@@ -339,6 +451,65 @@ func (config *Config) Validate() (err error) {
 			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
 				" - except that either ClientCN or ClientURISAN may be left unset")
+		}
+	}
+
+	// Hierarchical-mode validation.
+	if config.HierarchyEnabled {
+		// WS-C: hierarchy now self-organises via leader election.  Either a
+		// static upstream is configured (test/manual chaining, takes precedence)
+		// or leader election must be enabled so the role manager can discover the
+		// leader dynamically.
+		if !config.upstreamConfigured() && !config.LeaderElectionEnabled {
+			err = errors.New("HierarchyEnabled is set but neither a static upstream" +
+				" (UpstreamAddr / UpstreamK8sServiceName) nor LeaderElectionEnabled is configured")
+		}
+		if config.UpstreamAddr != "" && config.UpstreamK8sServiceName != "" {
+			err = errors.New("UpstreamAddr and UpstreamK8sServiceName are mutually exclusive")
+		}
+		// Election-driven hierarchy only works against the Kubernetes datastore
+		// (Leases live in coordination.k8s.io) and needs a pod identity for
+		// self-labelling and self-connection avoidance.
+		if config.LeaderElectionEnabled && !config.upstreamConfigured() {
+			if config.DatastoreType != "kubernetes" {
+				err = errors.New("HierarchyEnabled with leader election requires DatastoreType=kubernetes")
+			}
+			if config.PodName == "" {
+				err = errors.New("HierarchyEnabled with leader election requires PodName" +
+					" (set via the downward-API TYPHA_PODNAME env var)")
+			}
+			// Two-tier fan-out: tier-2 typhas need the tier-1 Service name to
+			// discover their upstream, and the leader Service name for tier-1
+			// typhas' upstream.  Defaults are non-empty, so this only fails if an
+			// operator blanks them.
+			if config.Tier1Count > 0 {
+				if config.Tier1ServiceName == "" {
+					err = errors.New("Tier1Count>0 requires Tier1ServiceName to be set")
+				}
+				if config.LeaderServiceName == "" {
+					err = errors.New("Tier1Count>0 requires LeaderServiceName to be set")
+				}
+			}
+		}
+		// A static upstream pins this Typha as a follower; two-tier election can't
+		// run alongside it.
+		if config.Tier1Count > 0 && config.upstreamConfigured() {
+			err = errors.New("Tier1Count>0 (two-tier fan-out) is incompatible with a" +
+				" static upstream (UpstreamAddr / UpstreamK8sServiceName)")
+		}
+	}
+
+	// Upstream (client-side) TLS config: if any are specified they _all_ must
+	// be - except that either UpstreamServerCN or UpstreamServerURISAN may be
+	// left unset.
+	if config.requiringUpstreamTLS() {
+		if config.ClientKeyFile == "" ||
+			config.ClientCertFile == "" ||
+			config.ClientCAFile == "" ||
+			(config.UpstreamServerCN == "" && config.UpstreamServerURISAN == "") {
+			err = errors.New("if any upstream-Typha (client-side) TLS config parameters are specified," +
+				" they _all_ must be" +
+				" - except that either UpstreamServerCN or UpstreamServerURISAN may be left unset")
 		}
 	}
 	return

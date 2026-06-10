@@ -128,6 +128,8 @@ local:typha/cmd/typha-client
 local:typha/pkg/config
 local:typha/pkg/discovery
 local:typha/pkg/logutils
+local:typha/pkg/promutils
+local:typha/pkg/synccheck
 local:typha/pkg/syncclient
 local:typha/pkg/syncproto
 local:typha/pkg/tlsutils

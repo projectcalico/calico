@@ -74,6 +74,8 @@ local:libcalico-go/lib/winutils
 local:pkg/buildinfo
 local:test-tools/mocknode/cmd/mocknode
 local:typha/pkg/discovery
+local:typha/pkg/promutils
+local:typha/pkg/synccheck
 local:typha/pkg/syncclient
 local:typha/pkg/syncproto
 local:typha/pkg/tlsutils
