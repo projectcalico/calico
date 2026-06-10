@@ -23,20 +23,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/projectcalico/calico/typha/pkg/rolemanager"
 )
 
 const (
-	// TyphaRoleLabel is the pod label the leader Typha applies to its own pod so
-	// that the calico-typha-leader headless Service selects it.  Followers
-	// discover the leader through that Service.
-	TyphaRoleLabel = "projectcalico.org/typha-role"
-	// TyphaRoleLeader is the value of TyphaRoleLabel applied by the leader.
-	TyphaRoleLeader = "leader"
+	// TyphaTierLabel is the pod label that advertises a Typha's hierarchical
+	// tier.  The pod template sets it to TyphaTier2 ("2") for every Typha; the
+	// role manager patches it to TyphaTierLeader/TyphaTier1 on promotion and back
+	// to TyphaTier2 on demotion.  The per-tier Services select on this label:
+	//
+	//   calico-typha-leader  selects typha-tier=leader
+	//   calico-typha-tier1   selects typha-tier=1
+	//
+	// and the discovery code cross-references the tier Services against the main
+	// calico-typha Service to classify each endpoint's tier.
+	TyphaTierLabel = "projectcalico.org/typha-tier"
+
+	// TyphaTierLeader / TyphaTier1 / TyphaTier2 are the values of TyphaTierLabel.
+	TyphaTierLeader = "leader"
+	TyphaTier1      = "1"
+	TyphaTier2      = "2"
 )
 
-// PodLabeller adds/removes the leader role label on this Typha's own pod via the
-// Kubernetes API.  It is used by the role manager (WS-C) so that the leader pod
-// is selected by the leader Service.
+// PodLabeller patches the tier label on this Typha's own pod via the Kubernetes
+// API.  It is used by the role manager so that the leader / tier-1 pods are
+// selected by their respective Services.  It patches only its own pod name (the
+// shared-ServiceAccount pods:patch grant is documented in DESIGN.md).
 type PodLabeller struct {
 	client    kubernetes.Interface
 	namespace string
@@ -53,26 +66,32 @@ func NewPodLabeller(client kubernetes.Interface, namespace, podName string) *Pod
 	}
 }
 
-// SetLeaderLabel adds TyphaRoleLabel=leader to our own pod.  Idempotent: a
-// strategic-merge patch that sets the label is a no-op if it is already set.
-func (l *PodLabeller) SetLeaderLabel(ctx context.Context) error {
-	return l.patchRoleLabel(ctx, TyphaRoleLeader)
+// SetTierLabel patches our own pod's tier label to the value implied by role.
+// Implements rolemanager.Labeller.
+func (l *PodLabeller) SetTierLabel(ctx context.Context, role rolemanager.Role) error {
+	return l.patchTierLabel(ctx, TierLabelValue(role))
 }
 
-// RemoveLeaderLabel removes TyphaRoleLabel from our own pod.  Idempotent: the
-// merge-patch sets the label key to null, which is a no-op if absent.
-func (l *PodLabeller) RemoveLeaderLabel(ctx context.Context) error {
-	return l.patchRoleLabel(ctx, nil)
+// TierLabelValue maps a role-manager Role to the TyphaTierLabel value.  Sourceless
+// (only seen transiently at shutdown) maps to tier-2, the safe leaf value.
+func TierLabelValue(role rolemanager.Role) string {
+	switch role {
+	case rolemanager.Leader:
+		return TyphaTierLeader
+	case rolemanager.Tier1:
+		return TyphaTier1
+	default:
+		return TyphaTier2
+	}
 }
 
-// patchRoleLabel patches our own pod's TyphaRoleLabel to the given value.  A nil
-// value removes the label (JSON null in a strategic-merge patch deletes the
-// map entry).
-func (l *PodLabeller) patchRoleLabel(ctx context.Context, value any) error {
+// patchTierLabel patches our own pod's TyphaTierLabel to the given value via a
+// strategic-merge patch (idempotent — a no-op if already set).
+func (l *PodLabeller) patchTierLabel(ctx context.Context, value string) error {
 	patch := map[string]any{
 		"metadata": map[string]any{
 			"labels": map[string]any{
-				TyphaRoleLabel: value,
+				TyphaTierLabel: value,
 			},
 		},
 	}
@@ -88,12 +107,12 @@ func (l *PodLabeller) patchRoleLabel(ctx context.Context, value any) error {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to patch pod %s/%s role label: %w", l.namespace, l.podName, err)
+		return fmt.Errorf("failed to patch pod %s/%s tier label: %w", l.namespace, l.podName, err)
 	}
 	log.WithFields(log.Fields{
 		"pod":   l.podName,
-		"label": TyphaRoleLabel,
+		"label": TyphaTierLabel,
 		"value": value,
-	}).Info("Patched own pod leader role label.")
+	}).Info("Patched own pod tier label.")
 	return nil
 }
