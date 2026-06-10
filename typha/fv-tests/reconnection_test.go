@@ -129,7 +129,7 @@ func setUpReconnectionTest(t *testing.T) (
 	recorder := fvtests.NewRecorder()
 	deduper := dedupebuffer.New()
 	client := syncclient.New(
-		discovery.New(discovery.WithAddrsOverride([]string{
+		discovery.New("", discovery.WithAddrsOverride([]string{
 			h[0].Addr(),
 			h[1].Addr(),
 		})),
