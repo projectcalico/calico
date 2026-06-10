@@ -168,8 +168,9 @@ closing client connections, to avoid serving stale data from a demoted Typha.
 ### Per-lease instantiation
 
 `Elector` is instantiated per Lease (the lease name is a Config parameter, not
-a singleton). WS-E uses this to run N parallel electors for tier-1 slots, each
-with its own Lease object.
+a singleton). The two-tier slot acquirer (`pkg/slotacquirer`, see "Two-tier
+fan-out") relies on this to run an independent elector per slot — the leader
+Lease plus N tier-1 Leases — each with its own Lease object.
 
 ### RBAC
 
@@ -186,11 +187,15 @@ The Role grants:
 
 - `coordination.k8s.io/leases: create` — unrestricted within the namespace
   (Kubernetes cannot scope `create` to `resourceNames`)
-- `coordination.k8s.io/leases: get, update` — scoped to `calico-typha-leader`
-  via `resourceNames` (WS-E appends its tier-1 lease names to this list)
-- `pods: patch` — for the leader self-labelling its own pod. Kubernetes RBAC
+- `coordination.k8s.io/leases: get, update` — scoped via `resourceNames` to
+  `calico-typha-leader` plus, in two-tier mode, the tier-1 lease names
+  `calico-typha-tier1-0..N-1` (the chart `range`s over `tier1Count` to emit
+  them). The scoping is preserved as tier-1 names are added — it is **not**
+  widened to all leases and **not** moved back to the shared ClusterRole.
+- `pods: patch` — for a Typha self-labelling its own pod's tier. Kubernetes RBAC
   has no self-reference, so `patch` cannot be restricted to the pod's own name;
-  namespace scoping is the available blast-radius limit.
+  namespace scoping is the available blast-radius limit. (Not broadened for the
+  tier label — same self-patch-own-pod pattern as WS-C.)
 
 The Role/RoleBinding are values-gated on `typha.hierarchy.enabled` (matching
 where the chart sets `TYPHA_LEADERELECTIONENABLED`), so a non-hierarchical
@@ -213,6 +218,14 @@ WS-G handles that side, where the grant can be SA-scoped as well.
   Leader→Follower or Follower→Leader transition.
 - `typha_leader_holder_info` gauge vec (label `holder`): info-style gauge,
   value always 1, label carries the current holder's pod-name identity.
+
+Two-tier metrics (`pkg/slotacquirer`):
+
+- `typha_hierarchy_role` gauge vec (label `role`): per-role gauge, exactly one
+  of `{leader,tier1,tier2}` is 1 at any time.
+- `typha_hierarchy_held_slot` gauge vec (label `slot`): info-style gauge, value
+  always 1, label carries the held slot/Lease name (`none` when holding
+  nothing) — doubles as the upstream-identity signal.
 
 ## Hierarchical (chained) mode
 
@@ -349,30 +362,47 @@ the heavy watch-everything syncers move to the upstream.
 
 ## Role state machine (promotion/demotion)
 
-WS-A made the pipeline source swappable; WS-B added leader election. WS-C wires
-them together so a hierarchy-enabled deployment self-organises: the elected
-leader runs real datastore syncers, every other Typha follows the leader, and
-promotion/demotion happen **in-process** with no restart. The role manager lives
-in `pkg/rolemanager` and runs as a single goroutine per Typha process,
-constructed and started from `daemon.go` (`startRoleManager`) only when
-hierarchy + election are enabled and no static upstream is configured
-(`roleManaged` mode). A static upstream pins the Typha as a follower and bypasses
-the role manager (manual chaining / tests).
+WS-A made the pipeline source swappable; WS-B added leader election. WS-C wired
+them together so a hierarchy-enabled deployment self-organises; WS-E generalised
+the two-state machine to three roles for two-tier fan-out (see "Two-tier
+fan-out" below). The elected leader runs real datastore syncers, every other
+Typha follows (a tier-1 from the leader, a tier-2 from a tier-1 or — in
+single-tier mode — directly from the leader), and promotion/demotion happen
+**in-process** with no restart. The role manager lives in `pkg/rolemanager` and
+runs as a single goroutine per Typha process, constructed and started from
+`daemon.go` (`startSlotAcquirerAndRoleManager`) only when hierarchy + election
+are enabled and no static upstream is configured (`roleManaged` mode). A static
+upstream pins the Typha as a follower and bypasses the role manager (manual
+chaining / tests).
+
+The role manager consumes role transitions from the **slot acquirer**
+(`pkg/slotacquirer`, see "Two-tier fan-out"), which publishes one of three
+roles: `Leader`, `Tier1`, `Tier2`. In single-tier mode (`Tier1Count == 0`) the
+acquirer only ever publishes `Leader`/`Tier2`, reproducing the WS-C two-state
+machine exactly.
 
 ### States and transition procedure
 
 ```
-             ┌────────────┐  Leader role   ┌──────────────┐
-   start ───→│  FOLLOWER  │───────────────→│   LEADER     │
-             │ (upstream  │←───────────────│ (real        │
-             │  sources)  │  Follower role │  syncers)    │
-             └────────────┘                └──────────────┘
+             ┌──────────┐        ┌──────────┐        ┌──────────┐
+   start ───→│  TIER2   │───────→│  TIER1   │───────→│  LEADER  │
+             │(src=t1   │←───────│(src=     │←───────│(real     │
+             │ service) │        │ leader)  │        │ syncers) │
+             └──────────┘        └──────────┘        └──────────┘
+   (promotion ladder shown; any role may transition directly to any other)
 ```
+
+The role manager picks the source for the target role via a single per-pipeline
+`NewSourceForRole(role)` factory: `Leader` → datastore syncer; `Tier1` →
+upstream syncclient to the leader Service; `Tier2` → upstream syncclient to the
+tier-1 Service (or, in single-tier mode, the leader Service — the daemon aliases
+the two discoverers there).
 
 The initial state is **SOURCELESS** (no source started yet) so the first
 transition's "stop old source" step is a no-op on cold start. On startup the
-manager converges immediately to FOLLOWER (a cold cluster has no leader, so
-everyone follows until one is elected); from then on it follows the elector.
+manager converges immediately to TIER2 (a cold cluster has no leader, so
+everyone is a leaf until the slots are filled); from then on it follows the
+acquirer.
 
 For each of the four pipelines the swap is identical in both directions and runs
 concurrently across pipelines, but the role manager is strictly serial per role
@@ -402,34 +432,42 @@ always converges to the most recently received role. A 100ms×10s flap storm
 converges to the final role with no source overlap and no goroutine leak
 (covered by `rolemanager` UTs under the race detector).
 
-### Leader discovery and self/cycle prevention
+### Tier advertisement, discovery and self/cycle prevention
 
-The leader advertises itself by labelling its **own pod** with
-`projectcalico.org/typha-role=leader` (via `pkg/k8s.PodLabeller`, a
-strategic-merge patch on the pod). A headless Service `calico-typha-leader`
-selects that label; followers discover their upstream through it using the
-existing `pkg/discovery` EndpointSlice path. The main `calico-typha` Service is
-unchanged and still selects all Typhas (Felix can connect to any ready one;
-client-side tier preference is WS-E).
+Every Typha advertises its tier by labelling its **own pod** with
+`projectcalico.org/typha-tier` (via `pkg/k8s.PodLabeller`, a strategic-merge
+patch on the pod that touches only that one key). The pod template sets `"2"`;
+on acquiring the leader / a tier-1 slot the role manager patches the value to
+`"leader"` / `"1"`, and back to `"2"` on demotion. Per-tier headless Services
+select on this label:
 
-**Promote ordering (decision):** the leader applies its pod label *after* the
-role manager has started the real datastore sources (step 3 above). Final
-"don't direct followers at a not-yet-synced leader" gating is provided by pod
+- `calico-typha-leader` selects `typha-tier=leader`.
+- `calico-typha-tier1` selects `typha-tier=1`.
+
+Tier-1 Typhas discover the leader through `calico-typha-leader`; tier-2 Typhas
+discover their upstream through `calico-typha-tier1` (or, in single-tier mode,
+through `calico-typha-leader`). Inter-Typha upstream discovery uses plain
+shuffled ordering — no same-node preference between Typha tiers (anti-affinity
+already spreads them). The main `calico-typha` Service is unchanged and still
+selects all Typhas (Felix can connect to any ready one; who-may-connect is
+policed client-side — see "Two-tier fan-out").
+
+**Label ordering (decision):** on **promotion** the pod's tier label is applied
+*after* the role manager has started the new sources (step 3 above); on
+**demotion** the (lower) label is applied *before* the swap so clients/Typhas
+stop being directed at us at the old tier as early as possible. Final "don't
+direct anyone at a not-yet-synced upstream" gating is provided by pod
 **readiness**: the snapcache health reporters set `Ready` only when the syncer is
 `InSync`, the pod's readiness probe reflects that, and an unready pod is removed
-from the Service's EndpointSlice. So a follower only ever discovers a leader
-whose syncers have begun *and* whose caches are InSync. We chose readiness-gating
-(rather than blocking the label until InSync inside the role manager) because it
-reuses the existing health plumbing and degrades correctly if the leader later
-falls out of sync.
+from the Service's EndpointSlice. We chose readiness-gating (rather than blocking
+the label until InSync inside the role manager) because it reuses the existing
+health plumbing and degrades correctly if the upstream later falls out of sync.
 
-Cycle/self-connection prevention (`daemon.filterOutSelf` +
-`daemon.filterToLeaseHolder`, installed as post-discovery filters): we drop any
-discovered endpoint that resolves to our own pod IP, and we log loudly if the
-leader Service ever returns more than one endpoint (a stale label lingering after
-a SIGKILL until the dead pod's endpoints are reaped). In single-tier M2,
-follower→follower cycles are impossible by construction (followers only ever
-target the leader Service).
+Cycle/self-connection prevention (`daemon.filterOutSelf`, installed as a
+post-discovery filter): we drop any discovered endpoint that resolves to our own
+pod IP. The per-tier Service selectors are the primary guard against connecting
+to the wrong tier; a stale label lingering after a SIGKILL is bounded because the
+dead pod's endpoints are reaped from the Service's EndpointSlice.
 
 ### Readiness across transitions
 
@@ -453,19 +491,155 @@ buffer.
 
 ### Graceful shutdown ordering
 
-On SIGTERM the daemon releases the lease (`electorCancel()` →
-`ReleaseOnCancel`) **before** starting the server's connection drain, so a
-follower can win the election and stand up syncers early, shortening the window
-in which clients have no fresh leader. The role manager also removes the leader
-label and stops all sources when its context is cancelled.
+On SIGTERM the daemon releases any held lease (`acquirerCancel()` →
+`ReleaseOnCancel`) **before** starting the server's connection drain, so another
+Typha can win the slot and stand up its sources early, shortening the window in
+which clients have no fresh upstream. The role manager stops all sources when its
+context is cancelled.
 
 ### Bootstrap and misconfiguration
 
-Cold start: all Typhas come up FOLLOWER with no leader → election picks one → it
-promotes (SOURCELESS→LEADER, so "stop old source" is a no-op) → labels its pod →
-followers discover it and sync. Until then followers are not Ready, which is
-correct. Hierarchy enabled with election but a non-Kubernetes datastore, or
-without `PodName`, is a fatal config error at startup.
+Cold start: all Typhas come up TIER2 with no leader → the slot acquirer fills the
+leader (and any tier-1) slots → the winner promotes (SOURCELESS→LEADER, so "stop
+old source" is a no-op) → labels its pod → other Typhas discover their upstream
+and sync. Until then leaf Typhas are not Ready, which is correct. Hierarchy
+enabled with election but a non-Kubernetes datastore, or without `PodName`, is a
+fatal config error at startup; `Tier1Count>0` alongside a static upstream is also
+rejected.
+
+## Two-tier fan-out
+
+For the very largest clusters (target 1M nodes) a single leader cannot fan out
+to every Typha. Two-tier mode (`Tier1Count = N > 0`) inserts a small elected set
+of **tier-1** Typhas between the leader and the leaf **tier-2** Typhas:
+
+```
+            datastore (kube-apiserver)
+                      │ (watch, ×1)
+                  [ leader ]            ← Lease: calico-typha-leader
+                ┌────┼────┐
+            [t1-0] [t1-1] … [t1-(N-1)]  ← Leases: calico-typha-tier1-0..N-1
+           ╱   │  ╲   ...   ╱  │ ╲
+        [tier-2 × hundreds/thousands]   ← everyone else (no slot)
+        ╱│╲      ...        ╱│╲
+     felix/confd clients (×1M)
+```
+
+`Tier1Count = 0` collapses this to the single-tier (WS-C) topology exactly:
+tier-2 Typhas connect straight to the leader and no tier-1 Leases exist.
+
+### Slot election with lazy candidacy (`pkg/slotacquirer`)
+
+client-go leader election is single-leader-per-Lease, so we run **one Lease per
+slot**: `calico-typha-leader` plus `calico-typha-tier1-0..N-1`. Every Typha runs
+one `slotacquirer.Acquirer`, which makes the instance hold **at most one** slot
+and converges the deployment so **exactly one** instance holds each slot. The
+role follows from the held slot: leader slot → `Leader`; a tier-1 slot →
+`Tier1`; nothing → `Tier2`.
+
+The naive approach — one always-running client-go elector per Lease on every
+Typha — would have every idle leaf Typha polling every Lease every `RetryPeriod`
+forever: roughly `P × (N+1) / RetryPeriod` lease GETs/s against the API server in
+steady state, even when all slots are filled and nobody can win anything. At the
+1M-node scale (thousands of tier-2 Typhas) that is a self-inflicted DoS on the
+exact component the hierarchy exists to protect.
+
+**Lazy candidacy** fixes this and is the one piece of nonstandard election code
+(isolated in `slotacquirer` and UT-ed hard, including by counting API calls):
+
+- A Typha that holds no slot does **not** keep electors running. It runs a single
+  cheap watch loop that **lists** the Leases every `SlotWatchInterval`
+  (default 10s) and only starts a real per-slot `leaderelection.Elector` for a
+  slot that looks *acquirable* (no holder, empty holder, held by us, or the
+  holder's lease has expired: `renewTime + leaseDuration < now`).
+- The instant it wins any slot it cancels every other campaign elector (each runs
+  on its own child context) — this is what enforces "≤1 slot per candidate",
+  releasing any other slot momentarily grabbed during the dual-acquisition
+  window — and keeps the winner's elector running to renew the lease.
+- When it loses its held slot it returns to the watch loop.
+
+Steady-state cost per idle Typha is therefore one LIST every `SlotWatchInterval`
+instead of `(N+1)` renew-GETs every `RetryPeriod` — campaign traffic only appears
+transiently when a slot actually frees up. (Alternative considered and rejected:
+the leader appoints tier-1 by writing a ConfigMap — simpler API-load profile but
+invents a bespoke coordination protocol and a single point of appointment.)
+
+Any Typha may win the leader lease, **including a tier-2** — the role manager
+handles a direct `Tier2 → Leader` jump, not just the ladder step (fv-tested).
+
+### Client (Felix) connection preference
+
+Decision (Shaun): who-may-connect-to-the-leader is policed **client-side**, not
+by Service membership. The main `calico-typha` Service keeps selecting **all**
+Typhas. Felix's discovery (`pkg/discovery`, enabled via `WithTierServices`)
+additionally lists the leader and tier-1 Services' endpoints and cross-references
+them against the main Service to classify each endpoint's tier (EndpointSlices
+don't expose pod labels, so the per-tier Services are the tier-information
+channel). The policy:
+
+1. A client on the **same node** as a Typha always prefers that Typha — whatever
+   its tier, including the leader. Smooths bootstrap; the node's local Typha is
+   always usable.
+2. When **tiering is active**, an **off-node** client may use **only** tier-2
+   Typhas; the leader and tier-1 are filtered out for off-node clients.
+3. "Tiering active" is detected client-side as "the tier-1 Service has ≥1
+   endpoint" — no need to plumb `Tier1Count` to Felix. When not active
+   (single-tier / small clusters), off-node clients may use any Typha.
+4. Endpoints of **unknown** tier (label/Service lag, or a brand-new cluster with
+   no labels yet) count as tier-2 to **fail open** — clients can always connect.
+
+Ordering: same-node endpoints first (any tier), then — if tiering active — only
+tier-2 endpoints, shuffled. No new Felix config: the preference is automatic
+(rides the shared discovery package).
+
+### Promotion drain
+
+On promotion **out of** tier-2 (to tier-1 or leader) this Typha should no longer
+serve off-node leaf clients. The role manager calls
+`server.DrainOffNodeClients()` after the source swap: it drops every client
+connection whose hello `Hostname` differs from this Typha's `NodeName`, **without**
+shutting the server down. Dropped clients re-discover and land on a tier-2 Typha;
+a same-node client (which always prefers its local Typha) is kept and just
+re-syncs through its dedupe buffer. Same-node-ness is matched on the client's
+hello hostname (Felix's node name).
+
+### Rebalancing / connection-limit math (`pkg/k8s.CalculateMaxConnLimitForTier`)
+
+The per-Typha connection limit is computed per serving tier:
+
+- **tier-2** serves leaf clients: `expected ≈ nodes × syncerTypes ÷ #tier2`.
+- **tier-1** serves tier-2 Typhas: `expected ≈ #tier2 × syncerTypes ÷ #tier1`.
+- **leader** serves tier-1 Typhas: `expected ≈ #tier1 × syncerTypes` (single
+  instance, so it must accept them all — gets the upper limit).
+
+Each divides by `(peers − 1)` for rolling-upgrade slack and adds 20% headroom
+(the same shape as the original single-tier `CalculateMaxConnLimit`), then clamps
+to the configured lower/upper limits. In single-tier mode (`#tier1 == 0`) a
+leader serving leaf clients falls back to the original node-based math, so WS-C
+behaviour is preserved exactly. Each formula is UT-ed.
+
+### Sizing guidance
+
+1M nodes, ~200 clients/Typha ⇒ ~5,000 tier-2 Typhas ⇒ ~20,000 upstream
+connections ÷ tier-1 ⇒ `N = 100` tier-1 at ~200 conns each; the leader serves
+~400 (4 syncer types × 100). `Tier1Count` is operator-set for now (auto-scaling
+from node count is a follow-up — see WS-G's autoscaler tier math).
+
+### Failure analysis
+
+- **Leader death.** The leader lease expires; the slot acquirer on every Typha
+  (including tier-2s) sees the slot become acquirable on its next watch and
+  campaigns; one wins and promotes (`Tier2→Leader` or `Tier1→Leader`). Tier-1
+  Typhas keep serving their last-known-good cache (marked not-in-sync) while
+  reconnecting to the new leader. Worst case recovery ≈ `LeaseDuration` + resync.
+- **Tier-1 death.** The tier-1 lease expires; another Typha wins it. Meanwhile
+  the affected tier-2 Typhas serve stale (binding decision 5: fail-safe,
+  serve-stale) and reconnect to a surviving / replacement tier-1 via the tier-1
+  Service. Leaf clients ride through via their dedupe buffers.
+- **Partition between tiers.** A tier-2 cut off from all tier-1s serves stale and
+  is not-Ready; its clients keep their last cache. No fallback to a direct
+  datastore connection (deliberately — that risks the thundering-herd the
+  hierarchy prevents; revisit after soak).
 
 ## Snapshot integrity checking
 

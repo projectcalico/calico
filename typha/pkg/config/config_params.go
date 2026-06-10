@@ -227,11 +227,28 @@ type Config struct {
 	RoleTransitionDebounce time.Duration `config:"seconds;2"`
 
 	// LeaderServiceName / LeaderServicePortName select the headless Service that
-	// selects the current leader Typha pod (via the projectcalico.org/typha-role
-	// label that the leader applies to itself).  Followers discover their
-	// upstream through this Service in hierarchical+election mode.
+	// selects the current leader Typha pod (via the projectcalico.org/typha-tier
+	// label that the leader applies to itself).  Tier-1 typhas (and, in
+	// single-tier mode, tier-2 typhas) discover their upstream through this
+	// Service.
 	LeaderServiceName     string `config:"string;calico-typha-leader"`
 	LeaderServicePortName string `config:"string;calico-typha"`
+
+	// Two-tier fan-out (WS-E).  Tier1Count is the number of tier-1 fan-out slots
+	// (N).  Default 0 = single-tier (M2/WS-C) behaviour: only the leader slot
+	// exists and tier-2 typhas connect straight to the leader.  When >0, N tier-1
+	// Leases (calico-typha-tier1-0..N-1) are elected; tier-1 typhas connect to the
+	// leader and tier-2 typhas connect to the tier-1 Service.
+	Tier1Count int `config:"int(0,);0"`
+	// Tier1ServiceName / Tier1ServicePortName select the Service that selects the
+	// tier-1 Typha pods (via projectcalico.org/typha-tier=1).  Tier-2 typhas
+	// discover their upstream through this Service when Tier1Count>0.
+	Tier1ServiceName     string `config:"string;calico-typha-tier1"`
+	Tier1ServicePortName string `config:"string;calico-typha"`
+	// SlotWatchInterval is how often a typha holding no slot lists the Leases to
+	// look for an acquirable slot ("lazy candidacy" — see typha/pkg/slotacquirer).
+	// This bounds the steady-state API-server load from idle candidates.
+	SlotWatchInterval time.Duration `config:"seconds;10"`
 
 	// State tracking.
 
@@ -461,6 +478,24 @@ func (config *Config) Validate() (err error) {
 				err = errors.New("HierarchyEnabled with leader election requires PodName" +
 					" (set via the downward-API TYPHA_PODNAME env var)")
 			}
+			// Two-tier fan-out: tier-2 typhas need the tier-1 Service name to
+			// discover their upstream, and the leader Service name for tier-1
+			// typhas' upstream.  Defaults are non-empty, so this only fails if an
+			// operator blanks them.
+			if config.Tier1Count > 0 {
+				if config.Tier1ServiceName == "" {
+					err = errors.New("Tier1Count>0 requires Tier1ServiceName to be set")
+				}
+				if config.LeaderServiceName == "" {
+					err = errors.New("Tier1Count>0 requires LeaderServiceName to be set")
+				}
+			}
+		}
+		// A static upstream pins this Typha as a follower; two-tier election can't
+		// run alongside it.
+		if config.Tier1Count > 0 && config.upstreamConfigured() {
+			err = errors.New("Tier1Count>0 (two-tier fan-out) is incompatible with a" +
+				" static upstream (UpstreamAddr / UpstreamK8sServiceName)")
 		}
 	}
 
