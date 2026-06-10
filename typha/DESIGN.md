@@ -173,16 +173,35 @@ with its own Lease object.
 
 ### RBAC
 
-The `calico-node` ClusterRole (shared with calico-node's ServiceAccount, which
-Typha pods use) gets:
+Leader election and hierarchical-mode self-labelling are namespaced concerns
+(the Lease and the Typha pods live in the Typha namespace), so the permissions
+live in a **namespaced `Role` + `RoleBinding`** (`calico-typha-leader-election`,
+in the Typha namespace), bound to the `calico-node` ServiceAccount that Typha
+runs as — **not** on the cluster-wide `calico-node` ClusterRole. Putting these
+on the ClusterRole would grant every calico-node pod cluster-wide the right to
+create Leases and (worse) patch pods anywhere; the namespaced Role limits the
+blast radius to the Typha namespace.
 
-- `coordination.k8s.io/leases: create` — unrestricted (Kubernetes cannot scope
-  `create` to `resourceNames`)
+The Role grants:
+
+- `coordination.k8s.io/leases: create` — unrestricted within the namespace
+  (Kubernetes cannot scope `create` to `resourceNames`)
 - `coordination.k8s.io/leases: get, update` — scoped to `calico-typha-leader`
-  via `resourceNames`
+  via `resourceNames` (WS-E appends its tier-1 lease names to this list)
+- `pods: patch` — for the leader self-labelling its own pod. Kubernetes RBAC
+  has no self-reference, so `patch` cannot be restricted to the pod's own name;
+  namespace scoping is the available blast-radius limit.
 
-If `LeaseName` is customised, the `resourceNames` restriction must be updated
-accordingly (or removed if the operator cannot predict the name).
+The Role/RoleBinding are values-gated on `typha.hierarchy.enabled` (matching
+where the chart sets `TYPHA_LEADERELECTIONENABLED`), so a non-hierarchical
+deployment's RBAC is unchanged. If `LeaseName` is customised, the
+`resourceNames` restriction must be updated accordingly.
+
+**Trade-off (OSS chart):** the open-source chart shares one ServiceAccount
+(`calico-node`) between calico-node and Typha, so namespace scoping is the
+tightest available limit without introducing a dedicated Typha ServiceAccount
+(out of scope here). The operator deployment already gives Typha a dedicated SA;
+WS-G handles that side, where the grant can be SA-scoped as well.
 
 ### Health and metrics
 
