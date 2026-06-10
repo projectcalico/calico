@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
@@ -55,6 +56,17 @@ func allocateConnID() uint64 {
 const (
 	defaultReadtimeout  = 30 * time.Second
 	defaultWriteTimeout = 10 * time.Second
+
+	// defaultRebalanceInterval is the base period between checks of whether the
+	// client is connected to its preferred Typha.  It is deliberately long: the
+	// goal is to migrate clients onto their preferred Typha slowly, over roughly
+	// this timescale, so that topology changes don't cause a thundering herd of
+	// reconnections.  The check timer is jittered to spread the load further.
+	defaultRebalanceInterval = time.Hour
+
+	// rebalanceGoodbyeReason is sent to the server (in MsgClientGoodbye) when we
+	// disconnect to rebalance, so the server can log why the client left.
+	rebalanceGoodbyeReason = "rebalancing to preferred Typha instance"
 )
 
 type Options struct {
@@ -67,6 +79,16 @@ type Options struct {
 	ServerCN       string
 	ServerURISAN   string
 	SyncerType     syncproto.SyncerType
+
+	// RebalanceInterval controls how often the client re-evaluates whether it is
+	// connected to its preferred Typha and, if not, deliberately disconnects so
+	// that it reconnects onto the preferred instance.  The check runs on a
+	// jittered timer; this is the base interval.  Zero selects the default
+	// (defaultRebalanceInterval); a negative value disables rebalancing.
+	// Rebalancing only happens for restart-aware clients (see
+	// RestartAwareCallbacks) since it relies on the client reconnecting; for
+	// other clients this is ignored.
+	RebalanceInterval time.Duration
 
 	// DisableDecoderRestart disables decoder restart and the features that depend on
 	// it (such as compression).  Useful for simulating an older client in UT.
@@ -93,6 +115,16 @@ func (o *Options) writeTimeout() time.Duration {
 		return defaultWriteTimeout
 	}
 	return o.WriteTimeout
+}
+
+// rebalanceInterval returns the configured base interval between rebalance
+// checks.  Zero maps to the default; a negative value is returned as-is and
+// signals (via rebalanceEnabled) that rebalancing is disabled.
+func (o *Options) rebalanceInterval() time.Duration {
+	if o == nil || o.RebalanceInterval == 0 {
+		return defaultRebalanceInterval
+	}
+	return o.RebalanceInterval
 }
 
 func (o *Options) requiringTLS() bool {
@@ -165,8 +197,17 @@ type SyncerClient struct {
 	connection net.Conn
 	connID     uint64
 	connR      io.Reader
-	encoder    *gob.Encoder
 	decoder    *gob.Decoder
+
+	// writeLock serialises writes to the connection and guards the encoder and
+	// writesClosed flag.  The read loop (pongs/acks) and the rebalance goroutine
+	// (the goodbye message) can both write, so writes must be serialised.
+	writeLock sync.Mutex
+	encoder   *gob.Encoder
+	// writesClosed is latched true once we've sent our goodbye message.  After
+	// that, no further message is written, guaranteeing the goodbye is the last
+	// thing on the wire before the socket closes.  Reset for each connection.
+	writesClosed bool
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
@@ -422,7 +463,10 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	s.callbacks.OnStatusUpdated(api.ResyncInProgress)
 
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
+	s.writeLock.Lock()
 	s.encoder = gob.NewEncoder(s.connection)
+	s.writesClosed = false
+	s.writeLock.Unlock()
 	s.decoder = gob.NewDecoder(s.connR)
 
 	ourSyncerType := s.options.SyncerType
@@ -487,7 +531,18 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 		return
 	}
 
-	// Handshake done, start processing messages from the server.
+	// Handshake done.  If rebalancing is enabled, start the background timer
+	// that periodically checks whether we're connected to our preferred Typha
+	// and, if not, disconnects so we reconnect onto it.  We tie the goroutine
+	// into connFinished so that the client's restart loop waits for it to exit
+	// before starting the next connection (it must not act on a later
+	// connection's socket).
+	if s.rebalanceEnabled() {
+		connFinished.Add(1)
+		go s.rebalanceLoop(cxt, logCxt, cancelFn, connFinished)
+	}
+
+	// Start processing messages from the server.
 	for cxt.Err() == nil {
 		msg, err := s.readMessageFromServer(cxt, logCxt)
 		if err != nil {
@@ -547,6 +602,77 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	}
 }
 
+// rebalanceEnabled reports whether the periodic rebalance check should run for
+// this client.  Rebalancing disconnects the client so it reconnects onto its
+// preferred Typha; that only makes sense if the client can restart its
+// connection (RestartAwareCallbacks).  A non-positive configured interval
+// disables it explicitly.
+func (s *SyncerClient) rebalanceEnabled() bool {
+	if s.options.rebalanceInterval() <= 0 {
+		return false
+	}
+	if _, ok := s.callbacks.(RestartAwareCallbacks); !ok {
+		s.logCxt.Debug("Client is not restart-aware; rebalancing to preferred Typha is disabled.")
+		return false
+	}
+	return true
+}
+
+// rebalanceLoop runs for the lifetime of one connection.  On a jittered timer
+// it re-runs discovery and, if we're not connected to our preferred Typha,
+// sends a goodbye and cancels the connection so the client's restart loop
+// reconnects us onto the preferred instance.
+func (s *SyncerClient) rebalanceLoop(cxt context.Context, logCxt *log.Entry, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
+	defer connFinished.Done()
+
+	interval := s.options.rebalanceInterval()
+	// Jitter the interval so that, when the topology changes, clients migrate
+	// gradually rather than all reconnecting at once.
+	maxJitter := max(interval/4, time.Millisecond)
+	ticker := jitter.NewTicker(interval, maxJitter)
+	defer ticker.Stop()
+	logCxt.WithField("interval", interval).Info("Started Typha rebalance check.")
+
+	for {
+		select {
+		case <-cxt.Done():
+			return
+		case <-ticker.C:
+			if s.maybeRebalance(cxt, logCxt) {
+				// We've said goodbye; cancel the connection so the restart loop
+				// reconnects us (to our preferred Typha) and stop checking.
+				cancelFn()
+				return
+			}
+		}
+	}
+}
+
+// maybeRebalance checks whether we're connected to our preferred Typha and, if
+// not, sends a goodbye and latches writes closed.  It returns true if it
+// initiated a disconnect (the caller should then tear down the connection).
+func (s *SyncerClient) maybeRebalance(cxt context.Context, logCxt *log.Entry) bool {
+	preferred, ok, err := s.discoverer.PreferredTypha()
+	if err != nil {
+		logCxt.WithError(err).Info("Rebalance check: failed to re-discover Typha endpoints; staying on current connection.")
+		return false
+	}
+	if !ok {
+		logCxt.Info("Rebalance check: discovery returned no Typha endpoints; staying on current connection.")
+		return false
+	}
+	if s.connInfo != nil && s.connInfo.Equal(preferred) {
+		logCxt.WithField("preferred", preferred).Debug("Rebalance check: already connected to preferred Typha.")
+		return false
+	}
+	logCxt.WithFields(log.Fields{
+		"current":   s.connInfo,
+		"preferred": preferred,
+	}).Info("Connected to a non-preferred Typha; disconnecting to rebalance onto our preferred Typha instance.")
+	s.sendGoodbyeAndCloseWrites(cxt, logCxt, rebalanceGoodbyeReason)
+	return true
+}
+
 func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
 	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
 	// Check if we should enable compression.
@@ -568,7 +694,22 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
 // write deadline to ensure we don't block forever.  Logs errors via logConnectionFailure.
+//
+// Once we've sent a goodbye (writesClosed), this becomes a no-op so that the
+// goodbye stays the final message on the wire.
 func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entry, op string, message any) error {
+	s.writeLock.Lock()
+	defer s.writeLock.Unlock()
+	if s.writesClosed {
+		logCxt.WithField("op", op).Debug("Connection writes already closed (goodbye sent); dropping message.")
+		return nil
+	}
+	return s.writeMessageLocked(cxt, logCxt, op, message)
+}
+
+// writeMessageLocked encodes a single message onto the connection.  The caller
+// must hold writeLock.
+func (s *SyncerClient) writeMessageLocked(cxt context.Context, logCxt *log.Entry, op string, message any) error {
 	err := s.connection.SetWriteDeadline(time.Now().Add(s.options.writeTimeout()))
 	if err != nil {
 		s.logConnectionFailure(cxt, logCxt, err, "set timeout before "+op)
@@ -582,6 +723,28 @@ func (s *SyncerClient) sendMessageToServer(cxt context.Context, logCxt *log.Entr
 		return err
 	}
 	return nil
+}
+
+// sendGoodbyeAndCloseWrites sends a final MsgClientGoodbye and latches the
+// connection write-closed, all under writeLock, so that no other message (such
+// as a pong from the read loop) can be interleaved after it.  Together with
+// closing the socket immediately afterwards, this guarantees the goodbye is the
+// last message the server sees from us before the connection drops.  Delivery
+// is best-effort: any error is logged but otherwise ignored, since we're
+// disconnecting regardless.
+func (s *SyncerClient) sendGoodbyeAndCloseWrites(cxt context.Context, logCxt *log.Entry, reason string) {
+	s.writeLock.Lock()
+	defer s.writeLock.Unlock()
+	if s.writesClosed {
+		return
+	}
+	if err := s.writeMessageLocked(cxt, logCxt, "send goodbye to server",
+		syncproto.MsgClientGoodbye{Reason: reason}); err != nil {
+		logCxt.WithError(err).Info("Failed to send goodbye to Typha before disconnecting; continuing to disconnect anyway.")
+	}
+	// Latch writes closed even if the send failed: we're about to close the
+	// connection and don't want any trailing messages.
+	s.writesClosed = true
 }
 
 // readMessageFromServer reads a single value-type MsgXYZ object from the server.  It updates the connection's
