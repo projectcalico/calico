@@ -263,6 +263,12 @@ type MsgClientHello struct {
 	// Typha will reject the connection attempt and wait for the client to be upgraded.
 	SupportsModernPolicyKeys bool
 
+	// SupportsChecksum tells the server that this client understands MsgChecksum and would like to
+	// receive integrity checksums for the snapshot it is sent (initial InSync + periodic).  Per the
+	// protocol upgrade rules, the server must not send MsgChecksum unless the client advertised this.
+	// gob defaults this to false for older clients, which is the safe behaviour.
+	SupportsChecksum bool
+
 	ClientConnID uint64
 }
 
@@ -276,6 +282,11 @@ type MsgServerHello struct {
 
 	// SupportsNodeResourceUpdates provides to the client whether this Typha supports node resource updates.
 	SupportsNodeResourceUpdates bool
+
+	// SupportsChecksum tells the client that this server can emit MsgChecksum.  The server only sets
+	// this (and only sends MsgChecksum) if the client also advertised SupportsChecksum, so checksums
+	// flow only when both peers support them.  gob defaults this to false for older servers.
+	SupportsChecksum bool
 
 	ServerConnID uint64
 }
@@ -302,6 +313,25 @@ type MsgPing struct {
 type MsgPong struct {
 	PingTimestamp time.Time
 	PongTimestamp time.Time
+}
+
+// MsgChecksum carries an integrity checksum of the server's snapshot at a
+// particular point in the stream.  The server sends it (only to clients that
+// advertised SupportsChecksum):
+//
+//  1. immediately after the MsgSyncStatus(InSync) that ends the initial sync —
+//     the stream position makes it unambiguous that the checksum describes the
+//     snapshot the client has just received in full;
+//  2. thereafter, after the deltas of a breadcrumb, at most once per configured
+//     interval — again the stream position ties it to "the state after
+//     applying everything sent so far".
+//
+// Checksum is the XOR-combined per-entry digest (see typha/pkg/synccheck) and
+// KVCount is the number of live entries it covers.  The client compares this
+// against a checksum it computes over its own reconstruction of the stream.
+type MsgChecksum struct {
+	Checksum uint64
+	KVCount  int64
 }
 
 type MsgKVs struct {
@@ -339,6 +369,7 @@ func init() {
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgChecksum", MsgChecksum{})
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {

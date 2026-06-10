@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
@@ -79,6 +80,19 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// ChecksumVerifier, if set, enables snapshot integrity checking against the
+	// upstream Typha.  The client advertises SupportsChecksum in its hello,
+	// records each MsgChecksum the server sends (deferring the comparison to the
+	// verifier), and periodically drives Verifier.Check().  Only used by a
+	// follower Typha, where the verifier reads the follower's own snapcache; it
+	// is nil for Felix and other plain clients.  See typha/pkg/synccheck.
+	ChecksumVerifier *synccheck.Verifier
+
+	// ChecksumCheckInterval overrides how often the client drives
+	// Verifier.Check() while connected.  Defaults to one second.  Only relevant
+	// when ChecksumVerifier is set.
+	ChecksumCheckInterval time.Duration
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -170,6 +184,24 @@ type SyncerClient struct {
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+
+	// checksumCountOnly is set during the handshake when the upstream runs a
+	// different software version, downgrading checksum comparison to KVCount
+	// only.  Only read/written from the connection's loop goroutine.
+	checksumCountOnly bool
+
+	// cancel cancels the context derived from the one passed to Start().
+	// It is populated by Start() and used by Stop() to trigger a clean
+	// shutdown.  Protected by cancelLock.
+	//
+	// connCancel cancels just the *current* connection's context (set each time
+	// startOneConnection spins up a connection).  RestartConnection() uses it to
+	// drop and reconnect without tearing down the whole client, so the outer
+	// restart loop in Start() re-fires OnTyphaConnectionRestarted and pulls a
+	// fresh snapshot.  Also protected by cancelLock.
+	cancelLock sync.Mutex
+	cancel     context.CancelFunc
+	connCancel context.CancelFunc
 }
 
 type RestartAwareCallbacks interface {
@@ -181,9 +213,19 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
 
+	// Derive a cancellable context so that Stop() can trigger a clean
+	// shutdown even if the caller's context is never cancelled.
+	cxt, cancel := context.WithCancel(cxt)
+	s.cancelLock.Lock()
+	s.cancel = cancel
+	s.cancelLock.Unlock()
+
 	var connectionFinishedWG sync.WaitGroup
 	err := s.startOneConnection(cxt, &connectionFinishedWG)
 	if err != nil {
+		// We never started the background goroutine that owns the context,
+		// so cancel it now to avoid leaking it.
+		cancel()
 		return err
 	}
 
@@ -193,6 +235,10 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	go func() {
 		defer func() {
 			s.logCxt.Info("Typha client shutting down.")
+			// Ensure the context is cancelled so that the per-connection
+			// shutdown goroutine closes the socket and exits even if we're
+			// stopping for a reason other than an explicit Stop()/cancel.
+			cancel()
 			s.Finished.Done()
 		}()
 
@@ -216,6 +262,49 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	}()
 
 	return nil
+}
+
+// Stop triggers a clean shutdown of the client and blocks until it has fully
+// stopped, i.e. until no more callbacks can fire.  It is safe to call Stop
+// multiple times.  Calling Stop before Start is a no-op.  After Stop() returns,
+// the Finished WaitGroup has completed.
+func (s *SyncerClient) Stop() {
+	s.cancelLock.Lock()
+	cancel := s.cancel
+	s.cancelLock.Unlock()
+	if cancel == nil {
+		// Never started.
+		return
+	}
+	cancel()
+	// Wait for the background goroutine(s) to exit.  This guarantees that the
+	// main loop has returned and hence that no further callbacks will fire,
+	// which is the contract that the chained-Typha SyncerSource relies on.
+	s.Finished.Wait()
+}
+
+// RestartConnection drops the current connection (if any) and lets the client's
+// restart loop reconnect, without tearing the whole client down.  Cancelling the
+// per-connection context makes loop() return; the outer "for cxt.Err()==nil"
+// loop in Start() then fires OnTyphaConnectionRestarted on a restart-aware sink
+// and pulls a fresh snapshot.  This is the remediation path for a confirmed
+// checksum mismatch (the dedupe buffer reconciles against the new snapshot).
+//
+// It is safe to call from any goroutine and at any time: if no connection is
+// currently active (e.g. we're mid-reconnect) it is a no-op.  Calling it on a
+// client that is not restart-aware would tear the client down for good, so the
+// caller must only use it with a restart-aware sink (the chained-Typha dedupe
+// buffer always is).
+func (s *SyncerClient) RestartConnection() {
+	s.cancelLock.Lock()
+	connCancel := s.connCancel
+	s.cancelLock.Unlock()
+	if connCancel == nil {
+		// Never connected yet, or already torn down.
+		return
+	}
+	s.logCxt.Info("Forcing reconnect of Typha client connection.")
+	connCancel()
 }
 
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
@@ -247,6 +336,11 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 	// Then start our background goroutines.  We start the main loop and a second goroutine to
 	// manage shutdown.
 	connCtx, cancelFn := context.WithCancel(cxt)
+	// Record the per-connection cancel so RestartConnection() can drop just this
+	// connection.  The restart loop in Start() will then reconnect.
+	s.cancelLock.Lock()
+	s.connCancel = cancelFn
+	s.cancelLock.Unlock()
 	connFinished.Add(1)
 	go s.loop(connCtx, cancelFn, connFinished)
 
@@ -442,6 +536,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
 			SupportsModernPolicyKeys:       true,
+			SupportsChecksum:               s.options.ChecksumVerifier != nil,
 			SupportedCompressionAlgorithms: compAlgs,
 			ClientConnID:                   s.connID,
 		},
@@ -485,6 +580,34 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	if ourSyncerType != serverSyncerType {
 		logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
 		return
+	}
+
+	// Set up snapshot integrity checking if configured and the server agreed.
+	// checksumCountOnly downgrades to KVCount-only comparison when the server
+	// runs a different software version: an intermediate Typha re-serializes
+	// values into its own cache, and across versions the serialized bytes can
+	// legitimately differ (added fields, etc.), but the KV count survives
+	// re-serialization.  See typha/pkg/synccheck and the WS-D design.
+	verifier := s.options.ChecksumVerifier
+	checksumActive := verifier != nil && serverHello.SupportsChecksum
+	if verifier != nil && !serverHello.SupportsChecksum {
+		logCxt.Info("Checksum verification requested but upstream Typha does not support it; disabled " +
+			"for this connection.")
+	}
+	if checksumActive {
+		// Start fresh: drop any expectation left over from a previous connection.
+		verifier.Reset()
+		checksumCountOnly := serverHello.Version != s.myVersion
+		if checksumCountOnly {
+			logCxt.WithFields(log.Fields{
+				"ourVersion":    s.myVersion,
+				"serverVersion": serverHello.Version,
+			}).Info("Upstream Typha runs a different version; downgrading checksum comparison to KV " +
+				"count only (re-serialized value bytes may legitimately differ across versions).")
+		}
+		s.startChecksumChecker(cxt, logCxt, verifier, connFinished)
+		// Stash for the message loop's MsgChecksum handler.
+		s.checksumCountOnly = checksumCountOnly
 	}
 
 	// Handshake done, start processing messages from the server.
@@ -540,11 +663,53 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 				log.WithError(err).Error("Failed to restart decoder")
 				return
 			}
+		case syncproto.MsgChecksum:
+			if !checksumActive {
+				// We didn't advertise support, so the server should never send this.
+				logCxt.Error("Received unexpected MsgChecksum from server (we did not advertise support).")
+				return
+			}
+			logCxt.WithFields(log.Fields{
+				"checksum": msg.Checksum,
+				"kvCount":  msg.KVCount,
+			}).Debug("Received checksum from upstream Typha; comparison deferred to verifier.")
+			verifier.OnRemoteChecksum(
+				synccheck.Checksum{XOR: msg.Checksum, KVCount: msg.KVCount},
+				s.checksumCountOnly,
+			)
 		case syncproto.MsgServerHello:
 			logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
 			return
 		}
 	}
+}
+
+// startChecksumChecker launches a goroutine that periodically drives the
+// verifier's deferred comparison for the lifetime of the connection (until cxt
+// is cancelled).  We compare on a timer rather than on each MsgChecksum because
+// the deltas that produced the upstream's checksum are still flowing through our
+// local pipeline when MsgChecksum arrives; the timer lets the local state drain
+// and catch up before we compare.
+func (s *SyncerClient) startChecksumChecker(cxt context.Context, logCxt *log.Entry, verifier *synccheck.Verifier, connFinished *sync.WaitGroup) {
+	interval := s.options.ChecksumCheckInterval
+	if interval <= 0 {
+		interval = time.Second
+	}
+	connFinished.Add(1)
+	go func() {
+		defer connFinished.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-cxt.Done():
+				logCxt.Debug("Checksum checker stopping (connection closed).")
+				return
+			case <-ticker.C:
+				verifier.Check()
+			}
+		}
+	}()
 }
 
 func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
