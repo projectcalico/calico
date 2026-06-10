@@ -82,7 +82,7 @@ func TestPromotion_FollowerToLeaderAndBack(t *testing.T) {
 
 	// Wait for the manager to converge to Follower and the client to see the
 	// upstream's data.
-	Eventually(follower.manager.Role, 3*time.Second, 20*time.Millisecond).Should(Equal(rolemanager.Follower))
+	Eventually(follower.manager.Role, 3*time.Second, 20*time.Millisecond).Should(Equal(rolemanager.Tier2))
 	upstreamExpected := map[string]string{
 		configPath("u-keep"): "u-keep-v1",
 		configPath("u-only"): "u-only-v1",
@@ -122,7 +122,7 @@ func TestPromotion_FollowerToLeaderAndBack(t *testing.T) {
 	// still holds u-keep=v1 and u-only=v1; ds-only/ds-added must be reconciled
 	// away.
 	follower.elector.demote()
-	Eventually(follower.manager.Role, 5*time.Second, 20*time.Millisecond).Should(Equal(rolemanager.Follower))
+	Eventually(follower.manager.Role, 5*time.Second, 20*time.Millisecond).Should(Equal(rolemanager.Tier2))
 	Eventually(func() map[string]string { return recorderValues(cc.recorder) },
 		10*time.Second, 100*time.Millisecond).Should(Equal(upstreamExpected),
 		"client should reconcile back to upstream truth after demotion")

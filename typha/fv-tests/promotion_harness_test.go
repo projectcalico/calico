@@ -25,8 +25,8 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
-	"github.com/projectcalico/calico/typha/pkg/leaderelection"
 	"github.com/projectcalico/calico/typha/pkg/rolemanager"
+	"github.com/projectcalico/calico/typha/pkg/slotacquirer"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
@@ -191,22 +191,23 @@ type promotableHarness struct {
 	mgrCancel    context.CancelFunc
 }
 
-// promotionElector is a fake elector whose Roles channel the test drives.
+// promotionElector is a fake role source whose Roles channel the test drives.
+// It implements rolemanager.RoleSource (emitting slotacquirer.Role values).
 type promotionElector struct {
-	ch chan leaderelection.Role
+	ch chan slotacquirer.Role
 }
 
 func newPromotionElector() *promotionElector {
-	return &promotionElector{ch: make(chan leaderelection.Role, 16)}
+	return &promotionElector{ch: make(chan slotacquirer.Role, 16)}
 }
 
-func (e *promotionElector) Roles() <-chan leaderelection.Role { return e.ch }
+func (e *promotionElector) Roles() <-chan slotacquirer.Role { return e.ch }
 
-func (e *promotionElector) promote() { e.ch <- leaderelection.Leader }
-func (e *promotionElector) demote()  { e.ch <- leaderelection.Follower }
-func (e *promotionElector) CurrentHolder() (string, bool) {
-	return "", false
-}
+func (e *promotionElector) promote() { e.ch <- slotacquirer.Leader }
+func (e *promotionElector) demote()  { e.ch <- slotacquirer.Tier2 }
+
+// promoteTier1 / demoteToTier2 drive the tier-1 role for two-tier chain tests.
+func (e *promotionElector) promoteTier1() { e.ch <- slotacquirer.Tier1 }
 
 func newPromotableHarness(upstreamAddr string, st syncproto.SyncerType) *promotableHarness {
 	return newPromotableHarnessOpts(upstreamAddr, st, false)
@@ -261,16 +262,25 @@ func newPromotableHarnessOpts(upstreamAddr string, st syncproto.SyncerType, chec
 		return newDatastoreSourceSink(h.ds, h.buffer)
 	}
 
+	newSourceForRole := func(role rolemanager.Role) syncsource.SyncerSource {
+		if role == rolemanager.Leader {
+			return newDatastore()
+		}
+		// Tier1 and Tier2 both source from the single configured upstream in this
+		// harness (callers that need distinct tier upstreams use the chain harness).
+		return newUpstream()
+	}
+
 	h.elector = newPromotionElector()
 	h.manager = rolemanager.New(
 		rolemanager.Config{Debounce: 20 * time.Millisecond},
 		h.elector,
 		nil, // no labeller in-process
+		nil, // no client drainer in-process
 		[]*rolemanager.Pipeline{{
-			Name:               string(st),
-			Buffer:             h.buffer,
-			NewDatastoreSource: newDatastore,
-			NewUpstreamSource:  newUpstream,
+			Name:             string(st),
+			Buffer:           h.buffer,
+			NewSourceForRole: newSourceForRole,
 		}},
 	)
 
