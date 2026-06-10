@@ -17,7 +17,8 @@ package discovery
 import (
 	"errors"
 	"fmt"
-	"reflect"
+	"slices"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 var _ = Describe("Typha address discovery", func() {
@@ -115,13 +118,14 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should return address if configured", func() {
-		typhaAddr, err := DiscoverTyphaAddrs(WithAddrOverride("10.0.0.1:8080"))
+		typhaAddr, err := DiscoverTyphaAddrs("", WithAddrOverride("10.0.0.1:8080"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
 	It("should apply a filter", func() {
 		typhaAddr, err := DiscoverTyphaAddrs(
+			"",
 			WithAddrOverride("10.0.0.1:8080"),
 			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
 				return append(typhaAddresses, Typha{Addr: "10.0.0.2:8080"}), nil
@@ -135,6 +139,7 @@ var _ = Describe("Typha address discovery", func() {
 	})
 	It("should return error from filter", func() {
 		_, err := DiscoverTyphaAddrs(
+			"",
 			WithAddrOverride("10.0.0.1:8080"),
 			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
 				return nil, fmt.Errorf("BANG")
@@ -144,19 +149,20 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should return nothing if no service name and no client", func() {
-		typhaAddr, err := DiscoverTyphaAddrs()
+		typhaAddr, err := DiscoverTyphaAddrs("")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal(noTyphas))
 	})
 
 	It("should return nothing if no service name with client", func() {
-		typhaAddr, err := DiscoverTyphaAddrs(WithKubeClient(k8sClient))
+		typhaAddr, err := DiscoverTyphaAddrs("", WithKubeClient(k8sClient))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal(noTyphas))
 	})
 
 	It("should return IP from endpoints", func() {
 		discoverer := New(
+			"",
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
@@ -174,10 +180,10 @@ var _ = Describe("Typha address discovery", func() {
 
 	It("should return v2 IP from endpoints if port name override is used, ordered with local endpoint first", func() {
 		typhaAddr, err := DiscoverTyphaAddrs(
+			localNodeName,
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 			WithKubeServicePortNameOverride("calico-typha-v2"),
-			WithNodeAffinity(localNodeName),
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{
@@ -190,6 +196,7 @@ var _ = Describe("Typha address discovery", func() {
 		endpointsTyphaServiceV2.Endpoints[0].Addresses[0] = "fd5f:65af::2"
 		refreshClient()
 		typhaAddr, err := DiscoverTyphaAddrs(
+			"",
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
@@ -206,6 +213,7 @@ var _ = Describe("Typha address discovery", func() {
 		endpointsTyphaServiceV2.Ports = nil
 		refreshClient()
 		_, err := DiscoverTyphaAddrs(
+			"",
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
@@ -213,90 +221,137 @@ var _ = Describe("Typha address discovery", func() {
 		Expect(err).To(Equal(ErrServiceNotReady))
 	})
 
-	It("should shuffle local and remote endpointsTyphaService and have local first", func() {
-		udp := v1.ProtocolUDP
-		tcp := v1.ProtocolTCP
-
-		endpointsTyphaService.Endpoints = append(endpointsTyphaService.Endpoints, []discoveryv1.Endpoint{
-			{
-				Addresses: []string{"10.0.0.5"},
-				NodeName:  &localNodeName,
-			},
-			{
-				Addresses: []string{"10.0.0.6"},
-				NodeName:  &localNodeName,
-			},
-			{
-				Addresses: []string{"10.0.0.3"},
-			},
-			{
-				Addresses: []string{"10.0.0.7"},
-				NodeName:  &remoteNodeName,
-			},
-		}...,
-		)
-
-		endpointsTyphaService.Ports = append(endpointsTyphaService.Ports, []discoveryv1.EndpointPort{
-			{
-				Name:     ptr.To("calico-typha-v2"),
-				Port:     ptr.To(int32(8157)),
-				Protocol: &udp,
-			},
-			{
-				Name:     ptr.To("calico-typha"),
-				Port:     ptr.To(int32(8156)),
-				Protocol: &tcp,
-			},
-		}...)
-		refreshClient()
-
-		typhaAddr, err := DiscoverTyphaAddrs(
-			WithKubeService("kube-system", "calico-typha-service"),
-			WithKubeClient(k8sClient),
-			WithKubeServicePortNameOverride("calico-typha-v2"),
-			WithNodeAffinity(localNodeName),
-		)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(typhaAddr).To(HaveLen(6))
-
-		// First 3 should always be the local ones.  Last 3 the remote ones.
-		Expect(typhaAddr[:3]).To(ConsistOf([]Typha{
-			{Addr: "10.0.0.4:8157", IP: "10.0.0.4", NodeName: &localNodeName},
-			{Addr: "10.0.0.5:8157", IP: "10.0.0.5", NodeName: &localNodeName},
-			{Addr: "10.0.0.6:8157", IP: "10.0.0.6", NodeName: &localNodeName},
-		}))
-		Expect(typhaAddr[3:]).To(ConsistOf([]Typha{
-			{Addr: "10.0.0.2:8157", IP: "10.0.0.2", NodeName: &remoteNodeName},
-			{Addr: "10.0.0.3:8157", IP: "10.0.0.3"},
-			{Addr: "10.0.0.7:8157", IP: "10.0.0.7", NodeName: &remoteNodeName},
-		}))
-
-		// Check that multiple calls to discover the addresses shuffles the order.
-		var shuffledLocal bool
-		var shuffledRemote bool
-		for range 10 {
-			newTyphaAddr, err := DiscoverTyphaAddrs(
+	Context("with multiple local and remote endpoints", func() {
+		// discoverFor runs discovery for the given node name (which doubles as
+		// the rendezvous key) against the v2 port.
+		discoverFor := func(nodeName string) []Typha {
+			addrs, err := DiscoverTyphaAddrs(
+				nodeName,
 				WithKubeService("kube-system", "calico-typha-service"),
 				WithKubeClient(k8sClient),
 				WithKubeServicePortNameOverride("calico-typha-v2"),
-				WithNodeAffinity(localNodeName),
 			)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(newTyphaAddr).To(HaveLen(6))
-			Expect(newTyphaAddr[:3]).To(ConsistOf(typhaAddr[:3]))
-			Expect(newTyphaAddr[3:]).To(ConsistOf(typhaAddr[3:]))
-
-			shuffledLocal = shuffledLocal || !reflect.DeepEqual(newTyphaAddr[:3], typhaAddr[:3])
-			shuffledRemote = shuffledRemote || !reflect.DeepEqual(newTyphaAddr[3:], typhaAddr[3:])
+			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			return addrs
 		}
 
-		Expect(shuffledLocal).To(BeTrue())
-		Expect(shuffledRemote).To(BeTrue())
+		localAddrs := []Typha{
+			{Addr: "10.0.0.4:8157", IP: "10.0.0.4", NodeName: &localNodeName},
+			{Addr: "10.0.0.5:8157", IP: "10.0.0.5", NodeName: &localNodeName},
+			{Addr: "10.0.0.6:8157", IP: "10.0.0.6", NodeName: &localNodeName},
+		}
+		remoteAddrs := []Typha{
+			{Addr: "10.0.0.2:8157", IP: "10.0.0.2", NodeName: &remoteNodeName},
+			{Addr: "10.0.0.3:8157", IP: "10.0.0.3"},
+			{Addr: "10.0.0.7:8157", IP: "10.0.0.7", NodeName: &remoteNodeName},
+		}
+
+		BeforeEach(func() {
+			udp := v1.ProtocolUDP
+			tcp := v1.ProtocolTCP
+
+			endpointsTyphaService.Endpoints = append(endpointsTyphaService.Endpoints, []discoveryv1.Endpoint{
+				{Addresses: []string{"10.0.0.5"}, NodeName: &localNodeName},
+				{Addresses: []string{"10.0.0.6"}, NodeName: &localNodeName},
+				{Addresses: []string{"10.0.0.3"}},
+				{Addresses: []string{"10.0.0.7"}, NodeName: &remoteNodeName},
+			}...)
+			endpointsTyphaService.Ports = append(endpointsTyphaService.Ports, []discoveryv1.EndpointPort{
+				{Name: ptr.To("calico-typha-v2"), Port: ptr.To(int32(8157)), Protocol: &udp},
+				{Name: ptr.To("calico-typha"), Port: ptr.To(int32(8156)), Protocol: &tcp},
+			}...)
+			refreshClient()
+		})
+
+		It("should put local endpoints first and remote endpoints second", func() {
+			typhaAddr := discoverFor(localNodeName)
+			Expect(typhaAddr).To(HaveLen(6))
+			// First 3 are always the local ones, last 3 the remote ones.
+			Expect(typhaAddr[:3]).To(ConsistOf(localAddrs))
+			Expect(typhaAddr[3:]).To(ConsistOf(remoteAddrs))
+		})
+
+		It("should be deterministic for a fixed node name", func() {
+			// Unlike the previous random shuffle, rendezvous ordering must be
+			// stable: repeated discovery for the same node returns the same
+			// order, so a node keeps a stable preferred Typha across restarts.
+			first := discoverFor(localNodeName)
+			for range 10 {
+				Expect(discoverFor(localNodeName)).To(Equal(first))
+			}
+		})
+
+		It("should give different nodes different preferred Typhas", func() {
+			// Node names that don't own any endpoint, so all six rank purely by
+			// the rendezvous key. Each node's top choice is deterministic, but
+			// across many nodes the preference should spread over multiple
+			// Typhas rather than all landing on one.
+			winners := map[string]int{}
+			for i := range 100 {
+				addrs := discoverFor(fmt.Sprintf("spread-node-%d", i))
+				Expect(addrs).To(HaveLen(6))
+				winners[addrs[0].IP]++
+			}
+			// Six Typhas, 100 nodes: an even split is ~17 each. Require the
+			// load to be shared across at least half of them.
+			Expect(len(winners)).To(BeNumerically(">=", 3),
+				"preferred Typha should spread across nodes, got: %v", winners)
+		})
+
+		It("should keep survivor order stable when a Typha is removed", func() {
+			// Key that owns nothing so all six rank together as one group.
+			const key = "survivor-test-node"
+			beforeIPs := typhaIPs(discoverFor(key))
+
+			// Remove one Typha and rediscover.
+			removeEndpoint(endpointsTyphaService, "10.0.0.7")
+			refreshClient()
+
+			afterIPs := typhaIPs(discoverFor(key))
+			Expect(afterIPs).To(HaveLen(5))
+
+			// Survivors keep their relative order: afterIPs is beforeIPs with
+			// 10.0.0.7 removed and nothing else reordered.
+			expected := slices.DeleteFunc(beforeIPs, func(ip string) bool { return ip == "10.0.0.7" })
+			Expect(afterIPs).To(Equal(expected))
+		})
 	})
 })
 
-func DiscoverTyphaAddrs(opts ...Option) ([]Typha, error) {
-	discoverer := New(opts...)
+// typhaIPs extracts the IPs from a list of Typhas, preserving order.
+func typhaIPs(ts []Typha) []string {
+	ips := make([]string, len(ts))
+	for i, t := range ts {
+		ips[i] = t.IP
+	}
+	return ips
+}
+
+// removeEndpoint deletes the endpoint with the given address from eps.
+func removeEndpoint(eps *discoveryv1.EndpointSlice, addr string) {
+	eps.Endpoints = slices.DeleteFunc(eps.Endpoints, func(e discoveryv1.Endpoint) bool {
+		return slices.Contains(e.Addresses, addr)
+	})
+}
+
+func TestNodeName(t *testing.T) {
+	t.Run("prefers NODENAME", func(t *testing.T) {
+		t.Setenv("NODENAME", "node-from-env")
+		if got := NodeName(); got != "node-from-env" {
+			t.Fatalf("NodeName() = %q, want node-from-env", got)
+		}
+	})
+	t.Run("falls back to hostname when NODENAME is unset", func(t *testing.T) {
+		t.Setenv("NODENAME", "")
+		want, _ := names.Hostname()
+		if got := NodeName(); got != want {
+			t.Fatalf("NodeName() = %q, want hostname %q", got, want)
+		}
+	})
+}
+
+func DiscoverTyphaAddrs(nodeName string, opts ...Option) ([]Typha, error) {
+	discoverer := New(nodeName, opts...)
 	return discoverer.LoadTyphaAddrs()
 }
 

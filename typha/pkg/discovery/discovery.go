@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strings"
@@ -29,6 +28,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/datastructures/rendezvous"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
@@ -119,21 +120,23 @@ func WithKubeServicePortNameOverride(portName string) Option {
 	}
 }
 
-// WithNodeAffinity help discovery preference by supplying nodeName to determine which endpoints are local to node
-func WithNodeAffinity(nodeName string) Option {
-	return func(d *Discoverer) {
-		d.nodeName = nodeName
-	}
-}
-
 func WithPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Typha, error)) Option {
 	return func(d *Discoverer) {
 		d.AddPostDiscoveryFilter(f)
 	}
 }
 
-func New(opts ...Option) *Discoverer {
+// New creates a Discoverer for the given node.
+//
+// nodeName identifies the node we're running on. It is used both to detect
+// which Typha endpoints are local to this node and as the key for the
+// rendezvous hash that orders the connection preference, so that every node
+// gets a stable preferred Typha while load stays balanced across the fleet.
+// Use NodeName to obtain the value; it must match the node names Kubernetes
+// records on the Typha service's endpoints (see NodeName for why).
+func New(nodeName string, opts ...Option) *Discoverer {
 	d := &Discoverer{
+		nodeName:           nodeName,
 		k8sServicePortName: "calico-typha",
 	}
 
@@ -142,6 +145,25 @@ func New(opts ...Option) *Discoverer {
 	}
 
 	return d
+}
+
+// NodeName returns the node name to use for Typha discovery. It prefers the
+// NODENAME environment variable, which Calico sets from the Kubernetes
+// downward API (spec.nodeName) — see the operator's pkg/render/node.go and the
+// calico-node manifest, both of which pin NODENAME to a fieldRef on
+// spec.nodeName. Because it comes from the downward API, NODENAME is identical
+// across every process in the calico-node pod and is guaranteed to match the
+// node names Kubernetes records on the Typha service's EndpointSlice
+// endpoints. That makes it the correct key both for identifying the local
+// Typha and for computing a stable, evenly distributed per-node connection
+// preference. When NODENAME is unset (e.g. outside a managed calico-node pod)
+// it falls back to the OS hostname.
+func NodeName() string {
+	if n := strings.TrimSpace(os.Getenv("NODENAME")); n != "" {
+		return n
+	}
+	h, _ := names.Hostname() // lowercased; "" on the rare error.
+	return h
 }
 
 func (d *Discoverer) AddPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Typha, error)) {
@@ -268,8 +290,12 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return nil, ErrServiceNotReady
 	}
 
-	shuffleInPlace(local)
-	shuffleInPlace(remote)
+	// Order each group by rendezvous hash so that this node has a stable,
+	// evenly distributed connection preference (see orderByRendezvous). Local
+	// endpoints stay first on the list; trying a co-located Typha first is
+	// important for cluster bootstrap.
+	local = orderByRendezvous(local, d.nodeName)
+	remote = orderByRendezvous(remote, d.nodeName)
 
 	addresses = append(local, remote...)
 
@@ -399,6 +425,19 @@ func (d *ConnectionAttemptTracker) refreshAndGCLastSeen(addrs []Typha) {
 	}
 }
 
-func shuffleInPlace(s []Typha) {
-	rand.Shuffle(len(s), func(i, j int) { s[i], s[j] = s[j], s[i] })
+// orderByRendezvous returns typhas in rendezvous (HRW) preference order for
+// key: deterministic for a given key, evenly spread across keys, and stable
+// when the typha set changes (removing one drops it without reordering the
+// survivors). Used with the node name as the key, it gives each node a stable
+// preferred Typha and ordered, load-balanced fallbacks. Each typha is
+// identified by its dedupeKey.
+func orderByRendezvous(typhas []Typha, key string) []Typha {
+	if len(typhas) <= 1 {
+		return typhas
+	}
+	r := rendezvous.New[Typha]()
+	for _, t := range typhas {
+		r.Insert(string(t.dedupeKey()), t)
+	}
+	return r.Rank(key)
 }
