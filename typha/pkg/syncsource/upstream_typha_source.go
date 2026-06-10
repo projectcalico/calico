@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
@@ -93,6 +94,47 @@ func (s *upstreamTyphaSource) Start(ctx context.Context) error {
 	go s.loop(ctx)
 	return nil
 }
+
+// Reconnect forces the current upstream connection to drop and reconnect
+// without tearing the source down.  The underlying syncclient's restart-aware
+// loop then re-fires OnTyphaConnectionRestarted and pulls a fresh snapshot,
+// which is exactly what the snapshot-integrity verifier wants on a confirmed
+// checksum mismatch (WS-D): re-sync from scratch rather than trusting possibly
+// corrupt cached state.  It is a no-op if no client is currently connected
+// (e.g. mid-backoff) — the next connection attempt starts clean anyway.
+func (s *upstreamTyphaSource) Reconnect() {
+	s.lock.Lock()
+	client := s.client
+	stopped := s.stopped
+	s.lock.Unlock()
+	if stopped || client == nil {
+		return
+	}
+	client.RestartConnection()
+}
+
+// SetChecksumVerifier installs a snapshot-integrity verifier that is applied to
+// every syncclient connection this source creates.  Must be called before
+// Start.  The verifier's RequestReconnect should normally be wired to this
+// source's Reconnect method so that a confirmed mismatch triggers a fresh
+// re-sync.
+func (s *upstreamTyphaSource) SetChecksumVerifier(v *synccheck.Verifier) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.cfg.ClientOptions.ChecksumVerifier = v
+}
+
+// UpstreamTyphaSource is the concrete type returned by NewUpstreamTyphaSource,
+// exposed so callers that need the checksum/reconnect hooks (the daemon's
+// follower wiring) can reach SetChecksumVerifier and Reconnect.  The role
+// manager and tests that only need the SyncerSource contract can ignore it.
+type UpstreamTyphaSource interface {
+	SyncerSource
+	Reconnect()
+	SetChecksumVerifier(v *synccheck.Verifier)
+}
+
+var _ UpstreamTyphaSource = (*upstreamTyphaSource)(nil)
 
 // loop owns the lifecycle of the underlying syncclient.  It retries the initial
 // connection forever (with backoff) until it succeeds or the source is stopped.

@@ -165,3 +165,58 @@ func TestPromotion_KeyDeletedDuringTransition(t *testing.T) {
 		configPath("survivor"): "survivor-v1",
 	}), "doomed key should be synthesized-deleted on promotion")
 }
+
+// TestPromotion_WithChecksumsEnabled is the end-to-end checksum-over-promotion
+// proof: the follower runs with snapshot-integrity checking enabled on its
+// upstream source.  Across a promote/demote cycle the data still reconciles
+// correctly and the verifier does not spuriously fire (the follower's
+// reconstructed checksum matches the upstream's while it is a follower, and the
+// verifier is torn down with the upstream source on promotion).  This guards
+// against the checksum machinery destabilising the source-swap path.
+func TestPromotion_WithChecksumsEnabled(t *testing.T) {
+	RegisterTestingT(t)
+	logutils.RedirectLogrusToTestingT(t)
+
+	st := syncproto.SyncerTypeFelix
+	upstream := newUpstreamHarness(st)
+	upstream.Start()
+	t.Cleanup(upstream.Stop)
+
+	follower := newPromotableHarnessOpts(upstream.Addr(), st, true /* checksums */)
+	follower.Start()
+	t.Cleanup(follower.Stop)
+
+	upstream.SendStatus(st, api.ResyncInProgress)
+	upstream.SendConfigUpdate(st, "a", "a-v1")
+	upstream.SendConfigUpdate(st, "b", "b-v1")
+	upstream.SendStatus(st, api.InSync)
+	follower.ds.Set("a", "a-ds")
+	follower.ds.Set("c", "c-ds")
+
+	cc := newChainClient(t, follower.Addr(), st)
+
+	// As a follower with checksums on, the client should see the upstream data
+	// and stay stable (no spurious reconnect storms emptying the cache).
+	upstreamExpected := map[string]string{
+		configPath("a"): "a-v1",
+		configPath("b"): "b-v1",
+	}
+	Eventually(func() map[string]string { return recorderValues(cc.recorder) },
+		10*time.Second, 100*time.Millisecond).Should(Equal(upstreamExpected))
+	Consistently(func() map[string]string { return recorderValues(cc.recorder) },
+		"2s", "100ms").Should(Equal(upstreamExpected),
+		"checksum verifier should not destabilise a correctly-synced follower")
+
+	// Promote, then demote, and confirm reconciliation still works end to end.
+	follower.elector.promote()
+	Eventually(func() map[string]string { return recorderValues(cc.recorder) },
+		10*time.Second, 100*time.Millisecond).Should(Equal(map[string]string{
+		configPath("a"): "a-ds",
+		configPath("c"): "c-ds",
+	}), "promotion reconciles to datastore truth with checksums enabled")
+
+	follower.elector.demote()
+	Eventually(func() map[string]string { return recorderValues(cc.recorder) },
+		10*time.Second, 100*time.Millisecond).Should(Equal(upstreamExpected),
+		"demotion reconciles back to upstream truth with checksums enabled")
+}

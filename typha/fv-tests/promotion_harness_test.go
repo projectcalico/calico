@@ -28,6 +28,8 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/leaderelection"
 	"github.com/projectcalico/calico/typha/pkg/rolemanager"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
 	"github.com/projectcalico/calico/typha/pkg/syncsource"
@@ -207,6 +209,14 @@ func (e *promotionElector) CurrentHolder() (string, bool) {
 }
 
 func newPromotableHarness(upstreamAddr string, st syncproto.SyncerType) *promotableHarness {
+	return newPromotableHarnessOpts(upstreamAddr, st, false)
+}
+
+// newPromotableHarnessOpts builds a promotable follower; checksum enables
+// snapshot-integrity checking on the upstream (follower) source, exactly as the
+// daemon wires it, so a promotion fv-test doubles as the checksum-over-promotion
+// proof.
+func newPromotableHarnessOpts(upstreamAddr string, st syncproto.SyncerType, checksum bool) *promotableHarness {
 	h := &promotableHarness{st: st, ds: newFakeDatastore()}
 	h.buffer = dedupebuffer.New()
 	h.cache = snapcache.New(snapcache.Config{
@@ -218,16 +228,34 @@ func newPromotableHarness(upstreamAddr string, st syncproto.SyncerType) *promota
 	go h.buffer.SendToSinkForever(validator)
 
 	newUpstream := func() syncsource.SyncerSource {
-		return syncsource.NewUpstreamTyphaSource(
+		src := syncsource.NewUpstreamTyphaSource(
 			discovery.New(discovery.WithAddrOverride(upstreamAddr)),
 			syncsource.UpstreamConfig{
 				MyVersion:  "follower-version",
 				MyHostname: "follower-host",
 				MyInfo:     "follower",
 				SyncerType: st,
+				ClientOptions: syncclient.Options{
+					ChecksumCheckInterval: 50 * time.Millisecond,
+				},
 			},
 			h.buffer,
 		)
+		if checksum {
+			ups := src.(syncsource.UpstreamTyphaSource)
+			verifier := synccheck.NewVerifier(synccheck.VerifierConfig{
+				SyncerType:     string(st),
+				MismatchAction: synccheck.MismatchActionReconnect,
+				Local: synccheck.LocalChecksumFunc(func() synccheck.Checksum {
+					return h.cache.CurrentBreadcrumb().Checksum
+				}),
+				RequestReconnect:     ups.Reconnect,
+				PersistChecks:        2,
+				ReconnectMinInterval: time.Millisecond,
+			})
+			ups.SetChecksumVerifier(verifier)
+		}
+		return src
 	}
 	newDatastore := func() syncsource.SyncerSource {
 		return newDatastoreSourceSink(h.ds, h.buffer)

@@ -53,6 +53,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/rolemanager"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
@@ -347,7 +348,7 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		return syncsource.NewDatastoreSource(newSyncer, dedupeBuf)
 	}
 	newUpstreamSource := func() syncsource.SyncerSource {
-		return syncsource.NewUpstreamTyphaSource(
+		src := syncsource.NewUpstreamTyphaSource(
 			upstreamDiscoverer,
 			syncsource.UpstreamConfig{
 				MyVersion:  buildinfo.Version,
@@ -356,17 +357,38 @@ func (t *TyphaDaemon) addSyncerPipeline(
 					buildinfo.GitRevision, buildinfo.BuildDate),
 				SyncerType: syncerType,
 				ClientOptions: syncclient.Options{
-					ReadTimeout:  t.ConfigParams.UpstreamReadTimeout,
-					WriteTimeout: t.ConfigParams.UpstreamWriteTimeout,
-					KeyFile:      t.ConfigParams.ClientKeyFile,
-					CertFile:     t.ConfigParams.ClientCertFile,
-					CAFile:       t.ConfigParams.ClientCAFile,
-					ServerCN:     t.ConfigParams.UpstreamServerCN,
-					ServerURISAN: t.ConfigParams.UpstreamServerURISAN,
+					ReadTimeout:           t.ConfigParams.UpstreamReadTimeout,
+					WriteTimeout:          t.ConfigParams.UpstreamWriteTimeout,
+					KeyFile:               t.ConfigParams.ClientKeyFile,
+					CertFile:              t.ConfigParams.ClientCertFile,
+					CAFile:                t.ConfigParams.ClientCAFile,
+					ServerCN:              t.ConfigParams.UpstreamServerCN,
+					ServerURISAN:          t.ConfigParams.UpstreamServerURISAN,
+					ChecksumCheckInterval: t.ConfigParams.ChecksumInterval,
 				},
 			},
 			dedupeBuf,
 		)
+
+		// Snapshot-integrity checking (WS-D): when enabled, attach a verifier
+		// that compares the upstream's reported checksum against our own
+		// reconstructed snapshot (this pipeline's snapcache breadcrumb).  On a
+		// confirmed mismatch the verifier asks the source to reconnect, which
+		// re-syncs from scratch through the dedupe buffer.
+		if t.ConfigParams.ChecksumEnabled {
+			if ups, ok := src.(syncsource.UpstreamTyphaSource); ok {
+				verifier := synccheck.NewVerifier(synccheck.VerifierConfig{
+					SyncerType:     string(syncerType),
+					MismatchAction: synccheck.MismatchAction(t.ConfigParams.ChecksumMismatchAction),
+					Local: synccheck.LocalChecksumFunc(func() synccheck.Checksum {
+						return cache.CurrentBreadcrumb().Checksum
+					}),
+					RequestReconnect: ups.Reconnect,
+				})
+				ups.SetChecksumVerifier(verifier)
+			}
+		}
+		return src
 	}
 
 	// Choose the source wiring:
@@ -466,6 +488,7 @@ func (t *TyphaDaemon) CreateServer() {
 			CAFile:                         t.ConfigParams.CAFile,
 			ClientCN:                       t.ConfigParams.ClientCN,
 			ClientURISAN:                   t.ConfigParams.ClientURISAN,
+			ChecksumInterval:               t.ConfigParams.ChecksumInterval,
 		},
 	)
 }
