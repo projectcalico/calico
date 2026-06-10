@@ -1088,6 +1088,71 @@ var _ = Describe("RouteTable", func() {
 				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero(),
 					"Route should be removed when one interface deleted")
 			})
+			It("Should program MTU on a multi-path route and correct an incorrect MTU on resync", func() {
+				By("Creating interfaces")
+				addLink := dataplane.AddIface(6, "cali6", true, true)
+				addLink2 := dataplane.AddIface(7, "cali7", true, true)
+
+				By("Setting a multi-path route with MTU")
+				rt.SetRoutes(RouteClassLocalWorkload, InterfaceNone, []Target{{
+					Type: TargetTypeVXLAN,
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.0/24"),
+						Priority: routePriorityForTest,
+					},
+					MTU: 1400,
+					MultiPath: []NextHop{
+						{
+							IfaceName: addLink.LinkAttrs.Name,
+							Gw:        ip.FromString("10.0.0.6"),
+						},
+						{
+							IfaceName: addLink2.LinkAttrs.Name,
+							Gw:        ip.FromString("10.0.0.7"),
+						},
+					},
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				expectedRoute := netlink.Route{
+					Family:   unix.AF_INET,
+					Dst:      mustParseCIDR("10.0.0.0/24"),
+					Type:     syscall.RTN_UNICAST,
+					Protocol: deviceRouteProtocol,
+					Scope:    netlink.SCOPE_UNIVERSE,
+					Table:    unix.RT_TABLE_MAIN,
+					Flags:    syscall.RTNH_F_ONLINK,
+					MTU:      1400,
+					MultiPath: []*netlink.NexthopInfo{
+						{
+							LinkIndex: addLink.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.6").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+						{
+							LinkIndex: addLink2.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.7").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+					},
+					Priority: routePriorityForTest,
+				}
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+					"MTU should be programmed on the multi-path route")
+
+				By("Corrupting the MTU in the dataplane behind the RouteTable's back")
+				corrupted := expectedRoute
+				corrupted.MTU = 9000
+				dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")] = corrupted
+
+				By("Triggering a resync")
+				rt.QueueResync()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+					"resync should have corrected the incorrect MTU on the multi-path route")
+			})
 			It("Should add multiple routes with a protocol", func() {
 				// Route that needs to be added
 				addLink := dataplane.AddIface(6, "cali6", true, true)
