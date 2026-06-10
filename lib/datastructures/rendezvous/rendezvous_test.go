@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand/v2"
+	"sort"
 	"testing"
 )
 
@@ -46,6 +47,34 @@ func bruteForceLookup(h Hash, members []string, key string) string {
 		}
 	}
 	return best
+}
+
+// bruteForceRank independently computes the full descending-preference
+// order over members for key, applying the same highest-score /
+// lower-key tiebreak as Rank. Used to cross-check Rank.
+func bruteForceRank(h Hash, members []string, key string) []string {
+	type sk struct {
+		score uint64
+		key   string
+	}
+	scored := make([]sk, len(members))
+	for i, m := range members {
+		var n [4]byte
+		binary.LittleEndian.PutUint32(n[:], uint32(len(m)))
+		buf := append(append(append([]byte{}, n[:]...), m...), key...)
+		scored[i] = sk{score: h(buf), key: m}
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].key < scored[j].key
+	})
+	out := make([]string, len(scored))
+	for i, s := range scored {
+		out[i] = s.key
+	}
+	return out
 }
 
 func TestEmpty_LookupReturnsFalse(t *testing.T) {
@@ -452,6 +481,166 @@ func TestLookup_MatchesBruteForce(t *testing.T) {
 	}
 }
 
+func TestRank_Empty(t *testing.T) {
+	r := New[string]()
+	if got := r.Rank("anything"); got != nil {
+		t.Fatalf("Rank on empty = %v, want nil", got)
+	}
+}
+
+func TestRank_FirstEqualsLookup(t *testing.T) {
+	r := New[string]()
+	for _, m := range []string{"a", "b", "c", "d", "e"} {
+		r.Insert(m, m)
+	}
+	for i := range 1000 {
+		k := fmt.Sprintf("key-%d", i)
+		order := r.Rank(k)
+		if len(order) == 0 {
+			t.Fatalf("key %q: empty rank", k)
+		}
+		want, _ := r.Lookup(k)
+		if order[0] != want {
+			t.Fatalf("key %q: Rank[0]=%q Lookup=%q", k, order[0], want)
+		}
+	}
+}
+
+func TestRank_IsPermutationOfMembers(t *testing.T) {
+	members := []string{"a", "b", "c", "d", "e", "f", "g"}
+	r := New[string]()
+	for _, m := range members {
+		r.Insert(m, m)
+	}
+	for i := range 500 {
+		order := r.Rank(fmt.Sprintf("k-%d", i))
+		if len(order) != len(members) {
+			t.Fatalf("rank len=%d want %d", len(order), len(members))
+		}
+		seen := make(map[string]bool, len(order))
+		for _, v := range order {
+			if seen[v] {
+				t.Fatalf("member %q appears twice in rank", v)
+			}
+			seen[v] = true
+		}
+		if len(seen) != len(members) {
+			t.Fatalf("rank covered %d distinct members, want %d", len(seen), len(members))
+		}
+	}
+}
+
+// TestRank_MatchesBruteForceOrder cross-checks the whole ordering, not
+// just the head, against an independent score-sorted list.
+func TestRank_MatchesBruteForceOrder(t *testing.T) {
+	rng := rand.New(rand.NewPCG(3, 4))
+	members := make([]string, 20)
+	for i := range members {
+		members[i] = fmt.Sprintf("member-%d-%d", i, rng.Uint32())
+	}
+	r := New[string]()
+	for _, m := range members {
+		r.Insert(m, m)
+	}
+	for i := range 1000 {
+		k := fmt.Sprintf("probe-%d", i)
+		got := r.Rank(k)
+		want := bruteForceRank(defaultHash, members, k)
+		if len(got) != len(want) {
+			t.Fatalf("key %q: len got=%d want=%d", k, len(got), len(want))
+		}
+		for j := range want {
+			if got[j] != want[j] {
+				t.Fatalf("key %q: rank[%d] got=%q want=%q", k, j, got[j], want[j])
+			}
+		}
+	}
+}
+
+// TestRank_StableUnderRemoval is the property that makes Rank usable
+// as a failover list: removing a member yields the same order with
+// that member deleted — survivors never reorder relative to each
+// other.
+func TestRank_StableUnderRemoval(t *testing.T) {
+	members := []string{"a", "b", "c", "d", "e", "f"}
+	r := New[string]()
+	for _, m := range members {
+		r.Insert(m, m)
+	}
+	for i := range 500 {
+		k := fmt.Sprintf("node-%d", i)
+		before := r.Rank(k)
+
+		r.Remove("c")
+		after := r.Rank(k)
+		r.Insert("c", "c") // restore for the next iteration
+
+		// after must equal before with "c" filtered out, same order.
+		want := make([]string, 0, len(before))
+		for _, v := range before {
+			if v != "c" {
+				want = append(want, v)
+			}
+		}
+		if len(after) != len(want) {
+			t.Fatalf("key %q: len after=%d want=%d", k, len(after), len(want))
+		}
+		for j := range want {
+			if after[j] != want[j] {
+				t.Fatalf("key %q: survivor order changed at %d: %q vs %q",
+					k, j, after[j], want[j])
+			}
+		}
+	}
+}
+
+// TestRank_FallbackSpreadsEvenly checks that not just the primary
+// (rank 0) but the first fallback (rank 1) is balanced across members
+// — i.e. load stays even when nodes fail over to their second choice.
+func TestRank_FallbackSpreadsEvenly(t *testing.T) {
+	const M = 10
+	const keys = 10000
+	r := New[string]()
+	for i := range M {
+		m := fmt.Sprintf("m%d", i)
+		r.Insert(m, m)
+	}
+	counts := make(map[string]int, M)
+	for i := range keys {
+		order := r.Rank(fmt.Sprintf("probe-%d", i))
+		counts[order[1]]++ // first fallback
+	}
+	if len(counts) != M {
+		t.Fatalf("only %d members ever appeared as first fallback", len(counts))
+	}
+	for m, c := range counts {
+		frac := float64(c) / float64(keys)
+		if frac < 0.05 || frac > 0.20 {
+			t.Errorf("member %s is first fallback for %.3f of keys (want 0.05..0.20)", m, frac)
+		}
+	}
+}
+
+func TestRank_Deterministic_IndependentOfInsertionOrder(t *testing.T) {
+	r1 := New[string]()
+	for _, m := range []string{"a", "b", "c", "d", "e"} {
+		r1.Insert(m, m)
+	}
+	r2 := New[string]()
+	for _, m := range []string{"e", "c", "a", "d", "b"} {
+		r2.Insert(m, m)
+	}
+	for i := range 500 {
+		k := fmt.Sprintf("k-%d", i)
+		o1, o2 := r1.Rank(k), r2.Rank(k)
+		for j := range o1 {
+			if o1[j] != o2[j] {
+				t.Fatalf("key %q rank[%d]: order1=%q order2=%q", k, j, o1[j], o2[j])
+			}
+		}
+	}
+}
+
 func FuzzRendezvous(f *testing.F) {
 	f.Add(uint64(1), uint64(2))
 	f.Add(uint64(42), uint64(99))
@@ -501,6 +690,23 @@ func FuzzRendezvous(f *testing.F) {
 				if keyOfValue(v1) != want {
 					t.Fatalf("Lookup winner=%q bruteForce=%q", keyOfValue(v1), want)
 				}
+
+				// Rank must be a permutation of the live members in
+				// brute-force order, and its head must agree with
+				// Lookup.
+				order := r.Rank(query)
+				if len(order) != len(live) {
+					t.Fatalf("Rank len=%d live=%d", len(order), len(live))
+				}
+				if order[0] != v1 {
+					t.Fatalf("Rank[0]=%q Lookup=%q", order[0], v1)
+				}
+				wantOrder := bruteForceRank(defaultHash, live, query)
+				for j := range wantOrder {
+					if keyOfValue(order[j]) != wantOrder[j] {
+						t.Fatalf("Rank[%d]=%q bruteForce=%q", j, keyOfValue(order[j]), wantOrder[j])
+					}
+				}
 			}
 		}
 	})
@@ -523,6 +729,22 @@ func BenchmarkLookup(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; b.Loop(); i++ {
 				_, _ = r.Lookup(fmt.Sprintf("benchmark-key-%d", i))
+			}
+		})
+	}
+}
+
+func BenchmarkRank(b *testing.B) {
+	for _, n := range []int{10, 50, 1000} {
+		b.Run(fmt.Sprintf("N%d", n), func(b *testing.B) {
+			r := New[string]()
+			for i := range n {
+				m := fmt.Sprintf("member-%d", i)
+				r.Insert(m, m)
+			}
+			b.ResetTimer()
+			for i := 0; b.Loop(); i++ {
+				_ = r.Rank(fmt.Sprintf("benchmark-key-%d", i))
 			}
 		})
 	}

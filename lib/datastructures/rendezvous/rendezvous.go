@@ -46,12 +46,25 @@
 // (e.g. hash collisions) are broken by the lexicographically smaller
 // member key.
 //
+// Rank exposes the full preference order — every member ranked by
+// descending score — rather than just the winner. Because each
+// member's score for a given key is independent of the rest of the
+// set, this order is stable: removing a member drops it from every
+// key's ranking without reordering the survivors, and the rank-0
+// choice (plus each subsequent fallback) is spread evenly across the
+// members. That makes Rank a good fit for ordered failover, e.g. a
+// Typha client picking which Typha to connect to: every node gets a
+// stable preferred Typha and deterministic fallbacks, while load
+// stays balanced across the fleet.
+//
 // The Rendezvous is not safe for concurrent use. Callers sharing one
 // across goroutines should wrap it in their own lock.
 package rendezvous
 
 import (
+	"cmp"
 	"encoding/binary"
+	"slices"
 
 	"github.com/zeebo/xxh3"
 )
@@ -155,6 +168,49 @@ func (r *Rendezvous[V]) Lookup(key string) (V, bool) {
 		}
 	}
 	return r.members[bestKey], true
+}
+
+// scored pairs a member key with its score for ranking.
+type scored struct {
+	score uint64
+	key   string
+}
+
+// Rank returns every member's value in descending preference order
+// for key: the value that Lookup would return is first, the runner-up
+// second, and so on. Ties (equal scores, e.g. hash collisions) are
+// broken by the lexicographically smaller member key, exactly as in
+// Lookup — so Rank(key)[0] always equals the value from Lookup(key).
+//
+// The result is a freshly allocated slice of length Len(), and is nil
+// when there are no members. It is deterministic regardless of
+// insertion or map iteration order. O(N log N) in the number of
+// members.
+//
+// Because a member's score depends only on (member, key), the order
+// is stable under membership changes: removing a member yields the
+// same ranking with that member deleted (survivors keep their
+// relative order), which is what makes it suitable for connection
+// failover lists.
+func (r *Rendezvous[V]) Rank(key string) []V {
+	if len(r.members) == 0 {
+		return nil
+	}
+	ranked := make([]scored, 0, len(r.members))
+	for k := range r.members {
+		ranked = append(ranked, scored{score: r.combinedHash(k, key), key: k})
+	}
+	slices.SortFunc(ranked, func(a, b scored) int {
+		if c := cmp.Compare(b.score, a.score); c != 0 { // score: descending
+			return c
+		}
+		return cmp.Compare(a.key, b.key) // tiebreak: key ascending
+	})
+	out := make([]V, len(ranked))
+	for i, s := range ranked {
+		out[i] = r.members[s.key]
+	}
+	return out
 }
 
 // combinedHash scores member against key as hash(len(member) ||
