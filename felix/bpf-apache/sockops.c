@@ -17,7 +17,7 @@
 
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
-    __type(key, union ip4_bpf_lpm_trie_key);
+    __type(key, struct ip4key);
     __type(value, __u32);
     __uint(max_entries, 65535);
     __uint(map_flags, BPF_F_NO_PREALLOC);
@@ -27,7 +27,7 @@ __attribute__((section("calico_sockops_func")))
 enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 {
 	struct sock_key key = {};
-	union ip4_bpf_lpm_trie_key sip, dip;
+	struct ip4key sip, dip;
 	__u32 sport, dport;
 
 	switch (skops->op) {
@@ -42,9 +42,10 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 			return BPF_OK;
 	}
 
-	ip4val_to_lpm(&sip, 32, skops->local_ip4);
-	ip4val_to_lpm(&dip, 32, skops->remote_ip4);
-
+	sip.addr = skops->local_ip4;
+	dip.addr = skops->remote_ip4;
+	sip.mask = 32;
+	dip.mask = 32;
 	// If neither source nor dest are present in the Felix-populated endpoints
 	// map we do nothing because the packet is not related to Felix-managed
 	// traffic.
@@ -58,12 +59,12 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 
 	// We use the app's port and ip address as key. The socket attached
 	// to our in-kernel context will be stored as the value automatically.
-	if (sip.ip.addr == ENVOY_IP && sport == ENVOY_PORT) {
+	if (sip.addr == ENVOY_IP && sport == ENVOY_PORT) {
 		// If the source is envoy, the app is on the destination side.
 		// We set envoy_side to 1 so the sockmap-attached BPF program
 		// (sk_msg in redir.c) can identify packets going to envoy.
 		key.envoy_side = 1;
-		key.ip4 = dip.ip.addr;
+		key.ip4 = dip.addr;
 		key.port = dport;
 	} else {
 		// If the source IP is not envoy we assume it comes from the app (if it
@@ -74,7 +75,7 @@ enum bpf_ret_code calico_sockops(struct bpf_sock_ops *skops)
 		// because we get executed before the destination address is rewritten
 		// by iptables so the packet from the app still has the destination
 		// address of some other service. We handle the general case.
-		key.ip4 = sip.ip.addr;
+		key.ip4 = sip.addr;
 		key.port = sport;
 		key.envoy_side = 0;
 	}
