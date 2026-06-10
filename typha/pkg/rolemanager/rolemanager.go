@@ -13,24 +13,28 @@
 // limitations under the License.
 
 // Package rolemanager implements the promotion/demotion state machine that
-// drives a hierarchical Typha deployment (WS-C).  It subscribes to leader
-// election role transitions and, for each syncer pipeline, swaps the pipeline's
-// source between a real datastore syncer (LEADER) and an upstream-Typha
-// syncclient (FOLLOWER) behind the pipeline's permanently-installed dedupe
-// buffer.
+// drives a hierarchical Typha deployment.  It subscribes to slot-acquirer role
+// transitions and, for each syncer pipeline, swaps the pipeline's source between
+// a real datastore syncer (LEADER), an upstream-Typha syncclient pointed at the
+// leader (TIER1), and an upstream-Typha syncclient pointed at the tier-1 Service
+// (TIER2) — all behind the pipeline's permanently-installed dedupe buffer.
 //
-// State machine:
+// State machine (three roles; in single-tier mode — Tier1Count=0 — the acquirer
+// never emits TIER1, so this collapses to the two-state LEADER↔TIER2 machine
+// that WS-C shipped, byte-for-byte):
 //
-//	           ┌────────────┐  Leader role   ┌──────────────┐
-//	start ────→│  FOLLOWER  │───────────────→│   LEADER     │
-//	           │ (upstream  │←───────────────│ (real        │
-//	           │  sources)  │  Follower role │  syncers)    │
-//	           └────────────┘                └──────────────┘
+//	          ┌──────────┐        ┌──────────┐        ┌──────────┐
+//	start ───→│  TIER2   │───────→│  TIER1   │───────→│  LEADER  │
+//	          │(src=t1   │←───────│(src=     │←───────│(real     │
+//	          │ service) │        │ leader)  │        │ syncers) │
+//	          └──────────┘        └──────────┘        └──────────┘
+//	    (any role may transition directly to any other; the diagram
+//	     shows the promotion ladder, not the only edges.)
 //
 // The very first transition starts from the SOURCELESS state (no source has
 // been started yet), so "stop the old source" is a no-op on cold start.
 //
-// Per-pipeline transition procedure (identical in both directions), run
+// Per-pipeline transition procedure (identical for all role changes), run
 // concurrently across the four pipelines but strictly serialised per role
 // change by the single Run goroutine:
 //
@@ -44,7 +48,8 @@
 //     deletes for keys that vanished while we were switching.  Downstream
 //     (validator → snapcache → connected clients) sees an ordinary resync.
 //
-// See typha/DESIGN.md, "Role state machine (promotion/demotion)".
+// See typha/DESIGN.md, "Role state machine (promotion/demotion)" and
+// "Two-tier fan-out".
 package rolemanager
 
 import (
@@ -54,13 +59,13 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/typha/pkg/leaderelection"
+	"github.com/projectcalico/calico/typha/pkg/slotacquirer"
 	"github.com/projectcalico/calico/typha/pkg/syncsource"
 )
 
 // Role is the role this Typha is acting as.  Note this is the *acted* role (the
 // sources actually running) which may briefly lag the desired role published by
-// the elector while a transition is in flight.
+// the acquirer while a transition is in flight.
 type Role int
 
 const (
@@ -68,8 +73,14 @@ const (
 	// pipeline yet.  The first transition always starts here so the "stop old
 	// source" step is a no-op on cold start.
 	Sourceless Role = iota
-	// Follower means the pipelines are sourced from an upstream Typha.
-	Follower
+	// Tier2 means the pipelines are sourced from an upstream tier-1 Typha (or,
+	// in single-tier mode, directly from the leader).  This is the leaf role and
+	// the bootstrap role.
+	Tier2
+	// Tier1 means the pipelines are sourced from an upstream connection to the
+	// leader, and this Typha fans out to tier-2 Typhas.  Only reached when
+	// tiering is active (Tier1Count>0).
+	Tier1
 	// Leader means the pipelines run real datastore syncers.
 	Leader
 )
@@ -78,10 +89,24 @@ func (r Role) String() string {
 	switch r {
 	case Leader:
 		return "Leader"
-	case Follower:
-		return "Follower"
+	case Tier1:
+		return "Tier1"
+	case Tier2:
+		return "Tier2"
 	default:
 		return "Sourceless"
+	}
+}
+
+// roleFromAcquirer maps a slot-acquirer role to the role manager's acted role.
+func roleFromAcquirer(r slotacquirer.Role) Role {
+	switch r {
+	case slotacquirer.Leader:
+		return Leader
+	case slotacquirer.Tier1:
+		return Tier1
+	default:
+		return Tier2
 	}
 }
 
@@ -94,45 +119,51 @@ type RestartSignaller interface {
 
 // Pipeline is one syncer pipeline that the role manager owns the source of.  The
 // dedupe buffer is the stable element installed for the lifetime of the process;
-// the role manager creates/stops sources behind it via the two factory funcs.
+// the role manager creates/stops sources behind it via the per-role factory.
 type Pipeline struct {
 	// Name is used only for logging (typically the syncer type).
 	Name string
 	// Buffer is the pipeline's permanently-installed dedupe buffer (the sink
 	// every source delivers into).
 	Buffer RestartSignaller
-	// NewDatastoreSource builds a fresh datastore-backed source feeding Buffer.
-	// Called each time we promote to Leader.
-	NewDatastoreSource func() syncsource.SyncerSource
-	// NewUpstreamSource builds a fresh upstream-Typha source feeding Buffer.
-	// Called each time we demote to Follower.
-	NewUpstreamSource func() syncsource.SyncerSource
+	// NewSourceForRole builds a fresh source feeding Buffer appropriate for the
+	// target role (Leader → datastore syncer; Tier1 → upstream-to-leader;
+	// Tier2 → upstream-to-tier1-or-leader).  Called on every promotion/demotion.
+	// It is never called with Sourceless.
+	NewSourceForRole func(role Role) syncsource.SyncerSource
 
 	// current is the source currently attached (nil in the Sourceless state).
 	current syncsource.SyncerSource
 }
 
-// Elector is the subset of leaderelection.Elector that the role manager
-// consumes.  Defined as an interface so unit tests can drive the state machine
-// with a fake elector.
-type Elector interface {
-	// Roles delivers a Role each time leadership is acquired or lost.  The
-	// channel is level-ish: the manager always converges to the latest received
-	// value, so dropped intermediate values (the real Elector drops the oldest
-	// on overflow) are harmless.
-	Roles() <-chan leaderelection.Role
+// RoleSource publishes desired-role transitions.  *slotacquirer.Acquirer
+// satisfies it; unit tests substitute a fake.
+type RoleSource interface {
+	// Roles delivers a Role each time the held slot changes.  The channel is
+	// level-ish: the manager always converges to the latest received value, so
+	// dropped intermediate values are harmless.
+	Roles() <-chan slotacquirer.Role
 }
 
-// Labeller applies/removes the leader role label on this Typha's own pod so
-// followers can discover the leader via the leader Service.  Implementations
-// must be idempotent and safe to call from the Run goroutine.
+// ClientDrainer drains off-node client connections from the local server.  Used
+// when this Typha is promoted out of Tier2 (it should no longer serve off-node
+// leaf clients; they re-discover and land on a tier-2 Typha).  nil disables
+// draining (e.g. tests, or single-tier mode where the leader keeps serving all
+// clients).
+type ClientDrainer interface {
+	// DrainOffNodeClients gracefully drops connections from clients that are not
+	// on this Typha's node, without shutting the server down.  Same-node clients
+	// (which always prefer their local Typha, whatever its tier) are kept.
+	DrainOffNodeClients(reason string)
+}
+
+// Labeller applies/removes the tier label on this Typha's own pod so clients and
+// other Typhas can discover it via the per-tier Services.  Implementations must
+// be idempotent and safe to call from the Run goroutine.
 type Labeller interface {
-	// SetLeaderLabel adds the leader role label to our own pod.  Called after
-	// the real syncers have reached InSync on promotion.
-	SetLeaderLabel(ctx context.Context) error
-	// RemoveLeaderLabel removes the leader role label from our own pod.  Called
-	// at the start of demotion and on graceful shutdown.
-	RemoveLeaderLabel(ctx context.Context) error
+	// SetTierLabel sets the pod's tier label to the value implied by role
+	// ("leader"/"1"/"2").  Called after the new sources have started.
+	SetTierLabel(ctx context.Context, role Role) error
 }
 
 // Config holds the tunables for the role manager.
@@ -153,9 +184,10 @@ func (c *Config) applyDefaults() {
 // with Run.
 type Manager struct {
 	cfg       Config
-	elector   Elector
+	roleSrc   RoleSource
 	pipelines []*Pipeline
 	labeller  Labeller
+	drainer   ClientDrainer
 
 	// mu guards currentRole so Role() can be read from other goroutines (tests,
 	// readiness).
@@ -163,15 +195,16 @@ type Manager struct {
 	currentRole Role
 }
 
-// New constructs a Manager.  labeller may be nil (e.g. static-upstream tests),
-// in which case leader labelling is skipped.
-func New(cfg Config, elector Elector, labeller Labeller, pipelines []*Pipeline) *Manager {
+// New constructs a Manager.  labeller and drainer may be nil (e.g. static
+// tests), in which case tier labelling / client draining are skipped.
+func New(cfg Config, roleSrc RoleSource, labeller Labeller, drainer ClientDrainer, pipelines []*Pipeline) *Manager {
 	cfg.applyDefaults()
 	return &Manager{
 		cfg:         cfg,
-		elector:     elector,
+		roleSrc:     roleSrc,
 		pipelines:   pipelines,
 		labeller:    labeller,
+		drainer:     drainer,
 		currentRole: Sourceless,
 	}
 }
@@ -188,7 +221,7 @@ func (m *Manager) Role() Role {
 // exactly once, typically in a goroutine.
 //
 // The loop is deliberately single-threaded: it reads desired-role transitions
-// from the elector, debounces them, and only ever runs one transition at a
+// from the acquirer, debounces them, and only ever runs one transition at a
 // time.  New role events that arrive during a transition are absorbed (we read
 // the *latest* desired role after each transition completes), so we never
 // interrupt a transition mid-flight and we always converge to the latest role.
@@ -196,11 +229,11 @@ func (m *Manager) Run(ctx context.Context) {
 	log.Info("Role manager starting.")
 	defer m.shutdown()
 
-	// desired tracks the latest role the elector wants us in.  Until the first
-	// election result arrives we want to be a Follower (the bootstrap state):
-	// a cold-start cluster has no leader, so every Typha follows until one is
-	// elected and then everyone discovers it.
-	desired := Follower
+	// desired tracks the latest role the acquirer wants us in.  Until the first
+	// acquirer result arrives we want to be Tier2 (the bootstrap state): a
+	// cold-start cluster has no leader, so every Typha is a leaf until the slots
+	// are filled and everyone discovers their upstream.
+	desired := Tier2
 
 	// debounceTimer fires Debounce after the desired role last changed; we only
 	// transition when it fires (or immediately on the very first convergence).
@@ -210,16 +243,16 @@ func (m *Manager) Run(ctx context.Context) {
 		debounceC = timer.C
 	}
 
-	// On startup, converge to the bootstrap (Follower) role immediately rather
-	// than waiting a debounce period — there is nothing to flap against yet.
+	// On startup, converge to the bootstrap (Tier2) role immediately rather than
+	// waiting a debounce period — there is nothing to flap against yet.
 	m.transitionTo(ctx, desired)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case role := <-m.elector.Roles():
-			newDesired := desiredFromElectorRole(role)
+		case role := <-m.roleSrc.Roles():
+			newDesired := roleFromAcquirer(role)
 			if newDesired == desired {
 				// Re-affirmation of the same desired role; nothing to do.
 				continue
@@ -241,15 +274,6 @@ func (m *Manager) Run(ctx context.Context) {
 	}
 }
 
-// desiredFromElectorRole maps a leader-election role to the role manager's
-// desired acted role.
-func desiredFromElectorRole(r leaderelection.Role) Role {
-	if r == leaderelection.Leader {
-		return Leader
-	}
-	return Follower
-}
-
 // transitionTo moves all pipelines into the target role.  Per-pipeline swaps
 // run concurrently; transitionTo blocks until they all complete, which keeps
 // the Run loop strictly serial (no overlapping transitions).
@@ -261,11 +285,14 @@ func (m *Manager) transitionTo(ctx context.Context, target Role) {
 	logCxt := log.WithFields(log.Fields{"from": from, "to": target})
 	logCxt.Info("Role transition starting.")
 
-	// On demotion, drop our leader label *before* we stop serving as a leader so
-	// that followers stop being directed at us as early as possible.
-	if from == Leader && m.labeller != nil {
-		if err := m.labeller.RemoveLeaderLabel(ctx); err != nil {
-			logCxt.WithError(err).Warn("Failed to remove leader label during demotion; continuing.")
+	// Demotion (to a lower tier): re-label *before* swapping sources so that
+	// clients and downstream Typhas stop being directed at us at the old (higher)
+	// tier as early as possible — the WS-C "remove leader label first on demotion"
+	// ordering, generalised to tiers.  Promotion labels *after* the swap (below).
+	demoting := target < from && from != Sourceless
+	if demoting && m.labeller != nil {
+		if err := m.labeller.SetTierLabel(ctx, target); err != nil {
+			logCxt.WithError(err).Warn("Failed to set tier label before demotion swap; continuing.")
 		}
 	}
 
@@ -283,16 +310,24 @@ func (m *Manager) transitionTo(ctx context.Context, target Role) {
 	m.currentRole = target
 	m.mu.Unlock()
 
-	// On promotion, advertise ourselves as leader only after the real syncers
-	// have started (and, ideally, reached InSync).  We start the sources above;
-	// the snapcache readiness reporters reflect InSync, and the leader Service
-	// can additionally be readiness-gated.  We apply the label after starting
-	// the sources so a follower never discovers a leader whose syncers haven't
-	// begun; final InSync gating is provided by pod readiness on the Service.
-	if target == Leader && m.labeller != nil {
-		if err := m.labeller.SetLeaderLabel(ctx); err != nil {
-			logCxt.WithError(err).Warn("Failed to set leader label during promotion; will rely on readiness gating.")
+	// Promotion (or cold start): advertise our new tier via the pod label *after*
+	// starting the new sources, so a client/Typha never discovers us in a tier
+	// whose sources haven't begun (final InSync gating is via pod readiness on
+	// the Services).
+	if !demoting && m.labeller != nil {
+		if err := m.labeller.SetTierLabel(ctx, target); err != nil {
+			logCxt.WithError(err).Warn("Failed to set tier label after transition; will rely on readiness gating.")
 		}
+	}
+
+	// On promotion *out of* Tier2 (to Tier1 or Leader), off-node leaf clients
+	// should no longer be served by us.  Drain them so they re-discover and land
+	// on a tier-2 Typha; same-node clients (which always prefer their local Typha)
+	// are kept by the drainer.  We do this after the source swap so we keep
+	// serving during the transition itself.
+	if from == Tier2 && target != Tier2 && m.drainer != nil {
+		logCxt.Info("Promoted out of Tier2; draining off-node client connections.")
+		m.drainer.DrainOffNodeClients("promoted out of tier-2; off-node clients should use a tier-2 Typha")
 	}
 
 	logCxt.Info("Role transition complete.")
@@ -316,44 +351,30 @@ func (m *Manager) swapPipelineSource(ctx context.Context, p *Pipeline, target Ro
 	logCxt.Debug("Signalling dedupe buffer of source swap.")
 	p.Buffer.OnTyphaConnectionRestarted()
 
-	// 3. Build and start the new source.
-	var newSrc syncsource.SyncerSource
-	switch target {
-	case Leader:
-		newSrc = p.NewDatastoreSource()
-	case Follower:
-		newSrc = p.NewUpstreamSource()
-	default:
-		logCxt.Panic("swapPipelineSource called with non-source target")
+	// 3. Build and start the new source for the target role.
+	if target == Sourceless {
+		logCxt.Panic("swapPipelineSource called with Sourceless target")
 	}
+	newSrc := p.NewSourceForRole(target)
 	logCxt.Debug("Starting new source.")
 	if err := newSrc.Start(ctx); err != nil {
-		// Start should not normally fail (the upstream source retries
-		// internally; the datastore source's syncer.Start is best-effort).  Log
-		// loudly and leave the pipeline sourceless — the next transition will
-		// retry.  We do not panic: a single failed pipeline must not crash the
-		// whole process.
+		// Start should not normally fail (the upstream source retries internally;
+		// the datastore source's syncer.Start is best-effort).  Log loudly and
+		// leave the pipeline sourceless — the next transition will retry.  We do
+		// not panic: a single failed pipeline must not crash the whole process.
 		logCxt.WithError(err).Error("Failed to start new pipeline source.")
 		return
 	}
 	p.current = newSrc
 }
 
-// shutdown stops every running source and removes the leader label.  Called when
-// Run returns (context cancelled).  Stopping the sources blocks until their
-// callbacks have drained; this is the in-process analogue of releasing the lease
-// before draining clients (the daemon releases the lease by cancelling the
-// elector's context before this runs).
+// shutdown stops every running source.  Called when Run returns (context
+// cancelled).  Stopping the sources blocks until their callbacks have drained;
+// this is the in-process analogue of releasing the lease before draining clients
+// (the daemon releases the lease by cancelling the acquirer's context before this
+// runs).
 func (m *Manager) shutdown() {
 	log.Info("Role manager stopping; tearing down sources.")
-	if m.labeller != nil {
-		// Best-effort: use a short bounded context since our own ctx is done.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := m.labeller.RemoveLeaderLabel(ctx); err != nil {
-			log.WithError(err).Warn("Failed to remove leader label on shutdown.")
-		}
-	}
 	var wg sync.WaitGroup
 	for _, p := range m.pipelines {
 		if p.current == nil {

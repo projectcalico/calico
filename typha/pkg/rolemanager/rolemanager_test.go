@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/projectcalico/calico/typha/pkg/leaderelection"
 	"github.com/projectcalico/calico/typha/pkg/rolemanager"
+	"github.com/projectcalico/calico/typha/pkg/slotacquirer"
 	"github.com/projectcalico/calico/typha/pkg/syncsource"
 )
 
@@ -31,7 +31,7 @@ import (
 type event struct {
 	pipeline string
 	kind     string // "stop", "restart", "start"
-	source   string // "datastore" or "upstream"
+	source   string // "datastore", "tier1" or "tier2"
 }
 
 // recorder collects ordering events from the fakes.  All fakes share one
@@ -127,6 +127,19 @@ func (s *fakeSource) Done() <-chan struct{} { return s.done }
 
 var _ syncsource.SyncerSource = (*fakeSource)(nil)
 
+// sourceKindForRole names the fake source kind for a target role, matching the
+// real daemon's per-role source selection.
+func sourceKindForRole(role rolemanager.Role) string {
+	switch role {
+	case rolemanager.Leader:
+		return "datastore"
+	case rolemanager.Tier1:
+		return "tier1"
+	default:
+		return "tier2"
+	}
+}
+
 // spyBuffer records OnTyphaConnectionRestarted on the shared recorder.
 type spyBuffer struct {
 	pipeline string
@@ -137,57 +150,71 @@ func (b *spyBuffer) OnTyphaConnectionRestarted() {
 	b.rec.record(event{pipeline: b.pipeline, kind: "restart"})
 }
 
-// fakeElector implements rolemanager.Elector with a channel we drive directly.
-type fakeElector struct {
-	ch chan leaderelection.Role
+// fakeRoleSource implements rolemanager.RoleSource with a channel we drive.
+type fakeRoleSource struct {
+	ch chan slotacquirer.Role
 }
 
-func newFakeElector() *fakeElector {
-	return &fakeElector{ch: make(chan leaderelection.Role, 16)}
+func newFakeRoleSource() *fakeRoleSource {
+	return &fakeRoleSource{ch: make(chan slotacquirer.Role, 16)}
 }
 
-func (e *fakeElector) Roles() <-chan leaderelection.Role { return e.ch }
+func (e *fakeRoleSource) Roles() <-chan slotacquirer.Role { return e.ch }
 
-func (e *fakeElector) send(r leaderelection.Role) { e.ch <- r }
+func (e *fakeRoleSource) send(r slotacquirer.Role) { e.ch <- r }
 
-// fakeLabeller records set/remove calls.
+// fakeLabeller records the sequence of tier labels applied.
 type fakeLabeller struct {
-	mu       sync.Mutex
-	setCalls int
-	rmCalls  int
+	mu     sync.Mutex
+	labels []rolemanager.Role
 }
 
-func (l *fakeLabeller) SetLeaderLabel(context.Context) error {
+func (l *fakeLabeller) SetTierLabel(_ context.Context, role rolemanager.Role) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.setCalls++
+	l.labels = append(l.labels, role)
 	return nil
 }
 
-func (l *fakeLabeller) RemoveLeaderLabel(context.Context) error {
+func (l *fakeLabeller) seq() []rolemanager.Role {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.rmCalls++
-	return nil
+	out := make([]rolemanager.Role, len(l.labels))
+	copy(out, l.labels)
+	return out
 }
 
-func (l *fakeLabeller) counts() (set, rm int) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.setCalls, l.rmCalls
+// fakeDrainer counts how many times off-node clients were drained.
+type fakeDrainer struct {
+	mu     sync.Mutex
+	drains int
+}
+
+func (d *fakeDrainer) DrainOffNodeClients(string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.drains++
+}
+
+func (d *fakeDrainer) count() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.drains
 }
 
 // buildPipelines makes n pipelines wired to the shared recorder.  Each
-// NewDatastoreSource / NewUpstreamSource returns a fresh fakeSource.
+// NewSourceForRole returns a fresh fakeSource tagged with the role's source
+// kind.
 func buildPipelines(n int, rec *recorder) []*rolemanager.Pipeline {
 	pipelines := make([]*rolemanager.Pipeline, n)
 	for i := range pipelines {
 		name := fmt.Sprintf("p%d", i)
 		pipelines[i] = &rolemanager.Pipeline{
-			Name:               name,
-			Buffer:             &spyBuffer{pipeline: name, rec: rec},
-			NewDatastoreSource: func() syncsource.SyncerSource { return newFakeSource(name, "datastore", rec) },
-			NewUpstreamSource:  func() syncsource.SyncerSource { return newFakeSource(name, "upstream", rec) },
+			Name:   name,
+			Buffer: &spyBuffer{pipeline: name, rec: rec},
+			NewSourceForRole: func(role rolemanager.Role) syncsource.SyncerSource {
+				return newFakeSource(name, sourceKindForRole(role), rec)
+			},
 		}
 	}
 	return pipelines
@@ -242,21 +269,20 @@ func assertSwapOrdering(t *testing.T, events []event, pipeline string) {
 	}
 }
 
-// TestBootstrapToFollower verifies the manager converges to Follower on startup
-// (no leader yet) and starts upstream sources on every pipeline.
-func TestBootstrapToFollower(t *testing.T) {
+// TestBootstrapToTier2 verifies the manager converges to Tier2 on startup (no
+// slot held yet) and starts tier-2 upstream sources on every pipeline.
+func TestBootstrapToTier2(t *testing.T) {
 	rec := newRecorder()
-	el := newFakeElector()
+	el := newFakeRoleSource()
 	pipelines := buildPipelines(4, rec)
-	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, nil, pipelines)
+	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, nil, nil, pipelines)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go m.Run(ctx)
 
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
 
-	// Every pipeline should have an upstream source started, no datastore.
 	events := rec.snapshot()
 	starts := map[string]int{}
 	for _, e := range events {
@@ -264,36 +290,39 @@ func TestBootstrapToFollower(t *testing.T) {
 			starts[e.source]++
 		}
 	}
-	if starts["upstream"] != 4 {
-		t.Fatalf("expected 4 upstream starts, got %v", starts)
+	if starts["tier2"] != 4 {
+		t.Fatalf("expected 4 tier2 starts, got %v", starts)
 	}
-	if starts["datastore"] != 0 {
-		t.Fatalf("expected 0 datastore starts, got %v", starts)
+	if starts["datastore"] != 0 || starts["tier1"] != 0 {
+		t.Fatalf("expected no datastore/tier1 starts on bootstrap, got %v", starts)
 	}
 }
 
-// TestPromoteThenDemote verifies a follower promotes to leader (datastore
-// sources) and back, with correct per-pipeline swap ordering and no overlap.
-func TestPromoteThenDemote(t *testing.T) {
+// TestSingleTierReproducesWSC is the regression guard: with only Leader/Tier2
+// roles ever emitted (the Tier1Count=0 case — the acquirer never produces
+// Tier1), the manager behaves exactly like WS-C's two-state machine: bootstrap
+// to leaf, promote to leader (datastore syncers), demote back to leaf, with the
+// stop→restart→start ordering and no source overlap.
+func TestSingleTierReproducesWSC(t *testing.T) {
 	rec := newRecorder()
-	el := newFakeElector()
+	el := newFakeRoleSource()
 	lab := &fakeLabeller{}
 	pipelines := buildPipelines(4, rec)
-	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, lab, pipelines)
+	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, lab, nil, pipelines)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go m.Run(ctx)
 
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
 
-	// Promote.
-	el.send(leaderelection.Leader)
+	// Promote straight to Leader (no Tier1 in between — single-tier).
+	el.send(slotacquirer.Leader)
 	waitForRole(t, m, rolemanager.Leader, 2*time.Second)
 
-	// Demote.
-	el.send(leaderelection.Follower)
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
+	// Demote straight back to Tier2.
+	el.send(slotacquirer.Tier2)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
 
 	events := rec.snapshot()
 	for i := 0; i < 4; i++ {
@@ -302,44 +331,140 @@ func TestPromoteThenDemote(t *testing.T) {
 	if got := rec.overlapCount(); got != 0 {
 		t.Fatalf("expected no overlapping sources, got %d overlaps; events %v", got, events)
 	}
-
-	// Label applied on promotion, removed on demotion (and possibly on
-	// shutdown, but we haven't cancelled yet).
-	set, rm := lab.counts()
-	if set != 1 {
-		t.Fatalf("expected 1 SetLeaderLabel, got %d", set)
+	// Only datastore and tier2 sources are ever used — never tier1.
+	for _, e := range events {
+		if e.source == "tier1" {
+			t.Fatalf("tier1 source used in single-tier mode; events %v", events)
+		}
 	}
-	if rm != 1 {
-		t.Fatalf("expected 1 RemoveLeaderLabel (demotion), got %d", rm)
+	// Tier label sequence: bootstrap(2) → leader → 2.
+	if seq := lab.seq(); len(seq) != 3 ||
+		seq[0] != rolemanager.Tier2 || seq[1] != rolemanager.Leader || seq[2] != rolemanager.Tier2 {
+		t.Fatalf("unexpected tier label sequence %v", seq)
 	}
 }
 
-// TestDebounceCoalescesFlap verifies that a quick Leader→Follower flap within
-// the debounce window does not produce a transition to Leader at all.
-func TestDebounceCoalescesFlap(t *testing.T) {
+// TestThreeRolePromotionLadder verifies the full ladder Tier2→Tier1→Leader and
+// back, with correct per-pipeline swap ordering, no overlap, and the right
+// source kind for each role.
+func TestThreeRolePromotionLadder(t *testing.T) {
 	rec := newRecorder()
-	el := newFakeElector()
-	pipelines := buildPipelines(1, rec)
-	m := rolemanager.New(rolemanager.Config{Debounce: 200 * time.Millisecond}, el, nil, pipelines)
+	el := newFakeRoleSource()
+	lab := &fakeLabeller{}
+	drainer := &fakeDrainer{}
+	pipelines := buildPipelines(4, rec)
+	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, lab, drainer, pipelines)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go m.Run(ctx)
 
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
 
-	// Flap Leader then back to Follower well within the debounce window.
-	el.send(leaderelection.Leader)
+	el.send(slotacquirer.Tier1)
+	waitForRole(t, m, rolemanager.Tier1, 2*time.Second)
+
+	el.send(slotacquirer.Leader)
+	waitForRole(t, m, rolemanager.Leader, 2*time.Second)
+
+	el.send(slotacquirer.Tier1)
+	waitForRole(t, m, rolemanager.Tier1, 2*time.Second)
+
+	el.send(slotacquirer.Tier2)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
+
+	events := rec.snapshot()
+	for i := 0; i < 4; i++ {
+		assertSwapOrdering(t, events, fmt.Sprintf("p%d", i))
+	}
+	if got := rec.overlapCount(); got != 0 {
+		t.Fatalf("source overlap during ladder: %d; events %v", got, events)
+	}
+
+	// Per pipeline, the source-kind sequence should be tier2, tier1, datastore,
+	// tier1, tier2.
+	want := []string{"tier2", "tier1", "datastore", "tier1", "tier2"}
+	gotByPipeline := map[string][]string{}
+	for _, e := range events {
+		if e.kind == "start" {
+			gotByPipeline[e.pipeline] = append(gotByPipeline[e.pipeline], e.source)
+		}
+	}
+	for i := 0; i < 4; i++ {
+		p := fmt.Sprintf("p%d", i)
+		if fmt.Sprint(gotByPipeline[p]) != fmt.Sprint(want) {
+			t.Fatalf("pipeline %s source sequence %v, want %v", p, gotByPipeline[p], want)
+		}
+	}
+
+	// Drained off-node clients exactly twice: Tier2→Tier1 and (later) Tier2→...
+	// only the first promotion out of tier-2 happens here (Tier2→Tier1).  The
+	// Tier1→Leader promotion is not "out of tier-2".  And the final Tier1→Tier2
+	// is a demotion.  So exactly one drain.
+	if got := drainer.count(); got != 1 {
+		t.Fatalf("expected exactly 1 off-node drain (on leaving Tier2), got %d", got)
+	}
+}
+
+// TestDrainOnlyWhenLeavingTier2 verifies the drainer fires on Tier2→Leader (a
+// direct promotion out of tier-2) but not on Tier1→Leader.
+func TestDrainOnlyWhenLeavingTier2(t *testing.T) {
+	rec := newRecorder()
+	el := newFakeRoleSource()
+	drainer := &fakeDrainer{}
+	pipelines := buildPipelines(1, rec)
+	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, nil, drainer, pipelines)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go m.Run(ctx)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
+
+	// Tier2 → Leader directly: one drain.
+	el.send(slotacquirer.Leader)
+	waitForRole(t, m, rolemanager.Leader, 2*time.Second)
+	if got := drainer.count(); got != 1 {
+		t.Fatalf("expected 1 drain on Tier2→Leader, got %d", got)
+	}
+
+	// Leader → Tier1 (demotion): no drain.
+	el.send(slotacquirer.Tier1)
+	waitForRole(t, m, rolemanager.Tier1, 2*time.Second)
+	if got := drainer.count(); got != 1 {
+		t.Fatalf("expected no extra drain on Leader→Tier1, got %d", got)
+	}
+
+	// Tier1 → Leader (promotion, but not out of tier-2): no drain.
+	el.send(slotacquirer.Leader)
+	waitForRole(t, m, rolemanager.Leader, 2*time.Second)
+	if got := drainer.count(); got != 1 {
+		t.Fatalf("expected no extra drain on Tier1→Leader, got %d", got)
+	}
+}
+
+// TestDebounceCoalescesFlap verifies that a quick Tier2→Leader→Tier2 flap within
+// the debounce window does not produce a transition to Leader at all.
+func TestDebounceCoalescesFlap(t *testing.T) {
+	rec := newRecorder()
+	el := newFakeRoleSource()
+	pipelines := buildPipelines(1, rec)
+	m := rolemanager.New(rolemanager.Config{Debounce: 200 * time.Millisecond}, el, nil, nil, pipelines)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go m.Run(ctx)
+
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
+
+	el.send(slotacquirer.Leader)
 	time.Sleep(20 * time.Millisecond)
-	el.send(leaderelection.Follower)
+	el.send(slotacquirer.Tier2)
 
-	// Give the debounce timer time to fire.
 	time.Sleep(400 * time.Millisecond)
 
-	if m.Role() != rolemanager.Follower {
-		t.Fatalf("expected to remain Follower after flap, got %v", m.Role())
+	if m.Role() != rolemanager.Tier2 {
+		t.Fatalf("expected to remain Tier2 after flap, got %v", m.Role())
 	}
-	// No datastore source should ever have started.
 	for _, e := range rec.snapshot() {
 		if e.kind == "start" && e.source == "datastore" {
 			t.Fatalf("datastore source started despite debounced flap; events %v", rec.snapshot())
@@ -347,50 +472,43 @@ func TestDebounceCoalescesFlap(t *testing.T) {
 	}
 }
 
-// TestFlapStorm toggles the role every 100ms for 10s (under the race detector
-// via -race) and asserts the manager converges to the final role, never
-// overlaps sources, and leaks no goroutines.
+// TestFlapStorm toggles the role every 100ms for 10s (under -race) and asserts
+// the manager converges to the final role, never overlaps sources, and leaks no
+// goroutines.
 func TestFlapStorm(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping flap storm in -short mode")
 	}
 	rec := newRecorder()
-	el := newFakeElector()
+	el := newFakeRoleSource()
 	lab := &fakeLabeller{}
 	pipelines := buildPipelines(4, rec)
-	// Small debounce so transitions actually happen during the storm.
-	m := rolemanager.New(rolemanager.Config{Debounce: 30 * time.Millisecond}, el, lab, pipelines)
+	m := rolemanager.New(rolemanager.Config{Debounce: 30 * time.Millisecond}, el, lab, nil, pipelines)
 
 	baseGoroutines := runtime.NumGoroutine()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go m.Run(ctx)
 
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
 
 	end := time.Now().Add(10 * time.Second)
-	toggle := leaderelection.Leader
+	roles := []slotacquirer.Role{slotacquirer.Leader, slotacquirer.Tier1, slotacquirer.Tier2}
+	i := 0
 	for time.Now().Before(end) {
-		el.send(toggle)
-		if toggle == leaderelection.Leader {
-			toggle = leaderelection.Follower
-		} else {
-			toggle = leaderelection.Leader
-		}
+		el.send(roles[i%len(roles)])
+		i++
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Settle on Leader and let the manager converge.
-	el.send(leaderelection.Leader)
+	el.send(slotacquirer.Leader)
 	waitForRole(t, m, rolemanager.Leader, 5*time.Second)
 
 	if got := rec.overlapCount(); got != 0 {
 		t.Fatalf("source overlap during flap storm: %d", got)
 	}
 
-	// Shut down and confirm no goroutine leak.
 	cancel()
-	// Manager.Run returns after shutdown(); give it a moment.
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		if m.Role() == rolemanager.Sourceless {
@@ -401,7 +519,6 @@ func TestFlapStorm(t *testing.T) {
 	if m.Role() != rolemanager.Sourceless {
 		t.Fatalf("manager did not return to Sourceless after shutdown; role %v", m.Role())
 	}
-	// Allow transient goroutines to exit.
 	time.Sleep(200 * time.Millisecond)
 	if leaked := runtime.NumGoroutine() - baseGoroutines; leaked > 5 {
 		t.Fatalf("possible goroutine leak: %d extra goroutines", leaked)
@@ -409,18 +526,17 @@ func TestFlapStorm(t *testing.T) {
 }
 
 // TestShutdownStopsSources verifies that cancelling Run's context stops all
-// running sources and removes the leader label.
+// running sources.
 func TestShutdownStopsSources(t *testing.T) {
 	rec := newRecorder()
-	el := newFakeElector()
-	lab := &fakeLabeller{}
+	el := newFakeRoleSource()
 	pipelines := buildPipelines(4, rec)
-	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, lab, pipelines)
+	m := rolemanager.New(rolemanager.Config{Debounce: 20 * time.Millisecond}, el, nil, nil, pipelines)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go m.Run(ctx)
-	waitForRole(t, m, rolemanager.Follower, 2*time.Second)
-	el.send(leaderelection.Leader)
+	waitForRole(t, m, rolemanager.Tier2, 2*time.Second)
+	el.send(slotacquirer.Leader)
 	waitForRole(t, m, rolemanager.Leader, 2*time.Second)
 
 	cancel()
@@ -432,7 +548,6 @@ func TestShutdownStopsSources(t *testing.T) {
 		t.Fatalf("expected Sourceless after shutdown, got %v", m.Role())
 	}
 
-	// Each pipeline's running datastore source should have been stopped.
 	stops := 0
 	for _, e := range rec.snapshot() {
 		if e.kind == "stop" && e.source == "datastore" {
@@ -441,9 +556,5 @@ func TestShutdownStopsSources(t *testing.T) {
 	}
 	if stops != 4 {
 		t.Fatalf("expected 4 datastore stops on shutdown, got %d", stops)
-	}
-	// Label removed at least once (demotion-from-leader on shutdown).
-	if _, rm := lab.counts(); rm < 1 {
-		t.Fatalf("expected leader label removed on shutdown")
 	}
 }
