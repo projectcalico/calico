@@ -8,8 +8,10 @@
 # Set it with:  gh variable set CI_NOTIFY_MAP --body 'login:Uxxxx,...'
 #
 # Delivery uses the gh-pr-monitor Slack bot. Its token is a repo secret
-# GH_PR_MONITOR_BOT_TOKEN; the bot needs chat:write + im:write scopes so
-# chat.postMessage can open a DM to the author's Slack member ID.
+# GH_PR_MONITOR_BOT_TOKEN; the bot needs chat:write + im:write scopes — it
+# opens a DM to the author's member ID with conversations.open, then posts
+# to that channel. (im:write is required; without it conversations.open
+# returns missing_scope and no DM is sent.)
 #
 # The workflow is a no-op (never fails noisily) if the variable/secret
 # are unset, the author hasn't opted in, or Slack is unreachable.
@@ -143,10 +145,14 @@ jobs:
           LOGIN=$(jq -r .login pr.json)
           # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
           # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
-          # is an unambiguous delimiter.
+          # is an unambiguous delimiter. Split entries on ',' (one per line),
+          # then strip whitespace *inside awk per record* — a global
+          # `tr -d '[:space:]'` would also delete the newlines and re-join
+          # every entry into one line, concatenating an ID with the next
+          # entry's login (e.g. "Uxxxxnextlogin").
           SLACK_ID=$(printf '%s' "$CI_NOTIFY_MAP" \
-            | tr ',' '\n' | tr -d '[:space:]' \
-            | awk -F: -v u="$LOGIN" '$1==u {print $2; exit}')
+            | tr ',' '\n' \
+            | awk -F: -v u="$LOGIN" '{gsub(/[[:space:]]/, "")} $1==u {print $2; exit}')
           if [[ -z "$SLACK_ID" ]]; then
             echo "::notice::author '$LOGIN' not in CI_NOTIFY_MAP — skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -209,6 +215,7 @@ jobs:
           echo "comment_url=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack DM
+        id: send
         if: >-
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
@@ -239,44 +246,59 @@ jobs:
             TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
           fi
 
-          jq -n --arg c "$SLACK_ID" --arg t "$TEXT" \
-            '{channel: $c, text: $t, unfurl_links: false}' > payload.json
+          # Resolve the member ID to a DM channel with conversations.open
+          # (requires im:write) and post to *that* channel. Passing the bare
+          # member ID as chat.postMessage's `channel` instead returns
+          # `channel_not_found` — the IM has to be opened first. Soft-fail
+          # throughout: never break the build on a Slack hiccup.
+          slack() {
+            # $1 = method, $2 = json body. Echoes the response; never fails.
+            set +e
+            curl -sS --max-time 30 -X POST "https://slack.com/api/$1" \
+              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              -H 'Content-Type: application/json; charset=utf-8' \
+              --data-binary "$2"
+            set -e
+          }
+          # jq stderr suppressed: an empty/non-JSON response (Slack unreachable)
+          # just yields ok=false/error=unknown and takes the warning branch.
+          ok()  { printf '%s' "$1" | jq -r '.ok // false'   2>/dev/null; }
+          err() { printf '%s' "$1" | jq -r '.error // "unknown"' 2>/dev/null; }
 
-          # Soft-fail: never break on a transient Slack issue.
-          set +e
-          RESP=$(curl -sS --max-time 30 -X POST \
-            https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            -H 'Content-Type: application/json; charset=utf-8' \
-            --data-binary @payload.json)
-          set -e
+          OPEN=$(slack conversations.open "$(jq -n --arg u "$SLACK_ID" '{users: $u}')")
+          if [[ "$(ok "$OPEN")" != "true" ]]; then
+            # missing_scope -> bot lacks im:write; user_not_found -> wrong
+            # member ID or wrong workspace for this token. Both surface here
+            # instead of as an opaque channel_not_found from postMessage.
+            echo "::warning::Slack conversations.open failed for $SLACK_ID: $(err "$OPEN")"
+            exit 0
+          fi
+          CHANNEL=$(printf '%s' "$OPEN" | jq -r '.channel.id')
 
-          # jq stderr suppressed: an empty/non-JSON $RESP (Slack unreachable)
-          # is already non-fatal here — the [[ ]] just takes the warning
-          # branch — but silencing jq keeps a transient failure out of the log.
-          if [[ "$(printf '%s' "$RESP" | jq -r '.ok // false' 2>/dev/null)" != "true" ]]; then
-            echo "::warning::Slack DM failed: $(printf '%s' "$RESP" | jq -r '.error // "unknown"' 2>/dev/null)"
+          RESP=$(slack chat.postMessage \
+            "$(jq -n --arg c "$CHANNEL" --arg t "$TEXT" '{channel: $c, text: $t, unfurl_links: false}')")
+          if [[ "$(ok "$RESP")" != "true" ]]; then
+            echo "::warning::Slack DM failed: $(err "$RESP")"
           else
             echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+            # Only a confirmed send arms the dedup marker below. A transient
+            # Slack failure leaves it unset, so the next serialized duplicate
+            # status event retries instead of being suppressed forever.
+            echo "sent=true" >> "$GITHUB_OUTPUT"
           fi
 
       # Record that this (commit, state) was notified, so the serialized
       # duplicate status events for the same outcome skip at the dedup gate.
-      # Status events only; never on the manual test path.
+      # Gated on a confirmed Slack send (steps.send.outputs.sent) — a failed
+      # DM must NOT arm the marker, or a transient Slack outage on the first
+      # event would suppress the notification for this (sha, state) forever.
+      # Status events only (SHA non-empty); never on the manual test path.
       - name: Record notification marker
-        if: >-
-          env.SHA != '' &&
-          steps.gate.outputs.skip != 'true' &&
-          steps.resolve.outputs.skip != 'true' &&
-          steps.lookup.outputs.skip != 'true'
+        if: env.SHA != '' && steps.send.outputs.sent == 'true'
         run: echo notified > .ci-notify-marker
 
       - name: Save notification marker
-        if: >-
-          env.SHA != '' &&
-          steps.gate.outputs.skip != 'true' &&
-          steps.resolve.outputs.skip != 'true' &&
-          steps.lookup.outputs.skip != 'true'
+        if: env.SHA != '' && steps.send.outputs.sent == 'true'
         # A cache hiccup (e.g. key already saved in a rare race) must never
         # fail the notifier — the DM has already gone out.
         continue-on-error: true
