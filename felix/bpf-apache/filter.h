@@ -21,7 +21,7 @@ struct protoport {
 
 struct {
     __uint(type, BPF_MAP_TYPE_LPM_TRIE);
-    __type(key, union ip4_bpf_lpm_trie_key);
+    __type(key, struct ip4key);
     __type(value, __u32);
     __uint(max_entries, 10240);
     __uint(map_flags, BPF_F_NO_PREALLOC);
