@@ -23,10 +23,11 @@ spec:
 ---
 
 # In hierarchical mode, this headless Service selects only the elected leader
-# Typha pod (which self-labels itself with projectcalico.org/typha-role=leader).
-# Follower Typhas discover their upstream — the leader — through this Service.
-# The main calico-typha Service above continues to select all Typhas so that
-# Felix can connect to any ready Typha.
+# Typha pod (which self-labels itself with projectcalico.org/typha-tier=leader).
+# Tier-1 Typhas (and, in single-tier mode, tier-2 Typhas) discover their upstream
+# — the leader — through this Service.  The main calico-typha Service above
+# continues to select all Typhas so that Felix can connect to any ready Typha;
+# who-may-connect-to-the-leader is policed client-side using the tier labels.
 apiVersion: v1
 kind: Service
 metadata:
@@ -35,7 +36,7 @@ metadata:
   labels:
     k8s-app: calico-typha
 spec:
-  # Headless: followers connect directly to the leader pod's IP.
+  # Headless: clients connect directly to the leader pod's IP.
   clusterIP: None
   ports:
     - port: 5473
@@ -44,7 +45,34 @@ spec:
       name: calico-typha
   selector:
     k8s-app: calico-typha
-    projectcalico.org/typha-role: leader
+    projectcalico.org/typha-tier: leader
+
+---
+
+# In two-tier mode (hierarchy.tier1Count > 0) this headless Service selects the
+# elected tier-1 Typha pods (which self-label projectcalico.org/typha-tier=1).
+# Tier-2 Typhas discover their upstream through this Service, and Felix uses it
+# (cross-referenced against the main Service) as the tier-information channel for
+# its client-side connection-preference policy.  It is created whenever hierarchy
+# is enabled (it harmlessly has no endpoints in single-tier mode) so the
+# discovery code can always look it up.
+apiVersion: v1
+kind: Service
+metadata:
+  name: calico-typha-tier1
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  clusterIP: None
+  ports:
+    - port: 5473
+      protocol: TCP
+      targetPort: calico-typha
+      name: calico-typha
+  selector:
+    k8s-app: calico-typha
+    projectcalico.org/typha-tier: "1"
 {{- end }}
 
 ---
@@ -87,6 +115,12 @@ spec:
     metadata:
       labels:
         k8s-app: calico-typha
+{{- if .Values.typha.hierarchy.enabled }}
+        # Every Typha starts as a tier-2 (leaf) Typha; the elected leader and
+        # tier-1 Typhas patch their own pod's tier label to "leader"/"1" and back
+        # to "2" on demotion.  The per-tier Services select on this label.
+        projectcalico.org/typha-tier: "2"
+{{- end }}
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
     spec:
@@ -187,13 +221,16 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
 {{- if .Values.typha.hierarchy.enabled }}
-            # Hierarchical Typha: self-organising single-tier hierarchy.  The
-            # elected leader runs the real datastore syncers; followers connect
-            # to it via the calico-typha-leader Service.
+            # Hierarchical Typha: self-organising hierarchy.  The elected leader
+            # runs the real datastore syncers; other Typhas connect to it (or, in
+            # two-tier mode, to a tier-1 Typha) via the per-tier Services.
             - name: TYPHA_HIERARCHYENABLED
               value: "true"
             - name: TYPHA_LEADERELECTIONENABLED
               value: "true"
+            # Two-tier fan-out: number of tier-1 fan-out Typhas.  0 = single-tier.
+            - name: TYPHA_TIER1COUNT
+              value: "{{ .Values.typha.hierarchy.tier1Count }}"
 {{- end }}
 {{- if .Values.typha.env }}
 {{ toYaml .Values.typha.env | indent 10 }}

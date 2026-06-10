@@ -226,8 +226,9 @@ metadata:
 rules:
   # Typha leader election — coordination.k8s.io/v1 Leases.  create cannot be
   # restricted to resourceNames (Kubernetes does not allow resourceNames on
-  # create).  get/update are name-scoped to the leader lease; add tier-N lease
-  # names here when WS-E introduces them.
+  # create).  get/update are name-scoped to the leader lease plus, in two-tier
+  # mode, the tier-1 Leases (calico-typha-tier1-0..N-1).  This keeps the grant
+  # narrowly scoped — do NOT move it back to the shared calico-node ClusterRole.
   - apiGroups: ["coordination.k8s.io"]
     resources:
       - leases
@@ -238,6 +239,9 @@ rules:
       - leases
     resourceNames:
       - calico-typha-leader
+{{- range $i := until (int .Values.typha.hierarchy.tier1Count) }}
+      - calico-typha-tier1-{{ $i }}
+{{- end }}
     verbs:
       - get
       - update
