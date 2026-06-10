@@ -81,6 +81,69 @@ func TestUpstreamTyphaSource_StopWhileConnecting(t *testing.T) {
 	}
 }
 
+// blackHoleAddr returns an address whose dial hangs rather than failing fast.
+// We use a TEST-NET-1 address (RFC 5737, 192.0.2.0/24, guaranteed not routed on
+// the public internet) so a TCP SYN gets no response and the dial blocks until
+// its timeout.  This models a dead upstream leader whose IP no longer answers,
+// as opposed to deadAddr() (a closed local port) which is refused instantly.
+func blackHoleAddr() string {
+	return "192.0.2.1:5473"
+}
+
+// TestUpstreamTyphaSource_StopWhileDialBlackHole is the regression test for the
+// promotion stall: when the upstream leader dies, a follower promoting to leader
+// must tear down its upstream source promptly even if the source is stuck in an
+// in-flight TCP/TLS dial to the now-unreachable leader.  Previously the dial used
+// a fixed 10s timeout that ignored context cancellation, so Stop() blocked for up
+// to that timeout (observed as a >9s role-transition stall in the felix FV).  The
+// dial now honours the connection context, so Stop() must return well under the
+// dial timeout.
+func TestUpstreamTyphaSource_StopWhileDialBlackHole(t *testing.T) {
+	buf := dedupebuffer.New()
+	src := NewUpstreamTyphaSource(
+		discovery.New(discovery.WithAddrOverride(blackHoleAddr())),
+		UpstreamConfig{
+			MyVersion:  "test",
+			MyHostname: "test-host",
+			SyncerType: syncproto.SyncerTypeFelix,
+		},
+		buf,
+	)
+
+	if err := src.Start(context.Background()); err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+
+	// Give the loop time to enter the (hanging) dial.
+	time.Sleep(100 * time.Millisecond)
+
+	start := time.Now()
+	stopReturned := make(chan struct{})
+	go func() {
+		src.Stop()
+		close(stopReturned)
+	}()
+
+	// The dial timeout is 10s; with context-aware dialing Stop must abort the
+	// in-flight dial near-instantly.  Allow generous slack for slow CI but well
+	// below the dial timeout so a regression (reverting to a ctx-ignoring dial)
+	// fails this test.
+	select {
+	case <-stopReturned:
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Fatalf("Stop took %v, expected it to abort the in-flight dial promptly", elapsed)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not return while source was stuck dialling a black-hole address")
+	}
+
+	select {
+	case <-src.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Done not closed after Stop")
+	}
+}
+
 // TestUpstreamTyphaSource_StopBeforeAndAfter verifies Stop is idempotent and
 // safe to call multiple times.
 func TestUpstreamTyphaSource_StopIdempotent(t *testing.T) {

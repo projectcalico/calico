@@ -314,6 +314,13 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 	maxTries := s.calculateConnectionAttemptLimit(len(s.discoverer.CachedTyphaAddrs()))
 	remainingTries := maxTries
 	for {
+		// Bail out promptly if we've been asked to stop (e.g. the upstream
+		// source is being torn down during a role transition).  Without this we
+		// would spin through all maxTries (each with a backoff sleep) before
+		// returning even though the context is already cancelled.
+		if cxt.Err() != nil {
+			return cxt.Err()
+		}
 		remainingTries--
 		if remainingTries < 0 {
 			return fmt.Errorf("failed to connect to Typha after %d tries", maxTries)
@@ -326,7 +333,13 @@ func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *syn
 		err = s.connect(cxt, addr)
 		if err != nil {
 			s.logCxt.WithError(err).Warnf("Failed to connect to typha endpoint %s.  Will try another if available...", addr.Addr)
-			time.Sleep(100 * time.Millisecond) // Avoid tight loop.
+			// Avoid a tight loop, but wake up immediately if the context is
+			// cancelled so Stop() is prompt.
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-cxt.Done():
+				return cxt.Err()
+			}
 		} else {
 			s.logCxt.Infof("Successfully connected to Typha at %s after %v.", addr.Addr, time.Since(startTime))
 			break
@@ -418,15 +431,21 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 		)
 
 		connFunc = func(addr string) (net.Conn, error) {
-			return tls.DialWithDialer(
-				&net.Dialer{Timeout: 10 * time.Second},
-				"tcp",
-				addr,
-				tlsConfig)
+			// Dial with the connection's context so that cancelling it (Stop()
+			// or RestartConnection()) aborts an in-flight TCP/TLS dial promptly
+			// rather than blocking for the full dial timeout.  Without this, a
+			// follower promoting after its upstream leader dies stalls for up to
+			// the dial timeout while tearing down its upstream source.
+			dialer := &tls.Dialer{
+				NetDialer: &net.Dialer{Timeout: 10 * time.Second},
+				Config:    tlsConfig,
+			}
+			return dialer.DialContext(cxt, "tcp", addr)
 		}
 	} else {
 		connFunc = func(addr string) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, 10*time.Second)
+			dialer := &net.Dialer{Timeout: 10 * time.Second}
+			return dialer.DialContext(cxt, "tcp", addr)
 		}
 	}
 	if cxt.Err() == nil {
