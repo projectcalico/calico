@@ -36,6 +36,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/readlogger"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/tlsutils"
 )
@@ -79,6 +80,19 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// ChecksumVerifier, if set, enables snapshot integrity checking against the
+	// upstream Typha.  The client advertises SupportsChecksum in its hello,
+	// records each MsgChecksum the server sends (deferring the comparison to the
+	// verifier), and periodically drives Verifier.Check().  Only used by a
+	// follower Typha, where the verifier reads the follower's own snapcache; it
+	// is nil for Felix and other plain clients.  See typha/pkg/synccheck.
+	ChecksumVerifier *synccheck.Verifier
+
+	// ChecksumCheckInterval overrides how often the client drives
+	// Verifier.Check() while connected.  Defaults to one second.  Only relevant
+	// when ChecksumVerifier is set.
+	ChecksumCheckInterval time.Duration
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -170,6 +184,11 @@ type SyncerClient struct {
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+
+	// checksumCountOnly is set during the handshake when the upstream runs a
+	// different software version, downgrading checksum comparison to KVCount
+	// only.  Only read/written from the connection's loop goroutine.
+	checksumCountOnly bool
 
 	// cancel cancels the context derived from the one passed to Start().
 	// It is populated by Start() and used by Stop() to trigger a clean
@@ -481,6 +500,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			SyncerType:                     ourSyncerType,
 			SupportsDecoderRestart:         !s.options.DisableDecoderRestart,
 			SupportsModernPolicyKeys:       true,
+			SupportsChecksum:               s.options.ChecksumVerifier != nil,
 			SupportedCompressionAlgorithms: compAlgs,
 			ClientConnID:                   s.connID,
 		},
@@ -524,6 +544,34 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	if ourSyncerType != serverSyncerType {
 		logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
 		return
+	}
+
+	// Set up snapshot integrity checking if configured and the server agreed.
+	// checksumCountOnly downgrades to KVCount-only comparison when the server
+	// runs a different software version: an intermediate Typha re-serializes
+	// values into its own cache, and across versions the serialized bytes can
+	// legitimately differ (added fields, etc.), but the KV count survives
+	// re-serialization.  See typha/pkg/synccheck and the WS-D design.
+	verifier := s.options.ChecksumVerifier
+	checksumActive := verifier != nil && serverHello.SupportsChecksum
+	if verifier != nil && !serverHello.SupportsChecksum {
+		logCxt.Info("Checksum verification requested but upstream Typha does not support it; disabled " +
+			"for this connection.")
+	}
+	if checksumActive {
+		// Start fresh: drop any expectation left over from a previous connection.
+		verifier.Reset()
+		checksumCountOnly := serverHello.Version != s.myVersion
+		if checksumCountOnly {
+			logCxt.WithFields(log.Fields{
+				"ourVersion":    s.myVersion,
+				"serverVersion": serverHello.Version,
+			}).Info("Upstream Typha runs a different version; downgrading checksum comparison to KV " +
+				"count only (re-serialized value bytes may legitimately differ across versions).")
+		}
+		s.startChecksumChecker(cxt, logCxt, verifier, connFinished)
+		// Stash for the message loop's MsgChecksum handler.
+		s.checksumCountOnly = checksumCountOnly
 	}
 
 	// Handshake done, start processing messages from the server.
@@ -579,11 +627,53 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 				log.WithError(err).Error("Failed to restart decoder")
 				return
 			}
+		case syncproto.MsgChecksum:
+			if !checksumActive {
+				// We didn't advertise support, so the server should never send this.
+				logCxt.Error("Received unexpected MsgChecksum from server (we did not advertise support).")
+				return
+			}
+			logCxt.WithFields(log.Fields{
+				"checksum": msg.Checksum,
+				"kvCount":  msg.KVCount,
+			}).Debug("Received checksum from upstream Typha; comparison deferred to verifier.")
+			verifier.OnRemoteChecksum(
+				synccheck.Checksum{XOR: msg.Checksum, KVCount: msg.KVCount},
+				s.checksumCountOnly,
+			)
 		case syncproto.MsgServerHello:
 			logCxt.WithField("serverVersion", msg.Version).Error("Unexpected extra server hello message received")
 			return
 		}
 	}
+}
+
+// startChecksumChecker launches a goroutine that periodically drives the
+// verifier's deferred comparison for the lifetime of the connection (until cxt
+// is cancelled).  We compare on a timer rather than on each MsgChecksum because
+// the deltas that produced the upstream's checksum are still flowing through our
+// local pipeline when MsgChecksum arrives; the timer lets the local state drain
+// and catch up before we compare.
+func (s *SyncerClient) startChecksumChecker(cxt context.Context, logCxt *log.Entry, verifier *synccheck.Verifier, connFinished *sync.WaitGroup) {
+	interval := s.options.ChecksumCheckInterval
+	if interval <= 0 {
+		interval = time.Second
+	}
+	connFinished.Add(1)
+	go func() {
+		defer connFinished.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-cxt.Done():
+				logCxt.Debug("Checksum checker stopping (connection closed).")
+				return
+			case <-ticker.C:
+				verifier.Check()
+			}
+		}
+	}()
 }
 
 func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
