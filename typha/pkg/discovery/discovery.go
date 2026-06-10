@@ -34,10 +34,45 @@ import (
 
 var ErrServiceNotReady = errors.New("missing Kubernetes service IP or port")
 
+// Tier classifies a discovered Typha endpoint within the hierarchical
+// deployment.  Clients use it to apply the connection-preference policy (WS-E):
+// same-node Typhas are always preferred whatever their tier; off-node clients
+// may only use tier-2 Typhas when tiering is active.
+type Tier int
+
+const (
+	// TierUnknown means the endpoint's tier could not be determined (label or
+	// Service lag).  Treated as TierTwo to fail open — a brand-new cluster has no
+	// tier labels yet and clients must still be able to connect.
+	TierUnknown Tier = iota
+	// TierTwo is a leaf Typha that serves ordinary clients.
+	TierTwo
+	// TierOne is a fan-out Typha that connects to the leader and serves tier-2.
+	TierOne
+	// TierLeader is the datastore-watching leader.
+	TierLeader
+)
+
+func (t Tier) String() string {
+	switch t {
+	case TierLeader:
+		return "leader"
+	case TierOne:
+		return "tier1"
+	case TierTwo:
+		return "tier2"
+	default:
+		return "unknown"
+	}
+}
+
 type Typha struct {
 	Addr     string
 	IP       string
 	NodeName *string
+	// Tier is the endpoint's hierarchical tier, set only when tier-service
+	// classification is enabled (WithTierServices).  TierUnknown otherwise.
+	Tier Tier
 }
 
 type addrDedupeKey string
@@ -71,6 +106,14 @@ type Discoverer struct {
 	k8sServicePortName string
 	inCluster          bool
 	filters            []func(typhaAddresses []Typha) ([]Typha, error)
+
+	// Tier classification (WS-E).  When tierServicesEnabled is true, the
+	// discoverer cross-references the leader and tier-1 Services' endpoints
+	// against the main Service's endpoints to classify each Typha's tier, then
+	// applies the client connection-preference policy.
+	tierServicesEnabled bool
+	leaderServiceName   string
+	tier1ServiceName    string
 
 	allKnownAddrs []Typha
 }
@@ -123,6 +166,32 @@ func WithKubeServicePortNameOverride(portName string) Option {
 func WithNodeAffinity(nodeName string) Option {
 	return func(d *Discoverer) {
 		d.nodeName = nodeName
+	}
+}
+
+// WithTierServices enables hierarchical tier classification (WS-E).  The
+// discoverer additionally lists the leader and tier-1 Services' endpoints (in
+// the same namespace as the main Service) and classifies each discovered Typha's
+// tier by cross-referencing IPs.  It then applies the client connection-
+// preference policy:
+//
+//   - Same-node Typhas are always preferred, whatever their tier (including the
+//     leader) — this smooths bootstrap.
+//   - When tiering is active (the tier-1 Service has at least one endpoint),
+//     off-node clients may only use tier-2 (or unknown-tier, fail-open) Typhas;
+//     the leader and tier-1 are filtered out for off-node clients.
+//   - When tiering is not active (single-tier / small clusters), off-node
+//     clients may use any Typha.
+//
+// Pass empty service names to leave classification disabled.
+func WithTierServices(leaderServiceName, tier1ServiceName string) Option {
+	return func(d *Discoverer) {
+		if leaderServiceName == "" && tier1ServiceName == "" {
+			return
+		}
+		d.tierServicesEnabled = true
+		d.leaderServiceName = leaderServiceName
+		d.tier1ServiceName = tier1ServiceName
 	}
 }
 
@@ -268,6 +337,17 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return nil, ErrServiceNotReady
 	}
 
+	// Hierarchical tier classification + client preference policy (WS-E).  Only
+	// active when tier Services are configured (Felix in hierarchical mode); a
+	// no-op otherwise so the default deployment is unchanged.
+	if d.tierServicesEnabled {
+		local, remote = d.classifyAndApplyTierPolicy(local, remote)
+		if len(local)+len(remote) == 0 {
+			logrus.Error("All Typha endpoints filtered out by tier policy.")
+			return nil, ErrServiceNotReady
+		}
+	}
+
 	shuffleInPlace(local)
 	shuffleInPlace(remote)
 
@@ -282,6 +362,98 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	logrus.WithFields(fields).Info("Found ready Typha addresses.")
 
 	return addresses, nil
+}
+
+// classifyAndApplyTierPolicy sets the Tier field on the local and remote Typha
+// lists (by cross-referencing the per-tier Services' endpoints) and applies the
+// client connection-preference policy:
+//
+//   - Same-node (local) Typhas are always kept, whatever their tier.
+//   - When tiering is active (the tier-1 Service has any endpoints), off-node
+//     (remote) Typhas are filtered to tier-2 (and unknown, fail-open) only — the
+//     leader and tier-1 are removed for off-node clients.
+//   - When tiering is not active, off-node Typhas are kept whatever their tier.
+//
+// On any error listing the tier Services we fail open: leave everything as
+// tier-unknown and keep all endpoints (the client must be able to connect).
+func (d *Discoverer) classifyAndApplyTierPolicy(local, remote []Typha) (keptLocal, keptRemote []Typha) {
+	leaderIPs := d.serviceEndpointIPs(d.leaderServiceName)
+	tier1IPs := d.serviceEndpointIPs(d.tier1ServiceName)
+
+	classify := func(ip string) Tier {
+		if leaderIPs[ip] {
+			return TierLeader
+		}
+		if tier1IPs[ip] {
+			return TierOne
+		}
+		// Present in the main Service but not in a tier Service.  In an active
+		// hierarchy that means tier-2; on a brand-new cluster (no labels yet) it
+		// is genuinely unknown — either way we treat it as usable tier-2.
+		return TierTwo
+	}
+	for i := range local {
+		local[i].Tier = classify(local[i].IP)
+	}
+	for i := range remote {
+		remote[i].Tier = classify(remote[i].IP)
+	}
+
+	// Tiering is "active" when the tier-1 Service has endpoints (equivalent to
+	// Tier1Count>0 having taken effect).  We learn this from the client side
+	// without needing Tier1Count plumbed to Felix.
+	tieringActive := len(tier1IPs) > 0
+
+	// Same-node endpoints are always kept whatever their tier.
+	keptLocal = local
+
+	if !tieringActive {
+		// Single-tier / small cluster: off-node clients may use any Typha.
+		keptRemote = remote
+		return
+	}
+
+	// Tiering active: off-node clients may only use tier-2 (or unknown) Typhas.
+	for _, t := range remote {
+		if t.Tier == TierLeader || t.Tier == TierOne {
+			logrus.WithFields(logrus.Fields{"addr": t.Addr, "tier": t.Tier}).Debug(
+				"Filtering out off-node higher-tier Typha for leaf client.")
+			continue
+		}
+		keptRemote = append(keptRemote, t)
+	}
+	return
+}
+
+// serviceEndpointIPs lists the ready endpoint IPs of the named Service (in the
+// discoverer's namespace) as a set.  Returns an empty set on error or when the
+// service name is empty — callers treat an empty set as "no endpoints" / fail
+// open.
+func (d *Discoverer) serviceEndpointIPs(serviceName string) map[string]bool {
+	ips := map[string]bool{}
+	if serviceName == "" || d.k8sClient == nil {
+		return ips
+	}
+	epClient := d.k8sClient.DiscoveryV1().EndpointSlices(d.k8sNamespace)
+	slices, err := epClient.List(context.Background(), v1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", discoveryv1.LabelServiceName, serviceName),
+	})
+	if err != nil {
+		logrus.WithError(err).WithField("service", serviceName).Warn(
+			"Failed to list tier Service endpoints; failing open (treating as no endpoints).")
+		return ips
+	}
+	for _, eps := range slices.Items {
+		for _, endpoint := range eps.Endpoints {
+			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+				continue
+			}
+			for _, addr := range endpoint.Addresses {
+				ips[addr] = true
+			}
+		}
+	}
+	return ips
 }
 
 type AddressLoader interface {

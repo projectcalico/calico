@@ -40,6 +40,14 @@ func (f *Typha) GetTyphaPIDs() []int {
 }
 
 func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
+	return RunTyphaWithEnv(infra, options, nil)
+}
+
+// RunTyphaWithEnv runs a Typha container with optional extra environment
+// variables.  extraEnv is applied after the defaults so it can override them
+// (used by the hierarchy helpers to enable HierarchyEnabled / leader election /
+// a static upstream and to give each Typha a distinct pod identity).
+func RunTyphaWithEnv(infra DatastoreInfra, options TopologyOptions, extraEnv map[string]string) *Typha {
 	log.Info("Starting typha")
 
 	args := infra.GetDockerArgs()
@@ -48,6 +56,9 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 		"-e", "TYPHA_LOGSEVERITYSCREEN="+options.TyphaLogSeverity,
 		"-e", "TYPHA_PROMETHEUSMETRICSENABLED=true",
 	)
+	for k, v := range extraEnv {
+		args = append(args, "-e", k+"="+v)
+	}
 
 	if options.WithFelixTyphaTLS {
 		EnsureTLSCredentials()

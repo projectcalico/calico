@@ -90,3 +90,9 @@ func (r *RealK8sAPI) GetNumTyphas(ctx context.Context, namespace, serviceName, p
 func (r *RealK8sAPI) GetNumNodes() (int, error) {
 	return r.nodeCounter.GetNumNodes()
 }
+
+// Clientset returns the shared Kubernetes clientset, constructing it on first
+// call.  Used by subsystems that need direct API access (e.g. leader election).
+func (r *RealK8sAPI) Clientset() (*kubernetes.Clientset, error) {
+	return r.clientSet()
+}

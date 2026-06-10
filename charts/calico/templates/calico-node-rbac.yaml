@@ -205,6 +205,74 @@ rules:
       - watch
 {{- end }}
 
+{{- if and (eq .Values.datastore "kubernetes") .Values.typha.enabled .Values.typha.hierarchy.enabled }}
+---
+
+# Typha leader election and hierarchical-mode self-labelling are namespaced
+# concerns (the Lease and the Typha pods both live in the Typha namespace), so
+# these permissions are granted via a namespaced Role + RoleBinding rather than
+# the cluster-wide calico-node ClusterRole.  This keeps the broad calico-node
+# DaemonSet grant from carrying lease/pod-patch rights it does not need.
+#
+# Gated to match the Deployment env: the chart only ever sets
+# TYPHA_LEADERELECTIONENABLED inside the typha.hierarchy.enabled block, so leader
+# election is on exactly when hierarchy is on.  If a future change lets election
+# be enabled independently of hierarchy, widen this guard to match.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-typha-leader-election
+  namespace: kube-system
+rules:
+  # Typha leader election — coordination.k8s.io/v1 Leases.  create cannot be
+  # restricted to resourceNames (Kubernetes does not allow resourceNames on
+  # create).  get/update are name-scoped to the leader lease plus, in two-tier
+  # mode, the tier-1 Leases (calico-typha-tier1-0..N-1).  This keeps the grant
+  # narrowly scoped — do NOT move it back to the shared calico-node ClusterRole.
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs:
+      - create
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    resourceNames:
+      - calico-typha-leader
+{{- range $i := until (int .Values.typha.hierarchy.tier1Count) }}
+      - calico-typha-tier1-{{ $i }}
+{{- end }}
+    verbs:
+      - get
+      - update
+  # Hierarchical Typha: the elected leader self-labels its own pod with
+  # projectcalico.org/typha-role=leader so the calico-typha-leader Service
+  # selects it.  patch on pods cannot be restricted to the pod's own name via
+  # resourceNames (Kubernetes does not support resourceNames on patch).
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - patch
+---
+
+# Bind the leader-election Role to the calico-node ServiceAccount (which Typha
+# runs as).
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: calico-typha-leader-election
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: calico-typha-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: calico-node
+    namespace: kube-system
+{{- end }}
+
 ---
 
 # CNI cluster role

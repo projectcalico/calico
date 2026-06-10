@@ -11,6 +11,20 @@ node:
   registry: quay.io/calico
 typha:
   enabled: false
+  # Hierarchical ("chained") Typha.  When enabled, Typha self-organises into a
+  # single-tier hierarchy: an elected leader runs the real datastore syncers and
+  # every other Typha connects to the leader as a Typha client.  Default off so
+  # the standard deployment is byte-for-byte unchanged.  Requires the Kubernetes
+  # datastore (uses coordination.k8s.io Leases for leader election).
+  hierarchy:
+    enabled: false
+    # tier1Count is the number of tier-1 fan-out Typhas (two-tier mode, for the
+    # very largest clusters).  Default 0 = single-tier: tier-2 Typhas connect
+    # straight to the leader.  When >0, that many tier-1 Leases are elected; the
+    # tier-1 Typhas connect to the leader and all other (tier-2) Typhas connect to
+    # the tier-1 Service.  Operator-set; size it from the node count (see
+    # typha/DESIGN.md sizing guidance).
+    tier1Count: 0
 flannel:
   image: docker.io/flannel/flannel
   tag: v0.24.4
