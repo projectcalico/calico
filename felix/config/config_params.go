@@ -281,15 +281,20 @@ type Config struct {
 	TyphaK8sServiceName string `config:"string;;local"`
 	// TyphaK8sNamespace namespace to look in when looking for Typha's service (see TyphaK8sServiceName).
 	TyphaK8sNamespace string `config:"string;kube-system;non-zero,local"`
-	// TyphaK8sLeaderServiceName / TyphaK8sTier1ServiceName name the per-tier Typha
-	// Services used by hierarchical (two-tier) Typha to classify discovered Typha
-	// endpoints by tier (WS-E).  Felix watches these in addition to the main
-	// TyphaK8sServiceName so it can apply the client connection-preference policy
-	// (off-node clients use only tier-2 Typhas when tiering is active; a same-node
-	// Typha is always preferred).  When the Services don't exist (non-hierarchical
+	// TyphaK8sLeaderServiceName names the Kubernetes Service that selects the leader
+	// Typha in a hierarchical (two-tier) Typha deployment.  Felix watches it in
+	// addition to the main TyphaK8sServiceName so it can classify discovered Typha
+	// endpoints by tier and apply the client connection-preference policy (off-node
+	// clients use only tier-2 Typhas when tiering is active; a same-node Typha is
+	// always preferred).  When the Service does not exist (non-hierarchical
 	// deployment) classification is a no-op and every Typha is usable.
 	TyphaK8sLeaderServiceName string `config:"string;calico-typha-leader;local"`
-	TyphaK8sTier1ServiceName  string `config:"string;calico-typha-tier1;local"`
+	// TyphaK8sTier1ServiceName names the Kubernetes Service that selects the tier-1
+	// Typhas in a hierarchical (two-tier) Typha deployment.  Felix watches it
+	// alongside TyphaK8sLeaderServiceName to classify discovered Typha endpoints by
+	// tier (see TyphaK8sLeaderServiceName).  When the Service does not exist
+	// classification is a no-op and every Typha is usable.
+	TyphaK8sTier1ServiceName string `config:"string;calico-typha-tier1;local"`
 	// TyphaReadTimeout read timeout when reading from the Typha connection.  If typha sends no data for this long,
 	// Felix will exit and restart.  (Note that Typha sends regular pings so traffic is always expected.)
 	TyphaReadTimeout time.Duration `config:"seconds;30;local"`

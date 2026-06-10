@@ -337,8 +337,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "/ TyphaK8sTier1ServiceName name the per-tier Typha\nServices used by hierarchical (two-tier) Typha to classify discovered Typha\nendpoints by tier (WS-E). Felix watches these in addition to the main\nTyphaK8sServiceName so it can apply the client connection-preference policy\n(off-node clients use only tier-2 Typhas when tiering is active; a same-node\nTypha is always preferred). When the Services don't exist (non-hierarchical\ndeployment) classification is a no-op and every Typha is usable.",
-          "DescriptionHTML": "<p>/ TyphaK8sTier1ServiceName name the per-tier Typha\nServices used by hierarchical (two-tier) Typha to classify discovered Typha\nendpoints by tier (WS-E). Felix watches these in addition to the main\nTyphaK8sServiceName so it can apply the client connection-preference policy\n(off-node clients use only tier-2 Typhas when tiering is active; a same-node\nTypha is always preferred). When the Services don't exist (non-hierarchical\ndeployment) classification is a no-op and every Typha is usable.</p>",
+          "Description": "Names the Kubernetes Service that selects the leader\nTypha in a hierarchical (two-tier) Typha deployment. Felix watches it in\naddition to the main TyphaK8sServiceName so it can classify discovered Typha\nendpoints by tier and apply the client connection-preference policy (off-node\nclients use only tier-2 Typhas when tiering is active; a same-node Typha is\nalways preferred). When the Service does not exist (non-hierarchical\ndeployment) classification is a no-op and every Typha is usable.",
+          "DescriptionHTML": "<p>Names the Kubernetes Service that selects the leader\nTypha in a hierarchical (two-tier) Typha deployment. Felix watches it in\naddition to the main TyphaK8sServiceName so it can classify discovered Typha\nendpoints by tier and apply the client connection-preference policy (off-node\nclients use only tier-2 Typhas when tiering is active; a same-node Typha is\nalways preferred). When the Service does not exist (non-hierarchical\ndeployment) classification is a no-op and every Typha is usable.</p>",
           "UserEditable": true,
           "GoType": ""
         },
@@ -415,8 +415,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "LocalOnly",
-          "Description": "",
-          "DescriptionHTML": "<p></p>",
+          "Description": "Names the Kubernetes Service that selects the tier-1\nTyphas in a hierarchical (two-tier) Typha deployment. Felix watches it\nalongside TyphaK8sLeaderServiceName to classify discovered Typha endpoints by\ntier (see TyphaK8sLeaderServiceName). When the Service does not exist\nclassification is a no-op and every Typha is usable.",
+          "DescriptionHTML": "<p>Names the Kubernetes Service that selects the tier-1\nTyphas in a hierarchical (two-tier) Typha deployment. Felix watches it\nalongside TyphaK8sLeaderServiceName to classify discovered Typha endpoints by\ntier (see TyphaK8sLeaderServiceName). When the Service does not exist\nclassification is a no-op and every Typha is usable.</p>",
           "UserEditable": true,
           "GoType": ""
         },
