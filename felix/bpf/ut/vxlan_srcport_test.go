@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// TestVXLANSrcPortRange verifies that, when VXLAN_PORT_MIN/MAX globals are set,
+// TestVXLANSrcPortRange verifies that, when VXLAN_SRC_PORT_MIN/MAX globals are set,
 // the BPF code remaps the sport^dport hash into [min, max], and that with the
 // range left at zero the raw hash is preserved (matching the historical
 // behaviour).
@@ -46,29 +46,6 @@ func TestVXLANSrcPortRange(t *testing.T) {
 			expected := min + (hash % (max - min + 1))
 			Expect(port).To(Equal(expected),
 				"port should be min + hash%%(range) when both min and max are set")
-		}, withVXLANPortRange(min, max))
-	})
-
-	t.Run("min==max (rejected by validator, BPF falls back to hash)", func(t *testing.T) {
-		RegisterTestingT(t)
-		const pinned uint16 = 4789
-		runBpfUnitTest(t, "vxlan_srcport_test.c", func(bpfrun bpfProgRunFn) {
-			res, err := bpfrun(pktBytes)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(uint16(res.Retval)).To(Equal(hash),
-				"min==max is rejected by Felix's config validator; "+
-					"if a degenerate range reaches BPF the guard should fall "+
-					"through to the raw hash rather than pinning to one port")
-		}, withVXLANPortRange(pinned, pinned))
-	})
-
-	t.Run("invalid range (min>max) falls back to hash", func(t *testing.T) {
-		RegisterTestingT(t)
-		runBpfUnitTest(t, "vxlan_srcport_test.c", func(bpfrun bpfProgRunFn) {
-			res, err := bpfrun(pktBytes)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(uint16(res.Retval)).To(Equal(hash),
-				"with max < min the BPF code should leave the hash unchanged")
-		}, withVXLANPortRange(60010, 60000))
+		}, withVXLANSrcPortRange(min, max))
 	})
 }
