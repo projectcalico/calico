@@ -209,6 +209,7 @@ jobs:
           echo "comment_url=$COMMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack DM
+        id: send
         if: >-
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
@@ -258,25 +259,24 @@ jobs:
             echo "::warning::Slack DM failed: $(printf '%s' "$RESP" | jq -r '.error // "unknown"' 2>/dev/null)"
           else
             echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+            # Only a confirmed send arms the dedup marker below. A transient
+            # Slack failure leaves it unset, so the next serialized duplicate
+            # status event retries instead of being suppressed forever.
+            echo "sent=true" >> "$GITHUB_OUTPUT"
           fi
 
       # Record that this (commit, state) was notified, so the serialized
       # duplicate status events for the same outcome skip at the dedup gate.
-      # Status events only; never on the manual test path.
+      # Gated on a confirmed Slack send (steps.send.outputs.sent) — a failed
+      # DM must NOT arm the marker, or a transient Slack outage on the first
+      # event would suppress the notification for this (sha, state) forever.
+      # Status events only (SHA non-empty); never on the manual test path.
       - name: Record notification marker
-        if: >-
-          env.SHA != '' &&
-          steps.gate.outputs.skip != 'true' &&
-          steps.resolve.outputs.skip != 'true' &&
-          steps.lookup.outputs.skip != 'true'
+        if: env.SHA != '' && steps.send.outputs.sent == 'true'
         run: echo notified > .ci-notify-marker
 
       - name: Save notification marker
-        if: >-
-          env.SHA != '' &&
-          steps.gate.outputs.skip != 'true' &&
-          steps.resolve.outputs.skip != 'true' &&
-          steps.lookup.outputs.skip != 'true'
+        if: env.SHA != '' && steps.send.outputs.sent == 'true'
         # A cache hiccup (e.g. key already saved in a rare race) must never
         # fail the notifier — the DM has already gone out.
         continue-on-error: true
