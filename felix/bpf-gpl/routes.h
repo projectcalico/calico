@@ -15,11 +15,6 @@ struct cali_rt_key {
 	ipv46_addr_t addr; // NBO
 };
 
-union cali_rt_lpm_key {
-	struct bpf_lpm_trie_key lpm;
-	struct cali_rt_key key;
-};
-
 enum cali_rt_flags {
 	CALI_RT_UNKNOWN               = 0x00,
 	CALI_RT_IN_POOL               = 0x01,
@@ -52,18 +47,18 @@ CALI_MAP_NAMED(cali_v6_routes, cali_routes,,
 CALI_MAP_NAMED(cali_v4_routes, cali_routes,,
 #endif
 		BPF_MAP_TYPE_LPM_TRIE,
-		union cali_rt_lpm_key, struct cali_rt,
+		struct cali_rt_key, struct cali_rt,
 		256*1024, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE struct cali_rt *cali_rt_lookup(ipv46_addr_t *addr)
 {
-	union cali_rt_lpm_key k;
+	struct cali_rt_key k;
 #ifdef IPVER6
-	k.key.prefixlen = 128;
+	k.prefixlen = 128;
 #else
-	k.key.prefixlen = 32;
+	k.prefixlen = 32;
 #endif
-	k.key.addr = *addr;
+	k.addr = *addr;
 	return cali_routes_lookup_elem(&k);
 }
 

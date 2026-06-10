@@ -33,10 +33,6 @@ struct ip_set_key {
 	__u8 pad;
 } __attribute__((packed));
 
-union ip_set_lpm_key {
-	struct bpf_lpm_trie_key lpm;
-	struct ip_set_key ip;
-};
 
 #ifdef IPVER6
 CALI_MAP_NAMED(cali_v6_ip_sets, cali_ip_sets,,
@@ -44,7 +40,7 @@ CALI_MAP_NAMED(cali_v6_ip_sets, cali_ip_sets,,
 CALI_MAP_NAMED(cali_v4_ip_sets, cali_ip_sets,,
 #endif
 	BPF_MAP_TYPE_LPM_TRIE,
-	union ip_set_lpm_key,
+	struct ip_set_key,
 	__u32,
 	1024*1024,
 	BPF_F_NO_PREALLOC)
