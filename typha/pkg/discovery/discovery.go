@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -29,7 +28,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	k8sbackend "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 )
 
 var ErrServiceNotReady = errors.New("missing Kubernetes service IP or port")
@@ -267,17 +267,22 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 	// If we get here, we need to look up the Typha service using the k8s API.
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
+		// Build it via the standard libcalico-go apiconfig path so we honour the
+		// same environment configuration as the rest of Calico (KUBECONFIG,
+		// K8S_API_ENDPOINT, custom CA/cert/token, and the
+		// K8S_INSECURE_SKIP_TLS_VERIFY option) rather than a divergent client.
 		logrus.Info("Creating Kubernetes client for Typha discovery...")
-		k8sConf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
 		if err != nil {
-			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes config.")
+			logrus.WithError(err).Error("Unable to load Kubernetes API config.")
 			return nil, err
 		}
-		d.k8sClient, err = kubernetes.NewForConfig(k8sConf)
+		_, clientSet, err := k8sbackend.CreateKubernetesClientset(&apiCfg.Spec)
 		if err != nil {
-			logrus.WithError(err).Error("Unable to create Kubernetes client set.")
+			logrus.WithError(err).Error("Unable to create in-cluster Kubernetes client.")
 			return nil, err
 		}
+		d.k8sClient = clientSet
 	} else if d.k8sClient == nil {
 		return nil, errors.New("failed to look up Typha, no Kubernetes client available")
 	}

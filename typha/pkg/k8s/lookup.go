@@ -16,14 +16,14 @@ package k8s
 
 import (
 	"context"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	k8sbackend "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 )
 
@@ -38,13 +38,17 @@ type RealK8sAPI struct {
 
 func (r *RealK8sAPI) clientSet() (*kubernetes.Clientset, error) {
 	if r.cachedClientSet == nil {
-		// TODO Typha: support Typha lookup without using rest.InClusterConfig().
-		k8sconf, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+		// Build the clientset via the standard libcalico-go apiconfig path so we
+		// honour the same environment configuration as Typha's datastore client
+		// and the rest of Calico: KUBECONFIG, K8S_API_ENDPOINT, custom CA/cert/
+		// token, and the K8S_INSECURE_SKIP_TLS_VERIFY option.  This avoids a
+		// second, divergent way of building the Kubernetes client.
+		apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
 		if err != nil {
-			log.WithError(err).Error("Unable to create Kubernetes config.")
+			log.WithError(err).Error("Unable to load Kubernetes API config.")
 			return nil, err
 		}
-		clientSet, err := kubernetes.NewForConfig(k8sconf)
+		_, clientSet, err := k8sbackend.CreateKubernetesClientset(&apiCfg.Spec)
 		if err != nil {
 			log.WithError(err).Error("Unable to create Kubernetes client set.")
 			return nil, err
