@@ -121,6 +121,13 @@ func (u *upstreamHarness) Stop() {
 	u.serverCancel()
 	u.server.Finished.Wait()
 	u.cacheCancel()
+	// Wait for each cache goroutine to exit so its shutdown logging happens
+	// before the test returns (avoids "Log after test completed" under -race).
+	for _, c := range u.caches {
+		if c.Done != nil {
+			<-c.Done
+		}
+	}
 }
 
 func (u *upstreamHarness) Addr() string {
@@ -244,6 +251,11 @@ func (f *followerHarness) Stop() {
 	f.serverCancel()
 	f.server.Finished.Wait()
 	f.cacheCancel()
+	for _, c := range f.caches {
+		if c.Done != nil {
+			<-c.Done
+		}
+	}
 }
 
 func (f *followerHarness) Addr() string {
