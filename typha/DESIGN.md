@@ -312,17 +312,245 @@ byte-for-byte unchanged (`pkg/config/config_params.go`):
 | `UpstreamK8sServiceName` / `UpstreamK8sNamespace` / `UpstreamK8sPortName` | Discover upstream Typhas via EndpointSlices. |
 | `ClientKeyFile` / `ClientCertFile` / `ClientCAFile` / `UpstreamServerCN` / `UpstreamServerURISAN` | Client-side TLS for the upstream connection. |
 | `UpstreamReadTimeout` / `UpstreamWriteTimeout` | Passed through to `syncclient.Options`. |
+| `RoleTransitionDebounce` | How long the desired role must be stable before the role manager acts (default 2s). |
+| `LeaderServiceName` / `LeaderServicePortName` | Headless Service that selects the leader pod; followers discover their upstream through it (defaults `calico-typha-leader` / `calico-typha`). |
 
-Validation (`Config.Validate`): when `HierarchyEnabled` is set, an upstream
-must be configured (WS-A has no election to provide one dynamically), and
-`UpstreamAddr` and `UpstreamK8sServiceName` are mutually exclusive. The
-client-side TLS params follow the same "all-or-nothing (except CN/URISAN)" rule
-as the server-side params.
+Validation (`Config.Validate`): when `HierarchyEnabled` is set, either a static
+upstream must be configured **or** leader election must be enabled (so the role
+manager can discover the leader dynamically — see "Role state machine" below).
+`UpstreamAddr` and `UpstreamK8sServiceName` are mutually exclusive. When relying
+on election (no static upstream) the datastore must be `kubernetes` and `PodName`
+must be set (downward API). The client-side TLS params follow the same
+"all-or-nothing (except CN/URISAN)" rule as the server-side params.
 
 Datastore client note: even in hierarchical mode Typha still creates its
 datastore client for config loading / `EnsureInitialized` and for the
 connection-rebalance K8s polling. Those are cheap calls to the API server; only
 the heavy watch-everything syncers move to the upstream.
+
+## Role state machine (promotion/demotion)
+
+WS-A made the pipeline source swappable; WS-B added leader election. WS-C wires
+them together so a hierarchy-enabled deployment self-organises: the elected
+leader runs real datastore syncers, every other Typha follows the leader, and
+promotion/demotion happen **in-process** with no restart. The role manager lives
+in `pkg/rolemanager` and runs as a single goroutine per Typha process,
+constructed and started from `daemon.go` (`startRoleManager`) only when
+hierarchy + election are enabled and no static upstream is configured
+(`roleManaged` mode). A static upstream pins the Typha as a follower and bypasses
+the role manager (manual chaining / tests).
+
+### States and transition procedure
+
+```
+             ┌────────────┐  Leader role   ┌──────────────┐
+   start ───→│  FOLLOWER  │───────────────→│   LEADER     │
+             │ (upstream  │←───────────────│ (real        │
+             │  sources)  │  Follower role │  syncers)    │
+             └────────────┘                └──────────────┘
+```
+
+The initial state is **SOURCELESS** (no source started yet) so the first
+transition's "stop old source" step is a no-op on cold start. On startup the
+manager converges immediately to FOLLOWER (a cold cluster has no leader, so
+everyone follows until one is elected); from then on it follows the elector.
+
+For each of the four pipelines the swap is identical in both directions and runs
+concurrently across pipelines, but the role manager is strictly serial per role
+change (a single goroutine; only one transition in flight at a time):
+
+1. `oldSource.Stop()` — blocks until no more callbacks can be delivered into the
+   dedupe buffer (the `SyncerSource.Stop` contract). This ordering is what makes
+   the swap race-free: step 2 cannot observe a late callback from the old source.
+2. `dedupeBuffer.OnTyphaConnectionRestarted()` — the buffer snapshots its
+   live-key set and discards queued in-flight updates.
+3. `newSource.Start(ctx)` — the fresh source delivers `WaitForDatastore →
+   ResyncInProgress → snapshot → InSync`; at `InSync` the buffer synthesizes
+   deletes for keys that vanished while we were switching. Downstream
+   (validator → snapcache → connected clients) sees an ordinary resync, exactly
+   as a Felix riding a Typha restart does today. This is why the dedupe buffer is
+   the stable element (see the binding invariant above): no swap-specific
+   reconciliation code exists.
+
+### Debounce, flap protection, serialization
+
+Role changes are debounced (`RoleTransitionDebounce`, default 2s): the desired
+role must be stable for the debounce period before a transition starts. A
+transition already in flight is never interrupted — the manager finishes it,
+then re-evaluates the latest desired role. The elector's `Roles()` channel is
+treated as level state (it drops the oldest value on overflow), so the manager
+always converges to the most recently received role. A 100ms×10s flap storm
+converges to the final role with no source overlap and no goroutine leak
+(covered by `rolemanager` UTs under the race detector).
+
+### Leader discovery and self/cycle prevention
+
+The leader advertises itself by labelling its **own pod** with
+`projectcalico.org/typha-role=leader` (via `pkg/k8s.PodLabeller`, a
+strategic-merge patch on the pod). A headless Service `calico-typha-leader`
+selects that label; followers discover their upstream through it using the
+existing `pkg/discovery` EndpointSlice path. The main `calico-typha` Service is
+unchanged and still selects all Typhas (Felix can connect to any ready one;
+client-side tier preference is WS-E).
+
+**Promote ordering (decision):** the leader applies its pod label *after* the
+role manager has started the real datastore sources (step 3 above). Final
+"don't direct followers at a not-yet-synced leader" gating is provided by pod
+**readiness**: the snapcache health reporters set `Ready` only when the syncer is
+`InSync`, the pod's readiness probe reflects that, and an unready pod is removed
+from the Service's EndpointSlice. So a follower only ever discovers a leader
+whose syncers have begun *and* whose caches are InSync. We chose readiness-gating
+(rather than blocking the label until InSync inside the role manager) because it
+reuses the existing health plumbing and degrades correctly if the leader later
+falls out of sync.
+
+Cycle/self-connection prevention (`daemon.filterOutSelf` +
+`daemon.filterToLeaseHolder`, installed as post-discovery filters): we drop any
+discovered endpoint that resolves to our own pod IP, and we log loudly if the
+leader Service ever returns more than one endpoint (a stale label lingering after
+a SIGKILL until the dead pod's endpoints are reaped). In single-tier M2,
+follower→follower cycles are impossible by construction (followers only ever
+target the leader Service).
+
+### Readiness across transitions
+
+The snapcache is the stable element and keeps running across a source swap, so
+its health reporter is never deregistered. During a swap the dedupe buffer sends
+`ResyncInProgress` (cache → not Ready) then `InSync` (cache → Ready); because the
+cache goroutine keeps reporting on its own health ticks, the reporter's timeout
+never expires mid-transition. A follower is Ready only when all four caches are
+InSync — correct during bootstrap (followers are not Ready until they have
+synced from the leader).
+
+### Dual-leadership window
+
+Leader election is best-effort (see "Leader election" above): clock skew can let
+two Typhas both believe they lead for up to `LeaseDuration`. This is safe — both
+run real datastore syncers and serve identical correct data; the only cost is
+transient extra datastore load and both pods carrying the leader label briefly.
+The loser demotes when it observes leadership loss. Nothing in the swap procedure
+corrupts state under dual leadership: each Typha independently reconciles its own
+buffer.
+
+### Graceful shutdown ordering
+
+On SIGTERM the daemon releases the lease (`electorCancel()` →
+`ReleaseOnCancel`) **before** starting the server's connection drain, so a
+follower can win the election and stand up syncers early, shortening the window
+in which clients have no fresh leader. The role manager also removes the leader
+label and stops all sources when its context is cancelled.
+
+### Bootstrap and misconfiguration
+
+Cold start: all Typhas come up FOLLOWER with no leader → election picks one → it
+promotes (SOURCELESS→LEADER, so "stop old source" is a no-op) → labels its pod →
+followers discover it and sync. Until then followers are not Ready, which is
+correct. Hierarchy enabled with election but a non-Kubernetes datastore, or
+without `PodName`, is a fatal config error at startup.
+
+## Snapshot integrity checking
+
+With data flowing through multiple Typha hops and through the
+promotion/demotion reconciliation path, a corruption bug (e.g. a dedupe-buffer
+reconciliation error) could silently drop or duplicate a KV. The integrity
+check catches that: the server reports a checksum of its snapshot; the client
+compares it against a checksum computed over its own reconstructed state. The
+check is **hop-by-hop** — each link (leader↔tier-1, typha↔typha, typha↔felix)
+validates independently, which localises faults and avoids requiring identical
+byte representations across software versions.
+
+### Checksum definition (`pkg/synccheck`)
+
+Order-independent, incremental checksum over the set of live KVs:
+
+- Per-entry digest: `h(entry) = xxhash64( uint64-LE(len(key)) ‖ key ‖ value )`,
+  where `key`/`value` are the wire fields of `SerializedUpdate` (the same bytes
+  the client receives). The length prefix makes the key/value boundary
+  unambiguous. 64-bit output.
+- Store checksum: per-entry digests combined with **XOR**. XOR gives O(1)
+  add/remove/clobber, so the cache maintains it incrementally:
+  - insert: `xor ^= h(new)`; delete: `xor ^= h(old)`;
+  - clobber: `xor ^= h(old); xor ^= h(new)` (old value already in hand in
+    `publishBreadcrumb`).
+- `KVCount` is tracked alongside: cheap, and it catches gross errors with a
+  clearer message than a hash mismatch (and survives re-serialization — see
+  version skew).
+
+Hash choice: `github.com/cespare/xxhash/v2` (already in the module graph).
+**Both peers must agree on the algorithm forever**; a future change must be
+gated behind a new hello flag. The 64-bit width is fine for an integrity (not
+security) check — XOR cancellation between two distinct live entries needs a
+64-bit collision, and the unique key is part of every digest.
+
+### Server side
+
+`snapcache.Cache` keeps a rolling `synccheck.Checksum`, updated in
+`publishBreadcrumb()` next to the existing old-value lookup. Dedupe-skipped
+writes (old == new) do **not** touch the checksum; delete-of-absent is a no-op.
+Each `Breadcrumb` carries the checksum+count as of that breadcrumb (immutable
+after publication, so per-client goroutines read it lock-free). The value bytes
+in the B-tree are exactly the bytes sent on both the streaming and the
+pre-serialized binary-snapshot paths (`snap_precalc.go` iterates the same
+breadcrumb KVs and never mutates `SerializedUpdate.Value`), so the checksum
+describes what the client actually receives.
+
+### Protocol carriage
+
+Negotiated via hello flags (`MsgClientHello.SupportsChecksum`,
+`MsgServerHello.SupportsChecksum`): the server only emits checksum data to
+clients that advertised support, and only echoes `SupportsChecksum: true` when
+the client asked. gob's zero-value rule keeps this safe for old peers. New
+message `MsgChecksum{Checksum uint64; KVCount int64}` is registered with gob.
+
+The server sends `MsgChecksum` from `sendDeltaUpdatesToClient`:
+
+1. immediately after the `MsgSyncStatus(InSync)` that ends initial sync — the
+   stream position makes it unambiguous which state it describes;
+2. thereafter, after the deltas of a breadcrumb, at most once per
+   `ChecksumInterval` (~30s). The delta loop coalesces breadcrumbs when the
+   client lags; only the **last** coalesced breadcrumb's checksum is emitted, so
+   it describes the state after everything just sent.
+
+### Client side (typha-as-client)
+
+A follower Typha's own snapcache independently maintains the same rolling
+checksum. When `MsgChecksum` arrives, the deltas that produced it are still
+flowing through the follower's dedupe buffer → validator → cache, so comparison
+is **deferred**: `synccheck.Verifier` records the expectation and a timer
+(driven from the syncclient) re-compares against the follower's current
+breadcrumb checksum. A mismatch must **persist across N consecutive checks**
+(default 3) before it is treated as real — in-flight skew clears within a check
+or two, a real divergence is permanent, so persistence filtering eliminates
+false positives. (Felix-bound checking is a deliberate follow-up: Felix has no
+value-preserving store to checksum; that would add an opt-in per-entry digest
+map in the syncclient layer.)
+
+**Version skew:** an intermediate Typha re-serializes values into its own
+cache. With identical code versions the bytes are identical (deterministic Go
+JSON marshalling); across versions the serialized form can legitimately differ.
+The deferred comparison spans the follower's *re-serialized* cache vs the
+upstream's checksum, so when `MsgServerHello.Version != ours` the client
+downgrades to **KVCount-only** comparison (counts survive re-serialization).
+
+### Mismatch handling
+
+Always: log (both checksums, counts, syncer type) + Prometheus
+(`typha_checksum_mismatches_total{syncer}`, `typha_checksum_matches_total`,
+`typha_checksum_last_compare_ok` gauge). Remediation is config
+`ChecksumMismatchAction` (`log` | `reconnect`, default `reconnect`):
+`reconnect` tears the connection down so the existing restart path
+(`OnTyphaConnectionRestarted` reconciliation) produces a clean re-sync,
+**rate-limited** to ~1 forced reconnect / 10min / pipeline so a persistent
+mismatch can't melt the hierarchy. After rate-limiting kicks in we keep serving
+(do not go unready); we only alarm.
+
+### Configuration
+
+| Param (env `TYPHA_<UPPER>`) | Meaning |
+|---|---|
+| `ChecksumEnabled` | Client-side verification on a follower (bool, default true; harmless when not hierarchical — nothing to verify). |
+| `ChecksumMismatchAction` | `log` or `reconnect` (default `reconnect`). |
+| `ChecksumInterval` | Server's periodic-checksum interval after the initial in-sync checksum (default 30s). |
 
 ## Review notes
 
@@ -348,7 +576,17 @@ When reviewing or writing a PR that touches Typha:
 - **Don't change DedupeBuffer semantics** (it is in `libcalico-go` and shared
   with Felix/confd). Extend with new methods and run the felix daemon-adjacent
   UTs if you must touch it.
+- **Checksum fidelity.** Any change to how a KV is stored or sent must keep the
+  B-tree value bytes equal to the wire bytes on *both* send paths (streaming and
+  binary snapshot), or the integrity check will false-positive. The checksum
+  algorithm and per-entry digest in `pkg/synccheck` are a wire contract: both
+  peers compute them independently, so a change needs a hello-flag-gated version
+  bump and updated golden vectors. Maintain the checksum only on real state
+  changes (not dedupe-skipped writes or delete-of-absent).
 - **Tests ship in the same PR.** New behaviour needs a UT at the lowest
   meaningful level; the chained data path is covered by the `typha/fv-tests`
   chain tests (parity across all four syncer types, upstream-restart
-  reconciliation, compression across the chain).
+  reconciliation, compression across the chain) and the checksum tests
+  (clean-run matches with zero false positives, fault-injection detection +
+  reconnect remediation, back-compat with non-checksum clients, version-skew
+  count-only).

@@ -186,6 +186,23 @@ type Config struct {
 	UpstreamReadTimeout  time.Duration `config:"seconds;30"`
 	UpstreamWriteTimeout time.Duration `config:"seconds;10"`
 
+	// Snapshot integrity checksum (WS-D).  When ChecksumEnabled is true, a
+	// follower Typha verifies the snapshot it reconstructs from its upstream
+	// against a checksum the upstream reports, detecting data lost/duplicated by
+	// an intermediate hop.  The server side always supports the protocol (gated
+	// per-connection by the client's hello flag), so this knob only controls the
+	// follower's client-side verification.  Default on; harmless when not in
+	// hierarchical mode (no upstream connection to verify).  See
+	// typha/pkg/synccheck and typha/DESIGN.md "Snapshot integrity checking".
+	ChecksumEnabled bool `config:"bool;true"`
+	// ChecksumMismatchAction selects remediation on a confirmed mismatch:
+	// "reconnect" (default) forces a clean re-sync via the existing restart path
+	// (rate-limited); "log" only alarms and keeps serving the current cache.
+	ChecksumMismatchAction string `config:"oneof(log,reconnect);reconnect"`
+	// ChecksumInterval is how often the upstream emits a periodic checksum after
+	// the initial in-sync checksum.
+	ChecksumInterval time.Duration `config:"seconds;30"`
+
 	// Pod identity — injected via downward-API env vars in the chart.
 	// Used by leader election (identity) and WS-C/E (node-affinity routing).
 	PodName      string `config:"string;"`
@@ -202,6 +219,19 @@ type Config struct {
 	LeaderElectionDuration time.Duration `config:"seconds;15"`
 	LeaderRenewDeadline    time.Duration `config:"seconds;10"`
 	LeaderRetryPeriod      time.Duration `config:"seconds;2"`
+
+	// RoleTransitionDebounce is how long the desired role must be stable before
+	// the role manager (WS-C) acts on it.  This protects against rapid election
+	// flapping triggering a storm of source swaps.  A transition already in
+	// flight is never interrupted; the debounce only gates *starting* one.
+	RoleTransitionDebounce time.Duration `config:"seconds;2"`
+
+	// LeaderServiceName / LeaderServicePortName select the headless Service that
+	// selects the current leader Typha pod (via the projectcalico.org/typha-role
+	// label that the leader applies to itself).  Followers discover their
+	// upstream through this Service in hierarchical+election mode.
+	LeaderServiceName     string `config:"string;calico-typha-leader"`
+	LeaderServicePortName string `config:"string;calico-typha"`
 
 	// State tracking.
 
@@ -364,6 +394,14 @@ func (config *Config) requiringTLS() bool {
 // upstreamConfigured returns true if any upstream Typha location is configured
 // (static address or k8s service).
 func (config *Config) upstreamConfigured() bool {
+	return config.UpstreamConfigured()
+}
+
+// UpstreamConfigured returns true if any static upstream Typha location is
+// configured (static address or k8s service).  When set, this Typha is pinned
+// as a follower of that upstream (WS-A manual chaining); election-driven
+// promotion/demotion is only used when no static upstream is configured.
+func (config *Config) UpstreamConfigured() bool {
 	return config.UpstreamAddr != "" || config.UpstreamK8sServiceName != ""
 }
 
@@ -401,14 +439,28 @@ func (config *Config) Validate() (err error) {
 
 	// Hierarchical-mode validation.
 	if config.HierarchyEnabled {
-		// In WS-A there is no leader election, so an upstream must be statically
-		// configured.  (WS-C relaxes this to "wait for the election result".)
-		if !config.upstreamConfigured() {
-			err = errors.New("HierarchyEnabled is set but no upstream Typha is configured" +
-				" (set UpstreamAddr or UpstreamK8sServiceName)")
+		// WS-C: hierarchy now self-organises via leader election.  Either a
+		// static upstream is configured (test/manual chaining, takes precedence)
+		// or leader election must be enabled so the role manager can discover the
+		// leader dynamically.
+		if !config.upstreamConfigured() && !config.LeaderElectionEnabled {
+			err = errors.New("HierarchyEnabled is set but neither a static upstream" +
+				" (UpstreamAddr / UpstreamK8sServiceName) nor LeaderElectionEnabled is configured")
 		}
 		if config.UpstreamAddr != "" && config.UpstreamK8sServiceName != "" {
 			err = errors.New("UpstreamAddr and UpstreamK8sServiceName are mutually exclusive")
+		}
+		// Election-driven hierarchy only works against the Kubernetes datastore
+		// (Leases live in coordination.k8s.io) and needs a pod identity for
+		// self-labelling and self-connection avoidance.
+		if config.LeaderElectionEnabled && !config.upstreamConfigured() {
+			if config.DatastoreType != "kubernetes" {
+				err = errors.New("HierarchyEnabled with leader election requires DatastoreType=kubernetes")
+			}
+			if config.PodName == "" {
+				err = errors.New("HierarchyEnabled with leader election requires PodName" +
+					" (set via the downward-API TYPHA_PODNAME env var)")
+			}
 		}
 	}
 

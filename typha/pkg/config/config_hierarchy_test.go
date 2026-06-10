@@ -93,7 +93,7 @@ func TestHierarchyValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "hierarchy on, no upstream: error",
+			name:    "hierarchy on, no upstream, no election: error",
 			kvs:     map[string]string{"HierarchyEnabled": "true"},
 			wantErr: true,
 		},
@@ -105,6 +105,45 @@ func TestHierarchyValidation(t *testing.T) {
 				"UpstreamK8sServiceName": "calico-typha-leader",
 			},
 			wantErr: true,
+		},
+		{
+			name: "hierarchy on, election enabled, k8s, podname: ok (WS-C role-managed)",
+			kvs: map[string]string{
+				"HierarchyEnabled":      "true",
+				"LeaderElectionEnabled": "true",
+				"DatastoreType":         "kubernetes",
+				"PodName":               "typha-abc",
+			},
+			wantErr: false,
+		},
+		{
+			name: "hierarchy on, election enabled, k8s, no podname: error",
+			kvs: map[string]string{
+				"HierarchyEnabled":      "true",
+				"LeaderElectionEnabled": "true",
+				"DatastoreType":         "kubernetes",
+			},
+			wantErr: true,
+		},
+		{
+			name: "hierarchy on, election enabled, non-k8s datastore: error",
+			kvs: map[string]string{
+				"HierarchyEnabled":      "true",
+				"LeaderElectionEnabled": "true",
+				"DatastoreType":         "etcdv3",
+				"PodName":               "typha-abc",
+			},
+			wantErr: true,
+		},
+		{
+			name: "hierarchy on, static upstream takes precedence over election (no podname needed): ok",
+			kvs: map[string]string{
+				"HierarchyEnabled":      "true",
+				"UpstreamAddr":          "host:5473",
+				"LeaderElectionEnabled": "true",
+				"DatastoreType":         "kubernetes",
+			},
+			wantErr: false,
 		},
 	}
 	for _, tc := range tests {
