@@ -778,6 +778,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 		Ifindex:  bestIfaceIdx,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: proto,
+		MTU:      bestTarget.MTU,
 	}
 	if len(bestTarget.MultiPath) > 0 {
 		for _, nh := range bestTarget.MultiPath {
@@ -793,7 +794,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	} else {
 		kernRoute.GW = bestTarget.GW
 		kernRoute.Ifindex = bestIfaceIdx
-		kernRoute.MTU = bestTarget.MTU
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
