@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -58,6 +59,13 @@ func (t Typha) dedupeKey() addrDedupeKey {
 	return addrDedupeKey(fmt.Sprintf("%s/%s/%s", t.Addr, t.IP, node))
 }
 
+// Equal reports whether t and other refer to the same Typha instance. It is
+// used to compare the Typha we are currently connected to against the
+// most-preferred Typha when deciding whether to rebalance.
+func (t Typha) Equal(other Typha) bool {
+	return t.dedupeKey() == other.dedupeKey()
+}
+
 func (t Typha) String() string {
 	nodePart := ""
 	if t.NodeName != nil {
@@ -80,6 +88,11 @@ type Discoverer struct {
 	inCluster          bool
 	filters            []func(typhaAddresses []Typha) ([]Typha, error)
 
+	// cacheLock guards allKnownAddrs.  Discovery can be re-run from a background
+	// goroutine (the client's rebalance timer calls PreferredTypha) concurrently
+	// with the connection-attempt path reading the cache, so the cache needs a
+	// lock even though discovery used to be single-threaded.
+	cacheLock     sync.RWMutex
 	allKnownAddrs []Typha
 }
 
@@ -187,7 +200,9 @@ func (d *Discoverer) AddPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Ty
 // or an error.
 func (d *Discoverer) LoadTyphaAddrs() (ts []Typha, err error) {
 	defer func() {
+		d.cacheLock.Lock()
 		d.allKnownAddrs = ts
+		d.cacheLock.Unlock()
 	}()
 	ts, err = d.discoverTyphaAddrs()
 	if err != nil {
@@ -203,7 +218,26 @@ func (d *Discoverer) LoadTyphaAddrs() (ts []Typha, err error) {
 }
 
 func (d *Discoverer) CachedTyphaAddrs() []Typha {
+	d.cacheLock.RLock()
+	defer d.cacheLock.RUnlock()
 	return d.allKnownAddrs
+}
+
+// PreferredTypha re-runs discovery and returns the most-preferred Typha to
+// connect to: the first entry in discovery order, which is the local Typha if
+// there is one, otherwise the rank-0 entry of the node's rendezvous ordering.
+// ok is false (with a nil error) if Typha is enabled but discovery currently
+// returns no usable endpoints.  Callers use this to spot when they are
+// connected to a non-preferred Typha and should rebalance.
+func (d *Discoverer) PreferredTypha() (t Typha, ok bool, err error) {
+	addrs, err := d.LoadTyphaAddrs()
+	if err != nil {
+		return Typha{}, false, err
+	}
+	if len(addrs) == 0 {
+		return Typha{}, false, nil
+	}
+	return addrs[0], true, nil
 }
 
 func (d *Discoverer) TyphaEnabled() bool {

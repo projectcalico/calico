@@ -118,14 +118,14 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should return address if configured", func() {
-		typhaAddr, err := DiscoverTyphaAddrs("", WithAddrOverride("10.0.0.1:8080"))
+		typhaAddr, err := DiscoverTyphaAddrs("test-node", WithAddrOverride("10.0.0.1:8080"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal([]Typha{{Addr: "10.0.0.1:8080"}}))
 	})
 
 	It("should apply a filter", func() {
 		typhaAddr, err := DiscoverTyphaAddrs(
-			"",
+			"test-node",
 			WithAddrOverride("10.0.0.1:8080"),
 			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
 				return append(typhaAddresses, Typha{Addr: "10.0.0.2:8080"}), nil
@@ -139,7 +139,7 @@ var _ = Describe("Typha address discovery", func() {
 	})
 	It("should return error from filter", func() {
 		_, err := DiscoverTyphaAddrs(
-			"",
+			"test-node",
 			WithAddrOverride("10.0.0.1:8080"),
 			WithPostDiscoveryFilter(func(typhaAddresses []Typha) ([]Typha, error) {
 				return nil, fmt.Errorf("BANG")
@@ -149,13 +149,13 @@ var _ = Describe("Typha address discovery", func() {
 	})
 
 	It("should return nothing if no service name and no client", func() {
-		typhaAddr, err := DiscoverTyphaAddrs("")
+		typhaAddr, err := DiscoverTyphaAddrs("test-node")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal(noTyphas))
 	})
 
 	It("should return nothing if no service name with client", func() {
-		typhaAddr, err := DiscoverTyphaAddrs("", WithKubeClient(k8sClient))
+		typhaAddr, err := DiscoverTyphaAddrs("test-node", WithKubeClient(k8sClient))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal(noTyphas))
 	})
@@ -307,6 +307,23 @@ var _ = Describe("Typha address discovery", func() {
 				"preferred Typha should spread across nodes, got: %v", winners)
 		})
 
+		It("PreferredTypha should return the first discovered Typha", func() {
+			d := New(
+				localNodeName,
+				WithKubeService("kube-system", "calico-typha-service"),
+				WithKubeClient(k8sClient),
+				WithKubeServicePortNameOverride("calico-typha-v2"),
+			)
+			pref, ok, err := d.PreferredTypha()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ok).To(BeTrue())
+			// The preferred Typha is the head of the discovery-ordered list...
+			Expect(pref.Equal(discoverFor(localNodeName)[0])).To(BeTrue())
+			// ...and it's deterministic and local (local endpoints come first).
+			Expect(pref.NodeName).NotTo(BeNil())
+			Expect(*pref.NodeName).To(Equal(localNodeName))
+		})
+
 		It("should keep survivor order stable when a Typha is removed", func() {
 			// Key that owns nothing so all six rank together as one group.
 			const key = "survivor-test-node"
@@ -341,6 +358,32 @@ func removeEndpoint(eps *discoveryv1.EndpointSlice, addr string) {
 	eps.Endpoints = slices.DeleteFunc(eps.Endpoints, func(e discoveryv1.Endpoint) bool {
 		return slices.Contains(e.Addresses, addr)
 	})
+}
+
+func TestTyphaEqual(t *testing.T) {
+	nodeA := "node-a"
+	nodeB := "node-b"
+	cases := []struct {
+		name string
+		a, b Typha
+		want bool
+	}{
+		{"same addr/ip/node", Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4", NodeName: &nodeA}, Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4", NodeName: &nodeA}, true},
+		{"different addr", Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4"}, Typha{Addr: "1.2.3.5:5", IP: "1.2.3.5"}, false},
+		{"different node", Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4", NodeName: &nodeA}, Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4", NodeName: &nodeB}, false},
+		{"nil vs set node", Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4"}, Typha{Addr: "1.2.3.4:5", IP: "1.2.3.4", NodeName: &nodeA}, false},
+		{"both addr-override (nil node)", Typha{Addr: "1.2.3.4:5"}, Typha{Addr: "1.2.3.4:5"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.a.Equal(c.b); got != c.want {
+				t.Fatalf("%v.Equal(%v) = %v, want %v", c.a, c.b, got, c.want)
+			}
+			if got := c.b.Equal(c.a); got != c.want {
+				t.Fatalf("Equal not symmetric: %v.Equal(%v) = %v, want %v", c.b, c.a, got, c.want)
+			}
+		})
+	}
 }
 
 func TestNodeName(t *testing.T) {
