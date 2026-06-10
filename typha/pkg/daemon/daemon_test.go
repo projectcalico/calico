@@ -130,9 +130,8 @@ var _ = Describe("Daemon", func() {
 				d.CreateServer()
 				Expect(d.CachesBySyncerType).To(HaveLen(syncproto.NumSyncerTypes))
 				for _, p := range d.SyncerPipelines {
-					Expect(p.SyncerToValidator).ToNot(BeNil())
-					Expect(p.Syncer).ToNot(BeNil())
-					Expect(p.SyncerToValidator).ToNot(BeNil())
+					Expect(p.Source).ToNot(BeNil())
+					Expect(p.DedupeBuffer).ToNot(BeNil())
 					Expect(p.ValidatorToCache).ToNot(BeNil())
 					Expect(p.Validator).ToNot(BeNil())
 					Expect(p.Cache).ToNot(BeNil())
@@ -177,8 +176,9 @@ var _ = Describe("Daemon", func() {
 				go cbs.Loop(recorderCtx)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Send in an update at the top of the processing pipeline.
-				d.SyncerPipelines[0].SyncerToValidator.OnStatusUpdated(bapi.InSync)
+				// Send in an update at the top of the processing pipeline (the
+				// dedupe buffer is now the permanent head of the pipeline).
+				d.SyncerPipelines[0].DedupeBuffer.OnStatusUpdated(bapi.InSync)
 				// It should make it all the way through to our recorder.
 				Eventually(cbs.Status).Should(Equal(bapi.InSync))
 			})

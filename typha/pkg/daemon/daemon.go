@@ -16,6 +16,8 @@ package daemon
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -32,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
@@ -42,12 +45,16 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
+	"github.com/projectcalico/calico/typha/pkg/leaderelection"
 	"github.com/projectcalico/calico/typha/pkg/logutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
+	"github.com/projectcalico/calico/typha/pkg/syncsource"
 )
 
 const DefaultConfigFile = "/etc/calico/typha.cfg"
@@ -78,25 +85,35 @@ type TyphaDaemon struct {
 	nodeCounter *calc.NodeCounter
 }
 
+// syncerPipeline is the per-syncer-type processing chain.  The head of the
+// chain is a dedupe buffer that is permanently installed for the lifetime of
+// the process; the actual source (a datastore syncer or an upstream-Typha
+// syncclient) attaches behind it via the Source field.  See typha/DESIGN.md,
+// "Hierarchical mode", for why the buffer is the stable element.
+//
+//	Source -> DedupeBuffer -(SendToSinkForever)-> Validator (+NodeCounter) ->
+//	    ValidatorToCache decoupler -> snapcache.Cache
 type syncerPipeline struct {
-	Type              syncproto.SyncerType
-	Syncer            bapi.Syncer
-	SyncerToValidator *calc.SyncerCallbacksDecoupler
-	Validator         *calc.ValidationFilter
-	ValidatorToCache  *calc.SyncerCallbacksDecoupler
-	Cache             *snapcache.Cache
+	Type             syncproto.SyncerType
+	Source           syncsource.SyncerSource
+	DedupeBuffer     *dedupebuffer.DedupeBuffer
+	Validator        *calc.ValidationFilter
+	ValidatorToCache *calc.SyncerCallbacksDecoupler
+	Cache            *snapcache.Cache
 }
 
 func (p syncerPipeline) Start(cxt context.Context) {
 	logCxt := log.WithField("syncerType", p.Type)
-	logCxt.Info("Starting syncer")
-	p.Syncer.Start()
-	logCxt.Info("Starting syncer-to-validator decoupler")
-	go p.SyncerToValidator.SendTo(p.Validator)
 	logCxt.Info("Starting validator-to-cache decoupler")
 	go p.ValidatorToCache.SendTo(p.Cache)
+	logCxt.Info("Starting dedupe buffer pump")
+	go p.DedupeBuffer.SendToSinkForever(p.Validator)
 	logCxt.Info("Starting cache")
 	p.Cache.Start(cxt)
+	logCxt.Info("Starting syncer source")
+	if err := p.Source.Start(cxt); err != nil {
+		logCxt.WithError(err).Fatal("Failed to start syncer source")
+	}
 	logCxt.Info("Started syncer pipeline")
 }
 
@@ -263,11 +280,14 @@ configRetry:
 func (t *TyphaDaemon) addSyncerPipeline(
 	syncerType syncproto.SyncerType,
 	newSyncer func(callbacks bapi.SyncerCallbacks) bapi.Syncer,
+	upstreamDiscoverer *discovery.Discoverer,
 ) {
-	// Get a Syncer from the datastore, which will feed the validator layer with updates.
-	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	syncer := newSyncer(syncerToValidator)
-	log.Debugf("Created Syncer: %#v", syncer)
+	// The dedupe buffer is the permanent head of the pipeline; it feeds the
+	// validator via its SendToSinkForever pump (started in pipeline.Start).  It
+	// is also the syncer callbacks sink that the source delivers into, and it is
+	// restart-aware so that the upstream syncclient can reconcile on reconnect
+	// (and so that WS-C can swap sources behind it).
+	dedupeBuf := dedupebuffer.New()
 
 	toCache := calc.NewSyncerCallbacksDecoupler()
 	var validator *calc.ValidationFilter
@@ -289,16 +309,54 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		Name:             string(syncerType),
 	})
 
+	// Choose the source: in hierarchical mode we source from an upstream Typha,
+	// otherwise we run a real datastore syncer.
+	var source syncsource.SyncerSource
+	if t.ConfigParams.HierarchyEnabled {
+		source = syncsource.NewUpstreamTyphaSource(
+			upstreamDiscoverer,
+			syncsource.UpstreamConfig{
+				MyVersion:  buildinfo.Version,
+				MyHostname: t.hostname(),
+				MyInfo: fmt.Sprintf("Revision: %s; Build date: %s",
+					buildinfo.GitRevision, buildinfo.BuildDate),
+				SyncerType: syncerType,
+				ClientOptions: syncclient.Options{
+					ReadTimeout:  t.ConfigParams.UpstreamReadTimeout,
+					WriteTimeout: t.ConfigParams.UpstreamWriteTimeout,
+					KeyFile:      t.ConfigParams.ClientKeyFile,
+					CertFile:     t.ConfigParams.ClientCertFile,
+					CAFile:       t.ConfigParams.ClientCAFile,
+					ServerCN:     t.ConfigParams.UpstreamServerCN,
+					ServerURISAN: t.ConfigParams.UpstreamServerURISAN,
+				},
+			},
+			dedupeBuf,
+		)
+	} else {
+		source = syncsource.NewDatastoreSource(newSyncer, dedupeBuf)
+	}
+
 	pipeline := &syncerPipeline{
-		Type:              syncerType,
-		Syncer:            syncer,
-		SyncerToValidator: syncerToValidator,
-		Validator:         validator,
-		ValidatorToCache:  toCache,
-		Cache:             cache,
+		Type:             syncerType,
+		Source:           source,
+		DedupeBuffer:     dedupeBuf,
+		Validator:        validator,
+		ValidatorToCache: toCache,
+		Cache:            cache,
 	}
 	t.SyncerPipelines = append(t.SyncerPipelines, pipeline)
 	t.CachesBySyncerType[syncerType] = cache
+}
+
+// hostname returns this Typha's hostname for use in the client hello when
+// connecting to an upstream Typha.  It is best-effort; the upstream only uses
+// it for logging/metrics.
+func (t *TyphaDaemon) hostname() string {
+	if hn, err := os.Hostname(); err == nil {
+		return hn
+	}
+	return "typha"
 }
 
 // CreateServer creates and configures (but does not start) the server components.
@@ -306,11 +364,19 @@ func (t *TyphaDaemon) CreateServer() {
 	// Health monitoring, for liveness and readiness endpoints.
 	t.healthAggregator = health.NewHealthAggregator()
 
+	// In hierarchical mode, build a discoverer for the upstream Typha that all
+	// four pipelines share (the discoverer is stateless with respect to syncer
+	// type; each pipeline gets its own syncclient connection).
+	var upstreamDiscoverer *discovery.Discoverer
+	if t.ConfigParams.HierarchyEnabled {
+		upstreamDiscoverer = t.newUpstreamDiscoverer()
+	}
+
 	// Now create the Syncer and caching layer (one pipeline for each syncer we support).
-	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeNodeStatus, t.DatastoreClient.NodeStatusSyncerByIface)
+	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface, upstreamDiscoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface, upstreamDiscoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface, upstreamDiscoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeNodeStatus, t.DatastoreClient.NodeStatusSyncerByIface, upstreamDiscoverer)
 
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
@@ -339,6 +405,69 @@ func (t *TyphaDaemon) CreateServer() {
 	)
 }
 
+// newUpstreamDiscoverer builds the discovery.Discoverer used to find the
+// upstream Typha in hierarchical mode.  It honours either the static
+// UpstreamAddr or the UpstreamK8s* service-discovery params, and installs a
+// post-discovery filter that drops any endpoint that resolves to ourselves
+// (minimal self-connection guard; WS-C extends this to full cycle prevention).
+func (t *TyphaDaemon) newUpstreamDiscoverer() *discovery.Discoverer {
+	opts := []discovery.Option{
+		discovery.WithAddrOverride(t.ConfigParams.UpstreamAddr),
+		discovery.WithInClusterKubeClient(),
+		discovery.WithKubeService(t.ConfigParams.UpstreamK8sNamespace, t.ConfigParams.UpstreamK8sServiceName),
+		discovery.WithKubeServicePortNameOverride(t.ConfigParams.UpstreamK8sPortName),
+		discovery.WithPostDiscoveryFilter(t.filterOutSelf),
+	}
+	return discovery.New(opts...)
+}
+
+// filterOutSelf removes any discovered upstream Typha endpoint that points back
+// at this instance, so that we never chain to ourselves.  We compare against
+// our own pod IP (POD_IP / our hostname's resolved address) and our server
+// port.
+func (t *TyphaDaemon) filterOutSelf(typhas []discovery.Typha) ([]discovery.Typha, error) {
+	selfIPs := t.selfIPs()
+	if len(selfIPs) == 0 {
+		return typhas, nil
+	}
+	var out []discovery.Typha
+	for _, typha := range typhas {
+		host, _, err := net.SplitHostPort(typha.Addr)
+		if err != nil {
+			// Can't parse; keep it rather than risk dropping a valid endpoint.
+			out = append(out, typha)
+			continue
+		}
+		candidateIP := typha.IP
+		if candidateIP == "" {
+			candidateIP = host
+		}
+		if selfIPs[candidateIP] {
+			log.WithField("addr", typha.Addr).Warn(
+				"Filtering out upstream Typha endpoint that points back at ourselves.")
+			continue
+		}
+		out = append(out, typha)
+	}
+	return out, nil
+}
+
+// selfIPs returns the set of IP addresses that identify this Typha instance,
+// used by the self-connection guard.  Uses POD_IP if set, plus any addresses
+// our hostname resolves to.
+func (t *TyphaDaemon) selfIPs() map[string]bool {
+	ips := map[string]bool{}
+	if podIP := os.Getenv("POD_IP"); podIP != "" {
+		ips[podIP] = true
+	}
+	if addrs, err := net.LookupHost(t.hostname()); err == nil {
+		for _, a := range addrs {
+			ips[a] = true
+		}
+	}
+	return ips
+}
+
 // Start starts all the server components in background goroutines.
 func (t *TyphaDaemon) Start(cxt context.Context) {
 	// Now we've connected everything up, start the background processing threads.
@@ -356,6 +485,8 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server, len(t.CachesBySyncerType))
 	}
 	log.Info("Started the datastore Syncer/cache layer/server.")
+
+	t.maybeStartLeaderElection(cxt)
 
 	if t.ConfigParams.DebugPort != 0 {
 		debugserver.StartDebugPprofServer(t.ConfigParams.DebugHost, t.ConfigParams.DebugPort)
@@ -396,6 +527,66 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		}).Info("Health enabled.  Starting server.")
 		t.healthAggregator.ServeHTTP(t.ConfigParams.HealthEnabled, t.ConfigParams.HealthHost, t.ConfigParams.HealthPort)
 	}
+}
+
+// maybeStartLeaderElection starts the Kubernetes Lease-based leader election
+// subsystem when LeaderElectionEnabled is true (and the datastore is
+// kubernetes).  The election result is inert in this workstream (WS-B): we log
+// transitions, update metrics, report health, and expose the Roles() channel
+// for WS-C to consume.  No behaviour changes beyond that.
+func (t *TyphaDaemon) maybeStartLeaderElection(ctx context.Context) {
+	if !t.ConfigParams.LeaderElectionEnabled {
+		return
+	}
+	if t.ConfigParams.DatastoreType != "kubernetes" {
+		log.Warn("LeaderElectionEnabled=true but DatastoreType is not kubernetes; skipping leader election")
+		return
+	}
+
+	// Build the k8s clientset directly (separate from the connection-rebalancing
+	// k8sAPI to keep Start() changes minimal).
+	k8sAPI := k8s.NewK8sAPI(t.nodeCounter)
+	cs, err := k8sAPI.Clientset()
+	if err != nil {
+		log.WithError(err).Error("Leader election: failed to build Kubernetes clientset; election disabled")
+		return
+	}
+
+	leaseNS := t.ConfigParams.LeaseNamespace
+	if leaseNS == "" {
+		leaseNS = t.ConfigParams.PodNamespace
+	}
+
+	elCfg := leaderelection.Config{
+		Enabled:        true,
+		LeaseName:      t.ConfigParams.LeaseName,
+		LeaseNamespace: leaseNS,
+		Identity:       t.ConfigParams.PodName,
+		LeaseDuration:  t.ConfigParams.LeaderElectionDuration,
+		RenewDeadline:  t.ConfigParams.LeaderRenewDeadline,
+		RetryPeriod:    t.ConfigParams.LeaderRetryPeriod,
+	}
+	elector := leaderelection.New(cs, elCfg, t.ConfigParams.PodName, t.ConfigParams.PodNamespace)
+	if elector == nil {
+		return
+	}
+
+	// Register a health reporter so the health aggregator knows the elector is alive.
+	t.healthAggregator.RegisterReporter("LeaderElection", &health.HealthReport{Live: true}, 0)
+	t.healthAggregator.Report("LeaderElection", &health.HealthReport{Live: true})
+
+	// Run the elector in the background, logging each transition.
+	go elector.Run(ctx)
+	go func() {
+		for {
+			select {
+			case role := <-elector.Roles():
+				log.WithField("role", role).Info("Leader election role transition")
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func (t *TyphaDaemon) configurePrometheusMetrics() {

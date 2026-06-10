@@ -159,6 +159,50 @@ type Config struct {
 	K8sServiceName                        string        `config:"string;calico-typha"`
 	K8sPortName                           string        `config:"string;calico-typha"`
 
+	// Hierarchical ("chained") Typha config.  When HierarchyEnabled is true,
+	// this Typha sources its syncer pipelines from an upstream Typha instead of
+	// the datastore.  See typha/DESIGN.md, "Hierarchical mode".  All default
+	// off/empty so the standard deployment is byte-for-byte unchanged.
+	HierarchyEnabled bool `config:"bool;false"`
+
+	// UpstreamAddr is a static upstream Typha host:port override (mutually
+	// exclusive with the UpstreamK8s* service-discovery params; mirrors Felix's
+	// TyphaAddr).
+	UpstreamAddr string `config:"authority;"`
+	// UpstreamK8sServiceName / UpstreamK8sNamespace / UpstreamK8sPortName select
+	// the upstream Typha service to discover via EndpointSlices.
+	UpstreamK8sServiceName string `config:"string;"`
+	UpstreamK8sNamespace   string `config:"string;"`
+	UpstreamK8sPortName    string `config:"string;calico-typha"`
+
+	// Client-side TLS for connecting to the upstream Typha (binding decision 4).
+	// If any are set, ClientKeyFile/ClientCertFile/ClientCAFile must all be set
+	// and at least one of UpstreamServerCN/UpstreamServerURISAN.
+	ClientKeyFile        string        `config:"file(must-exist);;local"`
+	ClientCertFile       string        `config:"file(must-exist);;local"`
+	ClientCAFile         string        `config:"file(must-exist);;local"`
+	UpstreamServerCN     string        `config:"string;"`
+	UpstreamServerURISAN string        `config:"string;"`
+	UpstreamReadTimeout  time.Duration `config:"seconds;30"`
+	UpstreamWriteTimeout time.Duration `config:"seconds;10"`
+
+	// Pod identity — injected via downward-API env vars in the chart.
+	// Used by leader election (identity) and WS-C/E (node-affinity routing).
+	PodName      string `config:"string;"`
+	PodNamespace string `config:"string;"`
+	NodeName     string `config:"string;"`
+
+	// Leader election (Kubernetes-datastore mode only).
+	// Durations default to 0 here; the leaderelection package substitutes
+	// the client-go recommended ratios (15s / 10s / 2s) when zero is supplied.
+	// Disabled by default so standard deployments are byte-for-byte unchanged.
+	LeaderElectionEnabled  bool          `config:"bool;false"`
+	LeaseName              string        `config:"string;calico-typha-leader"`
+	LeaseNamespace         string        `config:"string;"` // defaults to PodNamespace at runtime
+	LeaderElectionDuration time.Duration `config:"seconds;15"`
+	LeaderRenewDeadline    time.Duration `config:"seconds;10"`
+	LeaderRetryPeriod      time.Duration `config:"seconds;2"`
+
 	// State tracking.
 
 	// nameToSource tracks where we loaded each config param from.
@@ -317,6 +361,19 @@ func (config *Config) requiringTLS() bool {
 	return config.ServerKeyFile+config.ServerCertFile+config.CAFile+config.ClientCN+config.ClientURISAN != ""
 }
 
+// upstreamConfigured returns true if any upstream Typha location is configured
+// (static address or k8s service).
+func (config *Config) upstreamConfigured() bool {
+	return config.UpstreamAddr != "" || config.UpstreamK8sServiceName != ""
+}
+
+// requiringUpstreamTLS is true if any of the client-side (upstream) TLS
+// parameters are set.
+func (config *Config) requiringUpstreamTLS() bool {
+	return config.ClientKeyFile+config.ClientCertFile+config.ClientCAFile+
+		config.UpstreamServerCN+config.UpstreamServerURISAN != ""
+}
+
 // Validate() performs cross-field validation.
 func (config *Config) Validate() (err error) {
 	if config.DatastoreType == "etcdv3" && len(config.EtcdEndpoints) == 0 {
@@ -339,6 +396,33 @@ func (config *Config) Validate() (err error) {
 			err = errors.New("if any Felix-Typha TLS config parameters are specified," +
 				" they _all_ must be" +
 				" - except that either ClientCN or ClientURISAN may be left unset")
+		}
+	}
+
+	// Hierarchical-mode validation.
+	if config.HierarchyEnabled {
+		// In WS-A there is no leader election, so an upstream must be statically
+		// configured.  (WS-C relaxes this to "wait for the election result".)
+		if !config.upstreamConfigured() {
+			err = errors.New("HierarchyEnabled is set but no upstream Typha is configured" +
+				" (set UpstreamAddr or UpstreamK8sServiceName)")
+		}
+		if config.UpstreamAddr != "" && config.UpstreamK8sServiceName != "" {
+			err = errors.New("UpstreamAddr and UpstreamK8sServiceName are mutually exclusive")
+		}
+	}
+
+	// Upstream (client-side) TLS config: if any are specified they _all_ must
+	// be - except that either UpstreamServerCN or UpstreamServerURISAN may be
+	// left unset.
+	if config.requiringUpstreamTLS() {
+		if config.ClientKeyFile == "" ||
+			config.ClientCertFile == "" ||
+			config.ClientCAFile == "" ||
+			(config.UpstreamServerCN == "" && config.UpstreamServerURISAN == "") {
+			err = errors.New("if any upstream-Typha (client-side) TLS config parameters are specified," +
+				" they _all_ must be" +
+				" - except that either UpstreamServerCN or UpstreamServerURISAN may be left unset")
 		}
 	}
 	return

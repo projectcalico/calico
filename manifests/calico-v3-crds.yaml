@@ -12589,6 +12589,21 @@ rules:
       - get
       - list
       - watch
+  # Typha leader election — coordination.k8s.io/v1 Leases.
+  # create cannot be restricted to resourceNames (Kubernetes limitation).
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs:
+      - create
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    resourceNames:
+      - calico-typha-leader
+    verbs:
+      - get
+      - update
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role

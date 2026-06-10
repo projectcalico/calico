@@ -12251,6 +12251,21 @@ rules:
       - get
       - list
       - watch
+  # Typha leader election — coordination.k8s.io/v1 Leases.
+  # create cannot be restricted to resourceNames (Kubernetes limitation).
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs:
+      - create
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    resourceNames:
+      - calico-typha-leader
+    verbs:
+      - get
+      - update
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role
@@ -12905,6 +12920,19 @@ spec:
             #  value: "true"
             #- name: TYPHA_PROMETHEUSMETRICSPORT
             #  value: "9093"
+            # Pod identity — used by leader election and node-affinity routing.
+            - name: TYPHA_PODNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TYPHA_PODNAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TYPHA_NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           livenessProbe:
             httpGet:
               path: /liveness
