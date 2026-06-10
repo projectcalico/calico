@@ -298,7 +298,7 @@ func (v *kubeVirtVM) FindVirtLauncherPod(ctx context.Context, f *framework.Frame
 // than the server VM to exercise cross-node BGP routing. Returns both the
 // Client and the underlying ConnectionTester so callers can reuse the tester
 // for pre-flight checks (e.g. TCPConnect reachability gates).
-func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) (conncheck.Client, conncheck.ConnectionTester) {
+func setupAntiAffinityPod(ctx context.Context, f *framework.Framework, avoidNode string) (*conncheck.Client, conncheck.ConnectionTester) {
 	By(fmt.Sprintf("Creating client pod avoiding node %s", avoidNode))
 	tester := conncheck.NewConnectionTester(f)
 	DeferCleanup(tester.Stop)

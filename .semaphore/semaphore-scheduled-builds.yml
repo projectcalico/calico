@@ -1302,9 +1302,7 @@ blocks:
     run:
       when: "true"
     dependencies:
-      - Prerequisites
-      - "Build: calico image"
-      - "Build: node image"
+      - "Prerequisites"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
