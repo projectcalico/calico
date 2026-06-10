@@ -172,6 +172,12 @@ type Config struct {
 	ClientURISAN            string
 	WriteBufferSize         int
 
+	// NodeName is this Typha's own node name (downward API).  Used by
+	// DrainOffNodeClients to distinguish same-node clients (kept) from off-node
+	// clients (dropped) on promotion out of tier-2.  Empty disables the same-node
+	// distinction (all clients treated as off-node).
+	NodeName string
+
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
@@ -688,6 +694,37 @@ func (s *Server) TerminateRandomConnection(logCtx *log.Entry, reason string) boo
 	return false
 }
 
+// DrainOffNodeClients drops every current client connection whose hostname does
+// not match this Typha's node name, leaving same-node clients connected.  Used
+// by the role manager when this Typha is promoted out of tier-2: off-node leaf
+// clients should re-discover and land on a tier-2 Typha, while a same-node
+// client always prefers its local Typha whatever its tier and so is kept.
+//
+// Unlike graceful shutdown this does NOT set shuttingDown; the server stays up.
+// Dropped clients reconnect and the dedupe buffer rides the resync.  Connections
+// with an empty hostname (very old clients) are treated as off-node and dropped,
+// which is safe — they re-discover like any other client.
+func (s *Server) DrainOffNodeClients(reason string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	myNode := s.config.NodeName
+	dropped := 0
+	for connID, conn := range s.connIDToConn {
+		if myNode != "" && conn.clientHostname == myNode {
+			continue // Same-node client; keep it.
+		}
+		log.WithFields(log.Fields{
+			"connID":         connID,
+			"clientHostname": conn.clientHostname,
+			"reason":         reason,
+		}).Info("Draining off-node client connection.")
+		conn.cancelCxt()
+		dropped++
+	}
+	log.WithFields(log.Fields{"dropped": dropped, "node": myNode}).Info(
+		"Drained off-node client connections after tier change.")
+}
+
 func (s *Server) reportHealth() {
 	if s.config.HealthAggregator != nil {
 		s.config.HealthAggregator.Report(healthName, &health.HealthReport{Live: true})
@@ -742,6 +779,10 @@ type connection struct {
 	chosenCompression            syncproto.CompressionAlgorithm
 	clientSupportsDecoderRestart bool
 	clientSupportsChecksum       bool
+	// clientHostname is the Hostname the client supplied in its hello (for Felix,
+	// its node name).  Used by DrainOffNodeClients to keep same-node clients while
+	// dropping off-node ones on promotion out of tier-2.
+	clientHostname string
 
 	// Similarly to allCaches, allMetrics contains all the metrics relevant to a particular syncer.  We copy one
 	// of them to the unnamed field after the handshake.
@@ -1013,6 +1054,7 @@ func (h *connection) doHandshake() error {
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
 	h.clientSupportsChecksum = hello.SupportsChecksum
+	h.clientHostname = hello.Hostname
 	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
 		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
