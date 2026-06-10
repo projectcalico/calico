@@ -2542,7 +2542,7 @@ MTU of the host's interfaces.
 
 ### `VXLANPort` (config file) / `vxlanPort` (YAML)
 
-The UDP port number to use for VXLAN traffic.
+The UDP destination port number to use for VXLAN traffic.
 
 | Detail |   |
 | --- | --- |
@@ -2553,34 +2553,34 @@ The UDP port number to use for VXLAN traffic.
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `4789` |
 
-### `VXLANPortMax` (config file) / `vxlanPortMax` (YAML)
+### `VXLANSrcPortMax` (config file) / `vxlanSrcPortMax` (YAML)
 
 The upper bound (inclusive) of the UDP source port range used by Felix for outgoing
-VXLAN-encapsulated traffic. See VXLANPortMin.
+VXLAN-encapsulated traffic. See VXLANSrcPortMin.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_VXLANPortMax` |
+| Environment variable | `FELIX_VXLANSrcPortMax` |
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | `0` |
-| `FelixConfiguration` field | `vxlanPortMax` (YAML) `VXLANPortMax` (Go API) |
+| `FelixConfiguration` field | `vxlanSrcPortMax` (YAML) `VXLANSrcPortMax` (Go API) |
 | `FelixConfiguration` schema | Integer: [0,65535] |
 | Default value (YAML) | `0` |
 
-### `VXLANPortMin` (config file) / `vxlanPortMin` (YAML)
+### `VXLANSrcPortMin` (config file) / `vxlanSrcPortMin` (YAML)
 
 The lower bound (inclusive) of the UDP source port range used by Felix for outgoing
-VXLAN-encapsulated traffic. If both VXLANPortMin and VXLANPortMax are set, the kernel VXLAN tunnel
-device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANPortMin, VXLANPortMax].
-VXLANPortMin must be strictly less than VXLANPortMax.
+VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
 If unset (or zero), the kernel/dataplane default is used.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_VXLANPortMin` |
+| Environment variable | `FELIX_VXLANSrcPortMin` |
 | Encoding (env var/config file) | Integer: [0,65535] |
 | Default value (above encoding) | `0` |
-| `FelixConfiguration` field | `vxlanPortMin` (YAML) `VXLANPortMin` (Go API) |
+| `FelixConfiguration` field | `vxlanSrcPortMin` (YAML) `VXLANSrcPortMin` (Go API) |
 | `FelixConfiguration` schema | Integer: [0,65535] |
 | Default value (YAML) | `0` |
 

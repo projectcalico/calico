@@ -163,8 +163,8 @@ type Config struct {
 	VXLANMTU             int
 	VXLANMTUV6           int
 	VXLANPort            int
-	VXLANPortMin         int
-	VXLANPortMax         int
+	VXLANSrcPortMin      int
+	VXLANSrcPortMax      int
 
 	MaxIPSetSize int
 

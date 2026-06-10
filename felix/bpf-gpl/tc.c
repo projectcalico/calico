@@ -1275,23 +1275,18 @@ nat_encap:
 	 * ICMP does not have ports, but there is little to no worries about a
 	 * possible out-of-order processing in relation to the related flow.
 	 *
-	 * If a VXLAN source-port range is configured (both ends non-zero and
-	 * strictly min < max), map the hash into [VXLAN_PORT_MIN,
-	 * VXLAN_PORT_MAX]. Otherwise leave the hash as-is and let the
+	 * If a VXLAN source-port range is configured map the hash into [VXLAN_SRC_PORT_MIN,
+	 * VXLAN_SRC_PORT_MAX]. Otherwise leave the hash as-is and let the
 	 * kernel/peer accept any value as the wire source port. `max - min + 1`
 	 * keeps the range *inclusive* of the upper bound and matches the
 	 * Linux kernel's `udp_flow_src_port()`, which the non-BPF dataplane
-	 * goes through via the netlink-managed device; dropping the `+1`
-	 * here would silently lose the top port. The strict `>` check
-	 * mirrors Felix's config validator: a degenerate range (min == max)
-	 * falls through to the raw hash rather than pinning every packet to
-	 * a single port.
+	 * goes through via the netlink-managed device.
 	 */
 	__u16 vxlan_src_port = STATE->sport ^ STATE->dport;
 
-	if (VXLAN_PORT_MIN != 0 && VXLAN_PORT_MAX != 0 && VXLAN_PORT_MAX > VXLAN_PORT_MIN) {
-		__u16 range = (__u16)(VXLAN_PORT_MAX - VXLAN_PORT_MIN) + 1;
-		vxlan_src_port = VXLAN_PORT_MIN + (vxlan_src_port % range);
+	if (VXLAN_SRC_PORT_MIN != 0 && VXLAN_SRC_PORT_MAX != 0) {
+		__u16 range = (__u16)(VXLAN_SRC_PORT_MAX - VXLAN_SRC_PORT_MIN) + 1;
+		vxlan_src_port = VXLAN_SRC_PORT_MIN + (vxlan_src_port % range);
 	}
 
 	if (vxlan_encap(ctx, &STATE->ip_src, &STATE->ip_dst, vxlan_src_port)) {

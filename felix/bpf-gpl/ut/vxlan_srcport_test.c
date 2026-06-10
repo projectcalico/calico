@@ -12,7 +12,7 @@ const volatile struct cali_tc_preamble_globals __globals;
  * port that tc.c would assign to a VXLAN encapsulation of a flow with the
  * same sport/dport. It applies the same hash and (optional) port-range
  * mapping as the encap path in tc.c so the test exercises the
- * VXLAN_PORT_MIN/MAX globals end-to-end.
+ * VXLAN_SRC_PORT_MIN/MAX globals end-to-end.
  */
 static CALI_BPF_INLINE int calico_unittest_entry(struct __sk_buff *skb)
 {
@@ -44,9 +44,9 @@ static CALI_BPF_INLINE int calico_unittest_entry(struct __sk_buff *skb)
 
 	__u16 vxlan_src_port = sport ^ dport;
 
-	if (VXLAN_PORT_MIN != 0 && VXLAN_PORT_MAX != 0 && VXLAN_PORT_MAX > VXLAN_PORT_MIN) {
-		__u16 range = (__u16)(VXLAN_PORT_MAX - VXLAN_PORT_MIN) + 1;
-		vxlan_src_port = VXLAN_PORT_MIN + (vxlan_src_port % range);
+	if (VXLAN_SRC_PORT_MIN != 0 && VXLAN_SRC_PORT_MAX != 0) {
+		__u16 range = (__u16)(VXLAN_SRC_PORT_MAX - VXLAN_SRC_PORT_MIN) + 1;
+		vxlan_src_port = VXLAN_SRC_PORT_MIN + (vxlan_src_port % range);
 	}
 
 	return (int)vxlan_src_port;

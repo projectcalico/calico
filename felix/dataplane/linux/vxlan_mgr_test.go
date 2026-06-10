@@ -771,8 +771,8 @@ var _ = Describe("VXLANManager", func() {
 			MaxIPSetSize:       5,
 			Hostname:           "node1",
 			ExternalNodesCidrs: []string{"10.0.0.0/24"},
-			VXLANPortMin:       49152,
-			VXLANPortMax:       65535,
+			VXLANSrcPortMin:    49152,
+			VXLANSrcPortMax:    65535,
 			RulesConfig: rules.Config{
 				VXLANVNI:  1,
 				VXLANPort: 20,

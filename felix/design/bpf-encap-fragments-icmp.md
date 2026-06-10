@@ -101,7 +101,7 @@ firewall ACLs, ECMP-hash pinning, or to align with the kernel
 VXLAN driver's `srcport min max`), `FelixConfiguration` exposes
 two optional fields:
 
-- `vxlanPortMin` and `vxlanPortMax` — when both are non-zero and
+- `vxlanSrcPortMin` and `vxlanSrcPortMax` — when both are non-zero and
   strictly `min < max`, the BPF code remaps the hash into
   `[min, max]` via `min + (hash % (max - min + 1))`. The `+1` keeps
   the range *inclusive* of the upper bound and matches the Linux
@@ -109,27 +109,15 @@ two optional fields:
   dataplane goes through via the netlink-managed VXLAN device.
   Dropping the `+1` would silently lose the top port on the BPF
   side and diverge from the kernel-managed device. The macros are
-  populated from the `vxlan_port_min` / `vxlan_port_max` globals
+  populated from the `vxlan_src_port_min` / `vxlan_src_port_max` globals
   in `cali_tc_global_data` (see `felix/bpf-gpl/globals.h`).
-- Equal ports (`min == max`) are rejected by Felix's config
-  validator: a single-port "range" is degenerate and is not
-  honoured uniformly across dataplanes — on Linux the kernel
-  VXLAN driver silently ignores the configured range when
-  `low == high` and falls back to its default. The BPF guard in
-  `tc.c` uses a strict `>` to mirror the validator: if a
-  degenerate range somehow slips through, BPF falls back to the
-  raw `sport ^ dport` hash rather than pinning every packet to
-  one port.
 - The same range is also pushed onto the kernel-managed VXLAN
   device as `PortLow` / `PortHigh` (`vxlan_mgr.go`) so that the
   iptables/nftables dataplane behaves consistently. The
   `vxlanLinksIncompat` check only fires when both sides report a
-  non-zero range — the kernel sometimes echoes back a default
-  range that we did not configure, and treating that as a
-  mismatch would needlessly recreate the device.
-- Leaving either field unset (zero) preserves the historical
-  behaviour: the BPF hash is sent as-is and the kernel device
-  uses its default source-port range.
+  non-zero range, following the same "zero means unset / don't
+  care" idiom that the function already uses for `Group`, `Port`,
+  and the VTEP MAC.
 
 ### FDB
 
@@ -167,7 +155,7 @@ than pinned to a specific device.
   the device will not apply anything that does not come in via the
   tunnel key.
 - A new global config field consumed by the encap path (such as
-  `vxlan_port_min`/`vxlan_port_max`) must be added in the same
+  `vxlan_src_port_min`/`vxlan_src_port_max`) must be added in the same
   order in `felix/bpf-gpl/globals.h`,
   `felix/bpf/libbpf/libbpf_common.go`, and the
   `bpf_tc_set_globals` cgo signature in
