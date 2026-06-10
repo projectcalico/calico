@@ -170,6 +170,12 @@ type SyncerClient struct {
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+
+	// cancel cancels the context derived from the one passed to Start().
+	// It is populated by Start() and used by Stop() to trigger a clean
+	// shutdown.  Protected by cancelLock.
+	cancelLock sync.Mutex
+	cancel     context.CancelFunc
 }
 
 type RestartAwareCallbacks interface {
@@ -181,9 +187,19 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
 	s.logCxt.Info("Starting Typha client...")
 
+	// Derive a cancellable context so that Stop() can trigger a clean
+	// shutdown even if the caller's context is never cancelled.
+	cxt, cancel := context.WithCancel(cxt)
+	s.cancelLock.Lock()
+	s.cancel = cancel
+	s.cancelLock.Unlock()
+
 	var connectionFinishedWG sync.WaitGroup
 	err := s.startOneConnection(cxt, &connectionFinishedWG)
 	if err != nil {
+		// We never started the background goroutine that owns the context,
+		// so cancel it now to avoid leaking it.
+		cancel()
 		return err
 	}
 
@@ -193,6 +209,10 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	go func() {
 		defer func() {
 			s.logCxt.Info("Typha client shutting down.")
+			// Ensure the context is cancelled so that the per-connection
+			// shutdown goroutine closes the socket and exits even if we're
+			// stopping for a reason other than an explicit Stop()/cancel.
+			cancel()
 			s.Finished.Done()
 		}()
 
@@ -216,6 +236,25 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 	}()
 
 	return nil
+}
+
+// Stop triggers a clean shutdown of the client and blocks until it has fully
+// stopped, i.e. until no more callbacks can fire.  It is safe to call Stop
+// multiple times.  Calling Stop before Start is a no-op.  After Stop() returns,
+// the Finished WaitGroup has completed.
+func (s *SyncerClient) Stop() {
+	s.cancelLock.Lock()
+	cancel := s.cancel
+	s.cancelLock.Unlock()
+	if cancel == nil {
+		// Never started.
+		return
+	}
+	cancel()
+	// Wait for the background goroutine(s) to exit.  This guarantees that the
+	// main loop has returned and hence that no further callbacks will fire,
+	// which is the contract that the chained-Typha SyncerSource relies on.
+	s.Finished.Wait()
 }
 
 func (s *SyncerClient) startOneConnection(cxt context.Context, connFinished *sync.WaitGroup) error {
