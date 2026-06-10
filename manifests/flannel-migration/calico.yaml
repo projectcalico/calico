@@ -12250,6 +12250,15 @@ rules:
     verbs:
       - get
       - update
+  # Hierarchical Typha: the elected leader self-labels its own pod with
+  # projectcalico.org/typha-role=leader so the calico-typha-leader Service
+  # selects it.  patch on pods cannot be restricted to the pod's own name via
+  # resourceNames (Kubernetes does not support it for patch).
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - patch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # CNI cluster role

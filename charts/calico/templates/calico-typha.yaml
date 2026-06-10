@@ -18,6 +18,35 @@ spec:
   selector:
     k8s-app: calico-typha
 
+{{- if .Values.typha.hierarchy.enabled }}
+
+---
+
+# In hierarchical mode, this headless Service selects only the elected leader
+# Typha pod (which self-labels itself with projectcalico.org/typha-role=leader).
+# Follower Typhas discover their upstream — the leader — through this Service.
+# The main calico-typha Service above continues to select all Typhas so that
+# Felix can connect to any ready Typha.
+apiVersion: v1
+kind: Service
+metadata:
+  name: calico-typha-leader
+  namespace: kube-system
+  labels:
+    k8s-app: calico-typha
+spec:
+  # Headless: followers connect directly to the leader pod's IP.
+  clusterIP: None
+  ports:
+    - port: 5473
+      protocol: TCP
+      targetPort: calico-typha
+      name: calico-typha
+  selector:
+    k8s-app: calico-typha
+    projectcalico.org/typha-role: leader
+{{- end }}
+
 ---
 
 # This manifest creates a Deployment of Typha to back the above service.
@@ -157,6 +186,15 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+{{- if .Values.typha.hierarchy.enabled }}
+            # Hierarchical Typha: self-organising single-tier hierarchy.  The
+            # elected leader runs the real datastore syncers; followers connect
+            # to it via the calico-typha-leader Service.
+            - name: TYPHA_HIERARCHYENABLED
+              value: "true"
+            - name: TYPHA_LEADERELECTIONENABLED
+              value: "true"
+{{- end }}
 {{- if .Values.typha.env }}
 {{ toYaml .Values.typha.env | indent 10 }}
 {{- end }}
