@@ -21,7 +21,7 @@ import (
 	"sort"
 	"time"
 
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -683,7 +683,7 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 //
 // NOTE: keep in sync with isLoadBalancerOnly in felix/dataplane/linux/masq_mgr.go.
 func isLoadBalancerOnlyPool(pool *model.IPPool) bool {
-	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, apiv3.IPPoolAllowedUseLoadBalancer)
+	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, v3.IPPoolAllowedUseLoadBalancer)
 }
 
 // routesFromBlock returns a list of routes which should exist based on the provided

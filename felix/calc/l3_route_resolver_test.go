@@ -150,7 +150,7 @@ var _ = Describe("L3RouteResolver", func() {
 
 		BeforeEach(func() {
 			eventBuf = make(rtEventsMock, 100)
-			l3RR = NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
+			l3RR = NewL3RouteResolver("local-host", eventBuf, false, "CalicoIPAM")
 			l3RR.OnAlive = func() {}
 		})
 
@@ -190,7 +190,7 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(pool.CIDR)},
+					Key:   model.IPPoolKey{CIDR: pool.CIDR},
 					Value: &pool,
 				},
 			})
@@ -201,7 +201,7 @@ var _ = Describe("L3RouteResolver", func() {
 			blockCIDR := net.MustParseCIDR("10.0.1.0/29")
 			l3RR.OnBlockUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+					Key: model.BlockKey{CIDR: blockCIDR},
 					Value: &model.AllocationBlock{
 						CIDR:        blockCIDR,
 						Affinity:    &remoteAffinity,
@@ -247,7 +247,7 @@ var _ = Describe("L3RouteResolver", func() {
 			}
 			l3RR.OnPoolUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(pool.CIDR)},
+					Key:   model.IPPoolKey{CIDR: pool.CIDR},
 					Value: &pool,
 				},
 			})
@@ -258,7 +258,7 @@ var _ = Describe("L3RouteResolver", func() {
 			blockCIDR := net.MustParseCIDR("10.0.1.0/32")
 			l3RR.OnBlockUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+					Key: model.BlockKey{CIDR: blockCIDR},
 					Value: &model.AllocationBlock{
 						CIDR:        blockCIDR,
 						Affinity:    &remoteAffinity,
@@ -291,13 +291,13 @@ var _ = Describe("L3RouteResolver", func() {
 
 	It("should not set IpPoolType but still propagate NatOutgoing for LoadBalancer-only pools", func() {
 		eventBuf := make(rtEventsMock, 100)
-		l3RR := NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
+		l3RR := NewL3RouteResolver("local-host", eventBuf, false, "CalicoIPAM")
 		l3RR.OnAlive = func() {}
 
 		lbPoolCIDR, _ := ip.CIDRFromString("10.96.0.0/16")
 		l3RR.OnPoolUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(net.IPNet{IPNet: lbPoolCIDR.ToIPNet()})},
+				Key: model.IPPoolKey{CIDR: net.IPNet{IPNet: lbPoolCIDR.ToIPNet()}},
 				Value: &model.IPPool{
 					CIDR:        net.IPNet{IPNet: lbPoolCIDR.ToIPNet()},
 					Masquerade:  true,
@@ -310,7 +310,7 @@ var _ = Describe("L3RouteResolver", func() {
 		blockCIDR := net.MustParseCIDR("10.96.1.0/26")
 		l3RR.OnBlockUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+				Key: model.BlockKey{CIDR: blockCIDR},
 				Value: &model.AllocationBlock{
 					CIDR:        blockCIDR,
 					Affinity:    &remoteAffinity,
@@ -342,13 +342,13 @@ var _ = Describe("L3RouteResolver", func() {
 
 	It("should set IpPoolType for pools with Workload and LoadBalancer uses", func() {
 		eventBuf := make(rtEventsMock, 100)
-		l3RR := NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
+		l3RR := NewL3RouteResolver("local-host", eventBuf, false, "CalicoIPAM")
 		l3RR.OnAlive = func() {}
 
 		mixedPoolCIDR, _ := ip.CIDRFromString("10.0.0.0/16")
 		l3RR.OnPoolUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(net.IPNet{IPNet: mixedPoolCIDR.ToIPNet()})},
+				Key: model.IPPoolKey{CIDR: net.IPNet{IPNet: mixedPoolCIDR.ToIPNet()}},
 				Value: &model.IPPool{
 					CIDR:        net.IPNet{IPNet: mixedPoolCIDR.ToIPNet()},
 					VXLANMode:   encap.Always,
@@ -362,7 +362,7 @@ var _ = Describe("L3RouteResolver", func() {
 		blockCIDR := net.MustParseCIDR("10.0.1.0/26")
 		l3RR.OnBlockUpdate(api.Update{
 			KVPair: model.KVPair{
-				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+				Key: model.BlockKey{CIDR: blockCIDR},
 				Value: &model.AllocationBlock{
 					CIDR:        blockCIDR,
 					Affinity:    &remoteAffinity,
