@@ -205,7 +205,7 @@ rules:
       - watch
 {{- end }}
 
-{{- if eq .Values.datastore "kubernetes" }}
+{{- if and (eq .Values.datastore "kubernetes") .Values.typha.enabled .Values.typha.hierarchy.enabled }}
 ---
 
 # Typha leader election and hierarchical-mode self-labelling are namespaced
@@ -213,6 +213,11 @@ rules:
 # these permissions are granted via a namespaced Role + RoleBinding rather than
 # the cluster-wide calico-node ClusterRole.  This keeps the broad calico-node
 # DaemonSet grant from carrying lease/pod-patch rights it does not need.
+#
+# Gated to match the Deployment env: the chart only ever sets
+# TYPHA_LEADERELECTIONENABLED inside the typha.hierarchy.enabled block, so leader
+# election is on exactly when hierarchy is on.  If a future change lets election
+# be enabled independently of hierarchy, widen this guard to match.
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
