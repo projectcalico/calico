@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/typha/pkg/config"
 	. "github.com/projectcalico/calico/typha/pkg/k8s"
+	"github.com/projectcalico/calico/typha/pkg/rolemanager"
 )
 
 var _ = DescribeTable("CalculateMaxConnLimit tests",
@@ -41,6 +42,60 @@ var _ = DescribeTable("CalculateMaxConnLimit tests",
 	Entry("Lower limit", 10, 10, 11, "configured lower limit"),
 	Entry("Fraction", 10, 500, 101, "configured upper limit"),
 	Entry("Upper limit", 2, 500, 101, "configured upper limit"),
+)
+
+var _ = DescribeTable("CalculateMaxConnLimitForTier (two-tier math)",
+	func(servingTier rolemanager.Role, counts TierConnCounts, expectedNumber int, expectedReason string) {
+		configParams := &config.Config{
+			MaxConnectionsLowerLimit: 11,
+			MaxConnectionsUpperLimit: 10000,
+		}
+		num, reason := CalculateMaxConnLimitForTier(configParams, servingTier, counts)
+		Expect(num).To(Equal(expectedNumber))
+		Expect(reason).To(Equal(expectedReason))
+	},
+	// Single-tier mode (NumTier1=0): leader serves leaf clients, math matches the
+	// original CalculateMaxConnLimit over (NumTier2+1) servers.  With 5 tier2 + the
+	// leader = 6 servers, 100 nodes, 4 syncers: 4*(1 + 100*120/5/100) = 4*25 = 100.
+	Entry("single-tier leader serves leaves",
+		rolemanager.Leader,
+		TierConnCounts{NumNodes: 100, NumTier1: 0, NumTier2: 5, NumSyncer: 4},
+		100, "fraction+20%"),
+
+	// Two-tier leaf: 1M nodes / 5000 tier2 typhas.  expected = 1e6*4 = 4e6 clients
+	// over 5000 peers: 1 + 4e6*120/4999/100 ≈ 1 + 960 = 961.
+	Entry("tier2 serving leaves at scale",
+		rolemanager.Tier2,
+		TierConnCounts{NumNodes: 1_000_000, NumTier1: 100, NumTier2: 5000, NumSyncer: 4},
+		961, "fraction+20%"),
+
+	// Two-tier tier1: 5000 tier2 typhas × 4 syncers = 20000 upstream conns over
+	// 100 tier1 peers: 1 + 20000*120/99/100 ≈ 1 + 242 = 243.
+	Entry("tier1 serving tier2 at scale",
+		rolemanager.Tier1,
+		TierConnCounts{NumNodes: 1_000_000, NumTier1: 100, NumTier2: 5000, NumSyncer: 4},
+		243, "fraction+20%"),
+
+	// Two-tier leader: serves the tier1 typhas; single leader (peers=1) so it gets
+	// the upper limit (it must accept all tier1 connections).
+	Entry("leader serving tier1 (lone server)",
+		rolemanager.Leader,
+		TierConnCounts{NumNodes: 1_000_000, NumTier1: 100, NumTier2: 5000, NumSyncer: 4},
+		10000, "lone server in tier"),
+
+	// Two-tier tier1 with a single tier1 typha: lone server gets upper limit.
+	Entry("tier1 lone server",
+		rolemanager.Tier1,
+		TierConnCounts{NumNodes: 1000, NumTier1: 1, NumTier2: 50, NumSyncer: 4},
+		10000, "lone server in tier"),
+
+	// Small two-tier deployment hits the lower limit: 10 nodes / 3 tier2 typhas.
+	// expected = 10*4 = 40 over 3 peers: 1 + 40*120/2/100 = 1 + 24 = 25 < lower(11)?
+	// No, 25 > 11, so fraction wins at 25.
+	Entry("small tier2 fraction above lower",
+		rolemanager.Tier2,
+		TierConnCounts{NumNodes: 10, NumTier1: 2, NumTier2: 3, NumSyncer: 4},
+		25, "fraction+20%"),
 )
 
 var _ = Describe("Poll loop tests", func() {

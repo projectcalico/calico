@@ -18,6 +18,7 @@ require (
 	github.com/aws/smithy-go v1.25.0
 	github.com/bits-and-blooms/bitset v1.24.4
 	github.com/buger/jsonparser v1.1.2
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/container-storage-interface/spec v1.12.0
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1
@@ -209,7 +210,6 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.6.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 // indirect

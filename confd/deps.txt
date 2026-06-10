@@ -151,6 +151,8 @@ local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
 local:pkg/buildinfo
 local:typha/pkg/discovery
+local:typha/pkg/promutils
+local:typha/pkg/synccheck
 local:typha/pkg/syncclient
 local:typha/pkg/syncclientutils
 local:typha/pkg/syncproto

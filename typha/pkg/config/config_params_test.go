@@ -81,6 +81,17 @@ var _ = DescribeTable("Config parsing",
 	Entry("PrometheusMetricsPort", "PrometheusMetricsPort", "1234", int(1234)),
 	Entry("PrometheusGoMetricsEnabled", "PrometheusGoMetricsEnabled", "false", false),
 	Entry("PrometheusProcessMetricsEnabled", "PrometheusProcessMetricsEnabled", "false", false),
+
+	// Pod identity params (injected via downward-API in the chart).
+	Entry("PodName", "PodName", "calico-typha-abc12", "calico-typha-abc12"),
+	Entry("PodNamespace", "PodNamespace", "kube-system", "kube-system"),
+	Entry("NodeName", "NodeName", "node-1", "node-1"),
+
+	// Leader election params.
+	Entry("LeaderElectionEnabled", "LeaderElectionEnabled", "true", true),
+	Entry("LeaderElectionEnabled false", "LeaderElectionEnabled", "false", false),
+	Entry("LeaseName", "LeaseName", "my-typha-leader", "my-typha-leader"),
+	Entry("LeaseNamespace", "LeaseNamespace", "kube-system", "kube-system"),
 )
 
 var _ = DescribeTable("Config validation",
