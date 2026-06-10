@@ -29,6 +29,21 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
+// streamWrapper is the /bin/sh -c body used by PodSource.Start. Closing the
+// SPDY stdin channel triggers the reaper goroutine to SIGTERM the child
+// process. This allows clean shutdown of long-running streaming commands
+// without requiring `kill` access to the pod.
+const streamWrapper = `exec 3<&0
+"$@" </dev/null &
+child=$!
+( cat <&3 >/dev/null ; kill -TERM "$child" 2>/dev/null || true ) &
+reaper=$!
+wait "$child"
+rc=$?
+kill -TERM "$reaper" 2>/dev/null || true
+exit "$rc"
+`
+
 const defaultStreamMaxBytes = 1 << 20
 
 // StreamSource is the transport-specific bottom half of a stream probe.
@@ -338,7 +353,7 @@ func WaitForCadence(ctx context.Context, cp StreamCheckpointer, n int, within ti
 // pod_exec.go).
 type PodSource struct {
 	f         *framework.Framework
-	client    Client
+	client    *Client
 	container string
 
 	mu       sync.Mutex
@@ -349,7 +364,7 @@ type PodSource struct {
 
 // NewPodSource builds a PodSource for the given conncheck Client. The pod's
 // first container is used unless overridden with WithPodContainer.
-func NewPodSource(f *framework.Framework, client Client) *PodSource {
+func NewPodSource(f *framework.Framework, client *Client) *PodSource {
 	if f == nil {
 		framework.Failf("NewPodSource: framework is required")
 	}

@@ -1302,9 +1302,7 @@ blocks:
     run:
       when: "true"
     dependencies:
-      - Prerequisites
-      - "Build: calico image"
-      - "Build: node image"
+      - "Prerequisites"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -1318,7 +1316,6 @@ blocks:
       prologue:
         commands:
           - docker system prune -af
-          - .semaphore/load-cached-images
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -1344,9 +1341,6 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
-        on_fail:
-          commands:
-            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: "true or change_in(['/lib/'], {pipeline_file: 'ignore'})"
