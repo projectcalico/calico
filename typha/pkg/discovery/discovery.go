@@ -35,6 +35,13 @@ import (
 
 var ErrServiceNotReady = errors.New("missing Kubernetes service IP or port")
 
+// ErrEmptyNodeName is returned when Typha endpoints must be discovered from the
+// Kubernetes service but no node name was supplied. The node name is required:
+// it is the key that gives each node a stable, evenly distributed connection
+// preference, and an empty key would make every client prefer the same Typha.
+// See NodeName for how to obtain it.
+var ErrEmptyNodeName = errors.New("node name is required for Typha discovery but was empty")
+
 type Typha struct {
 	Addr     string
 	IP       string
@@ -217,7 +224,14 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return typhas, nil
 	}
 
-	// If we get here, we need to look up the Typha service using the k8s API.
+	// If we get here, we need to look up the Typha service using the k8s API
+	// and rank the endpoints by rendezvous hash, which requires a node name as
+	// the key.
+	if d.nodeName == "" {
+		logrus.Error("Cannot discover Typha endpoints without a node name.")
+		return nil, ErrEmptyNodeName
+	}
+
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
 		logrus.Info("Creating Kubernetes client for Typha discovery...")

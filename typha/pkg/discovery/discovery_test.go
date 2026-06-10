@@ -162,7 +162,7 @@ var _ = Describe("Typha address discovery", func() {
 
 	It("should return IP from endpoints", func() {
 		discoverer := New(
-			"",
+			localNodeName,
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
@@ -196,7 +196,7 @@ var _ = Describe("Typha address discovery", func() {
 		endpointsTyphaServiceV2.Endpoints[0].Addresses[0] = "fd5f:65af::2"
 		refreshClient()
 		typhaAddr, err := DiscoverTyphaAddrs(
-			"",
+			localNodeName,
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
@@ -213,12 +213,21 @@ var _ = Describe("Typha address discovery", func() {
 		endpointsTyphaServiceV2.Ports = nil
 		refreshClient()
 		_, err := DiscoverTyphaAddrs(
-			"",
+			localNodeName,
 			WithKubeService("kube-system", "calico-typha-service"),
 			WithKubeClient(k8sClient),
 		)
 		Expect(err).To(HaveOccurred())
 		Expect(err).To(Equal(ErrServiceNotReady))
+	})
+
+	It("should error if the node name is empty when discovering via the k8s service", func() {
+		_, err := DiscoverTyphaAddrs(
+			"",
+			WithKubeService("kube-system", "calico-typha-service"),
+			WithKubeClient(k8sClient),
+		)
+		Expect(err).To(MatchError(ErrEmptyNodeName))
 	})
 
 	Context("with multiple local and remote endpoints", func() {
