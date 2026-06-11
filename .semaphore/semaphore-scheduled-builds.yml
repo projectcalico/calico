@@ -1891,7 +1891,9 @@ after_pipeline:
       - name: Failure triage to Slack
         commands:
           # On a FAILED master/release-* run, ask the triage agent to assess the
-          # workflow and post its summary to the Slack channel. No-op otherwise.
+          # workflow. The agent only returns a message body when it judges the
+          # failure a genuine regression (red); for a flake / passed / needs-a-
+          # look verdict it returns the sentinel NO_NOTIFY and we post nothing.
           - |
             test "$SEMAPHORE_PIPELINE_RESULT" = failed || { echo "pipeline passed — nothing to triage"; exit 0; }
             case "$SEMAPHORE_GIT_BRANCH" in
@@ -1910,6 +1912,9 @@ after_pipeline:
               [ -n "$text" ] && break
               echo "attempt $i: no reply yet (agent may be cold) — retrying"; sleep 15
             done
+            case "$text" in
+              NO_NOTIFY*) echo "triage verdict is not a genuine regression — nothing to post"; exit 0 ;;
+            esac
             [ -n "$text" ] || text=":warning: triage agent returned no summary for workflow ${SEMAPHORE_WORKFLOW_ID} (${SEMAPHORE_GIT_BRANCH})"
             jq -n --arg t "$text" '{text:$t}' | curl -sS -m 30 -X POST \
               -H 'Content-Type: application/json' --data @- "$SLACK_CORE_WEBHOOK_URL"
