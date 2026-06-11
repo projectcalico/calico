@@ -401,11 +401,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		"numNodes":      m.nodeRing.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
-	desiredByIface := m.buildDesiredState()
-	err := m.reconcileListeners(desiredByIface)
-	m.publishDesiredIPs(desiredByIface)
-
-	return err
+	return m.reconcileListeners()
 }
 
 func (m *proxyNeighManager) Stop() {
@@ -483,9 +479,13 @@ func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[str
 }
 
 // reconcileListeners drops listeners that are no longer desired or have failed,
-// then starts one for each desired interface that has no listener, which
-// recreates any failed listener just dropped.
-func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
+// (re)starts one for each desired interface that has no listener (this recreates
+// any failed listener just dropped), then hands each listener its latest desired
+// IP set and wakes its goroutine to reconcile. The listener goroutine owns the
+// raw socket and performs every write itself.
+func (m *proxyNeighManager) reconcileListeners() error {
+	desiredByIface := m.buildDesiredState()
+
 	// Drop listeners that are no longer desired or whose goroutine reported an
 	// unrecoverable socket error.
 	for ifaceName, l := range m.listeners {
@@ -495,35 +495,26 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 		l.stop()
 		delete(m.listeners, ifaceName)
 	}
-	// Start a listener for each desired interface that doesn't have one (this
-	// recreates any failed listener dropped above).
+	// Start a listener for each desired interface that doesn't have one, then
+	// publish the latest desired set to it and wake its goroutine.
 	var err error
-	for ifaceName := range desiredByIface {
-		if _, ok := m.listeners[ifaceName]; !ok {
+	for ifaceName, desired := range desiredByIface {
+		l, ok := m.listeners[ifaceName]
+		if !ok {
 			if err = m.startListener(ifaceName); err != nil {
 				logrus.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
 				// Re-mark dirty so the next CompleteDeferredWork retries,
 				// and remember the error to surface it to the dataplane loop.
 				m.dirty = true
+				continue
 			}
-		}
-	}
-	return err
-}
-
-// publishDesiredIPs hands each listener its latest desired IP set and wakes its
-// goroutine to reconcile. The listener goroutine owns the raw socket and
-// performs every write itself.
-func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[string]) {
-	for ifaceName, desired := range desiredByIface {
-		l, ok := m.listeners[ifaceName]
-		if !ok {
-			continue
+			l = m.listeners[ifaceName]
 		}
 		l.desired.Store(&desired)
 		l.signalReconcile()
 		l.wake()
 	}
+	return err
 }
 
 // startListener opens a raw socket on the given interface and starts a
