@@ -188,7 +188,8 @@ type Config struct {
 
 	FloatingIPsEnabled bool
 
-	LocalSubnetL2Reachability string
+	LocalSubnetL2Reachability                string
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration
 
 	Wireguard wireguard.Config
 
