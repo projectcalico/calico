@@ -813,59 +813,55 @@ func (l *ifaceListener) runNDPListener() {
 
 // runListener is the read loop shared by the ARP and NDP listeners, handling
 // context cancellation, read deadlines, timeouts and listener recreation on
-// unrecoverable errors, while readAndRespond does the protocol-specific read
-// and reply.
+// unrecoverable errors, while readAndRespond does the protocol-specific read and reply.
 func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) error, readAndRespond func() error) {
 	defer close(l.done)
 	defer l.closeSocket()
 
-	// Anchor the periodic re-announce clock to listener start so the first
-	// refresh fires announceInterval from now, not immediately after the
-	// initial announce that applyDesiredState performs below.
-	lastAnnounce := time.Now()
+	// Periodically re-announce every owned IP so neighbor caches and switch
+	// forwarding tables stay warm even when the desired set is unchanged.
+	var refreshC <-chan time.Time
+	if l.announceInterval > 0 {
+		ticker := time.NewTicker(l.announceInterval)
+		defer ticker.Stop()
+		refreshC = ticker.C
+	}
 
 	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})
 	for {
-		if l.ctx.Err() != nil {
+		select {
+		case <-l.ctx.Done():
 			logCtx.Debug("Listener stopping: context cancelled")
 			return
-		}
 
-		// Apply any desired-set change the manager published. All socket
-		// writes (GARP / NA / multicast join+leave) happen here, on this
-		// goroutine, keeping the listener the sole owner of the raw socket.
-		select {
 		case <-l.reconcile:
+			// Apply any desired-set change the manager published. All socket
+			// writes (GARP / NA / multicast join+leave) happen here, on this
+			// goroutine, keeping the listener the sole owner of the raw socket.
 			l.applyDesiredState()
-		default:
-		}
 
-		// Periodically re-announce every owned IP so neighbor caches and switch
-		// forwarding tables stay warm even when the desired set is unchanged.
-		// The loop wakes at least every readTimeout, so this fires within one
-		// readTimeout of the interval elapsing.
-		if l.announceInterval > 0 && time.Since(lastAnnounce) >= l.announceInterval {
+		case <-refreshC:
 			l.reannounceAll()
-			lastAnnounce = time.Now()
-		}
 
-		if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
-			logCtx.WithError(err).Warn("Failed to set read deadline")
-		}
+		default:
+			if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
+				logCtx.WithError(err).Warn("Failed to set read deadline")
+			}
 
-		if err := readAndRespond(); err != nil {
-			if l.ctx.Err() != nil {
-				logCtx.Debug("Listener stopping: context cancelled during read")
+			if err := readAndRespond(); err != nil {
+				if l.ctx.Err() != nil {
+					logCtx.Debug("Listener stopping: context cancelled during read")
+					return
+				}
+				if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+					continue
+				}
+				// Unrecoverable socket error: flag this listener so the manager
+				// drops it and recreates a fresh one on the next reconcile.
+				logCtx.WithError(err).Warn("Listener read failed; recreating listener")
+				l.failed.Store(true)
 				return
 			}
-			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
-				continue
-			}
-			// Unrecoverable socket error: flag this listener so the manager
-			// drops it and recreates a fresh one on the next reconcile.
-			logCtx.WithError(err).Warn("Listener read failed; recreating listener")
-			l.failed.Store(true)
-			return
 		}
 	}
 }
