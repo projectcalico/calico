@@ -150,6 +150,7 @@ func startTyphaClient(st syncproto.SyncerType, hostname string) {
 	logrus.Infof("Starting sycher of type: %v", st)
 	cbs := newSyncerCallbacks(st)
 	typhaDiscoverer := discovery.New(
+		hostname,
 		discovery.WithInClusterKubeClient(),
 		discovery.WithKubeService(typhaNamespace, typhaK8sServiceName),
 	)

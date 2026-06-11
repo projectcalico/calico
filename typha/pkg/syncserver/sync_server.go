@@ -857,6 +857,12 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 				h.logCxt.Debug("Pong from client")
 				lastPongReceived = time.Now()
 				h.summaryPingLatency.Observe(time.Since(msg.PingTimestamp).Seconds())
+			case syncproto.MsgClientGoodbye:
+				// The client is deliberately disconnecting (e.g. rebalancing to
+				// its preferred Typha) and has told us why.  Log it and shut the
+				// connection down cleanly rather than treating it as an error.
+				h.logCxt.WithField("reason", msg.Reason).Info("Client disconnected deliberately.")
+				return nil
 			default:
 				h.logCxt.WithField("msg", msg).Error("Unknown message from client")
 				return errors.New("unknown message type")
