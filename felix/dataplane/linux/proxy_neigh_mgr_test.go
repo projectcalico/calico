@@ -35,10 +35,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// testReadTimeout is the per-read deadline used by unit-test managers: small so
-// a listener that loops on a read timeout (and teardown) is near-instant rather
-// than waiting the production readDeadlineInterval.
-const testReadTimeout = 10 * time.Millisecond
+const (
+	// testReadTimeout is the per-read deadline used by unit-test managers: small so
+	// a listener that loops on a read timeout (and teardown) is near-instant rather
+	// than waiting the production readDeadlineInterval.
+	testReadTimeout = 10 * time.Millisecond
+
+	// testAnnounceInterval is a short periodic re-announce interval used by the
+	// re-announcement tests: comfortably larger than testReadTimeout so the loop
+	// gets several read iterations per interval, but small enough that a couple of
+	// refreshes land well within an Eventually timeout.
+	testAnnounceInterval = 40 * time.Millisecond
+)
 
 func newMockNetlinkForProxyNeigh() *mocknetlink.MockNetlinkDataplane {
 	dp := mocknetlink.New()
@@ -312,7 +320,7 @@ func newTestProxyNeighManagerWithHostname(nl *mocknetlink.MockNetlinkDataplane, 
 		}
 		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 	}
-	mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout)
+	mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout, 0)
 	// Register a default no-encap pool covering the test subnet.
 	sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
 	return mgr
@@ -333,7 +341,7 @@ func newTestProxyNDPManager(nl *mocknetlink.MockNetlinkDataplane, ndpConns map[s
 		}
 		return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 	}
-	mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout)
+	mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, 0)
 	sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
 	return mgr
 }
@@ -979,7 +987,7 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 			created = append(created, c)
 			return c, c.hwAddr, nil
 		}
-		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout)
+		mgr = newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout, 0)
 		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
 		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
 		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
@@ -1017,5 +1025,112 @@ var _ = Describe("Proxy neighbor manager - listener recreation", func() {
 		Expect(mgr.CompleteDeferredWork()).To(Succeed())
 		Expect(mgr.listeners["eth0"]).To(BeIdenticalTo(first))
 		Expect(created).To(HaveLen(1))
+	})
+})
+
+var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
+	It("re-sends gratuitous ARP for owned IPs on the announce interval (IPv4)", func() {
+		nl := newMockNetlinkForProxyNeigh()
+		arpClients := map[string]*mockARPClient{
+			"eth0": newMockARPClient(net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0x01}),
+		}
+		config := Config{
+			Hostname:    "test-node",
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		af := func(ifaceName string) (arpClient, net.HardwareAddr, error) {
+			if c, ok := arpClients[ifaceName]; ok {
+				return c, c.hwAddr, nil
+			}
+			return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
+		}
+		mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout, testAnnounceInterval)
+		defer mgr.Stop()
+		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
+		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
+		sendIfaceAddrsUpdate(mgr, "eth0", "10.0.0.1")
+		mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+
+		// The initial announce fires once; the periodic refresh then keeps
+		// sending more GARPs for the same IP without any reconcile.
+		Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
+		Eventually(func() int {
+			return len(arpClients["eth0"].getWrites())
+		}, "100ms").Should(BeNumerically(">=", 2))
+
+		// Every refresh is a well-formed GARP for the owned IP.
+		for _, w := range arpClients["eth0"].getWrites() {
+			Expect(w.packet.Operation).To(Equal(arp.OperationRequest))
+			Expect(w.packet.SenderHardwareAddr).To(Equal(arpClients["eth0"].hwAddr))
+			Expect(w.packet.SenderIP.String()).To(Equal("10.0.0.50"))
+			Expect(w.packet.TargetIP.String()).To(Equal("10.0.0.50"))
+			Expect(w.dest).To(Equal(ethernet.Broadcast))
+		}
+	})
+
+	It("re-sends unsolicited NA without re-joining the multicast group (IPv6)", func() {
+		nl := newMockNetlinkForProxyNeigh()
+		ndpConns := map[string]*mockNDPConn{"eth0": newMockNDPConn()}
+		config := Config{
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		nf := func(ifaceName string) (ndpConn, net.HardwareAddr, error) {
+			if c, ok := ndpConns[ifaceName]; ok {
+				return c, ndpTestHWAddr, nil
+			}
+			return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
+		}
+		mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, testAnnounceInterval)
+		defer mgr.Stop()
+		sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
+		setIfaceAddr(nl, "eth0", "fd00::1/64")
+		sendIfaceAddrsUpdate(mgr, "eth0", "fd00::1")
+		mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", "fd00::50/128"))
+		Expect(mgr.CompleteDeferredWork()).To(Succeed())
+
+		// Periodic refresh keeps sending unsolicited NAs for the owned IP.
+		Eventually(func() int {
+			return len(ndpConns["eth0"].getWrites())
+		}, "100ms").Should(BeNumerically(">=", 2))
+
+		// The solicited-node group is joined exactly once on add — the refresh
+		// must not re-join it every interval.
+		want, err := ndp.SolicitedNodeMulticast(netip.MustParseAddr("fd00::50"))
+		Expect(err).NotTo(HaveOccurred())
+		Consistently(func() []netip.Addr {
+			return ndpConns["eth0"].getJoinedGroups()
+		}).Should(ConsistOf(want))
+
+		// Every write is an unsolicited NA for the owned IP.
+		for _, w := range ndpConns["eth0"].getWrites() {
+			na, ok := w.msg.(*ndp.NeighborAdvertisement)
+			Expect(ok).To(BeTrue())
+			Expect(na.TargetAddress.String()).To(Equal("fd00::50"))
+			Expect(na.Solicited).To(BeFalse())
+			Expect(na.Override).To(BeTrue())
+			Expect(w.dst.String()).To(Equal("ff02::1"))
+		}
+	})
+
+	It("takes the re-announce interval from the LocalSubnetL2ReachabilityRefreshInterval config", func() {
+		config := Config{
+			Hostname:                                 "test-node",
+			LocalSubnetL2ReachabilityRefreshInterval: 90 * time.Second,
+			RulesConfig:                              rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		mgr := newProxyNeighManager(config, 4)
+		defer mgr.Stop()
+		Expect(mgr.announceInterval).To(Equal(90 * time.Second))
+	})
+
+	It("disables periodic re-announcement when the config interval is zero", func() {
+		config := Config{
+			Hostname:    "test-node",
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		mgr := newProxyNeighManager(config, 4)
+		defer mgr.Stop()
+		Expect(mgr.announceInterval).To(BeZero())
 	})
 })
