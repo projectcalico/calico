@@ -217,10 +217,11 @@ func StartDataplaneDriver(
 		}
 
 		dpConfig := intdataplane.Config{
-			Hostname:                  felixHostname,
-			NodeZone:                  felixNodeZone,
-			FloatingIPsEnabled:        strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
-			LocalSubnetL2Reachability: configParams.LocalSubnetL2Reachability,
+			Hostname:                                 felixHostname,
+			NodeZone:                                 felixNodeZone,
+			FloatingIPsEnabled:                       strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
+			LocalSubnetL2Reachability:                configParams.LocalSubnetL2Reachability,
+			LocalSubnetL2ReachabilityRefreshInterval: configParams.LocalSubnetL2ReachabilityRefreshInterval,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,

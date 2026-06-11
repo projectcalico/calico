@@ -1110,4 +1110,24 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			Expect(w.dst.String()).To(Equal("ff02::1"))
 		}
 	})
+
+	It("jitters the announce interval within ±10% of the base", func() {
+		base := 60 * time.Second
+		l := &ifaceListener{announceInterval: base}
+		lo := base - base/announceJitterFraction
+		hi := base + base/announceJitterFraction
+		// Sample many times: every draw must stay inside the band, and the
+		// draws must actually vary (not collapse to the base value).
+		seen := set.New[time.Duration]()
+		for range 1000 {
+			got := l.jitteredAnnounceInterval()
+			Expect(got).To(BeNumerically(">=", lo))
+			Expect(got).To(BeNumerically("<=", hi))
+			seen.Add(got)
+		}
+		Expect(seen.Len()).To(BeNumerically(">", 1), "jitter should vary the interval")
+
+		// A disabled interval is returned unchanged (no jitter, no panic).
+		Expect((&ifaceListener{announceInterval: 0}).jitteredAnnounceInterval()).To(BeZero())
+	})
 })

@@ -1083,6 +1083,24 @@ subnet are reachable from the local L2 segment without BGP.
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
 | Default value (YAML) | `Disabled` |
 
+### `LocalSubnetL2ReachabilityRefreshInterval` (config file) / `localSubnetL2ReachabilityRefreshInterval` (YAML)
+
+The period at which Felix re-announces
+(gratuitous ARP / unsolicited NA) the pod and LoadBalancer IPs it answers for when
+LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding
+tables warm. A small random jitter is applied per interface to avoid synchronized
+bursts. Set to 0 to disable periodic re-announcement (the one-shot announcement on
+add still happens).
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LocalSubnetL2ReachabilityRefreshInterval` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `60` (1m0s) |
+| `FelixConfiguration` field | `localSubnetL2ReachabilityRefreshInterval` (YAML) `LocalSubnetL2ReachabilityRefreshInterval` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `1m0s` |
+
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 
 A regular expression that controls which interfaces Felix should scan in order
