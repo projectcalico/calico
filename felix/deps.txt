@@ -369,6 +369,8 @@ local:node/pkg/lifecycle/utils
 local:pkg/buildinfo
 local:pod2daemon/binder
 local:typha/pkg/discovery
+local:typha/pkg/promutils
+local:typha/pkg/synccheck
 local:typha/pkg/syncclient
 local:typha/pkg/syncproto
 local:typha/pkg/tlsutils

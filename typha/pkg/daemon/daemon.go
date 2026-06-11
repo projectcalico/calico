@@ -16,6 +16,8 @@ package daemon
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"runtime"
@@ -28,10 +30,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/nodestatussyncer"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/tunnelipsyncer"
@@ -42,12 +46,19 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/typha/pkg/calc"
 	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
+	"github.com/projectcalico/calico/typha/pkg/leaderelection"
 	"github.com/projectcalico/calico/typha/pkg/logutils"
+	"github.com/projectcalico/calico/typha/pkg/rolemanager"
+	"github.com/projectcalico/calico/typha/pkg/slotacquirer"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
+	"github.com/projectcalico/calico/typha/pkg/synccheck"
+	"github.com/projectcalico/calico/typha/pkg/syncclient"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
+	"github.com/projectcalico/calico/typha/pkg/syncsource"
 )
 
 const DefaultConfigFile = "/etc/calico/typha.cfg"
@@ -76,27 +87,79 @@ type TyphaDaemon struct {
 
 	// Node counting.
 	nodeCounter *calc.NodeCounter
+
+	// Hierarchical mode.  roleManaged is true when the pipeline sources are
+	// owned by the role manager (election-driven hierarchy) rather than wired
+	// statically.  RoleManager drives promotion/demotion; acquirerCancel cancels
+	// the acquirer's context on graceful shutdown so the held lease is released
+	// (ReleaseOnCancel) before clients are drained.
+	roleManaged    bool
+	RoleManager    *rolemanager.Manager
+	acquirerCancel context.CancelFunc
+
+	// upstreamDiscoverer finds the leader (used by tier-1 typhas' upstream source
+	// and, in single-tier mode, by tier-2 typhas).  tier1Discoverer finds the
+	// tier-1 Service (used by tier-2 typhas when tiering is active); it aliases
+	// upstreamDiscoverer in single-tier mode.
+	upstreamDiscoverer *discovery.Discoverer
+	tier1Discoverer    *discovery.Discoverer
+
+	// Two-tier fan-out (WS-E).  When Tier1Count>0, Acquirer runs the multi-slot
+	// lazy-candidacy election (leader + N tier-1 slots) and the role manager
+	// consumes its three-role output.  When Tier1Count==0 the Acquirer still runs
+	// but with only the leader slot, reproducing WS-C single-tier behaviour.
+	Acquirer *slotacquirer.Acquirer
 }
 
+// syncerPipeline is the per-syncer-type processing chain.  The head of the
+// chain is a dedupe buffer that is permanently installed for the lifetime of
+// the process; the actual source (a datastore syncer or an upstream-Typha
+// syncclient) attaches behind it via the Source field.  See typha/DESIGN.md,
+// "Hierarchical mode", for why the buffer is the stable element.
+//
+//	Source -> DedupeBuffer -(SendToSinkForever)-> Validator (+NodeCounter) ->
+//	    ValidatorToCache decoupler -> snapcache.Cache
 type syncerPipeline struct {
-	Type              syncproto.SyncerType
-	Syncer            bapi.Syncer
-	SyncerToValidator *calc.SyncerCallbacksDecoupler
-	Validator         *calc.ValidationFilter
-	ValidatorToCache  *calc.SyncerCallbacksDecoupler
-	Cache             *snapcache.Cache
+	Type             syncproto.SyncerType
+	Source           syncsource.SyncerSource
+	DedupeBuffer     *dedupebuffer.DedupeBuffer
+	Validator        *calc.ValidationFilter
+	ValidatorToCache *calc.SyncerCallbacksDecoupler
+	Cache            *snapcache.Cache
+
+	// Source factories.  In role-managed (election-driven hierarchical) mode,
+	// Source is left nil and the role manager builds/stops sources on demand via
+	// NewSourceForRole.  In the static modes (datastore-only or static upstream)
+	// Source is built eagerly and started by Start; the factories are unused.
+	//
+	// NewDatastoreSource / NewUpstreamSource are retained for the static modes
+	// (manual chaining / tests).  NewSourceForRole is the election-driven path: it
+	// returns the source appropriate for the target role (Leader → datastore;
+	// Tier1 → upstream-to-leader; Tier2 → upstream-to-tier1-or-leader).
+	NewDatastoreSource func() syncsource.SyncerSource
+	NewUpstreamSource  func() syncsource.SyncerSource
+	NewSourceForRole   func(role rolemanager.Role) syncsource.SyncerSource
 }
 
-func (p syncerPipeline) Start(cxt context.Context) {
+// Start brings up the always-on part of the pipeline (the downstream pumps and
+// the snapcache).  It starts the source too unless roleManaged is true, in which
+// case the role manager owns the source lifecycle.
+func (p syncerPipeline) Start(cxt context.Context, roleManaged bool) {
 	logCxt := log.WithField("syncerType", p.Type)
-	logCxt.Info("Starting syncer")
-	p.Syncer.Start()
-	logCxt.Info("Starting syncer-to-validator decoupler")
-	go p.SyncerToValidator.SendTo(p.Validator)
 	logCxt.Info("Starting validator-to-cache decoupler")
 	go p.ValidatorToCache.SendTo(p.Cache)
+	logCxt.Info("Starting dedupe buffer pump")
+	go p.DedupeBuffer.SendToSinkForever(p.Validator)
 	logCxt.Info("Starting cache")
 	p.Cache.Start(cxt)
+	if roleManaged {
+		logCxt.Info("Role-managed pipeline; source will be started by the role manager")
+	} else {
+		logCxt.Info("Starting syncer source")
+		if err := p.Source.Start(cxt); err != nil {
+			logCxt.WithError(err).Fatal("Failed to start syncer source")
+		}
+	}
 	logCxt.Info("Started syncer pipeline")
 }
 
@@ -263,11 +326,15 @@ configRetry:
 func (t *TyphaDaemon) addSyncerPipeline(
 	syncerType syncproto.SyncerType,
 	newSyncer func(callbacks bapi.SyncerCallbacks) bapi.Syncer,
+	leaderDiscoverer *discovery.Discoverer,
+	tier1Discoverer *discovery.Discoverer,
 ) {
-	// Get a Syncer from the datastore, which will feed the validator layer with updates.
-	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
-	syncer := newSyncer(syncerToValidator)
-	log.Debugf("Created Syncer: %#v", syncer)
+	// The dedupe buffer is the permanent head of the pipeline; it feeds the
+	// validator via its SendToSinkForever pump (started in pipeline.Start).  It
+	// is also the syncer callbacks sink that the source delivers into, and it is
+	// restart-aware so that the upstream syncclient can reconcile on reconnect
+	// (and so that WS-C can swap sources behind it).
+	dedupeBuf := dedupebuffer.New()
 
 	toCache := calc.NewSyncerCallbacksDecoupler()
 	var validator *calc.ValidationFilter
@@ -289,16 +356,121 @@ func (t *TyphaDaemon) addSyncerPipeline(
 		Name:             string(syncerType),
 	})
 
+	// Build source factories for this pipeline.  newDatastoreSource runs a real
+	// datastore syncer (leader / non-hierarchical).  newUpstreamSource connects
+	// to an upstream Typha (follower).
+	newDatastoreSource := func() syncsource.SyncerSource {
+		return syncsource.NewDatastoreSource(newSyncer, dedupeBuf)
+	}
+	// newUpstreamSourceVia builds an upstream-Typha source that discovers its
+	// upstream through the given discoverer.  Tier-1 typhas use the leader
+	// discoverer; tier-2 typhas use the tier-1 discoverer (or the leader
+	// discoverer in single-tier mode, where tier1Discoverer == leaderDiscoverer).
+	newUpstreamSourceVia := func(disco *discovery.Discoverer) syncsource.SyncerSource {
+		src := syncsource.NewUpstreamTyphaSource(
+			disco,
+			syncsource.UpstreamConfig{
+				MyVersion:  buildinfo.Version,
+				MyHostname: t.hostname(),
+				MyInfo: fmt.Sprintf("Revision: %s; Build date: %s",
+					buildinfo.GitRevision, buildinfo.BuildDate),
+				SyncerType: syncerType,
+				ClientOptions: syncclient.Options{
+					ReadTimeout:           t.ConfigParams.UpstreamReadTimeout,
+					WriteTimeout:          t.ConfigParams.UpstreamWriteTimeout,
+					KeyFile:               t.ConfigParams.ClientKeyFile,
+					CertFile:              t.ConfigParams.ClientCertFile,
+					CAFile:                t.ConfigParams.ClientCAFile,
+					ServerCN:              t.ConfigParams.UpstreamServerCN,
+					ServerURISAN:          t.ConfigParams.UpstreamServerURISAN,
+					ChecksumCheckInterval: t.ConfigParams.ChecksumInterval,
+				},
+			},
+			dedupeBuf,
+		)
+
+		// Snapshot-integrity checking (WS-D): when enabled, attach a verifier
+		// that compares the upstream's reported checksum against our own
+		// reconstructed snapshot (this pipeline's snapcache breadcrumb).  On a
+		// confirmed mismatch the verifier asks the source to reconnect, which
+		// re-syncs from scratch through the dedupe buffer.
+		if t.ConfigParams.ChecksumEnabled {
+			if ups, ok := src.(syncsource.UpstreamTyphaSource); ok {
+				verifier := synccheck.NewVerifier(synccheck.VerifierConfig{
+					SyncerType:     string(syncerType),
+					MismatchAction: synccheck.MismatchAction(t.ConfigParams.ChecksumMismatchAction),
+					Local: synccheck.LocalChecksumFunc(func() synccheck.Checksum {
+						return cache.CurrentBreadcrumb().Checksum
+					}),
+					RequestReconnect: ups.Reconnect,
+				})
+				ups.SetChecksumVerifier(verifier)
+			}
+		}
+		return src
+	}
+	// newUpstreamSource is the static-mode factory: it always discovers via the
+	// leader discoverer (which, in the static cases, is configured from the
+	// Upstream* params).  Retained for WS-A manual chaining / tests.
+	newUpstreamSource := func() syncsource.SyncerSource {
+		return newUpstreamSourceVia(leaderDiscoverer)
+	}
+	// newSourceForRole is the election-driven factory consumed by the role
+	// manager: it selects the source kind and (for upstream sources) the upstream
+	// Service appropriate for the target role.
+	newSourceForRole := func(role rolemanager.Role) syncsource.SyncerSource {
+		switch role {
+		case rolemanager.Leader:
+			return newDatastoreSource()
+		case rolemanager.Tier1:
+			// Tier-1 typhas source from the leader.
+			return newUpstreamSourceVia(leaderDiscoverer)
+		default: // Tier2
+			// Tier-2 typhas source from tier-1 (or, in single-tier mode, the
+			// leader — tier1Discoverer == leaderDiscoverer there).
+			return newUpstreamSourceVia(tier1Discoverer)
+		}
+	}
+
+	// Choose the source wiring:
+	//   - role-managed hierarchy: leave Source nil; the role manager creates and
+	//     swaps sources via NewSourceForRole.
+	//   - static upstream (HierarchyEnabled + UpstreamAddr/Service, no election):
+	//     eagerly build an upstream source (WS-A behaviour, manual chaining).
+	//   - default: eagerly build a datastore source.
+	var source syncsource.SyncerSource
+	switch {
+	case t.roleManaged:
+		source = nil
+	case t.ConfigParams.HierarchyEnabled:
+		source = newUpstreamSource()
+	default:
+		source = newDatastoreSource()
+	}
+
 	pipeline := &syncerPipeline{
-		Type:              syncerType,
-		Syncer:            syncer,
-		SyncerToValidator: syncerToValidator,
-		Validator:         validator,
-		ValidatorToCache:  toCache,
-		Cache:             cache,
+		Type:               syncerType,
+		Source:             source,
+		DedupeBuffer:       dedupeBuf,
+		Validator:          validator,
+		ValidatorToCache:   toCache,
+		Cache:              cache,
+		NewDatastoreSource: newDatastoreSource,
+		NewUpstreamSource:  newUpstreamSource,
+		NewSourceForRole:   newSourceForRole,
 	}
 	t.SyncerPipelines = append(t.SyncerPipelines, pipeline)
 	t.CachesBySyncerType[syncerType] = cache
+}
+
+// hostname returns this Typha's hostname for use in the client hello when
+// connecting to an upstream Typha.  It is best-effort; the upstream only uses
+// it for logging/metrics.
+func (t *TyphaDaemon) hostname() string {
+	if hn, err := os.Hostname(); err == nil {
+		return hn
+	}
+	return "typha"
 }
 
 // CreateServer creates and configures (but does not start) the server components.
@@ -306,11 +478,45 @@ func (t *TyphaDaemon) CreateServer() {
 	// Health monitoring, for liveness and readiness endpoints.
 	t.healthAggregator = health.NewHealthAggregator()
 
+	// Decide whether the role manager owns the pipeline sources.  This is the
+	// election-driven hierarchy: hierarchy enabled, election enabled, and no
+	// static upstream configured (a static upstream takes precedence and pins us
+	// as a follower, for manual chaining / tests).
+	t.roleManaged = t.ConfigParams.HierarchyEnabled &&
+		t.ConfigParams.LeaderElectionEnabled &&
+		!t.ConfigParams.UpstreamConfigured()
+	if t.ConfigParams.HierarchyEnabled && t.ConfigParams.UpstreamConfigured() && t.ConfigParams.LeaderElectionEnabled {
+		log.Warn("Both a static upstream and leader election are configured; " +
+			"the static upstream takes precedence and this Typha will not participate " +
+			"in election-driven promotion/demotion.")
+	}
+
+	// In hierarchical mode, build the upstream discoverer(s) that all four
+	// pipelines share (a discoverer is stateless with respect to syncer type;
+	// each pipeline gets its own syncclient connection).
+	//
+	//   - leaderDiscoverer targets the leader Service (used by tier-1 typhas and,
+	//     in static mode, by the configured upstream).
+	//   - tier1Discoverer targets the tier-1 Service (used by tier-2 typhas when
+	//     tiering is active).  In single-tier mode (Tier1Count==0) it is the same
+	//     discoverer as leaderDiscoverer, so tier-2 typhas connect straight to the
+	//     leader — exactly WS-C behaviour.
+	if t.ConfigParams.HierarchyEnabled {
+		t.upstreamDiscoverer = t.newUpstreamDiscoverer()
+		if t.roleManaged && t.ConfigParams.Tier1Count > 0 {
+			t.tier1Discoverer = t.newTier1Discoverer()
+		} else {
+			t.tier1Discoverer = t.upstreamDiscoverer
+		}
+	}
+	leaderDiscoverer := t.upstreamDiscoverer
+	tier1Discoverer := t.tier1Discoverer
+
 	// Now create the Syncer and caching layer (one pipeline for each syncer we support).
-	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface)
-	t.addSyncerPipeline(syncproto.SyncerTypeNodeStatus, t.DatastoreClient.NodeStatusSyncerByIface)
+	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface, leaderDiscoverer, tier1Discoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface, leaderDiscoverer, tier1Discoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeTunnelIPAllocation, t.DatastoreClient.TunnelIPAllocationSyncerByIface, leaderDiscoverer, tier1Discoverer)
+	t.addSyncerPipeline(syncproto.SyncerTypeNodeStatus, t.DatastoreClient.NodeStatusSyncerByIface, leaderDiscoverer, tier1Discoverer)
 
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
@@ -335,8 +541,105 @@ func (t *TyphaDaemon) CreateServer() {
 			CAFile:                         t.ConfigParams.CAFile,
 			ClientCN:                       t.ConfigParams.ClientCN,
 			ClientURISAN:                   t.ConfigParams.ClientURISAN,
+			ChecksumInterval:               t.ConfigParams.ChecksumInterval,
+			NodeName:                       t.ConfigParams.NodeName,
 		},
 	)
+}
+
+// newUpstreamDiscoverer builds the discovery.Discoverer used to find the leader
+// Typha in hierarchical mode (tier-1's upstream; also tier-2's upstream in
+// single-tier mode).
+//
+//   - Static mode (UpstreamAddr / UpstreamK8s* set): honour those params
+//     directly (WS-A behaviour, manual chaining / tests).
+//   - Role-managed mode (election-driven): discover via the leader Service,
+//     which selects only the pod labelled projectcalico.org/typha-tier=leader.
+//
+// A post-discovery filter drops any endpoint that resolves to ourselves so we
+// never chain to ourselves.  Inter-Typha discovery uses plain shuffled ordering
+// (no same-node preference between Typha tiers — anti-affinity already spreads
+// them).
+func (t *TyphaDaemon) newUpstreamDiscoverer() *discovery.Discoverer {
+	var opts []discovery.Option
+	if t.roleManaged {
+		opts = []discovery.Option{
+			discovery.WithInClusterKubeClient(),
+			discovery.WithKubeService(t.ConfigParams.PodNamespace, t.ConfigParams.LeaderServiceName),
+			discovery.WithKubeServicePortNameOverride(t.ConfigParams.LeaderServicePortName),
+			discovery.WithPostDiscoveryFilter(t.filterOutSelf),
+		}
+	} else {
+		opts = []discovery.Option{
+			discovery.WithAddrOverride(t.ConfigParams.UpstreamAddr),
+			discovery.WithInClusterKubeClient(),
+			discovery.WithKubeService(t.ConfigParams.UpstreamK8sNamespace, t.ConfigParams.UpstreamK8sServiceName),
+			discovery.WithKubeServicePortNameOverride(t.ConfigParams.UpstreamK8sPortName),
+			discovery.WithPostDiscoveryFilter(t.filterOutSelf),
+		}
+	}
+	return discovery.New(opts...)
+}
+
+// newTier1Discoverer builds the discovery.Discoverer that tier-2 Typhas use to
+// find their upstream tier-1 Typha (via the calico-typha-tier1 Service).  Only
+// used when Tier1Count>0; in single-tier mode tier-2 uses the leader discoverer
+// instead.  Plain shuffled ordering — no same-node preference between Typha
+// tiers (anti-affinity spreads them).
+func (t *TyphaDaemon) newTier1Discoverer() *discovery.Discoverer {
+	return discovery.New(
+		discovery.WithInClusterKubeClient(),
+		discovery.WithKubeService(t.ConfigParams.PodNamespace, t.ConfigParams.Tier1ServiceName),
+		discovery.WithKubeServicePortNameOverride(t.ConfigParams.Tier1ServicePortName),
+		discovery.WithPostDiscoveryFilter(t.filterOutSelf),
+	)
+}
+
+// filterOutSelf removes any discovered upstream Typha endpoint that points back
+// at this instance, so that we never chain to ourselves.  We compare against
+// our own pod IP (POD_IP / our hostname's resolved address) and our server
+// port.
+func (t *TyphaDaemon) filterOutSelf(typhas []discovery.Typha) ([]discovery.Typha, error) {
+	selfIPs := t.selfIPs()
+	if len(selfIPs) == 0 {
+		return typhas, nil
+	}
+	var out []discovery.Typha
+	for _, typha := range typhas {
+		host, _, err := net.SplitHostPort(typha.Addr)
+		if err != nil {
+			// Can't parse; keep it rather than risk dropping a valid endpoint.
+			out = append(out, typha)
+			continue
+		}
+		candidateIP := typha.IP
+		if candidateIP == "" {
+			candidateIP = host
+		}
+		if selfIPs[candidateIP] {
+			log.WithField("addr", typha.Addr).Warn(
+				"Filtering out upstream Typha endpoint that points back at ourselves.")
+			continue
+		}
+		out = append(out, typha)
+	}
+	return out, nil
+}
+
+// selfIPs returns the set of IP addresses that identify this Typha instance,
+// used by the self-connection guard.  Uses POD_IP if set, plus any addresses
+// our hostname resolves to.
+func (t *TyphaDaemon) selfIPs() map[string]bool {
+	ips := map[string]bool{}
+	if podIP := os.Getenv("POD_IP"); podIP != "" {
+		ips[podIP] = true
+	}
+	if addrs, err := net.LookupHost(t.hostname()); err == nil {
+		for _, a := range addrs {
+			ips[a] = true
+		}
+	}
+	return ips
 }
 
 // Start starts all the server components in background goroutines.
@@ -344,7 +647,7 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	// Now we've connected everything up, start the background processing threads.
 	log.Info("Starting the datastore Syncer/cache layer")
 	for _, s := range t.SyncerPipelines {
-		s.Start(cxt)
+		s.Start(cxt, t.roleManaged)
 	}
 	t.Server.Start(cxt)
 	if t.ConfigParams.ConnectionRebalancingMode == "kubernetes" {
@@ -356,6 +659,8 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 		go k8s.PollK8sForConnectionLimit(cxt, t.ConfigParams, ticker.C, k8sAPI, t.Server, len(t.CachesBySyncerType))
 	}
 	log.Info("Started the datastore Syncer/cache layer/server.")
+
+	t.maybeStartLeaderElection(cxt)
 
 	if t.ConfigParams.DebugPort != 0 {
 		debugserver.StartDebugPprofServer(t.ConfigParams.DebugHost, t.ConfigParams.DebugPort)
@@ -398,6 +703,123 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	}
 }
 
+// maybeStartLeaderElection starts the Kubernetes Lease-based election subsystem
+// when LeaderElectionEnabled is true (and the datastore is kubernetes).
+//
+//   - Role-managed mode (election-driven hierarchy): run the multi-slot
+//     lazy-candidacy Acquirer (leader + Tier1Count tier-1 slots) and the role
+//     manager that consumes its three-role output.  Tier1Count==0 reduces the
+//     Acquirer to a single leader slot, reproducing WS-C single-tier behaviour.
+//   - Static mode (election enabled but a static upstream pins us as follower):
+//     the election result is inert; run a single Elector just for the leader
+//     lease and log transitions (WS-B behaviour preserved).
+//
+// The acquirer/elector runs on its own cancellable context so graceful shutdown
+// can release any held lease (ReleaseOnCancel) before draining clients.
+func (t *TyphaDaemon) maybeStartLeaderElection(ctx context.Context) {
+	if !t.ConfigParams.LeaderElectionEnabled {
+		return
+	}
+	if t.ConfigParams.DatastoreType != "kubernetes" {
+		log.Warn("LeaderElectionEnabled=true but DatastoreType is not kubernetes; skipping leader election")
+		return
+	}
+
+	// Build the k8s clientset directly (separate from the connection-rebalancing
+	// k8sAPI to keep Start() changes minimal).
+	k8sAPI := k8s.NewK8sAPI(t.nodeCounter)
+	cs, err := k8sAPI.Clientset()
+	if err != nil {
+		log.WithError(err).Error("Leader election: failed to build Kubernetes clientset; election disabled")
+		return
+	}
+
+	leaseNS := t.ConfigParams.LeaseNamespace
+	if leaseNS == "" {
+		leaseNS = t.ConfigParams.PodNamespace
+	}
+
+	// Register a health reporter so the health aggregator knows the election
+	// subsystem is alive.
+	t.healthAggregator.RegisterReporter("LeaderElection", &health.HealthReport{Live: true}, 0)
+	t.healthAggregator.Report("LeaderElection", &health.HealthReport{Live: true})
+
+	if t.roleManaged {
+		t.startSlotAcquirerAndRoleManager(ctx, cs, leaseNS)
+		return
+	}
+
+	// Static mode: inert single-lease election just for logging (WS-B).
+	elCfg := leaderelection.Config{
+		Enabled:        true,
+		LeaseName:      t.ConfigParams.LeaseName,
+		LeaseNamespace: leaseNS,
+		Identity:       t.ConfigParams.PodName,
+		LeaseDuration:  t.ConfigParams.LeaderElectionDuration,
+		RenewDeadline:  t.ConfigParams.LeaderRenewDeadline,
+		RetryPeriod:    t.ConfigParams.LeaderRetryPeriod,
+	}
+	elector := leaderelection.New(cs, elCfg, t.ConfigParams.PodName, t.ConfigParams.PodNamespace)
+	if elector == nil {
+		return
+	}
+	electorCtx, electorCancel := context.WithCancel(ctx)
+	t.acquirerCancel = electorCancel
+	go elector.Run(electorCtx)
+	go func() {
+		for {
+			select {
+			case role := <-elector.Roles():
+				log.WithField("role", role).Info("Leader election role transition")
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// startSlotAcquirerAndRoleManager builds and runs the multi-slot Acquirer and
+// the role manager that consumes it.  The acquirer runs on its own context so we
+// can release any held lease at the start of graceful shutdown.
+func (t *TyphaDaemon) startSlotAcquirerAndRoleManager(ctx context.Context, cs kubernetes.Interface, leaseNS string) {
+	t.Acquirer = slotacquirer.New(cs, slotacquirer.Config{
+		Tier1Count:     t.ConfigParams.Tier1Count,
+		LeaseNamespace: leaseNS,
+		Identity:       t.ConfigParams.PodName,
+		LeaseDuration:  t.ConfigParams.LeaderElectionDuration,
+		RenewDeadline:  t.ConfigParams.LeaderRenewDeadline,
+		RetryPeriod:    t.ConfigParams.LeaderRetryPeriod,
+		WatchInterval:  t.ConfigParams.SlotWatchInterval,
+	})
+
+	acquirerCtx, acquirerCancel := context.WithCancel(ctx)
+	t.acquirerCancel = acquirerCancel
+	go t.Acquirer.Run(acquirerCtx)
+
+	pipelines := make([]*rolemanager.Pipeline, 0, len(t.SyncerPipelines))
+	for _, p := range t.SyncerPipelines {
+		p := p
+		pipelines = append(pipelines, &rolemanager.Pipeline{
+			Name:             string(p.Type),
+			Buffer:           p.DedupeBuffer,
+			NewSourceForRole: p.NewSourceForRole,
+		})
+	}
+
+	labeller := k8s.NewPodLabeller(cs, t.ConfigParams.PodNamespace, t.ConfigParams.PodName)
+
+	t.RoleManager = rolemanager.New(
+		rolemanager.Config{Debounce: t.ConfigParams.RoleTransitionDebounce},
+		t.Acquirer,
+		labeller,
+		t.Server, // *syncserver.Server implements rolemanager.ClientDrainer.
+		pipelines,
+	)
+	log.WithField("tier1Count", t.ConfigParams.Tier1Count).Info(
+		"Starting slot acquirer + role manager (election-driven hierarchical mode).")
+	go t.RoleManager.Run(ctx)
+}
+
 func (t *TyphaDaemon) configurePrometheusMetrics() {
 	if t.ConfigParams.PrometheusGoMetricsEnabled && t.ConfigParams.PrometheusProcessMetricsEnabled {
 		log.Info("Including Golang & Process metrics")
@@ -429,6 +851,14 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 		select {
 		case <-termChan:
 			log.Warn("Received SIGTERM, shutting down")
+			// Graceful shutdown ordering: if we are (or might be) the leader,
+			// release the lease and drop our leader label *first*, so followers
+			// fail over to a new leader early, before we start draining clients.
+			// Cancelling the elector context triggers ReleaseOnCancel; the role
+			// manager (which shares the parent context) removes the leader label
+			// when its context is cancelled, but we also proactively remove it
+			// here to shorten the window.
+			t.releaseLeadershipForShutdown()
 			t.Server.ShutDownGracefully()
 		case <-usr1SignalChan:
 			log.Info("Received SIGUSR1, emitting heap profile")
@@ -440,6 +870,17 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 			log.Fatal("Server has shut down.")
 		}
 	}
+}
+
+// releaseLeadershipForShutdown releases any held lease (via ReleaseOnCancel) at
+// the start of graceful shutdown so another Typha can take over the slot before
+// we begin draining client connections.  Safe to call when election is disabled.
+func (t *TyphaDaemon) releaseLeadershipForShutdown() {
+	if t.acquirerCancel == nil {
+		return
+	}
+	log.Info("Releasing held lease(s) before draining client connections.")
+	t.acquirerCancel()
 }
 
 // ClientV3Shim wraps a real client, allowing its syncer to be mocked.
