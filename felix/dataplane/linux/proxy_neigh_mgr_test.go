@@ -35,16 +35,18 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// testReadTimeout is the per-read deadline used by unit-test managers: small so
-// a listener that loops on a read timeout (and teardown) is near-instant rather
-// than waiting the production readDeadlineInterval.
-const testReadTimeout = 10 * time.Millisecond
+const (
+	// testReadTimeout is the per-read deadline used by unit-test managers: small so
+	// a listener that loops on a read timeout (and teardown) is near-instant rather
+	// than waiting the production readDeadlineInterval.
+	testReadTimeout = 10 * time.Millisecond
 
-// testAnnounceInterval is a short periodic re-announce interval used by the
-// re-announcement tests: comfortably larger than testReadTimeout so the loop
-// gets several read iterations per interval, but small enough that a couple of
-// refreshes land well within an Eventually timeout.
-const testAnnounceInterval = 40 * time.Millisecond
+	// testAnnounceInterval is a short periodic re-announce interval used by the
+	// re-announcement tests: comfortably larger than testReadTimeout so the loop
+	// gets several read iterations per interval, but small enough that a couple of
+	// refreshes land well within an Eventually timeout.
+	testAnnounceInterval = 40 * time.Millisecond
+)
 
 func newMockNetlinkForProxyNeigh() *mocknetlink.MockNetlinkDataplane {
 	dp := mocknetlink.New()
@@ -1055,7 +1057,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
 		Eventually(func() int {
 			return len(arpClients["eth0"].getWrites())
-		}, "2s").Should(BeNumerically(">=", 2))
+		}, "100ms").Should(BeNumerically(">=", 2))
 
 		// Every refresh is a well-formed GARP for the owned IP.
 		for _, w := range arpClients["eth0"].getWrites() {
@@ -1090,7 +1092,7 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		// Periodic refresh keeps sending unsolicited NAs for the owned IP.
 		Eventually(func() int {
 			return len(ndpConns["eth0"].getWrites())
-		}, "2s").Should(BeNumerically(">=", 2))
+		}, "100ms").Should(BeNumerically(">=", 2))
 
 		// The solicited-node group is joined exactly once on add — the refresh
 		// must not re-join it every interval.

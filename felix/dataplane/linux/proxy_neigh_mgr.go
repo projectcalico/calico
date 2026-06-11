@@ -43,21 +43,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
-// single socket read before waking to re-check for context cancellation.
-// A read that hits the deadline simply loops
-const readDeadlineInterval = 1 * time.Second
+const (
+	// readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
+	// single socket read before waking to re-check for context cancellation.
+	// A read that hits the deadline simply loops
+	readDeadlineInterval = 1 * time.Second
 
-// The interval at which each listener re-announces (gratuitous ARP / unsolicited
-// NA) every IP it owns — keeping neighbor caches and switch forwarding tables
-// warm even when the desired set is unchanged — comes from the
-// LocalSubnetL2ReachabilityRefreshInterval config parameter (default 120s). The
-// initial announcement still fires immediately when an IP is added; the config
-// value only governs the periodic refresh afterwards, and a zero or negative
-// interval disables that refresh, leaving only the one-shot announce on add.
-
-// ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
-const ipv6AllNodesMulticast = "ff02::1"
+	// ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
+	ipv6AllNodesMulticast = "ff02::1"
+)
 
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
@@ -593,8 +587,7 @@ type ifaceListener struct {
 
 	// announced tracks the IPs the goroutine has already announced/joined for,
 	// so it can compute the delta against a new desired set. Goroutine-local:
-	// only ever touched by the listener goroutine, so it needs no
-	// synchronization.
+	// only ever touched by the listener goroutine, so it needs no synchronization.
 	announced set.Set[string]
 
 	arpCli      arpClient // IPv4 only
@@ -604,11 +597,11 @@ type ifaceListener struct {
 
 	// announceInterval is how often the goroutine re-announces every owned IP.
 	// Zero or negative disables periodic re-announcement (only the initial
-	// announce on add fires). Read only by the listener goroutine.
+	// announce on add fires).
 	announceInterval time.Duration
+
 	// lastAnnounce is when the goroutine last re-announced its full owned set.
-	// Goroutine-local: compared against announceInterval each loop iteration and
-	// never touched off-goroutine, so it needs no synchronization.
+	// Goroutine-local: compared against announceInterval each loop iteration.
 	lastAnnounce time.Time
 
 	ctx    context.Context
@@ -708,7 +701,7 @@ func (l *ifaceListener) applyDesiredState() {
 // announce sends a single gratuitous ARP (IPv4) or unsolicited NA (IPv6) for
 // addr. It does not touch multicast group membership, so it is safe to call
 // both for a newly desired IP (after joinNDPGroup) and for periodic refresh of
-// an already-joined IP. Runs only on the listener goroutine.
+// an already-joined IP.
 func (l *ifaceListener) announce(addr netip.Addr) {
 	if l.ndpCli != nil {
 		l.sendUNA(addr)
