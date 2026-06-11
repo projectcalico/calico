@@ -1110,4 +1110,25 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			Expect(w.dst.String()).To(Equal("ff02::1"))
 		}
 	})
+
+	It("takes the re-announce interval from the LocalSubnetL2ReachabilityRefreshInterval config", func() {
+		config := Config{
+			Hostname:                                 "test-node",
+			LocalSubnetL2ReachabilityRefreshInterval: 90 * time.Second,
+			RulesConfig:                              rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		mgr := newProxyNeighManager(config, 4)
+		defer mgr.Stop()
+		Expect(mgr.announceInterval).To(Equal(90 * time.Second))
+	})
+
+	It("disables periodic re-announcement when the config interval is zero", func() {
+		config := Config{
+			Hostname:    "test-node",
+			RulesConfig: rules.Config{WorkloadIfacePrefixes: []string{"cali"}},
+		}
+		mgr := newProxyNeighManager(config, 4)
+		defer mgr.Stop()
+		Expect(mgr.announceInterval).To(BeZero())
+	})
 })

@@ -48,13 +48,13 @@ import (
 // A read that hits the deadline simply loops
 const readDeadlineInterval = 1 * time.Second
 
-// announceRefreshInterval is how often each listener re-announces (gratuitous
-// ARP / unsolicited NA) every IP it owns, so neighbor caches and switch
-// forwarding tables stay warm even when the desired set is unchanged. The
-// initial announcement still fires immediately when an IP is added; this only
-// governs the periodic refresh afterwards. A zero or negative interval disables
-// the periodic refresh, leaving only the one-shot announce on add.
-const announceRefreshInterval = 60 * time.Second
+// The interval at which each listener re-announces (gratuitous ARP / unsolicited
+// NA) every IP it owns — keeping neighbor caches and switch forwarding tables
+// warm even when the desired set is unchanged — comes from the
+// LocalSubnetL2ReachabilityRefreshInterval config parameter (default 120s). The
+// initial announcement still fires immediately when an IP is added; the config
+// value only governs the periodic refresh afterwards, and a zero or negative
+// interval disables that refresh, leaving only the one-shot announce on add.
 
 // ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
 const ipv6AllNodesMulticast = "ff02::1"
@@ -190,7 +190,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			return conn, ifi.HardwareAddr, nil
 		}
 	}
-	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval, announceRefreshInterval)
+	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval, dpConfig.LocalSubnetL2ReachabilityRefreshInterval)
 }
 
 // setIgnoreOutgoing sets PACKET_IGNORE_OUTGOING on the raw socket so the kernel
