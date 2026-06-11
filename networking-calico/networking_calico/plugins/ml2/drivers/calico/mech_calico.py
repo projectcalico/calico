@@ -47,7 +47,6 @@ from neutron_lib.agent import topics
 from neutron_lib.callbacks import events
 from neutron_lib.callbacks import registry
 from neutron_lib.callbacks import resources
-from neutron_lib.db import api as db_api
 from neutron_lib.plugins import directory as plugin_dir
 from neutron_lib.plugins.ml2 import api
 
@@ -890,20 +889,25 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         )
 
         # Update the existing ports for this network and which don't have their own
-        # qos_policy_id.
+        # qos_policy_id.  We do NOT wrap this in a writer/reader context: each upstream
+        # call (``get_ports``, ``get_security_group_rules`` via the endpoint syncer,
+        # etc.) is already decorated with ``@db_api.retry_if_session_inactive`` and
+        # manages its own transaction plus retry.  Holding an outer writer here disables
+        # that retry -- documented as an anti-pattern in Neutron's contributor devref:
+        # "the retry context would be always called from inside an active transaction
+        # making it useless."
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_WRITER.using(plugin_context):
-            ports = self.db.get_ports(
-                plugin_context,
-                filters={
-                    "network_id": [network_id],
-                },
-            )
-            self.update_existing_ports(
-                [p for p in ports if not p["qos_policy_id"]],
-                plugin_context,
-                "network changing qos_policy_id",
-            )
+        ports = self.db.get_ports(
+            plugin_context,
+            filters={
+                "network_id": [network_id],
+            },
+        )
+        self.update_existing_ports(
+            [p for p in ports if not p["qos_policy_id"]],
+            plugin_context,
+            "network changing qos_policy_id",
+        )
 
     def update_existing_ports(self, ports, plugin_context, reason):
         # For each port, recompute and emit the WorkloadEndpoint for that port.
@@ -916,36 +920,35 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
         LOG.info("HANDLE_QOS_POLICY_UPDATE: %s %s", context, policy_id)
 
-        with db_api.CONTEXT_WRITER.using(context):
-            policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
+        # No outer writer/reader context here -- see the comment in
+        # update_network_postcommit above for rationale.
+        policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
-            # Find ports whose network use this QoS policy and that don't have a
-            # port-specific QoS policy.
-            networks_ids = policy.get_bound_networks()
-            ports_with_net_policy = (
-                ports_object.Port.get_objects(context, network_id=networks_ids)
-                if networks_ids
-                else []
+        # Find ports whose network use this QoS policy and that don't have a
+        # port-specific QoS policy.
+        networks_ids = policy.get_bound_networks()
+        ports_with_net_policy = (
+            ports_object.Port.get_objects(context, network_id=networks_ids)
+            if networks_ids
+            else []
+        )
+        ports = [
+            port.to_dict()
+            for port in ports_with_net_policy
+            if port.qos_policy_id is None
+        ]
+
+        # Add the ports that directly use this QoS policy.
+        port_ids = policy.get_bound_ports()
+        if port_ids:
+            ports.extend(
+                [
+                    p.to_dict()
+                    for p in ports_object.Port.get_objects(context, id=port_ids)
+                ]
             )
-            ports = [
-                port.to_dict()
-                for port in ports_with_net_policy
-                if port.qos_policy_id is None
-            ]
 
-            # Add the ports that directly use this QoS policy.
-            port_ids = policy.get_bound_ports()
-            if port_ids:
-                ports.extend(
-                    [
-                        p.to_dict()
-                        for p in ports_object.Port.get_objects(context, id=port_ids)
-                    ]
-                )
-
-            self.update_existing_ports(
-                ports, context, "network QoS policy rules changing"
-            )
+        self.update_existing_ports(ports, context, "network QoS policy rules changing")
 
     def delete_network_postcommit(self, context):
         LOG.info("DELETE_NETWORK_POSTCOMMIT: %s" % context)
@@ -956,31 +959,31 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("CREATE_SUBNET_POSTCOMMIT")
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
 
-        # Re-read the subnet from the DB.  This ensures that a change to the
-        # same subnet can't be processed by another controller process while
-        # we're writing the effects of this call into etcd.
+        # Re-read the subnet from the DB so we pick up the latest state, rather than the
+        # (potentially slightly stale) ``context.current`` snapshot taken in the
+        # precommit phase.  ``self.db.get_subnet`` is
+        # ``@retry_if_session_inactive``-decorated and manages its own reader
+        # transaction; we deliberately do NOT wrap it in our own writer/reader -- see
+        # update_network_postcommit for rationale.
         subnet = context.current
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_WRITER.using(plugin_context):
-            subnet = self.db.get_subnet(plugin_context, subnet["id"])
-            if subnet["enable_dhcp"]:
-                self.subnet_syncer.write_subnet(subnet, context)
+        subnet = self.db.get_subnet(plugin_context, subnet["id"])
+        if subnet["enable_dhcp"]:
+            self.subnet_syncer.write_subnet(subnet, context)
 
     def update_subnet_postcommit(self, context):
         TrackTask("UPDATE_SUBNET_POSTCOMMIT")
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
 
-        # Re-read the subnet from the DB.  This ensures that a change to the
-        # same subnet can't be processed by another controller process while
-        # we're writing the effects of this call into etcd.
+        # Re-read the subnet (see create_subnet_postcommit for the rationale behind the
+        # re-read and against wrapping in a writer context).
         subnet = context.current
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_WRITER.using(plugin_context):
-            subnet = self.db.get_subnet(plugin_context, subnet["id"])
-            if subnet["enable_dhcp"]:
-                self.subnet_syncer.write_subnet(subnet, context)
-            else:
-                self.subnet_syncer.delete_subnet(subnet["id"])
+        subnet = self.db.get_subnet(plugin_context, subnet["id"])
+        if subnet["enable_dhcp"]:
+            self.subnet_syncer.write_subnet(subnet, context)
+        else:
+            self.subnet_syncer.delete_subnet(subnet["id"])
 
     def delete_subnet_postcommit(self, context):
         TrackTask("DELETE_SUBNET_POSTCOMMIT")
@@ -991,13 +994,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def create_port_postcommit(self, context):
         """create_port_postcommit
 
-        Called after Neutron has committed a port creation event to the
-        database.
+        Called after Neutron has committed a port creation event to the database.
 
-        Process this event by taking and holding a database transaction and
-        re-reading the port. Once we do that, we know the port will remain
-        unchanged while we hold the transaction. We can then write the port to
-        etcd, along with any other information we may need.
+        Process this event by writing the corresponding WorkloadEndpoint (and any side
+        data such as security-group policies) to etcd.  We deliberately do not wrap this
+        in a writer/reader context: the inner calls into ``self.db.get_*`` are already
+        ``@db_api.retry_if_session_inactive``-decorated and manage their own
+        transactions plus retry behaviour.  Holding an outer writer here disables that
+        retry -- see ``update_network_postcommit`` for the devref reference and PR
+        #12898 for the regression history this avoids.
         """
         TrackTask("CREATE_PORT_POSTCOMMIT")
         LOG.info("CREATE_PORT_POSTCOMMIT: %s", context)
@@ -1014,8 +1019,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return
 
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_WRITER.using(plugin_context):
-            self.endpoint_syncer.write_endpoint(port, plugin_context)
+        self.endpoint_syncer.write_endpoint(port, plugin_context)
 
     def update_port_postcommit(self, context):
         """update_port_postcommit
@@ -1048,135 +1052,136 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.debug("Old = %r", original)
         LOG.debug("New = %r", port)
 
-        # Re-read the port; we do this to guarantee correctly ordered handling
-        # of multiple updates to the same port, when there are multiple Neutron
-        # servers and so different updates could be processed on different
-        # servers.  Imagine an update that changes KEY1=NEW1, and a following
-        # update that changes KEY2=NEW2.  So the first update_port_postcommit
-        # callback will have KEY1=NEW1 KEY2=OLD2 and the second callback will
-        # have KEY1=NEW1 KEY2=NEW2.  Now suppose the 'second' callback executes
-        # first, and in particular that its write hits the etcd datastore first.
-        # Then the 'first' callback's write hits second and we can end up with
-        # data in the datastore that corresponds to KEY1=NEW1 KEY2=OLD2.
+        # Re-read the port to pick up the latest available data rather than relying on
+        # ``context._port`` which is a snapshot taken earlier in the API call.
+        # ``self.db.get_port`` is ``@db_api.retry_if_session_inactive``-decorated and
+        # manages its own reader transaction; we deliberately do NOT wrap this body in
+        # our own writer/reader context -- see ``create_port_postcommit`` for rationale
+        # and PR #12898 for the regression history.
         #
-        # To eliminate that possibility of writing stale data, take a Neutron DB
-        # transaction, re-read the latest available port data, and write
-        # corresponding data into etcd while still holding the Neutron DB
-        # transaction.
+        # The re-read is a best-effort hedge against two fast-paired updates to the same
+        # port being routed to different API workers and arriving at postcommit in the
+        # opposite order to the API call order.  If the second-in-time update has
+        # already committed to the Neutron DB by the time we get here, this re-read
+        # picks up both changes and we write a consistent superset to etcd.  If the
+        # other order obtains (we re-read before the other worker's DB commit, then race
+        # on the etcd write), the etcd state can transiently revert to the older
+        # update's view.  A writer transaction here would not help: a Neutron writer txn
+        # in our session does not row-lock the port and does not order against other
+        # workers' sessions or etcd writes, and the etcd write below is not CAS-guarded
+        # (``mod_revision`` is ``None`` in ``endpoints.write_endpoint`` for the dynamic
+        # path).  Persistent drift, if it happens, is repaired on the next
+        # neutron-server restart by the startup resync; there is no longer a periodic
+        # resync.  Tightening this -- e.g. CAS-against-mod_revision on dynamic writes
+        # with retry-on-conflict -- is a known follow-up.
         plugin_context = context._plugin_context
-        with db_api.CONTEXT_WRITER.using(plugin_context):
 
-            # If the port was previously bound, the endpoint should already
-            # exist.
-            endpoint_should_already_exist = port_bound(original)
+        # If the port was previously bound, the endpoint should already exist.
+        endpoint_should_already_exist = port_bound(original)
 
-            # Detect live migration ending (migrating_to was set, now cleared).
-            orig_migrating_to = original.get("binding:profile", {}).get("migrating_to")
-            curr_migrating_to = port.get("binding:profile", {}).get("migrating_to")
+        # Detect live migration ending (migrating_to was set, now cleared).
+        orig_migrating_to = original.get("binding:profile", {}).get("migrating_to")
+        curr_migrating_to = port.get("binding:profile", {}).get("migrating_to")
 
-            if orig_migrating_to is not None and curr_migrating_to is None:
-                # Live migration ended — clean up LiveMigration resource
-                # and, if the migration failed, the destination WEP.
-                # Source WEP deletion for the success case is handled by
-                # the host-change block below, which covers both cold
-                # and live migration.
-                namespace = self.endpoint_syncer.namespace
-                dest_port = original.copy()
-                dest_port["binding:host_id"] = orig_migrating_to
-                dest_wep_name = endpoint_name(dest_port)
-                migration_uid = datamodel_v3.get_uid(
-                    "LiveMigration", namespace, dest_wep_name
-                )
-                self.endpoint_syncer.delete_live_migration(dest_wep_name)
+        if orig_migrating_to is not None and curr_migrating_to is None:
+            # Live migration ended — clean up LiveMigration resource
+            # and, if the migration failed, the destination WEP.
+            # Source WEP deletion for the success case is handled by
+            # the host-change block below, which covers both cold
+            # and live migration.
+            namespace = self.endpoint_syncer.namespace
+            dest_port = original.copy()
+            dest_port["binding:host_id"] = orig_migrating_to
+            dest_wep_name = endpoint_name(dest_port)
+            migration_uid = datamodel_v3.get_uid(
+                "LiveMigration", namespace, dest_wep_name
+            )
+            self.endpoint_syncer.delete_live_migration(dest_wep_name)
 
-                if port["binding:host_id"] == original["binding:host_id"]:
-                    # Migration FAILED — host didn't change, delete
-                    # destination WEP.
-                    LOG.info(
-                        "Live migration %s: failed, port %s remains on %s",
-                        migration_uid,
-                        port["id"],
-                        port["binding:host_id"],
-                    )
-                    self.endpoint_syncer.delete_endpoint(dest_port)
-                else:
-                    LOG.info(
-                        "Live migration %s: succeeded, port %s migrated from %s to %s",
-                        migration_uid,
-                        port["id"],
-                        original["binding:host_id"],
-                        port["binding:host_id"],
-                    )
-
-            # Check for migration (cold or live) so that we can reliably
-            # delete the WorkloadEndpoint on the old host.
-            if original["binding:host_id"] != port["binding:host_id"]:
+            if port["binding:host_id"] == original["binding:host_id"]:
+                # Migration FAILED — host didn't change, delete
+                # destination WEP.
                 LOG.info(
-                    "Migration, delete WorkloadEndpoint on old host %s",
-                    original["binding:host_id"],
-                )
-                self.endpoint_syncer.delete_endpoint(original)
-                endpoint_should_already_exist = False
-
-            try:
-                port = self.db.get_port(plugin_context, port["id"])
-            except n_exc.PortNotFound:
-                LOG.info("Port no longer exists")
-                return
-
-            # Now, fork execution based on the type of update we're performing.
-            # There are a few:
-            # - a pre live-migration notice (binding profile has a migrating_to
-            #   key with the future nova-compute host as the value), where we
-            #   create a destination WEP and LiveMigration resource;
-            # - a port becoming bound (binding vif_type from unbound to bound);
-            # - a port becoming unbound (binding vif_type from bound to
-            #   unbound);
-            # - an update (port bound at all times);
-            # - a change to an unbound port (which we don't care about, because
-            #   we do nothing with unbound ports).
-            if port.get("binding:profile", {}).get("migrating_to") is not None:
-                dest_host = port["binding:profile"]["migrating_to"]
-
-                dest_port = port.copy()
-                dest_port["binding:host_id"] = dest_host
-
-                # Create LiveMigration resource BEFORE the destination
-                # WEP, so that Felix has the migration context before it
-                # sees the new endpoint.  (In etcd, write ordering is
-                # preserved per-client.)
-                migration_uid = self.endpoint_syncer.write_live_migration(
-                    port, dest_port
-                )
-
-                # Create destination WEP after the LiveMigration resource.
-                # Skip DB re-read because this is a synthetic port dict
-                # with the destination host.
-                self.endpoint_syncer.write_endpoint(
-                    dest_port, plugin_context, reread=False
-                )
-
-                LOG.info(
-                    "Live migration %s: pre-migrate port %s from %s to %s",
+                    "Live migration %s: failed, port %s remains on %s",
                     migration_uid,
                     port["id"],
                     port["binding:host_id"],
-                    dest_host,
                 )
-            elif port_bound(port):
-                if endpoint_should_already_exist:
-                    LOG.info("Port update")
-                    self.endpoint_syncer.write_endpoint(
-                        port, plugin_context, must_update=True
-                    )
-                else:
-                    LOG.info("Port becoming bound: create.")
-                    self.endpoint_syncer.write_endpoint(port, plugin_context)
-            elif endpoint_should_already_exist:
-                LOG.info("Port becoming unbound: destroy.")
-                self.endpoint_syncer.delete_endpoint(original)
+                self.endpoint_syncer.delete_endpoint(dest_port)
             else:
-                LOG.info("Update on unbound port: no action")
+                LOG.info(
+                    "Live migration %s: succeeded, port %s migrated from %s to %s",
+                    migration_uid,
+                    port["id"],
+                    original["binding:host_id"],
+                    port["binding:host_id"],
+                )
+
+        # Check for migration (cold or live) so that we can reliably
+        # delete the WorkloadEndpoint on the old host.
+        if original["binding:host_id"] != port["binding:host_id"]:
+            LOG.info(
+                "Migration, delete WorkloadEndpoint on old host %s",
+                original["binding:host_id"],
+            )
+            self.endpoint_syncer.delete_endpoint(original)
+            endpoint_should_already_exist = False
+
+        try:
+            port = self.db.get_port(plugin_context, port["id"])
+        except n_exc.PortNotFound:
+            LOG.info("Port no longer exists")
+            return
+
+        # Now, fork execution based on the type of update we're performing.
+        # There are a few:
+        # - a pre live-migration notice (binding profile has a migrating_to
+        #   key with the future nova-compute host as the value), where we
+        #   create a destination WEP and LiveMigration resource;
+        # - a port becoming bound (binding vif_type from unbound to bound);
+        # - a port becoming unbound (binding vif_type from bound to
+        #   unbound);
+        # - an update (port bound at all times);
+        # - a change to an unbound port (which we don't care about, because
+        #   we do nothing with unbound ports).
+        if port.get("binding:profile", {}).get("migrating_to") is not None:
+            dest_host = port["binding:profile"]["migrating_to"]
+
+            dest_port = port.copy()
+            dest_port["binding:host_id"] = dest_host
+
+            # Create LiveMigration resource BEFORE the destination
+            # WEP, so that Felix has the migration context before it
+            # sees the new endpoint.  (In etcd, write ordering is
+            # preserved per-client.)
+            migration_uid = self.endpoint_syncer.write_live_migration(port, dest_port)
+
+            # Create destination WEP after the LiveMigration resource.
+            # Skip DB re-read because this is a synthetic port dict
+            # with the destination host.
+            self.endpoint_syncer.write_endpoint(dest_port, plugin_context, reread=False)
+
+            LOG.info(
+                "Live migration %s: pre-migrate port %s from %s to %s",
+                migration_uid,
+                port["id"],
+                port["binding:host_id"],
+                dest_host,
+            )
+        elif port_bound(port):
+            if endpoint_should_already_exist:
+                LOG.info("Port update")
+                self.endpoint_syncer.write_endpoint(
+                    port, plugin_context, must_update=True
+                )
+            else:
+                LOG.info("Port becoming bound: create.")
+                self.endpoint_syncer.write_endpoint(port, plugin_context)
+        elif endpoint_should_already_exist:
+            LOG.info("Port becoming unbound: destroy.")
+            self.endpoint_syncer.delete_endpoint(original)
+        else:
+            LOG.info("Update on unbound port: no action")
 
     def update_floatingip(self, plugin_context):
         """update_floatingip
@@ -1187,9 +1192,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("UPDATE_FLOATINGIP")
         LOG.info("UPDATE_FLOATINGIP: %s", plugin_context)
 
-        with db_api.CONTEXT_WRITER.using(plugin_context):
-            port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
-            self._update_port(plugin_context, port)
+        # No outer writer/reader context here -- see create_port_postcommit for
+        # rationale.
+        port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
+        self._update_port(plugin_context, port)
 
     def delete_port_postcommit(self, context):
         """delete_port_postcommit
@@ -1239,8 +1245,13 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         TrackTask("SECURITY_GROUPS_RULE_UPDATED")
         LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
-        with db_api.CONTEXT_WRITER.using(context.plugin_context):
-            self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
+
+        # No outer writer/reader context here -- see create_port_postcommit for
+        # rationale.  ``write_sgs_to_etcd`` calls ``self.db.get_security_group_rules``,
+        # which is ``@retry_if_session_inactive``-decorated and triggers upstream
+        # ``_ensure_default_security_group``'s race recovery when called without an
+        # outer writer.
+        self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
 
     def _update_port(self, plugin_context, port):
         """_update_port
