@@ -3006,6 +3006,16 @@ spec:
                     - Disabled
                     - PodsAndLoadBalancers
                   type: string
+                localSubnetL2ReachabilityRefreshInterval:
+                  description: |-
+                    LocalSubnetL2ReachabilityRefreshInterval is the period at which Felix re-announces
+                    (gratuitous ARP / unsolicited NA) the pod and LoadBalancer IPs it answers for when
+                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding
+                    tables warm. A small random jitter is applied per interface to avoid synchronized
+                    bursts. Set to 0 to disable periodic re-announcement (the one-shot announcement on
+                    add still happens). [Default: 60s]
+                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
                 logActionRateLimit:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",

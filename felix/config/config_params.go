@@ -380,6 +380,12 @@ type Config struct {
 	// selected LoadBalancer VIPs that overlap the host subnet. [Default: Disabled]
 	LocalSubnetL2Reachability string `config:"oneof(Disabled,PodsAndLoadBalancers);Disabled"`
 
+	// LocalSubnetL2ReachabilityRefreshInterval is the period at which Felix re-announces
+	// (gratuitous ARP / unsolicited NA) the IPs it answers for when LocalSubnetL2Reachability
+	// is enabled. A small random jitter is applied per interface. Set to 0 to disable the
+	// periodic refresh. [Default: 60s]
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration `config:"seconds;60"`
+
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
 	WindowsManageFirewallRules string `config:"oneof(Enabled,Disabled);Disabled"`
 

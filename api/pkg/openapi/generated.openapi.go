@@ -4304,6 +4304,12 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"localSubnetL2ReachabilityRefreshInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LocalSubnetL2ReachabilityRefreshInterval is the period at which Felix re-announces (gratuitous ARP / unsolicited NA) the pod and LoadBalancer IPs it answers for when LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding tables warm. A small random jitter is applied per interface to avoid synchronized bursts. Set to 0 to disable periodic re-announcement (the one-shot announcement on add still happens). [Default: 60s]",
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
+						},
+					},
 					"windowsManageFirewallRules": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]",

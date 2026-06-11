@@ -1124,6 +1124,16 @@ type FelixConfigurationSpec struct {
 	// +optional
 	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
 
+	// LocalSubnetL2ReachabilityRefreshInterval is the period at which Felix re-announces
+	// (gratuitous ARP / unsolicited NA) the pod and LoadBalancer IPs it answers for when
+	// LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding
+	// tables warm. A small random jitter is applied per interface to avoid synchronized
+	// bursts. Set to 0 to disable periodic re-announcement (the one-shot announcement on
+	// add still happens). [Default: 60s]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	LocalSubnetL2ReachabilityRefreshInterval *metav1.Duration `json:"localSubnetL2ReachabilityRefreshInterval,omitempty" configv1timescale:"seconds"`
+
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional
 	WindowsManageFirewallRules *WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty" validate:"omitempty,oneof=Enabled Disabled"`

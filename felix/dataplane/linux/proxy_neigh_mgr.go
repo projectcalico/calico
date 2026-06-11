@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"regexp"
@@ -47,6 +48,11 @@ import (
 // single socket read before waking to re-check for context cancellation.
 // A read that hits the deadline simply loops
 const readDeadlineInterval = 1 * time.Second
+
+// announceJitterFraction is the fraction by which each listener's re-announce
+// interval is randomly perturbed (±10%), so listeners — and nodes — that start
+// together don't re-announce in lockstep. Re-rolled every cycle.
+const announceJitterFraction = 10
 
 // ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
 const ipv6AllNodesMulticast = "ff02::1"
@@ -93,6 +99,10 @@ type proxyNeighManager struct {
 	// readTimeout bounds how long each listener blocks in a single socket read
 	// before looping to re-check for cancellation.
 	readTimeout time.Duration
+
+	// announceInterval is how often each listener re-announces every IP it owns.
+	// Zero or negative disables periodic re-announcement.
+	announceInterval time.Duration
 
 	// hostIfaceToCIDRs maps host interface name to the parsed CIDRs on that interface.
 	hostIfaceToCIDRs map[string][]net.IPNet
@@ -178,7 +188,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			return conn, ifi.HardwareAddr, nil
 		}
 	}
-	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval)
+	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval, dpConfig.LocalSubnetL2ReachabilityRefreshInterval)
 }
 
 // setIgnoreOutgoing sets PACKET_IGNORE_OUTGOING on the raw socket so the kernel
@@ -207,6 +217,7 @@ func newProxyNeighManagerWithShims(
 	af arpClientFactory,
 	nf ndpConnFactory,
 	readTimeout time.Duration,
+	announceInterval time.Duration,
 ) *proxyNeighManager {
 	wlIfacesPattern := "^(" + strings.Join(dpConfig.RulesConfig.WorkloadIfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -217,6 +228,7 @@ func newProxyNeighManagerWithShims(
 		hostname:         dpConfig.Hostname,
 		wlIfacesRegexp:   wlIfacesRegexp,
 		readTimeout:      readTimeout,
+		announceInterval: announceInterval,
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
@@ -522,11 +534,12 @@ func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[
 // listener goroutine.
 func (m *proxyNeighManager) startListener(ifaceName string) error {
 	l := &ifaceListener{
-		ifaceName:   ifaceName,
-		readTimeout: m.readTimeout,
-		reconcile:   make(chan struct{}, 1),
-		announced:   set.New[string](),
-		done:        make(chan struct{}),
+		ifaceName:        ifaceName,
+		readTimeout:      m.readTimeout,
+		announceInterval: m.announceInterval,
+		reconcile:        make(chan struct{}, 1),
+		announced:        set.New[string](),
+		done:             make(chan struct{}),
 	}
 
 	l.ctx, l.cancel = context.WithCancel(m.ctx)
@@ -586,10 +599,23 @@ type ifaceListener struct {
 	ndpCli      ndpConn   // IPv6 only
 	hwAddr      net.HardwareAddr
 	readTimeout time.Duration
-	ctx         context.Context
-	cancel      context.CancelFunc
-	done        chan struct{}
-	failed      atomic.Bool
+
+	// announceInterval is the base period at which the goroutine re-announces
+	// every owned IP. Zero or negative disables periodic re-announcement (only
+	// the initial announce on add fires). Read only by the listener goroutine.
+	announceInterval time.Duration
+	// lastAnnounce is when the goroutine last re-announced its full owned set,
+	// and nextAnnounceAfter is the jittered interval to wait before the next
+	// refresh (re-rolled each cycle). Both are goroutine-local — compared each
+	// loop iteration and never touched off-goroutine — so need no
+	// synchronization.
+	lastAnnounce      time.Time
+	nextAnnounceAfter time.Duration
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	failed atomic.Bool
 }
 
 // stop cancels the listener goroutine and waits for it to exit. The goroutine
@@ -663,10 +689,8 @@ func (l *ifaceListener) applyDesiredState() {
 		}
 		if l.ndpCli != nil {
 			l.joinNDPGroup(ip)
-			l.sendUNA(addr)
-		} else {
-			l.sendGARP(addr)
 		}
+		l.announce(addr)
 	}
 
 	// Release the multicast subscription for IPs that dropped out of the desired set.
@@ -680,6 +704,46 @@ func (l *ifaceListener) applyDesiredState() {
 	}
 
 	l.announced = desired
+}
+
+// announce sends a single gratuitous ARP (IPv4) or unsolicited NA (IPv6) for
+// addr. It does not touch multicast group membership, so it is safe to call
+// both for a newly desired IP (after joinNDPGroup) and for periodic refresh of
+// an already-joined IP. Runs only on the listener goroutine.
+func (l *ifaceListener) announce(addr netip.Addr) {
+	if l.ndpCli != nil {
+		l.sendUNA(addr)
+	} else {
+		l.sendGARP(addr)
+	}
+}
+
+// reannounceAll re-sends a gratuitous ARP / unsolicited NA for every IP this
+// listener currently owns, refreshing neighbor caches and switch tables without
+// changing group membership. Driven by announceInterval from the listener loop.
+func (l *ifaceListener) reannounceAll() {
+	for ip := range l.announced.All() {
+		addr, err := netip.ParseAddr(ip)
+		if err != nil {
+			logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for re-announce")
+			continue
+		}
+		l.announce(addr)
+	}
+}
+
+// jitteredAnnounceInterval returns announceInterval perturbed by a uniform
+// random ±1/announceJitterFraction (±10%), so listeners that start in lockstep
+// — across interfaces and, more importantly, across nodes booting together —
+// spread their re-announce bursts out instead of synchronizing them. Re-rolled
+// each cycle so any chance alignment doesn't persist.
+func (l *ifaceListener) jitteredAnnounceInterval() time.Duration {
+	if l.announceInterval <= 0 {
+		return l.announceInterval
+	}
+	span := int64(l.announceInterval) / announceJitterFraction
+	// rand.Int64N(2*span+1) - span yields a uniform offset in [-span, +span].
+	return l.announceInterval + time.Duration(rand.Int64N(2*span+1)-span)
 }
 
 // closeSocket leaves any joined NDP multicast groups and closes the raw socket.
@@ -795,6 +859,12 @@ func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) er
 	defer close(l.done)
 	defer l.closeSocket()
 
+	// Anchor the periodic re-announce clock to listener start so the first
+	// refresh fires roughly announceInterval from now, not immediately after the
+	// initial announce that applyDesiredState performs below.
+	l.lastAnnounce = time.Now()
+	l.nextAnnounceAfter = l.jitteredAnnounceInterval()
+
 	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})
 	for {
 		if l.ctx.Err() != nil {
@@ -809,6 +879,16 @@ func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) er
 		case <-l.reconcile:
 			l.applyDesiredState()
 		default:
+		}
+
+		// Periodically re-announce every owned IP so neighbor caches and switch
+		// forwarding tables stay warm even when the desired set is unchanged.
+		// The loop wakes at least every readTimeout, so this fires within one
+		// readTimeout of the (jittered) interval elapsing.
+		if l.announceInterval > 0 && time.Since(l.lastAnnounce) >= l.nextAnnounceAfter {
+			l.reannounceAll()
+			l.lastAnnounce = time.Now()
+			l.nextAnnounceAfter = l.jitteredAnnounceInterval()
 		}
 
 		if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
