@@ -600,10 +600,6 @@ type ifaceListener struct {
 	// announce on add fires).
 	announceInterval time.Duration
 
-	// lastAnnounce is when the goroutine last re-announced its full owned set.
-	// Goroutine-local: compared against announceInterval each loop iteration.
-	lastAnnounce time.Time
-
 	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -674,15 +670,10 @@ func (l *ifaceListener) applyDesiredState() {
 		if l.announced.Contains(ip) {
 			continue
 		}
-		addr, err := netip.ParseAddr(ip)
-		if err != nil {
-			logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for announce")
-			continue
-		}
 		if l.ndpCli != nil {
 			l.joinNDPGroup(ip)
 		}
-		l.announce(addr)
+		l.announce(ip)
 	}
 
 	// Release the multicast subscription for IPs that dropped out of the desired set.
@@ -702,7 +693,12 @@ func (l *ifaceListener) applyDesiredState() {
 // addr. It does not touch multicast group membership, so it is safe to call
 // both for a newly desired IP (after joinNDPGroup) and for periodic refresh of
 // an already-joined IP.
-func (l *ifaceListener) announce(addr netip.Addr) {
+func (l *ifaceListener) announce(ip string) {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for announce")
+		return
+	}
 	if l.ndpCli != nil {
 		l.sendUNA(addr)
 	} else {
@@ -715,12 +711,7 @@ func (l *ifaceListener) announce(addr netip.Addr) {
 // changing group membership. Driven by announceInterval from the listener loop.
 func (l *ifaceListener) reannounceAll() {
 	for ip := range l.announced.All() {
-		addr, err := netip.ParseAddr(ip)
-		if err != nil {
-			logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for re-announce")
-			continue
-		}
-		l.announce(addr)
+		l.announce(ip)
 	}
 }
 
@@ -840,7 +831,7 @@ func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) er
 	// Anchor the periodic re-announce clock to listener start so the first
 	// refresh fires announceInterval from now, not immediately after the
 	// initial announce that applyDesiredState performs below.
-	l.lastAnnounce = time.Now()
+	lastAnnounce := time.Now()
 
 	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})
 	for {
@@ -862,9 +853,9 @@ func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) er
 		// forwarding tables stay warm even when the desired set is unchanged.
 		// The loop wakes at least every readTimeout, so this fires within one
 		// readTimeout of the interval elapsing.
-		if l.announceInterval > 0 && time.Since(l.lastAnnounce) >= l.announceInterval {
+		if l.announceInterval > 0 && time.Since(lastAnnounce) >= l.announceInterval {
 			l.reannounceAll()
-			l.lastAnnounce = time.Now()
+			lastAnnounce = time.Now()
 		}
 
 		if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
