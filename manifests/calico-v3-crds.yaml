@@ -2996,7 +2996,9 @@ spec:
                     IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   description: |-
@@ -3063,12 +3065,14 @@ spec:
                     - Disabled
                   type: string
                 istioDSCPMark:
+                  anyOf:
+                    - type: integer
+                    - type: string
                   description: |-
                     IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
                     SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
                     with other Istio installation. [Default: 23]
                   pattern: ^.*
-                  type: integer
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
@@ -3088,6 +3092,17 @@ spec:
                     VM live migration completes.  This allows routes to converge across the cluster before
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                localSubnetL2Reachability:
+                  description: |-
+                    LocalSubnetL2Reachability controls whether Felix automatically responds to
+                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+                    selected LoadBalancer VIPs that fall within the same subnet as the host
+                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
                   type: string
                 logActionRateLimit:
                   description: |-
@@ -3226,7 +3241,9 @@ spec:
                     NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 nftablesMode:
                   default: Auto
@@ -5210,10 +5227,8 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
                     nullable: true
+                    type: integer
                   type: array
                   x-kubernetes-list-type: atomic
                 attributes:
@@ -13224,7 +13239,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "policytypes.policy.projectcalico.org"
@@ -13286,7 +13301,7 @@ spec:
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
 # and sets the projectcalico.org/tier label to match.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "tierlabel.policy.projectcalico.org"
@@ -13329,7 +13344,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-policytypes-binding
@@ -13349,7 +13364,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-tier-label-binding
@@ -13365,6 +13380,37 @@ spec:
           - globalnetworkpolicies
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
+---
+# Source: calico/templates/admission-policies.yaml
+---
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: admissionregistration.k8s.io/v1

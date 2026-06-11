@@ -28,6 +28,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -107,9 +108,23 @@ var _ = Describe("VXLANManager", func() {
 
 		fdb = &mockVXLANFDB{}
 
-		la := netlink.NewLinkAttrs()
-		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
+
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dataplaneV6 := mocknetlink.New()
+		_, err = dataplaneV6.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplaneV6.ImmediateLinkUp = true
+		eth0V6 := dataplaneV6.AddIface(2, "eth0", true, true)
+		Expect(dataplaneV6.AddrAdd(eth0V6, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fc00:10:96::2")}})).To(Succeed())
+		dataplaneV6.ResetDeltas()
 
 		dpConfig := Config{
 			MaxIPSetSize:       5,
@@ -129,11 +144,7 @@ var _ = Describe("VXLANManager", func() {
 			4444,
 			dpConfig,
 			opRecorder,
-			&mockTunnelDataplane{
-				links:          []netlink.Link{&mockLink{attrs: la}},
-				tunnelLinkName: dataplanedefs.VXLANIfaceNameV4,
-				ipVersion:      4,
-			},
+			dataplane,
 		)
 
 		dpConfigV6 := Config{
@@ -154,11 +165,7 @@ var _ = Describe("VXLANManager", func() {
 			6666,
 			dpConfigV6,
 			opRecorder,
-			&mockTunnelDataplane{
-				links:          []netlink.Link{&mockLink{attrs: la}},
-				tunnelLinkName: dataplanedefs.VXLANIfaceNameV6,
-				ipVersion:      6,
-			},
+			dataplaneV6,
 		)
 	})
 

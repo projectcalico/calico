@@ -131,6 +131,13 @@ func (c *ConntrackCleanupManager) UpdateCIDROwner(cidr ip.CIDR, ifaceIdx int, ro
 // a call to UpdateCIDROwner for the same CIDR before the cleanup is triggered
 // will undo the removal.
 func (c *ConntrackCleanupManager) RemoveCIDROwner(cidr ip.CIDR) {
+	// Mirror the check in UpdateCIDROwner: we only track single-address
+	// CIDRs.  Without this check, removing (say) a /26 block route would
+	// incorrectly delete the entry for a workload that happens to own the
+	// block's network address.
+	if !cidr.IsSingleAddress() {
+		return
+	}
 	c.addrOwners.Desired().Delete(cidr.Addr())
 }
 

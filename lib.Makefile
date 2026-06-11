@@ -135,6 +135,13 @@ ifneq ($(GO_BUILD_PARALLELISM),)
 GOFLAGS := $(GOFLAGS) -p=$(GO_BUILD_PARALLELISM)
 endif
 
+# Outer parallelism for image / kind-build-images / kind-reload. Each parallel
+# job spawns a docker go-build container, so `-j$(nproc)` on a workstation with
+# limited RAM (e.g. 32G running alongside an IDE/LSP/AI session) will thrash
+# into swap. Default to a conservative 4. Raise via NUM_BUILD_JOBS=N for a
+# bigger machine.
+NUM_BUILD_JOBS ?= 4
+
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -144,10 +151,10 @@ CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 RUST_BUILD_IMAGE ?= calico/rust-build
 CALICO_RUST_BUILD = $(RUST_BUILD_IMAGE):$(RUST_BUILD_VER)
 
-# We use BoringCrypto as FIPS validated cryptography in order to allow users to run in FIPS Mode (amd64 only).
+# On amd64 we build with CGO enabled (libbpf and other cgo deps require it);
+# other architectures default to pure-Go builds.
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-GOEXPERIMENT?=boringcrypto
-TAGS?=boringcrypto,osusergo,netgo
+TAGS?=osusergo,netgo
 CGO_ENABLED?=1
 else
 CGO_ENABLED?=0
@@ -163,6 +170,12 @@ endif
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
 
+# Rust target triple (long form). Injected as CARGO_BUILD_TARGET so cargo
+# cross-compiles transparently. Linker/sysroot side uses CROSS_TRIPLE below.
+RUST_TARGET_amd64   := x86_64-unknown-linux-gnu
+RUST_TARGET_arm64   := aarch64-unknown-linux-gnu
+RUST_TARGET         := $(RUST_TARGET_$(ARCH))
+
 # Set CROSS_CC and CROSS_SYSROOT when cross-compiling from amd64.
 ifeq ($(BUILDARCH),amd64)
 ifneq ($(ARCH),amd64)
@@ -175,25 +188,7 @@ endif
 endif
 endif
 
-# Build a binary with boring crypto support.
-# This function expects you to pass in two arguments:
-#   1st arg: path/to/input/package(s)
-#   2nd arg: path/to/output/binary
-# Only when arch = amd64 it will use boring crypto to build the binary.
-# Uses LDFLAGS, CGO_LDFLAGS, CGO_CFLAGS when set.
-# Tests that the resulting binary contains boringcrypto symbols.
-define build_cgo_boring_binary
-	$(DOCKER_RUN) \
-		-e CGO_ENABLED=1 \
-		$(if $(CROSS_CC),-e CC="$(CROSS_CC)") \
-		-e CGO_CFLAGS=$(CGO_CFLAGS) \
-		-e CGO_LDFLAGS=$(CGO_LDFLAGS) \
-		$(CALICO_BUILD) \
-		sh -c '$(GIT_CONFIG_SSH) GOEXPERIMENT=boringcrypto go build -o $(2) -tags fipsstrict -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1) \
-			&& go tool nm $(2) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
-endef
-
-# Use this when building binaries that need cgo, but have no crypto and therefore would not contain any boring symbols.
+# Use this when building binaries that need cgo (e.g. for libbpf).
 define build_cgo_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=1 \
@@ -204,7 +199,7 @@ define build_cgo_binary
 		sh -c '$(GIT_CONFIG_SSH) go build -o $(2) -v -buildvcs=false -ldflags "$(LDFLAGS)" $(1)'
 endef
 
-# For binaries that do not require boring crypto.
+# For binaries that do not require cgo.
 define build_binary
 	$(DOCKER_RUN) \
 		-e CGO_ENABLED=0 \
@@ -424,12 +419,73 @@ DOCKER_RUN := $(DOCKER_RUN_PRIV_NET) --net=host
 
 DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
+# Cross-compile env for Rust + cc-rs / bindgen. Same gate as the Go side.
+# Key suffixes use the long Rust triple (cc-rs convention); extend for ppc64le.
+ifeq ($(BUILDARCH),amd64)
+ifneq ($(ARCH),amd64)
+RUST_CROSS_ENV := \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=clang \
+	-e CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=--target=$(CROSS_TRIPLE) -C link-arg=--sysroot=$(CROSS_SYSROOT) -C link-arg=-fuse-ld=lld" \
+	-e CC_aarch64_unknown_linux_gnu=clang \
+	-e CXX_aarch64_unknown_linux_gnu=clang++ \
+	-e AR_aarch64_unknown_linux_gnu=$(CROSS_TRIPLE)-ar \
+	-e CFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e CXXFLAGS_aarch64_unknown_linux_gnu="--sysroot=$(CROSS_SYSROOT) -fuse-ld=lld" \
+	-e BINDGEN_EXTRA_CLANG_ARGS_aarch64_unknown_linux_gnu="--target=$(CROSS_TRIPLE) --sysroot=$(CROSS_SYSROOT) -I$(CROSS_SYSROOT)/usr/include"
+endif
+endif
+
+###############################################################################
+# Calico-patched controller-gen
+#
+# CRD generation uses a controller-gen with Calico-specific patches (see the
+# *.patch files under //hack/cmd/calico-controller-gen): NumOrString/Port/
+# Protocol/DSCP int-or-string union schemas, and nullable slice-of-pointer
+# elements. The projectcalico/toolchain repo bakes a (NumOrString-only) patched
+# binary into the calico/go-build image; we build our own patched binary
+# in-repo instead (download tarball -> apply patches -> go build), so CRD
+# generation owns its patches and does not depend on the image's controller-gen.
+#
+# The controller-tools version is pinned inside build.sh (its VERSION line, the
+# single source of truth). build.sh checks it against the controller-gen baked
+# into the calico/go-build image and, on a mismatch, rewrites that line and
+# fails so the bump is committed deliberately. We read the pin here cheaply (no
+# container) for the cache key.
+CONTROLLER_TOOLS_VERSION := $(shell sed -n 's/^VERSION="\(v[0-9][0-9.]*\)".*/\1/p' $(REPO_ROOT)/hack/cmd/calico-controller-gen/build.sh | head -1)
+CONTROLLER_TOOLS_VERSION := $(or $(CONTROLLER_TOOLS_VERSION),v0.18.0)
+
+# The binary is built into the shared .go-pkg-cache (mounted as /go-cache in
+# every component container, including api/'s isolated mount). It is stamped
+# with the go-build image version, the controller-tools version, and a hash of
+# all patches: bumping the image (which may carry a new controller-gen), the
+# pinned version, or a patch yields a new path and triggers a rebuild — and a
+# rebuild re-runs the image-vs-pin check in build.sh.
+CALICO_CONTROLLER_GEN_HASH := $(shell cat $(REPO_ROOT)/hack/cmd/calico-controller-gen/*.patch 2>/dev/null | sha256sum | cut -c1-12)
+CALICO_CONTROLLER_GEN_STAMP := $(GO_BUILD_VER)-$(CONTROLLER_TOOLS_VERSION)-$(CALICO_CONTROLLER_GEN_HASH)
+# Two views of the same file: the host path Make uses as a build target, and
+# the in-container path (/go-cache is the bind-mount of .go-pkg-cache) used to
+# invoke it from inside the build containers.
+CALICO_CONTROLLER_GEN_BIN := $(REPO_ROOT)/.go-pkg-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
+CALICO_CONTROLLER_GEN     := /go-cache/bin/calico-controller-gen-$(CALICO_CONTROLLER_GEN_STAMP)
+
+# Real file target (not .PHONY): Make skips it entirely — no container spin-up —
+# when the binary already exists and build.sh is unchanged. Patch edits and
+# version-pin bumps both land in the filename above (via the hash and the
+# pinned version), so they yield a new target and trigger a rebuild. The recipe
+# needs the repo root mounted (for build.sh and the patches), so components in
+# their own module (api/) reach it via:
+#   $(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+$(CALICO_CONTROLLER_GEN_BIN): hack/cmd/calico-controller-gen/build.sh
+	$(DOCKER_GO_BUILD) sh -c \
+		'./hack/cmd/calico-controller-gen/build.sh $(CALICO_CONTROLLER_GEN)'
+
 DOCKER_RUST_BUILD := mkdir -p bin && \
 	docker run --rm \
 		--init \
-		--platform=linux/$(ARCH) \
 		--user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 		$(EXTRA_DOCKER_ARGS) \
+		-e CARGO_BUILD_TARGET=$(RUST_TARGET) \
+		$(RUST_CROSS_ENV) \
 		-v $(REPO_ROOT):/rust/src/github.com/projectcalico/calico:rw \
 		-w /rust/src/$(PACKAGE_NAME) \
 		$(CALICO_RUST_BUILD)
@@ -815,9 +871,10 @@ REPO_REL_DIR=$(shell if [ -e hack/format-changed-files.sh ]; then echo '.'; else
 # Format changed files only.
 fix-changed go-fmt-changed goimports-changed:
 	if [ "$(SKIP_FIX_CHANGED)" != "true" ]; then \
+	  parent_branch=`release_prefix=$(RELEASE_BRANCH_PREFIX)-v git_repo_slug=$(GIT_REPO_SLUG) $(REPO_REL_DIR)/hack/find-parent-release-branch.sh`; \
 	  $(DOCKER_RUN) -e release_prefix=$(RELEASE_BRANCH_PREFIX)-v \
 	                -e git_repo_slug=$(GIT_REPO_SLUG) \
-	                -e parent_branch=$(shell $(REPO_REL_DIR)/hack/find-parent-release-branch.sh) \
+	                -e parent_branch=$$parent_branch \
 	                $(CALICO_BUILD) $(REPO_REL_DIR)/hack/format-changed-files.sh; \
 	fi
 
@@ -1717,7 +1774,7 @@ MISSING-IMAGE:
 
 $(REPO_ROOT)/node/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/node/.image.created-$(ARCH)) \
-    $(LIBBPF_MARKER) $(call local-deps-go-files,node)
+    $(LIBBPF_MARKER) $(call local-deps-go-files,node) $(call local-deps-go-files,cmd)
 	rm -f $@
 	$(MAKE) -C $(REPO_ROOT)/node image
 	echo "node:latest-$(ARCH)" > $@
@@ -1794,7 +1851,7 @@ kind-deploy:
 # re-pulls the new digests under the test-build tag (PullAlways).
 .PHONY: kind-reload
 kind-reload:
-	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \

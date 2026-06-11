@@ -17,11 +17,25 @@ package utils
 import (
 	"context"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// configRetry backs off long enough to ride out a calico-apiserver pod that's
+// briefly rolling or unreachable, which is where the transient errors that
+// retriableAPIError covers come from.
+var configRetry = wait.Backoff{
+	Steps:    8,
+	Duration: 100 * time.Millisecond,
+	Factor:   2.0,
+	Jitter:   0.1,
+	Cap:      10 * time.Second,
+}
 
 // ConfigureWithCleanup fetches an object by key, applies a mutation, and
 // returns a cleanup function that restores the original state. If the object
@@ -38,12 +52,16 @@ import (
 func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlclient.ObjectKey, obj T, mutate func(T)) (func(), error) {
 	ctx := context.Background()
 
-	err := cli.Get(ctx, key, obj)
+	err := retry.OnError(configRetry, retriableAPIError, func() error {
+		return cli.Get(ctx, key, obj)
+	})
 	if apierrors.IsNotFound(err) {
 		obj.SetName(key.Name)
 		obj.SetNamespace(key.Namespace)
 		mutate(obj)
-		if err := cli.Create(ctx, obj); err != nil {
+		if err := retry.OnError(configRetry, retriableAPIError, func() error {
+			return cli.Create(ctx, obj)
+		}); err != nil {
 			return nil, fmt.Errorf("failed to create %T: %w", obj, err)
 		}
 		return func() {
@@ -51,26 +69,48 @@ func ConfigureWithCleanup[T ctrlclient.Object](cli ctrlclient.Client, key ctrlcl
 				framework.Logf("WARNING: failed to delete %T %s: %v", obj, key, err)
 			}
 		}, nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get %T: %w", obj, err)
 	}
 
-	original := obj.DeepCopyObject().(T)
-	mutate(obj)
-	if err := cli.Update(ctx, obj); err != nil {
+	// Operator-reconciled resources (e.g. Installation) can be updated by a
+	// controller between our Get and Update, returning 409 Conflict. Re-read
+	// the latest resourceVersion and re-apply our mutation on conflict, and on
+	// the transient apiserver errors retriableAPIError covers.
+	var original T
+	if err := retry.OnError(configRetry, retriableAPIError, func() error {
+		if err := cli.Get(ctx, key, obj); err != nil {
+			return err
+		}
+		original = obj.DeepCopyObject().(T)
+		mutate(obj)
+		return cli.Update(ctx, obj)
+	}); err != nil {
 		return nil, fmt.Errorf("failed to update %T: %w", obj, err)
 	}
 
 	return func() {
-		// Re-fetch to get the current resourceVersion before restoring.
-		if err := cli.Get(context.Background(), key, obj); err != nil {
-			framework.Logf("WARNING: failed to get %T for restoration: %v", obj, err)
-			return
-		}
-		original.SetResourceVersion(obj.GetResourceVersion())
-		if err := cli.Update(context.Background(), original); err != nil {
+		if err := retry.OnError(configRetry, retriableAPIError, func() error {
+			if err := cli.Get(context.Background(), key, obj); err != nil {
+				return err
+			}
+			original.SetResourceVersion(obj.GetResourceVersion())
+			return cli.Update(context.Background(), original)
+		}); err != nil {
 			framework.Logf("WARNING: failed to restore %T: %v", obj, err)
 		}
 	}, nil
+}
+
+// retriableAPIError reports whether err is worth retrying against the
+// aggregated projectcalico.org/v3 API server. Besides 409 Conflict, the
+// aggregation layer intermittently drops a request mid-flight when the backing
+// calico-apiserver pod is rolling. That surfaces as ServiceUnavailable
+// ("unexpected EOF") or a 500 InternalError, and clears on retry.
+func retriableAPIError(err error) bool {
+	return apierrors.IsConflict(err) ||
+		apierrors.IsServiceUnavailable(err) ||
+		apierrors.IsInternalError(err) ||
+		apierrors.IsTimeout(err) ||
+		apierrors.IsTooManyRequests(err)
 }

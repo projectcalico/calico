@@ -2,31 +2,31 @@ include ../metadata.mk
 
 # This Makefile builds Felix and releases it in various forms:
 #
-#				   Go install
-#					|
-#		 +-------+		v
-#		 | Felix |   +---------------------+
-#		 |  Go   |   | calico/go-build     |
-#		 |  code |   +---------------------+
-#		 +-------+	  /
-#			\	 /
-#			 \      /
-#			 go build
-#			     |
-#			     v
-#		       +------------------+
-#		       | bin/calico-felix |
-#		       +------------------+
-#			       /
-#		      .-------'
-#		    /
-#		   /
-#	    docker build
-#		  |
-#		  v
-#	   +-------------------+
-#	   | calico/felix-test |
-#	   +-------------------+
+#                                  Go install
+#                                       |
+#                +-------+              v
+#                | Felix |   +---------------------+
+#                |  Go   |   | calico/go-build     |
+#                |  code |   +---------------------+
+#                +-------+        /
+#                       \        /
+#                        \      /
+#                        go build
+#                            |
+#                            v
+#                      +------------------+
+#                      | bin/calico-felix |
+#                      +------------------+
+#                              /
+#                     .-------'
+#                   /
+#                  /
+#           docker build
+#                 |
+#                 v
+#          +-------------------+
+#          | calico/felix-test |
+#          +-------------------+
 #
 ###############################################################################
 PACKAGE_NAME = github.com/projectcalico/calico/felix
@@ -174,14 +174,10 @@ DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC)
 LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
 bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-else
 ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
 else
 	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-endif
 endif
 
 bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
@@ -348,12 +344,25 @@ build-calico-race:
 # this target to build everything so that it can be cached and shared between downstream jobs.
 fv-prereqs: $(REMOTE_DEPS) \
             $(FELIX_CONTAINER_CREATED) \
+            $(FV_BINARY) \
             bin/test-workload \
             bin/test-connection \
             bin/calico-bpf \
             bin/pktgen \
             build-bpf \
             fv/fv.test
+
+# FV bind-mounts $(FV_BINARY) (built by ../cmd/calico, either calico-race or
+# calico-cgo depending on FV_RACE_DETECTOR_ENABLED) into the felix-test
+# container as /usr/local/bin/calico-felix. Felix Go source lives outside this
+# Makefile's view, so we delegate to ../cmd/calico — declaring the target
+# PHONY ensures the inner Make re-evaluates source-file timestamps every time
+# (it's a no-op when the binary is already current). Without this, edits to
+# Felix Go code silently fail to reach the FV container and the on-disk
+# binary disagrees with the freshly-rebuilt BPF objects in bin/bpf.
+.PHONY: $(FV_BINARY)
+$(FV_BINARY):
+	$(MAKE) -C ../cmd/calico bin/$(notdir $@)
 
 # build-fv-env: Prepare the environment for FV (Function Verification) tests
 #

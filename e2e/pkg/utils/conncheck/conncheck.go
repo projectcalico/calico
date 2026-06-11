@@ -434,6 +434,15 @@ func (c *connectionTester) command(t Target) string {
 		switch t.GetProtocol() {
 		case TCP:
 			cmd = fmt.Sprintf("wget -qO- -T 5 http://%s", t.Destination())
+		case TCPConnect:
+			host, port, err := net.SplitHostPort(t.Destination())
+			if err != nil {
+				framework.Failf("TCPConnect target must have a port: %v", err)
+			}
+			// `-z` zero-I/O mode is supported by both BusyBox (Alpine) and
+			// OpenBSD (Netshoot) nc, but BusyBox's `nc -h` doesn't advertise
+			// it. Don't "fix" this to nc -vz; -v isn't BusyBox-compatible.
+			cmd = fmt.Sprintf("nc -w 3 -z %s %s", host, port)
 		case ICMP:
 			cmd = fmt.Sprintf("ping -c 5 %s", t.Destination())
 		case HTTP:

@@ -163,6 +163,12 @@ for batch in "${batches[@]}"; do
   (
     set +e
 
+    # Tell the watchdog (below) when this batch has fully finished, so it can
+    # distinguish "done, just waiting to be reaped" from "genuinely hung".
+    done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
+    rm -f "$done_marker"
+    trap 'touch "$done_marker"' EXIT
+
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
     echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
     if "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
@@ -207,6 +213,9 @@ for batch in "${batches[@]}"; do
     else
       echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
     fi
+
+    # Mark the batch fully complete so the watchdog skips snapshot/kill for it.
+    touch "$done_marker"
     exit $rc
   ) &
   pid=$!
@@ -215,17 +224,44 @@ for batch in "${batches[@]}"; do
   test_pid+=( "$pid" )
 
   # Start a per-batch watchdog that kills this batch before the Semaphore job
-  # timeout.  Each batch kills its own watchdog when it finishes (in the wait
-  # loop below), so there is no PID-reuse race.
+  # timeout.  The watchdog only acts if the batch is genuinely still running
+  # (checked via a marker file, see below), so a batch that finished early but
+  # hasn't been reaped yet by the sequential wait loop does not get a spurious
+  # timeout report.  Each batch also kills its own watchdog when it is reaped
+  # (in the wait loop below), so there is no PID-reuse race.
   if [ "$watchdog_seconds" -gt 0 ]; then
   (
     sleep "$watchdog_seconds"
+
+    # Distinguish a genuinely hung batch from one that has merely finished but
+    # not yet been reaped by the sequential loop below.  We use a marker file
+    # rather than 'kill -0 $pid' because a finished-but-unreaped batch is a
+    # zombie whose pid still exists, so kill -0 would wrongly report it alive
+    # and we would emit a spurious timeout report for a batch that passed.
+    batch_formatted="$(format_batch_for_log "$batch")"
+    done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
+    if [ -f "$done_marker" ]; then
+      exit 0
+    fi
+
     echo
     echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
 
-    # Capture a VM-side snapshot before SIGTERM so we have evidence of what
-    # was hung (test process? docker? bpffs umount? leaked BPF objects?).
-    # Wrapped in 'timeout' so a hung VM/SSH cannot extend the kill.
+    # 1. Serial console via the GCP control plane.  This does not use the VM's
+    # network/SSH path, so it still works when the VM is wedged and SSH would
+    # return rc=255 -- exactly the case that matters most (kernel soft-lockup /
+    # OOM / oops).  The kernel logs to ttyS0 (console=ttyS0), so a hang shows up
+    # here even when the in-VM snapshot below cannot connect.
+    serial_log="$artifacts_dir/vm-serial-$batch_formatted.log"
+    echo "  Capturing VM serial console to $serial_log"
+    timeout 60 gcloud --quiet compute instances get-serial-port-output "$vm_name" \
+        --zone="$zone" --port=1 \
+        > "$serial_log" 2>&1 \
+        || echo "  Serial console capture failed/timed out (rc=$?)"
+
+    # 2. SSH-based in-VM snapshot (ps/bpftool/bpffs/dmesg/kernel stacks).  Useful
+    # when the VM is merely slow rather than wedged.  Wrapped in 'timeout' so a
+    # hung VM/SSH cannot extend the kill.
     snapshot_log="$artifacts_dir/vm-snapshot-$batch_formatted.log"
     echo "  Capturing pre-kill VM snapshot to $snapshot_log"
     timeout 60 env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/on-test-vm" \
@@ -233,12 +269,23 @@ for batch in "${batches[@]}"; do
         > "$snapshot_log" 2>&1 \
         || echo "  VM snapshot capture failed/timed out (rc=$?)"
 
+    # Push the diagnostics immediately.  A job killed at its timeout may never
+    # run publish-artifacts (or have it truncated mid-upload), and these files
+    # sort after test-*.log alphabetically, so they would be the first dropped.
+    # Pushing by basename from $artifacts_dir keeps the remote path tidy.
+    # The watchdog is always the first pusher of these files (publish-artifacts
+    # runs later in the epilogue), so no --force/overwrite is needed here.
+    for diag in "$serial_log" "$snapshot_log"; do
+      [ -s "$diag" ] || continue
+      ( cd "$artifacts_dir" && artifact push job "$(basename "$diag")" ) \
+          >/dev/null 2>&1 || true
+    done
+
     echo "  Killing hung batch $batch (pid $pid)"
     kill -TERM "-$pid" 2>/dev/null || true
 
     # Generate a JUnit XML report for the timed-out batch so it shows up
     # in Semaphore test results as a clear failure.
-    batch_formatted="$(format_batch_for_log "$batch")"
     if [ "$batch" = "ut" ]; then
       report_type="ut"
     else

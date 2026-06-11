@@ -200,7 +200,7 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 	}
 	existing, ok := t.flows[fm]
 	if !ok {
-		t.errors = append(t.errors, fmt.Sprintf("Flow was not present in logs: %#v", fm))
+		t.errors = append(t.errors, fmt.Sprintf("Flow was not present in logs: %#v\nReceived flows:%s", fm, t.dumpReceivedFlows()))
 		return
 	}
 	delete(t.flows, fm)
@@ -239,13 +239,33 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 // deltas.
 func (t *FlowTester) Finish() error {
 	for _, fl := range t.flows {
-		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %#v", fl))
+		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %s", formatFlow(fl)))
 	}
 
 	if len(t.errors) == 0 {
 		return nil
 	}
 	return errors.New(strings.Join(t.errors, "\n==============\n"))
+}
+
+// dumpReceivedFlows renders every flow currently held by the tester. Used in
+// failure messages so that flake reports show the policy sets the dataplane
+// actually reported, not just the meta-key the expected flow didn't match.
+func (t *FlowTester) dumpReceivedFlows() string {
+	if len(t.flows) == 0 {
+		return " (none)"
+	}
+	var b strings.Builder
+	for _, fl := range t.flows {
+		b.WriteString("\n  - ")
+		b.WriteString(formatFlow(fl))
+	}
+	return b.String()
+}
+
+func formatFlow(fl flowlog.FlowLog) string {
+	return fmt.Sprintf("meta=%#v enforced=%v pending=%v",
+		fl.FlowMeta, fl.FlowEnforcedPolicySet, fl.FlowPendingPolicySet)
 }
 
 // Return a test-specific flowMeta from the flowLog.  We may include policies and labels in the metadata so that
