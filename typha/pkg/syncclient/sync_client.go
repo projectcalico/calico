@@ -670,6 +670,13 @@ func (s *SyncerClient) maybeRebalance(cxt context.Context, logCxt *log.Entry) bo
 		"preferred": preferred,
 	}).Info("Connected to a non-preferred Typha; disconnecting to rebalance onto our preferred Typha instance.")
 	s.sendGoodbyeAndCloseWrites(cxt, logCxt, rebalanceGoodbyeReason)
+	// Forget which Typhas we've already tried so that the reconnect starts
+	// from the head of our preference order.  Otherwise, if the preferred
+	// Typha was tried (and unreachable) when this connection was made, the
+	// tracker would skip it and we'd hop to yet another non-preferred
+	// instance.  Safe without a lock: the restart loop only calls into the
+	// tracker after this goroutine exits (it waits on connFinished).
+	s.connAttemptTracker.Reset()
 	return true
 }
 

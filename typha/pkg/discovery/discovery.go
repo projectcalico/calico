@@ -397,6 +397,17 @@ func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
 	return d.pickNextTypha(allKnownAddrs), nil
 }
 
+// Reset forgets which addresses have already been tried, so the next call to
+// NextAddr starts again from the head of the preference order.  Call it when
+// deliberately disconnecting (for example, to rebalance onto the preferred
+// Typha); without a reset, NextAddr would skip any address tried earlier —
+// including the preferred Typha itself, if it happened to be unreachable when
+// the previous connection was made — and reconnect to another non-preferred
+// instance instead.
+func (d *ConnectionAttemptTracker) Reset() {
+	clear(d.triedAddrsLastSeen)
+}
+
 func (d *ConnectionAttemptTracker) refreshAddrs() ([]Typha, error) {
 	if !d.triedCache {
 		// Very first time, we expect the discoverer to have a cache of the

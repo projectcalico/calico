@@ -478,6 +478,28 @@ var _ = Describe("ConnectionAttemptTracker", func() {
 		})
 	})
 
+	Describe("with three typhas", func() {
+		BeforeEach(func() {
+			addrs := []Typha{typha1, typha2, typha3}
+			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{
+				{ts: addrs},
+			}
+			discoverer.CachedAddrs = addrs
+		})
+		It("should restart from the head of the list after Reset", func() {
+			// Simulate the rebalance scenario: the preferred typha1 was down
+			// at connect time (tried), and we connected to typha2.
+			Expect(cat.NextAddr()).To(Equal(typha1))
+			Expect(cat.NextAddr()).To(Equal(typha2))
+
+			// On a deliberate disconnect the client resets the tracker; the
+			// reconnect must start from the head of the preference order
+			// rather than skipping ahead to the untried typha3.
+			cat.Reset()
+			Expect(cat.NextAddr()).To(Equal(typha1))
+		})
+	})
+
 	Describe("with changing addrs", func() {
 		BeforeEach(func() {
 			discoverer.TyphaAddrsToReturn = []typhaAddrsResp{

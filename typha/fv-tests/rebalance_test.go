@@ -36,7 +36,11 @@ import (
 // TestRebalanceToPreferredTypha checks that a client which ends up connected to
 // a non-preferred Typha (because its preferred one was unavailable at connect
 // time) later migrates onto the preferred Typha when the rebalance timer fires,
-// and that it tells the server why it is leaving.
+// and that it tells the server why it is leaving.  The test uses three Typhas
+// to check that the migration is a single hop straight to the preferred
+// instance: the connection-attempt tracker must not "remember" the failed
+// startup attempt against the preferred Typha and divert the client to the
+// remaining untried (but still non-preferred) one.
 func TestRebalanceToPreferredTypha(t *testing.T) {
 	RegisterTestingT(t)
 	logutils.RedirectLogrusToTestingT(t)
@@ -53,16 +57,23 @@ func TestRebalanceToPreferredTypha(t *testing.T) {
 	preferred := NewHarness()
 	preferred.Config.Port = portFromAddr(t, preferredAddr)
 
+	// Two non-preferred Typhas: the client should connect to the first at
+	// startup (after failing to reach the preferred one) and should never touch
+	// the second — rebalancing must go straight to the preferred instance.
 	nonPreferred := NewHarness()
 	nonPreferred.Start()
 	t.Cleanup(nonPreferred.Stop)
+
+	nonPreferred2 := NewHarness()
+	nonPreferred2.Start()
+	t.Cleanup(nonPreferred2.Stop)
 
 	// Restart-aware client (it has a DedupeBuffer) so that rebalancing is
 	// enabled.  Short rebalance interval so the test doesn't have to wait.
 	recorder := fvtests.NewRecorder()
 	deduper := dedupebuffer.New()
 	client := syncclient.New(
-		discovery.New("test-node", discovery.WithAddrsOverride([]string{preferredAddr, nonPreferred.Addr()})),
+		discovery.New("test-node", discovery.WithAddrsOverride([]string{preferredAddr, nonPreferred.Addr(), nonPreferred2.Addr()})),
 		"test-version",
 		"test-host",
 		"test-info",
@@ -119,6 +130,16 @@ func TestRebalanceToPreferredTypha(t *testing.T) {
 	// Once on its preferred Typha, the client should stay put (no churn).
 	Consistently(preferred.Server.NumActiveConnections, "1s", "50ms").Should(Equal(1),
 		"client should remain connected to its preferred Typha")
+
+	// The migration must be a single hop: exactly one rebalance goodbye, and
+	// the second non-preferred Typha never sees a connection.  (If the
+	// connection-attempt tracker weren't reset on rebalance, the client would
+	// skip the previously tried preferred Typha and hop via nonPreferred2,
+	// saying goodbye twice.)
+	Expect(capture.Reasons()).To(HaveLen(1),
+		"client should rebalance in a single hop, with exactly one goodbye")
+	Expect(nonPreferred2.Server.NumActiveConnections()).To(BeZero(),
+		"client should never connect to the second non-preferred Typha")
 }
 
 // reservePort grabs a free TCP port and immediately releases it, returning the
