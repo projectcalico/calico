@@ -195,20 +195,26 @@ for batch in "${batches[@]}"; do
       fi
     fi
 
+    # The SSH-based teardown steps below are wrapped in 'timeout': if the VM
+    # wedged (e.g. a kernel BPF/vmap teardown deadlock that leaves it
+    # SSH-unreachable), these would otherwise hang until the watchdog kills the
+    # whole batch.  Bounding them lets a batch whose tests already finished
+    # proceed straight to the (control-plane) VM delete.  gcloud delete does not
+    # need SSH, so it reclaims a wedged VM regardless.
     collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
-    if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
+    if timeout 180 "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
       echo "$prefix Remote artifact collection SUCCEEDED"
     else
-      echo "$prefix Remote artifact collection FAILED"
+      echo "$prefix Remote artifact collection FAILED (rc=$?)"
     fi
-    if scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
+    if timeout 180 scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
       echo "$prefix Artifact retrieval SUCCEEDED"
     else
-      echo "$prefix Artifact retrieval FAILED"
+      echo "$prefix Artifact retrieval FAILED (rc=$?)"
     fi
 
     echo "$prefix Deleting test VM $vm_name"
-    if gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
+    if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
       echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
     else
       echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
