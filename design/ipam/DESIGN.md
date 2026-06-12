@@ -11,7 +11,7 @@ You may obtain a copy of the License at
 # IPAM - Architecture & Design Index
 
 Calico's IPAM is the subsystem that allocates pod, tunnel, and LoadBalancer IPs out of configured IP pools. It is not owned by any single component: the core library lives in
-`libcalico-go/lib/ipam`, but it's invoked from `cni-plugin`, `kube-controllers`, `node`, `calicoctl`, and (read-only) from Felix. The design lives at `docs/design/ipam/` rather
+`libcalico-go/lib/ipam`, but it's invoked from `cni-plugin`, `kube-controllers`, `node`, `calicoctl`, and (read-only) from Felix. The design lives at `design/ipam/` rather
 than under any one component for the same reason.
 
 ## 1. Architecture overview
@@ -84,7 +84,7 @@ anything goes.
 - **Update rule.** A change to how IPAM works in a given area must update the relevant sub-design in this directory in the same PR. This index is also updated when the
   sub-design table, an `applies to` scope, or §1's architecture overview changes. Exemptions: (a) a bug fix that restores behavior the doc already describes, (b) a mechanical
   refactor with no observable change, (c) comment or log-message edits, (d) dependency bumps. If in doubt, update. The path-scoped
-  [`.github/instructions/ipam.instructions.md`](../../../.github/instructions/ipam.instructions.md) file wires this rule into Copilot's automated review.
+  [`.github/instructions/ipam.instructions.md`](../../.github/instructions/ipam.instructions.md) file wires this rule into Copilot's automated review.
 
 ## 4. Cross-cutting review rubric
 
@@ -116,7 +116,7 @@ A PR that answers "no" to any of these without a written reason should not merge
 
 When a new IPAM topic earns its own doc:
 
-1. Create `docs/design/ipam/<topic>.md`. Follow the shape of an existing sub-design: narrative prose, architecture, per-section review notes at the end of each section, and a "keep
+1. Create `design/ipam/<topic>.md`. Follow the shape of an existing sub-design: narrative prose, architecture, per-section review notes at the end of each section, and a "keep
    this in sync" tail.
 2. Update the sub-design index above with a row giving the link, the `applies to` glob, and the ✅ exists marker.
 3. Move any orientation content that belongs to the new sub-design out of this file into the new doc (most of §1 is cross-cutting and stays here).

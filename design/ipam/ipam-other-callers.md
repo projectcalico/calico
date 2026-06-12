@@ -19,7 +19,7 @@ migrate` parses the tunnel prefixes, and the CNI DEL path releases by both the h
 
 ## calicoctl
 
-[`calicoctl/calicoctl/commands/ipam/`](../../../calicoctl/calicoctl/commands/ipam/) is the operator-facing CRUD surface for IPAM state. `show`, `check`, and `release` are the
+[`calicoctl/calicoctl/commands/ipam/`](../../calicoctl/calicoctl/commands/ipam/) is the operator-facing CRUD surface for IPAM state. `show`, `check`, and `release` are the
 IPAM-meaningful subcommands; `configure` and `split` are admin-CRUD on `IPAMConfig` / `IPPool`. The `check` algorithm reuses the validity heuristics the GC applies, but exposed for
 manual review without a running controller.
 
@@ -30,8 +30,8 @@ manual review without a running controller.
 
 ## Node tunnel-address allocator
 
-[`node/pkg/allocateip/allocateip.go`](../../../node/pkg/allocateip/allocateip.go). Runs inside the node container, watches `IPPool` and `FelixConfiguration`, and reconciles tunnel
-interface addresses (IPIP, VXLAN, VXLAN-v6, WireGuard, WireGuard-v6). It's wired in from [`node/pkg/node/command.go`](../../../node/pkg/node/command.go) as
+[`node/pkg/allocateip/allocateip.go`](../../node/pkg/allocateip/allocateip.go). Runs inside the node container, watches `IPPool` and `FelixConfiguration`, and reconciles tunnel
+interface addresses (IPIP, VXLAN, VXLAN-v6, WireGuard, WireGuard-v6). It's wired in from [`node/pkg/node/command.go`](../../node/pkg/node/command.go) as
 `newAllocateTunnelAddrsCommand` - not the path `node/pkg/ipam/` that you might guess from grep.
 
 For each tunnel type, per reconcile:
@@ -54,7 +54,7 @@ tunnel is disabled), uses `IntendedUse = Tunnel` so pool selection respects `all
 ## Felix
 
 Felix doesn't allocate IPs. It holds an IPAM client for one purpose: the KubeVirt live-migration owner-swap monitor in
-[`felix/dataplane/linux/live_migration.go`](../../../felix/dataplane/linux/live_migration.go).
+[`felix/dataplane/linux/live_migration.go`](../../felix/dataplane/linux/live_migration.go).
 
 When a workload endpoint transitions to "active" live-migration state, the monitor calls `vmipam.EnsureActiveVMOwnerAttrs` to promote the alternate owner to active under a
 `CompareAndSwap` precondition. This is the dataplane half of the KubeVirt IP persistence handshake described in [`./ipam-cni.md`](./ipam-cni.md). Felix swaps ownership; it never
@@ -67,7 +67,7 @@ assigns.
 
 ## LoadBalancer controller
 
-[`kube-controllers/pkg/controllers/loadbalancer/`](../../../kube-controllers/pkg/controllers/loadbalancer/). Allocates IPs for Calico's Service LoadBalancer abstraction. Uses
+[`kube-controllers/pkg/controllers/loadbalancer/`](../../kube-controllers/pkg/controllers/loadbalancer/). Allocates IPs for Calico's Service LoadBalancer abstraction. Uses
 `virtual:load-balancer` affinity (not host-anchored), filters pools on `allowedUses: LoadBalancer`, and handles are `lb-<hash>` where `<hash>` is the sha256 of `<service>-<namespace>-<uid>` (see `createHandle`), not the `virtual:load-balancer` affinity string. `AssignIP` for static `loadBalancerIP`,
 `AutoAssign` otherwise; `ReleaseByHandle` on delete.
 
@@ -80,7 +80,7 @@ Cold-start races are the recurring failure mode: the controller needs full block
 
 ## Flannel migration
 
-[`kube-controllers/pkg/controllers/flannelmigration/ipam_migrator.go`](../../../kube-controllers/pkg/controllers/flannelmigration/ipam_migrator.go). One-time migration from
+[`kube-controllers/pkg/controllers/flannelmigration/ipam_migrator.go`](../../kube-controllers/pkg/controllers/flannelmigration/ipam_migrator.go). One-time migration from
 Flannel's host-local IPAM to Calico IPAM. For each node:
 
 1. Read Flannel subnet.
@@ -96,7 +96,7 @@ upgrade only.
 
 ## `libcalico-go/lib/ipam/vmipam`
 
-[`libcalico-go/lib/ipam/vmipam/`](../../../libcalico-go/lib/ipam/vmipam/) is the KubeVirt IP-persistence extension to the core IPAM client. It's where the alternate/active
+[`libcalico-go/lib/ipam/vmipam/`](../../libcalico-go/lib/ipam/vmipam/) is the KubeVirt IP-persistence extension to the core IPAM client. It's where the alternate/active
 owner-attrs dance lives (`EnsureActiveVMOwnerAttrs`, `SetOwnerAttributes`). Both the CNI plugin and Felix go through it for KubeVirt-specific allocation transitions. The
 owner-attrs precondition mechanism is defined in [`ipam-core-library.md`](./ipam-core-library.md).
 

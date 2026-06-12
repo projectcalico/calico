@@ -15,7 +15,7 @@ This sub-design covers the core IPAM library in `libcalico-go/lib/ipam/`. It is 
 
 ## Public API surface
 
-The library's contract is `Interface` in [`interface.go`](../../../libcalico-go/lib/ipam/interface.go); that file is the source of truth for method signatures and is not restated
+The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib/ipam/interface.go); that file is the source of truth for method signatures and is not restated
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
@@ -41,7 +41,7 @@ Three invariants frame this section:
 - **`MaxBlocksPerHost` caps claims, not allocations.** Once a node reaches the cap it can still fill blocks it already owns. The cap is the only gate on new-block claims.
 - **`StrictAffinity=true` is the only way to suppress non-affine fallback.** Anything that needs "borrow nothing" semantics must set it, not invent a parallel switch.
 
-`AutoAssign` is the hot path. Entry point is `autoAssign` in [`ipam.go`](../../../libcalico-go/lib/ipam/ipam.go). The walk splits at three chokepoints:
+`AutoAssign` is the hot path. Entry point is `autoAssign` in [`ipam.go`](../../libcalico-go/lib/ipam/ipam.go). The walk splits at three chokepoints:
 `prepareAffinityBlocksForHost` resolves the node + pools and lists existing affinities; `findOrClaimBlock` walks affine blocks and lazily reconstructs an `IPAMBlock` if an affinity
 exists but the block doesn't (recovery for a node that crashed mid-claim); `findUsableBlock` claims a new block via the two-phase `pending → confirmed` protocol or, with
 `StrictAffinity=false`, falls back to `randomBlockGenerator` over non-affine blocks.
@@ -74,10 +74,10 @@ Two invariants frame this section:
   dropping it reopens the pod-reuse race.
 
 All `IPAMBlock`, `BlockAffinity`, and `IPAMHandle` updates are CAS on resource version via `backend.Client.Update`. The library wraps every write in a bounded retry loop
-(`datastoreRetries = 100`, declared in [`ipam.go`](../../../libcalico-go/lib/ipam/ipam.go)). On `ErrorResourceUpdateConflict` the loop re-fetches and retries; on any other error it
+(`datastoreRetries = 100`, declared in [`ipam.go`](../../libcalico-go/lib/ipam/ipam.go)). On `ErrorResourceUpdateConflict` the loop re-fetches and retries; on any other error it
 exits immediately and surfaces to the caller.
 
-Each `IPAMBlock` carries a `SequenceNumber` that [`updateBlock`](../../../libcalico-go/lib/ipam/ipam_block_reader_writer.go) increments on every write, and per-ordinal
+Each `IPAMBlock` carries a `SequenceNumber` that [`updateBlock`](../../libcalico-go/lib/ipam/ipam_block_reader_writer.go) increments on every write, and per-ordinal
 `SequenceNumberForAllocation[ord]` records the block's sequence number at allocation time. A `ReleaseOptions.SequenceNumber` from the caller is compared against the stored value;
 on mismatch the library returns `ErrorBadSequenceNumber` and the IP is **not** released. This prevents the GC from freeing an ordinal that was reallocated to a new pod between scan
 and release - the new pod's allocation bumps the block sequence number, so stale release options won't match.
@@ -153,7 +153,7 @@ Fields:
 
 ## Error taxonomy
 
-Sentinel errors are defined in [`ipam_errors.go`](../../../libcalico-go/lib/ipam/ipam_errors.go) and at the top of `ipam.go`. The design points worth carrying here are the error
+Sentinel errors are defined in [`ipam_errors.go`](../../libcalico-go/lib/ipam/ipam_errors.go) and at the top of `ipam.go`. The design points worth carrying here are the error
 classes, not the names:
 
 - **Transient.** `ErrorResourceUpdateConflict`, `errBlockClaimConflict`, `errStaleAffinity`. The retry loop swallows these; callers never see them. Exiting the retry loop without
@@ -173,4 +173,4 @@ Internal sentinels (`noFreeBlocksError`, `errBlockClaimConflict`, `errStaleAffin
 
 - [`./ipam-datastore.md`](./ipam-datastore.md) - the CAS protocol and sequence-number scheme are defined together with the backend.
 - [`./ipam-cni.md`](./ipam-cni.md) - the CNI plugin duplicates the handle-ID convention; changes here that affect the format need to land there too.
-- [`../../../libcalico-go/lib/ipam/`](../../../libcalico-go/lib/ipam/) - a `DESIGN.md` stub in that directory points back here.
+- [`../../libcalico-go/lib/ipam/`](../../libcalico-go/lib/ipam/) - a `DESIGN.md` stub in that directory points back here.

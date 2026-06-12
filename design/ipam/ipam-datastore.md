@@ -10,14 +10,14 @@ You may obtain a copy of the License at
 
 # IPAM datastore
 
-The backend datastore layer for IPAM: the four CRDs and their KDD wrappers under [`libcalico-go/lib/backend/k8s/resources/`](../../../libcalico-go/lib/backend/k8s/resources/) and
-the model types under [`libcalico-go/lib/backend/model/`](../../../libcalico-go/lib/backend/model/). Cross-component picture is in the [index](./DESIGN.md). Paired with
+The backend datastore layer for IPAM: the four CRDs and their KDD wrappers under [`libcalico-go/lib/backend/k8s/resources/`](../../libcalico-go/lib/backend/k8s/resources/) and
+the model types under [`libcalico-go/lib/backend/model/`](../../libcalico-go/lib/backend/model/). Cross-component picture is in the [index](./DESIGN.md). Paired with
 [`ipam-core-library.md`](./ipam-core-library.md) - the CAS protocol and sequence-number scheme are defined together; this file covers the datastore side.
 
 ## IPAMBlock
 
 An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 for IPv6. The block is the CAS unit: one object per slice, holding every per-IP record. Layout is in
-[`libcalico-go/lib/backend/model/block.go`](../../../libcalico-go/lib/backend/model/block.go); the design points that aren't obvious from the struct:
+[`libcalico-go/lib/backend/model/block.go`](../../libcalico-go/lib/backend/model/block.go); the design points that aren't obvious from the struct:
 
 - **The `Unallocated` queue is FIFO and that's load-bearing.** Allocation pops the head; release pushes the tail. Cycling through the queue is what enforces rate-limited IP reuse -
   a fresh allocation gets the IP that's been free the longest, not the IP that was just released. Code that punches the bitmap directly, bypassing the queue, breaks reuse delay.
@@ -36,7 +36,7 @@ An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 fo
 ## BlockAffinity
 
 A `BlockAffinity` records that a host (or virtual owner) claims a block. State machine, driven by
-[`ipam_block_reader_writer.go`](../../../libcalico-go/lib/ipam/ipam_block_reader_writer.go): `∅ → pending → confirmed → pendingDeletion → ∅`.
+[`ipam_block_reader_writer.go`](../../libcalico-go/lib/ipam/ipam_block_reader_writer.go): `∅ → pending → confirmed → pendingDeletion → ∅`.
 
 - **`pending`** - host wants the block, hasn't proven ownership. Treat as if absent for ownership / route decisions.
 - **`confirmed`** - host owns the block. The block's `Affinity` field matches; route advertisement is safe.
@@ -65,7 +65,7 @@ allocations onto the same handle.
 
 Handle ID format conventions live in [`ipam-core-library.md`](./ipam-core-library.md#handle-ids).
 
-`Watch` is not supported - [`ipam_handle.go`](../../../libcalico-go/lib/backend/k8s/resources/ipam_handle.go) returns `ErrorOperationNotSupported`. kube-controllers reconciles via
+`Watch` is not supported - [`ipam_handle.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_handle.go) returns `ErrorOperationNotSupported`. kube-controllers reconciles via
 the block syncer plus a handle-side scan rather than a watch. See https://github.com/projectcalico/calico/pull/12713.
 
 **Review notes**
@@ -76,7 +76,7 @@ the block syncer plus a handle-side scan rather than a watch. See https://github
 
 ## IPAMConfig and IPReservation
 
-Both stored as CRDs alongside the other IPAM resources. [`ipam_config.go`](../../../libcalico-go/lib/backend/k8s/resources/ipam_config.go) wraps the singleton `IPAMConfig`. Storage
+Both stored as CRDs alongside the other IPAM resources. [`ipam_config.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_config.go) wraps the singleton `IPAMConfig`. Storage
 shape only - field semantics, defaults, and `StrictAffinity` / `MaxBlocksPerHost` / `AutoAllocateBlocks` interactions live in
 [`ipam-core-library.md`](./ipam-core-library.md#ipamconfig). `IPReservation` is read at allocation time and converted into an ordinal filter; never participates in CAS.
 
@@ -87,7 +87,7 @@ shape only - field semantics, defaults, and `StrictAffinity` / `MaxBlocksPerHost
 
 ## CIDR-to-name encoding
 
-Block and `BlockAffinity` CRD names encode the CIDR with dots/colons/slash replaced by `-` (see [`libcalico-go/lib/names/cidr.go`](../../../libcalico-go/lib/names/cidr.go)). Two
+Block and `BlockAffinity` CRD names encode the CIDR with dots/colons/slash replaced by `-` (see [`libcalico-go/lib/names/cidr.go`](../../libcalico-go/lib/names/cidr.go)). Two
 design points: the encoding is one-way load-bearing - changing it strands every existing row, since lookup by the new name finds nothing and there is no migration path - and the
 resulting name is not a stable host identifier, because `BlockAffinity` names exceed 253 chars on long hostnames and get truncated + SHA256-suffixed.
 
@@ -122,7 +122,7 @@ Sequence numbers live in the `Spec`, so they survive soft delete and object rena
 ## Soft vs hard delete
 
 Kubernetes has no compare-and-delete by resource version. KDD works around this with a two-step pattern in
-[`ipam_block.go`](../../../libcalico-go/lib/backend/k8s/resources/ipam_block.go), mirrored in the affinity and handle wrappers:
+[`ipam_block.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_block.go), mirrored in the affinity and handle wrappers:
 
 1. **Soft delete** - `Update` with `Spec.Deleted = true`. CAS on revision succeeds only if no other writer modified the row. This is the linearisation point.
 2. **Hard delete** - `Delete` by revision and UID. The K8s row goes away.
@@ -135,7 +135,7 @@ Guarantees:
   hard delete.
 
 `Deleted` is stored as `bool` in v3 CRDs and as string `"true"` / `"false"` in v1; `ConvertFromK8s` in
-[`ipam_affinity_v3.go`](../../../libcalico-go/lib/backend/k8s/resources/ipam_affinity_v3.go) normalizes.
+[`ipam_affinity_v3.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_affinity_v3.go) normalizes.
 
 **Review notes**
 

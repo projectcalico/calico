@@ -17,9 +17,9 @@ handling.
 Architecture, invariants, and review criteria live in the
 cross-component IPAM design:
 
-- Index: [`docs/design/ipam/DESIGN.md`](../../../docs/design/ipam/DESIGN.md)
-- CNI plugin: [`docs/design/ipam/ipam-cni.md`](../../../docs/design/ipam/ipam-cni.md)
-- Core library: [`docs/design/ipam/ipam-core-library.md`](../../../docs/design/ipam/ipam-core-library.md)
+- Index: [`design/ipam/DESIGN.md`](../../../design/ipam/DESIGN.md)
+- CNI plugin: [`design/ipam/ipam-cni.md`](../../../design/ipam/ipam-cni.md)
+- Core library: [`design/ipam/ipam-core-library.md`](../../../design/ipam/ipam-core-library.md)
 
-Update the design under `docs/design/ipam/`, not this file. This
+Update the design under `design/ipam/`, not this file. This
 file is a discoverability pointer.

@@ -20,8 +20,8 @@ applyTo:
 
 Architecture, invariants, data model, allocation flow, GC
 behavior, and per-section review criteria for Calico IPAM live
-under [`docs/design/ipam/`](../../docs/design/ipam/), indexed by
-[`docs/design/ipam/DESIGN.md`](../../docs/design/ipam/DESIGN.md).
+under [`design/ipam/`](../../design/ipam/), indexed by
+[`design/ipam/DESIGN.md`](../../design/ipam/DESIGN.md).
 IPAM is cross-component (`libcalico-go/lib/ipam`, `cni-plugin`,
 `kube-controllers`, `node`, plus read-only callers like Felix and
 `calicoctl`), so the design lives at the repo level rather than
@@ -41,7 +41,7 @@ A PR that **changes how IPAM works** - the data model, the
 allocation or release flow, the handle ID convention, the GC
 reconciliation logic, the `IPAMConfig` resolution rules, or any
 invariant a sub-design records - must update the relevant file
-under `docs/design/ipam/` in the same PR.
+under `design/ipam/` in the same PR.
 
 **Exemption.** No doc update is needed if the PR is exclusively
 one of: (a) a bug fix that restores behavior the doc already
@@ -57,7 +57,7 @@ the review flags a missing update per the rule above, its
 comment should include a ready-to-paste `@copilot` prompt naming
 the sub-design and the new behavior or invariant, for example:
 
-> `@copilot update docs/design/ipam/ipam-gc.md "Reconciliation" to cover the new confirmation-pass step before releasing a suspected leaked allocation - what triggers it, what it checks, and how it interacts with the existing grace period.`
+> `@copilot update design/ipam/ipam-gc.md "Reconciliation" to cover the new confirmation-pass step before releasing a suspected leaked allocation - what triggers it, what it checks, and how it interacts with the existing grace period.`
 
 The reviewer (or author) drops that into a new PR comment; the
 Copilot coding agent picks it up and pushes a commit with the

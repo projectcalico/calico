@@ -10,7 +10,7 @@ You may obtain a copy of the License at
 
 # IPAM garbage collection
 
-The IPAM GC lives in [`kube-controllers/pkg/controllers/node/`](../../../kube-controllers/pkg/controllers/node/), **not** `pkg/controllers/ipam/`. There is no `ipam` controller; if
+The IPAM GC lives in [`kube-controllers/pkg/controllers/node/`](../../kube-controllers/pkg/controllers/node/), **not** `pkg/controllers/ipam/`. There is no `ipam` controller; if
 you came looking for the GC and didn't find it, look in `node`.
 
 Main file: `ipam.go` (~1600 lines). Supporting types in `ipam_allocation.go`. Pool / block mapping in `pool_manager.go`. Cross-component picture is in the [index](./DESIGN.md); the
@@ -202,19 +202,19 @@ without a separate consistency check loses the protection.
 
 Two harnesses cover the GC and they are not interchangeable:
 
-- **`assertConsistentState`** in [`kube-controllers/pkg/controllers/node/ipam_test.go`](../../../kube-controllers/pkg/controllers/node/ipam_test.go) is the canonical end-of-test
+- **`assertConsistentState`** in [`kube-controllers/pkg/controllers/node/ipam_test.go`](../../kube-controllers/pkg/controllers/node/ipam_test.go) is the canonical end-of-test
   invariant check. It cross-walks every in-memory map (`allBlocks`, `allocationsByBlock`, `allocationState`, `handleTracker`, `confirmedLeaks`, `nodesByBlock`, `blocksByNode`,
   `emptyBlocks`) and asserts they agree. Every test that mutates the controller's state must call it. The v3.32 memory-leak family
   (https://github.com/projectcalico/calico/pull/12277, /12286, /12287, /12288) all came from "added to one path, forgot another" - the consistency check catches that class
   directly.
-- **[`hack/cmd/ipam-hammer/`](../../../hack/cmd/ipam-hammer/)** is the race-reproduction harness for allocation and GC paths. Use it before declaring a race-fix complete. Unit
+- **[`hack/cmd/ipam-hammer/`](../../hack/cmd/ipam-hammer/)** is the race-reproduction harness for allocation and GC paths. Use it before declaring a race-fix complete. Unit
   tests can't exercise the CAS / timing windows that hammer can.
 
 **Review notes**
 
 - A new map mutation needs an `assertConsistentState` call in the corresponding test. Skipping it ships a memory-leak class bug.
 - A "fixes a race" PR without an `ipam-hammer` run on the before/after binaries is not done. Manual reasoning is not a substitute.
-- For changes to block-level invariants, extend the table tests in [`libcalico-go/lib/ipam/ipam_block_test.go`](../../../libcalico-go/lib/ipam/ipam_block_test.go) rather than
+- For changes to block-level invariants, extend the table tests in [`libcalico-go/lib/ipam/ipam_block_test.go`](../../libcalico-go/lib/ipam/ipam_block_test.go) rather than
   adding ad-hoc tests; the table is where reviewers look first.
 
 ## Keep in sync with
@@ -222,4 +222,4 @@ Two harnesses cover the GC and they are not interchangeable:
 - [`./ipam-datastore.md`](./ipam-datastore.md) - block / affinity state machine, sequence numbers, `mustBeEmpty=true` precondition.
 - [`./ipam-core-library.md`](./ipam-core-library.md) - `ReleaseIPs` / `ReleaseByHandle` semantics, handle conventions, sequence-number protection.
 - [`./ipam-cni.md`](./ipam-cni.md) - CNI side of the KubeVirt persistence handshake the VM grace period defends.
-- [`../../../kube-controllers/pkg/controllers/node/`](../../../kube-controllers/pkg/controllers/node/) - a `DESIGN.md` stub in that directory will point back here.
+- [`../../kube-controllers/pkg/controllers/node/`](../../kube-controllers/pkg/controllers/node/) - a `DESIGN.md` stub in that directory will point back here.

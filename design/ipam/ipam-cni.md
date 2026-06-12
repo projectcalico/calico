@@ -15,7 +15,7 @@ cross-component picture - data model, consumers, repo split - lives in the [inde
 [`./ipam-core-library.md`](./ipam-core-library.md) and referenced here, not re-derived.
 
 The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (invoked when `conf.IPAM.Type == "calico-ipam"`). The dispatcher in
-[`cni-plugin/cmd/calico/calico.go`](../../../cni-plugin/cmd/calico/calico.go) routes by binary name.
+[`cni-plugin/cmd/calico/calico.go`](../../cni-plugin/cmd/calico/calico.go) routes by binary name.
 
 ## ADD flow
 
@@ -26,7 +26,7 @@ Invariants:
 - **Lock then clock.** The 90s allocation timeout starts *after* the host-wide IPAM lock is acquired (see [The IPAM lock](#the-ipam-lock)). Otherwise lock contention burns the
   budget before any allocation work runs.
 
-`cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
+`cmdAdd` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) is the entry point. The flow is straightforward client construction →
 pool resolution → lock → `AutoAssign` → return. The design-relevant steps are:
 
 - **KubeVirt detection.** A pod name prefixed `virt-launcher-` triggers a VMI fetch. When `IPAMConfig.KubeVirtVMAddressPersistence` is enabled, the handle ID switches from
@@ -73,7 +73,7 @@ enumerates via `IPsByHandle`, and clears owner attrs through `SetOwnerAttributes
 
 ## Annotations
 
-User-facing wire surface - breaking parsing or semantics here is a user-visible incident. Handled in [`cni-plugin/pkg/k8s/k8s.go`](../../../cni-plugin/pkg/k8s/k8s.go). Namespace
+User-facing wire surface - breaking parsing or semantics here is a user-visible incident. Handled in [`cni-plugin/pkg/k8s/k8s.go`](../../cni-plugin/pkg/k8s/k8s.go). Namespace
 annotations are read as defaults; per-pod annotations override.
 
 | Annotation | What it does |
@@ -99,8 +99,8 @@ skips IPAM, the IP is whatever the user wrote, and nothing else in Calico knows 
 
 `ipam_plugin.go` is shared; the platform splits are file-level GOOS shims and a small set of args set differently on Windows.
 
-- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go)); Windows to `c:\CalicoWindows\ipam.lock`
-  ([`ipam_lock_windows.go`](../../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)).
+- Lock file: Linux defaults to `/var/run/calico/ipam.lock` ([`ipam_lock_linux.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_linux.go)); Windows to `c:\CalicoWindows\ipam.lock`
+  ([`ipam_lock_windows.go`](../../cni-plugin/pkg/ipamplugin/ipam_lock_windows.go)).
 - Binary: Windows enters through `node/cmd/calico-ipam`.
 - Windows forces `StrictAffinity=true` (HNS can't route remote affinity blocks). `WindowsUseSingleNetwork` collapses to `MaxBlocksPerHost = 1`. `HostReservedAttrIPv4s` reserves the
   first three and last IP of each block under the literal handle `windows-reserved-ipam-handle`. The reserved-handle name is parsed elsewhere - don't rename it.
@@ -119,7 +119,7 @@ worse than failing the ADD: the user asked for dual-stack and didn't get it.
 
 ## The IPAM lock
 
-`acquireIPAMLockBestEffort` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) takes a `flock` on the path from `conf.IPAMLockFile`,
+`acquireIPAMLockBestEffort` in [`cni-plugin/pkg/ipamplugin/ipam_plugin.go`](../../cni-plugin/pkg/ipamplugin/ipam_plugin.go) takes a `flock` on the path from `conf.IPAMLockFile`,
 falling back to the platform default. The lock is per-host and held for the duration of the ADD (or DEL) call.
 
 What it protects against: two `calico-ipam` invocations on the same node racing each other. CAS on `IPAMBlock` would technically serialize the persisted state, but pre-allocation
@@ -141,4 +141,4 @@ entire budget on lock contention and then fail the ADD with no allocation attemp
 
 - [`./ipam-core-library.md`](./ipam-core-library.md) - handle IDs are defined there; the CNI plugin is one consumer of that convention.
 - [`./ipam-datastore.md`](./ipam-datastore.md) - block / handle state model that DEL idempotency relies on.
-- [`../../../cni-plugin/pkg/ipamplugin/`](../../../cni-plugin/pkg/ipamplugin/) - a `DESIGN.md` stub in that directory will point back here.
+- [`../../cni-plugin/pkg/ipamplugin/`](../../cni-plugin/pkg/ipamplugin/) - a `DESIGN.md` stub in that directory will point back here.
