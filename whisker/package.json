@@ -79,7 +79,6 @@
         "brace-expansion": "^2.0.2",
         "flatted": "^3.4.2",
         "js-yaml": "^4.1.1",
-        "picomatch": "^2.3.2",
         "ws": "^8.20.1",
         "yaml": "^1.10.3"
     },
