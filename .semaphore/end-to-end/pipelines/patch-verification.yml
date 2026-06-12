@@ -521,8 +521,6 @@ blocks:
           value: "operator"
         - name: NUM_KUBEVIRT_VMS
           value: "2"
-        - name: RUN_LOCAL_TESTS
-          value: "true"
         - name: E2E_TEST_CONFIG
           value: "e2e/config/gcp-kubevirt.yaml"
 
