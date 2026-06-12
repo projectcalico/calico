@@ -15,6 +15,8 @@
 
 import time
 
+from neutron_lib.db import api as db_api
+
 from oslo_log import log
 
 LOG = log.getLogger(__name__)
@@ -86,10 +88,19 @@ class ResourceSyncer(object):
     when the syncer read the incorrect data.
     """
 
-    def __init__(self, db, txn_from_context, resource_kind):
+    def __init__(self, db, resource_kind, inject_per_item_delay_ms=0):
         self.db = db
-        self.txn_from_context = txn_from_context
         self.resource_kind = resource_kind
+        # Test-only: when positive, sleep this many ms after each
+        # iteration of the compare loop below.  Used by the resync-
+        # concurrency test (CORE-12037).  Always 0 in production.  Clamp
+        # to 0 defensively: time.sleep() raises ValueError on a negative
+        # argument, which would silently turn a misconfigured test knob
+        # into a resync failure.  The two call sites (mech_calico's
+        # IntOpt and the calico-resync --inject-per-item-delay-ms flag)
+        # both have their own non-negativity checks, but a single guard
+        # here covers any future caller too.
+        self._inject_per_item_delay_secs = max(0, inject_per_item_delay_ms) / 1000.0
 
     def resync(self, context, scope):
         """Reconcile this resource type's etcd state with Neutron.
@@ -141,7 +152,7 @@ class ResourceSyncer(object):
             etcd_map = self.get_from_etcd(scope)
             t_etcd_read = time.monotonic()
 
-            with self.txn_from_context(context, "get-all-" + self.resource_kind):
+            with db_api.CONTEXT_WRITER.using(context):
                 neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
@@ -174,6 +185,12 @@ class ResourceSyncer(object):
         def _iter_order(n):
             return (0 if n.startswith("lm ") else 1, n)
 
+        # Compare-loop marker.  The resync-concurrency test (CORE-12037) waits
+        # for this line in the resync log before firing its in-resync burst, so
+        # the burst lands inside the test-injected per-item delay window rather
+        # than during the etcd read or the CONTEXT_WRITER-held neutron read.
+        LOG.info("Resync for %s: starting compare loop", self.resource_kind)
+
         for name in sorted(set(etcd_map) | set(neutron_map), key=_iter_order):
             in_etcd = name in etcd_map
             in_neutron = name in neutron_map
@@ -184,7 +201,7 @@ class ResourceSyncer(object):
                 # is at least as fresh as our etcd read; the CAS on mod_revision
                 # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
-                with self.txn_from_context(context, "update-" + self.resource_kind):
+                with db_api.CONTEXT_WRITER.using(context):
                     write_data = self.neutron_to_etcd_write_data(
                         name, neutron_map[name], context, reread=False
                     )
@@ -207,7 +224,7 @@ class ResourceSyncer(object):
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so we don't race with
                 # a concurrent dynamic delete.
-                with self.txn_from_context(context, "create-" + self.resource_kind):
+                with db_api.CONTEXT_WRITER.using(context):
                     try:
                         write_data = self.neutron_to_etcd_write_data(
                             name, neutron_map[name], context, reread=True
@@ -242,6 +259,8 @@ class ResourceSyncer(object):
                         name,
                     )
             # else: name was in scope but neither side has it -- nothing to do.
+            if self._inject_per_item_delay_secs:
+                time.sleep(self._inject_per_item_delay_secs)
         t_compare = time.monotonic()
 
         # Delete any legacy etcd data for this kind of resource.  Only makes sense in

@@ -47,8 +47,9 @@ gen-files: gen-crds
 ## Force a rebuild of custom resource definition yamls
 gen-crds:
 	rm -rf config/crd
-	# Generate CRDs
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) controller-gen crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
+	# Generate CRDs using the in-repo Calico-patched controller-gen.
+	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
@@ -57,14 +58,11 @@ gen-crds:
 	curl -sSfL --retry 3 $(NETPOL_CNP_CRD_URL)/$(NETPOL_CNP_CRD) -o ./config/crd/$(NETPOL_CNP_CRD)
 	# Run prettier to fix indentation
 	docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/config/crd/:/work/config/crd/ tmknom/prettier --write --parser=yaml /work
-	# Patch in manual tweaks to the generated CRDs.
-	patch --no-backup-if-mismatch -p2 < patches/0001-Add-nullable-to-IPAM-block-allocations-field.patch
 
 ./lib/apis/internalapi/zz_generated.deepcopy.go: $(APIS_SRCS)
 	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--bounding-dirs "github.com/projectcalico/calico/libcalico-go" \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/lib/apis/internalapi"'
 

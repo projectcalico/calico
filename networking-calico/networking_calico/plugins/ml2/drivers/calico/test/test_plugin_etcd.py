@@ -368,11 +368,24 @@ class TestPluginEtcdBase(_TestEtcdBase):
         lib.m_oslo_config.cfg.CONF.calico.ingress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.egress_burst_packets = 0
         lib.m_oslo_config.cfg.CONF.calico.startup_resync = "always"
+        # Set the resync-concurrency injection knob explicitly to 0 so the
+        # syncer's ``max(0, inject_per_item_delay_ms)`` clamp gets a real
+        # int -- without this, the attribute is the default MagicMock,
+        # which raises TypeError on `>` comparison with int.  (Before the
+        # clamp landed, the auto-generated MagicMock.__float__ silently
+        # coerced this into a real time.sleep(1.0) per compare-loop item,
+        # adding ~70s of dead sleep to the suite.)
+        lib.m_oslo_config.cfg.CONF.calico.startup_resync_inject_per_item_delay_ms = 0
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
         # This value needs to be a string:
         lib.m_oslo_config.cfg.CONF.keystone_authtoken.auth_url = ""
+
+        # _check_mysql_driver() reads this at start of day to validate the
+        # SQLAlchemy driver.  Without a concrete value here, the default
+        # MagicMock would let the prefix check false-positive on "mysql:".
+        lib.m_oslo_config.cfg.CONF.database.connection = None
 
         self.sg_default_key_v3 = (
             "/calico/resources/v3/projectcalico.org/networkpolicies/"
@@ -2646,22 +2659,29 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
     @mock.patch("eventlet.spawn")
     def test_loop_writing_port_statuses(self, _m_spawn):
         self.driver._init_start_endpoint_status_watcher()
-
-        with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
-            with mock.patch.object(
-                self.driver, "_try_to_update_port_status"
-            ) as m_try_upd:
-                m_queue.get.side_effect = iter([((1, mock.ANY), ("host", "port"))])
-                self.assertRaises(
-                    StopIteration,
-                    self.driver._loop_writing_port_statuses,
-                )
+        with mock.patch.object(
+            self.driver, "_port_status_queue"
+        ) as m_queue, mock.patch.object(
+            self.driver, "_try_to_update_port_status"
+        ) as m_try_upd, mock.patch.object(
+            mech_calico, "_close_session_safely"
+        ) as m_close:
+            m_queue.get.side_effect = iter([((1, mock.ANY), ("host", "port"))])
+            self.assertRaises(
+                StopIteration,
+                self.driver._loop_writing_port_statuses,
+            )
         self.assertEqual(
             [
                 mock.call(mock.ANY, ("host", "port")),
             ],
             m_try_upd.mock_calls,
         )
+
+        # The loop must close its session after each iteration AND on loop exit, so two
+        # calls here: one from the inner `finally` after _try_to_update_port_status, one
+        # from the outer `finally` when StopIteration propagates.
+        self.assertEqual(2, m_close.call_count)
 
     @mock.patch("eventlet.spawn")
     def test_try_to_update_port_status(self, _m_spawn):
@@ -3082,3 +3102,29 @@ def _neutron_rule_from_dict(overrides):
     }
     rule.update(overrides)
     return rule
+
+
+class TestCloseSessionSafely(unittest.TestCase):
+    """Unit tests for mech_calico._close_session_safely().
+
+    Verifies the helper closes the admin-context session, swallows exceptions from
+    close() (so a single bad iteration cannot kill the long-lived port-status loop), and
+    is a no-op when the context has no session attribute.
+    """
+
+    def test_closes_session(self):
+        ctx = mock.MagicMock()
+        mech_calico._close_session_safely(ctx)
+        ctx.session.close.assert_called_once_with()
+
+    def test_swallows_close_exception(self):
+        ctx = mock.MagicMock()
+        ctx.session.close.side_effect = RuntimeError("boom")
+        mech_calico._close_session_safely(ctx)  # must not raise
+
+    def test_no_session_attr_is_noop(self):
+        class _NoSession:
+            pass
+
+        # Bare object with no .session attribute -- no raise, no call.
+        mech_calico._close_session_safely(_NoSession())

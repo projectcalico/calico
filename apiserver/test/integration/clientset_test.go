@@ -17,6 +17,7 @@ package integration
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -34,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -2509,4 +2511,113 @@ func testPolicyWatch(client calicoclient.Interface) error {
 	}
 
 	return nil
+}
+
+// TestServerSideApplyCreate locks in the fix for
+// https://github.com/projectcalico/calico/issues/12841. A server-side apply of a
+// tiered policy that doesn't exist yet reaches the apiserver as an update with
+// forceAllowCreate set, not as a Create. The tier RBAC check must not turn that
+// into a NotFound; the policy should be created.
+func TestServerSideApplyCreate(t *testing.T) {
+	client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
+		return &v3.GlobalNetworkPolicy{}
+	})
+	defer shutdownServer()
+
+	ctx := context.Background()
+	pc := client.ProjectcalicoV3()
+	const fieldManager = "ssa-test"
+
+	// applyCreate marshals obj and applies it, then runs getAfter to confirm the
+	// server created it. patch and getAfter close over the typed client for the
+	// resource under test, since each has its own concrete return type.
+	applyCreate := func(t *testing.T, obj runtime.Object, name string, patch func(data []byte) error, getAfter func() error) {
+		t.Helper()
+		data, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatalf("failed to marshal %s: %v", name, err)
+		}
+		if err := patch(data); err != nil {
+			t.Fatalf("server-side apply create of %s failed: %v", name, err)
+		}
+		if err := getAfter(); err != nil {
+			t.Fatalf("%s was not created by server-side apply: %v", name, err)
+		}
+	}
+
+	t.Run("GlobalNetworkPolicy", func(t *testing.T) {
+		c := pc.GlobalNetworkPolicies()
+		obj := &v3.GlobalNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindGlobalNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "gnp-ssa"},
+			Spec:       v3.GlobalNetworkPolicySpec{Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("NetworkPolicy", func(t *testing.T) {
+		c := pc.NetworkPolicies("default")
+		obj := &v3.NetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "np-ssa", Namespace: "default"},
+			Spec:       v3.NetworkPolicySpec{Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("StagedGlobalNetworkPolicy", func(t *testing.T) {
+		c := pc.StagedGlobalNetworkPolicies()
+		obj := &v3.StagedGlobalNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindStagedGlobalNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "sgnp-ssa"},
+			Spec:       v3.StagedGlobalNetworkPolicySpec{StagedAction: "Set", Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("StagedNetworkPolicy", func(t *testing.T) {
+		c := pc.StagedNetworkPolicies("default")
+		obj := &v3.StagedNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindStagedNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "snp-ssa", Namespace: "default"},
+			Spec:       v3.StagedNetworkPolicySpec{StagedAction: "Set", Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
 }

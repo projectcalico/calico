@@ -49,6 +49,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -100,6 +101,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
@@ -181,16 +183,18 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 #   make image                                              # build + tag as calico/<name>:<version>
 #   make push DEV_IMAGE_PATH=myuser DEV_IMAGE_TAG=latest    # build + tag + push to myuser/<name>:latest
 #
-# Component images are independent targets, so `make -jN` builds them in
-# parallel (e.g., `make -j4 push DEV_IMAGE_PATH=myuser`).
+# Component images are independent targets and build in parallel up to
+# NUM_BUILD_JOBS (default 4 to keep memory usage sane on a workstation;
+# raise via NUM_BUILD_JOBS=8 etc. for a bigger machine).
 #
 # To force a full rebuild, remove the stamp directory:
 #   rm -rf .dev-stamps && make push ...
 ###############################################################################
 
 .PHONY: image
-## Build all component images and tag for dev registry. Supports make -jN for parallel builds.
-image: $(KIND_IMAGE_MARKERS)
+## Build all component images and tag for dev registry.
+image:
+	$(MAKE) -j$(NUM_BUILD_JOBS) $(KIND_IMAGE_MARKERS)
 	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
 	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
@@ -238,7 +242,7 @@ CLUSTER_ROUTING ?= BIRD
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
-	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
@@ -301,7 +305,7 @@ GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance
 GATEWAY_CONFORMANCE_ORG ?= projectcalico
 GATEWAY_CONFORMANCE_PROJECT ?= calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
-GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/CODE-OF-CONDUCT.md
+GATEWAY_CONFORMANCE_CONTACT ?= https://www.tigera.io/contact/
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
 GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
 GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml

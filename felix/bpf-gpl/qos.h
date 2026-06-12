@@ -12,25 +12,31 @@
 
 struct calico_qos_key {
 	__u32 ifindex;
-	__u32 ingress; // 0=egress; 1=ingress;
+	__u16 ingress; // 0=egress; 1=ingress;
+	__u16 family;  // 4=IPv4, 6=IPv6
 };
 
 struct calico_qos_val {
 	struct bpf_spin_lock lock;
-	// config
+	// packet rate config
 	__s16 packet_rate;
 	__s16 packet_burst;
-	// state
+	// packet rate state
 	__s16 packet_rate_tokens;
 	__s16 padding[3]; // alignment
 	__u64 packet_rate_last_update;
+	// connection limit
+	__u32 max_connections; // 0 = no limit, >0 = limit
+	__u32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
 };
 
-// 2*IFACE_STATE_MAP_SIZE because it will potentially have 2 entries for each interface (ingress/egress)
-CALI_MAP(cali_qos,,
+// 4*IFACE_STATE_MAP_SIZE: up to 2 entries (ingress/egress) per interface and
+// per IP family (v4/v6). v4 and v6 traffic count against separate counters,
+// matching the per-family rule semantics of iptables and nftables modes.
+CALI_MAP(cali_qos, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_qos_key, struct calico_qos_val,
-		2*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
+		4*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 {
@@ -57,6 +63,11 @@ static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
 		.ingress = 1,
 #else // CALI_F_EGRESS
 		.ingress = 0,
+#endif
+#ifdef IPVER6
+		.family = 6,
+#else
+		.family = 4,
 #endif
 	};
 	if (!(qos = cali_qos_lookup_elem(&key))) {
@@ -149,6 +160,97 @@ static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
 	}
 #endif /* IPVER6 */
 	return true;
+}
+
+/* qos_connlimit_check_and_increment atomically checks the connection limit for
+ * the current interface and direction using the cali_qos map. If below the
+ * limit, increments the counter and returns 0 (allow). If at or above the
+ * limit, returns -1 (reject). Returns 0 if no limit is configured for this
+ * interface+direction (no map entry or max_connections <= 0).
+ *
+ * Only called for TCP SYN on WEP interfaces.
+ */
+static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx *ctx)
+{
+	/* For netkit, skb->ifindex is the peer (pod-side) ifindex; the QoS
+	 * map is keyed by the host-side primary ifindex. Use host_ifindex
+	 * from globals when available.
+	 */
+	__u32 __qos_ifindex = ctx->globals->data.host_ifindex ?
+		ctx->globals->data.host_ifindex : ctx->skb->ifindex;
+	struct calico_qos_key key = {
+		.ifindex = __qos_ifindex,
+#if CALI_F_INGRESS
+		.ingress = 1,
+#else // CALI_F_EGRESS
+		.ingress = 0,
+#endif
+#ifdef IPVER6
+		.family = 6,
+#else
+		.family = 4,
+#endif
+	};
+
+	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	if (!qos || qos->max_connections <= 0) {
+		return 0;
+	}
+
+	int rc = 0;
+
+	bpf_spin_lock(&qos->lock);
+	if (qos->current_count >= qos->max_connections) {
+		rc = -1;
+	} else {
+		qos->current_count++;
+	}
+	bpf_spin_unlock(&qos->lock);
+
+	if (rc < 0) {
+		CALI_DEBUG("connlimit: over limit (%d >= %d), rejecting",
+			   qos->current_count, qos->max_connections);
+	} else {
+		CALI_DEBUG("connlimit: under limit (%d/%d), allowing",
+			   qos->current_count, qos->max_connections);
+	}
+
+	return rc;
+}
+
+/* qos_connlimit_decrement decrements the connection limit counter for the
+ * given interface, direction, and IP family. Called when a TCP connection
+ * closes (both FINs seen or RST) and from the cleanup program when a counted
+ * CT entry expires. Takes an explicit ifindex+direction+family because the
+ * decrement may run from any BPF program (from_hep, from_wep,
+ * conntrack_cleanup, ...), not just the pod's own WEP program. Family is
+ * compile-time-known at every call site (the BPF programs are family-typed
+ * via the IPVER6 macro), so callers pass it as a literal.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement(__u32 ifindex, __u16 direction, __u16 family)
+{
+	struct calico_qos_key key = {
+		.ifindex = ifindex,
+		.ingress = direction,
+		.family = family,
+	};
+
+	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	if (!qos || qos->max_connections <= 0) {
+		return;
+	}
+
+	bpf_spin_lock(&qos->lock);
+	if (qos->current_count > 0) {
+		qos->current_count--;
+	}
+	bpf_spin_unlock(&qos->lock);
+
+	/* CALI_DEBUG_NO_FLAG (not CALI_DEBUG) — the TC programs' CALI_LOG
+	 * override reads ctx->globals which we don't have here.
+	 */
+	CALI_DEBUG_NO_FLAG("connlimit: decremented count to %d/%d",
+		   qos->current_count, qos->max_connections);
 }
 
 #endif /* __CALI_QOS_H__ */

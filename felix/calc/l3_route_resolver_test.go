@@ -17,6 +17,7 @@ package calc
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
@@ -285,6 +286,111 @@ var _ = Describe("L3RouteResolver", func() {
 			Expect(tunnelRoute.Types&proto.RouteType_REMOTE_WORKLOAD).NotTo(BeZero(),
 				"tunnel route in /32 block should have REMOTE_WORKLOAD")
 		})
+	})
+
+	It("should not set IpPoolType but still propagate NatOutgoing for LoadBalancer-only pools", func() {
+		eventBuf := make(rtEventsMock, 100)
+		l3RR := NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
+		l3RR.OnAlive = func() {}
+
+		lbPoolCIDR, _ := ip.CIDRFromString("10.96.0.0/16")
+		l3RR.OnPoolUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(net.IPNet{IPNet: lbPoolCIDR.ToIPNet()})},
+				Value: &model.IPPool{
+					CIDR:        net.IPNet{IPNet: lbPoolCIDR.ToIPNet()},
+					Masquerade:  true,
+					AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseLoadBalancer},
+				},
+			},
+		})
+
+		remoteAffinity := "virtual:loadbalancer"
+		blockCIDR := net.MustParseCIDR("10.96.1.0/26")
+		l3RR.OnBlockUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+				Value: &model.AllocationBlock{
+					CIDR:        blockCIDR,
+					Affinity:    &remoteAffinity,
+					Allocations: make([]*int, 64),
+					Unallocated: []int{0},
+				},
+			},
+		})
+
+		l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{V4Addr: ip.FromString("192.168.0.2").(ip.V4Addr)})
+		l3RR.flush()
+
+		var routes []*proto.RouteUpdate
+		for len(eventBuf) > 0 {
+			if rt, ok := (<-eventBuf).(*proto.RouteUpdate); ok {
+				routes = append(routes, rt)
+			}
+		}
+		var blockRoute *proto.RouteUpdate
+		for _, rt := range routes {
+			if rt.Dst == "10.96.1.0/26" {
+				blockRoute = rt
+			}
+		}
+		Expect(blockRoute).NotTo(BeNil(), "expected a route for 10.96.1.0/26")
+		Expect(blockRoute.IpPoolType).To(Equal(proto.IPPoolType_NONE))
+		Expect(blockRoute.NatOutgoing).To(BeTrue())
+	})
+
+	It("should set IpPoolType for pools with Workload and LoadBalancer uses", func() {
+		eventBuf := make(rtEventsMock, 100)
+		l3RR := NewL3RouteResolver("local-host", eventBuf, "CalicoIPAM")
+		l3RR.OnAlive = func() {}
+
+		mixedPoolCIDR, _ := ip.CIDRFromString("10.0.0.0/16")
+		l3RR.OnPoolUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(net.IPNet{IPNet: mixedPoolCIDR.ToIPNet()})},
+				Value: &model.IPPool{
+					CIDR:        net.IPNet{IPNet: mixedPoolCIDR.ToIPNet()},
+					VXLANMode:   encap.Always,
+					Masquerade:  true,
+					AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload, v3.IPPoolAllowedUseLoadBalancer},
+				},
+			},
+		})
+
+		remoteAffinity := "host:remote-host"
+		blockCIDR := net.MustParseCIDR("10.0.1.0/26")
+		l3RR.OnBlockUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+				Value: &model.AllocationBlock{
+					CIDR:        blockCIDR,
+					Affinity:    &remoteAffinity,
+					Allocations: make([]*int, 64),
+					Unallocated: []int{0},
+				},
+			},
+		})
+
+		l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{
+			V4Addr:    ip.FromString("192.168.0.2").(ip.V4Addr),
+			VXLANAddr: ip.FromString("10.0.1.1"),
+		})
+		l3RR.flush()
+
+		var routes []*proto.RouteUpdate
+		for len(eventBuf) > 0 {
+			if rt, ok := (<-eventBuf).(*proto.RouteUpdate); ok {
+				routes = append(routes, rt)
+			}
+		}
+		var blockRoute *proto.RouteUpdate
+		for _, rt := range routes {
+			if rt.Dst == "10.0.1.0/26" {
+				blockRoute = rt
+			}
+		}
+		Expect(blockRoute).NotTo(BeNil(), "expected a route for 10.0.1.0/26")
+		Expect(blockRoute.IpPoolType).To(Equal(proto.IPPoolType_VXLAN))
 	})
 
 	Describe("l3rrNodeInfo UTs", func() {

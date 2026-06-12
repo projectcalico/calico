@@ -4,14 +4,14 @@
 # The project Go version
 GO_VERSION=1.26.3
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.35.5
+K8S_VERSION=v1.36.1
 # The version of LLVM to use for go-build and calico/base images.
-LLVM_VERSION=20.1.8
+LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
 RUST_BUILD_VER=1.94.1
 
-CALICO_BASE_VER=ubi9-1778780765
+CALICO_BASE_VER=ubi9-1779935431
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
@@ -57,10 +57,12 @@ WINDOWS_HPC_VERSION ?= v1.0.0
 # The Windows versions used as base for Calico Windows images
 WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 
-# The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image
-# whenever the cni-plugin image is created.
-CNI_VERSION=master
-FLANNEL_VERSION=main
+# The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image.
+# Pinned so the content-addressed third-party-cni-plugins image hash changes when these move.
+# CNI_VERSION is a commit SHA because the fork has no release tag at the toolchain we build with;
+# bump it to pick up upstream changes.
+CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
+FLANNEL_VERSION=v1.2.0-flannel2-go1.22.7
 
 # The libbpf version to use
 LIBBPF_VERSION=v1.6.2

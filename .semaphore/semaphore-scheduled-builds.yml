@@ -127,7 +127,10 @@ global_job_config:
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
-  # Manual promotion for publishing a hashrelease.
+  # Manual promotion for publishing a hashrelease. To push per-component
+  # images at the current SHA, trigger this with BUILD_CONTAINER_IMAGES=true
+  # and PUBLISH_IMAGES=true — that replaces the previous per-merge auto-push
+  # behavior that fired the Push * promotions below on every merge.
   - name: Publish hashrelease
     pipeline_file: release/hashrelease.yml
     parameters:
@@ -161,52 +164,38 @@ promotions:
     pipeline_file: cleanup.yml
     auto_promote:
       when: "result = 'stopped'"
-  # Have separate promotions for publishing images so we can re-run
-  # them individually if they fail, and so we can run them in parallel.
+  # Separate promotions for publishing images individually, kept as manual
+  # buttons so a single component can be re-pushed without re-running the
+  # full hashrelease. These no longer auto-fire on master/release merges —
+  # use "Publish hashrelease" with PUBLISH_IMAGES=true for the bulk push.
   - name: Push calico images
     pipeline_file: push-images/calico.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push calico-node images
     pipeline_file: push-images/node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
+  - name: Push third-party-cni-plugins images
+    pipeline_file: push-images/third-party-cni-plugins.yml
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
-    auto_promote:
-      when: "branch =~ 'master|release-'"
   - name: Push Whisker images
     pipeline_file: push-images/whisker.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
-      when: "branch =~ 'master'"
+      when: "branch = 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
       when: "branch =~ 'master|release-.*'"
   - name: Push E2E images
     pipeline_file: push-images/e2e-test.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push istio images
     pipeline_file: push-images/istio.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
   - name: Push nftables RPM images
     pipeline_file: push-images/nft-rpms.yml
-    auto_promote:
-      when: "branch =~ 'master|release-.*'"
 blocks:
   - name: Check images availability
     run:
@@ -356,6 +345,14 @@ blocks:
     # arches) and uploads the image tarball to GCS for downstream consumers.
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+    #
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
       when: "true"
     dependencies: []
@@ -412,10 +409,32 @@ blocks:
                 gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
-    # Always build and cache the calico image so that downstream CI blocks can
-    # load it from GCS instead of rebuilding per component. This block is the
-    # sole producer for the "calico" build-cache group — every Go component
-    # block on master restores the module + build cache populated here.
+    # Build and cache the calico image so that downstream CI blocks can load it
+    # from GCS instead of rebuilding per component. This block is the sole
+    # producer for the "calico" build-cache group — every Go component block on
+    # master restores the module + build cache populated here.
+    #
+    # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
+    # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
+    # producer must run whenever they do — including on felix-test-only PRs.
+    #
+    # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
+    # test-file exclusion, but for every *secondary*/dependency package it adds a
+    # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
+    # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
+    # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
+    # while skipping this producer — leaving the artifacts unuploaded. Putting felix
+    # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
+    # cmd/calico stays as a secondary so the calico image still rebuilds on changes
+    # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
+    #
+    # The process/testing paths trigger this so the win-fv-felix block (which now
+    # installs the locally-built calico image) has it cached in GCS. The libcalico
+    # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
+    # superset of the win-fv-felix block's trigger (felix's full test closure plus
+    # its own CI block), so win-fv-felix never runs without this image in GCS.
     run:
       when: "true"
     dependencies: []
@@ -472,6 +491,13 @@ blocks:
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
     # can depend on the shared producer→GCS→consumer upload pattern.
+    # felix + process/testing paths trigger this so the win-fv-felix block (which
+    # now installs the locally-built node image) has it cached in GCS. felix is a
+    # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
+    # (test + non-Go files) that the win-fv-felix block triggers on as a primary
+    # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
+    # the rest of felix's test closure, keeping this a superset of win-fv-felix so
+    # it never runs without this image in GCS.
     run:
       when: "true"
     dependencies:
@@ -1075,13 +1101,19 @@ blocks:
   - name: "Felix: Windows FV"
     run:
       when: "false or true"
-    dependencies: ["Felix: Build Windows binaries"]
+    dependencies:
+      - "Felix: Build Windows binaries"
+      - "Build: calico image"
+      - "Build: node image"
     task:
       secrets:
         - name: banzai-secrets
         - name: private-repo
       prologue:
         commands:
+          # Load the locally-built calico + node images from the GCS cache so the
+          # local-build install uses images from the commit under test.
+          - .semaphore/load-cached-images
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -1103,6 +1135,12 @@ blocks:
           value: "calico"
         - name: FV_TYPE
           value: "calico-felix"
+        # Install the operator, Linux, and Windows images all built from the
+        # commit under test instead of a cached operator + hashrelease components.
+        - name: RELEASE_STREAM
+          value: "local-build"
+        - name: HASH_RELEASE
+          value: "false"
         - name: SEMAPHORE_ARTIFACT_EXPIRY
           value: 2w
         - name: CONTAINERD_VERSION
@@ -1326,25 +1364,10 @@ blocks:
               values:
                 - arm64
           commands:
-            # Skip istio ztunnel in this arm64 cross-build job.
-            # ztunnel is built separately in the native arm64 runner block below.
-            - ../.semaphore/run-and-monitor build-$ARCH.log make build-istio ARCH=$ARCH
-  - name: Istio Ztunnel - native arm64 runner
-    run:
-      when: "true"
-    dependencies:
-      - Istio
-    task:
-      agent:
-        machine:
-          type: s1-aws-arm64-2
-      prologue:
-        commands:
-          - cd istio
-      jobs:
-        - name: "Linux arm64"
-          commands:
-            - ../.semaphore/run-and-monitor build-arm64.log make build-ztunnel ARCH=arm64
+            # Cross-builds all istio components including ztunnel.
+            # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+            # toolchain (clang + sysroot), no native arm64 runner needed.
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: kube-controllers
     run:
       when: "true"
@@ -1374,6 +1397,55 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "KubeVirt live migration (KIND)"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/kind-kubevirt.yaml"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "KubeVirt live migration (KIND)"
+          commands:
+            # Build e2e test binary
+            - make -C e2e build
+            # Create KIND cluster with Calico
+            - make kind-up
+            # Download and deploy KubeVirt simulation mode
+            - export KUBEVIRT_RELEASE_URL="https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1"
+            - mkdir -p /tmp/kubevirt-manifests
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/ci-deploy-kind.sh" -o /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-operator.yaml" -o /tmp/kubevirt-manifests/kubevirt-operator.yaml
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
+            - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            # Start external BIRD BGP peer container on the KIND Docker network.
+            # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+            - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            # Run KubeVirt e2e tests
+            - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: >-
@@ -1558,6 +1630,32 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
             - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
+  - name: Third-party CNI plugins image
+    run:
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/cni-plugins
+      jobs:
+        - name: "Third-party CNI plugins: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Third-party CNI plugins: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Tools (hack directory)"
     run:
       when: >-
@@ -1708,6 +1806,8 @@ blocks:
         machine:
           type: f1-standard-2
           os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
       prologue:
         commands:
           - cd networking-calico
@@ -1717,6 +1817,10 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log make tox-caracal
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
+            # Env vars needed for saving performance results.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall

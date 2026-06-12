@@ -95,6 +95,14 @@ const (
 	FloatingIPsDisabled FloatingIPType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=Disabled;PodsAndLoadBalancers
+type LocalSubnetL2ReachabilityMode string
+
+const (
+	LocalSubnetL2ReachabilityDisabled             LocalSubnetL2ReachabilityMode = "Disabled"
+	LocalSubnetL2ReachabilityPodsAndLoadBalancers LocalSubnetL2ReachabilityMode = "PodsAndLoadBalancers"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type BPFHostNetworkedNATType string
 
@@ -460,7 +468,9 @@ type FelixConfigurationSpec struct {
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	IptablesMarkMask *uint32 `json:"iptablesMarkMask,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
+	IptablesMarkMask *int64 `json:"iptablesMarkMask,omitempty"`
 
 	// DisableConntrackInvalidCheck disables the check for invalid connections in conntrack. While the conntrack
 	// invalid check helps to detect malicious traffic, it can also cause issues with certain multi-NIC scenarios.
@@ -691,7 +701,9 @@ type FelixConfigurationSpec struct {
 	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
+	NftablesMarkMask *int64 `json:"nftablesMarkMask,omitempty"`
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
@@ -1103,6 +1115,14 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	// +optional
+	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
 
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional

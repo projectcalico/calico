@@ -100,6 +100,14 @@ type Cmd struct {
 	CmdStr   string
 	FilePath string
 	SymLink  string
+
+	// FallbackCmdStr, if set, is run when CmdStr exits non-zero — for example
+	// when collecting from an older component that doesn't understand a newer
+	// flag or subcommand. Its output is written to FallbackFilePath (or to
+	// FilePath if FallbackFilePath is empty). This keeps diags useful across
+	// version skew: e.g. try a JSON dump, fall back to the plain-text dump.
+	FallbackCmdStr   string
+	FallbackFilePath string
 }
 
 // ExecCmdWriteToFile executes the provided command c and outputs the result to a
@@ -124,21 +132,39 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 
 	logCtx.Debugf("Executing command: %+v ... ", c.CmdStr)
 	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
+
+	// Determine where the output should land. If the primary command failed and
+	// a fallback is configured, run the fallback instead (e.g. an older
+	// calico-node that doesn't support --json: retry without it and keep the
+	// plain-text output). The fallback output replaces the primary output.
+	filePath := c.FilePath
+	if err != nil && c.FallbackCmdStr != "" {
+		logCtx.Debugf("Command failed, trying fallback: %s", c.FallbackCmdStr)
+		fParts := strings.Fields(c.FallbackCmdStr)
+		fContent, fErr := exec.Command(fParts[0], fParts[1:]...).CombinedOutput()
+		if fErr == nil {
+			content, err = fContent, nil
+			if c.FallbackFilePath != "" {
+				filePath = c.FallbackFilePath
+			}
+		}
+	}
+
 	if err != nil {
 		fmt.Printf("%s Failed to run command: %s\nError: %s\n", logPrefix, c.CmdStr, string(content))
 	}
 
 	// This is for the commands we want to run but don't want to save the output
 	// or for commands that don't produce any output to stdout
-	if c.FilePath == "" {
+	if filePath == "" {
 		logCtx.Debugln("Command executed successfully, skipping writing output (no filepath specified)")
 		return
 	}
 
-	if err := os.WriteFile(c.FilePath, content, 0644); err != nil {
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
 		logCtx.Errorf("Error writing diags to file: %s\n", err)
 	}
-	logCtx.Debugf("Command executed successfully and outputted to %s", c.FilePath)
+	logCtx.Debugf("Command executed successfully and outputted to %s", filePath)
 
 	if c.SymLink != "" {
 		dir = filepath.Dir(c.SymLink)
@@ -146,7 +172,7 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 			fmt.Printf("%s Error creating directory for %v: %v\n", logPrefix, c.SymLink, err)
 			return
 		}
-		relativeTarget, err := filepath.Rel(dir, c.FilePath)
+		relativeTarget, err := filepath.Rel(dir, filePath)
 		if err != nil {
 			fmt.Printf("%s Error computing relative path for %v: %v\n", logPrefix, c.SymLink, err)
 			return

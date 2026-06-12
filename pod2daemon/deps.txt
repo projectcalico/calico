@@ -4,8 +4,7 @@ Run 'make gen-deps-files' to regenerate.
 go 1.26.3
 github.com/beorn7/perks v1.0.1
 github.com/cespare/xxhash/v2 v2.3.0
-github.com/container-storage-interface/spec v1.9.0
-github.com/golang/protobuf v1.5.4
+github.com/container-storage-interface/spec v1.12.0
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/projectcalico/calico
 github.com/prometheus/client_golang v1.23.2
@@ -22,7 +21,7 @@ golang.org/x/text v0.37.0
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478
 google.golang.org/grpc v1.80.0
-google.golang.org/protobuf v1.36.11
+google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 
 local:pod2daemon/binder
 local:pod2daemon/nodeagent

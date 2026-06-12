@@ -560,12 +560,14 @@ message IPAMPool {
   bool masquerade = 2;
   string ipip_mode = 3;
   string vxlan_mode = 4;
+  repeated string allowed_uses = 5;
 }
 
 message Encapsulation {
   bool ipip_enabled = 1;
   bool vxlan_enabled = 2;
   bool vxlan_enabled_v6 = 3;
+  bool no_encap_enabled = 4;
 }
 
 message ServiceAccountUpdate {
@@ -810,6 +812,7 @@ message ServiceUpdate {
 	string loadbalancer_ip = 5;
 	repeated string external_ips = 6;
 	repeated ServicePort ports = 7;
+	repeated string loadbalancer_ingress_ips = 8;
 }
 
 message ServiceRemove {

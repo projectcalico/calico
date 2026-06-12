@@ -682,6 +682,7 @@ type PersistentConnectionOpts struct {
 	SourcePort          int
 	MonitorConnectivity bool
 	Timeout             time.Duration
+	SendRST             bool
 }
 
 func (w *Workload) StartPersistentConnectionMayFail(
@@ -698,6 +699,7 @@ func (w *Workload) StartPersistentConnectionMayFail(
 		SourcePort:          opts.SourcePort,
 		MonitorConnectivity: opts.MonitorConnectivity,
 		Timeout:             opts.Timeout,
+		SendRST:             opts.SendRST,
 	}
 
 	err := pc.Start()

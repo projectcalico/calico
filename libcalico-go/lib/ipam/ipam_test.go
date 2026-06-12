@@ -74,7 +74,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	// tests.
 	var bc bapi.Client
 	var ic Interface
-	var kc *kubernetes.Clientset
+	var kc kubernetes.Interface
 	var reservations *ipamtestutils.FakeReservations
 	BeforeEach(func() {
 		var err error
@@ -4361,6 +4361,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(cfg.StrictAffinity).To(Equal(false))
 		})
 
+		It("should not persist the default IPAMConfig when reading it", func() {
+			_, err := ic.GetIPAMConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// GetIPAMConfig returns the default in memory, so a read must not
+			// have written anything to the datastore.
+			_, err = bc.Get(ctx, model.IPAMConfigKey{}, "")
+			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+		})
+
 		It("should set an IPAMConfig resource that is different from the default", func() {
 			cfg := IPAMConfig{AutoAllocateBlocks: false, StrictAffinity: true}
 			err := ic.SetIPAMConfig(ctx, cfg)
@@ -4568,11 +4578,11 @@ func deletePool(cidr string) {
 	delete(ipPools.Pools, cidr)
 }
 
-func applyNode(c bapi.Client, kc *kubernetes.Clientset, host string, labels map[string]string) {
+func applyNode(c bapi.Client, kc kubernetes.Interface, host string, labels map[string]string) {
 	ipamtestutils.ApplyNode(c, kc, host, labels)
 }
 
-func deleteNode(c bapi.Client, kc *kubernetes.Clientset, host string) {
+func deleteNode(c bapi.Client, kc kubernetes.Interface, host string) {
 	if kc != nil {
 		err := kc.CoreV1().Nodes().Delete(context.Background(), host, metav1.DeleteOptions{})
 		if err != nil && !kerrors.IsNotFound(err) {

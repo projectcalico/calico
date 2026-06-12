@@ -4520,6 +4520,7 @@ type IPAMPool struct {
 	Masquerade    bool                   `protobuf:"varint,2,opt,name=masquerade,proto3" json:"masquerade,omitempty"`
 	IpipMode      string                 `protobuf:"bytes,3,opt,name=ipip_mode,json=ipipMode,proto3" json:"ipip_mode,omitempty"`
 	VxlanMode     string                 `protobuf:"bytes,4,opt,name=vxlan_mode,json=vxlanMode,proto3" json:"vxlan_mode,omitempty"`
+	AllowedUses   []string               `protobuf:"bytes,5,rep,name=allowed_uses,json=allowedUses,proto3" json:"allowed_uses,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4582,11 +4583,19 @@ func (x *IPAMPool) GetVxlanMode() string {
 	return ""
 }
 
+func (x *IPAMPool) GetAllowedUses() []string {
+	if x != nil {
+		return x.AllowedUses
+	}
+	return nil
+}
+
 type Encapsulation struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	IpipEnabled    bool                   `protobuf:"varint,1,opt,name=ipip_enabled,json=ipipEnabled,proto3" json:"ipip_enabled,omitempty"`
 	VxlanEnabled   bool                   `protobuf:"varint,2,opt,name=vxlan_enabled,json=vxlanEnabled,proto3" json:"vxlan_enabled,omitempty"`
 	VxlanEnabledV6 bool                   `protobuf:"varint,3,opt,name=vxlan_enabled_v6,json=vxlanEnabledV6,proto3" json:"vxlan_enabled_v6,omitempty"`
+	NoEncapEnabled bool                   `protobuf:"varint,4,opt,name=no_encap_enabled,json=noEncapEnabled,proto3" json:"no_encap_enabled,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4638,6 +4647,13 @@ func (x *Encapsulation) GetVxlanEnabled() bool {
 func (x *Encapsulation) GetVxlanEnabledV6() bool {
 	if x != nil {
 		return x.VxlanEnabledV6
+	}
+	return false
+}
+
+func (x *Encapsulation) GetNoEncapEnabled() bool {
+	if x != nil {
+		return x.NoEncapEnabled
 	}
 	return false
 }
@@ -5996,16 +6012,17 @@ func (x *ServicePort) GetNodePort() int32 {
 }
 
 type ServiceUpdate struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Namespace      string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Type           string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
-	ClusterIps     []string               `protobuf:"bytes,4,rep,name=cluster_ips,json=clusterIps,proto3" json:"cluster_ips,omitempty"`
-	LoadbalancerIp string                 `protobuf:"bytes,5,opt,name=loadbalancer_ip,json=loadbalancerIp,proto3" json:"loadbalancer_ip,omitempty"`
-	ExternalIps    []string               `protobuf:"bytes,6,rep,name=external_ips,json=externalIps,proto3" json:"external_ips,omitempty"`
-	Ports          []*ServicePort         `protobuf:"bytes,7,rep,name=ports,proto3" json:"ports,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Name                   string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace              string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Type                   string                 `protobuf:"bytes,3,opt,name=type,proto3" json:"type,omitempty"`
+	ClusterIps             []string               `protobuf:"bytes,4,rep,name=cluster_ips,json=clusterIps,proto3" json:"cluster_ips,omitempty"`
+	LoadbalancerIp         string                 `protobuf:"bytes,5,opt,name=loadbalancer_ip,json=loadbalancerIp,proto3" json:"loadbalancer_ip,omitempty"`
+	ExternalIps            []string               `protobuf:"bytes,6,rep,name=external_ips,json=externalIps,proto3" json:"external_ips,omitempty"`
+	Ports                  []*ServicePort         `protobuf:"bytes,7,rep,name=ports,proto3" json:"ports,omitempty"`
+	LoadbalancerIngressIps []string               `protobuf:"bytes,8,rep,name=loadbalancer_ingress_ips,json=loadbalancerIngressIps,proto3" json:"loadbalancer_ingress_ips,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ServiceUpdate) Reset() {
@@ -6083,6 +6100,13 @@ func (x *ServiceUpdate) GetExternalIps() []string {
 func (x *ServiceUpdate) GetPorts() []*ServicePort {
 	if x != nil {
 		return x.Ports
+	}
+	return nil
+}
+
+func (x *ServiceUpdate) GetLoadbalancerIngressIps() []string {
+	if x != nil {
+		return x.LoadbalancerIngressIps
 	}
 	return nil
 }
@@ -6537,7 +6561,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
 	"\x04pool\x18\x02 \x01(\v2\x0f.felix.IPAMPoolR\x04pool\" \n" +
 	"\x0eIPAMPoolRemove\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"z\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x9d\x01\n" +
 	"\bIPAMPool\x12\x12\n" +
 	"\x04cidr\x18\x01 \x01(\tR\x04cidr\x12\x1e\n" +
 	"\n" +
@@ -6545,11 +6569,13 @@ const file_felixbackend_proto_rawDesc = "" +
 	"masquerade\x12\x1b\n" +
 	"\tipip_mode\x18\x03 \x01(\tR\bipipMode\x12\x1d\n" +
 	"\n" +
-	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\"\x81\x01\n" +
+	"vxlan_mode\x18\x04 \x01(\tR\tvxlanMode\x12!\n" +
+	"\fallowed_uses\x18\x05 \x03(\tR\vallowedUses\"\xab\x01\n" +
 	"\rEncapsulation\x12!\n" +
 	"\fipip_enabled\x18\x01 \x01(\bR\vipipEnabled\x12#\n" +
 	"\rvxlan_enabled\x18\x02 \x01(\bR\fvxlanEnabled\x12(\n" +
-	"\x10vxlan_enabled_v6\x18\x03 \x01(\bR\x0evxlanEnabledV6\"\xbb\x01\n" +
+	"\x10vxlan_enabled_v6\x18\x03 \x01(\bR\x0evxlanEnabledV6\x12(\n" +
+	"\x10no_encap_enabled\x18\x04 \x01(\bR\x0enoEncapEnabled\"\xbb\x01\n" +
 	"\x14ServiceAccountUpdate\x12'\n" +
 	"\x02id\x18\x01 \x01(\v2\x17.felix.ServiceAccountIDR\x02id\x12?\n" +
 	"\x06labels\x18\x02 \x03(\v2'.felix.ServiceAccountUpdate.LabelsEntryR\x06labels\x1a9\n" +
@@ -6666,7 +6692,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\vServicePort\x12\x1a\n" +
 	"\bProtocol\x18\x01 \x01(\tR\bProtocol\x12\x12\n" +
 	"\x04Port\x18\x02 \x01(\x05R\x04Port\x12\x1a\n" +
-	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xec\x01\n" +
+	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xa6\x02\n" +
 	"\rServiceUpdate\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n" +
@@ -6675,7 +6701,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"clusterIps\x12'\n" +
 	"\x0floadbalancer_ip\x18\x05 \x01(\tR\x0eloadbalancerIp\x12!\n" +
 	"\fexternal_ips\x18\x06 \x03(\tR\vexternalIps\x12(\n" +
-	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\"A\n" +
+	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\x128\n" +
+	"\x18loadbalancer_ingress_ips\x18\b \x03(\tR\x16loadbalancerIngressIps\"A\n" +
 	"\rServiceRemove\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace*(\n" +
