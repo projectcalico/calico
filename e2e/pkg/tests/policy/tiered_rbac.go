@@ -371,6 +371,8 @@ var _ = describe.CalicoDescribe(
 			}
 
 			It("should not allow updating the default tier", func() {
+				Skip("requires built-in tier order CEL validation (#12250/#12441), not backported to release-v3.32")
+
 				tier := v3.NewTier()
 				tier.Name = "default"
 				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
@@ -386,6 +388,8 @@ var _ = describe.CalicoDescribe(
 			})
 
 			It("should not allow deleting the default tier", func() {
+				Skip("requires operator-managed protect-builtin-tiers VAP (operator #4878), not in operator v1.42 / release-v3.32")
+
 				tier := v3.NewTier()
 				tier.Name = "default"
 				Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(tier), tier)).To(
