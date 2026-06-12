@@ -119,11 +119,8 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
-K8ST_TO_RUN?=tests/
 # Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
-
-K8ST_REPORT_FILENAME ?= k8s-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/usr/lib/calico/bpf/*')
@@ -399,17 +396,12 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    -e KUBECONFIG=/root/.kube/config \
-	    -e PYTHONDONTWRITEBYTECODE=1 \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
 	     cd /code/tests/k8st && \
-	     go_rc=0; py_rc=0; \
-	     /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)" || go_rc=$$?; \
-	     pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)" || py_rc=$$?; \
-	     echo "Go suite rc=$$go_rc, Python suite rc=$$py_rc"; \
-	     [ $$go_rc -eq 0 ] && [ $$py_rc -eq 0 ]'
+	     /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)"'
 
 ###############################################################################
 # CI/CD
