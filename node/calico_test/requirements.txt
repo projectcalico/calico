@@ -15,9 +15,9 @@ oauthlib==3.3.1
 #packaging - already provided by Alpine
 pluggy==1.6.0
 pyasn1-modules==0.4.2
-pyasn1==0.6.2
+pyasn1==0.6.3
 #pyparsing - already provided by Alpine
-pytest==9.0.2
+pytest==9.0.3
 pytest-timeout
 python-dateutil==2.9.0.post0
 PyYAML==6.0.3
@@ -25,6 +25,6 @@ requests-oauthlib==2.0.0
 simplejson==3.20.2
 six==1.17.0
 termcolor==3.3.0
-urllib3==2.6.3
+urllib3==2.7.0
 wcwidth==0.5.3
 websocket-client==1.9.0
