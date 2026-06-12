@@ -1,6 +1,42 @@
 after_pipeline:
   task:
+    secrets:
+      # SLACK_CORE_WEBHOOK_URL + RELEASE_MONITOR_AGENT_URL / RELEASE_MONITOR_AGENT_TOKEN.
+      - name: slack-master-release-monitor
     jobs:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
+      - name: Failure triage to Slack
+        commands:
+          # On a FAILED master/release-* run, ask the triage agent to assess the
+          # workflow. The agent only returns a message body when it judges the
+          # failure a genuine regression (red); for a flake / passed / needs-a-
+          # look verdict it returns the sentinel NO_NOTIFY and we post nothing.
+          - |
+            test "$SEMAPHORE_PIPELINE_RESULT" = failed || { echo "pipeline passed — nothing to triage"; exit 0; }
+            case "$SEMAPHORE_GIT_BRANCH" in
+              master|release-*) ;;
+              *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
+            esac
+            msg="Triage Semaphore workflow ${SEMAPHORE_WORKFLOW_ID} on branch ${SEMAPHORE_GIT_BRANCH}."
+            req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/send",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
+            # Cold agent through Cloudflare can take ~40s — retry a few times.
+            text=""
+            for i in 1 2 3; do
+              resp=$(curl -sS -m 150 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+                -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
+                -H "Content-Type: application/json" -d "$req" || true)
+              # Echo the raw a2a response so the parsing below can be debugged
+              # from the Semaphore log if it ever goes wrong.
+              echo "attempt $i raw agent response: $resp"
+              text=$(printf '%s' "$resp" | jq -r '.result.artifacts[0].parts[0].text // .result.history[-1].parts[0].text // empty' 2>/dev/null || true)
+              [ -n "$text" ] && break
+              echo "attempt $i: no reply yet (agent may be cold) — retrying"; sleep 15
+            done
+            case "$text" in
+              NO_NOTIFY*) echo "triage verdict is not a genuine regression — nothing to post"; exit 0 ;;
+            esac
+            [ -n "$text" ] || text=":warning: triage agent returned no summary for workflow ${SEMAPHORE_WORKFLOW_ID} (${SEMAPHORE_GIT_BRANCH})"
+            jq -n --arg t "$text" '{text:$t}' | curl -sS -m 30 -X POST \
+              -H 'Content-Type: application/json' --data @- "$SLACK_CORE_WEBHOOK_URL"
