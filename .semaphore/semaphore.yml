@@ -6310,6 +6310,9 @@ after_pipeline:
               resp=$(curl -sS -m 150 -X POST "$RELEASE_MONITOR_AGENT_URL" \
                 -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
                 -H "Content-Type: application/json" -d "$req" || true)
+              # Echo the raw a2a response so the parsing below can be debugged
+              # from the Semaphore log if it ever goes wrong.
+              echo "attempt $i raw agent response: $resp"
               text=$(printf '%s' "$resp" | jq -r '.result.artifacts[0].parts[0].text // .result.history[-1].parts[0].text // empty' 2>/dev/null || true)
               [ -n "$text" ] && break
               echo "attempt $i: no reply yet (agent may be cold) — retrying"; sleep 15
