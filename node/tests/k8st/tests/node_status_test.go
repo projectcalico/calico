@@ -16,8 +16,6 @@
 // resource. It creates a status object scoped to one worker node and asserts
 // that Calico populates the agent (BIRD), BGP-peer and route sub-statuses to
 // reflect the running node-to-node mesh.
-//
-// Ported from tests/k8st/tests/test_node_status.py.
 
 package k8stests
 
@@ -40,8 +38,6 @@ import (
 // cluster runs a four-node node-to-node mesh (control-plane + three workers),
 // so the status for any one node should show three established peers in each
 // family and the corresponding mesh-learned routes.
-//
-// Port of test_node_status.py:TestNodeMeshStatus.test_dual_stack_status.
 func TestNodeMeshStatus(t *testing.T) {
 	defer utils.CollectDiagsOnFailure(t)()
 

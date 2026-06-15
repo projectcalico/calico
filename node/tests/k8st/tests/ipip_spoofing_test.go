@@ -17,8 +17,6 @@
 // pod on one node forges an encapsulated packet addressed to a pod on another
 // node; Calico's anti-spoofing enforcement must prevent the inner packet from
 // being delivered, while a normal (un-encapsulated, un-spoofed) packet is.
-//
-// Ported from tests/k8st/tests/test_ipip_spoofing.py.
 
 package k8stests
 
@@ -30,11 +28,9 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
@@ -58,8 +54,6 @@ const (
 // scenarios. The pods and namespace are shared across both scenarios; each
 // scenario flips the cluster encapsulation to the mode under test. The
 // scenarios mutate cluster-wide encapsulation, so they run sequentially.
-//
-// Port of test_ipip_spoofing.py:TestSpoof.
 func TestSpoof(t *testing.T) {
 	defer utils.CollectDiagsOnFailure(t)()
 
@@ -159,7 +153,7 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 		sendScapy(t, fmt.Sprintf(
 			"send(IP(dst='%s')/UDP(dport=5000, sport=5000)/Raw(load='%s'))", remotePodIP, normalMsg))
 		return grepSnoop(t, normalMsg)
-	}, "90s", "2s").Should(Succeed(), "normal %s packet was never delivered", encap)
+	}, "60s", "2s").Should(Succeed(), "normal %s packet was never delivered", encap)
 
 	// A spoofed (encapsulated) packet must NOT be delivered: we keep forging it
 	// and require that the grep for its payload keeps failing.
@@ -171,7 +165,7 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 			return fmt.Errorf("ERROR - succeeded in sending spoofed %s packet", encap)
 		}
 		return nil
-	}, "90s", "2s").Should(Succeed(), "spoofed %s packet was delivered — anti-spoofing failed", encap)
+	}, "60s", "2s").Should(Succeed(), "spoofed %s packet was delivered — anti-spoofing failed", encap)
 }
 
 // sendScapy feeds a single scapy send() statement to the scapy pod on stdin.
@@ -212,8 +206,6 @@ func clearConntrack(t *testing.T, ctx context.Context) {
 // Installation, waits for the operator to reconcile the default IPv4 pool, then
 // restarts the calico-node pods so the change takes effect cleanly. It is a
 // no-op (beyond the pool read) when already in the requested mode.
-//
-// Port of test_ipip_spoofing.py:TestSpoof._set_encapsulation.
 func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context.Context, encap string) {
 	t.Helper()
 
@@ -237,14 +229,20 @@ func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context
 	}
 
 	t.Logf("Setting encapsulation to %s via Installation", encap)
-	payload := fmt.Sprintf(
-		`[{"op":"add","path":"/spec/calicoNetwork/ipPools/0/encapsulation","value":%q}]`, encap)
-	inst := &unstructured.Unstructured{}
-	inst.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "operator.tigera.io", Version: "v1", Kind: "Installation",
-	})
-	inst.SetName("default")
-	g.Expect(cli.Patch(ctx, inst, ctrlclient.RawPatch(types.JSONPatchType, []byte(payload)))).
+	wantEncap := map[string]operatorv1.EncapsulationType{
+		"IPIP":  operatorv1.EncapsulationIPIP,
+		"VXLAN": operatorv1.EncapsulationVXLAN,
+	}[encap]
+
+	inst := &operatorv1.Installation{}
+	g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, inst)).
+		To(Succeed(), "reading Installation default")
+	g.Expect(inst.Spec.CalicoNetwork).NotTo(BeNil(), "Installation has no calicoNetwork")
+	g.Expect(inst.Spec.CalicoNetwork.IPPools).NotTo(BeEmpty(), "Installation has no calicoNetwork.ipPools")
+
+	patch := ctrlclient.MergeFrom(inst.DeepCopy())
+	inst.Spec.CalicoNetwork.IPPools[0].Encapsulation = wantEncap
+	g.Expect(cli.Patch(ctx, inst, patch)).
 		To(Succeed(), "patching Installation encapsulation to %s", encap)
 
 	// Wait for the operator to reconcile the IPPool before restarting pods.
@@ -274,6 +272,7 @@ func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context
 // Ready, so we additionally require no pod carries a deletion timestamp.
 func waitForCalicoNodeRestart(t *testing.T, ctx context.Context) {
 	t.Helper()
+
 	cs := utils.K8sClient(t)
 	err := utils.RetryUntilSuccess(t, 2*time.Minute, func() error {
 		pods, err := cs.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{

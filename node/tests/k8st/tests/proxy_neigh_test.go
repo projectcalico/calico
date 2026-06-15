@@ -40,6 +40,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -237,8 +238,9 @@ func httpURL(ip string) string {
 
 // --- Cluster client + resource helpers ---
 
-// newClient builds a controller-runtime client for k8s core + projectcalico.org/v3
-// from the ambient kubeconfig (KUBECONFIG / ~/.kube/config / in-cluster).
+// newClient builds a controller-runtime client for k8s core, projectcalico.org/v3
+// and operator.tigera.io/v1 from the ambient kubeconfig
+// (KUBECONFIG / ~/.kube/config / in-cluster).
 func newClient(g *WithT) ctrlclient.Client {
 	cfg, err := ctrlconfig.GetConfig()
 	g.Expect(err).NotTo(HaveOccurred(), "loading kubeconfig")
@@ -246,6 +248,7 @@ func newClient(g *WithT) ctrlclient.Client {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(corev1.AddToScheme(scheme))
 	utilruntime.Must(v3.AddToScheme(scheme))
+	utilruntime.Must(operatorv1.AddToScheme(scheme))
 
 	cli, err := ctrlclient.New(cfg, ctrlclient.Options{Scheme: scheme})
 	g.Expect(err).NotTo(HaveOccurred(), "creating controller-runtime client")
