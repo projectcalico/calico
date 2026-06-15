@@ -102,6 +102,11 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 			buildState(table, ipv, s)
 			table.ApplyUpdates(nil)
 			table.Apply()
+			// The first Apply() programs the whole table, which invalidates the
+			// dataplane cache. Apply once more so the cache is settled before we
+			// start timing - we want the steady-state delta cost, not the one-off
+			// reload that follows the initial program.
+			table.Apply()
 
 			b.ReportAllocs()
 			reportScale(b, s)
