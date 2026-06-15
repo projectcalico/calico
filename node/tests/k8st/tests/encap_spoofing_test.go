@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// ipip_spoofing_test.go is a kind-only system test asserting that Calico drops
+// This is a kind-only system test asserting that Calico drops
 // IPIP- and VXLAN-encapsulated packets whose inner source is spoofed. A scapy
 // pod on one node forges an encapsulated packet addressed to a pod on another
 // node; Calico's anti-spoofing enforcement must prevent the inner packet from
