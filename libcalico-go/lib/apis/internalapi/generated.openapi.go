@@ -641,7 +641,7 @@ func schema_libcalico_go_lib_apis_internalapi_IPAMConfigSpec(ref common.Referenc
 					},
 					"ipCooldownSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immeduately (but are still handled with a FIFO queue to minimize immediate reuse).",
+							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to minimize immediate reuse).",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
