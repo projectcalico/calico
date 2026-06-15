@@ -66,78 +66,72 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          proceed=false
+          recent=false; operator=false; cni=false; cni_sha=
 
-          # Manual runs always do the full work (handy for testing / forcing a sync).
+          force=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            proceed=true
+            force=true  # manual runs do the full work (handy for testing / forcing a sync)
           fi
 
-          # 1. Internal codegen: a merge could have changed generated output.
-          #    The window must stay larger than the cron interval (4h) so we
-          #    never skip across a gap between runs.
-          if [ "$proceed" != true ] && [ -n "$(git log -1 --since='5 hours ago' --format=%H)" ]; then
-            echo "branch saw a recent commit"
-            proceed=true
+          # recent: a merge could have changed generated output. The window must
+          # stay larger than the cron interval (4h) so we never skip across a gap
+          # between runs. Coarse on purpose -- we can't know what a merge touched,
+          # so any merge means regenerate.
+          if [ "$force" = true ] || [ -n "$(git log -1 --since='5 hours ago' --format=%H)" ]; then
+            recent=true
           fi
 
-          # 2. Operator CRDs: reuse the same fetch the generate target uses,
-          #    minus the Docker-based formatting (SKIP_FIX_CHANGED), then see if
-          #    anything changed. Revert the probe's writes; the real run redoes them.
-          if [ "$proceed" != true ]; then
-            make get-operator-crds SKIP_FIX_CHANGED=true
-            if ! git diff --quiet; then
-              echo "operator CRDs changed"
-              proceed=true
-            fi
-            git checkout -- .
+          # operator: reuse the same fetch the generate target uses, minus the
+          # Docker-based formatting (SKIP_FIX_CHANGED), then see if anything
+          # changed. Revert the probe's writes; the real run redoes them.
+          make get-operator-crds SKIP_FIX_CHANGED=true
+          if [ "$force" = true ] || ! git diff --quiet; then
+            operator=true
+          fi
+          git checkout -- .
+
+          # cni: pin behind upstream. Capture the target SHA here so the bump
+          # step doesn't have to query again (and can't race a moving upstream).
+          repo=projectcalico/containernetworking-plugins
+          db=$(gh api "repos/$repo" -q .default_branch)
+          cni_sha=$(gh api "repos/$repo/commits/$db" -q .sha)
+          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
+          if [ "$force" = true ] || [ "$cni_sha" != "$cur" ]; then
+            cni=true
           fi
 
-          # 3. CNI pin behind upstream.
-          if [ "$proceed" != true ]; then
-            repo=projectcalico/containernetworking-plugins
-            db=$(gh api "repos/$repo" -q .default_branch)
-            new=$(gh api "repos/$repo/commits/$db" -q .sha)
-            cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
-            if [ "$new" != "$cur" ]; then
-              echo "CNI_VERSION behind ($cur -> $new)"
-              proceed=true
-            fi
-          fi
+          echo "drift: recent=$recent operator=$operator cni=$cni"
+          {
+            echo "recent=$recent"
+            echo "operator=$operator"
+            echo "cni=$cni"
+            echo "cni_sha=$cni_sha"
+          } >> "$GITHUB_OUTPUT"
 
-          echo "Proceed: $proceed"
-          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
-
+      # make generate is the heavy step, so it only runs when something it
+      # actually regenerates drifted. A CNI-only bump skips it entirely.
       - name: Install tools
-        if: steps.drift.outputs.proceed == 'true'
+        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         run: make bin/helm bin/yq
 
       - name: Bump CNI plugin pin
-        # Bump CNI_VERSION to the latest commit on the upstream fork's default
-        # branch. Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go
-        # toolchain baked into the name, so we don't auto-bump it. A bump that
-        # doesn't build is caught by the PR's normal CI, so it can't merge.
-        if: steps.drift.outputs.proceed == 'true'
+        # Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go toolchain
+        # baked into the name, so we don't auto-bump it. CNI_VERSION is a build-time
+        # clone ref, not baked into any generated file, so this needs no regen. A
+        # bump that doesn't build is caught by the PR's normal CI, so it can't merge.
+        if: steps.drift.outputs.cni == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          CNI_SHA: ${{ steps.drift.outputs.cni_sha }}
         run: |
-          repo=projectcalico/containernetworking-plugins
-          default_branch=$(gh api "repos/$repo" -q .default_branch)
-          new_sha=$(gh api "repos/$repo/commits/$default_branch" -q .sha)
-          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
-          if [ "$new_sha" != "$cur" ]; then
-            echo "Bumping CNI_VERSION $cur -> $new_sha"
-            sed -i "s/^CNI_VERSION=.*/CNI_VERSION=$new_sha/" metadata.mk
-          else
-            echo "CNI_VERSION already at $cur"
-          fi
+          echo "Bumping CNI_VERSION to $CNI_SHA"
+          sed -i "s/^CNI_VERSION=.*/CNI_VERSION=$CNI_SHA/" metadata.mk
 
       - name: Regenerate
-        if: steps.drift.outputs.proceed == 'true'
+        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true'
         run: make generate
 
       - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
-        if: steps.drift.outputs.proceed == 'true'
+        if: steps.drift.outputs.recent == 'true' || steps.drift.outputs.operator == 'true' || steps.drift.outputs.cni == 'true'
         id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
