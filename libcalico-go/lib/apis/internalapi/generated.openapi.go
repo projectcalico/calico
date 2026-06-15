@@ -154,9 +154,17 @@ func schema_libcalico_go_lib_apis_internalapi_AllocationAttribute(ref common.Ref
 							},
 						},
 					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
