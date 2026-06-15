@@ -1,10 +1,12 @@
-# Sync operator CRD files from tigera/operator into this repo's Helm charts
-# and regenerate manifests. Creates or updates a PR if anything changed.
+# Keep generated and pinned-upstream content in sync. Pulls operator CRDs from
+# tigera/operator, regenerates all generated files (make generate), and bumps
+# the bundled CNI plugin pin to the latest upstream commit. Opens or updates a
+# single PR per branch carrying whatever drifted.
 ---
-name: Sync operator CRDs
+name: Sync upstream
 on:  # yamllint disable-line rule:truthy
   schedule:
-    - cron: '0 * * * *'  # every hour
+    - cron: '0 6 * * *'  # daily
   workflow_dispatch: {}
 
 permissions:
@@ -39,7 +41,7 @@ jobs:
     needs: discover-branches
     runs-on: ubuntu-latest
     concurrency:
-      group: sync-operator-crds-${{ matrix.branch }}
+      group: sync-upstream-${{ matrix.branch }}
       cancel-in-progress: true
     strategy:
       fail-fast: false
@@ -49,29 +51,52 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           ref: ${{ matrix.branch }}
+          # Full history so generators that use git describe / changed-file
+          # detection behave the same as a local checkout.
+          fetch-depth: 0
 
       - name: Install tools
         run: make bin/helm bin/yq
 
-      - name: Sync operator CRDs
-        run: make get-operator-crds
+      - name: Bump CNI plugin pin
+        # Bump CNI_VERSION to the latest commit on the upstream fork's default
+        # branch. Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go
+        # toolchain baked into the name, so we don't auto-bump it. A bump that
+        # doesn't build is caught by the PR's normal CI, so it can't merge.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo=projectcalico/containernetworking-plugins
+          default_branch=$(gh api "repos/$repo" -q .default_branch)
+          new_sha=$(gh api "repos/$repo/commits/$default_branch" -q .sha)
+          cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
+          if [ "$new_sha" != "$cur" ]; then
+            echo "Bumping CNI_VERSION $cur -> $new_sha"
+            sed -i "s/^CNI_VERSION=.*/CNI_VERSION=$new_sha/" metadata.mk
+          else
+            echo "CNI_VERSION already at $cur"
+          fi
 
-      - name: Regenerate manifests
-        run: make gen-manifests
+      - name: Regenerate
+        run: make generate
 
       - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
         id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Sync operator CRDs from tigera/operator"
-          branch: auto-sync-operator-crds-${{ matrix.branch }}
+          commit-message: "Sync upstream: operator CRDs, generated files, CNI pin"
+          branch: auto-sync-upstream-${{ matrix.branch }}
           base: ${{ matrix.branch }}
-          title: "Auto: sync operator CRDs from tigera/operator [${{ matrix.branch }}]"
+          title: "Auto: sync upstream into [${{ matrix.branch }}]"
           body: |
-            Automated sync of operator CRD files from `tigera/operator` into
-            `${{ matrix.branch }}` and regeneration of manifests.
+            Automated sync into `${{ matrix.branch }}`:
 
-            Triggered by scheduled workflow.
+            - Operator CRDs from `tigera/operator`
+            - Regenerated files (`make generate`)
+            - CNI plugin pin (`CNI_VERSION`) bumped to the latest upstream commit
+
+            Only the bits that actually drifted show up in the diff. Triggered by
+            scheduled workflow.
           labels: auto-sync,docs-not-required,release-note-not-required,skip-bot-cherry-pick,merge-when-ready
           delete-branch: true
 
@@ -79,7 +104,7 @@ jobs:
       # it can't approve its own PR, and the Actions token can't approve PRs anyway.
       # Approve as marvin-tigera (TIGERA_BOT_PAT) so Marvin merges it once CI is green.
       # branch protection has dismiss_stale_reviews off, so a single approval persists
-      # across the hourly content updates -- the reviewDecision guard keeps reruns quiet.
+      # across content updates -- the reviewDecision guard keeps reruns quiet.
       - name: Auto-approve so Marvin merges once CI passes
         if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
         env:
