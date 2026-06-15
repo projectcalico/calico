@@ -1022,64 +1022,50 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 	}
 
-	// Make a second pass over the dirty chains.  This time, we write out the rule changes.
+	// Make a second pass over the dirty chains.  This time, we write out the rule
+	// changes.  We rewrite each changed chain wholesale - flush it and re-add all of
+	// its rules in this transaction - rather than diffing rule by rule.  nftables
+	// applies the flush and the adds atomically, so there's no window where the chain
+	// is empty.  Rewriting wholesale means we never need individual rule handles,
+	// which in turn lets us skip the full dataplane reload that recovering those
+	// handles used to require (see the post-write handling below).  Felix recomputes
+	// the whole chain on any change anyway, so these chains are small.
 	newHashes := map[string][]string{}
 	for chainName := range t.dirtyChains.All() {
-		if chain, ok := t.desiredStateOfChain(chainName); ok {
-			// Chain update or creation.  Scan the chain against its previous hashes
-			// and replace/append/delete as appropriate.
-			previousHashes := t.chainToDataplaneHashes[chainName]
-			currentHashes := t.render.RuleHashes(chain, features)
-			newHashes[chainName] = currentHashes
+		chain, ok := t.desiredStateOfChain(chainName)
+		if !ok {
+			continue
+		}
+		previousHashes := t.chainToDataplaneHashes[chainName]
+		currentHashes := t.render.RuleHashes(chain, features)
+		newHashes[chainName] = currentHashes
 
-			// Make sure sets are created for the chain, as nft will fail the transaction
-			// if there are unreferenced sets.
-			for _, setName := range chain.IPSetNames() {
-				if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
-					tx.Add(set)
-				} else {
-					t.logCxt.WithFields(logrus.Fields{
-						"chain": chainName,
-						"set":   setName,
-					}).Warn("IP Set for chain has not yet been received by data plane")
-				}
+		if reflect.DeepEqual(currentHashes, previousHashes) {
+			// Chain is already in sync; nothing to write.
+			continue
+		}
+
+		// Make sure any sets the chain references exist before we add rules that use
+		// them, or nft will reject the transaction.
+		for _, setName := range chain.IPSetNames() {
+			if set := t.IPSetsDataplane.(*IPSets).NFTablesSet(setName); set != nil {
+				tx.Add(set)
+			} else {
+				t.logCxt.WithFields(logrus.Fields{
+					"chain": chainName,
+					"set":   setName,
+				}).Warn("IP Set for chain has not yet been received by data plane")
 			}
+		}
 
-			t.logCxt.WithFields(logrus.Fields{
-				"chainName": chainName,
-				"previous":  previousHashes,
-				"current":   currentHashes,
-			}).Debug("Comparing chain hashes")
-
-			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
-				if i < len(previousHashes) && i < len(currentHashes) {
-					if previousHashes[i] == currentHashes[i] {
-						continue
-					}
-					rendered := t.render.Render(chainName, currentHashes[i], chain.Rules[i], features)
-					rendered.Handle = t.chainToFullRules[chainName][i].Handle
-					t.logCxt.WithFields(logrus.Fields{
-						"chainName": chainName,
-						"handle":    *rendered.Handle,
-					}).Debug("Replacing rule in chain")
-					tx.Replace(rendered)
-				} else if i < len(previousHashes) {
-					// previousHashes was longer, remove the old rules from the end.
-					t.logCxt.WithFields(logrus.Fields{
-						"chainName": chainName,
-					}).Debug("Deleting old rule from end of chain")
-					tx.Delete(&knftables.Rule{
-						Chain:  chainName,
-						Handle: t.chainToFullRules[chainName][i].Handle,
-					})
-				} else {
-					// currentHashes was longer.  Append.
-					t.logCxt.WithFields(logrus.Fields{
-						"chainName": chainName,
-					}).Debug("Appending rule to chain")
-					tx.Add(t.render.Render(chainName, currentHashes[i], chain.Rules[i], features))
-				}
-			}
+		// Flush the existing chain before re-adding its rules.  A chain that isn't in
+		// the dataplane yet was just created (empty) in the pass above, so there's
+		// nothing to flush.
+		if _, existed := t.chainToDataplaneHashes[chainName]; existed {
+			tx.Flush(&knftables.Chain{Name: chainName})
+		}
+		for i, hash := range currentHashes {
+			tx.Add(t.render.Render(chainName, hash, chain.Rules[i], features))
 		}
 	}
 
@@ -1216,20 +1202,17 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 	t.chainToFullRules = newChainToFullRules
 
-	// Invalidate the in-memory dataplane state so that we reload on the next write. This ensures we have the correct handles
-	// in-memory for each of the objects we've just written. nftables requires an object's handle in order to
-	// perform update or delete operations.
+	// We rewrite chains wholesale (flush + re-add) rather than patching rules by
+	// handle, so an enabled table never needs to read the dataplane back after a
+	// write: our in-memory hashes already record what we programmed, and the
+	// periodic refresh (refreshInterval) still catches any out-of-band drift.
+	// Skipping the reload is the whole point - it's an O(total rules) re-read and
+	// JSON parse of the entire table, and at scale it dominated every sync.
 	//
-	// Only do this if we actually wrote to the dataplane. A no-op apply leaves our in-memory handles valid, so
-	// invalidating here would force a full, pointless resync on the next apply. This matters at scale: a sync that
-	// only touches IP set members (programmed via the separate IPSets path) leaves this apply a no-op, and we don't
-	// want it to trigger an O(total rules) re-read of the whole table.
-	//
-	// Skip invalidation for disabled tables that have finished cleanup (no chains left in the dataplane).
-	// These tables only exist to remove leftover nftables state when switching to iptables mode. Once cleanup
-	// is confirmed, there's no need to reload state on every apply cycle — doing so would fork nft processes
-	// on every iteration for no useful work.
-	if wroteToDataplane && (!t.disabled || len(t.chainToDataplaneHashes) != 0) {
+	// A disabled table is the exception: it exists only to clean up leftover state
+	// when switching to iptables mode, and it reloads after a write so it can see
+	// how much remains to delete. Once nothing is left we stop (len == 0).
+	if wroteToDataplane && t.disabled && len(t.chainToDataplaneHashes) != 0 {
 		t.InvalidateDataplaneCache("post-write")
 	}
 	return nil
