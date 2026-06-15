@@ -82,8 +82,11 @@ it buffers updates in `pending*` maps/sets and flushes via
 `Flush()` in dependency-safe order, coalescing rapid updates so
 the dataplane only sees the final state.
 
-Full invariants and per-node review notes will live in
-`felix/design/calc-graph.md` when that sub-design is written.
+Full invariants and per-node review notes — the node contract,
+the upstream syncer contract, inter-node ordering, the label
+indexes, the `EventSequencer` flush order, and the calc-graph FV
+testing framework — are in
+[`calc-graph.md`](./design/calc-graph.md).
 
 ### Dataplane manager pattern
 
@@ -132,6 +135,16 @@ IPv4 and IPv6 each get their own manager instances.
 `dataplane/driver.go` is the factory that constructs and wires
 the dataplane.
 
+The Linux dataplane is a single codebase (`InternalDataplane`) that
+is switched between iptables, nftables and eBPF modes; all three
+share the manager/driver layering, the `OnUpdate`/`apply()` event
+loop, and the restart-and-resync (mark-and-sweep) doctrine. That
+shared architecture — plus the `*tables`-specific Table abstraction,
+IP sets, and the calc-graph→dataplane proto contract — is detailed in
+[`dataplane.md`](./design/dataplane.md). The eBPF mode reuses that
+architecture; its mode-specific managers, maps and packet path are in
+the [`bpf-*` family](./design/bpf-overview.md).
+
 ### Dataplane backends
 
 Felix runs against one dataplane at a time (selected by
@@ -171,8 +184,12 @@ Used by more than one dataplane:
 | `nfnetlink/` | Conntrack and nflog via netfilter netlink |
 | `netlinkshim/` | Netlink abstraction layer for testing and portability |
 
-These will be covered in sub-designs (`route-sync.md`,
-`flow-logs-collector.md`) as and when those are written.
+The route-sync drivers (`routetable/`, `routerule/`, `vxlanfdb/`)
+fit the dataplane manager/driver architecture and resync doctrine
+covered in [`dataplane.md`](./design/dataplane.md); their deeper
+netlink-level design (resync grace periods, conntrack cleanup on
+IP moves) is reserved for a future `route-sync.md` sub-design.
+`flow-logs-collector.md` is likewise still to be written.
 
 ## 2. Sub-design index
 
@@ -212,9 +229,9 @@ large enough to bloat AI-tool context.
 | [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan_mgr.go` | ✅ exists |
 | [bpf-observability](./design/bpf-observability.md) | `felix/bpf/filter/**`, `events/**`, `ringbuf/**`, `qos/**`, `felix/bpf-gpl/log.h`, `events*.h`, `qos.h`, `ringbuf.h` | ✅ exists |
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
-| tables-dataplane | `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, non-BPF parts of `felix/rules/**`, non-BPF parts of `felix/dataplane/linux/` | *not yet written* |
-| calc-graph | `felix/calc/**` | *not yet written* |
-| route-sync | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | *not yet written* |
+| [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
+| [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |
 | windows-dataplane | `felix/dataplane/windows/**` | *not yet written* |
