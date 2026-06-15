@@ -6,7 +6,7 @@
 # `cherry-pick-candidate` label:
 #   agent says backport, label absent       : add label
 #   agent says skip, label present (by bot) : remove label
-#   any human action on the label           : leave it alone
+#   any non-bot action on the label         : leave it alone
 #
 # Trust model: stage 1 may execute fork-modified code from the PR head,
 # but it has zero permissions. Stage 2 runs from the base branch (trusted
@@ -39,6 +39,9 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      # pull-requests: write is required to add or remove labels on PRs.
+      # issues: write alone returns 403 against /issues/{n}/labels when
+      # the target is a PR. Do not tighten this back to read.
       pull-requests: write
       issues: write
     env:

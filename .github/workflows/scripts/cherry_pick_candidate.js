@@ -5,11 +5,12 @@
 // Rules:
 //   agent says backport, label absent       : add label
 //   agent says skip, label present (by bot) : remove label
-//   any human action on the label           : leave it alone (for the
+//   any non-bot action on the label         : leave it alone (for the
 //                                             rest of the PR's life)
 //
 // The whole job is a no-op until the BACKPORT_CLASSIFIER_AGENT_URL and
-// BACKPORT_CLASSIFIER_AGENT_TOKEN env vars are set.
+// BACKPORT_CLASSIFIER_AGENT_TOKEN repo secrets are set (passed in to
+// this script as AGENT_URL and AGENT_TOKEN env vars by the workflow).
 
 const LABEL = 'cherry-pick-candidate';
 const BOT_LOGIN = 'github-actions[bot]';
@@ -19,7 +20,16 @@ module.exports = async ({ github, context, core }) => {
   const agentUrl = process.env.AGENT_URL;
   const agentToken = process.env.AGENT_TOKEN;
   if (!agentUrl || !agentToken) {
-    core.warning('BACKPORT_CLASSIFIER_AGENT_URL or BACKPORT_CLASSIFIER_AGENT_TOKEN missing, skipping');
+    core.warning('BACKPORT_CLASSIFIER_AGENT_URL or BACKPORT_CLASSIFIER_AGENT_TOKEN secret missing (read by this script as AGENT_URL/AGENT_TOKEN env vars), skipping');
+    return;
+  }
+  // Register the token for log masking so it cannot leak via any
+  // downstream log line, including diagnostics added later.
+  core.setSecret(agentToken);
+  // Refuse to send the bearer token over plaintext if a misconfigured
+  // secret points at a non-https URL.
+  if (!/^https:\/\//i.test(agentUrl)) {
+    core.warning('AGENT_URL is not https://, refusing to send bearer token over plaintext, skipping');
     return;
   }
 
@@ -43,7 +53,8 @@ module.exports = async ({ github, context, core }) => {
   }
 
   // 2. Authority check. The most recent labeled/unlabeled event for this
-  //    label tells us who currently owns it. Any non-bot account is final.
+  //    label tells us who currently owns it. Any actor other than
+  //    github-actions[bot] is final.
   const events = await github.paginate(
     github.rest.issues.listEventsForTimeline,
     { owner, repo, issue_number: pr.number },
@@ -53,7 +64,7 @@ module.exports = async ({ github, context, core }) => {
   );
   const lastActor = labelEvents[labelEvents.length - 1]?.actor?.login || '';
   if (lastActor && lastActor !== BOT_LOGIN) {
-    core.info(`Label authority: human (${lastActor}), bot will not modify`);
+    core.info(`Label authority: ${lastActor} (non-bot), bot will not modify`);
     return;
   }
   const present = pr.labels.some(l => l.name === LABEL);
@@ -88,6 +99,9 @@ module.exports = async ({ github, context, core }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
+        // Fail closed on any redirect so the bearer token cannot be
+        // sent to a different host than the configured AGENT_URL.
+        redirect: 'error',
         signal: AbortSignal.timeout(60_000),
       });
       if (r.ok) {
