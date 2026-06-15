@@ -160,6 +160,24 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}).To(Panic())
 	})
 
+	It("should not reload the dataplane on a no-op Apply()", func() {
+		// Drive to a settled, in-sync state. The first Apply() writes the base
+		// chains; the second reloads once to recover their handles and is then
+		// a no-op.
+		table.Apply()
+		table.Apply()
+		listCalls := f.ListCallCount
+		Expect(listCalls).To(BeNumerically(">", 0))
+
+		// Further no-op Applies must not re-read the dataplane. A full re-read is
+		// O(total rules), so a sync that changed nothing - or only touched IP set
+		// members, which are programmed via the separate IPSets path - must not
+		// trigger one.
+		table.Apply()
+		table.Apply()
+		Expect(f.ListCallCount).To(Equal(listCalls))
+	})
+
 	Describe("after inserting a rule", func() {
 		BeforeEach(func() {
 			table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
