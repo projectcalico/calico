@@ -2,11 +2,15 @@
 # tigera/operator, regenerates all generated files (make generate), and bumps
 # the bundled CNI plugin pin to the latest upstream commit. Opens or updates a
 # single PR per branch carrying whatever drifted.
+#
+# Runs every 4h, but a cheap drift check up front skips the heavy regen unless
+# something actually changed: a recent merge, an operator CRD update, or the CNI
+# pin falling behind upstream.
 ---
 name: Sync upstream
 on:  # yamllint disable-line rule:truthy
   schedule:
-    - cron: '0 6 * * *'  # daily
+    - cron: '0 */4 * * *'  # every 4 hours
   workflow_dispatch: {}
 
 permissions:
@@ -52,10 +56,60 @@ jobs:
         with:
           ref: ${{ matrix.branch }}
           # Full history so generators that use git describe / changed-file
-          # detection behave the same as a local checkout.
+          # detection behave the same as a local checkout, and so the drift
+          # check below can see recent commit timestamps.
           fetch-depth: 0
 
+      - name: Check for drift
+        id: drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          proceed=false
+
+          # Manual runs always do the full work (handy for testing / forcing a sync).
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            proceed=true
+          fi
+
+          # 1. Internal codegen: a merge could have changed generated output.
+          #    The window must stay larger than the cron interval (4h) so we
+          #    never skip across a gap between runs.
+          if [ "$proceed" != true ] && [ -n "$(git log -1 --since='5 hours ago' --format=%H)" ]; then
+            echo "branch saw a recent commit"
+            proceed=true
+          fi
+
+          # 2. Operator CRDs: reuse the same fetch the generate target uses,
+          #    minus the Docker-based formatting (SKIP_FIX_CHANGED), then see if
+          #    anything changed. Revert the probe's writes; the real run redoes them.
+          if [ "$proceed" != true ]; then
+            make get-operator-crds SKIP_FIX_CHANGED=true
+            if ! git diff --quiet; then
+              echo "operator CRDs changed"
+              proceed=true
+            fi
+            git checkout -- .
+          fi
+
+          # 3. CNI pin behind upstream.
+          if [ "$proceed" != true ]; then
+            repo=projectcalico/containernetworking-plugins
+            db=$(gh api "repos/$repo" -q .default_branch)
+            new=$(gh api "repos/$repo/commits/$db" -q .sha)
+            cur=$(grep '^CNI_VERSION=' metadata.mk | cut -d= -f2)
+            if [ "$new" != "$cur" ]; then
+              echo "CNI_VERSION behind ($cur -> $new)"
+              proceed=true
+            fi
+          fi
+
+          echo "Proceed: $proceed"
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+
       - name: Install tools
+        if: steps.drift.outputs.proceed == 'true'
         run: make bin/helm bin/yq
 
       - name: Bump CNI plugin pin
@@ -63,6 +117,7 @@ jobs:
         # branch. Only CNI_VERSION; FLANNEL_VERSION is a release tag with the Go
         # toolchain baked into the name, so we don't auto-bump it. A bump that
         # doesn't build is caught by the PR's normal CI, so it can't merge.
+        if: steps.drift.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,9 +133,11 @@ jobs:
           fi
 
       - name: Regenerate
+        if: steps.drift.outputs.proceed == 'true'
         run: make generate
 
       - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        if: steps.drift.outputs.proceed == 'true'
         id: cpr
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
