@@ -135,11 +135,15 @@ IPv4 and IPv6 each get their own manager instances.
 `dataplane/driver.go` is the factory that constructs and wires
 the dataplane.
 
-The manager/driver layering, the `OnUpdate`/`apply()` event loop,
-the restart-and-resync (mark-and-sweep) doctrine, the `*tables`
-Table abstraction, IP sets, and the calc-graph→dataplane proto
-contract are all detailed in
-[`dataplane.md`](./design/dataplane.md).
+The Linux dataplane is a single codebase (`InternalDataplane`) that
+is switched between iptables, nftables and eBPF modes; all three
+share the manager/driver layering, the `OnUpdate`/`apply()` event
+loop, and the restart-and-resync (mark-and-sweep) doctrine. That
+shared architecture — plus the `*tables`-specific Table abstraction,
+IP sets, and the calc-graph→dataplane proto contract — is detailed in
+[`dataplane.md`](./design/dataplane.md). The eBPF mode reuses that
+architecture; its mode-specific managers, maps and packet path are in
+the [`bpf-*` family](./design/bpf-overview.md).
 
 ### Dataplane backends
 
@@ -225,7 +229,7 @@ large enough to bloat AI-tool context.
 | [bpf-encap-fragments-icmp](./design/bpf-encap-fragments-icmp.md) | `felix/bpf/ipfrags/**`, `felix/bpf-gpl/ip_v4_fragment.h`, `tc_ip_frag.c`, `icmp*.h`, `fib*.h`, `felix/bpf/routes/**`, `felix/dataplane/linux/vxlan_mgr.go` | ✅ exists |
 | [bpf-observability](./design/bpf-observability.md) | `felix/bpf/filter/**`, `events/**`, `ringbuf/**`, `qos/**`, `felix/bpf-gpl/log.h`, `events*.h`, `qos.h`, `ringbuf.h` | ✅ exists |
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
-| [dataplane](./design/dataplane.md) | `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, non-BPF parts of `felix/rules/**`, non-BPF parts of `felix/dataplane/linux/`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
+| [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |

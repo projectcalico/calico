@@ -111,16 +111,19 @@ deals with:
 
 ### Review notes for this section
 
-- A PR that proposes to "recompute" some derived state wholesale on
-  each update is fighting the architecture. The default is
-  incremental, edge-triggered processing. Wholesale recomputation
-  is acceptable only where the recomputed set is provably bounded
-  by *local* state (e.g. re-sorting one local endpoint's policy
-  list) and never by cluster-wide state.
-- A PR that adds per-update work proportional to the *cluster-wide*
-  resource count (not the local count) is a scaling regression and
-  needs an explicit justification or a redesign. This is the
-  calc-graph analogue of the BPF "fast-path cost" rule.
+- Wholesale recomputation from cached state (recompute the output
+  from scratch, then dedup no-op changes downstream) is the
+  *simplest* option and is perfectly fine wherever the recomputed
+  set is small or low-churn — re-sorting one local endpoint's policy
+  list, or recomputing Felix configuration from the handful of
+  config resources, are both legitimate. Use it wherever it's the
+  right trade-off; reach for fine-grained incremental updates only
+  when full recomputation would be too expensive.
+- The actual anti-pattern is per-update work whose cost scales with
+  the *cluster-wide* resource count on a *high-churn* path — e.g.
+  touching all 100k endpoints every time any one of them changes.
+  That is a scaling regression and needs an explicit justification
+  or a redesign.
 
 ## The node model and the node contract
 
@@ -312,7 +315,7 @@ matches B".
 | `ActiveRulesCalculator` (`active_rules_calculator.go`) | Tracks which policies/profiles are active given local endpoint labels |
 | `RuleScanner` (`rule_scanner.go`) | Extracts selector/named-port references from active rules; drives the label index |
 | `PolicyResolver` / `PolicySorter` (`policy_resolver.go`, `policy_sorter.go`) | Computes the ordered per-endpoint policy list (tiers, order) |
-| `L3RouteResolver` (`l3_route_resolver.go`) | Computes routes from IP pools, WEPs, host IPs |
+| `L3RouteResolver` (`l3_route_resolver.go`) | Computes a generalized route map of Calico-known IP space from IP pools, WEPs, host IPs. Generalized in the sense that some entries are just "we know this useful information about this CIDR" rather than actual IP routes. |
 | `VXLANResolver` (`vxlan_resolver.go`) | Computes VTEP entries |
 | `EncapsulationResolver` (`encapsulation_resolver.go`) | Derives encap mode from IP-pool config |
 | `IstioCalculator` (`istio_calculator.go`) | Marks WEPs in the Istio ambient mesh |
@@ -429,26 +432,38 @@ The decision procedure for a new output message:
 
 Strict ordering collides with referential inconsistency: what does
 the graph emit when a referent is genuinely missing (not just late)?
-There are three sanctioned strategies, in rough order of preference:
+There are three sanctioned strategies; which one fits depends on the
+trade-off between how much work it is to handle the case in the
+dataplane versus buffering it in the graph, and on what actually
+makes sense for the particular resource type:
 
-- **(a) Synthesize a safe stand-in.** Best when a safe default
+- **(a) Synthesize a safe stand-in.** Good when a safe default
   exists. Felix does this for profile rules: a missing profile is
   resolved to a fail-safe **deny-all** rule set (the `DummyDropRules`
   in `calc/active_rules_calculator.go`), so policy still resolves and
-  fails closed.
-- **(b) Buffer the dependent until the dependency arrives.** Usually
+  fails closed. (A stand-in doesn't always make sense — for some
+  resource types there is no meaningful dummy value.)
+- **(b) Buffer the dependent until the dependency arrives.** Often
   the **wrong** choice. You must **not** buffer endpoints or
   policies — they are security-critical, most dependency chains
-  start at endpoints, and delaying them risks leaving traffic
-  unsecured. Reserve buffering for non-security-critical leaves.
+  start at endpoints, and delaying them risks leaving endpoints with
+  stale policy/configuration, which could be a security hole.
+  Reserve buffering for non-security-critical leaves.
 - **(c) Make an explicit exception and handle it in the dataplane.**
   Pass the inconsistency through to the dataplane as a signal rather
   than resolving it in the graph, letting the dataplane fail closed
-  on its own terms. Use this sparingly, and only when neither a safe
-  stand-in (a) nor buffering (b) fits.
+  on its own terms. The right choice when the dataplane has to do
+  something for this case anyway — e.g. a WEP gains a new
+  security-critical field, so a missing dependency means *that
+  endpoint* must fail closed, and neither buffering nor a dummy
+  resource fits.
 
-The unifying rule: when in doubt, **fail closed** and keep moving;
-never withhold a security-critical update to wait for consistency.
+The hard invariant under all three: a missing dependency must never
+silently leave a security-critical resource (an endpoint or policy)
+open — it has to **fail closed**, via whichever of (a)/(c) suits the
+resource. Which mechanism, and how much of the work lands in the
+graph versus the dataplane, is the judgement call; failing closed is
+not.
 
 ### Review notes for this section
 

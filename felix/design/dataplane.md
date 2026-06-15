@@ -15,31 +15,44 @@ limitations under the License.
 -->
 
 
-# Felix dataplane — Design
+# Felix Linux dataplane — Design
 
-This is the design doc for Felix's **Linux dataplane**: the manager
-and driver layers that take the calc graph's output and program the
-kernel. It covers the manager/driver architecture, the
-`OnUpdate`/`apply()` event loop, the restart-and-resync doctrine
-that pervades every driver, and the specific drivers for the
-`*tables` backends (iptables/nftables), IP sets, and routing
-(routetable/routerule/vxlanfdb).
+Felix's Linux dataplane is a **single codebase** (`InternalDataplane`
+in `dataplane/linux/`) that can be switched between **iptables,
+nftables and eBPF** modes — `BPFEnabled` and `NFTablesMode` select
+which managers and behaviours are wired into the *same* object. All
+three modes share the manager/driver model, the main event loop, the
+`OnUpdate`/`apply()` cycle, and the restart-and-resync doctrine.
 
-The eBPF dataplane has its own design family — start at
-[`bpf-overview.md`](./bpf-overview.md). This doc is about the
-**non-BPF** Linux dataplane, though the manager-pattern,
-event-loop and resync sections describe machinery the BPF
-dataplane shares (and the doc flags where BPF differs). Windows is
-covered only as a contrast section; its full design is a separate
-future topic.
+This doc owns that **shared architecture, for all three modes**,
+plus the parts specific to the **`*tables` (iptables/nftables)**
+backends:
 
-If you are editing any of `felix/dataplane/linux/` (non-BPF),
-`felix/iptables/`, `felix/nftables/`, `felix/generictables/`,
-`felix/rules/` (non-BPF), `felix/ipsets/`, `felix/markbits/`,
-`felix/routetable/`, `felix/routerule/`, or `felix/vxlanfdb/`, read
-this file. The input boundary — the protobuf messages the dataplane
-receives — is the other end of the contract documented in
-[`calc-graph.md`](./calc-graph.md); the
+- **Shared by every mode** (the bulk of this doc): the manager/driver
+  split, the `OnUpdate`/`apply()` event loop, the failure
+  philosophy, the restart/resync **mark-and-sweep** doctrine,
+  fail-closed behaviour, dual-stack, status reporting, and the
+  calc-graph→dataplane proto contract.
+- **`*tables`-specific** (clearly-scoped sections): the `Table`
+  abstraction, rule generation and dispatch chains, IP sets.
+
+The **eBPF mode reuses all the shared architecture above**, but has
+its own mode-specific managers (notably `bpfEndpointManager`), BPF
+maps, and packet path. Those are **not** repeated here — they are
+documented in the **`bpf-*` sub-design family** (start at
+[`bpf-overview.md`](./bpf-overview.md)). So a change to the BPF
+dataplane typically needs *both* this doc (for the loop/manager/
+resync architecture it plugs into) and the relevant `bpf-*` files
+(for the packet path). **Windows** is a genuinely separate dataplane,
+covered here only as a contrast; its full design is a future topic.
+
+If you are editing any of `felix/dataplane/linux/`, `felix/iptables/`,
+`felix/nftables/`, `felix/generictables/`, `felix/rules/`,
+`felix/ipsets/`, `felix/markbits/`, `felix/routetable/`,
+`felix/routerule/`, or `felix/vxlanfdb/`, read this file (and, for
+BPF-specific files, the `bpf-*` family too). The input boundary — the
+protobuf messages the dataplane receives — is the other end of the
+contract documented in [`calc-graph.md`](./calc-graph.md); the
 [dataplane API section below](#the-dataplane-api-calc-graph--dataplane-contract)
 is the shared place that contract is written down.
 
@@ -92,7 +105,7 @@ driver absorb the resync complexity behind a declarative
 "here is the desired state" API and keep the manager simple (see
 [Restart, resync and mark-and-sweep](#restart-resync-and-mark-and-sweep)).
 
-Beyond convert (a) and reconcile (b), the dataplane has two more
+Beyond convert (a) and reconcile (b), the dataplane has three more
 jobs:
 
 - **(c) React to expected dataplane changes.** Some kernel state
@@ -103,6 +116,12 @@ jobs:
   (the `force*Refresh` timers, below) re-run the start-of-day
   reconciliation to repair drift Felix didn't cause and wasn't
   told about.
+- **(e) Report status back out.** The dataplane reports endpoint
+  programming status: into the datastore (`WorkloadEndpointStatus`
+  etc. — mainly used by OpenStack), and via a file-based local
+  status reporter that signals the CNI plugin that a workload's veth
+  has been programmed correctly, so the CNI plugin can delay pod
+  start-up until the dataplane is actually ready for that workload.
 
 ### Review notes for this section
 
@@ -198,7 +217,12 @@ order is:
    queued resync): `ProcessPendingDiffState`, `applyXDPActions`
    (with its own retry loop), `ProcessMemberUpdates`, `UpdateState`,
    possibly `shutdownXDPCompletely`. This runs every `apply()`; only
-   the `QueueResync` is gated on `forceXDPRefresh`.
+   the `QueueResync` is gated on `forceXDPRefresh`. Note this is
+   Felix's **legacy** XDP support — untracked-policy XDP layered on
+   top of iptables mode (`xdpState`). It is no longer being
+   enhanced; the modern XDP path (untracked policy and more) lives in
+   the proper BPF dataplane (see the `bpf-*` design family). Don't
+   confuse the two.
 5. Handle any popped **refresh timers** by **queueing resyncs**:
    `forceRouteRefresh` resyncs the route tables, the routing rules,
    **and the VXLAN FDBs**; `forceIPSetsRefresh` resyncs the IP sets.
@@ -347,6 +371,34 @@ why the identification mechanism differs per driver:
   defeats the deferred-cleanup safety and risks deleting
   not-yet-seen state.
 
+### Fail closed while Felix isn't running
+
+Recognising "our" resources is not only about cleanup — it is also
+**security-critical**, because the dataplane has to keep doing the
+right thing in the windows when Felix is **down, restarting, or
+behind**. The motivating race:
+
+- Calc-graph updates can be delayed (Felix busy, restarting, or
+  crashed).
+- The CNI plugin creates a new workload's `cali*` veth and plugs in
+  the pod **before** that endpoint round-trips through the datastore
+  back to Felix — so for a moment the interface exists but Felix has
+  no policy for it.
+
+If the dataplane defaulted to "allow unknown interfaces" that pod
+would have open connectivity until Felix caught up. Instead it
+**fails closed**: the iptables/nftables dispatch chains (the
+[dispatch trie/map](#rules-generation-dispatch-chains-and-mark-bits))
+**drop any `cali*` interface that isn't explicitly allow-listed**.
+An interface Felix hasn't programmed policy for gets no traffic, and
+this holds even if Felix is stopped entirely — the rules stay in the
+kernel.
+
+The general doctrine, which applies to any dataplane change: **think
+about what happens if Felix crashes or stops at this exact point.**
+Existing, already-secured traffic must keep flowing; anything that
+can't yet be secured properly must fail closed, not fall open.
+
 ## The dataplane API (calc graph → dataplane contract)
 
 This section is the one place the calc-graph→dataplane contract is
@@ -458,7 +510,10 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   branch per distinct next-character rather than one rule per
   endpoint. This is the `*tables` analogue of the BPF fast-path
   discipline: keep per-packet work sub-linear in the number of local
-  endpoints.
+  endpoints. The dispatch chains also **fail closed**: a `cali*`
+  interface that isn't in the trie is dropped, which is the
+  security-critical default that protects not-yet-known workloads
+  (see [Fail closed while Felix isn't running](#fail-closed-while-felix-isnt-running)).
 - **Mark-bit allocation.** Marks are a scarce, shared resource.
   `MarkBitsManager` (`felix/markbits/`, e.g. `NextSingleBitMark`)
   allocates bits for `*tables` modes from the configured range. (BPF

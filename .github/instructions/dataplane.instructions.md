@@ -14,14 +14,17 @@ applyTo:
 
 # Felix Linux dataplane
 
-Architecture, invariants, and review criteria for Felix's non-BPF
-Linux dataplane — the manager/driver layering, the
-`OnUpdate`/`apply()` event loop, the restart-and-resync
-(mark-and-sweep) doctrine, the `*tables` Table abstraction, IP
-sets, dispatch chains, mark bits, and the route drivers — live in
+Architecture, invariants, and review criteria for Felix's Linux
+dataplane live in
 [`felix/design/dataplane.md`](../../felix/design/dataplane.md),
-indexed from [`felix/DESIGN.md`](../../felix/DESIGN.md). Review
-notes are embedded inline at the end of each section.
+indexed from [`felix/DESIGN.md`](../../felix/DESIGN.md). It covers
+the architecture **shared by all three modes** (iptables, nftables
+and eBPF — one `InternalDataplane` codebase): the manager/driver
+layering, the `OnUpdate`/`apply()` event loop, the restart-and-resync
+(mark-and-sweep) doctrine, fail-closed behaviour, dual-stack and
+status reporting; plus the `*tables`-specific Table abstraction, IP
+sets, dispatch chains, mark bits, and route drivers. Review notes are
+embedded inline at the end of each section.
 
 Before writing code (Copilot coding agent) or reviewing a PR
 (Copilot code review) in any file matched by this instruction's
@@ -41,10 +44,15 @@ Before writing code (Copilot coding agent) or reviewing a PR
    graph flush order and `apply()`; decide the iptables/nftables
    parity story explicitly; apply changes symmetrically to the IPv4
    and IPv6 instances.
-4. BPF-dataplane files have their own design family — start at
-   [`bpf-overview.md`](../../felix/design/bpf-overview.md). Some
-   shared code (e.g. parts of `felix/rules/`) is matched by both;
-   load both designs when a PR spans them.
+4. eBPF is a *mode* of this same dataplane, not a separate program:
+   it reuses the shared loop/manager/resync architecture documented
+   here, and adds its own packet path, BPF maps and managers in the
+   `bpf-*` family (start at
+   [`bpf-overview.md`](../../felix/design/bpf-overview.md)). Shared
+   files (the `InternalDataplane` loop in `felix/dataplane/linux/`,
+   `felix/rules/`) are matched by both this rule and the `bpf-*`
+   rules — a BPF PR should load **both** this doc and the relevant
+   `bpf-*` sub-designs.
 
 The input boundary is the protobuf contract documented in
 [`dataplane.md` → The dataplane API](../../felix/design/dataplane.md)
