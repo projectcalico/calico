@@ -495,12 +495,18 @@ func makeAffinityJSON[K affinityKey, V nat.AffinityValueInterface](m map[K]V) []
 			Timestamp: v.Timestamp().String(),
 		})
 	}
-	// Sort by (service addr, port, client) for deterministic output.
+	// Sort by (service addr, port, proto, client) for deterministic output.
+	// Proto is part of the sort key because a service can be sticky on the same
+	// addr+port for more than one protocol; without it those entries would
+	// compare equal and order non-deterministically.
 	slices.SortFunc(entries, func(a, b affinityEntryJSON) int {
 		if c := cmp.Compare(a.Addr, b.Addr); c != 0 {
 			return c
 		}
 		if c := cmp.Compare(a.Port, b.Port); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Proto, b.Proto); c != 0 {
 			return c
 		}
 		return cmp.Compare(a.ClientIP, b.ClientIP)

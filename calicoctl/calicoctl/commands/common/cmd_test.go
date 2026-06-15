@@ -52,6 +52,41 @@ func TestExecCmdWriteToFile_Fallback(t *testing.T) {
 	}
 }
 
+// TestExecCmdWriteToFile_EmptyCmd verifies that an empty/whitespace command
+// string is handled gracefully rather than panicking on parts[0].
+func TestExecCmdWriteToFile_EmptyCmd(t *testing.T) {
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "out.json")
+
+	common.ExecCmdWriteToFile("[test]", common.Cmd{
+		CmdStr:   "   ", // whitespace only -> no tokens
+		FilePath: jsonPath,
+	})
+
+	if _, err := os.Stat(jsonPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no output file for an empty command, stat err=%v", err)
+	}
+}
+
+// TestExecCmdWriteToFile_EmptyFallback verifies that an empty fallback command
+// is skipped (not executed) and does not panic when the primary fails.
+func TestExecCmdWriteToFile_EmptyFallback(t *testing.T) {
+	dir := t.TempDir()
+	jsonPath := filepath.Join(dir, "out.json")
+	txtPath := filepath.Join(dir, "out.txt")
+
+	common.ExecCmdWriteToFile("[test]", common.Cmd{
+		CmdStr:           "false", // exits non-zero
+		FilePath:         jsonPath,
+		FallbackCmdStr:   "   ", // whitespace only -> no tokens
+		FallbackFilePath: txtPath,
+	})
+
+	if _, err := os.Stat(txtPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no fallback file for an empty fallback command, stat err=%v", err)
+	}
+}
+
 // TestExecCmdWriteToFile_PrimarySucceeds verifies the fallback is not used when
 // the primary command succeeds.
 func TestExecCmdWriteToFile_PrimarySucceeds(t *testing.T) {
