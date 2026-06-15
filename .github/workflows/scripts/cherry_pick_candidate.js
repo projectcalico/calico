@@ -32,6 +32,10 @@ module.exports = async ({ github, context, core }) => {
     core.warning('AGENT_URL is not https://, refusing to send bearer token over plaintext, skipping');
     return;
   }
+  // Neutralize :: in agent-controlled text before logging so the agent
+  // cannot inject ::add-mask:: or other workflow commands. Used for every
+  // line that echoes any byte the agent could have authored.
+  const safe = s => String(s ?? '').replace(/::/g, ':​:');
 
   const headSha = context.payload.workflow_run?.head_sha;
   if (!headSha) {
@@ -129,7 +133,7 @@ module.exports = async ({ github, context, core }) => {
     parsed = JSON.parse(stripped);
   } catch (e) {
     core.warning(`could not parse agent response: ${e.message}`);
-    core.info(`raw response: ${JSON.stringify(response).slice(0, 500)}`);
+    core.info(safe(`raw response: ${JSON.stringify(response).slice(0, 500)}`));
     return;
   }
   const { decision, confidence, primary_signal: primarySignal, reason } = parsed;
@@ -137,9 +141,6 @@ module.exports = async ({ github, context, core }) => {
     core.warning(`unknown decision: ${decision}, skipping`);
     return;
   }
-  // Sanitize agent-controlled text before logging so it cannot inject
-  // ::add-mask:: or other workflow commands via the reason field.
-  const safe = s => String(s ?? '').replace(/::/g, ':​:');
   core.info(`agent decision: ${decision} (confidence=${safe(confidence)})`);
   core.info(`primary signal: ${safe(primarySignal)}`);
   core.info(`reason: ${safe(reason)}`);
