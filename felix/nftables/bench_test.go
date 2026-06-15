@@ -135,38 +135,51 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 	}
 }
 
+// benchTableName is a dedicated, benchmark-only table. We deliberately avoid
+// "calico" so a run can never touch a real Calico dataplane on this host.
+const benchTableName = "calico-bench"
+
 // newRealTable builds an NftablesTable wired to the real kernel via knftables.
-// It skips (rather than fails) when not run as root so a plain "go test" on a
-// dev box doesn't error - the benchmark is only meaningful with kernel access.
+// It skips (rather than fails) when its prerequisites aren't met (not root, or
+// no nft binary) so a plain "go test" on a dev box doesn't error - the benchmark
+// is only meaningful with kernel access.
 func newRealTable(b *testing.B) (*nftables.NftablesTable, *ipsets.IPVersionConfig) {
 	if os.Getuid() != 0 {
 		b.Skip("Must run as root: programs the real nftables dataplane.")
+	}
+	if _, err := exec.LookPath("nft"); err != nil {
+		b.Skip("nft binary not found; skipping nftables dataplane benchmark.")
 	}
 	logutils.ConfigureEarlyLogging()
 	logrus.SetLevel(logrus.WarnLevel)
 
 	// Start clean and tidy up after ourselves - we program a real table in the
 	// host's network namespace.
-	deleteCalicoTable()
-	b.Cleanup(deleteCalicoTable)
+	deleteBenchTable()
+	b.Cleanup(deleteBenchTable)
 
+	// required=false so we return nil (and skip) rather than panic if the
+	// knftables client can't be created, e.g. the kernel lacks nftables support.
 	table := nftables.NewTable(
-		"calico",
+		benchTableName,
 		4,
 		rules.RuleHashPrefix,
 		environment.NewFeatureDetector(nil),
 		nftables.TableOptions{
 			OpRecorder: logutils.NewSummarizer("bench"),
 		},
-		true,
+		false,
 	)
+	if table == nil {
+		b.Skip("nftables not available on this host; skipping benchmark.")
+	}
 	ipv := ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, ipsets.IPSetNamePrefix, nil, nil)
 	return table, ipv
 }
 
-func deleteCalicoTable() {
+func deleteBenchTable() {
 	// May not exist yet on the first call; ignore the error.
-	_ = exec.Command("nft", "delete", "table", "ip", "calico").Run()
+	_ = exec.Command("nft", "delete", "table", "ip", benchTableName).Run()
 }
 
 // buildState queues the desired state onto the table: numIPSets hash:ip sets,
