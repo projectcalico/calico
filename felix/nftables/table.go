@@ -222,10 +222,6 @@ type NftablesTable struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
-	// chainToFullRules contains the full rules for any chains that we may be hooking into, mapped from chain name
-	// to slices of rules in that chain.
-	chainToFullRules map[string][]*knftables.Rule
-
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 
@@ -431,7 +427,6 @@ func newTable(
 		chainRefCounts:         refcounts,
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
-		chainToFullRules:       map[string][]*knftables.Rule{},
 		logCxt:                 logrus.WithFields(logFields),
 		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
 			logutilslc.OptInterval(30*time.Second),
@@ -660,7 +655,7 @@ func (t *NftablesTable) loadDataplaneState() {
 
 	t.lastReadTime = t.timeNow()
 
-	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
+	dataplaneHashes := t.getHashesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -712,7 +707,6 @@ func (t *NftablesTable) loadDataplaneState() {
 
 	t.logCxt.Debug("Finished loading nftables state")
 	t.chainToDataplaneHashes = dataplaneHashes
-	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
 }
 
@@ -760,13 +754,12 @@ func (t *NftablesTable) expectedHashesForInsertAppendChain(chainName string) (al
 	return
 }
 
-// getHashesAndRulesFromDataplane loads the current state of our table. It parses out the hashes that we
-// add to rules and, for chains that we insert into, the full rules. The 'hashes' map contains an entry for each chain
-// in the table. Each entry is a slice containing the hashes for the rules in that table. Rules with no hashes are
-// represented by an empty string. The 'rules' map contains an entry for each non-Calico chain in the table that
-// contains inserts. It is used to generate deletes using the full rule, rather than deletes by line number, to avoid
-// race conditions on chains we don't fully control.
-func (t *NftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule) {
+// getHashesFromDataplane loads the current state of our table and parses out the rule
+// hashes we add as comments. The returned map contains an entry for each chain in the
+// table; each entry is the slice of rule hashes for that chain, in order. A rule with no
+// hash comment (e.g. one another process added to a chain we hook) is represented by an
+// empty string.
+func (t *NftablesTable) getHashesFromDataplane() map[string][]string {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
@@ -774,7 +767,7 @@ func (t *NftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]st
 	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
 	for {
 		t.onStillAlive()
-		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
+		hashes, err := t.attemptToGetHashesFromDataplane()
 		if err != nil {
 			countNumListErrors.Inc()
 			var stderr string
@@ -791,13 +784,12 @@ func (t *NftablesTable) getHashesAndRulesFromDataplane() (hashes map[string][]st
 			}
 			continue
 		}
-
-		return hashes, rules
+		return hashes
 	}
 }
 
-// attemptToGetHashesAndRulesFromDataplane reads nftables state and loads it into memory.
-func (t *NftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]*knftables.Rule, err error) {
+// attemptToGetHashesFromDataplane reads nftables state and extracts our rule hashes.
+func (t *NftablesTable) attemptToGetHashesFromDataplane() (hashes map[string][]string, err error) {
 	startTime := t.timeNow()
 	defer func() {
 		saveDuration := t.timeNow().Sub(startTime)
@@ -808,15 +800,14 @@ func (t *NftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 		}
 	}()
 
-	t.logCxt.Debug("Attmempting to get hashes and rules from nftables")
+	t.logCxt.Debug("Attempting to get hashes from nftables")
 
 	hashes = make(map[string][]string)
-	rules = make(map[string][]*knftables.Rule)
 
 	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
 	defer cancel()
 
-	// Add chains. We need to query this separately, as chains may exist without rules.
+	// List chains separately, as chains may exist without rules.
 	countNumListCalls.Inc()
 	allChains, err := t.nft.List(ctx, "chain")
 	if err != nil {
@@ -825,11 +816,10 @@ func (t *NftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 			return
 		}
 		countNumListErrors.Inc()
-		return nil, nil, err
+		return nil, err
 	}
 	for _, chain := range allChains {
 		hashes[chain] = []string{}
-		rules[chain] = []*knftables.Rule{}
 	}
 
 	// List rules and extract the hashes.
@@ -839,13 +829,10 @@ func (t *NftablesTable) attemptToGetHashesAndRulesFromDataplane() (hashes map[st
 			err = nil
 			return
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
 	for _, rule := range allRules {
-		// Add the rule to the list of rules for the chain.
-		rules[rule.Chain] = append(rules[rule.Chain], rule)
-
 		if rule.Comment != nil {
 			// The rule has a comment, extract the hash.
 			hash := strings.TrimPrefix(strings.Split(*rule.Comment, ";")[0], t.hashCommentPrefix)
@@ -1069,18 +1056,9 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 	}
 
-	// Make a copy of our full rules map and keep track of all changes made while processing dirtyBaseChains.
-	// When we've successfully updated nftables, we'll update our cache of chainToFullRules with this map.
-	newChainToFullRules := map[string][]*knftables.Rule{}
-	for chain, rules := range t.chainToFullRules {
-		newChainToFullRules[chain] = make([]*knftables.Rule, len(rules))
-		copy(newChainToFullRules[chain], rules)
-	}
-
 	// Now calculate nftables updates for our inserted and appended rules, which are used to hook top-level chains.
 	for chainName := range t.dirtyBaseChains.All() {
 		previousHashes := t.chainToDataplaneHashes[chainName]
-		newRules := newChainToFullRules[chainName]
 
 		// Calculate the hashes for our inserted and appended rules.
 		newChainHashes, newInsertedRuleHashes, newAppendedRuleHashes := t.expectedHashesForInsertAppendChain(chainName)
@@ -1095,17 +1073,8 @@ func (t *NftablesTable) applyUpdates() error {
 		tx.Flush(&knftables.Chain{Name: chainName})
 		t.logCxt.WithField("chainName", chainName).Info("Flushing chain")
 
-		// Go over our slice of "new" rules and create a copy of the slice with just the rules we didn't empty out.
-		copyOfNewRules := []*knftables.Rule{}
-		for _, rule := range newRules {
-			if rule != nil {
-				copyOfNewRules = append(copyOfNewRules, rule)
-			}
-		}
-		newRules = copyOfNewRules
+		// Add inserted rules if there are any.
 		rules := t.chainToInsertedRules[chainName]
-
-		// Add rules if there is any
 		if len(rules) > 0 {
 			t.logCxt.Debug("Rendering rules.")
 			for i := 0; i < len(rules); i++ {
@@ -1123,7 +1092,6 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 
 		newHashes[chainName] = newChainHashes
-		newChainToFullRules[chainName] = newRules
 		// We don't delete the items from the set until after programming succeeds.
 	}
 
@@ -1200,7 +1168,6 @@ func (t *NftablesTable) applyUpdates() error {
 			t.chainToDataplaneHashes[chainName] = hashes
 		}
 	}
-	t.chainToFullRules = newChainToFullRules
 
 	// We rewrite chains wholesale (flush + re-add) rather than patching rules by
 	// handle, so an enabled table never needs to read the dataplane back after a
@@ -1245,7 +1212,7 @@ func (t *NftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chain, rules, features)
 
-	dpHashes, _ := t.getHashesAndRulesFromDataplane()
+	dpHashes := t.getHashesFromDataplane()
 	dpHashesSet := set.New[string]()
 	for _, h := range dpHashes[chain] {
 		dpHashesSet.Add(h)
