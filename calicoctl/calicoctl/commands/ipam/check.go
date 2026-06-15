@@ -379,6 +379,18 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		fmt.Printf("Scanning for IPs that are allocated but not actually in use...\n")
 		for ip, allocs := range c.allocations {
 			if _, ok := c.inUseIPs[ip]; !ok {
+				// If the IP is in a cooldown state, do not report it as a problem/leak.
+				coolingDown := false
+				for _, alloc := range allocs {
+					if alloc.CoolingDown {
+						coolingDown = true
+						break
+					}
+				}
+				if coolingDown {
+					continue
+				}
+
 				if c.showProblemIPs {
 					for _, alloc := range allocs {
 						fmt.Printf("  %s leaked; attrs %v\n", ip, alloc.GetAttrString())
