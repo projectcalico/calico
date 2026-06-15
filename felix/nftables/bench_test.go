@@ -135,6 +135,51 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 	}
 }
 
+// BenchmarkChainUpdate measures the incremental cost of changing a single policy
+// chain's rules and reprogramming, in steady state (no forced resync).  This is
+// the path the flush-and-rewrite change targets: today a chain write invalidates
+// the cache and the next Apply() does a full O(total) reload to recover rule
+// handles; rewriting the chain wholesale removes the need for handles, so no
+// reload is required.
+func BenchmarkChainUpdate(b *testing.B) {
+	for _, s := range scaleSpecs {
+		b.Run(s.name, func(b *testing.B) {
+			table, ipv := newRealTable(b)
+			buildState(table, ipv, s)
+			table.ApplyUpdates(nil)
+			table.Apply()
+			// Settle the cache before timing (see BenchmarkDeltaUpdate).
+			table.Apply()
+
+			b.ReportAllocs()
+			reportScale(b, s)
+			cpu := startCPUTimer()
+			b.ResetTimer()
+
+			// Toggle one rule's destination port on a single chain so each
+			// iteration is a real change to that chain and nothing else.
+			chainName := "cali-pi-000000"
+			setName := ipv.NameForMainIPSet("s000000")
+			for i := range b.N {
+				port := uint16(2000 + i%2)
+				table.UpdateChain(&generictables.Chain{
+					Name: chainName,
+					Rules: []generictables.Rule{
+						{
+							Match:  nftables.Match().Protocol("tcp").SourceIPSet(setName).DestPorts(port),
+							Action: nftables.ReturnAction{},
+						},
+					},
+				})
+				table.Apply()
+			}
+
+			b.StopTimer()
+			cpu.report(b)
+		})
+	}
+}
+
 // benchTableName is a dedicated, benchmark-only table. We deliberately avoid
 // "calico" so a run can never touch a real Calico dataplane on this host.
 const benchTableName = "calico-bench"
