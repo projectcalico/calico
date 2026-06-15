@@ -1399,7 +1399,12 @@ func (c ipamClient) GarbageCollectColdIPs(ctx context.Context, config *IPAMConfi
 	block := allocationBlock{kvp.Value.(*model.AllocationBlock)}.clone()
 	if block.garbageCollect(config.IPCooldownSeconds) {
 		log.WithField("cidr", kvp.Key).Debug("Cold IP GC: writing back GC'd block")
-		_, err := c.blockReaderWriter.updateBlock(ctx, kvp)
+		_, err := c.blockReaderWriter.updateBlock(ctx, &model.KVPair{
+			Key:      kvp.Key,
+			Value:    block.AllocationBlock,
+			Revision: kvp.Revision,
+			UID:      kvp.UID,
+		})
 		return err
 	}
 
