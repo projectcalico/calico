@@ -207,9 +207,11 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	c.clusterGUID = clusterInfo.Spec.ClusterGUID
 
 	var numAllocs int
+	var blocks *model.KVPairList
 	{
 		fmt.Println("Loading all IPAM blocks...")
-		blocks, err := c.backendClient.List(ctx, model.BlockListOptions{}, "")
+		var err error
+		blocks, err = c.backendClient.List(ctx, model.BlockListOptions{}, "")
 		if err != nil {
 			return fmt.Errorf("failed to list IPAM blocks: %w", err)
 		}
@@ -228,9 +230,6 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 				}
 				numAllocs++
 				c.recordAllocation(b, ord)
-			}
-			if err := validateBlock(b); err != nil {
-				fmt.Printf("Found invalid IPAM block %s: %s\n", kvp.Key, err)
 			}
 		}
 		fmt.Printf("IPAM blocks record %d allocations.\n", numAllocs)
@@ -481,6 +480,20 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 			missingHandles = append(missingHandles, handleID)
 		}
 		fmt.Printf("Found %d handles mentioned in blocks with no matching handle resource.\n", len(missingHandles))
+	}
+
+	var invalidBlocks []string
+	{
+		fmt.Printf("Validating IPAMBlock structures...\n")
+		for _, kvp := range blocks.KVPairs {
+			b := kvp.Value.(*model.AllocationBlock)
+			if err := validateBlock(b); err != nil {
+				fmt.Printf("  IPAMBlock %s is invalid: %s\n", kvp.Key, err)
+				numProblems++
+				invalidBlocks = append(invalidBlocks, kvp.Key.String())
+			}
+		}
+		fmt.Printf("Found %d invalid IPAMBlocks.\n", len(invalidBlocks))
 	}
 
 	fmt.Printf("Check complete; found %d problems.\n", numProblems)
