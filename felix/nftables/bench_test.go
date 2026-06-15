@@ -40,9 +40,12 @@ import (
 //
 // The scale knobs (IP sets, members per set, policy chains, rules per chain)
 // map onto the dimensions the higher-level k8sfv scale runs drive from real
-// policy, so a finding here is reproducible there.  Service-heavy workloads
-// show up as many small IP sets with many referencing rules, which is what the
-// larger specs below approximate.
+// policy, so a finding here is reproducible there.  Felix's IP sets come from
+// policy selectors (label selectors over pods/namespaces, network sets, named
+// ports), not from Kubernetes services - those are kube-proxy's job and live in
+// its own table.  So the large specs below model policies that select across
+// many endpoints, which is where Felix's IP set and rule load actually comes
+// from.
 
 type scaleSpec struct {
 	name string
