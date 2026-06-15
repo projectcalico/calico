@@ -1171,7 +1171,8 @@ func (t *NftablesTable) applyUpdates() error {
 		tx.Delete(&knftables.Table{})
 	}
 
-	if tx.NumOperations() == 0 {
+	wroteToDataplane := tx.NumOperations() > 0
+	if !wroteToDataplane {
 		t.logCxt.Debug("Update ended up being no-op, skipping call to nftables.")
 	} else {
 		// Run the transaction.
@@ -1219,11 +1220,16 @@ func (t *NftablesTable) applyUpdates() error {
 	// in-memory for each of the objects we've just written. nftables requires an object's handle in order to
 	// perform update or delete operations.
 	//
+	// Only do this if we actually wrote to the dataplane. A no-op apply leaves our in-memory handles valid, so
+	// invalidating here would force a full, pointless resync on the next apply. This matters at scale: a sync that
+	// only touches IP set members (programmed via the separate IPSets path) leaves this apply a no-op, and we don't
+	// want it to trigger an O(total rules) re-read of the whole table.
+	//
 	// Skip invalidation for disabled tables that have finished cleanup (no chains left in the dataplane).
 	// These tables only exist to remove leftover nftables state when switching to iptables mode. Once cleanup
 	// is confirmed, there's no need to reload state on every apply cycle — doing so would fork nft processes
 	// on every iteration for no useful work.
-	if !t.disabled || len(t.chainToDataplaneHashes) != 0 {
+	if wroteToDataplane && (!t.disabled || len(t.chainToDataplaneHashes) != 0) {
 		t.InvalidateDataplaneCache("post-write")
 	}
 	return nil
