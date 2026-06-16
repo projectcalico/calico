@@ -15,14 +15,14 @@ CALICO_BASE_VER=ubi9-1781568165
 
 # Version of various tools used in the build and tests.
 COREDNS_VERSION=1.5.2
-CRANE_VERSION=v0.21.5
-ETCD_VERSION=v3.5.29
+CRANE_VERSION=v0.21.6
+ETCD_VERSION=v3.6.12
 GHR_VERSION=v0.18.3
-GITHUB_CLI_VERSION=2.90.0
+GITHUB_CLI_VERSION=2.94.0
 GOTESTSUM_VERSION=v1.13.0
-HELM_VERSION=v3.20.2
+HELM_VERSION=v3.21.1
 KINDEST_NODE_VERSION=v1.36.1
-KIND_VERSION=v0.31.0
+KIND_VERSION=v0.32.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
 # differently for a forked repo.
