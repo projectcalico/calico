@@ -2998,15 +2998,18 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 }
 
 // writeQoSRateEntry updates the cali_qos packet-rate map entry for one
-// (ifindex, direction, family) triple. If hasRate is false the entry is
-// deleted. On config change (rate or burst differs from the existing
-// entry) the token-bucket state is reset to "uninitialised" so the BPF
-// dataplane re-fills from burst on the next packet; otherwise the
-// existing dynamic state is preserved.
+// (ifindex, direction, family) triple.
 //
-// This RMW only touches the packet-rate map. The connlimit map has its
-// own write path (writeQoSConnEntry) — the two maps are independent and
-// no value is shared between them.
+//   - If hasRate is false: the entry is deleted.
+//   - If the entry exists and (packetRate, packetBurst) match: no write.
+//     The BPF dataplane owns packet_rate_tokens and
+//     packet_rate_last_update; rewriting them from a userspace snapshot
+//     would race with packet-rate updates and re-introduce the same
+//     class of lost-update bug the cali_qos / cali_qos_conn split was
+//     introduced to fix.
+//   - Otherwise (fresh entry, or config changed): write the new config
+//     with the token-bucket state reset to the sentinel so the BPF
+//     dataplane re-initialises from burst on the next packet.
 func (m *bpfEndpointManager) writeQoSRateEntry(qosKey qos.Key, hasRate bool, packetRate, packetBurst int16) error {
 	if !hasRate {
 		if err := m.QoSMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -3014,19 +3017,18 @@ func (m *bpfEndpointManager) writeQoSRateEntry(qosKey qos.Key, hasRate bool, pac
 		}
 		return nil
 	}
-	existingBytes, err := m.QoSMap.Get(qosKey.AsBytes())
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+	existingBytes, getErr := m.QoSMap.Get(qosKey.AsBytes())
+	if getErr != nil && !errors.Is(getErr, os.ErrNotExist) {
+		return getErr
 	}
-	existing := qos.ValueFromBytes(existingBytes)
-	qosTokens := existing.PacketRateTokens()
-	qosLastUpdate := existing.PacketRateLastUpdate()
-	// Reset state if config changed.
-	if existing.PacketRate() != packetRate || existing.PacketBurst() != packetBurst {
-		qosTokens = int16(-1)
-		qosLastUpdate = uint64(0)
+	if getErr == nil {
+		existing := qos.ValueFromBytes(existingBytes)
+		if existing.PacketRate() == packetRate && existing.PacketBurst() == packetBurst {
+			// Config unchanged — leave the dataplane's running state alone.
+			return nil
+		}
 	}
-	val := qos.NewValue(packetRate, packetBurst, qosTokens, qosLastUpdate)
+	val := qos.NewValue(packetRate, packetBurst, int16(-1), 0)
 	if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), val.AsBytes(), unix.BPF_F_LOCK); err != nil {
 		return fmt.Errorf("failed to update cali_qos map: %w", err)
 	}
@@ -3034,13 +3036,17 @@ func (m *bpfEndpointManager) writeQoSRateEntry(qosKey qos.Key, hasRate bool, pac
 }
 
 // writeQoSConnEntry updates the cali_qos_conn connlimit map entry for one
-// (ifindex, direction, family) triple. If hasLimit is false the entry is
-// deleted. The current_count is read-preserved from the existing entry —
-// the BPF dataplane writes it on SYN/FIN/RST and the scanner overwrites
-// it on recount, so preserving it across a config change is the right
-// default (a freshly-configured limit on an interface that already had
-// state will keep its count; if no entry existed, current_count starts
-// at zero).
+// (ifindex, direction, family) triple.
+//
+//   - If hasLimit is false: the entry is deleted.
+//   - If the entry exists and max_connections matches: no write. The
+//     BPF dataplane (SYN / FIN/RST / cleanup) and the Go scanner both
+//     write current_count concurrently; rewriting it from a userspace
+//     snapshot would race with both.
+//   - Otherwise (fresh entry, or config changed): write the new
+//     max_connections, preserving current_count from the snapshot when
+//     present. The race here is bounded to the rare config-change event
+//     and the Go scanner reconciles drift within ~30s.
 func (m *bpfEndpointManager) writeQoSConnEntry(qosKey qos.Key, hasLimit bool, maxConnections uint32) error {
 	if !hasLimit {
 		if err := m.QoSConnMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -3048,12 +3054,20 @@ func (m *bpfEndpointManager) writeQoSConnEntry(qosKey qos.Key, hasLimit bool, ma
 		}
 		return nil
 	}
-	existingBytes, err := m.QoSConnMap.Get(qosKey.AsBytes())
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+	existingBytes, getErr := m.QoSConnMap.Get(qosKey.AsBytes())
+	if getErr != nil && !errors.Is(getErr, os.ErrNotExist) {
+		return getErr
 	}
-	existing := qos.ConnValueFromBytes(existingBytes)
-	val := qos.NewConnValue(maxConnections, existing.CurrentCount())
+	var currentCount uint32
+	if getErr == nil {
+		existing := qos.ConnValueFromBytes(existingBytes)
+		if existing.MaxConnections() == maxConnections {
+			// Config unchanged — leave current_count to the dataplane and the scanner.
+			return nil
+		}
+		currentCount = existing.CurrentCount()
+	}
+	val := qos.NewConnValue(maxConnections, currentCount)
 	if err := m.QoSConnMap.UpdateWithFlags(qosKey.AsBytes(), val.AsBytes(), unix.BPF_F_LOCK); err != nil {
 		return fmt.Errorf("failed to update cali_qos_conn map: %w", err)
 	}
@@ -4413,12 +4427,12 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 		qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1, family) // ingress=1
 		if qosErr := m.deleteQoSEntry(qosIngressKey); qosErr != nil {
 			err = qosErr
-			logrus.WithField("family", family).WithError(err).Warn("QoS map may leak.")
+			logrus.WithField("family", family).WithError(err).Warn("QoS maps may leak.")
 		}
 		qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0, family) // egress=0
 		if qosErr := m.deleteQoSEntry(qosEgressKey); qosErr != nil {
 			err = qosErr
-			logrus.WithField("family", family).WithError(err).Warn("QoS map may leak.")
+			logrus.WithField("family", family).WithError(err).Warn("QoS maps may leak.")
 		}
 	}
 
