@@ -369,7 +369,7 @@ spec:
   - Ingress
   ingress:
   - from:
-    - ipBlock: { cidr: %s/32 }
+    - ipBlock: { cidr: %s/128 }
     ports:
     - protocol: TCP
       port: 80
