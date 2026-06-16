@@ -1,6 +1,6 @@
 # Stage 1 of the cherry-pick-candidate auto-labeler. Fires on PR open,
-# reopen, and title/body edits with zero permissions and no logic. Sole
-# purpose: fire a workflow_run event so the trusted stage 2
+# reopen, and title/body edits with zero permissions, and no logic. Sole
+# purpose: fire  a workflow_run event so the trusted stage 2
 # (cherry_pick_candidate.yml) can do the real work from the base branch
 # with the privileged token.
 
