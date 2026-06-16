@@ -79,7 +79,7 @@ endif
 .PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.1.4 --install all || true
+	docker run --privileged --rm calico/binfmt:qemu-v10.2.2 --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
