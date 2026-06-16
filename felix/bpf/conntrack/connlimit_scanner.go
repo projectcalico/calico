@@ -58,10 +58,14 @@ type connlimitKey struct {
 // network partition), so a ~30s recovery window is adequate.
 const connLimitScannerRunEveryN = 3
 
-// connLimitQoSMap is the subset of the QoS BPF map API that the scanner needs.
-// Narrowed from maps.MapWithUpdateWithFlags so tests can supply a small fake
-// without taking a dependency on the full Map interface (avoids an import
-// cycle with felix/bpf/mock, which itself depends on conntrack).
+// connLimitQoSMap is the subset of the cali_qos_conn BPF map API that the
+// scanner needs. Narrowed from maps.MapWithUpdateWithFlags so tests can
+// supply a small fake without taking a dependency on the full Map interface
+// (avoids an import cycle with felix/bpf/mock, which itself depends on
+// conntrack). The scanner only touches the connection-limit map — packet-
+// rate state lives in a separate cali_qos map that the scanner never
+// reads or writes; this is what prevents the lost-update race that
+// motivated the split (see qos.h).
 type connLimitQoSMap interface {
 	Get(k []byte) ([]byte, error)
 	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
@@ -243,10 +247,11 @@ func (s *ConnLimitScanner) IterationEnd() {
 	}
 }
 
-// prepareUpdate reads the existing QoS map entry and returns the key bytes
-// and a new value with current_count replaced by `count` (preserving the
-// packet-rate fields and max_connections). Returns changed=false when the
-// existing count already matches `count`, or when the read fails.
+// prepareUpdate reads the existing cali_qos_conn entry and returns the key
+// bytes and a new value with current_count replaced by `count` (preserving
+// max_connections). Returns changed=false when the existing count already
+// matches `count`, or when the read fails. Packet-rate state lives in a
+// separate map (cali_qos) that the scanner never touches.
 func (s *ConnLimitScanner) prepareUpdate(ifindex uint32, direction uint16, count uint32) (keyBytes, valBytes []byte, changed bool) {
 	qosKey := qos.NewKey(ifindex, direction, s.family)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
@@ -256,15 +261,11 @@ func (s *ConnLimitScanner) prepareUpdate(ifindex uint32, direction uint16, count
 		}
 		return nil, nil, false
 	}
-	existing := qos.ValueFromBytes(qosValBytes)
+	existing := qos.ConnValueFromBytes(qosValBytes)
 	if existing.CurrentCount() == count {
 		return nil, nil, false
 	}
-	newVal := qos.NewValue(
-		existing.PacketRate(), existing.PacketBurst(),
-		existing.PacketRateTokens(), existing.PacketRateLastUpdate(),
-		existing.MaxConnections(), count,
-	)
+	newVal := qos.NewConnValue(existing.MaxConnections(), count)
 	return qosKey.AsBytes(), newVal.AsBytes(), true
 }
 
