@@ -439,6 +439,10 @@ func (c ipamClient) prepareAffinityBlocksForHost(ctx context.Context, requestedP
 			log.WithError(err).Warnf("Failed to get pool for IP")
 			continue
 		}
+		// Guard against a pool that was deleted concurrently after the
+		// block was loaded but before we resolved it here. Without this
+		// nil-check the SelectsNode() call below would dereference a
+		// nil pool and panic.
 		if pool == nil {
 			logCtx.WithFields(log.Fields{"block": block}).Warn("No pool found for block, skipping")
 			continue
