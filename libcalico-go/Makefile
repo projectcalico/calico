@@ -160,8 +160,6 @@ cluster-create: kind-cluster-create
 
 ## Run an etcd with TLS enabled, needed for some libcalico-go UTs.
 run-etcd-tls: stop-etcd-tls
-	# TODO: We shouldn't need to enable the v2 API, but some of our test code
-	# still relies on it.
 	docker run --detach \
 		-v $(CURDIR)/test/etcd-ut-certs:/root/etcd-certificates/ \
 		--net=host \
@@ -176,7 +174,6 @@ run-etcd-tls: stop-etcd-tls
 		--cert-file=/root/etcd-certificates/server.crt \
 		--key-file=/root/etcd-certificates/server.key \
 		--client-cert-auth=true \
-		--enable-v2 \
 		--data-dir=/var/lib/etcd
 
 ## Stop etcd with name calico-etcd-tls
