@@ -79,7 +79,7 @@ endif
 .PHONY: register
 register:
 ifneq ($(BUILDARCH),$(ARCH))
-	docker run --privileged --rm calico/binfmt:qemu-v10.1.4 --install all || true
+	docker run --privileged --rm calico/binfmt:qemu-v10.2.2 --install all || true
 endif
 
 # If this is a release, also tag and push additional images.
@@ -1923,7 +1923,6 @@ DEV_OPERATOR_IMAGE = $(DEV_IMAGE_PREFIX)/operator:$(DEV_IMAGE_TAG)
 # Common functions for launching a local etcd instance.
 ###############################################################################
 ## Run etcd as a container (calico-etcd)
-# TODO: We shouldn't need to enable the v2 API, but some of our test code still relies on it.
 .PHONY: run-etcd stop-etcd
 run-etcd:
 	@if ! docker inspect calico-etcd >/dev/null 2>&1; then \
@@ -1931,7 +1930,6 @@ run-etcd:
 			--net=host \
 			--entrypoint=/usr/local/bin/etcd \
 			--name calico-etcd $(ETCD_IMAGE) \
-			--enable-v2 \
 			--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 			--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"; \
 	fi
