@@ -575,8 +575,9 @@ func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
 	}
 
 	// max_connections must survive the recount. Packet-rate state lives
-	// in a separate map that the scanner never touches — see
-	// TestConnLimitScannerDoesNotTouchPacketRateMap for that property.
+	// in a separate map (cali_qos) the scanner has no handle to; the
+	// connLimitQoSMap interface structurally precludes the scanner from
+	// touching it.
 	bytes, err := m.Get(qos.NewKey(ifA, 1, qos.IPFamilyV4).AsBytes())
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)

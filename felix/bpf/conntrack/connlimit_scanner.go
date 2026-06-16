@@ -43,7 +43,7 @@ type connlimitKey struct {
 
 // ConnLimitScanner is an EntryScannerSynced that periodically recounts active
 // TCP connections per interface+direction using the BPF CT map and writes the
-// true count to the cali_qos BPF map. This corrects any drift from LRU
+// true count to the cali_qos_conn BPF map. This corrects any drift from LRU
 // eviction or connection close without explicit decrement.
 //
 // The BPF dataplane increments the count on new TCP SYN. This scanner
@@ -77,8 +77,8 @@ type ConnLimitScanner struct {
 	podInfo    map[string]ConnLimitPodInfo
 	counts     map[connlimitKey]uint32
 	// family is the IP family this scanner runs over (4 or 6). Used as
-	// the family dimension when writing back to the cali_qos map so v4
-	// and v6 each update their own counter, avoiding the dual-stack
+	// the family dimension when writing back to the cali_qos_conn map so
+	// v4 and v6 each update their own counter, avoiding the dual-stack
 	// overwrite that would otherwise happen with a shared map entry.
 	family      uint16
 	iterCount   int
@@ -87,8 +87,8 @@ type ConnLimitScanner struct {
 
 // NewConnLimitScanner creates a new ConnLimitScanner. family must be either
 // qos.IPFamilyV4 (4) or qos.IPFamilyV6 (6) — it identifies which family's
-// CT map this scanner is walking and which family's QoS map entry it
-// writes back to.
+// CT map this scanner is walking and which family's cali_qos_conn entry
+// it writes back to.
 func NewConnLimitScanner(
 	qosMap connLimitQoSMap,
 	getPodInfo ConnLimitPodInfoProvider,
@@ -257,7 +257,7 @@ func (s *ConnLimitScanner) prepareUpdate(ifindex uint32, direction uint16, count
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {
 		if !maps.IsNotExists(err) {
-			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading QoS map entry.")
+			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading cali_qos_conn entry.")
 		}
 		return nil, nil, false
 	}
