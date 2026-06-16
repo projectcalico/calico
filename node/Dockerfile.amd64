@@ -190,8 +190,9 @@ RUN chmod u+s /bin/bird6
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc
 COPY filesystem/included-source/ /included-source
-# Corresponding source for the patched, GPL-2.0 nftables + libnftnl we install
-# above, shipped alongside the BIRD and Felix GPL source already in this dir.
+# Corresponding source for the patched nftables (GPL-2.0-only) and libnftnl
+# (GPL-2.0-or-later) we install above, shipped alongside the BIRD and Felix
+# GPL source already in this dir.
 COPY --from=nft-rpms /src/ /included-source/
 COPY filesystem/usr/ /usr
 COPY filesystem/sbin/* /usr/sbin/
