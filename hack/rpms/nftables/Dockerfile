@@ -54,4 +54,14 @@ RUN rpmbuild -ba /root/rpmbuild/SPECS/libnftnl.spec && \
     cp /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/libnftnl-${LIBNFTNL_VER}-*.rpm /rpms/ && \
     cp /root/rpmbuild/RPMS/$(rpm --eval '%{_arch}')/nftables-${NFTABLES_VER}-*.rpm /rpms/
 
+# Stash the corresponding source (the pinned, checksum-verified upstream
+# tarballs plus our patches) under /src. nftables and libnftnl are both GPL-2.0,
+# so consuming images COPY --from=nft-rpms /src into their /included-source to
+# ship the complete corresponding source alongside the binaries.
+RUN mkdir -p /src && \
+    cp /root/rpmbuild/SOURCES/libnftnl-${LIBNFTNL_VER}.tar.xz \
+       /root/rpmbuild/SOURCES/nftables-${NFTABLES_VER}.tar.xz \
+       /root/rpmbuild/SOURCES/*.patch \
+       /src/
+
 RUN dnf clean all
