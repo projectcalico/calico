@@ -4,7 +4,7 @@
 # The project Go version
 GO_VERSION=1.26.4
 # Version of Kubernetes to use for dependencies, tests, registry.k8s.io/kubectl, and kubectl binary release.
-K8S_VERSION=v1.36.1
+K8S_VERSION=v1.36.2
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
@@ -21,7 +21,7 @@ GHR_VERSION=v0.18.3
 GITHUB_CLI_VERSION=2.90.0
 GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.20.2
-KINDEST_NODE_VERSION=v1.35.1
+KINDEST_NODE_VERSION=v1.36.1
 KIND_VERSION=v0.31.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
