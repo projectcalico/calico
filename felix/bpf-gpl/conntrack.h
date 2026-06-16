@@ -594,13 +594,12 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
 {
 	__u32 cl_flags = ct_value_get_flags(v);
-	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC) {
-		return;
-	}
 	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
 		return;
 	}
-	ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
+	if (__sync_fetch_and_or((__u32 *)&v->type, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
 
 	/* Skip the ingress decrement if the entry was rejected by the
 	 * ingress limit check.
