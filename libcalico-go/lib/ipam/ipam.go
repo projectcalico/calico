@@ -982,6 +982,10 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	if err != nil {
 		return err
 	}
+	// Guard against a non-error nil return: getPoolForIP returns
+	// (nil, nil) when the address does not fall inside any configured
+	// pool. The getBlockCIDRForAddress() call below dereferences pool,
+	// so without this nil-check we would panic on a misconfigured IP.
 	if pool == nil {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
