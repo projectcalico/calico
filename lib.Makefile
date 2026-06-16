@@ -1734,7 +1734,8 @@ KIND_CALICO_IMAGES = \
 	calico/calico:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
-	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG) \
+	calico/third-party-cni-plugins:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1747,7 +1748,8 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
-	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1810,6 +1812,11 @@ $(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
 
 $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
+
+# third-party-cni-plugins clones the upstream CNI and flannel sources and
+# compiles them, tagging the image as calico/third-party-cni-plugins:latest-$(ARCH).
+$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
