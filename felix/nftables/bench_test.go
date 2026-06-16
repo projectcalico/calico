@@ -15,11 +15,14 @@
 package nftables_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/prometheus/procfs"
 	"github.com/sirupsen/logrus"
@@ -78,8 +81,7 @@ func BenchmarkResync(b *testing.B) {
 			table.Apply()
 
 			b.ReportAllocs()
-			reportScale(b, s)
-			cpu := startCPUTimer()
+			rec := record(b, s, "resync")
 			b.ResetTimer()
 
 			for range b.N {
@@ -90,7 +92,7 @@ func BenchmarkResync(b *testing.B) {
 			}
 
 			b.StopTimer()
-			cpu.report(b)
+			rec.finish()
 		})
 	}
 }
@@ -112,8 +114,7 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 			table.Apply()
 
 			b.ReportAllocs()
-			reportScale(b, s)
-			cpu := startCPUTimer()
+			rec := record(b, s, "delta")
 			b.ResetTimer()
 
 			// Toggle one member of set 0 in and out so each iteration is a real
@@ -130,7 +131,7 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 			}
 
 			b.StopTimer()
-			cpu.report(b)
+			rec.finish()
 		})
 	}
 }
@@ -152,8 +153,7 @@ func BenchmarkChainUpdate(b *testing.B) {
 			table.Apply()
 
 			b.ReportAllocs()
-			reportScale(b, s)
-			cpu := startCPUTimer()
+			rec := record(b, s, "chain_update")
 			b.ResetTimer()
 
 			// Toggle one rule's destination port on a single chain so each
@@ -175,7 +175,7 @@ func BenchmarkChainUpdate(b *testing.B) {
 			}
 
 			b.StopTimer()
-			cpu.report(b)
+			rec.finish()
 		})
 	}
 }
@@ -279,29 +279,92 @@ func intToIP(v uint32) string {
 	return fmt.Sprintf("%d.%d.%d.%d", byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
 }
 
-func reportScale(b *testing.B, s scaleSpec) {
-	b.ReportMetric(float64(s.numIPSets), "ipsets")
-	b.ReportMetric(float64(s.numIPSets*s.membersPerSet), "members")
-	b.ReportMetric(float64(s.numPolicies), "chains")
-	b.ReportMetric(float64(s.numPolicies*s.rulesPerChain), "rules")
+// perfArtifactsEnvVar names a directory to write per-measurement results into,
+// as hack/perf JSON docs (see hack/perf/README.md). It is unset for ordinary
+// `go test` runs - we only emit when a CI job asks for it, which keeps dev runs
+// out of the long-term trend store. The CI job then runs send-perf-results
+// against the directory to push the docs to Lens.
+const (
+	perfArtifactsEnvVar = "NFT_BENCH_PERF_ARTIFACTS_DIR"
+	perfFamily          = "benchmark_data_nft_dataplane"
+)
+
+// recorder measures a benchmark loop and, on finish, reports per-op metrics to
+// testing.B and (if enabled) writes a hack/perf doc for it. Start it immediately
+// before b.ResetTimer() and finish it immediately after b.StopTimer().
+type recorder struct {
+	b     *testing.B
+	spec  scaleSpec
+	phase string
+
+	proc      procfs.Proc
+	startCPU  float64
+	startWall time.Time
+	startMem  runtime.MemStats
 }
 
-// cpuTimer captures process CPU time across a benchmark loop so we can report
-// per-op CPU alongside wall-clock - the two diverge once the nft path blocks on
-// the kernel.
-type cpuTimer struct {
-	proc  procfs.Proc
-	start float64
-}
-
-func startCPUTimer() cpuTimer {
+func record(b *testing.B, s scaleSpec, phase string) *recorder {
 	proc, _ := procfs.NewProc(os.Getpid())
 	stat, _ := proc.Stat()
-	return cpuTimer{proc: proc, start: stat.CPUTime()}
+	r := &recorder{b: b, spec: s, phase: phase, proc: proc, startCPU: stat.CPUTime(), startWall: time.Now()}
+	runtime.ReadMemStats(&r.startMem)
+	return r
 }
 
-func (c cpuTimer) report(b *testing.B) {
+func (r *recorder) finish() {
+	wallNsPerOp := float64(time.Since(r.startWall).Nanoseconds()) / float64(r.b.N)
+
+	var endMem runtime.MemStats
+	runtime.ReadMemStats(&endMem)
+	bytesPerOp := float64(endMem.TotalAlloc-r.startMem.TotalAlloc) / float64(r.b.N)
+	allocsPerOp := float64(endMem.Mallocs-r.startMem.Mallocs) / float64(r.b.N)
+
+	// CPU time diverges from wall-clock once the nft path blocks on the kernel,
+	// so report both.
 	runtime.GC()
-	stat, _ := c.proc.Stat()
-	b.ReportMetric((stat.CPUTime()-c.start)/float64(b.N)*1e9, "ncpu/op")
+	stat, _ := r.proc.Stat()
+	cpuNsPerOp := (stat.CPUTime() - r.startCPU) / float64(r.b.N) * 1e9
+
+	r.b.ReportMetric(float64(r.spec.numIPSets), "ipsets")
+	r.b.ReportMetric(float64(r.spec.numIPSets*r.spec.membersPerSet), "members")
+	r.b.ReportMetric(float64(r.spec.numPolicies), "chains")
+	r.b.ReportMetric(float64(r.spec.numPolicies*r.spec.rulesPerChain), "rules")
+	r.b.ReportMetric(cpuNsPerOp, "ncpu/op")
+
+	r.writePerfDoc(wallNsPerOp, cpuNsPerOp, bytesPerOp, allocsPerOp)
+}
+
+func (r *recorder) writePerfDoc(wallNsPerOp, cpuNsPerOp, bytesPerOp, allocsPerOp float64) {
+	dir := os.Getenv(perfArtifactsEnvVar)
+	if dir == "" {
+		return
+	}
+	doc := map[string]any{
+		"test_name":         "nft_dataplane",
+		"dataplane":         "nftables",
+		"phase":             r.phase,
+		"scale_ipsets":      r.spec.numIPSets,
+		"scale_set_members": r.spec.numIPSets * r.spec.membersPerSet,
+		"scale_chains":      r.spec.numPolicies,
+		"scale_rules":       r.spec.numPolicies * r.spec.rulesPerChain,
+		"wall_ns_per_op":    wallNsPerOp,
+		"cpu_ns_per_op":     cpuNsPerOp,
+		"bytes_per_op":      bytesPerOp,
+		"allocs_per_op":     allocsPerOp,
+		"ok":                true,
+	}
+	familyDir := filepath.Join(dir, perfFamily)
+	if err := os.MkdirAll(familyDir, 0o755); err != nil {
+		r.b.Logf("perf: failed to create %s: %v", familyDir, err)
+		return
+	}
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		r.b.Logf("perf: failed to marshal doc: %v", err)
+		return
+	}
+	path := filepath.Join(familyDir, fmt.Sprintf("%s_%s.json", r.phase, r.spec.name))
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		r.b.Logf("perf: failed to write %s: %v", path, err)
+	}
 }
