@@ -2011,7 +2011,7 @@ setup-windows-builder: clean-windows-builder
 # 			--no-cache \
 # 			--build-arg GIT_VERSION=$(GIT_VERSION) \
 # 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
-# 			-f Dockerfile-windows .; \
+# 			-f Dockerfile.windows .; \
 # 	done ;
 
 # image-windows: var-require-all-BRANCH_NAME
@@ -2058,7 +2058,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		-t $(WINDOWS_IMAGE):latest \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \
-		-f Dockerfile-windows .
+		-f Dockerfile.windows .
 
 .PHONY: image-windows release-windows release-windows-with-tag
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
