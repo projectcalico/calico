@@ -104,6 +104,14 @@ class CalicoManagerWorker(worker.BaseWorker):
         """Start service."""
         super(CalicoManagerWorker, self).start(name, desc)
 
+    def stop(self):
+        """Stop service."""
+        super(CalicoManagerWorker, self).stop()
+
+    def wait(self):
+        """Wait for service to complete."""
+        super(CalicoManagerWorker, self).wait()
+
     def reset(self):
         config.reset_service()
 
@@ -118,6 +126,14 @@ class CalicoAgentStatusWatcherWorker(worker.BaseWorker):
         """Start service."""
         super(CalicoAgentStatusWatcherWorker, self).start(name, desc)
 
+    def stop(self):
+        """Stop service."""
+        super(CalicoAgentStatusWatcherWorker, self).stop()
+
+    def wait(self):
+        """Wait for service to complete."""
+        super(CalicoAgentStatusWatcherWorker, self).wait()
+
     def reset(self):
         config.reset_service()
 
@@ -131,6 +147,14 @@ class CalicoEndpointStatusWatcherWorker(worker.BaseWorker):
     def start(self, name="calico-endpoint-status-watcher", desc=None):
         """Start service."""
         super(CalicoEndpointStatusWatcherWorker, self).start(name, desc)
+
+    def stop(self):
+        """Stop service."""
+        super(CalicoEndpointStatusWatcherWorker, self).stop()
+
+    def wait(self):
+        """Wait for service to complete."""
+        super(CalicoEndpointStatusWatcherWorker, self).wait()
 
     def reset(self):
         config.reset_service()
