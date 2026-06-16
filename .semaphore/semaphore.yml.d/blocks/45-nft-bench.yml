@@ -1,4 +1,4 @@
-- name: "Felix: nftables dataplane benchmark"
+- name: "Felix: dataplane benchmark"
   run:
     when: "${CHANGE_IN(felix/nftables,non-go:/hack/perf/)}"
   dependencies:
@@ -11,7 +11,7 @@
     secrets:
       - name: banzai-secrets
     jobs:
-      - name: "Felix: nftables dataplane benchmark"
+      - name: "Felix: dataplane benchmark"
         execution_time_limit:
           minutes: 30
         commands:

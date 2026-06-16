@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -757,7 +758,7 @@ func (t *NftablesTable) expectedHashesForInsertAppendChain(chainName string) (al
 // getHashesFromDataplane loads the current state of our table and parses out the rule
 // hashes we add as comments. The returned map contains an entry for each chain in the
 // table; each entry is the slice of rule hashes for that chain, in order. A rule with no
-// hash comment (e.g. one another process added to a chain we hook) is represented by an
+// hash comment (e.g. a rule another process added to a chain we hook) is represented by an
 // empty string.
 func (t *NftablesTable) getHashesFromDataplane() map[string][]string {
 	retries := 3
@@ -1027,7 +1028,7 @@ func (t *NftablesTable) applyUpdates() error {
 		currentHashes := t.render.RuleHashes(chain, features)
 		newHashes[chainName] = currentHashes
 
-		if reflect.DeepEqual(currentHashes, previousHashes) {
+		if slices.Equal(currentHashes, previousHashes) {
 			// Chain is already in sync; nothing to write.
 			continue
 		}

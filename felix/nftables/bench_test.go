@@ -137,11 +137,7 @@ func BenchmarkDeltaUpdate(b *testing.B) {
 }
 
 // BenchmarkChainUpdate measures the incremental cost of changing a single policy
-// chain's rules and reprogramming, in steady state (no forced resync).  This is
-// the path the flush-and-rewrite change targets: today a chain write invalidates
-// the cache and the next Apply() does a full O(total) reload to recover rule
-// handles; rewriting the chain wholesale removes the need for handles, so no
-// reload is required.
+// chain's rules and reprogramming, in steady state (no forced resync).
 func BenchmarkChainUpdate(b *testing.B) {
 	for _, s := range scaleSpecs {
 		b.Run(s.name, func(b *testing.B) {
@@ -306,7 +302,14 @@ type recorder struct {
 func record(b *testing.B, s scaleSpec, phase string) *recorder {
 	proc, _ := procfs.NewProc(os.Getpid())
 	stat, _ := proc.Stat()
-	r := &recorder{b: b, spec: s, phase: phase, proc: proc, startCPU: stat.CPUTime(), startWall: time.Now()}
+	r := &recorder{
+		b:         b,
+		spec:      s,
+		phase:     phase,
+		proc:      proc,
+		startCPU:  stat.CPUTime(),
+		startWall: time.Now(),
+	}
 	runtime.ReadMemStats(&r.startMem)
 	return r
 }

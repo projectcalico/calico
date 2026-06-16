@@ -6178,7 +6178,7 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
-  - name: "Felix: nftables dataplane benchmark"
+  - name: "Felix: dataplane benchmark"
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -6268,7 +6268,7 @@ blocks:
       secrets:
         - name: banzai-secrets
       jobs:
-        - name: "Felix: nftables dataplane benchmark"
+        - name: "Felix: dataplane benchmark"
           execution_time_limit:
             minutes: 30
           commands:
