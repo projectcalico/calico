@@ -129,6 +129,10 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 
 	parts := strings.Fields(c.CmdStr)
 	logCtx.Debugf("cmd tokens: [%+v]", parts)
+	if len(parts) == 0 {
+		fmt.Printf("%s No command to execute\n", logPrefix)
+		return
+	}
 
 	logCtx.Debugf("Executing command: %+v ... ", c.CmdStr)
 	content, err := exec.Command(parts[0], parts[1:]...).CombinedOutput()
@@ -141,11 +145,15 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 	if err != nil && c.FallbackCmdStr != "" {
 		logCtx.Debugf("Command failed, trying fallback: %s", c.FallbackCmdStr)
 		fParts := strings.Fields(c.FallbackCmdStr)
-		fContent, fErr := exec.Command(fParts[0], fParts[1:]...).CombinedOutput()
-		if fErr == nil {
-			content, err = fContent, nil
-			if c.FallbackFilePath != "" {
-				filePath = c.FallbackFilePath
+		if len(fParts) == 0 {
+			logCtx.Warn("Empty fallback command, skipping")
+		} else {
+			fContent, fErr := exec.Command(fParts[0], fParts[1:]...).CombinedOutput()
+			if fErr == nil {
+				content, err = fContent, nil
+				if c.FallbackFilePath != "" {
+					filePath = c.FallbackFilePath
+				}
 			}
 		}
 	}

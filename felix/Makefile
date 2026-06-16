@@ -115,9 +115,6 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
-CGO_ENABLED=1
 # Normalize userspace types to ensure consistency across architectures.
 ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
@@ -134,12 +131,6 @@ CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
-else
-CGO_ENABLED=0
-CGO_LDFLAGS=""
-# Race detection requires CGO enabled.
-FV_RACE_DETECTOR_ENABLED?=false
-endif
 
 ifeq ($(ARCH),amd64)
 BUILD_TARGETS+=bin/calico-felix.exe
@@ -169,16 +160,11 @@ $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -pa
 	# rejects libbpf's non-PIC references to glibc symbols like stderr.
 	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
-LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
-bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
+bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-endif
 
 bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	@echo Building felix with race detector enabled for $(ARCH) on $(BUILDARCH)
@@ -223,7 +209,7 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
 $(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache ARCH=$(ARCH) all
 	touch -c $@
 
 $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile

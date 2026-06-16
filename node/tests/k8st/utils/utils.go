@@ -377,9 +377,38 @@ func ExecInPod(t testing.TB, namespace, podName, command string, opts ...RunOpti
 
 func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions) (string, error) {
 	t.Helper()
+	// Match `kubectl exec -- <command>` after shell word splitting: the Python
+	// helper passed the command unquoted, so plain whitespace splitting is the
+	// semantic it relied on.
+	return streamInPod(t, pod, strings.Fields(command), "", opts...)
+}
+
+// ExecInPodStdin runs an explicit argv inside the named pod's first container,
+// feeding stdin to the remote process. Used for tools like scapy that read a
+// script from standard input — where the `kubectl exec -- <whitespace-split>`
+// semantics of ExecInPod cannot express the input.
+func ExecInPodStdin(t testing.TB, namespace, podName, stdin string, command []string, opts ...RunOptions) (string, error) {
+	t.Helper()
+	cs := K8sClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	defer cancel()
+
+	pod, err := cs.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return streamInPod(t, pod, command, stdin, opts...)
+}
+
+// streamInPod runs command (already split into argv) inside the pod's first
+// container over a native SPDY exec session, optionally feeding stdin to the
+// remote process. It follows the same RunOptions semantics as Run.
+func streamInPod(t testing.TB, pod *corev1.Pod, command []string, stdin string, opts ...RunOptions) (string, error) {
+	t.Helper()
 	o := mergeRunOptions(opts)
 
-	t.Logf("[%s] exec in %s/%s: %s", time.Now().Format(time.RFC3339), pod.Namespace, pod.Name, command)
+	t.Logf("[%s] exec in %s/%s: %v", time.Now().Format(time.RFC3339), pod.Namespace, pod.Name, command)
 
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -405,12 +434,10 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: container,
-			// Match `kubectl exec -- <command>` after shell word
-			// splitting: the Python helper passed the command unquoted, so
-			// plain whitespace splitting is the semantic it relied on.
-			Command: strings.Fields(command),
-			Stdout:  true,
-			Stderr:  true,
+			Command:   command,
+			Stdin:     stdin != "",
+			Stdout:    true,
+			Stderr:    true,
 		}, scheme.ParameterCodec)
 
 	executor, err := remotecommand.NewSPDYExecutor(K8sRestConfig(t), "POST", req.URL())
@@ -418,11 +445,15 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 		return "", fmt.Errorf("building SPDY executor: %w", err)
 	}
 
+	streamOpts := remotecommand.StreamOptions{}
 	var stdout, stderr strings.Builder
-	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
-	})
+	streamOpts.Stdout = &stdout
+	streamOpts.Stderr = &stderr
+	if stdin != "" {
+		streamOpts.Stdin = strings.NewReader(stdin)
+	}
+
+	err = executor.StreamWithContext(ctx, streamOpts)
 	out := stdout.String()
 	errOut := stderr.String()
 	t.Logf("Out:\n%s", out)
@@ -433,7 +464,7 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 			t.Logf("Failure output:\n%s\nerr:\n%s", out, errOut)
 		}
 		if !o.AllowFail {
-			return out, fmt.Errorf("exec %q in pod %s/%s failed: %w (stderr: %s)",
+			return out, fmt.Errorf("exec %v in pod %s/%s failed: %w (stderr: %s)",
 				command, pod.Namespace, pod.Name, err, errOut)
 		}
 		if o.ReturnErr {
