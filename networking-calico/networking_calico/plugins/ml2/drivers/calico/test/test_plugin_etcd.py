@@ -2178,8 +2178,7 @@ class TestLiveMigration(TestPluginEtcdBase):
             mock_db_port
         )
 
-    @mock.patch("eventlet.spawn")
-    def test_vif_plug_no_notification_for_non_migration(self, _m_spawn):
+    def test_vif_plug_no_notification_for_non_migration(self):
         """Felix 'up' on source host does NOT trigger Nova notification."""
         self._do_initial_resync()
         self.recent_writes = {}

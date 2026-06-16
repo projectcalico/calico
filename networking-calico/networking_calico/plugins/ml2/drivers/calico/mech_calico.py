@@ -488,14 +488,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             return False
 
         # Else, let's check if we refresh the time within timeout.
-        time_till_last_refreshed = time.time() - self._is_master.value
-        refreshed_in_time = time_till_last_refreshed < MASTER_TIMEOUT
+        time_since_last_refreshed = time.time() - self._is_master.value
+        refreshed_in_time = time_since_last_refreshed < MASTER_TIMEOUT
 
         # If not, there is something wrong with elector!!
         if not refreshed_in_time:
             LOG.warning(
                 "The elector hasn't refreshed the lease in "
-                f"{time_till_last_refreshed}s."
+                f"{time_since_last_refreshed}s."
             )
 
         return refreshed_in_time
