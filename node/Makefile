@@ -518,7 +518,7 @@ $(WINDOWS_INSTALL_SCRIPT):
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
 WINDOWS_IMAGE_REQS := \
-	Dockerfile-windows \
+	Dockerfile.windows \
 	dist/LICENSE \
 	$(WINDOWS_BINARY) \
 	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \
