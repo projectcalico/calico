@@ -44,15 +44,37 @@ module.exports = async ({ github, context, core }) => {
   }
 
   // 1. Find the open master PR for this head SHA.
-  const associated = await github.paginate(
-    github.rest.repos.listPullRequestsAssociatedWithCommit,
-    { owner, repo, commit_sha: headSha },
-  );
-  const pr = associated.find(p =>
-    p.state === 'open' && p.head.sha === headSha && p.base.ref === 'master',
-  );
-  if (!pr) {
-    core.warning(`no open master PR found with head SHA ${headSha}, skipping`);
+  // search/issues is fork-friendly: the /repos/.../commits/{sha}/pulls
+  // endpoint (which listPullRequestsAssociatedWithCommit wraps) returns
+  // nothing for fork PRs because the head commit lives on the fork's
+  // repo, not the base repo's commit DAG. The search index can lag a
+  // few seconds for very fresh commits, so we retry once after 5s.
+  let prNumber = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const { data: search } = await github.rest.search.issuesAndPullRequests({
+      q: `repo:${owner}/${repo} is:pr sha:${headSha}`,
+    });
+    const hit = search.items.find(i => i.state === 'open');
+    if (hit) {
+      prNumber = hit.number;
+      break;
+    }
+    if (attempt === 1) {
+      core.info(`Search index empty for ${headSha}, retrying in 5s`);
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+  if (!prNumber) {
+    core.warning(`no open PR found with head SHA ${headSha}, skipping`);
+    return;
+  }
+  // Confirm base.ref and head.sha via the PR API; search returns
+  // issue-shaped results that don't carry those fields.
+  const { data: pr } = await github.rest.pulls.get({
+    owner, repo, pull_number: prNumber,
+  });
+  if (pr.base.ref !== 'master' || pr.head.sha !== headSha || pr.state !== 'open') {
+    core.info(`PR #${pr.number} no longer matches expected state (base=${pr.base.ref}, head_sha=${pr.head.sha}, state=${pr.state}), skipping`);
     return;
   }
 
