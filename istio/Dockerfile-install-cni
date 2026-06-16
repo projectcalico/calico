@@ -124,6 +124,10 @@ COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
 COPY bin/istio-cni-${TARGETARCH} /opt/cni/bin/istio-cni
 COPY istio/LICENSE /LICENSE
 
+# Corresponding source for the patched, GPL-2.0 nftables + libnftnl whose .so
+# and nft binary we ship above (upstream tarballs plus our patches).
+COPY --from=nft-rpms /src/ /included-source/
+
 FROM ${CALICO_BASE}
 
 ARG GIT_VERSION=unknown
