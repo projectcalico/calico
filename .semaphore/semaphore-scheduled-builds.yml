@@ -1843,6 +1843,44 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
+  - name: "Felix: dataplane benchmark"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
+      jobs:
+        - name: "Felix: dataplane benchmark"
+          execution_time_limit:
+            minutes: 30
+          commands:
+            # The benchmark programs a real nftables table, which the go-build
+            # image can't do (it has no nft binary), so run it on the host. Build
+            # the benchmark and the Lens publisher as static binaries in go-build,
+            # then run them here.
+            - sudo apt-get update -y && sudo apt-get install -y nftables
+            - make -C felix bin/nft.test
+            - make bin/send-perf-results
+            - mkdir -p artifacts/perf
+            # Run as root so the benchmark can program the kernel. A few iterations
+            # is enough for a stable steady-state number; this is trend tracking,
+            # not a per-PR gate.
+            - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
+            # Publish to Lens. send-perf-results no-ops if the creds are unset.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+            - ./bin/send-perf-results --dir artifacts/perf
+      epilogue:
+        always:
+          commands:
+            - artifact push job artifacts/perf || true
   - name: Mock node
     run:
       when: "true"

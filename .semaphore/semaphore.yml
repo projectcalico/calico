@@ -6178,6 +6178,121 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
+  - name: "Felix: dataplane benchmark"
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/45-nft-bench.yml',
+        '/api/pkg/apis/projectcalico/v3/*.go',
+        '/api/pkg/defaults/*.go',
+        '/api/pkg/lib/numorstring/*.go',
+        '/crypto/pkg/tls/*.go',
+        '/felix/config/*.go',
+        '/felix/dataplane/ipsets/*.go',
+        '/felix/deltatracker/*.go',
+        '/felix/environment/*.go',
+        '/felix/generictables/*.go',
+        '/felix/idalloc/*.go',
+        '/felix/ip/*.go',
+        '/felix/ipsets/*.go',
+        '/felix/iptables/cmdshim/*.go',
+        '/felix/labelindex/ipsetmember/*.go',
+        '/felix/logutils/*.go',
+        '/felix/netlinkshim/*.go',
+        '/felix/nftables/**',
+        '/felix/proto/*.go',
+        '/felix/stringutils/*.go',
+        '/hack/perf/',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/lib/std/uniquelabels/*.go',
+        '/lib/std/uniquestr/*.go',
+        '/libcalico-go/config/*.go',
+        '/libcalico-go/lib/apiconfig/*.go',
+        '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
+        '/libcalico-go/lib/apis/internalapi/*.go',
+        '/libcalico-go/lib/backend/*.go',
+        '/libcalico-go/lib/backend/api/*.go',
+        '/libcalico-go/lib/backend/encap/*.go',
+        '/libcalico-go/lib/backend/etcdv3/*.go',
+        '/libcalico-go/lib/backend/k8s/*.go',
+        '/libcalico-go/lib/backend/k8s/conversion/*.go',
+        '/libcalico-go/lib/backend/k8s/resources/*.go',
+        '/libcalico-go/lib/backend/model/*.go',
+        '/libcalico-go/lib/clientv3/*.go',
+        '/libcalico-go/lib/consistenthash/*.go',
+        '/libcalico-go/lib/errors/*.go',
+        '/libcalico-go/lib/hash/*.go',
+        '/libcalico-go/lib/logutils/*.go',
+        '/libcalico-go/lib/logutils/logformat/*.go',
+        '/libcalico-go/lib/names/*.go',
+        '/libcalico-go/lib/namespace/*.go',
+        '/libcalico-go/lib/net/*.go',
+        '/libcalico-go/lib/options/*.go',
+        '/libcalico-go/lib/prometheus/*.go',
+        '/libcalico-go/lib/resources/*.go',
+        '/libcalico-go/lib/selector/*.go',
+        '/libcalico-go/lib/selector/parser/*.go',
+        '/libcalico-go/lib/selector/tokenizer/*.go',
+        '/libcalico-go/lib/set/*.go',
+        '/libcalico-go/lib/validator/v3/*.go',
+        '/libcalico-go/lib/watch/*.go',
+        '/libcalico-go/lib/winutils/*.go',
+        '/metadata.mk',
+        '/node/pkg/lifecycle/utils/*.go'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/crypto/**/*_test.go',
+        '/felix/**/*_test.go',
+        '/lib/**/*_test.go',
+        '/libcalico-go/**/*_test.go',
+        '/node/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
+      jobs:
+        - name: "Felix: dataplane benchmark"
+          execution_time_limit:
+            minutes: 30
+          commands:
+            # The benchmark programs a real nftables table, which the go-build
+            # image can't do (it has no nft binary), so run it on the host. Build
+            # the benchmark and the Lens publisher as static binaries in go-build,
+            # then run them here.
+            - sudo apt-get update -y && sudo apt-get install -y nftables
+            - make -C felix bin/nft.test
+            - make bin/send-perf-results
+            - mkdir -p artifacts/perf
+            # Run as root so the benchmark can program the kernel. A few iterations
+            # is enough for a stable steady-state number; this is trend tracking,
+            # not a per-PR gate.
+            - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
+            # Publish to Lens. send-perf-results no-ops if the creds are unset.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+            - ./bin/send-perf-results --dir artifacts/perf
+      epilogue:
+        always:
+          commands:
+            - artifact push job artifacts/perf || true
   - name: Mock node
     run:
       when: >-
