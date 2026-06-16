@@ -821,7 +821,6 @@ var _ = infrastructure.DatastoreDescribe(
 							Eventually(func() uint32 {
 								tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 								tc.Felixes[1].Exec("calico-bpf", "conntrack", "clean")
-								time.Sleep(12 * time.Second)
 								return getBPFCurrentCount(1, 1, "egress")()
 							}, "60s", "1s").Should(Equal(uint32(0)))
 						}
