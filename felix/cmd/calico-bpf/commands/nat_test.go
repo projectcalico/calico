@@ -92,6 +92,38 @@ func TestAffinityDumpJSON(t *testing.T) {
 	}
 }
 
+// TestAffinityDumpJSONProtoOrdering verifies that affinity entries sharing the
+// same service addr+port and client IP but differing in protocol are ordered
+// deterministically (by protocol). Without proto in the sort key these entries
+// compare equal and slices.SortFunc leaves their order unspecified.
+func TestAffinityDumpJSONProtoOrdering(t *testing.T) {
+	client := net.IPv4(10, 0, 0, 1)
+	svc := net.IPv4(1, 1, 1, 1)
+	m := nat2.AffinityMapMem{
+		// Same client, same addr+port; only the protocol differs (TCP=6, UDP=17).
+		nat2.NewAffinityKey(client, nat2.NewNATKey(svc, 53, 17)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 5353)),
+		nat2.NewAffinityKey(client, nat2.NewNATKey(svc, 53, 6)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 5353)),
+	}
+
+	// Map iteration order is randomised, so a single deterministic ordering
+	// across repeated calls is what we assert.
+	first := makeAffinityJSON(m)
+	if len(first) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %+v", len(first), first)
+	}
+	if first[0].Proto != 6 || first[1].Proto != 17 {
+		t.Fatalf("entries not ordered by proto: %+v", first)
+	}
+	for i := 0; i < 20; i++ {
+		got := makeAffinityJSON(m)
+		if got[0].Proto != first[0].Proto || got[1].Proto != first[1].Proto {
+			t.Fatalf("non-deterministic ordering across calls: %+v vs %+v", first, got)
+		}
+	}
+}
+
 // TestDumpNiceGrouping verifies that dumpNiceGrouped groups frontends sharing the
 // same service ID so the backend list is printed just once per service.
 func TestDumpNiceGrouping(t *testing.T) {

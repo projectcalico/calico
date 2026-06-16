@@ -13,6 +13,12 @@ installation:
   kubeletVolumePluginPath: "None"
   flexVolumePath: "None"
 
+  # kind node images already ship the upstream CNI plugins under /opt/cni/bin,
+  # so skip the cni-plugins init container that stages them.
+  cni:
+    type: Calico
+    installMode: CalicoOnly
+
   calicoNetwork:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5

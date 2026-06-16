@@ -9,7 +9,7 @@ K8S_VERSION=v1.36.1
 LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
 GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
-RUST_BUILD_VER=1.94.1
+RUST_BUILD_VER=1.96.0
 
 CALICO_BASE_VER=ubi9-1780507355
 
