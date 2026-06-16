@@ -21,7 +21,14 @@ GHR_VERSION=v0.18.3
 GITHUB_CLI_VERSION=2.94.0
 GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.21.1
-KINDEST_NODE_VERSION=v1.36.1
+# KINDEST_NODE_VERSION is the Kubernetes version of the KIND cluster used in
+# tests, and is deliberately held one minor behind K8S_VERSION: the KubeVirt
+# live-migration tests deploy KubeVirt (tigera/kubevirt mockvirt-v1.8.1, i.e.
+# KubeVirt 1.8), which only supports Kubernetes 1.33-1.35. On a 1.36 node image
+# VMIs never leave the "Scheduled" phase and the suite times out. v1.35.5 is the
+# 1.35.x node image shipped with KIND_VERSION below. Bump this only once a
+# KubeVirt/mockvirt release that supports the target Kubernetes minor exists.
+KINDEST_NODE_VERSION=v1.35.5
 KIND_VERSION=v0.32.0
 
 # Configuration for Semaphore/Github integration.  This needs to be set
