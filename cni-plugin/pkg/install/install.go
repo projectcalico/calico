@@ -272,6 +272,34 @@ func Install(version string) error {
 		}
 	}
 
+	// If no candidate directory was writeable but the user opted out of binary
+	// updates (UPDATE_CNI_BINARIES=false) and the calico binaries are already on
+	// the host, treat that as success. This covers read-only systems that bake
+	// the CNI binaries into the OS image. See projectcalico/calico#7486.
+	if !binsWritten && !c.UpdateCNIBinaries {
+		// Require both binaries this installer owns: calico provides the CNI
+		// plugin, calico-ipam the IPAM plugin. Auxiliary plugins (portmap etc.)
+		// come from the host image and are its responsibility to bake in.
+		requiredBins := []string{"calico", "calico-ipam"}
+		if runtime.GOOS == "windows" {
+			requiredBins = []string{"calico.exe", "calico-ipam.exe"}
+		}
+		for _, d := range dirs {
+			allPresent := true
+			for _, name := range requiredBins {
+				if !fileExists(fmt.Sprintf("%s/%s", d, name)) {
+					allPresent = false
+					break
+				}
+			}
+			if allPresent {
+				logrus.Infof("No writeable CNI bin directory found but %v already exist at %s and UPDATE_CNI_BINARIES=false; continuing", requiredBins, d)
+				binsWritten = true
+				break
+			}
+		}
+	}
+
 	// If binaries were not placed, exit
 	if !binsWritten {
 		logrus.WithError(err).Fatalf("found no writeable directory, exiting")

@@ -17,6 +17,9 @@ spec:
 
   cni:
     type: Calico
+    # Skip the cni-plugins init container; the Windows FV doesn't need the
+    # upstream plugins and this avoids building/importing their image.
+    installMode: CalicoOnly
   calicoNetwork:
     bgp: Disabled
     linuxDataplane: {{$.Env.ASO_LINUX_DATAPLANE}}

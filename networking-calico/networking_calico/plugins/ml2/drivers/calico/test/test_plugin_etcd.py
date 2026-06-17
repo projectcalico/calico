@@ -345,8 +345,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # written before that was added and they do not support the interleaved
         # requests from the status thread.  The status-reporting thread is
         # tested separately.
-        self.driver._status_updating_thread = mock.Mock(
-            spec=self.driver._status_updating_thread
+        self.driver.watch_status_updates = mock.Mock(
+            spec=self.driver.watch_status_updates
         )
 
         # Mock out config.
@@ -450,6 +450,12 @@ class TestPluginEtcdBase(_TestEtcdBase):
             self.sg_default_key_v3: self.sg_default_value_v3,
         }
 
+        self.driver._post_fork_init()
+        self.driver._init_start_calico_resource_syncer()
+        self.driver._init_start_agent_status_watcher()
+        self.driver._init_start_calico_manager()
+        self.driver._init_start_endpoint_status_watcher()
+
     def make_context(self):
         context = mock.MagicMock()
         context._plugin_context.to_dict.return_value = {}
@@ -468,9 +474,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         assertions happen to match the no-op output.  Negative tests can opt
         out with ``expect_ok=False``.
 
-        If the driver has been initialised (post _post_fork_init) we reuse its syncers
-        so the same primed project cache is in play.  Otherwise we let the runner build
-        fresh syncers against the mocked DB and Keystone.
+        If the driver has been initialised (post post_fork_initialize) we reuse its
+        syncers so the same primed project cache is in play.  Otherwise we let the
+        runner build fresh syncers against the mocked DB and Keystone.
         """
         result = resync.Scope(
             self.db,
@@ -2496,38 +2502,72 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             mech_calico.felix_agent_state("host2", False),
         )
 
-    def test_status_thread_epoch(self):
-        self.driver._epoch = 2
-        self.driver._status_updating_thread(1)
-
     @mock.patch(
-        "networking_calico.plugins.ml2.drivers.calico.mech_calico.StatusWatcher",
+        "networking_calico.plugins.ml2.drivers.calico.status.AgentStatusWatcher",
         autospec=True,
     )
-    def test_status_thread_mainline(self, m_StatusWatcher):
+    def test_agent_status_thread_mainline(self, m_watcher):
         count = [0]
+        m_watcher.__name__ = "AgentStatusWatcher"
+        self.driver.is_master = mock.Mock()
+        self.driver.is_master.return_value = True
 
-        with mock.patch.object(self.driver, "elector") as m_elector:
-            m_elector.master.return_value = True
+        def maybe_end_loop(*args, **kwargs):
+            if count[0] == 2:
+                # Thread dies, should be restarted.
+                self.driver._etcd_watcher_thread = False
+            if count[0] == 4:
+                # After a few loops, stop being the master...
+                self.driver.is_master.return_value = False
+            if count[0] > 6:
+                # Then terminate the loop after a few more...
+                self.driver._stop_worker = True
+            count[0] += 1
 
-            def maybe_end_loop(*args, **kwargs):
-                if count[0] == 2:
-                    # Thread dies, should be restarted.
-                    self.driver._etcd_watcher_thread = False
-                if count[0] == 4:
-                    # After a few loops, stop being the master...
-                    m_elector.master.return_value = False
-                if count[0] > 6:
-                    # Then terminate the loop after a few more...
-                    self.driver._epoch += 1
-                count[0] += 1
+        with mock.patch("eventlet.spawn") as m_spawn:
+            with mock.patch("eventlet.sleep") as m_sleep:
+                m_sleep.side_effect = maybe_end_loop
+                self.driver.watch_status_updates(m_watcher)
 
-            with mock.patch("eventlet.spawn") as m_spawn:
-                with mock.patch("eventlet.sleep") as m_sleep:
-                    m_sleep.side_effect = maybe_end_loop
-                    self.driver._status_updating_thread(0)
+        m_watcher = m_watcher.return_value
+        self.assertEqual(
+            [
+                mock.call(mock.ANY),
+                mock.call(mock.ANY),
+            ],
+            [c for c in m_spawn.mock_calls if c[0] == ""],
+        )
+        self.assertEqual(2, len(m_watcher.stop.mock_calls))
+        self.assertIsNone(self.driver._etcd_watcher)
 
-        m_watcher = m_StatusWatcher.return_value
+    @mock.patch(
+        "networking_calico.plugins.ml2.drivers.calico.status.StatusWatcher",
+        autospec=True,
+    )
+    def test_endpoint_status_thread_mainline(self, m_watcher):
+        count = [0]
+        m_watcher.__name__ = "EndpointStatusWatcher"
+        self.driver.is_master = mock.Mock()
+        self.driver.is_master.return_value = True
+
+        def maybe_end_loop(*args, **kwargs):
+            if count[0] == 2:
+                # Thread dies, should be restarted.
+                self.driver._etcd_watcher_thread = False
+            if count[0] == 4:
+                # After a few loops, stop being the master...
+                self.driver.is_master.return_value = False
+            if count[0] > 6:
+                # Then terminate the loop after a few more...
+                self.driver._stop_worker = True
+            count[0] += 1
+
+        with mock.patch("eventlet.spawn") as m_spawn:
+            with mock.patch("eventlet.sleep") as m_sleep:
+                m_sleep.side_effect = maybe_end_loop
+                self.driver.watch_status_updates(m_watcher)
+
+        m_watcher = m_watcher.return_value
         self.assertEqual(
             [
                 mock.call(mock.ANY),
@@ -2560,7 +2600,9 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             m_rpc.report_state.mock_calls,
         )
 
-    def test_on_port_status_changed(self):
+    @mock.patch("eventlet.spawn")
+    def test_on_port_status_changed(self, _m_spawn):
+        self.driver._init_start_endpoint_status_watcher()
         self.driver._last_status_queue_log_time = monotonic_time() - 100
         with mock.patch.object(self.driver, "_port_status_queue") as m_queue:
             m_queue.qsize.return_value = 100
@@ -2613,7 +2655,9 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
                 m_queue.put.mock_calls,
             )
 
-    def test_loop_writing_port_statuses(self):
+    @mock.patch("eventlet.spawn")
+    def test_loop_writing_port_statuses(self, _m_spawn):
+        self.driver._init_start_endpoint_status_watcher()
         with mock.patch.object(
             self.driver, "_port_status_queue"
         ) as m_queue, mock.patch.object(
@@ -2625,7 +2669,6 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             self.assertRaises(
                 StopIteration,
                 self.driver._loop_writing_port_statuses,
-                self.driver._epoch,
             )
         self.assertEqual(
             [
@@ -2639,8 +2682,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         # from the outer `finally` when StopIteration propagates.
         self.assertEqual(2, m_close.call_count)
 
-    def test_try_to_update_port_status(self):
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status(self, _m_spawn):
         self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
 
         mock_calls = []
 
@@ -2661,8 +2706,10 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         )
         self.assertEqual([], m_spawn.mock_calls)  # No retry on success
 
-    def test_try_to_update_port_status_fail(self):
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_fail(self, _m_spawn):
         self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
 
         mock_calls = []
 
@@ -2716,7 +2763,8 @@ class TestStatusWatcherBase(_TestEtcdBase):
 
         super(TestStatusWatcherBase, self).setUp()
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
-        self.watcher = status.StatusWatcher(self.driver)
+        self.agent_watcher = status.AgentStatusWatcher(self.driver)
+        self.endpoint_watcher = status.EndpointStatusWatcher(self.driver)
 
     def _add_test_endpoint(self):
         # Add a workload to be deleted
@@ -2726,9 +2774,11 @@ class TestStatusWatcherBase(_TestEtcdBase):
             + "openstack/wlid/endpoint/ep1"
         ) % self.region_string
         m_port_status_node.value = '{"status": "up"}'
-        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack", "wlid", "ep1")
-        self.assertEqual({"hostname": set([ep_id])}, self.watcher._endpoints_by_host)
+        self.assertEqual(
+            {"hostname": set([ep_id])}, self.endpoint_watcher._endpoints_by_host
+        )
         return m_port_status_node
 
 
@@ -2738,16 +2788,55 @@ class TestStatusWatcher(TestStatusWatcherBase):
         lib.m_oslo_config.cfg.CONF.calico.etcd_cert_file = "cert-file"
         lib.m_oslo_config.cfg.CONF.calico.etcd_ca_cert_file = "ca-cert-file"
         lib.m_oslo_config.cfg.CONF.calico.etcd_key_file = "key-file"
-        self.watcher = status.StatusWatcher(self.driver)
+        _ = status.StatusWatcher(self.driver)
 
     @mock.patch("eventlet.spawn")
-    def test_snapshot(self, m_spawn):
-        # Populate initial status tree data, for initial snapshot testing.
-
+    def test_snapshot_agent(self, _m_spawn):
         felix_status_key = "/calico/felix/v2/no-region/host/hostname/status"
         felix_last_reported_status_key = (
             "/calico/felix/v2/no-region/host/hostname/last_reported_status"
         )
+
+        self.etcd_data = {
+            # An agent status key to ignore.
+            felix_last_reported_status_key: json.dumps(
+                {"uptime": 10, "first_update": True}
+            ),
+            # An agent status key to take notice of.
+            felix_status_key: json.dumps({"uptime": 10, "first_update": True}),
+        }
+
+        watch_events = []
+
+        def _iterator():
+            for e in watch_events:
+                yield e
+            _log.info("Stop watcher now")
+            self.agent_watcher.stop()
+            yield None
+
+        def _cancel():
+            pass
+
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+
+        # Start the watcher.  It will do initial snapshot processing, then stop
+        # when it tries to watch for further changes.
+        self.agent_watcher.start()
+
+        self.driver.on_felix_alive.assert_called_once_with("hostname", new=True)
+
+        # Start the watcher again, with the same etcd data.  We should not see the
+        # felix alive gets send again, as we already updated.
+        self.driver.on_felix_alive.reset_mock()
+        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
+        self.agent_watcher.start()
+        self.driver.on_felix_alive.assert_not_called()
+
+    @mock.patch("eventlet.spawn")
+    def test_snapshot_endpoint(self, _m_spawn):
+        # Populate initial status tree data, for initial snapshot testing.
+
         ep_on_that_host_key = (
             "/calico/felix/v2/no-region/host/hostname/workload/"
             + "openstack/wlid/endpoint/ep1"
@@ -2758,12 +2847,6 @@ class TestStatusWatcher(TestStatusWatcherBase):
         )
 
         self.etcd_data = {
-            # An agent status key to ignore.
-            felix_last_reported_status_key: json.dumps(
-                {"uptime": 10, "first_update": True}
-            ),
-            # An agent status key to take notice of.
-            felix_status_key: json.dumps({"uptime": 10, "first_update": True}),
             # A port status key to take notice of.
             ep_on_that_host_key: '{"status": "up"}',
             # A port status key to ignore.
@@ -2776,7 +2859,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
             for e in watch_events:
                 yield e
             _log.info("Stop watcher now")
-            self.watcher.stop()
+            self.endpoint_watcher.stop()
             yield None
 
         def _cancel():
@@ -2786,9 +2869,8 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         # Start the watcher.  It will do initial snapshot processing, then stop
         # when it tries to watch for further changes.
-        self.watcher.start()
+        self.endpoint_watcher.start()
 
-        self.driver.on_felix_alive.assert_called_once_with("hostname", new=True)
         self.driver.on_port_status_changed.assert_has_calls(
             [
                 mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
@@ -2799,11 +2881,9 @@ class TestStatusWatcher(TestStatusWatcherBase):
 
         # Start the watcher again, with the same etcd data.  We should see the
         # same status callbacks.
-        self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.start()
-        self.driver.on_felix_alive.assert_not_called()
+        self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
                 mock.call("unknown", "ep2", {"status": "up"}, priority="low"),
@@ -2815,29 +2895,12 @@ class TestStatusWatcher(TestStatusWatcherBase):
         # Resync after deleting the unknown host endpoint.  We should see that
         # endpoint reported with status None.
         del self.etcd_data[ep_on_unknown_host_key]
-        self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.start()
-        self.driver.on_felix_alive.assert_not_called()
+        self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
                 mock.call("unknown", "ep2", None, priority="low"),
-                mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
-            ],
-            any_order=True,
-        )
-
-        # Resync after deleting the Felix status.  This does not affect the
-        # status of ep1.
-        del self.etcd_data[felix_status_key]
-        self.driver.on_felix_alive.reset_mock()
-        self.driver.on_port_status_changed.reset_mock()
-        self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.start()
-        self.driver.on_felix_alive.assert_not_called()
-        self.driver.on_port_status_changed.assert_has_calls(
-            [
                 mock.call("hostname", "ep1", {"status": "up"}, priority="low"),
             ],
             any_order=True,
@@ -2857,11 +2920,9 @@ class TestStatusWatcher(TestStatusWatcherBase):
                 "type": "SET",
             }
         ]
-        self.driver.on_felix_alive.reset_mock()
         self.driver.on_port_status_changed.reset_mock()
         self.clientv3.watch_prefix.return_value = _iterator(), _cancel
-        self.watcher.start()
-        self.driver.on_felix_alive.assert_not_called()
+        self.endpoint_watcher.start()
         self.driver.on_port_status_changed.assert_has_calls(
             [
                 mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
@@ -2872,7 +2933,9 @@ class TestStatusWatcher(TestStatusWatcherBase):
     def test_endpoint_status_add_delete(self):
         m_port_status_node = self._add_test_endpoint()
         m_port_status_node.action = "delete"
-        self.watcher._on_ep_delete(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_delete(
+            m_port_status_node, "hostname", "wlid", "ep1"
+        )
 
         self.assertEqual(
             [
@@ -2881,7 +2944,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.watcher._endpoints_by_host)
+        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
 
     def test_endpoint_status_add_bad_json(self):
         m_port_status_node = mock.Mock()
@@ -2890,7 +2953,7 @@ class TestStatusWatcher(TestStatusWatcherBase):
             "openstack/wlid/endpoint/ep1"
         )
         m_port_status_node.value = '{"status": "up"'
-        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
 
         self.assertEqual(
             [
@@ -2898,23 +2961,23 @@ class TestStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.watcher._endpoints_by_host)
+        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
         m_port_status_node.key = (
             "/calico/felix/v2/no-region/host/hostname/workload/openstack/wlid/endpoint"
         )
-        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
-        self.assertEqual({}, self.watcher._endpoints_by_host)
+        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
 
     def test_status_bad_json(self):
         for value in ["{", 10, "foo"]:
             m_response = mock.Mock()
             m_response.key = "/calico/felix/v2/no-region/host/hostname/status"
             m_response.value = value
-            self.watcher._on_status_set(m_response, "foo")
+            self.agent_watcher._on_status_set(m_response, "foo")
         self.assertFalse(self.driver.on_felix_alive.called)
 
     def test_felix_status_expiry(self):
@@ -2925,12 +2988,12 @@ class TestStatusWatcher(TestStatusWatcherBase):
             "openstack/wlid/endpoint/epid"
         )
         m_response.value = '{"status": "up"}'
-        self.watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
+        self.endpoint_watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
 
         # Then note that felix is down.
         m_response = mock.Mock()
         m_response.key = "/calico/felix/v2/no-region/host/hostname/status"
-        self.watcher._on_status_del(m_response, "hostname")
+        self.agent_watcher._on_status_del(m_response, "hostname")
 
         # Check that nothing happens to the port.  (Previously, we used to mark
         # the port as in ERROR but that behaviour was removed due to its
@@ -2952,7 +3015,9 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
     def test_endpoint_status_add_delete(self):
         m_port_status_node = self._add_test_endpoint()
         m_port_status_node.action = "delete"
-        self.watcher._on_ep_delete(m_port_status_node, "hostname", "wlid", "ep1")
+        self.endpoint_watcher._on_ep_delete(
+            m_port_status_node, "hostname", "wlid", "ep1"
+        )
 
         self.assertEqual(
             [
@@ -2961,7 +3026,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
             ],
             self.driver.on_port_status_changed.mock_calls,
         )
-        self.assertEqual({}, self.watcher._endpoints_by_host)
+        self.assertEqual({}, self.endpoint_watcher._endpoints_by_host)
 
     def test_handle_port_this_region(self):
         # Simulate status update for a workload in this region.
@@ -2973,7 +3038,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         )
         m_port_status_node.value = '{"status": "up"}'
         m_port_status_node.action = "set"
-        self.watcher.dispatcher.handle_event(m_port_status_node)
+        self.endpoint_watcher.dispatcher.handle_event(m_port_status_node)
         self.assertEqual(
             [
                 mock.call("hostname", "ep1", {"status": "up"}, priority="high"),
@@ -2990,7 +3055,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
         )
         m_port_status_node.value = '{"status": "up"}'
         m_port_status_node.action = "set"
-        self.watcher.dispatcher.handle_event(m_port_status_node)
+        self.endpoint_watcher.dispatcher.handle_event(m_port_status_node)
         self.assertEqual([], self.driver.on_port_status_changed.mock_calls)
 
     def test_handle_felix_this_region(self):
@@ -3006,7 +3071,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
                 "first_update": True,
             }
         )
-        self.watcher.dispatcher.handle_event(m_response)
+        self.agent_watcher.dispatcher.handle_event(m_response)
         self.assertTrue(self.driver.on_felix_alive.called)
 
     def test_ignore_felix_other_region(self):
@@ -3020,7 +3085,7 @@ class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
                 "first_update": True,
             }
         )
-        self.watcher.dispatcher.handle_event(m_response)
+        self.agent_watcher.dispatcher.handle_event(m_response)
         self.assertFalse(self.driver.on_felix_alive.called)
 
 

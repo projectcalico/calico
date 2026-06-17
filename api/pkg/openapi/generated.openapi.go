@@ -4297,6 +4297,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"localSubnetL2Reachability": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LocalSubnetL2Reachability controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"localSubnetL2ReachabilityRefreshInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0 to disable periodic re-announcement, leaving only the one-shot announce when an IP is added. [Default: 120s]",
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
+						},
+					},
 					"windowsManageFirewallRules": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]",

@@ -95,6 +95,14 @@ const (
 	FloatingIPsDisabled FloatingIPType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=Disabled;PodsAndLoadBalancers
+type LocalSubnetL2ReachabilityMode string
+
+const (
+	LocalSubnetL2ReachabilityDisabled             LocalSubnetL2ReachabilityMode = "Disabled"
+	LocalSubnetL2ReachabilityPodsAndLoadBalancers LocalSubnetL2ReachabilityMode = "PodsAndLoadBalancers"
+)
+
 // +kubebuilder:validation:Enum=Enabled;Disabled
 type BPFHostNetworkedNATType string
 
@@ -1107,6 +1115,23 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	// +optional
+	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
+
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+	// LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+	// forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+	// to disable periodic re-announcement, leaving only the one-shot announce when an
+	// IP is added. [Default: 120s]
+	// +optional
+	LocalSubnetL2ReachabilityRefreshInterval *metav1.Duration `json:"localSubnetL2ReachabilityRefreshInterval,omitempty" configv1timescale:"seconds"`
 
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional

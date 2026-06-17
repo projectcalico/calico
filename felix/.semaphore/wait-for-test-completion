@@ -1,38 +1,45 @@
 #!/bin/bash
+# Single-shot status check for a detached test batch (see batches.sh:run_batch).
+# Prints exactly one token on stdout and exits:
+#   <number>  the batch finished; this is its exit code (read from test.rc)
+#   running   the batch process is still alive
+#   66        the batch process is gone but left no test.rc (crash/reboot)
+#
+# This script must NOT block or loop: the caller polls it repeatedly and owns
+# the overall timeout.  A loop here is exactly what used to wedge the whole job
+# when the VM locked up *after* the tests completed -- the loop would spin on
+# the VM forever, the caller's ssh would never return, and the batch would only
+# end at the 55-minute watchdog.  Returning promptly lets the caller fall back
+# to the streamed-log verdict when the VM stops responding.
 
-while true; do
-  if [ -f test.rc ]; then
-    # Test finished, output its return code and exit.
-    cat test.rc
-    break
-  fi
+if [ -f test.rc ]; then
+  cat test.rc
+  exit 0
+fi
 
-  # Avoid tight loop.
-  sleep 1
-
-  # Check if the process is still running.
-  if [ ! -f test.pid ]; then
-    echo "ERROR: test.pid not found" >&2
-    echo "66"
-    break
-  fi
-  pid=$(cat test.pid)
-  if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: test.pid contains non-numeric value: '$pid'" >&2
-    echo "66"
-    break
-  fi
-  if [ -e "/proc/$pid" ]; then
-    # It is, so keep waiting.
-    continue
-  fi
-  # Make sure we didn't race with it finishing...
-  sleep 1
-  if [ -f test.rc ]; then
-    continue
-  fi
-
-  # Not still running and no return code file, something went wrong.
+if [ ! -f test.pid ]; then
+  echo "ERROR: test.pid not found" >&2
   echo "66"
-  break
-done
+  exit 0
+fi
+pid=$(cat test.pid)
+if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: test.pid contains non-numeric value: '$pid'" >&2
+  echo "66"
+  exit 0
+fi
+if [ -e "/proc/$pid" ]; then
+  echo "running"
+  exit 0
+fi
+
+# Process gone: re-check test.rc in case we raced with it being written.
+sleep 1
+if [ -f test.rc ]; then
+  cat test.rc
+  exit 0
+fi
+
+# Not still running and no return code file: something went wrong.
+echo "66"
+exit 0

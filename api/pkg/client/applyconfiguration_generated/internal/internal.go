@@ -1176,6 +1176,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: liveMigrationRouteConvergenceTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: localSubnetL2Reachability
+      type:
+        scalar: string
+    - name: localSubnetL2ReachabilityRefreshInterval
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
     - name: logActionRateLimit
       type:
         scalar: string

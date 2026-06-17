@@ -375,6 +375,18 @@ type Config struct {
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that overlap the host subnet. [Default: Disabled]
+	LocalSubnetL2Reachability string `config:"oneof(Disabled,PodsAndLoadBalancers);Disabled"`
+
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for, keeping
+	// neighbor caches and switch forwarding tables warm even when the set of
+	// proxied IPs is unchanged. Set to 0 to disable periodic re-announcement,
+	// leaving only the one-shot announce when an IP is added. [Default: 120s]
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration `config:"seconds;120"`
+
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
 	WindowsManageFirewallRules string `config:"oneof(Enabled,Disabled);Disabled"`
 

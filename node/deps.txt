@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.3
+go 1.26.4
 cel.dev/expr v0.25.1
 github.com/BurntSushi/toml v1.6.0
 github.com/DeRuina/timberjack v1.4.1
@@ -72,15 +72,21 @@ github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/kelseyhightower/memkv v0.1.1
 github.com/klauspost/compress v1.18.5
+github.com/klauspost/cpuid/v2 v2.2.10
 github.com/leodido/go-urn v1.4.0
 github.com/lithammer/dedent v1.1.0
 github.com/mailru/easyjson v0.9.0
 github.com/mattn/go-runewidth v0.0.19
 github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
+github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
+github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
+github.com/mdlayher/ndp v1.1.0
 github.com/mdlayher/netlink v1.7.2
+github.com/mdlayher/packet v1.1.2
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
+github.com/moby/spdystream v0.5.1
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
@@ -113,6 +119,7 @@ github.com/tchap/go-patricia/v2 v2.3.3
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4
+github.com/zeebo/xxh3 v1.1.0
 go.etcd.io/etcd/api/v3 v3.6.10
 go.etcd.io/etcd/client/pkg/v3 v3.6.10
 go.etcd.io/etcd/client/v3 v3.6.10
@@ -122,14 +129,14 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.1
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/crypto v0.51.0
+golang.org/x/crypto v0.53.0
 golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
-golang.org/x/net v0.54.0
+golang.org/x/net v0.56.0
 golang.org/x/oauth2 v0.36.0
-golang.org/x/sync v0.20.0
-golang.org/x/sys v0.44.0
-golang.org/x/term v0.43.0
-golang.org/x/text v0.37.0
+golang.org/x/sync v0.21.0
+golang.org/x/sys v0.46.0
+golang.org/x/term v0.44.0
+golang.org/x/text v0.38.0
 golang.org/x/time v0.15.0
 golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173
 golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
@@ -156,6 +163,7 @@ k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
 k8s.io/kubelet v0.36.1
 k8s.io/kubernetes v1.36.1
+k8s.io/streaming v0.36.1
 k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 kubevirt.io/api v1.8.2
 kubevirt.io/containerized-data-importer-api v1.64.0

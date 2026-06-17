@@ -166,9 +166,9 @@ endif
 # slow QEMU emulation for CGO builds.
 #
 # Map Go ARCH names to clang target triples.
-# Only arm64 and ppc64le need cross-compilation support (CGO is not enabled for s390x).
 CLANG_CROSS_TRIPLE_arm64   := aarch64-linux-gnu
 CLANG_CROSS_TRIPLE_ppc64le := powerpc64le-linux-gnu
+CLANG_CROSS_TRIPLE_s390x   := s390x-linux-gnu
 
 # Rust target triple (long form). Injected as CARGO_BUILD_TARGET so cargo
 # cross-compiles transparently. Linker/sysroot side uses CROSS_TRIPLE below.
@@ -1734,7 +1734,8 @@ KIND_CALICO_IMAGES = \
 	calico/calico:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-gateway:$(KIND_TEST_BUILD_TAG) \
 	calico/envoy-proxy:$(KIND_TEST_BUILD_TAG) \
-	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG)
+	calico/envoy-ratelimit:$(KIND_TEST_BUILD_TAG) \
+	calico/third-party-cni-plugins:$(KIND_TEST_BUILD_TAG)
 
 # .image.created markers: the per-component image build stamp files.
 # Each depends on its source files via deps.txt so Make knows when
@@ -1747,7 +1748,8 @@ KIND_IMAGE_MARKERS = \
 	$(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-gateway/.envoy-gateway.created-$(ARCH) \
 	$(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH) \
-	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH)
+	$(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH) \
+	$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH)
 
 # Shared libbpf marker. Both node and cmd/calico (and the felix
 # sub-make steps invoked from them) need libbpf, and `kind-build-images`
@@ -1810,6 +1812,11 @@ $(REPO_ROOT)/third_party/envoy-proxy/.envoy-proxy.created-$(ARCH):
 
 $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/envoy-ratelimit image
+
+# third-party-cni-plugins clones the upstream CNI and flannel sources and
+# compiles them, tagging the image as calico/third-party-cni-plugins:latest-$(ARCH).
+$(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
+	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
@@ -2011,7 +2018,7 @@ setup-windows-builder: clean-windows-builder
 # 			--no-cache \
 # 			--build-arg GIT_VERSION=$(GIT_VERSION) \
 # 			--build-arg WINDOWS_HPC_VERSION=$(WINDOWS_HPC_VERSION) \
-# 			-f Dockerfile-windows .; \
+# 			-f Dockerfile.windows .; \
 # 	done ;
 
 # image-windows: var-require-all-BRANCH_NAME
@@ -2058,7 +2065,7 @@ windows-sub-image-%: var-require-all-GIT_VERSION-WINDOWS_IMAGE-WINDOWS_DIST-WIND
 		-t $(WINDOWS_IMAGE):latest \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg=WINDOWS_VERSION=$* \
-		-f Dockerfile-windows .
+		-f Dockerfile.windows .
 
 .PHONY: image-windows release-windows release-windows-with-tag
 image-windows: setup-windows-builder var-require-all-WINDOWS_VERSIONS
