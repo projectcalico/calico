@@ -213,6 +213,9 @@ class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
         pass
 
+    def start(self):
+        pass
+
     def master(self):
         return True
 
@@ -577,43 +580,31 @@ class Lib(object):
     def do_post_fork_actions(self, uuid_str=None):
         """Simulate the post-fork actions that Neutron runs in production.
 
-        In production the Neutron server comprises (at least) two processes:
-
-        - an "API worker" process, responsible for Neutron API requests, i.e. dynamic
-          CRUD of ports and other networking resources
-
-        - an "RPC worker" process, which is designed for RPC between the Neutron server
-          and compute node agents, but which we use for other work that is not driven
-          from the Neutron API, including periodic resync from the Neutron DB to the
-          Calico datastore, port and agent status reporting and periodic etcd
-          compaction.
+        In production the Neutron server comprises API worker processes, responsible
+        for Neutron API requests, i.e. dynamic CRUD of ports and other networking
+        resources; RPC worker processes; and the Calico worker processes returned by
+        ``get_workers()``, which do the work that is not driven from the Neutron API:
+        periodic resync from the Neutron DB to the Calico datastore, leader election,
+        etcd compaction, and agent and port status reporting.
 
         In UT there is only one process, and we want to get the effects of all those in
         the one UT process, which means:
 
-        - Do the same startup preparations - DB connection etc. - that the API worker
-          process would do.  These are all coded in ``_post_fork_init()``.  This allows
+        - Do the startup preparations - DB connection, syncers etc. - that every worker
+          process does.  These are all coded in ``_post_fork_init()``.  This allows
           tests to later call driver entrypoints like ``update_port_postcommit()``,
           similarly as production Neutron would.
 
-        - Spawn the threads for "other work" (as above) as the RPC worker process would
-          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
-
-        - Do the first pass of the periodic resync, which is coded in ``_do_resync()``.
-          We call that directly, and stop ``_post_fork_init()`` from spawning the
-          periodic resync and resync monitor threads, so that tests see exactly one
-          resync pass, done by the time this method returns.  Those threads are tested
-          separately.
+        - Do the first pass of the periodic resync, which is coded in ``_do_resync()``,
+          so that tests see exactly one resync pass, done by the time this method
+          returns.  The worker threads themselves are tested separately.
 
         ``uuid_str`` controls the UUID generated during init (used for
         ClusterInformation's clusterGUID).
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            with mock.patch.object(
-                self.driver, "periodic_resync_thread"
-            ), mock.patch.object(self.driver, "resync_monitor_thread"):
-                self.driver._post_fork_init(voting=True)
+            self.driver._post_fork_init()
             self.driver._do_resync()
 
     def check_update_port_status_called(self, context):
