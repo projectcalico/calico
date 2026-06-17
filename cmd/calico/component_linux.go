@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build linux
+
 package main
 
 import (
@@ -30,13 +32,12 @@ import (
 	"github.com/projectcalico/calico/whisker-backend/cmd/whiskerbackend"
 )
 
-func newComponentCommand() *cobra.Command {
+func addComponentCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "component",
 		Short: "Run Calico components (internal use by the operator)",
 	}
 
-	// Top-level components — each is a standalone daemon.
 	cmd.AddCommand(
 		node.NewFelixCommand(),
 		node.NewConfdCommand(),
@@ -50,16 +51,10 @@ func newComponentCommand() *cobra.Command {
 		flexvol.NewCommand(),
 		webhook.NewCommand(),
 		kubecontrollers.NewCommand(),
-	)
-
-	// Components with their own CLI framework that need shims.
-	cmd.AddCommand(
 		newAPIServerCommand(),
 		newCNICommand(),
+		node.NewCommand(),
 	)
 
-	// Node lifecycle operations.
-	cmd.AddCommand(node.NewCommand())
-
-	return cmd
+	parent.AddCommand(cmd)
 }
