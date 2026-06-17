@@ -4361,6 +4361,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(cfg.StrictAffinity).To(Equal(false))
 		})
 
+		It("should not persist the default IPAMConfig when reading it", func() {
+			_, err := ic.GetIPAMConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// GetIPAMConfig returns the default in memory, so a read must not
+			// have written anything to the datastore.
+			_, err = bc.Get(ctx, model.IPAMConfigKey{}, "")
+			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+		})
+
 		It("should set an IPAMConfig resource that is different from the default", func() {
 			cfg := IPAMConfig{AutoAllocateBlocks: false, StrictAffinity: true}
 			err := ic.SetIPAMConfig(ctx, cfg)

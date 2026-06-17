@@ -16,6 +16,7 @@
 //
 // +kubebuilder:object:generate=true
 // +groupName=migration.projectcalico.org
+// +versionName=v1beta1
 package migration
 
 import (

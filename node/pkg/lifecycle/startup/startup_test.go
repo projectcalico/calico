@@ -729,6 +729,30 @@ var _ = Describe("FV tests against a real etcd", func() {
 			})
 		})
 
+		It("should create the default IPAMConfiguration", func() {
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := client.New(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(be.Clean()).To(Succeed())
+
+			node := getNode(ctx, c, utils.DetermineNodeName())
+			Expect(ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, nil, nil)).To(Succeed())
+
+			// The default must carry the real IPAM defaults, not the zero value.
+			// AutoAllocateBlocks in particular has to be true, or IPAM can't hand out blocks.
+			ipamConfig, err := c.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ipamConfig.Spec.AutoAllocateBlocks).To(BeTrue())
+			Expect(ipamConfig.Spec.StrictAffinity).To(BeFalse())
+			Expect(ipamConfig.Spec.KubeVirtVMAddressPersistence).NotTo(BeNil())
+			Expect(*ipamConfig.Spec.KubeVirtVMAddressPersistence).To(Equal(apiv3.VMAddressPersistenceEnabled))
+		})
+
 		It("should respect the env var", func() {
 			// Create a new client.
 			cfg, err := apiconfig.LoadClientConfigFromEnvironment()

@@ -70,10 +70,6 @@ installation:
   # Run Calico in non-privileged mode (Rootless)
   nonPrivileged: "Disabled"
 
-  # Enable FIPS compliance mode (Requires FIPS compliant cluster/images)
-  # Only supported for Variant=Calico.
-  # fipsMode: "Disabled"
-
   # Configure log severity (Info, Debug, Warning, Error, Fatal)
   # logging:
   #   cni:

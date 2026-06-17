@@ -64,7 +64,7 @@ const (
 	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
 	IPSetIDDSCPEndpoints = "dscp-src-net"
 
-	IPSetIDAllPools             = "network-ip-pools"
+	IPSetIDNetworkPools         = "network-ip-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostNets        = "all-hosts-net"

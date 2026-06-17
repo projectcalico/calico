@@ -1066,6 +1066,41 @@ reverting to normal priority.
 | `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
 | Default value (YAML) | `30s` |
 
+### `LocalSubnetL2Reachability` (config file) / `localSubnetL2Reachability` (YAML)
+
+Controls whether Felix automatically responds to
+ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+selected LoadBalancer VIPs that fall within the same subnet as the host
+interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+subnet are reachable from the local L2 segment without BGP.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LocalSubnetL2Reachability` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>PodsAndLoadBalancers</code> |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `localSubnetL2Reachability` (YAML) `LocalSubnetL2Reachability` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"PodsAndLoadBalancers"</code>. |
+| Default value (YAML) | `Disabled` |
+
+### `LocalSubnetL2ReachabilityRefreshInterval` (config file) / `localSubnetL2ReachabilityRefreshInterval` (YAML)
+
+Controls how often Felix re-announces
+(gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+to disable periodic re-announcement, leaving only the one-shot announce when an
+IP is added.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LocalSubnetL2ReachabilityRefreshInterval` |
+| Encoding (env var/config file) | Seconds (floating point) |
+| Default value (above encoding) | `120` (2m0s) |
+| `FelixConfiguration` field | `localSubnetL2ReachabilityRefreshInterval` (YAML) `LocalSubnetL2ReachabilityRefreshInterval` (Go API) |
+| `FelixConfiguration` schema | Duration string, for example <code>1m30s123ms</code> or <code>1h5m</code>. |
+| Default value (YAML) | `2m0s` |
+
 ### `MTUIfacePattern` (config file) / `mtuIfacePattern` (YAML)
 
 A regular expression that controls which interfaces Felix should scan in order
@@ -1448,7 +1483,7 @@ number with at least 8 bits set, none of which clash with any other mark bits in
 | Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `iptablesMarkMask` (YAML) `IptablesMarkMask` (Go API) |
-| `FelixConfiguration` schema | Unsigned 32-bit integer. |
+| `FelixConfiguration` schema | `integer` |
 | Default value (YAML) | `0xffff0000` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 
@@ -1593,7 +1628,7 @@ number with at least 8 bits set, none of which clash with any other mark bits in
 | Encoding (env var/config file) | 32-bit bitmask (hex or deccimal allowed) with at least 2 bits set, example: <code>0xffff0000</code> |
 | Default value (above encoding) | `0xffff0000` |
 | `FelixConfiguration` field | `nftablesMarkMask` (YAML) `NftablesMarkMask` (Go API) |
-| `FelixConfiguration` schema | Unsigned 32-bit integer. |
+| `FelixConfiguration` schema | `integer` |
 | Default value (YAML) | `0xffff0000` |
 | Notes | Required, Felix will exit if the value is invalid. | 
 

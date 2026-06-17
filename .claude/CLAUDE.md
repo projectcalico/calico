@@ -290,6 +290,17 @@ Where it lives:
   in-repo conventions. **Not** for architecture. If you are looking
   for invariants or design rationale, look for a `DESIGN.md`, not
   here.
+- **`design/<topic>/`** — cross-component designs for
+  subsystems that span multiple components (e.g. IPAM spans
+  `libcalico-go/lib/ipam`, `cni-plugin`, `kube-controllers`,
+  `node`). Same shape as a component design index: a `DESIGN.md`
+  plus per-topic sub-files with `applies to` globs. Use this when
+  no single component owns the subsystem. Discoverability pointer
+  stubs may live in consumer subdirectories (see e.g.
+  `libcalico-go/lib/ipam/DESIGN.md`,
+  `cni-plugin/pkg/ipamplugin/DESIGN.md`,
+  `kube-controllers/pkg/controllers/node/DESIGN.md`) but the
+  canonical content lives under `design/<topic>/`.
 - **[`.github/copilot-instructions.md`](../.github/copilot-instructions.md)**
   and
   **[`.github/instructions/*.instructions.md`](../.github/instructions/)**

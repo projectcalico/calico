@@ -2821,6 +2821,189 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 	})
 })
 
+var _ = Describe("RouteTable resync repair of externally modified routes", func() {
+	var dataplane *mocknetlink.MockNetlinkDataplane
+	var t *mocktime.MockTime
+	var rt *RouteTable
+
+	BeforeEach(func() {
+		dataplane = mocknetlink.New()
+		t = mocktime.New()
+		rt = New(
+			&defaultOwnershipPolicy,
+			4,
+			10*time.Second,
+			nil,
+			FelixRouteProtocol,
+			true,
+			0,
+			logutils.NewSummarizer("test"),
+			dataplane,
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
+		)
+	})
+
+	// programAndModifyRoute programs a route, then modifies it in the mock
+	// dataplane behind the RouteTable's back, keeping the same key
+	// (CIDR/TOS/priority) but changing the route's attributes.  It returns
+	// the mock dataplane key and the original (desired) route.
+	programAndModifyRoute := func() (key string, want netlink.Route) {
+		dataplane.AddIface(2, "cali1", true, true)
+		rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
+			RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32")},
+			Type:     TargetTypeLinkLocalUnicast,
+		})
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+
+		key = routeKeyStr(254, "10.0.0.1/32", 0)
+		var ok bool
+		want, ok = dataplane.RouteKeyToRoute[key]
+		Expect(ok).To(BeTrue(), "route was not programmed")
+
+		modified := want
+		modified.Src = net.ParseIP("1.2.3.4")
+		dataplane.RouteKeyToRoute[key] = modified
+		return
+	}
+
+	It("should repair an externally modified route on full resync", func() {
+		key, want := programAndModifyRoute()
+		rt.QueueResync()
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(dataplane.RouteKeyToRoute[key]).To(Equal(want),
+			"full resync should have repaired the externally modified route")
+	})
+
+	It("should repair an externally modified route on interface resync", func() {
+		key, want := programAndModifyRoute()
+		rt.QueueResyncIface("cali1")
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(dataplane.RouteKeyToRoute[key]).To(Equal(want),
+			"interface resync should have repaired the externally modified route")
+	})
+})
+
+var _ = Describe("RouteTable IPv6 multi-path routes", func() {
+	var dataplane *mocknetlink.MockNetlinkDataplane
+	var t *mocktime.MockTime
+	var rt *RouteTable
+
+	deviceRouteProtocol := netlink.RouteProtocol(10)
+	ownershipPol := defaultOwnershipPolicy
+	ownershipPol.AllRouteProtocols = []netlink.RouteProtocol{deviceRouteProtocol}
+	ownershipPol.ExclusiveRouteProtocols = []netlink.RouteProtocol{deviceRouteProtocol}
+
+	BeforeEach(func() {
+		dataplane = mocknetlink.New()
+		t = mocktime.New()
+		rt = New(
+			&ownershipPol,
+			6,
+			10*time.Second,
+			nil,
+			deviceRouteProtocol,
+			true,
+			0,
+			logutils.NewSummarizer("test"),
+			dataplane,
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
+		)
+	})
+
+	It("should not reprogram an unchanged multi-path route on resync", func() {
+		dataplane.AddIface(10, "cali10", true, true)
+		dataplane.AddIface(11, "cali11", true, true)
+		rt.SetRoutes(RouteClassVXLANTunnel, InterfaceNone, []Target{{
+			Type:     TargetTypeVXLAN,
+			RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("fd00:10::/64")},
+			MultiPath: []NextHop{
+				{IfaceName: "cali10", Gw: ip.FromString("fe80::10")},
+				{IfaceName: "cali11", Gw: ip.FromString("fe80::11")},
+			},
+		}})
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		key := routeKeyStr(254, "fd00:10::/64", 1024)
+		Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
+
+		// A resync should read back exactly what we programmed and so
+		// shouldn't touch the route.  (IPv6 is the interesting case here:
+		// InterfaceNone maps to ifindex 1 on IPv6 but the kernel reports
+		// multi-path routes with no top-level OIF.)
+		dataplane.UpdatedRouteKeys.Clear()
+		rt.QueueResync()
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(dataplane.UpdatedRouteKeys.Contains(key)).To(BeFalse(),
+			"resync should not reprogram an unchanged multi-path route")
+	})
+})
+
+var _ = Describe("RouteTable grace-period bookkeeping", func() {
+	var dataplane *mocknetlink.MockNetlinkDataplane
+	var t *mocktime.MockTime
+	var rt *RouteTable
+
+	const gracePeriod = 100 * time.Second
+
+	BeforeEach(func() {
+		dataplane = mocknetlink.New()
+		t = mocktime.New()
+		t.SetAutoIncrement(0)
+		rt = New(
+			&defaultOwnershipPolicy,
+			4,
+			10*time.Second,
+			nil,
+			FelixRouteProtocol,
+			true,
+			0,
+			logutils.NewSummarizer("test"),
+			dataplane,
+			WithTimeShim(t),
+			WithConntrackShim(dataplane),
+			WithNetlinkHandleShim(dataplane.NewMockNetlink),
+			WithRouteCleanupGracePeriod(gracePeriod),
+		)
+	})
+
+	It("should clean up records for deleted ifaces, at most once per grace period", func() {
+		// Tell the RouteTable about an interface.  The first Apply()'s full
+		// resync won't find it in the (empty) mock dataplane, so it will be
+		// marked not-present, leaving just its grace-period record behind.
+		rt.OnIfaceStateChanged("cali1", 2, ifacemonitor.StateUp)
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(rt.GraceInfoCount()).To(Equal(1),
+			"grace-period record should be retained within the grace period")
+
+		// Second interface seen 60s later, then deleted.
+		t.IncrementTime(60 * time.Second)
+		rt.OnIfaceStateChanged("cali2", 3, ifacemonitor.StateUp)
+		rt.OnIfaceStateChanged("cali2", 3, ifacemonitor.StateNotPresent)
+		Expect(rt.GraceInfoCount()).To(Equal(2))
+
+		// 120s after start: the cleanup scan runs (it last ran at t0);
+		// cali1's record has aged out, cali2's hasn't.
+		t.IncrementTime(60 * time.Second)
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(rt.GraceInfoCount()).To(Equal(1))
+
+		// 180s: cali2's record is now stale too, but the cleanup scan is
+		// throttled (it last ran 60s ago), so the record survives.
+		t.IncrementTime(60 * time.Second)
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(rt.GraceInfoCount()).To(Equal(1),
+			"cleanup scan should be throttled to once per grace period")
+
+		// 240s: throttle has expired; the stale record gets cleaned up.
+		t.IncrementTime(60 * time.Second)
+		Expect(rt.Apply()).NotTo(HaveOccurred())
+		Expect(rt.GraceInfoCount()).To(Equal(0))
+	})
+})
+
 func mustParseCIDR(cidr string) *net.IPNet {
 	_, c, err := net.ParseCIDR(cidr)
 	Expect(err).NotTo(HaveOccurred())

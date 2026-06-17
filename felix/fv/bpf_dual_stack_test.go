@@ -524,8 +524,13 @@ func readDroppedNoHostIPCounter(g Gomega, felix *infrastructure.Felix, ifName st
 		if strings.TrimSpace(strings.ToLower(fields[0])) == "dropped" {
 			inDropped = true
 		}
-		if inDropped && strings.TrimSpace(strings.ToLower(fields[1])) ==
-			"vxlan encap when host ip unknown" {
+		// The counter name "VXLAN encap when host IP unknown" exceeds the
+		// counters-dump TYPE column width and wraps onto a second line
+		// ("...host IP" / "unknown"), so match on the unique prefix that
+		// survives on the first line — the counts live on that first line
+		// either way. HasPrefix also matches the unwrapped (wide-table) form.
+		if inDropped && strings.HasPrefix(strings.TrimSpace(strings.ToLower(fields[1])),
+			"vxlan encap when host ip") {
 			iCount, _ = strconv.Atoi(strings.TrimSpace(fields[2]))
 			eCount, _ = strconv.Atoi(strings.TrimSpace(fields[3]))
 			return iCount, eCount

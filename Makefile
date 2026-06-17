@@ -49,6 +49,7 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -100,6 +101,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
@@ -140,6 +142,13 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
+# Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
+# that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
+# can run it without the go-build container.
+bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ ./hack/perf/cmd/send-perf-results"
 
 CHART_DESTINATION ?= ./bin
 

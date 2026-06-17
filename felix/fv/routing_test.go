@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
+	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -229,9 +230,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 								Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(f.IP))
 								Consistently(f.BPFRoutes).ShouldNot(ContainSubstring(externalClient.IP))
 							} else if NFTMode() {
-								Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+								Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes)))
 							} else {
-								Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+								Eventually(f.IPSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes)))
 							}
 						}
 
@@ -267,12 +268,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						for _, f := range tc.Felixes {
 							if BPFMode() {
 								Eventually(f.BPFRoutes, "15s").Should(ContainSubstring(externalClient.IP))
-								Expect(f.IPSetSize("cali40all-hosts-net")).To(BeZero(),
+								Expect(f.IPSetSize(utils.IPSetName(rules.IPSetIDAllHostNets, 4))).To(BeZero(),
 									"BPF mode shouldn't program IP sets")
 							} else if NFTMode() {
-								Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
+								Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes) + 1))
 							} else {
-								Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes) + 1))
+								Eventually(f.IPSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes) + 1))
 							}
 						}
 
@@ -707,9 +708,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 							}).Should(Equal(expectedNumRoutes),
 								fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, f.BPFRoutes()))
 						} else if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
+							Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
+							Eventually(f.IPSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 						}
 					}
 
@@ -743,9 +744,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 						}).Should(Equal(expectedNumRoutes),
 							fmt.Sprintf("Expected %v route per node, not: %v", expectedNumRoutes, felixes[0].BPFRoutes()))
 					} else if NFTMode() {
-						Eventually(felixes[0].NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
+						Eventually(felixes[0].NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 					} else {
-						Eventually(felixes[0].IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(ipsetLen))
+						Eventually(felixes[0].IPSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(ipsetLen))
 					}
 
 					cc.ExpectSome(w[0], w[1])
@@ -782,9 +783,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					for _, f := range felixes {
 						// Wait for Felix to set up the allow list.
 						if NFTMode() {
-							Eventually(f.NFTSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes)))
 						} else {
-							Eventually(f.IPSetSizeFn("cali40all-hosts-net"), "15s", "200ms").Should(Equal(len(felixes)))
+							Eventually(f.IPSetSizeFn(utils.IPSetName(rules.IPSetIDAllHostNets, 4)), "15s", "200ms").Should(Equal(len(felixes)))
 						}
 					}
 
@@ -807,14 +808,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				if ipipMode == api.IPIPModeAlways && !BPFMode() {
 					It("after manually removing third node from allow list should have expected connectivity", func() {
 						if NFTMode() {
-							felixes[0].Exec("nft", "delete", "element", "ip", "calico", "cali40all-hosts-net", fmt.Sprintf("{ %s }", felixes[2].IP))
+							felixes[0].Exec("nft", "delete", "element", "ip", "calico", utils.IPSetName(rules.IPSetIDAllHostNets, 4), fmt.Sprintf("{ %s }", felixes[2].IP))
 							if enableIPv6 {
-								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", "cali60all-hosts-net", fmt.Sprintf("{ %s }", felixes[2].IPv6))
+								felixes[0].Exec("nft", "delete", "element", "ip6", "calico", utils.IPSetName(rules.IPSetIDAllHostNets, 6), fmt.Sprintf("{ %s }", felixes[2].IPv6))
 							}
 						} else {
-							felixes[0].Exec("ipset", "del", "cali40all-hosts-net", felixes[2].IP)
+							felixes[0].Exec("ipset", "del", utils.IPSetName(rules.IPSetIDAllHostNets, 4), felixes[2].IP)
 							if enableIPv6 {
-								felixes[0].Exec("ipset", "del", "cali60all-hosts-net", felixes[2].IPv6)
+								felixes[0].Exec("ipset", "del", utils.IPSetName(rules.IPSetIDAllHostNets, 6), felixes[2].IPv6)
 							}
 						}
 

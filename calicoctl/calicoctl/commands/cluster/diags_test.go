@@ -32,6 +32,27 @@ func init() {
 	logutils.ConfigureFormatter("test")
 }
 
+func TestBpfJSONCmd_CollectsJSONWithTextFallback(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Each calico-bpf dump must request JSON via the combined-binary path and
+	// land in a .json file, with a fallback to the legacy `calico-node -bpf`
+	// text form (.txt file) for older calico-node versions that have neither
+	// the `calico component node bpf` path nor --json.
+	cmd := bpfJSONCmd("/node-dir", "nodeA", "calico-system", "calico-node-xyz", "nat maglev table", "nat maglev", "bpf-nat-maglev")
+
+	Expect(cmd.CmdStr).To(ContainSubstring("calico component node bpf nat maglev"))
+	Expect(cmd.CmdStr).To(HaveSuffix("--json"))
+	Expect(cmd.FilePath).To(Equal("/node-dir/bpf-nat-maglev.json"))
+
+	Expect(cmd.FallbackCmdStr).To(ContainSubstring("calico-node -bpf nat maglev"))
+	Expect(cmd.FallbackCmdStr).NotTo(ContainSubstring("calico component node bpf"),
+		"fallback must use the legacy calico-node -bpf invocation")
+	Expect(cmd.FallbackCmdStr).NotTo(ContainSubstring("--json"),
+		"legacy fallback predates --json")
+	Expect(cmd.FallbackFilePath).To(Equal("/node-dir/bpf-nat-maglev.txt"))
+}
+
 func TestDiags(t *testing.T) {
 	RegisterTestingT(t)
 	test := func(invocation string, expectedErr error, expectedOutput string, expectedOpts *diagOpts) {

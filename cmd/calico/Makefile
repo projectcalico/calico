@@ -15,7 +15,6 @@ LIBBPF_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/li
 BPFGPL_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 LIBBPF_A = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 # When cross-compiling, force lld as the linker — GNU ld is single-target,
 # while lld natively links the cross-arch ELF objects produced by clang.
 # (The cross sysroot itself is already supplied via CC's --sysroot flag.)
@@ -23,21 +22,21 @@ CROSS_CGO_LDFLAGS=
 ifneq ($(CROSS_SYSROOT),)
 	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
 endif
-CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
-CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+# Normalize userspace types to ensure consistency across architectures.
+# On ppc64le the kernel UAPI defines __u64 as `unsigned long` unless
+# __SANE_USERSPACE_TYPES__ is set, which makes cgo reject `C.ulonglong`
+# arguments to __u64 parameters (felix/bpf/maps/syscall.go). Matches the
+# same flag in felix/Makefile and node/Makefile.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
+CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
+CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 
-FIPS ?= false
-ifeq ($(FIPS),true)
-BINDIR = bin/$(ARCH)-fips
-CONTAINER_MARKER = .image.created-$(ARCH)-fips
-IMAGE_TAG = latest-fips
-VALIDARCHES=amd64
-else
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
 IMAGE_TAG = latest
-endif
 
 .PHONY: clean
 clean:
@@ -53,15 +52,8 @@ build: $(BINDIR)/calico-$(ARCH)
 build-cgo: $(BINDIR)/calico-cgo-$(ARCH)
 build-race: $(BINDIR)/calico-race-$(ARCH)
 
-ifeq ($(FIPS),true)
-# The FIPS binary is cgo-linked via build_cgo_boring_binary, so it needs libbpf
-# available in the build container for transitive felix/bpf/libbpf imports.
-$(BINDIR)/calico-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
-	$(call build_cgo_boring_binary, ./, $@)
-else
 $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
-endif
 
 .PHONY: calicoctl
 calicoctl: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-darwin-amd64 bin/calicoctl-darwin-arm64 bin/calicoctl-windows-amd64.exe
@@ -87,13 +79,7 @@ bin/calicoctl-windows-amd64.exe: bin/calicoctl-windows-amd64
 	mv $< $@
 
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, ./, $@)
-else ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, ./, $@)
-else
-	$(call build_binary, ./, $@)
-endif
 
 # Race-enabled combined binary for Felix FV runs. The race detector requires
 # CGO so we always build with CGO_ENABLED=1 and pull in libbpf the same way
@@ -124,11 +110,9 @@ $(CONTAINER_MARKER): $(REPO_ROOT)/docker/calico/Dockerfile $(BINDIR)/calico-$(AR
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=$(IMAGE_TAG) LATEST_IMAGE_TAG=$(IMAGE_TAG)
 	touch $@
 
-image-all: $(addprefix sub-image-,$(VALIDARCHES)) sub-image-fips-amd64
+image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-sub-image-fips-%:
-	$(MAKE) image FIPS=true ARCH=$*
 
 ###############################################################################
 # CI/CD
@@ -149,8 +133,6 @@ release-build: .release-$(VERSION).created
 	$(MAKE) -C $(REPO_ROOT)/calicoctl build-all
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)
 	$(MAKE) retag-build-images-with-registries RELEASE=true IMAGETAG=latest
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=$(VERSION)-fips LATEST_IMAGE_TAG=latest-fips
-	$(MAKE) FIPS=true retag-build-images-with-registries RELEASE=true IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
 	touch $@
 
 ## Pushes the combined calico image to the registries.
@@ -158,5 +140,4 @@ release-build: .release-$(VERSION).created
 release-publish: release-prereqs .release-$(VERSION).published
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	$(MAKE) FIPS=true push-images-to-registries push-manifests IMAGETAG=$(VERSION)-fips RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
 	touch $@

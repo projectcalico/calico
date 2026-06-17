@@ -174,6 +174,8 @@ promotions:
     pipeline_file: push-images/node.yml
   - name: Push cni-plugin images
     pipeline_file: push-images/cni-plugin.yml
+  - name: Push third-party-cni-plugins images
+    pipeline_file: push-images/third-party-cni-plugins.yml
   - name: Push mock calico-node images
     pipeline_file: push-images/mock-node.yml
   - name: Push Whisker images
@@ -182,6 +184,8 @@ promotions:
     pipeline_file: push-images/envoy.yml
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
+    auto_promote:
+      when: "branch = 'master'"
   - name: Run Fossa scans
     pipeline_file: license-scanning/fossa-scan.yml
     auto_promote:
@@ -342,8 +346,13 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): node, istio. Path forms cover the
-    # secondary-CHANGE_IN(istio) gap that misses istio/patches/*.
+    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+    # block's CHANGE_IN must be a superset of the union of all three consumer
+    # triggers — otherwise the consumer fires, the producer skips, and the
+    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+    # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
       when: "true"
     dependencies: []
@@ -405,11 +414,22 @@ blocks:
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
-    # cmd/calico's Go closure already covers felix/typha (registered as
-    # subcommands); the non-go paths close the gap for Felix Build/UT, which
-    # does untolerated gcloud cp of calico-cgo/calico-race/libbpf. Other
-    # consumers use .semaphore/load-cached-images, which falls back to a local
-    # build on cache miss.
+    # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
+    # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
+    # producer must run whenever they do — including on felix-test-only PRs.
+    #
+    # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
+    # test-file exclusion, but for every *secondary*/dependency package it adds a
+    # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
+    # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
+    # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
+    # while skipping this producer — leaving the artifacts unuploaded. Putting felix
+    # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
+    # cmd/calico stays as a secondary so the calico image still rebuilds on changes
+    # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
+    #
     # The process/testing paths trigger this so the win-fv-felix block (which now
     # installs the locally-built calico image) has it cached in GCS. The libcalico
     # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
@@ -1377,6 +1397,55 @@ blocks:
         always:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+  - name: "KubeVirt live migration (KIND)"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+      - "Build: node image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/kind-kubevirt.yaml"
+      agent:
+        machine:
+          type: f1-standard-4
+          os_image: ubuntu2204
+      prologue:
+        commands:
+          - docker system prune -af
+          - .semaphore/load-cached-images
+      jobs:
+        - name: "KubeVirt live migration (KIND)"
+          commands:
+            # Build e2e test binary
+            - make -C e2e build
+            # Create KIND cluster with Calico
+            - make kind-up
+            # Download and deploy KubeVirt simulation mode
+            - export KUBEVIRT_RELEASE_URL="https://github.com/tigera/kubevirt/releases/download/mockvirt-v1.8.1"
+            - mkdir -p /tmp/kubevirt-manifests
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/ci-deploy-kind.sh" -o /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-operator.yaml" -o /tmp/kubevirt-manifests/kubevirt-operator.yaml
+            - curl --retry 9 --retry-all-errors -fsSL "${KUBEVIRT_RELEASE_URL}/kubevirt-cr.yaml" -o /tmp/kubevirt-manifests/kubevirt-cr.yaml
+            - chmod +x /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            - MOCKVIRT_KUBECONFIG="$(pwd)/hack/test/kind/kind-kubeconfig.yaml" MOCKVIRT_MANIFESTS_DIR=/tmp/kubevirt-manifests /tmp/kubevirt-manifests/ci-deploy-kind.sh
+            # Start external BIRD BGP peer container on the KIND Docker network.
+            # Tests discover this container via the BIRD_BGPPEER_CONTAINER_NAME env var.
+            - export BIRD_BGPPEER_CONTAINER_NAME=bird-bgp-peer
+            - docker run -d --name ${BIRD_BGPPEER_CONTAINER_NAME} --privileged --network kind calico/bird:v0.3.3-211-g9111ec3c
+            # Run KubeVirt e2e tests
+            - .semaphore/run-and-monitor e2e-kubevirt-kind.log make e2e-run KUBECONFIG=$(pwd)/hack/test/kind/kind-kubeconfig.yaml
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
+        on_fail:
+          commands:
+            - .semaphore/collect-kind-diags
   - name: Libraries (lib)
     run:
       when: >-
@@ -1561,6 +1630,32 @@ blocks:
           commands:
             - ../.semaphore/run-and-monitor ci.log make ci
             - 'test-results publish ./report/*.xml --name "pod2daemon: UT" || true'
+  - name: Third-party CNI plugins image
+    run:
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/third_party/cni-plugins'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd third_party/cni-plugins
+      jobs:
+        - name: "Third-party CNI plugins: CI"
+          commands:
+            - ../../.semaphore/run-and-monitor make-ci.log make ci
+        - name: "Third-party CNI plugins: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../../.semaphore/run-and-monitor image-$ARCH.log make build ARCH=$ARCH
   - name: "Tools (hack directory)"
     run:
       when: >-
@@ -1711,6 +1806,8 @@ blocks:
         machine:
           type: f1-standard-2
           os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
       prologue:
         commands:
           - cd networking-calico
@@ -1720,6 +1817,10 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log make tox-caracal
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
+            # Env vars needed for saving performance results.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
             # this was causing the DevStack setup to fail, because pip doesn't know how to uninstall
@@ -1742,6 +1843,44 @@ blocks:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
             - artifact push job logs
+  - name: "Felix: dataplane benchmark"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
+      secrets:
+        - name: banzai-secrets
+      jobs:
+        - name: "Felix: dataplane benchmark"
+          execution_time_limit:
+            minutes: 30
+          commands:
+            # The benchmark programs a real nftables table, which the go-build
+            # image can't do (it has no nft binary), so run it on the host. Build
+            # the benchmark and the Lens publisher as static binaries in go-build,
+            # then run them here.
+            - sudo apt-get update -y && sudo apt-get install -y nftables
+            - make -C felix bin/nft.test
+            - make bin/send-perf-results
+            - mkdir -p artifacts/perf
+            # Run as root so the benchmark can program the kernel. A few iterations
+            # is enough for a stable steady-state number; this is trend tracking,
+            # not a per-PR gate.
+            - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
+            # Publish to Lens. send-perf-results no-ops if the creds are unset.
+            - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+            - ./bin/send-perf-results --dir artifacts/perf
+      epilogue:
+        always:
+          commands:
+            - artifact push job artifacts/perf || true
   - name: Mock node
     run:
       when: "true"
