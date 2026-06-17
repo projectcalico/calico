@@ -574,6 +574,14 @@ ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
+# bin/nft.test is the compiled felix/nftables test binary. The "Felix: nftables
+# dataplane benchmark" CI job runs it on the host (as root, against a real nft)
+# to publish the dataplane-programming benchmarks to Lens. Built statically (no
+# CGO) so it runs outside the go-build container.
+.PHONY: bin/nft.test
+bin/nft.test: $(shell find nftables -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go test ./nftables -c -o $@"
+
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ -c -o $@
