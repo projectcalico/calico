@@ -215,33 +215,77 @@ which is acceptable on the fast path.
 ### Scope of BPF involvement
 
 Calico's QoS controls cover bandwidth, packet rate, connection count
-and DSCP. Not all of those live in BPF:
+and DSCP. The BPF dataplane handles three of the four:
 
 - **Bandwidth** is handled by tc qdiscs on the workload veth and by
   the upstream CNI bandwidth plugin. BPF is not involved.
-- **Connection count** (`IngressMaxConnections` / `EgressMaxConnections`
-  on a workload endpoint) is enforced via `*tables` rules — look for
-  `LimitNumConnections` in `felix/rules/endpoints.go`. BPF is not
-  involved.
 - **Packet rate** is enforced by BPF (per-workload token bucket).
+- **Connection count** (`IngressMaxConnections` / `EgressMaxConnections`
+  on a workload endpoint) is enforced by BPF in BPF mode and by
+  `*tables` rules (`LimitNumConnections` in `felix/rules/endpoints.go`)
+  in iptables/nftables mode.
 - **DSCP** marking is applied by BPF on egress to external
   destinations and HEPs.
 
-The BPF-specific implementation lives under `felix/bpf/qos/` (Go) and
-`felix/bpf-gpl/qos.h` (C).
+The BPF-specific implementation lives under `felix/bpf/qos/` (Go),
+`felix/bpf/conntrack/connlimit_scanner.go` (the userspace recount
+loop), and `felix/bpf-gpl/qos.h` (C).
+
+### Two maps: `cali_qos` (packet rate) and `cali_qos_conn` (connlimit)
+
+Packet-rate and connection-limit state live in two separate BPF maps
+that share the same key shape but have disjoint values. Splitting
+them is what allows the userspace `ConnLimitScanner` to write
+`current_count` back without clobbering the BPF dataplane's running
+token-bucket state — see PR #13009 for the lost-update bug the split
+fixes.
+
+Shared key (`felix/bpf/qos/map.go`):
+
+```c
+struct calico_qos_key {
+    __u32 ifindex;
+    __u16 ingress; // 0=egress, 1=ingress
+    __u16 family;  // 4=IPv4, 6=IPv6
+};
+```
+
+The family dimension means v4 and v6 traffic on the same (ifindex,
+direction) count against independent entries, matching iptables and
+nftables semantics where connlimit and rate-limit rules live in
+family-specific chains.
+
+`cali_qos` value holds packet-rate state only:
+
+```c
+struct calico_qos_val {
+    struct bpf_spin_lock lock;
+    __s16 packet_rate, packet_burst;       // config
+    __s16 packet_rate_tokens, padding[3];  // dynamic state
+    __u64 packet_rate_last_update;         // dynamic state
+};
+```
+
+`cali_qos_conn` value holds connlimit state only:
+
+```c
+struct calico_qos_conn_val {
+    struct bpf_spin_lock lock;
+    __u32 max_connections;  // config
+    __u32 current_count;    // dynamic state
+};
+```
+
+Both maps use a `BPF_F_NO_PREALLOC` hash with a BPF spinlock at
+value offset 0. They are created with BTF type info via the shared
+`common_map_stub.o` so the kernel can validate `BPF_F_LOCK` writes.
 
 ### Packet rate
 
-Packet rate is enforced per-interface, per-direction. The BPF map
-`cali_qos` (`felix/bpf/qos/map.go`, key `(ifindex, ingress)`)
-holds the TBF state per attach point. The value struct carries the
-configured `packet_rate` (tokens/second) and `packet_burst` (bucket
-size), plus mutable token count and the last-update timestamp,
-protected by a BPF spinlock.
-
+Packet rate is enforced per-interface, per-direction, per-family.
 `qos_enforce_packet_rate` in `qos.h`:
 
-- No entry in the map → no rate limit → accept.
+- No entry in `cali_qos` → no rate limit → accept.
 - Under the spinlock: advance the token count based on elapsed time,
   cap at burst, decrement by one per accepted packet.
 - No tokens → drop with `TC_ACT_SHOT`.
@@ -250,6 +294,42 @@ The per-direction `INGRESS_PACKET_RATE_CONFIGURED` /
 `EGRESS_PACKET_RATE_CONFIGURED` flags (set on the AttachPoint and
 propagated to BPF globals) let the program skip the map lookup
 entirely when the feature isn't configured for that attach point.
+
+### Connection count
+
+Connection count is enforced at TCP-SYN admission time and decremented
+on connection close.
+
+- **SYN admission**: at `to-wep` for ingress and at egress
+  CT-create time for outgoing connections,
+  `qos_connlimit_check_and_increment` (in `qos.h`) looks up the
+  `cali_qos_conn` entry for this (ifindex, direction, family).
+  No entry or `max_connections <= 0` → no limit. Otherwise:
+  spin-lock; if `current_count >= max_connections` → return -1
+  (reject with TCP RST); else increment and return 0 (allow).
+- **CT-entry stamping**: a successful admission stamps
+  `CALI_CT_FLAG_CONNLIMIT_INGRESS` (or `_EGRESS`) on the CT entry.
+  Rejection at the ingress check stamps `CONNLIMIT_INGRESS_REJECTED`
+  instead. These flags drive the close-time decrement decision.
+- **Decrement on close (fast path)**: `qos_connlimit_decrement_for_ct`
+  (in `conntrack.h`) is invoked from `calico_ct_lookup` when a TCP
+  close is observed. It decrements the per-(direction, family)
+  counter for an entry that was counted at SYN time — gated on
+  `(INGRESS && !INGRESS_REJECTED)` or `EGRESS`, idempotent via
+  `CONNLIMIT_DEC`.
+- **Decrement on cleanup**: when the BPF conntrack cleanup scanner
+  removes an expired CT entry, the same helper fires so silent
+  purges (LRU eviction, idle TCPEstablished) don't leak slots.
+- **Decrement (safety net)**: a userspace `ConnLimitScanner`
+  (`felix/bpf/conntrack/connlimit_scanner.go`) recounts established
+  TCP CT entries every ~30s and overwrites `current_count` in
+  `cali_qos_conn` via `BPF_F_LOCK` batch updates. It corrects any
+  residual drift the fast/cleanup paths missed and skips entries
+  with `CONNLIMIT_DEC` already set so it doesn't double-count.
+
+The per-direction `INGRESS_CONN_LIMIT_CONFIGURED` /
+`EGRESS_CONN_LIMIT_CONFIGURED` flags gate the BPF connlimit code
+path entirely when no limit is configured for that attach point.
 
 ### DSCP
 
@@ -275,26 +355,36 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
 
 ### Review notes for this section
 
-- A new BPF-enforced QoS field needs a slot in the `cali_qos` value
-  struct. That struct contains a `bpf_spin_lock` at offset 0, which
-  must stay at offset 0; its presence also means the map is a
-  `BPF_MAP_TYPE_HASH` (not LRU/percpu/etc.). Do not relax those
-  without a plan for concurrent access.
+- A new BPF-enforced QoS field needs a slot in either `cali_qos` or
+  `cali_qos_conn`, depending on which writer owns it. Both structs
+  contain a `bpf_spin_lock` at offset 0, which must stay at offset 0;
+  its presence also means the map is a `BPF_MAP_TYPE_HASH` (not
+  LRU/percpu/etc.). Do not relax those without a plan for concurrent
+  access. **Do not add a field that needs to be written by both the
+  BPF dataplane and userspace to the same value** — userspace cannot
+  RMW under the lock (locks don't span syscall boundaries), and the
+  cali_qos / cali_qos_conn split exists precisely to avoid that
+  class of lost-update.
 - Any change to packet-rate accounting must preserve the spinlock
   discipline: all reads and writes of `packet_rate_tokens` /
   `packet_rate_last_update` happen under the lock, and the drop
   decision is part of the atomic section. Dropping outside the lock
   allows overshoot.
+- Any change to connlimit decrement paths must preserve the
+  `CONNLIMIT_DEC` idempotence flag — both the fast path (FIN/RST in
+  `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
+  scanner) set it before decrementing, and the Go scanner skips
+  entries that carry it. Without that, drift accumulates upward.
+- ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
+  UpdateWithFlags when the configured fields match the existing
+  entry. The dataplane owns the dynamic fields between configuration
+  changes; rewriting them from a userspace snapshot races with
+  per-packet updates. See `writeQoSRateEntry` and `writeQoSConnEntry`.
 - A change that extends DSCP marking to new paths (a new tunnel
   type, a new forwarded-packet case) must set `CALI_ST_SET_DSCP`
   based on the CT flag, _not_ on the globals alone — globals are a
   per-attach-point configuration, not a per-flow decision. The CT
   flag is what records the per-flow policy decision.
-- If a feature is added that looks like it belongs in the QoS chain
-  but only needs per-packet iptables-visible behaviour (e.g. a
-  simple drop rule), prefer placing it in the `*tables` rule
-  generators — `felix/rules/endpoints.go` already handles the
-  connection-count and similar per-WEP knobs.
 
 
 
