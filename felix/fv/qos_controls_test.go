@@ -830,12 +830,15 @@ var _ = infrastructure.DatastoreDescribe(
 							// and wait one scan cycle for the recount to drop
 							// to 0 before opening the phase-2 connections.
 							By("Flushing conntrack entries until egress count is 0")
+							// Poll once per scanner cycle (~12s): each tick flushes
+							// conntrack on both nodes, so a 1s interval would fire
+							// many expensive Execs before the recount can drop the
+							// count.
 							Eventually(func() uint32 {
 								tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 								tc.Felixes[1].Exec("calico-bpf", "conntrack", "clean")
-								time.Sleep(12 * time.Second)
 								return getBPFCurrentCount(1, 1, "egress")()
-							}, "60s", "1s").Should(Equal(uint32(0)))
+							}, "60s", "12s").Should(Equal(uint32(0)))
 						}
 
 						By("Starting persistent connections on workload 1")
