@@ -50,14 +50,24 @@ SSH_OPTS="-i ${SSH_KEY_FILE} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChe
 function import_linux_images() {
   # Re-tag the GCS-cached images to the tag the operator renders. The operator
   # collapses cni/typha/kube-controllers/csi/apiserver/flexvol onto calico/calico,
-  # so calico/calico + calico/node + calico/operator cover the whole Linux side.
+  # so calico/calico + calico/node + calico/operator cover most of the Linux side.
   docker tag calico/calico:latest-amd64 "calico/calico:${DEV_IMAGE_TAG}"
   docker tag calico/node:latest-amd64 "calico/node:${DEV_IMAGE_TAG}"
+
+  # third-party-cni-plugins is a separate init-container image (it is not
+  # collapsed onto calico/calico) that the operator stages into /opt/cni/bin via
+  # the calico-node cni-plugins init container. It is not in the GCS image cache,
+  # so build it from the commit under test and re-tag to the operator-rendered
+  # tag. Without this the cni-plugins init container ImagePullBackOffs and the
+  # install never completes.
+  make -C "${CALICO_HOME}/third_party/cni-plugins" image
+  docker tag calico/third-party-cni-plugins:latest-amd64 "calico/third-party-cni-plugins:${DEV_IMAGE_TAG}"
 
   local tar="/tmp/winfv-linux-images.tar"
   docker save -o "${tar}" \
     "calico/calico:${DEV_IMAGE_TAG}" \
     "calico/node:${DEV_IMAGE_TAG}" \
+    "calico/third-party-cni-plugins:${DEV_IMAGE_TAG}" \
     "calico/operator:${DEV_IMAGE_TAG}"
 
   scp ${SSH_OPTS} "${tar}" "aso@${LINUX_EIP}:/tmp/winfv-linux-images.tar"
