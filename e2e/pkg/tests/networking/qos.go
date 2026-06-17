@@ -268,13 +268,14 @@ func measureWithRateRetry(
 	opts ...iperfcheck.MeasureOption,
 ) *iperfcheck.Result {
 	result, err := tester.MeasureBandwidth(client, server, opts...)
-	Expect(err).NotTo(HaveOccurred(), "failed to measure bandwidth")
+	Expect(err).NotTo(HaveOccurred(), "failed to measure rate from %s to %s", client.Name(), server.Name())
 	if result.AverageRate <= maxRate {
 		return result
 	}
-	logrus.Infof("Rate %.0f bps exceeds limit %.0f bps, retrying in case rules weren't programmed yet", result.AverageRate, maxRate)
+	logrus.Infof("Rate %.0f bps from %s to %s exceeds limit %.0f bps, retrying once (QoS rules may not be programmed yet, or the token-bucket warm-up burst may not have drained)",
+		result.AverageRate, client.Name(), server.Name(), maxRate)
 	time.Sleep(5 * time.Second)
 	result, err = tester.MeasureBandwidth(client, server, opts...)
-	Expect(err).NotTo(HaveOccurred(), "failed to measure bandwidth on retry")
+	Expect(err).NotTo(HaveOccurred(), "failed to measure rate from %s to %s on retry", client.Name(), server.Name())
 	return result
 }
