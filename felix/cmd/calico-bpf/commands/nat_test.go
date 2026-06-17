@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -37,6 +38,31 @@ func TestNATDump(t *testing.T) {
 	}
 
 	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back, false)
+}
+
+// TestAffinityDumpJSON checks that makeAffinityJSON exposes the client, the
+// frontend service tuple, and the chosen backend as structured fields.
+func TestAffinityDumpJSON(t *testing.T) {
+	m := nat2.AffinityMapMem{
+		nat2.NewAffinityKey(net.IPv4(10, 0, 0, 1), nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 8080)),
+	}
+
+	entries := makeAffinityJSON(m)
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %+v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.ClientIP != "10.0.0.1" || e.Addr != "1.1.1.1" || e.Port != 80 || e.Proto != 6 {
+		t.Fatalf("unexpected affinity key fields: %+v", e)
+	}
+	if e.Backend.Addr != "5.5.5.5" || e.Backend.Port != 8080 {
+		t.Fatalf("unexpected backend: %+v", e.Backend)
+	}
+	if _, err := json.Marshal(entries); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 }
 
 // TestDumpNiceGrouping verifies that dumpNiceGrouped groups frontends sharing the

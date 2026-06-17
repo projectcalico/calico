@@ -94,16 +94,34 @@ var natDelCmd = &cobra.Command{
 	Short: "deletes an entry from the NAT tables",
 }
 
-func dumpAff(cmd *cobra.Command) (err error) {
+func dumpAff(cmd *cobra.Command) error {
+	if ipv6 != nil && *ipv6 {
+		affMap, err := nat.LoadAffinityMapV6(nat.AffinityMapV6())
+		if err != nil {
+			return err
+		}
+		return writeAff(cmd, makeAffinityJSON(affMap))
+	}
+
 	affMap, err := nat.LoadAffinityMap(nat.AffinityMap())
 	if err != nil {
 		return err
 	}
+	return writeAff(cmd, makeAffinityJSON(affMap))
+}
 
-	for k, v := range affMap {
-		cmd.Printf("%-40s %s\n", k, v)
+func writeAff(cmd *cobra.Command, entries []affinityEntryJSON) error {
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
 	}
 
+	for _, e := range entries {
+		cmd.Printf("client %s svc proto %d %s -> %s ts %s\n",
+			e.ClientIP, e.Proto, net.JoinHostPort(e.Addr, fmt.Sprint(e.Port)),
+			net.JoinHostPort(e.Backend.Addr, fmt.Sprint(e.Backend.Port)), e.Timestamp)
+	}
 	cmd.Printf("\n")
 
 	return nil
@@ -365,6 +383,51 @@ type natServiceGroupJSON struct {
 	ID        uint32            `json:"id"`
 	Frontends []natFrontendJSON `json:"frontends"`
 	Backends  []natBackendJSON  `json:"backends"`
+}
+
+// affinityEntryJSON is one client -> backend affinity entry, keyed by the
+// client IP and the frontend service it is sticky to.
+type affinityEntryJSON struct {
+	ClientIP  string         `json:"client_ip"`
+	Proto     uint8          `json:"proto"`
+	Addr      string         `json:"addr"`
+	Port      uint16         `json:"port"`
+	Backend   natBackendJSON `json:"backend"`
+	Timestamp string         `json:"timestamp"`
+}
+
+// affinityKey is the constraint for an affinity map key: comparable and
+// exposing the affinity key accessors.
+type affinityKey interface {
+	comparable
+	nat.AffinityKeyInterface
+}
+
+func makeAffinityJSON[K affinityKey, V nat.AffinityValueInterface](m map[K]V) []affinityEntryJSON {
+	entries := make([]affinityEntryJSON, 0, len(m))
+	for k, v := range m {
+		fe := k.FrontendAffinityKey()
+		be := v.Backend()
+		entries = append(entries, affinityEntryJSON{
+			ClientIP:  k.ClientIP().String(),
+			Proto:     fe.Proto(),
+			Addr:      fe.Addr().String(),
+			Port:      fe.Port(),
+			Backend:   natBackendJSON{Addr: be.Addr().String(), Port: be.Port()},
+			Timestamp: v.Timestamp().String(),
+		})
+	}
+	// Sort by (service addr, port, client) for deterministic output.
+	slices.SortFunc(entries, func(a, b affinityEntryJSON) int {
+		if c := cmp.Compare(a.Addr, b.Addr); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Port, b.Port); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ClientIP, b.ClientIP)
+	})
+	return entries
 }
 
 func dumpNATJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
