@@ -2052,12 +2052,12 @@ var _ = Describe("RouteTable resync repair of externally modified routes", func(
 	programAndModifyRoute := func() (key string, want netlink.Route) {
 		dataplane.AddIface(2, "cali1", true, true)
 		rt.RouteUpdate(RouteClassLocalWorkload, "cali1", Target{
-			RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32")},
-			Type:     TargetTypeLinkLocalUnicast,
+			CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"),
+			Type: TargetTypeLinkLocalUnicast,
 		})
 		Expect(rt.Apply()).NotTo(HaveOccurred())
 
-		key = routeKeyStr(254, "10.0.0.1/32", 0)
+		key = "254-10.0.0.1/32"
 		var ok bool
 		want, ok = dataplane.RouteKeyToRoute[key]
 		Expect(ok).To(BeTrue(), "route was not programmed")
@@ -2118,15 +2118,15 @@ var _ = Describe("RouteTable IPv6 multi-path routes", func() {
 		dataplane.AddIface(10, "cali10", true, true)
 		dataplane.AddIface(11, "cali11", true, true)
 		rt.SetRoutes(RouteClassVXLANTunnel, InterfaceNone, []Target{{
-			Type:     TargetTypeVXLAN,
-			RouteKey: RouteKey{CIDR: ip.MustParseCIDROrIP("fd00:10::/64")},
+			Type: TargetTypeVXLAN,
+			CIDR: ip.MustParseCIDROrIP("fd00:10::/64"),
 			MultiPath: []NextHop{
 				{IfaceName: "cali10", Gw: ip.FromString("fe80::10")},
 				{IfaceName: "cali11", Gw: ip.FromString("fe80::11")},
 			},
 		}})
 		Expect(rt.Apply()).NotTo(HaveOccurred())
-		key := routeKeyStr(254, "fd00:10::/64", 1024)
+		key := "254-fd00:10::/64"
 		Expect(dataplane.RouteKeyToRoute).To(HaveKey(key))
 
 		// A resync should read back exactly what we programmed and so
