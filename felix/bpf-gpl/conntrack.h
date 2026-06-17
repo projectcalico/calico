@@ -584,9 +584,10 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 /* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
  * for a CT entry that is closing or being purged. Reads the entry's
  * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
- * (ifindex, direction) pair(s). Idempotent: skips entries that already carry
- * CONNLIMIT_DEC, and sets DEC before decrementing so a concurrent decrement
- * on another CPU sees the flag and bails.
+ * (ifindex, direction) pair(s). Decrements exactly once: atomically claims the
+ * CONNLIMIT_DEC flag and only the caller that wins the claim decrements, so
+ * concurrent callers on other CPUs (the CT entry is in a shared, non-per-CPU
+ * map) bail.
  *
  * Called from the packet path on FIN-FIN / RST close, and from
  * conntrack_cleanup when an idle entry is purged with no close packet.
@@ -594,13 +595,22 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
 {
 	__u32 cl_flags = ct_value_get_flags(v);
-	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_DEC) {
-		return;
-	}
 	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
 		return;
 	}
-	ct_value_set_flags(v, CALI_CT_FLAG_CONNLIMIT_DEC);
+	/* Atomically set CONNLIMIT_DEC and bail if it was already set: this is the
+	 * exactly-once claim, replacing a non-atomic read/test/set that let two
+	 * CPUs both pass the check and both decrement. The bit lives in flags3
+	 * (byte offset 18), but BPF atomics require a 4-byte-aligned target and
+	 * flags3 is not 4-byte aligned, so we OR into the aligned word at &v->type
+	 * (bytes 16-19: type|flags|flags3|flags4). The mask 0x200000 has only one
+	 * bit set, landing in flags3 (little-endian), so type/flags/flags4 are
+	 * untouched -- same bit the old ct_value_set_flags(v, CONNLIMIT_DEC) set.
+	 * Relies on the struct layout (flags3 at &v->type + 2) and little-endian
+	 * (all BPF target arches). */
+	if (__sync_fetch_and_or((__u32 *)&v->type, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
 
 	/* Skip the ingress decrement if the entry was rejected by the
 	 * ingress limit check.
