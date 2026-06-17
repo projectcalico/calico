@@ -600,15 +600,15 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	}
 	/* Atomically set CONNLIMIT_DEC and bail if it was already set: this is the
 	 * exactly-once claim, replacing a non-atomic read/test/set that let two
-	 * CPUs both pass the check and both decrement. The bit lives in flags3
-	 * (byte offset 18), but BPF atomics require a 4-byte-aligned target and
-	 * flags3 is not 4-byte aligned, so we OR into the aligned word at &v->type
-	 * (bytes 16-19: type|flags|flags3|flags4). The mask 0x200000 has only one
-	 * bit set, landing in flags3 (little-endian), so type/flags/flags4 are
-	 * untouched -- same bit the old ct_value_set_flags(v, CONNLIMIT_DEC) set.
-	 * Relies on the struct layout (flags3 at &v->type + 2) and little-endian
-	 * (all BPF target arches). */
-	if (__sync_fetch_and_or((__u32 *)&v->type, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
+	 * CPUs both pass the check and both decrement. The bit lives in flags3,
+	 * but BPF atomics require a 4-byte-aligned target, so we OR into
+	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. The mask
+	 * 0x200000 has only one bit set, landing in flags3 (little-endian), so
+	 * type/flags/flags4 are untouched -- same bit the old
+	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. Relies on little-endian (all
+	 * BPF target arches) and flags3 being byte 2 of type_flags_word, both
+	 * guarded by COMPILE_TIME_ASSERTs in __xxx_compile_asserts. */
+	if (__sync_fetch_and_or(&v->type_flags_word, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
 		return;
 	}
 
