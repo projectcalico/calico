@@ -842,6 +842,11 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 				FilePath: fmt.Sprintf("%s/bpf-conntrack-stats.json", curNodeDir),
 			},
 			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF nat affinity for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico component node bpf nat aff --json", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-nat-aff.json", curNodeDir),
+			},
+			common.Cmd{
 				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
 				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
 				FilePath: fmt.Sprintf("%s/bpf-prog.txt", curNodeDir),
