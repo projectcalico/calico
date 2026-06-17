@@ -602,12 +602,11 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 	 * exactly-once claim, replacing a non-atomic read/test/set that let two
 	 * CPUs both pass the check and both decrement. The bit lives in flags3,
 	 * but BPF atomics require a 4-byte-aligned target, so we OR into
-	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. The mask
-	 * 0x200000 has only one bit set, landing in flags3 (little-endian), so
-	 * type/flags/flags4 are untouched -- same bit the old
-	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. Relies on little-endian (all
-	 * BPF target arches) and flags3 being byte 2 of type_flags_word, both
-	 * guarded by COMPILE_TIME_ASSERTs in __xxx_compile_asserts. */
+	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. On the
+	 * little-endian BPF dataplane arches (amd64/arm64) the mask's single bit
+	 * lands in flags3, leaving type/flags/flags4 untouched -- same bit the old
+	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. (s390x builds bpfeb where the
+	 * bit lands elsewhere, but the BPF dataplane does not run there.) */
 	if (__sync_fetch_and_or(&v->type_flags_word, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
 		return;
 	}

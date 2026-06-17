@@ -133,10 +133,10 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 	COMPILE_TIME_ASSERT((sizeof(struct calico_ct_value) == 88))
 #endif
 	// qos_connlimit_decrement_for_ct claims CONNLIMIT_DEC with an atomic OR on
-	// type_flags_word. That lands the bit in flags3 only on little-endian with
-	// flags3 at byte 2 of the word; guard both so a struct reshuffle or a
-	// big-endian target fails the build rather than corrupting a neighbour.
-	COMPILE_TIME_ASSERT(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+	// type_flags_word; on little-endian (amd64/arm64, the BPF dataplane arches)
+	// flags3 must be byte 2 of the word for the bit to land there. Guard the
+	// offset so a struct reshuffle fails the build rather than corrupting a
+	// neighbouring field.
 	COMPILE_TIME_ASSERT(__builtin_offsetof(struct calico_ct_value, flags3) -
 			__builtin_offsetof(struct calico_ct_value, type_flags_word) == 2)
 #pragma clang diagnostic pop
