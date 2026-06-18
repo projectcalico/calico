@@ -94,7 +94,11 @@ class StatusWatcher(etcdutils.EtcdWatcher):
 
         # Monotonic time of the last stale-status WARNING we logged.  Used to rate-limit
         # the warning so we do not flood the log when the whole cluster is backlogged.
-        self._last_stale_warn = 0.0
+        # Initialised to -inf so the first stale-update encountered always passes the
+        # rate-limit check, regardless of system uptime: on Linux ``monotonic_time()``
+        # is seconds-since-boot, so a 0.0 sentinel would suppress the first warning on
+        # any host with uptime below STALE_STATUS_WARN_INTERVAL_SECS.
+        self._last_stale_warn = float("-inf")
 
     def _pre_snapshot_hook(self):
         # Save off current endpoint status, then reset current state, so we

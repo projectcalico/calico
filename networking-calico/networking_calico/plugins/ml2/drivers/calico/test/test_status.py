@@ -34,7 +34,10 @@ class TestCheckForStaleStatus(unittest.TestCase):
     def setUp(self):
         super(TestCheckForStaleStatus, self).setUp()
         self.watcher = status.StatusWatcher.__new__(status.StatusWatcher)
-        self.watcher._last_stale_warn = 0.0
+        # Match the production sentinel so the rate-limit check does not eat
+        # the first stale-update warning on hosts whose uptime is below
+        # STALE_STATUS_WARN_INTERVAL_SECS.
+        self.watcher._last_stale_warn = float("-inf")
         self.watcher.processing_snapshot = False
 
     def _fmt(self, dt):
@@ -45,7 +48,7 @@ class TestCheckForStaleStatus(unittest.TestCase):
         with mock.patch.object(status.LOG, "warning") as m_warn:
             self.watcher._check_for_stale_status("host1", {"time": fresh})
         m_warn.assert_not_called()
-        self.assertEqual(0.0, self.watcher._last_stale_warn)
+        self.assertEqual(float("-inf"), self.watcher._last_stale_warn)
 
     def test_stale_update_warns(self):
         stale = self._fmt(datetime.now(tz=timezone.utc) - timedelta(hours=1))
@@ -54,7 +57,7 @@ class TestCheckForStaleStatus(unittest.TestCase):
         m_warn.assert_called_once()
         # First positional arg of the single call is the log format string.
         self.assertIn("stale Felix status update", m_warn.call_args.args[0])
-        self.assertGreater(self.watcher._last_stale_warn, 0.0)
+        self.assertGreater(self.watcher._last_stale_warn, float("-inf"))
 
     def test_stale_update_is_rate_limited(self):
         stale = self._fmt(datetime.now(tz=timezone.utc) - timedelta(hours=1))
@@ -96,4 +99,4 @@ class TestCheckForStaleStatus(unittest.TestCase):
         self.assertIn("Could not parse status time", m_warn.call_args.args[0])
         # An unparseable time does not count as a stale-status warning for rate-limiting
         # purposes.
-        self.assertEqual(0.0, self.watcher._last_stale_warn)
+        self.assertEqual(float("-inf"), self.watcher._last_stale_warn)
