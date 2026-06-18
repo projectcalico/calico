@@ -619,17 +619,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             except Exception:
                 LOG.warning("Failed to find network name for port %s", port["id"])
 
-            # Read QoS rules.  We build port_extra.qos here, inside the
-            # reader, so that the per-rule attribute accesses inside
-            # build_qos_controls happen while the rule ORM objects are
-            # still attached to the session.  Calling build_qos_controls
-            # after the reader exited would work today (the columns we
-            # access are simple eager-loaded ones, and oslo.db's reader
-            # mode typically leaves detached attributes readable), but
-            # would tie our correctness to oslo.db's expire_on_commit /
-            # rollback_reader_sessions configuration.  build_qos_controls
-            # is pure compute -- no extra SQL -- so calling it inside
-            # the reader is cheap and decouples us from those internals.
+            # Read QoS rules.  We build port_extra.qos here, inside the reader, so that
+            # the per-rule attribute accesses inside build_qos_controls happen while the
+            # rule ORM objects are still attached to the session.  Calling
+            # build_qos_controls after the reader exited would work today (the columns
+            # we access are simple eager-loaded ones, and oslo.db's reader mode
+            # typically leaves detached attributes readable), but would tie our
+            # correctness to oslo.db's expire_on_commit / rollback_reader_sessions
+            # configuration.  Calling build_qos_controls inside the reader is cheap and
+            # decouples us from those internals.
             qos_policy_id = port.get("qos_policy_id") or port.get(
                 "qos_network_policy_id"
             )
