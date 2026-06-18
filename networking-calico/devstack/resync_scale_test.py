@@ -443,10 +443,32 @@ def cleanup_neutron(conn):
     LOG.info("  deleted %d networks", deleted)
 
 
+# etcd prefixes that the resync writes into and that we therefore want a
+# clean slate of before each run.  Deliberately narrow: a previous version of
+# this helper wiped /calico wholesale, which also blew away the neutron leader-
+# election key and ClusterInformation.  That made ManagerWorker flap into a
+# new term and triggered Felix to delete its own host status and restart --
+# noise that swamped the diags we actually care about.  Leaving leader
+# election, ClusterInformation, FelixConfiguration, BGP config, Node objects
+# and Felix's own /calico/felix/v2/... status subtree untouched keeps the rest
+# of the system quiet across resync runs.
+_RESYNC_ETCD_PREFIXES = (
+    "/calico/resources/v3/projectcalico.org/workloadendpoints/",
+    "/calico/resources/v3/projectcalico.org/networkpolicies/",
+    "/calico/resources/v3/projectcalico.org/livemigrations/",
+    "/calico/dhcp/v2/",
+)
+
+
 def cleanup_etcd(etcd_client):
-    """Wipe everything under /calico so the next resync starts cold."""
-    LOG.info("Wiping /calico from etcd...")
-    etcd_client.delete_prefix("/calico")
+    """Delete the resync-managed etcd resources so the next resync starts cold.
+
+    See ``_RESYNC_ETCD_PREFIXES`` for what is deleted and the rationale on
+    what we deliberately leave in place.
+    """
+    for prefix in _RESYNC_ETCD_PREFIXES:
+        LOG.info("Wiping %s from etcd...", prefix)
+        etcd_client.delete_prefix(prefix)
 
 
 # ---------------------------------------------------------------------------
