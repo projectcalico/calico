@@ -617,7 +617,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                     NETWORK_NAME_MAX_LENGTH,
                 )
             except Exception:
-                LOG.warning(f"Failed to find network name for port {port['id']}")
+                LOG.warning("Failed to find network name for port %s", port["id"])
 
             # Read QoS rules.  We build port_extra.qos here, inside the
             # reader, so that the per-rule attribute accesses inside
