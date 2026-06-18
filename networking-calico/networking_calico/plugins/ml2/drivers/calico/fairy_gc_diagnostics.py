@@ -128,17 +128,19 @@ from sqlalchemy.pool import Pool
 LOG = log.getLogger(__name__)
 
 
-# Module-level so install() is idempotent across multi-worker forks that all share this
-# module's state.
+# Module-level so install() is idempotent: subsequent calls within the same process are
+# no-ops.
 _INSTALLED = False
 
 
 def install():
     """Idempotently install the fairy-GC diagnostic listeners.
 
-    Safe to call multiple times (subsequent calls are no-ops) and from multiple
-    processes (SQLAlchemy event listeners attached to the ``Pool`` class are inherited
-    by forked children without reinstallation).
+    Safe to call multiple times (subsequent calls in the same process are no-ops).
+    Calling install() in the parent before workers are forked is sufficient: the
+    SQLAlchemy event listeners attach to the ``Pool`` class, so each forked worker
+    inherits them as part of its post-fork memory image and does not need to
+    re-install.
 
     If eventlet is not importable -- e.g. after the planned eventlet removal in
     neutron-server -- this is a no-op with a single WARNING log line.  The race the

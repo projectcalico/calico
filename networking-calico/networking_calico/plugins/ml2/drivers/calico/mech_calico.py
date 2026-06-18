@@ -425,9 +425,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()
         if cfg.CONF.calico.fairy_gc_diagnostics:
-            # Install once in the parent process; the listeners attach
-            # to the SQLAlchemy Pool class and are inherited by all
-            # forked worker processes via the shared module state.
+            # Install once in the parent process before workers are forked.
+            # The listeners attach to the SQLAlchemy Pool class; each forked
+            # worker inherits them as part of its post-fork memory image, so
+            # we do not need to re-install in each child.
             from networking_calico.plugins.ml2.drivers.calico import (
                 fairy_gc_diagnostics,
             )
