@@ -414,10 +414,37 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
         becomes one OS process.
 
-        ``[calico] startup_resync = never`` suppresses the worker entirely so the
-        operator can take responsibility for resync (typically by running
-        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
-        one neutron-server in the deployment).
+        Mastership architecture
+        -----------------------
+        Three of the four workers run continuous loops where "who is doing this work
+        right now?" is decided dynamically by leader election against an etcd key (see
+        ``Elector`` in election.py):
+
+        * ``CalicoManagerWorker`` runs the elector itself, plus the periodic etcd
+          compaction loop (compaction is gated on ``is_master()``).
+
+        * ``CalicoAgentStatusWatcherWorker`` watches Felix uptime keys, gated on
+          ``is_master()``.
+
+        * ``CalicoEndpointStatusWatcherWorker`` watches per-port status keys, gated on
+          ``is_master()``.
+
+        Election is the right fit for these because failover matters: if the current
+        master process dies, another neutron-server should automatically pick up the
+        continuous work.
+
+        The fourth worker is different:
+
+        * ``CalicoStartupResyncWorker`` runs the one-shot Neutron-DB-to-etcd resync on
+          process start, then idles.  There is no continuous loop to fail over, the
+          resync runs exactly once per process lifetime, and we want each operator to
+          consciously decide whether their deployment topology requires a startup resync
+          at all.  The decision is therefore a static config switch (``[calico]
+          startup_resync = always|never``) rather than dynamic election.  ``[calico]
+          startup_resync = never`` suppresses the worker entirely so the operator can
+          take responsibility for resync themselves -- typically by running
+          ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
+          one neutron-server in the deployment.
         """
         services = [
             CalicoManagerWorker(),
