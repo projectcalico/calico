@@ -139,10 +139,28 @@ def install():
     Safe to call multiple times (subsequent calls are no-ops) and from multiple
     processes (SQLAlchemy event listeners attached to the ``Pool`` class are inherited
     by forked children without reinstallation).
+
+    If eventlet is not importable -- e.g. after the planned eventlet removal in
+    neutron-server -- this is a no-op with a single WARNING log line.  The race the
+    listeners detect only fires under eventlet, so there is nothing useful to install in
+    that case, and we deliberately do not want a per-checkin ImportError-driven log
+    storm.
     """
     global _INSTALLED
     if _INSTALLED:
         return
+
+    try:
+        import eventlet.greenthread
+        import eventlet.hubs
+    except ImportError:
+        LOG.warning(
+            "Calico fairy-GC diagnostics: eventlet not importable, not "
+            "installing listeners.  The race this module detects only "
+            "fires under eventlet."
+        )
+        return
+
     _INSTALLED = True
 
     @event.listens_for(Pool, "checkout")
@@ -163,29 +181,20 @@ def install():
         # ``_thread_yield``.  If we're in the hub greenlet, ``_thread_yield`` is about
         # to call ``time.sleep(0)`` -> ``hub.switch()`` and deadlock.  Log enough
         # context to identify the originating code path before that happens.
-        #
-        # Imported lazily so this module can be imported in environments where eventlet
-        # isn't loaded (e.g. unit tests).
-        try:
-            import eventlet.greenthread
-            import eventlet.hubs
-
-            hub = eventlet.hubs.get_hub()
-            if eventlet.greenthread.getcurrent() is hub.greenlet:
-                creating_stack = connection_record.info.get(
-                    "calico_checkout_stack", "<not captured>"
-                )
-                LOG.warning(
-                    "Calico fairy-GC diagnostic: connection checkin firing "
-                    "in eventlet hub greenlet -- oslo.db's _thread_yield is "
-                    "about to call time.sleep(0), which will deadlock as "
-                    "TimeoutError.\n"
-                    "  Connection was checked out at:\n%s\n"
-                    "  Current finalizer stack:\n%s",
-                    creating_stack,
-                    "".join(traceback.format_stack()),
-                )
-        except Exception:
-            LOG.exception("Calico fairy-GC diagnostic: error in checkin listener")
+        hub = eventlet.hubs.get_hub()
+        if eventlet.greenthread.getcurrent() is hub.greenlet:
+            creating_stack = connection_record.info.get(
+                "calico_checkout_stack", "<not captured>"
+            )
+            LOG.warning(
+                "Calico fairy-GC diagnostic: connection checkin firing "
+                "in eventlet hub greenlet -- oslo.db's _thread_yield is "
+                "about to call time.sleep(0), which will deadlock as "
+                "TimeoutError.\n"
+                "  Connection was checked out at:\n%s\n"
+                "  Current finalizer stack:\n%s",
+                creating_stack,
+                "".join(traceback.format_stack()),
+            )
 
     LOG.info("Calico fairy-GC diagnostics installed")
