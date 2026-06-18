@@ -128,9 +128,12 @@ from sqlalchemy.pool import Pool
 LOG = log.getLogger(__name__)
 
 
-# Module-level so install() is idempotent: subsequent calls within the same process are
-# no-ops.
-_INSTALLED = False
+# Module-level flag so install() runs at most once per process: subsequent calls are
+# no-ops regardless of whether the first call actually registered listeners or bailed
+# out early.  The flag means "decision made", not "listeners active" -- without this,
+# repeat calls would re-emit the early-return WARNING each time, contradicting the
+# docstring's "single WARNING" promise.
+_INSTALL_ATTEMPTED = False
 
 
 def install():
@@ -148,9 +151,13 @@ def install():
     that case, and we deliberately do not want a per-checkin ImportError-driven log
     storm.
     """
-    global _INSTALLED
-    if _INSTALLED:
+    global _INSTALL_ATTEMPTED
+    if _INSTALL_ATTEMPTED:
         return
+    # Commit to the decision now so any early return below still counts as
+    # "already attempted" and we do not re-log the early-return WARNING on
+    # subsequent calls.
+    _INSTALL_ATTEMPTED = True
 
     try:
         import eventlet.greenthread
@@ -172,8 +179,6 @@ def install():
         )
         return
 
-    _INSTALLED = True
-
     @event.listens_for(Pool, "checkout")
     def _calico_track_checkout(dbapi_conn, connection_record, connection_proxy):
         # Capture the call stack at the moment of checkout, so a later finalizer-fired
@@ -182,8 +187,14 @@ def install():
         # frames need to outlive the current call -- the connection may sit in the pool
         # for a long time before being GC'd, and lazy formatting would race the frames
         # being collected themselves.
+        #
+        # Bounded at the most-recent 50 frames: a Neutron handler chain is typically
+        # ~30 frames, so 50 covers the full path through the driver in normal cases
+        # and caps the worst case (e.g. a pathological deep-recursion middleware) so
+        # we do not burn unbounded CPU per checkout or stash unbounded strings on
+        # long-lived ``connection_record.info`` entries.
         connection_record.info["calico_checkout_stack"] = "".join(
-            traceback.format_stack()
+            traceback.format_stack(limit=50)
         )
 
     @event.listens_for(Pool, "checkin", insert=True)
@@ -205,7 +216,10 @@ def install():
                 "  Connection was checked out at:\n%s\n"
                 "  Current finalizer stack:\n%s",
                 creating_stack,
-                "".join(traceback.format_stack()),
+                # Finalizer stack is typically shallower than the checkout-time
+                # stack (just the GC / weakref-finalizer path into us), so 30
+                # frames is plenty.
+                "".join(traceback.format_stack(limit=30)),
             )
 
     LOG.info("Calico fairy-GC diagnostics installed")
