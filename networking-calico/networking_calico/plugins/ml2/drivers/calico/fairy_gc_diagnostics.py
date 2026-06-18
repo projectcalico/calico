@@ -155,11 +155,20 @@ def install():
     try:
         import eventlet.greenthread
         import eventlet.hubs
+        import eventlet.patcher
     except ImportError:
         LOG.warning(
             "Calico fairy-GC diagnostics: eventlet not importable, not "
             "installing listeners.  The race this module detects only "
             "fires under eventlet."
+        )
+        return
+
+    if not eventlet.patcher.is_monkey_patched("time"):
+        LOG.warning(
+            "Calico fairy-GC diagnostics: eventlet is importable but time is not "
+            "monkey-patched; not installing listeners.  The race this module detects "
+            "requires eventlet monkey-patching."
         )
         return
 
