@@ -163,6 +163,29 @@ calico_opts = [
         ),
         help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
     ),
+    cfg.BoolOpt(
+        "fairy_gc_diagnostics",
+        default=False,
+        help=(
+            "DIAGNOSTIC: install SQLAlchemy event listeners that "
+            "capture a stack trace at every connection-pool checkout "
+            "and detect when a connection-checkin (typically fired by "
+            "GC of a session) is happening in the eventlet hub "
+            "greenlet -- a failure mode in which oslo.db's "
+            "_thread_yield listener calls time.sleep(0) -> "
+            "hub.switch() and deadlocks because the hub greenlet "
+            "cannot switch to itself.  When the in-hub case is "
+            "detected, the originating-checkout stack is logged at "
+            "WARNING so the leaking code path can be identified.  See "
+            "the module docstring in "
+            "networking_calico/plugins/ml2/drivers/calico/"
+            "fairy_gc_diagnostics.py for the full failure-mode "
+            "explanation.  Default off because the per-checkout stack "
+            "capture adds non-trivial overhead at high "
+            "connection-churn rates; enable when investigating a "
+            "suspected occurrence."
+        ),
+    ),
     cfg.IntOpt(
         "startup_resync_inject_per_item_delay_ms",
         default=0,
@@ -401,6 +424,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()
+        if cfg.CONF.calico.fairy_gc_diagnostics:
+            # Install once in the parent process before workers are forked.
+            # The listeners attach to the SQLAlchemy Pool class; each forked
+            # worker inherits them as part of its post-fork memory image, so
+            # we do not need to re-install in each child.
+            from networking_calico.plugins.ml2.drivers.calico import (
+                fairy_gc_diagnostics,
+            )
+
+            fairy_gc_diagnostics.install()
         registry.subscribe(
             self.post_fork_initialize,
             resources.PROCESS,
