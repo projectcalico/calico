@@ -578,8 +578,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # Collect information that uses raw queries into the Neutron DB.  These queries
         # need ``session.in_transaction()`` to be True, or else SQLAlchemy drops huge
         # WARNING tracebacks saying "ORM session: SQL execution without transaction in
-        # progress" warnings otherwise.  We arrange for that by using the
-        # ``CONTEXT_READER`` wrapper.
+        # progress".  We arrange for that by using the ``CONTEXT_READER`` wrapper.
         with db_api.CONTEXT_READER.using(context):
             # We may have an out of date or incomplete port dict at this point.
             # Explicitly query the IPAllocation table to get latest fixed IP data.
