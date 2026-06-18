@@ -718,6 +718,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
       jobs:
         - name: "Felix: Build and cache FV prerequisites"
           priority:
@@ -881,6 +882,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
   - name: "Felix: nftables tests on Ubuntu 22.04"
     run:
       when: "true"
@@ -906,6 +908,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
   - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
     run:
       when: "true"
@@ -931,6 +934,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
   - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
     run:
       when: "true"
@@ -960,6 +964,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
   - name: goldmane
     run:
       when: "true"
