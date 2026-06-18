@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
 type diagOpts struct {
@@ -50,12 +51,21 @@ type diagOpts struct {
 	// Fields that we really want Bind to fill in.
 	Help                 bool
 	Config               string
-	Since                string
 	MaxLogs              int
 	MaxParallelism       int
 	FocusNodes           string
+	ProblemNodes         string
+	ProblemPods          string
+	ComparisonNodes      string
 	AllowVersionMismatch bool
 	SkipTempDirCleanup   bool
+
+	// Set from the interactive wizard, not bound to a docopt flag: when the
+	// problem started, the operator's per-resource description, and the time they
+	// finished answering the wizard's questions.
+	StartedAt   string
+	Description string
+	AnsweredAt  string
 }
 
 var usage = `Usage:
@@ -63,14 +73,20 @@ var usage = `Usage:
 
 Options:
   -h --help                    Show this screen.
-     --since=<SINCE>           Only collect logs newer than provided relative
-                               duration, in seconds (s), minutes (m) or hours (h).
      --max-logs=<MAXLOGS>      Only collect up to this number of logs, for each
                                kind of Calico component. [default: 5]
      --max-parallelism=<MAXPARALLELISM> Maximum number of parallel threads to use for
                                collecting logs. [default: 10]
      --focus-nodes=<NODES>     Comma-separated list of nodes from which we should
                                try first to collect logs.
+     --problem-nodes=<NODES>   Comma-separated list of nodes where the problem is
+                               occurring. These are collected in full, exempt
+                               from the --max-logs cap.
+     --problem-pods=<PODS>     Comma-separated list of pods (namespace/pod) that
+                               are having trouble. Their nodes are collected in
+                               full, exempt from the --max-logs cap.
+     --comparison-nodes=<NODES> Comma-separated list of healthy nodes to also
+                               collect in full, for comparison.
   -c --config=<CONFIG>         Path to connection configuration file.
                                [default: ` + constants.DefaultConfigPath + `]
      --allow-version-mismatch  Allow client and cluster versions mismatch.
@@ -94,8 +110,17 @@ Description:
   Calico component with pods on multiple nodes, calicoctl will first collect logs
   from the pods (if any) on the focus nodes, then from other nodes in the cluster.
 
-  To collect logs only for the last few hours, minutes, or seconds, set the --since
-  option to indicate the desired period.
+  To target the nodes where a problem is occurring, use --problem-nodes (or
+  --problem-pods, which resolves the given pods to their nodes).  Those nodes are
+  collected in full, not subject to the --max-logs cap.  Use --comparison-nodes to
+  also collect a few healthy nodes in full for comparison.  When none of these
+  targeting options is given and calicoctl is run in an interactive terminal, it
+  prompts for the affected nodes (or pods), suggests comparison nodes, and shows a
+  confirmation before collecting.  It also asks when the problem started and for
+  the role of each affected pod/node; those answers, the targeting choices and the
+  time they were made are saved in bundle-info.yaml at the top of the bundle.  In
+  a non-interactive context (a script or pipeline) it falls back to collecting
+  from all nodes as before.
 `
 
 // Diags executes a series of kubectl exec commands to retrieve logs and resource information
@@ -123,19 +148,11 @@ func diagsTestable(args []string, print func(a ...any) (int, error), continuatio
 		return nil
 	}
 
-	// Default --since to "0s", which kubectl understands as meaning all logs.
-	if opts.Since == "" {
-		opts.Since = "0s"
-	}
-
 	return continuation(&opts)
 }
 
 func collectDiags(opts *diagOpts) error {
 	common.MaxParallelism = opts.MaxParallelism
-
-	// Ensure since value is valid with proper time unit
-	argutils.ValidateSinceDuration(opts.Since)
 
 	// Ensure max-logs value is non-negative
 	argutils.ValidateMaxLogs(opts.MaxLogs)
@@ -143,6 +160,28 @@ func collectDiags(opts *diagOpts) error {
 	// Ensure kubectl command is available (since we need it to access BGP information)
 	if err := common.KubectlExists(); err != nil {
 		return fmt.Errorf("missing dependency: %s", err)
+	}
+
+	// Create Kubernetes client from config or env vars.
+	kubeClient, calicoClient, _, err := clientmgr.GetClients(opts.Config)
+	if err != nil {
+		fmt.Printf("ERROR creating clients: %v\n", err)
+		return err
+	}
+
+	// Work out which nodes to target before we print the banner or create the
+	// temp directory: the interactive picker (when applicable) runs here, and
+	// the operator may cancel it — in which case we want to have created
+	// nothing.
+	if kubeClient != nil {
+		proceed, err := resolveNodeTargeting(kubeClient, opts)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			fmt.Println("Aborted; no diagnostics collected.")
+			return nil
+		}
 	}
 
 	fmt.Println("==== Begin collecting diagnostics. ====")
@@ -166,15 +205,13 @@ func collectDiags(opts *diagOpts) error {
 	archiveName := directoryName + ".tar.gz"
 	dir := fmt.Sprintf("%s/%s", tempDir, directoryName)
 
-	// Create Kubernetes client from config or env vars.
-	kubeClient, calicoClient, _, err := clientmgr.GetClients(opts.Config)
-	if err != nil {
-		fmt.Printf("ERROR creating clients: %v\n", err)
-		return err
-	}
 	// Skip the per-node BPF dumps if the BPF dataplane isn't enabled —
 	// they are slow and on iptables/nftables clusters produce no useful data.
 	bpfEnabled := isBPFEnabled(calicoClient)
+
+	// Record what we're about to collect (and how) at the top of the bundle.
+	writeBundleInfo(dir, opts, bpfEnabled)
+
 	if kubeClient != nil {
 		collectTLSSecrets(kubeClient, dir+"/tls")
 		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts, bpfEnabled)
@@ -184,6 +221,86 @@ func collectDiags(opts *diagOpts) error {
 	createArchive(tempDir, directoryName, archiveName)
 
 	return nil
+}
+
+// bundleInfo is the top-level metadata file (bundle-info.yaml) written into the
+// diagnostics bundle. It records what was collected and how — the targeting
+// decisions and the tool version behind them — so whoever analyses the bundle
+// later doesn't have to guess.
+type bundleInfo struct {
+	CollectedAt      string `json:"collectedAt"`
+	CalicoctlVersion string `json:"calicoctlVersion,omitempty"`
+	GitRevision      string `json:"gitRevision,omitempty"`
+	BuildDate        string `json:"buildDate,omitempty"`
+	BPFDataplane     bool   `json:"bpfDataplaneEnabled"`
+	// ProblemStartedAt is the operator's answer to "when did the problem start?",
+	// ProblemDescription is their per-resource account of the roles involved, and
+	// QuestionsAnsweredAt is when they finished the interactive wizard. All are
+	// empty on the non-interactive (flag-driven) path.
+	ProblemStartedAt    string          `json:"problemStartedAt,omitempty"`
+	ProblemDescription  string          `json:"problemDescription,omitempty"`
+	QuestionsAnsweredAt string          `json:"questionsAnsweredAt,omitempty"`
+	Options             bundleOptions   `json:"options"`
+	Targeting           bundleTargeting `json:"targeting"`
+}
+
+type bundleOptions struct {
+	MaxLogs        int `json:"maxLogs"`
+	MaxParallelism int `json:"maxParallelism"`
+}
+
+type bundleTargeting struct {
+	ProblemNodes    []string `json:"problemNodes,omitempty"`
+	ComparisonNodes []string `json:"comparisonNodes,omitempty"`
+	FocusNodes      []string `json:"focusNodes,omitempty"`
+	// ProblemPods is the pods the operator pointed at (interactively or via
+	// --problem-pods) that the problem nodes were derived from, as
+	// "namespace/name" refs.
+	ProblemPods             []string `json:"problemPods,omitempty"`
+	FullCollectionNodeCount int      `json:"fullCollectionNodeCount"`
+}
+
+// writeBundleInfo writes bundle-info.yaml at the top level of the bundle. It is
+// best-effort: a failure here only warns, never aborts the collection.
+func writeBundleInfo(dir string, opts *diagOpts, bpfEnabled bool) {
+	problem := parseCSV(opts.ProblemNodes)
+	comparison := parseCSV(opts.ComparisonNodes)
+	info := bundleInfo{
+		CollectedAt:         time.Now().UTC().Format(time.RFC3339),
+		CalicoctlVersion:    buildinfo.Version,
+		GitRevision:         buildinfo.GitRevision,
+		BuildDate:           buildinfo.BuildDate,
+		BPFDataplane:        bpfEnabled,
+		ProblemStartedAt:    opts.StartedAt,
+		ProblemDescription:  opts.Description,
+		QuestionsAnsweredAt: opts.AnsweredAt,
+		Options: bundleOptions{
+			MaxLogs:        opts.MaxLogs,
+			MaxParallelism: opts.MaxParallelism,
+		},
+		Targeting: bundleTargeting{
+			ProblemNodes:    problem,
+			ComparisonNodes: comparison,
+			FocusNodes:      parseCSV(opts.FocusNodes),
+			ProblemPods:     parseCSV(opts.ProblemPods),
+			FullCollectionNodeCount: fullCollectionCount(selection{
+				ProblemNodes:    problem,
+				ComparisonNodes: comparison,
+			}),
+		},
+	}
+	data, err := yaml.Marshal(&info)
+	if err != nil {
+		fmt.Printf("WARNING: could not render bundle-info.yaml: %v\n", err)
+		return
+	}
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		fmt.Printf("WARNING: could not create bundle directory for bundle-info.yaml: %v\n", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bundle-info.yaml"), data, 0o644); err != nil {
+		fmt.Printf("WARNING: could not write bundle-info.yaml: %v\n", err)
+	}
 }
 
 // isBPFEnabled reports whether the BPF dataplane is turned on in the cluster's
@@ -209,26 +326,27 @@ func isBPFEnabled(calicoClient clientv3.Interface) bool {
 }
 
 func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts, bpfEnabled bool) {
-	// If --focus-nodes is specified, put those node names at the start of the node list.
-	nodeList := strings.Split(opts.FocusNodes, ",")
+	// Build the ordered node list and the set of nodes that are collected in
+	// full (problem and comparison nodes), exempt from the --max-logs cap.
+	problem := parseCSV(opts.ProblemNodes)
+	comparison := parseCSV(opts.ComparisonNodes)
+	focus := parseCSV(opts.FocusNodes)
 
-	// Keep track of nodes already in the list.
-	nodesAlreadyListed := set.New[string]()
-	for _, nodeName := range nodeList {
-		nodesAlreadyListed.Add(nodeName)
-	}
-
-	// Add all other nodes into the list.
+	var allNodes []string
 	nl, err := kubeClient.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
 	if err != nil {
 		fmt.Printf("ERROR listing all nodes in cluster: %v\n", err)
-		// Continue because we can still use the --focus-nodes, if specified.
+		// Continue because we can still use the targeted nodes, if specified.
 	} else {
 		for _, node := range nl.Items {
-			if !nodesAlreadyListed.Contains(node.Name) {
-				nodeList = append(nodeList, node.Name)
-			}
+			allNodes = append(allNodes, node.Name)
 		}
+	}
+
+	nodeList, uncapped := buildNodeOrdering(allNodes, problem, comparison, focus)
+	if uncapped.Len() > 0 {
+		fmt.Printf("Collecting full diagnostics from %d targeted node(s): %s\n",
+			uncapped.Len(), joinOrNone(append(append([]string{}, problem...), comparison...)))
 	}
 
 	// Iterate through all Calico/Tigera namespaces.
@@ -252,7 +370,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because deployments or other namespaces might work.
 		} else {
 			for _, ds := range dsl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, ds.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, ds.Spec.Selector)
 			}
 		}
 
@@ -263,7 +381,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because other namespaces might work.
 		} else {
 			for _, d := range dl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, d.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, d.Spec.Selector)
 			}
 		}
 
@@ -274,13 +392,13 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because other namespaces might work.
 		} else {
 			for _, s := range sl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, s.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, s.Spec.Selector)
 			}
 		}
 	}
 }
 
-func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, bpfEnabled bool, ns string, selector *v1.LabelSelector) {
+func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, uncapped set.Set[string], bpfEnabled bool, ns string, selector *v1.LabelSelector) {
 	labelMap, err := v1.LabelSelectorAsMap(selector)
 	if err != nil {
 		fmt.Printf("ERROR forming pod selector: %v\n", err)
@@ -301,31 +419,49 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 		podsByNode[p.Spec.NodeName] = append(podsByNode[p.Spec.NodeName], p)
 	}
 
-	nextNodeIndex := 0
 	var cmds []common.Cmd
-	for logsWanted := opts.MaxLogs; logsWanted > 0; {
-		// Get the next node name to look at.
-		if nextNodeIndex >= len(nodeList) {
-			// There are no more nodes we can look at.
-			break
+	for _, sel := range selectPodsForCollection(nodeList, uncapped, podsByNode, opts.MaxLogs) {
+		fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", sel.pod.Name, ns, sel.node)
+		if strings.HasPrefix(sel.pod.Name, "calico-node-") {
+			nodeDir := dir + "/" + sel.node
+			collectCalicoNodeDiags(nodeDir, sel.node, ns, sel.pod.Name, bpfEnabled)
 		}
-		nodeName := nodeList[nextNodeIndex]
-		nextNodeIndex++
-
-		for _, pod := range podsByNode[nodeName] {
-			fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", pod.Name, ns, nodeName)
-			if strings.HasPrefix(pod.Name, "calico-node-") {
-				nodeDir := dir + "/" + nodeName
-				collectCalicoNodeDiags(nodeDir, nodeName, ns, pod.Name, bpfEnabled)
-			}
-			cmds = append(cmds, diagsCmdsForPod(dir, linkDir, opts, nodeName, ns, &pod)...)
-			logsWanted--
-			if logsWanted <= 0 {
-				break
-			}
-		}
+		cmds = append(cmds, diagsCmdsForPod(dir, linkDir, sel.node, ns, sel.pod)...)
 	}
 	common.ExecAllCmdsWriteToFile(cmds)
+}
+
+// podOnNode pairs a pod with the node it runs on, for collection.
+type podOnNode struct {
+	node string
+	pod  *apiv1.Pod
+}
+
+// selectPodsForCollection decides which pods to collect for one component, in
+// order. It walks nodeList in priority order: pods on uncapped nodes (problem
+// and comparison nodes) are always selected, while pods on other nodes are
+// selected only until the maxLogs budget is exhausted. Because uncapped nodes
+// are ordered first, the budget is spent on the remaining best-effort nodes.
+func selectPodsForCollection(nodeList []string, uncapped set.Set[string], podsByNode map[string][]apiv1.Pod, maxLogs int) []podOnNode {
+	var out []podOnNode
+	logsWanted := maxLogs
+	for _, nodeName := range nodeList {
+		pods := podsByNode[nodeName]
+		if len(pods) == 0 {
+			continue
+		}
+		exempt := uncapped.Contains(nodeName)
+		for i := range pods {
+			if !exempt {
+				if logsWanted <= 0 {
+					continue
+				}
+				logsWanted--
+			}
+			out = append(out, podOnNode{node: nodeName, pod: &pods[i]})
+		}
+	}
+	return out
 }
 
 func collectCalicoResource(dir string) {
@@ -701,13 +837,13 @@ func collectGlobalClusterInformation(dir string) {
 	collectThirdPartyResource(dir + "/third-party")
 }
 
-func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace string, pod *apiv1.Pod) []common.Cmd {
+func diagsCmdsForPod(dir, linkDir, nodeName, namespace string, pod *apiv1.Pod) []common.Cmd {
 	nodeDir := dir + "/" + nodeName
 	namespaceDir := nodeDir + "/" + namespace
 	cmds := []common.Cmd{
 		{
 			Info:     fmt.Sprintf("Collect logs for pod %s", pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs -n %s %s --all-containers", namespace, pod.Name),
 			FilePath: fmt.Sprintf("%s/%s.log", namespaceDir, pod.Name),
 			SymLink:  fmt.Sprintf("%s/%s/%s.log", linkDir, namespace, pod.Name),
 		},
@@ -723,7 +859,7 @@ func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace st
 	if hasPreviousLogs(pod) {
 		cmds = append(cmds, common.Cmd{
 			Info:     fmt.Sprintf("Collect previous logs for pod %s", pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs --previous -n %s %s --all-containers", namespace, pod.Name),
 			FilePath: fmt.Sprintf("%s/%s.previous.log", namespaceDir, pod.Name),
 			SymLink:  fmt.Sprintf("%s/%s/%s.previous.log", linkDir, namespace, pod.Name),
 		})
