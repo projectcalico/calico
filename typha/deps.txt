@@ -7,7 +7,7 @@ github.com/antlr4-go/antlr/v4 v4.13.0
 github.com/beorn7/perks v1.0.1
 github.com/blang/semver/v4 v4.0.0
 github.com/cespare/xxhash/v2 v2.3.0
-github.com/clipperhouse/uax29/v2 v2.6.0
+github.com/clipperhouse/uax29/v2 v2.7.0
 github.com/coreos/go-semver v0.3.1
 github.com/coreos/go-systemd/v22 v22.7.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
@@ -40,7 +40,7 @@ github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
 github.com/leodido/go-urn v1.4.0
 github.com/mailru/easyjson v0.9.0
-github.com/mattn/go-runewidth v0.0.19
+github.com/mattn/go-runewidth v0.0.20
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
