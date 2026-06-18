@@ -3326,6 +3326,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
       jobs:
         - name: "Felix: Build and cache FV prerequisites"
           priority:
@@ -3508,6 +3509,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
       jobs:
         - name: "Felix: UT"
           execution_time_limit:
@@ -3943,6 +3945,7 @@ blocks:
         - name: google-service-account-for-gce
         - name: gemini-api-key
         - name: fv-tests-guru-github-token
+        - name: fv-guru-db
       jobs:
         - name: "Felix: iptables tests on Ubuntu 22.04"
           execution_time_limit:
