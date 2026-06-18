@@ -181,11 +181,11 @@ def install():
         # ``_thread_yield``.  If we're in the hub greenlet, ``_thread_yield`` is about
         # to call ``time.sleep(0)`` -> ``hub.switch()`` and deadlock.  Log enough
         # context to identify the originating code path before that happens.
+        creating_stack = connection_record.info.pop(
+            "calico_checkout_stack", "<not captured>"
+        )
         hub = eventlet.hubs.get_hub()
         if eventlet.greenthread.getcurrent() is hub.greenlet:
-            creating_stack = connection_record.info.get(
-                "calico_checkout_stack", "<not captured>"
-            )
             LOG.warning(
                 "Calico fairy-GC diagnostic: connection checkin firing "
                 "in eventlet hub greenlet -- oslo.db's _thread_yield is "
