@@ -37,7 +37,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/timeshim"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -167,7 +167,7 @@ type Wireguard struct {
 	writeProcSys func(path, value string) error
 
 	logCtx            *log.Entry
-	rateLimitedLogger *lclogutils.RateLimitedLogger
+	rateLimitedLogger *logrusr.RateLimitedLogger
 }
 
 func New(
@@ -299,7 +299,7 @@ func NewWithShims(
 		writeProcSys:         writeProcSys,
 		opRecorder:           opRecorder,
 		logCtx:               logCtx,
-		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
+		rateLimitedLogger:    logrusr.NewRateLimitedLogger(logrusr.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
 	}
 }
 

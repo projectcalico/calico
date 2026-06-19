@@ -23,19 +23,19 @@ import (
 	"github.com/mipearson/rfw"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
-func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *logutils.Destination, fileDirErr error, fileOpenErr error) {
+func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDest *logrusr.Destination, fileDirErr error, fileOpenErr error) {
 	fileDirErr = os.MkdirAll(path.Dir(configParams.LogFilePath), 0755)
 	var rotAwareFile io.Writer
 	rotAwareFile, fileOpenErr = rfw.Open(configParams.LogFilePath, 0644)
 	if fileDirErr == nil && fileOpenErr == nil {
-		fileDest = logutils.NewStreamDestination(
+		fileDest = logrusr.NewStreamDestination(
 			logLevel,
 			rotAwareFile,
-			make(chan logutils.QueuedLog, logQueueSize),
+			make(chan logrusr.QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 			counterLogErrors,
 		)
@@ -43,7 +43,7 @@ func getFileDestination(configParams *config.Config, logLevel log.Level) (fileDe
 	return
 }
 
-func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*logutils.Destination, error) {
+func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*logrusr.Destination, error) {
 	// Set net/addr to "" so we connect to the system syslog server rather
 	// than a remote one.
 	net := ""
@@ -56,10 +56,10 @@ func getSyslogDestination(configParams *config.Config, logLevel log.Level) (*log
 	tag := "calico-typha"
 	w, sysErr := syslog.Dial(net, addr, priority, tag)
 	if sysErr == nil {
-		syslogDest := logutils.NewSyslogDestination(
+		syslogDest := logrusr.NewSyslogDestination(
 			logLevel,
 			w,
-			make(chan logutils.QueuedLog, logQueueSize),
+			make(chan logrusr.QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
 			counterLogErrors,
 		)

@@ -34,7 +34,7 @@ import (
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const (
@@ -162,7 +162,7 @@ func (cfg *Config) TLSConfig() (*tls.Config, *tls.Certificate, error) {
 }
 
 func (cfg *Config) configureLogging() {
-	logutils.ConfigureFormatter("guardian")
+	logrusr.ConfigureFormatter("guardian")
 	log.SetOutput(os.Stdout)
 
 	// Override with desired log level

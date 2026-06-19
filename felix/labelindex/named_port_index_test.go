@@ -35,7 +35,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -914,7 +914,7 @@ var (
 )
 
 func TestNamedPortIndex(t *testing.T) {
-	logutils.ConfigureLoggingForTestingT(t)
+	logrusr.ConfigureLoggingForTestingT(t)
 	log.SetLevel(log.DebugLevel)
 
 	for _, state := range baseTests {
@@ -950,7 +950,7 @@ func TestNamedPortIndex(t *testing.T) {
 				}
 				t.Run(strings.Join(names, " THEN "),
 					func(t *testing.T) {
-						logutils.ConfigureLoggingForTestingT(t)
+						logrusr.ConfigureLoggingForTestingT(t)
 						RegisterTestingT(t)
 						idx := NewSelectorAndNamedPortIndex(false)
 						rec := newRecorder()

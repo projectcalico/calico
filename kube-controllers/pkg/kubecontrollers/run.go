@@ -66,7 +66,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/cmdwrapper"
 )
@@ -94,7 +94,7 @@ func initKlog() {
 }
 
 func run(parentCtx context.Context, cliCfg Config) {
-	logutils.ConfigureFormatter("kube-controllers")
+	logrusr.ConfigureFormatter("kube-controllers")
 
 	cfg := new(config.Config)
 	if err := cfg.Parse(); err != nil {
