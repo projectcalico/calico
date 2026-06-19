@@ -21,7 +21,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/typha/pkg/config"
 )
 
@@ -29,12 +29,12 @@ import (
 // file writing relies on POSIX-specific primitives. Typha only runs on
 // Linux; this stub exists so that the combined calico binary can be built
 // for Windows (which imports this package transitively via node).
-func getFileDestination(_ *config.Config, _ log.Level) (*logutils.Destination, error, error) {
+func getFileDestination(_ *config.Config, _ log.Level) (*logrusr.Destination, error, error) {
 	return nil, nil, errors.New("file logging is not supported on this platform")
 }
 
 // getSyslogDestination is unsupported on non-Linux platforms: Go's
 // log/syslog package does not compile on Windows.
-func getSyslogDestination(_ *config.Config, _ log.Level) (*logutils.Destination, error) {
+func getSyslogDestination(_ *config.Config, _ log.Level) (*logrusr.Destination, error) {
 	return nil, errors.New("syslog logging is not supported on this platform")
 }

@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -52,7 +52,7 @@ func ConfigureEarlyLogging() {
 	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("felix")
+	logrusr.ConfigureFormatter("felix")
 
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config
@@ -83,9 +83,9 @@ func ConfigureEarlyLogging() {
 // attaches them to logrus.
 func ConfigureLogging(configParams *config.Config) {
 	// Parse the log levels, defaulting to panic if in doubt.
-	logLevelScreen := logutils.SafeParseLogLevel(configParams.LogSeverityScreen)
-	logLevelFile := logutils.SafeParseLogLevel(configParams.LogSeverityFile)
-	logLevelSyslog := logutils.SafeParseLogLevel(configParams.LogSeveritySys)
+	logLevelScreen := logrusr.SafeParseLogLevel(configParams.LogSeverityScreen)
+	logLevelFile := logrusr.SafeParseLogLevel(configParams.LogSeverityFile)
+	logLevelSyslog := logrusr.SafeParseLogLevel(configParams.LogSeveritySys)
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := max(logLevelFile, logLevelScreen)
@@ -96,7 +96,7 @@ func ConfigureLogging(configParams *config.Config) {
 	log.SetLevel(mostVerboseLevel)
 
 	// Screen target.
-	var dests []*logutils.Destination
+	var dests []*logrusr.Destination
 	if configParams.LogSeverityScreen != "" {
 		dests = append(dests, getScreenDestination(configParams, logLevelScreen))
 	}
@@ -105,7 +105,7 @@ func ConfigureLogging(configParams *config.Config) {
 	// of the logger.
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
-		var destination *logutils.Destination
+		var destination *logrusr.Destination
 		destination, fileDirErr, fileOpenErr = getFileDestination(configParams, logLevelFile)
 		if fileDirErr == nil && fileOpenErr == nil && destination != nil {
 			dests = append(dests, destination)
@@ -115,26 +115,26 @@ func ConfigureLogging(configParams *config.Config) {
 	// Syslog target.  Again, we record the error if we fail to connect to syslog.
 	var sysErr error
 	if configParams.LogSeveritySys != "" {
-		var destination *logutils.Destination
+		var destination *logrusr.Destination
 		destination, sysErr = getSyslogDestination(configParams, logLevelSyslog)
 		if sysErr == nil && destination != nil {
 			dests = append(dests, destination)
 		}
 	}
 
-	hook := logutils.NewBackgroundHook(
-		logutils.FilterLevels(mostVerboseLevel),
+	hook := logrusr.NewBackgroundHook(
+		logrusr.FilterLevels(mostVerboseLevel),
 		logLevelSyslog,
 		dests,
 		counterDroppedLogs,
-		logutils.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
+		logrusr.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
 	)
 	hook.Start()
 	log.AddHook(hook)
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
+	log.SetOutput(&logrusr.NullWriter{})
 
 	// Do any deferred error logging.
 	if fileDirErr != nil {
@@ -155,11 +155,11 @@ func ConfigureLogging(configParams *config.Config) {
 	}
 }
 
-func getScreenDestination(configParams *config.Config, logLevel log.Level) *logutils.Destination {
-	return logutils.NewStreamDestination(
+func getScreenDestination(configParams *config.Config, logLevel log.Level) *logrusr.Destination {
+	return logrusr.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, logQueueSize),
+		make(chan logrusr.QueuedLog, logQueueSize),
 		configParams.DebugDisableLogDropping,
 		counterLogErrors,
 	)
