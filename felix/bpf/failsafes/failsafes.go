@@ -24,8 +24,8 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -40,7 +40,7 @@ type Manager struct {
 	// failsafesOut the outbound failsafe ports, from configuration.
 	failsafesOut []config.ProtoPort
 
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	keyFromSlice func([]byte) KeyInterface
 	makeKey      func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface
 	ipFamily     proto.IPVersion
@@ -52,7 +52,7 @@ func (m *Manager) OnUpdate(_ any) {
 func NewManager(
 	failsafesMap maps.Map,
 	failsafesIn, failsafesOut []config.ProtoPort,
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 	ipFamily proto.IPVersion,
 	keyFromSlice func([]byte) KeyInterface,
 	makeKey func(ipProto uint8, port uint16, outbound bool, ip string, mask int) KeyInterface,
