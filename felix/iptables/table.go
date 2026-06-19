@@ -32,8 +32,8 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
+	logutilslc "github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -286,7 +286,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	reason       string
 }
 
@@ -312,7 +312,7 @@ type TableOptions struct {
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder logrusr.OpRecorder
 }
 
 func NewTable(

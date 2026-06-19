@@ -278,7 +278,7 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
+local:felix/logging
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -312,7 +312,9 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/datastructures/hashring
+local:lib/logrusr
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
@@ -344,8 +346,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/ipam/vmipam
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace

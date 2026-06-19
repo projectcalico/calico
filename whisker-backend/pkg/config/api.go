@@ -22,7 +22,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type Config struct {
@@ -61,7 +61,7 @@ func (cfg *Config) HostAddr() string {
 
 func (cfg *Config) ConfigureLogging() {
 	// Install a hook that adds file/line number information.
-	logutils.ConfigureFormatter("whisker-backend")
+	logrusr.ConfigureFormatter("whisker-backend")
 	logrus.SetOutput(os.Stdout)
 
 	// Override with desired log level

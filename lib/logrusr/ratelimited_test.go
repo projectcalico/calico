@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package logrusr_test
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	. "github.com/projectcalico/calico/lib/logrusr"
 )
 
 // A mock log formatter that simply serves to count log invocations.
