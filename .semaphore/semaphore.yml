@@ -1435,7 +1435,6 @@ blocks:
       - Check language/Dockerfiles
       - Check protobufs
       - Manifests and API docs
-      - Store working copy
       - "Pull: go-build image"
     task:
       jobs:
