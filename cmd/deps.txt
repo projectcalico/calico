@@ -478,8 +478,10 @@ local:lib/httpmachinery/pkg/context
 local:lib/httpmachinery/pkg/header
 local:lib/httpmachinery/pkg/server
 local:lib/httpmachinery/pkg/server/adaptors/gorilla
+local:lib/logrusr
 local:lib/std/chanutil
 local:lib/std/cryptoutils
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
