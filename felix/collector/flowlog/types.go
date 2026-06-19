@@ -29,7 +29,7 @@ import (
 	logutil "github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const (
@@ -44,7 +44,7 @@ var (
 	EmptyService = FlowService{"-", "-", "-", 0}
 	EmptyIP      = [16]byte{}
 
-	rlog1 = logutils.NewRateLimitedLogger()
+	rlog1 = logrusr.NewRateLimitedLogger()
 )
 
 type (

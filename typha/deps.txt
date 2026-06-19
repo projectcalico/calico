@@ -110,6 +110,8 @@ sigs.k8s.io/yaml v1.6.0
 local:api/pkg/apis/projectcalico/v3
 local:api/pkg/lib/numorstring
 local:crypto/pkg/tls
+local:lib/logrusr
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
@@ -118,8 +120,6 @@ local:libcalico-go/lib/backend/api
 local:libcalico-go/lib/backend/encap
 local:libcalico-go/lib/backend/model
 local:libcalico-go/lib/errors
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
 local:libcalico-go/lib/readlogger

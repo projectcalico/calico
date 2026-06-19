@@ -59,7 +59,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -913,7 +913,7 @@ func exitWithCustomRC(rc int, message string) {
 	// all the in-flight logs get written before we exit.
 	log.WithFields(log.Fields{
 		"rc":                       rc,
-		lclogutils.FieldForceFlush: true,
+		logrusr.FieldForceFlush: true,
 	}).Info(message)
 	os.Exit(rc)
 }

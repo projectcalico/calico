@@ -120,6 +120,8 @@ local:hack/cmd/gomodder
 local:hack/cmd/ipam-hammer
 local:hack/perf/cmd/send-perf-results
 local:hack/test/spider
+local:lib/logrusr
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/config
@@ -139,8 +141,6 @@ local:libcalico-go/lib/consistenthash
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/ipam
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
