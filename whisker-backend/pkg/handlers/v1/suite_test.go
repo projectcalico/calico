@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	apicontextmocks "github.com/projectcalico/calico/lib/httpmachinery/pkg/context/mocks"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
@@ -33,7 +34,7 @@ func setupTest(t *testing.T) scaffold {
 	RegisterTestingT(t)
 
 	ctx := new(apicontextmocks.Context)
-	ctx.On("Logger").Return(logrus.NewEntry(logrus.StandardLogger()), "")
+	ctx.On("Logger").Return(logrusr.New(logrus.StandardLogger()))
 
 	zeroTime, err := time.Parse(time.RFC3339, "1970-01-01T00:00:00Z")
 	Expect(err).ShouldNot(HaveOccurred())
