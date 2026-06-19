@@ -27,12 +27,12 @@ import (
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type mockVXLANFDB struct {
@@ -108,7 +108,7 @@ var _ = Describe("VXLANManager", func() {
 
 		fdb = &mockVXLANFDB{}
 
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := logrusr.NewSummarizer("test")
 
 		dataplane := mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
