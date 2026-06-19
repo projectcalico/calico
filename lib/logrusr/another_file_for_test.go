@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package logrusr_test
 
 import (
-	"testing"
-
-	"github.com/onsi/ginkgo/v2"
-	"github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+	"github.com/sirupsen/logrus"
 )
 
-func TestLogutils(t *testing.T) {
-	testutils.HookLogrusForGinkgo()
-	gomega.RegisterFailHandler(ginkgo.Fail)
-	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/logutils_suite.xml"
-	ginkgo.RunSpecs(t, "Logutils Suite", suiteConfig, reporterConfig)
+// debugFromAnotherFile calls Debug on the logger; it's in another file to test filename filtering!
+func debugFromAnotherFile(logger *logrus.Logger, msg string) {
+	logger.Debug(msg)
 }
