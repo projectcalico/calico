@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package logformat contains Calico's custom logrus formatter and the small
-// set of helpers needed to use it.  It deliberately depends only on the
-// standard library and logrus so that lightweight command-line tools can
-// import it to get consistent log formatting without pulling in the heavier
-// dependency tree (Prometheus, etc.) of the parent logutils package.
-package logformat
+// Package logrusr is Calico's shared logrus toolkit.  It provides the
+// standard Calico log formatter, the fan-out BackgroundHook + Destination
+// pipeline (screen / file / syslog with drop-tracking), the caller-
+// stamping hook that makes wrapper types report user code as the caller,
+// a rate-limited logger, a Summarizer for periodic op-count logging, and
+// helpers for redacting sensitive URLs and query parameters.
+//
+// The package depends only on the standard library and logrus; metrics
+// hooks are exposed via a small Counter interface (matched by
+// prometheus.Counter) so callers can wire Prometheus if they want it,
+// but the package itself does not depend on Prometheus.
+package logrusr
 
 import (
 	"bytes"
 	"fmt"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,6 +38,18 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+)
+
+// Packages whose frames we skip when reporting a log line's caller.
+// logrus's own getCaller only skips itself, which means wrapper types in
+// this package (RateLimitedLogger, the log.Logger adapter, Summarizer)
+// and in lib/std/log (the slog-shaped facade) would otherwise be reported
+// as the caller instead of the user code.
+const (
+	logrusPackage  = "github.com/sirupsen/logrus."
+	logrusrPackage = "github.com/projectcalico/calico/lib/logrusr."
+	stdlogPackage  = "github.com/projectcalico/calico/lib/std/log."
+	maxCallerDepth = 32
 )
 
 const (
@@ -43,10 +62,14 @@ const (
 	FileNameUnknown = "<nil>"
 )
 
-func init() {
-	// We need logrus to record the caller on each log entry for us.
-	log.SetReportCaller(true)
-}
+// We don't call logrus.SetReportCaller: logrus's own caller detection
+// only skips its own frames, so wrapper types in this package
+// (RateLimitedLogger, the log.Logger adapter, Summarizer) and the
+// slog-shaped facade in lib/std/log would be reported as the caller
+// instead of the user code.  ConfigureFormatter installs a caller-
+// stamping hook that walks the stack once per log line, skipping
+// those wrapper packages, and memoises the result on entry.Caller so
+// downstream hooks and Format() are O(1).
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
 func FilterLevels(maxLevel log.Level) []log.Level {
@@ -63,6 +86,81 @@ func ConfigureFormatter(componentName string) {
 	formatter := &Formatter{Component: componentName}
 	formatter.init()
 	log.SetFormatter(formatter)
+	installCallerHookOnce()
+}
+
+// callerHook stamps entry.Caller with the first non-logrus / non-logrusr
+// / non-lib-std-log frame it finds on the stack.  logrus dups the entry
+// once before firing any hooks, so we can safely mutate it here without
+// racing other goroutines that may be re-using the original entry.
+//
+// Downstream hooks and Formatter.Format short-circuit on entry.Caller
+// being non-nil, so the walk happens once per emission regardless of how
+// many hooks are in play.
+type callerHook struct{}
+
+func (callerHook) Levels() []log.Level { return log.AllLevels }
+
+func (callerHook) Fire(entry *log.Entry) error {
+	if entry.Caller != nil {
+		return nil
+	}
+	file, line := lookupCaller()
+	entry.Caller = &runtime.Frame{File: file, Line: line}
+	return nil
+}
+
+var callerHookInstalled sync.Once
+
+func installCallerHookOnce() {
+	callerHookInstalled.Do(func() {
+		log.AddHook(callerHook{})
+	})
+}
+
+// InstallCallerHook attaches the caller-stamping hook to a specific
+// logrus.Logger — the same hook ConfigureFormatter installs on the
+// standard logger.  Use this for logrus.Logger instances that don't
+// share the standard logger's hook chain (e.g. per-test loggers or
+// stand-alone loggers wired into custom destinations).
+func InstallCallerHook(logger *log.Logger) {
+	logger.AddHook(callerHook{})
+}
+
+// ConfigureEarlyLoggingFromEnv installs the Calico logrus formatter, sets
+// stdout as the log destination, and picks an initial log level from
+// environment variables named after the component:
+//
+//	${COMPONENT}_EARLYLOGSEVERITYSCREEN — early-only override
+//	${COMPONENT}_LOGSEVERITYSCREEN     — normal setting
+//
+// The component name is upper-cased for the env-var lookup and passed
+// verbatim as the log prefix.  If neither variable is set (or the value
+// fails to parse), the level defaults to Error.  The full configuration
+// picked up from the component's own config loader will typically override
+// this level later at startup.
+func ConfigureEarlyLoggingFromEnv(componentName string) {
+	log.SetOutput(os.Stdout)
+	ConfigureFormatter(componentName)
+
+	prefix := strings.ToUpper(componentName) + "_"
+	// Try the early-only override first; fall back to the normal setting.
+	rawLogLevel := os.Getenv(prefix + "EARLYLOGSEVERITYSCREEN")
+	if rawLogLevel == "" {
+		rawLogLevel = os.Getenv(prefix + "LOGSEVERITYSCREEN")
+	}
+
+	logLevelScreen := log.ErrorLevel
+	if rawLogLevel != "" {
+		parsedLevel, err := log.ParseLevel(rawLogLevel)
+		if err == nil {
+			logLevelScreen = parsedLevel
+		} else {
+			log.WithError(err).Error("Failed to parse early log level, defaulting to error.")
+		}
+	}
+	log.SetLevel(logLevelScreen)
+	log.Infof("Early screen log level set to %v", logLevelScreen)
 }
 
 // Formatter is our custom log formatter designed to balance ease of machine processing
@@ -137,8 +235,11 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 
 func (f *Formatter) writeInfix(b *bytes.Buffer, level log.Level) {
 	if level >= maxLevel {
-		// Slow path for unknown log levels.
+		// Slow path for unknown log levels — computeInfix writes
+		// directly to b; preComputedInfixByLevel has no entry for this
+		// level, so indexing into it would panic.
 		f.computeInfix(b, level)
+		return
 	}
 	_, _ = b.WriteString(f.preComputedInfixByLevel[level])
 }
@@ -225,13 +326,53 @@ func FormatForSyslog(entry *log.Entry) string {
 	return b.String()
 }
 
-// GetFileInfo returns the base file name and line number recorded on the log
-// entry, or (FileNameUnknown, 0) if the caller could not be determined.
+// pcsPool re-uses program-counter buffers across log emissions so the
+// caller walk allocates once per goroutine, not once per line.
+var pcsPool = sync.Pool{
+	New: func() any {
+		pcs := make([]uintptr, maxCallerDepth)
+		return &pcs
+	},
+}
+
+// GetFileInfo returns the base file name and line number for the log
+// entry, using entry.Caller if it has already been populated (typically
+// by callerHook installed via ConfigureFormatter) and falling back to
+// a fresh stack walk otherwise.
 func GetFileInfo(entry *log.Entry) (string, int) {
-	if entry.Caller == nil {
+	if entry.Caller != nil {
+		return path.Base(entry.Caller.File), entry.Caller.Line
+	}
+	return lookupCaller()
+}
+
+// lookupCaller walks the stack and returns the first frame whose
+// function is not in logrus, lib/logrusr or lib/std/log — i.e. the
+// user code that actually issued the log call.
+func lookupCaller() (string, int) {
+	pcsPtr := pcsPool.Get().(*[]uintptr)
+	defer pcsPool.Put(pcsPtr)
+	pcs := *pcsPtr
+
+	// Skip runtime.Callers itself and lookupCaller.
+	n := runtime.Callers(2, pcs)
+	if n == 0 {
 		return FileNameUnknown, 0
 	}
-	return path.Base(entry.Caller.File), entry.Caller.Line
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		fn := frame.Function
+		if !strings.HasPrefix(fn, logrusPackage) &&
+			!strings.HasPrefix(fn, logrusrPackage) &&
+			!strings.HasPrefix(fn, stdlogPackage) {
+			return path.Base(frame.File), frame.Line
+		}
+		if !more {
+			break
+		}
+	}
+	return FileNameUnknown, 0
 }
 
 // appendKVsAndNewLine writes the entry's KV pairs to the end of the buffer,
