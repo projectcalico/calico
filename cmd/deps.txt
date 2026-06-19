@@ -318,7 +318,6 @@ local:confd/pkg/backends
 local:confd/pkg/backends/calico
 local:confd/pkg/backends/types
 local:confd/pkg/config
-local:confd/pkg/log
 local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
@@ -403,7 +402,7 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
+local:felix/logging
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -516,8 +515,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/multireadbuf
 local:libcalico-go/lib/names
@@ -571,7 +568,7 @@ local:typha/pkg/daemon
 local:typha/pkg/discovery
 local:typha/pkg/jitter
 local:typha/pkg/k8s
-local:typha/pkg/logutils
+local:typha/pkg/logging
 local:typha/pkg/promutils
 local:typha/pkg/snapcache
 local:typha/pkg/syncclient

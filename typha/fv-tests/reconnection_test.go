@@ -11,7 +11,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/syncersv1/dedupebuffer"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	fvtests "github.com/projectcalico/calico/typha/fv-tests"
 	"github.com/projectcalico/calico/typha/pkg/discovery"
 	"github.com/projectcalico/calico/typha/pkg/syncclient"
@@ -115,7 +115,7 @@ func setUpReconnectionTest(t *testing.T) (
 	chan struct{},
 ) {
 	RegisterTestingT(t)
-	logutils.RedirectLogrusToTestingT(t)
+	logrusr.RedirectLogrusToTestingT(t)
 
 	var h [2]*ServerHarness
 	for i := range 2 {

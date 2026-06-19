@@ -63,14 +63,14 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/felix/proto"
 )
 
 var canTestMarks bool
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))

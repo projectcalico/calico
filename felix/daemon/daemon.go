@@ -39,7 +39,7 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
@@ -59,7 +59,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -115,7 +115,7 @@ const (
 func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 
 	ctx := context.Background()
 
@@ -357,7 +357,7 @@ configRetry:
 
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
-	logutils.ConfigureLogging(configParams)
+	logging.ConfigureLogging(configParams)
 	// Since we may have enabled more logging, log with the build context
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
@@ -740,7 +740,7 @@ configRetry:
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
-	logutils.RegisterProfilingSignalHandlers(configParams)
+	logging.RegisterProfilingSignalHandlers(configParams)
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
@@ -913,7 +913,7 @@ func exitWithCustomRC(rc int, message string) {
 	// all the in-flight logs get written before we exit.
 	log.WithFields(log.Fields{
 		"rc":                       rc,
-		lclogutils.FieldForceFlush: true,
+		logrusr.FieldForceFlush: true,
 	}).Info(message)
 	os.Exit(rc)
 }

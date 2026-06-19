@@ -17,7 +17,7 @@
 // standard library and logrus so that lightweight command-line tools can
 // import it to get consistent log formatting without pulling in the heavier
 // dependency tree (Prometheus, etc.) of the parent logutils package.
-package logformat
+package logrusr
 
 import (
 	"bytes"

@@ -21,12 +21,12 @@ import (
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
 	"github.com/projectcalico/calico/guardian/pkg/server"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func TestRequestsFromGuardianToUpstream(t *testing.T) {
-	logutils.ConfigureFormatter("guardian")
-	logutils.RedirectLogrusToTestingT(t)
+	logrusr.ConfigureFormatter("guardian")
+	logrusr.RedirectLogrusToTestingT(t)
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
 

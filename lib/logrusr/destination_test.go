@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package logrusr_test
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	. "github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -62,15 +62,15 @@ var _ = Describe("Logutils", func() {
 
 	It("Should add correct file when invoked via log.Info", func() {
 		log.Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
 	})
 	It("Should add correct file when invoked via Logger.Info", func() {
 		log.StandardLogger().Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
 	})
 	It("Should add correct file when invoked via log.WithField(...).Info", func() {
 		log.WithField("foo", "bar").Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
 	})
 	It("requires logrus.AllLevels to be consistent/in order", func() {
 		// Formatter.init() pre-computes various strings on this assumption.
