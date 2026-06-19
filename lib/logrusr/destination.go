@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils
+package logrusr
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"regexp"
@@ -26,52 +25,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils/logformat"
 )
-
-// The custom log formatter and its helpers live in the logformat sub-package so
-// that lightweight tools can import them without pulling in this package's
-// heavier dependencies (e.g. Prometheus).  They are re-exported here so that
-// existing callers of logutils continue to work unchanged.
-const (
-	// FieldForceFlush is a field name used to signal to the BackgroundHook that it should flush the log after this
-	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
-	FieldForceFlush = logformat.FieldForceFlush
-
-	// FileNameUnknown is the string used in logs if the filename/line number
-	// cannot be determined.
-	FileNameUnknown = logformat.FileNameUnknown
-
-	// TimeFormat is the timestamp format used by the custom Formatter.
-	TimeFormat = logformat.TimeFormat
-)
-
-// Formatter is Calico's custom logrus formatter.  See logformat.Formatter.
-type Formatter = logformat.Formatter
-
-// NullWriter is a dummy writer that always succeeds and does nothing.
-type NullWriter = logformat.NullWriter
-
-// FilterLevels returns all the logrus.Level values <= maxLevel.
-func FilterLevels(maxLevel log.Level) []log.Level {
-	return logformat.FilterLevels(maxLevel)
-}
-
-// ConfigureFormatter installs the custom Formatter on the standard logger.
-func ConfigureFormatter(componentName string) {
-	logformat.ConfigureFormatter(componentName)
-}
-
-// AppendTime appends a time to the buffer in our format.
-func AppendTime(b *bytes.Buffer, t time.Time) {
-	logformat.AppendTime(b, t)
-}
-
-// FormatForSyslog formats logs in a way tailored for syslog.
-func FormatForSyslog(entry *log.Entry) string {
-	return logformat.FormatForSyslog(entry)
-}
 
 type QueuedLog struct {
 	Level         log.Level
@@ -287,7 +241,7 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 
 	if entry.Level >= log.DebugLevel && h.debugFileNameRE != nil {
 		// This is a debug log, check if debug logging is enabled for this file.
-		fileName, _ := logformat.GetFileInfo(entry)
+		fileName, _ := GetFileInfo(entry)
 		if fileName == FileNameUnknown || !h.debugFileNameRE.MatchString(fileName) {
 			return nil
 		}

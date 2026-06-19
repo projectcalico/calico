@@ -22,11 +22,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	. "github.com/projectcalico/calico/felix/cachingmap"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 )
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils
+package logging
 
 import (
 	"os"
@@ -20,17 +20,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/typha/pkg/config"
+	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
 	counterDroppedLogs = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "typha_logs_dropped",
+		Name: "felix_logs_dropped",
 		Help: "Number of logs dropped because the output stream was blocked.",
 	})
 	counterLogErrors = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "typha_log_errors",
+		Name: "felix_log_errors",
 		Help: "Number of errors encountered while logging.",
 	})
 )
@@ -45,24 +45,23 @@ func init() {
 const logQueueSize = 100
 
 // ConfigureEarlyLogging installs our logging adapters, and enables early logging to screen
-// if it is enabled by either the TYPHA_EARLYLOGSEVERITYSCREEN or TYPHA_LOGSEVERITYSCREEN
+// if it is enabled by either the FELIX_EARLYLOGSEVERITYSCREEN or FELIX_LOGSEVERITYSCREEN
 // environment variable.
-// It also disables glog's log to disk default behaviour.
 func ConfigureEarlyLogging() {
 	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
 	log.SetOutput(os.Stdout)
 
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("typha")
+	logrusr.ConfigureFormatter("felix")
 
 	// First try the early-only environment variable.  Since the normal
 	// config processing doesn't know about that variable, normal config
 	// will override it once it's loaded.
-	rawLogLevel := os.Getenv("TYPHA_EARLYLOGSEVERITYSCREEN")
+	rawLogLevel := os.Getenv("FELIX_EARLYLOGSEVERITYSCREEN")
 	if rawLogLevel == "" {
 		// Early-only flag not set, look for the normal config-owned
 		// variable.
-		rawLogLevel = os.Getenv("TYPHA_LOGSEVERITYSCREEN")
+		rawLogLevel = os.Getenv("FELIX_LOGSEVERITYSCREEN")
 	}
 
 	// Default to logging errors.
@@ -84,21 +83,20 @@ func ConfigureEarlyLogging() {
 // attaches them to logrus.
 func ConfigureLogging(configParams *config.Config) {
 	// Parse the log levels, defaulting to panic if in doubt.
-	logLevelScreen := logutils.SafeParseLogLevel(configParams.LogSeverityScreen)
-	logLevelFile := logutils.SafeParseLogLevel(configParams.LogSeverityFile)
-	logLevelSyslog := logutils.SafeParseLogLevel(configParams.LogSeveritySys)
+	logLevelScreen := logrusr.SafeParseLogLevel(configParams.LogSeverityScreen)
+	logLevelFile := logrusr.SafeParseLogLevel(configParams.LogSeverityFile)
+	logLevelSyslog := logrusr.SafeParseLogLevel(configParams.LogSeveritySys)
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := max(logLevelFile, logLevelScreen)
-	if logLevelSyslog > mostVerboseLevel {
-		mostVerboseLevel = logLevelScreen
-	}
+	mostVerboseLevel = max(logLevelSyslog, mostVerboseLevel)
+
 	// Disable all more-verbose levels using the global setting, this ensures that debug logs
 	// are filtered out as early as possible.
 	log.SetLevel(mostVerboseLevel)
 
 	// Screen target.
-	var dests []*logutils.Destination
+	var dests []*logrusr.Destination
 	if configParams.LogSeverityScreen != "" {
 		dests = append(dests, getScreenDestination(configParams, logLevelScreen))
 	}
@@ -107,7 +105,7 @@ func ConfigureLogging(configParams *config.Config) {
 	// of the logger.
 	var fileDirErr, fileOpenErr error
 	if configParams.LogSeverityFile != "" && configParams.LogFilePath != "" {
-		var destination *logutils.Destination
+		var destination *logrusr.Destination
 		destination, fileDirErr, fileOpenErr = getFileDestination(configParams, logLevelFile)
 		if fileDirErr == nil && fileOpenErr == nil && destination != nil {
 			dests = append(dests, destination)
@@ -117,24 +115,26 @@ func ConfigureLogging(configParams *config.Config) {
 	// Syslog target.  Again, we record the error if we fail to connect to syslog.
 	var sysErr error
 	if configParams.LogSeveritySys != "" {
-		var destination *logutils.Destination
+		var destination *logrusr.Destination
 		destination, sysErr = getSyslogDestination(configParams, logLevelSyslog)
 		if sysErr == nil && destination != nil {
 			dests = append(dests, destination)
 		}
 	}
 
-	hook := logutils.NewBackgroundHook(logutils.FilterLevels(mostVerboseLevel), logLevelSyslog, dests, counterDroppedLogs)
+	hook := logrusr.NewBackgroundHook(
+		logrusr.FilterLevels(mostVerboseLevel),
+		logLevelSyslog,
+		dests,
+		counterDroppedLogs,
+		logrusr.WithDebugFileRegexp(configParams.LogDebugFilenameRegex),
+	)
 	hook.Start()
 	log.AddHook(hook)
 
 	// Disable logrus' default output, which only supports a single destination.  We use the
 	// hook above to fan out logs to multiple destinations.
-	log.SetOutput(&logutils.NullWriter{})
-
-	// Since we push our logs onto a second thread via a channel, we can disable the
-	// Logger's built-in mutex completely.
-	log.StandardLogger().SetNoLock()
+	log.SetOutput(&logrusr.NullWriter{})
 
 	// Do any deferred error logging.
 	if fileDirErr != nil {
@@ -145,22 +145,31 @@ func ConfigureLogging(configParams *config.Config) {
 		log.WithError(fileOpenErr).WithField("file", configParams.LogFilePath).
 			Fatal("Failed to open log file.")
 	}
-	// We don't bail out if we can't connect to syslog because our default is to try to
-	// connect but it's very common for syslog to be disabled when we're run in a
-	// container.
 	if sysErr != nil {
+		// We don't bail out if we can't connect to syslog because our default is to try to
+		// connect but it's very common for syslog to be disabled when we're run in a
+		// container.
 		log.WithError(sysErr).Error(
 			"Failed to connect to syslog. To prevent this error, either set config " +
 				"parameter LogSeveritySys=none or configure a local syslog service.")
 	}
 }
 
-func getScreenDestination(configParams *config.Config, logLevel log.Level) *logutils.Destination {
-	return logutils.NewStreamDestination(
+func getScreenDestination(configParams *config.Config, logLevel log.Level) *logrusr.Destination {
+	return logrusr.NewStreamDestination(
 		logLevel,
 		os.Stdout,
-		make(chan logutils.QueuedLog, logQueueSize),
+		make(chan logrusr.QueuedLog, logQueueSize),
 		configParams.DebugDisableLogDropping,
 		counterLogErrors,
 	)
+}
+
+// TODO(dimitrin): Once logrus is upgraded to 1.2.0+, replace all logutils Trace calls with
+// calls to logrus Trace.
+// Tracef prints the debug log if display is true.
+func Tracef(display bool, format string, args ...any) {
+	if display {
+		log.Debugf(format, args...)
+	}
 }

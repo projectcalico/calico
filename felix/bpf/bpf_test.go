@@ -31,7 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 )
 
 var (
@@ -56,7 +56,7 @@ func cleanup(calicoDir string) error {
 }
 
 func setup() {
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 
 	_ = cleanup("")

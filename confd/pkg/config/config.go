@@ -7,11 +7,23 @@ import (
 	"github.com/BurntSushi/toml"
 	log "github.com/sirupsen/logrus"
 
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
+
+// SetLevel sets the global logrus level from a string. On parse failure
+// it falls back to InfoLevel and logs a warning. Valid levels are panic,
+// fatal, error, warn, info, debug.
+func SetLevel(level string) {
+	lvl, err := log.ParseLevel(level)
+	if err != nil {
+		log.SetLevel(log.InfoLevel)
+		log.WithError(err).WithField("level", level).Warning("Failed to parse log level, defaulting to INFO")
+		return
+	}
+	log.SetLevel(lvl)
+}
 
 var (
 	configFile        = ""
@@ -98,10 +110,10 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 
 	if level := os.Getenv("BGP_LOGSEVERITYSCREEN"); level != "" {
 		// If specified, use the provided log level.
-		logutils.SetLevel(level)
+		SetLevel(level)
 	} else {
 		// Default to info level logs.
-		logutils.SetLevel("info")
+		SetLevel("info")
 	}
 
 	return &config, nil
