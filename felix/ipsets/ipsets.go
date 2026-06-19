@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -98,14 +98,14 @@ type IPSets struct {
 	// each use.
 	stderrCopy bytes.Buffer
 
-	opReporter logutils.OpRecorder
+	opReporter logrusr.OpRecorder
 
 	// Optional filter.  When non-nil, only these IP set IDs will be rendered into the dataplane
 	// as Linux IP sets.
 	neededIPSetNames set.Set[string]
 }
 
-func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *IPSets {
+func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logrusr.OpRecorder) *IPSets {
 	return NewIPSetsWithShims(
 		ipVersionConfig,
 		recorder,
@@ -117,7 +117,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *
 // NewIPSetsWithShims is an internal test constructor.
 func NewIPSetsWithShims(
 	ipVersionConfig *IPVersionConfig,
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 	cmdFactory cmdFactory,
 	sleep func(time.Duration),
 ) *IPSets {

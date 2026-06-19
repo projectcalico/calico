@@ -19,7 +19,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // LoadConfigFromEnvironment extracts raw config parameters (identified by
@@ -39,7 +39,7 @@ func LoadConfigFromEnvironment(environ []string) map[string]string {
 		if strings.Index(key, "felix_") == 0 {
 			splits = strings.SplitN(key, "_", 2)
 			paramName := splits[1]
-			if logutils.IsSensitiveParam(paramName) {
+			if logrusr.IsSensitiveParam(paramName) {
 				log.Infof("Found felix environment variable: %s=<redacted>", paramName)
 			} else {
 				log.Infof("Found felix environment variable: %s=%q", paramName, value)

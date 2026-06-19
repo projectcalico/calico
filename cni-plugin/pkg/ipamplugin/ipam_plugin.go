@@ -49,14 +49,14 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	logrusr.ConfigureFormatter("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"

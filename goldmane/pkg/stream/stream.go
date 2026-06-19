@@ -10,7 +10,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type Stream interface {
@@ -34,7 +34,7 @@ type stream struct {
 	cancel context.CancelFunc
 
 	// rl is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *logrusr.RateLimitedLogger
 }
 
 // Close signals to the stream manager that this stream is done and should be closed.

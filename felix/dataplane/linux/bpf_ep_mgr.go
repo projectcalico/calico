@@ -79,14 +79,14 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
+	logutilslc "github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -360,7 +360,7 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	opReporter logutils.OpRecorder
+	opReporter logrusr.OpRecorder
 
 	// XDP
 	xdpModes []bpf.XDPMode
@@ -532,7 +532,7 @@ func NewBPFEndpointManager(
 	iptablesFilterTableV4 Table,
 	iptablesFilterTableV6 Table,
 	livenessCallback func(),
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
 	mainRouteTableV6 routetable.Interface,
 	lookupsCache *calc.LookupsCache,

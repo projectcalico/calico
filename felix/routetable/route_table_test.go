@@ -27,12 +27,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/testutils"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const routePriorityForTest int = 48931
@@ -83,7 +83,7 @@ var _ = Describe("RouteTable v6", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -215,7 +215,7 @@ var _ = Describe("RouteTable", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithStaticARPEntries(true),
@@ -372,7 +372,7 @@ var _ = Describe("RouteTable", func() {
 					FelixRouteProtocol,
 					true,
 					0,
-					logutils.NewSummarizer("test"),
+					logrusr.NewSummarizer("test"),
 					dataplane,
 					WithTimeShim(t),
 					WithStaticARPEntries(true),
@@ -804,7 +804,7 @@ var _ = Describe("RouteTable", func() {
 					deviceRouteProtocol,
 					true,
 					0,
-					logutils.NewSummarizer("test"),
+					logrusr.NewSummarizer("test"),
 					dataplane,
 					WithTimeShim(t),
 					WithConntrackShim(dataplane),
@@ -1835,7 +1835,7 @@ var _ = Describe("RouteTable with multiple priorities", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2343,7 +2343,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2447,7 +2447,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			FelixRouteProtocol,
 			true,
 			100,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2811,7 +2811,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				FelixRouteProtocol,
 				true,
 				100,
-				logutils.NewSummarizer("test"),
+				logrusr.NewSummarizer("test"),
 				dataplane,
 				WithTimeShim(t),
 				WithConntrackShim(dataplane),
@@ -2837,7 +2837,7 @@ var _ = Describe("RouteTable resync repair of externally modified routes", func(
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -2906,7 +2906,7 @@ var _ = Describe("RouteTable IPv6 multi-path routes", func() {
 			deviceRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -2960,7 +2960,7 @@ var _ = Describe("RouteTable grace-period bookkeeping", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),

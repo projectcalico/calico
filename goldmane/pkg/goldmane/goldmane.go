@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 )
 
@@ -163,7 +163,7 @@ type Goldmane struct {
 	health *health.HealthAggregator
 
 	// ratelimiter is used to rate limit log messages that may happen frequently.
-	rl *logutils.RateLimitedLogger
+	rl *logrusr.RateLimitedLogger
 
 	// The following channels are input channels to make resuests of the main loop.
 	listRequests        chan listRequest
@@ -188,9 +188,9 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		pushIndex:           30,
 		nowFunc:             time.Now,
 		streams:             stream.NewStreamManager(),
-		rl: logutils.NewRateLimitedLogger(
-			logutils.OptBurst(1),
-			logutils.OptInterval(15*time.Second),
+		rl: logrusr.NewRateLimitedLogger(
+			logrusr.OptBurst(1),
+			logrusr.OptInterval(15*time.Second),
 		),
 	}
 

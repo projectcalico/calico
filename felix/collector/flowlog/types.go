@@ -26,10 +26,10 @@ import (
 	"github.com/projectcalico/calico/felix/collector/types/metric"
 	"github.com/projectcalico/calico/felix/collector/types/tuple"
 	"github.com/projectcalico/calico/felix/collector/utils"
-	logutil "github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const (
@@ -44,7 +44,7 @@ var (
 	EmptyService = FlowService{"-", "-", "-", 0}
 	EmptyIP      = [16]byte{}
 
-	rlog1 = logutils.NewRateLimitedLogger()
+	rlog1 = logrusr.NewRateLimitedLogger()
 )
 
 type (
@@ -492,12 +492,12 @@ func NewFlowStatsByProcess(
 
 func (f *FlowStatsByProcess) aggregateFlowStatsByProcess(mu *metric.Update) {
 	if stats, ok := f.statsByProcessName[FieldNotIncluded]; ok {
-		logutil.Tracef(f.displayDebugTraceLogs, "Process stats found %+v for metric update %+v", stats, mu)
+		logging.Tracef(f.displayDebugTraceLogs, "Process stats found %+v for metric update %+v", stats, mu)
 		stats.aggregateFlowStats(*mu, f.displayDebugTraceLogs)
-		logutil.Tracef(f.displayDebugTraceLogs, "Aggregated stats %+v after processing metric update %+v", stats, mu)
+		logging.Tracef(f.displayDebugTraceLogs, "Aggregated stats %+v after processing metric update %+v", stats, mu)
 		f.statsByProcessName[FieldNotIncluded] = stats
 	} else {
-		logutil.Tracef(f.displayDebugTraceLogs, "Process stats not found for metric update %+v", mu)
+		logging.Tracef(f.displayDebugTraceLogs, "Process stats not found for metric update %+v", mu)
 		stats := NewFlowStats(*mu)
 		f.statsByProcessName[FieldNotIncluded] = &stats
 	}
