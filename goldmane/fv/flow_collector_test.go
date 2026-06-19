@@ -19,8 +19,8 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type testSink struct {
@@ -86,7 +86,7 @@ func setupTest(t *testing.T, srvOption ServerSetupOption) func() {
 	// Register gomega with test.
 	RegisterTestingT(t)
 	logrus.SetLevel(logrus.DebugLevel)
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logCancel := logrusr.RedirectLogrusToTestingT(t)
 
 	// Create a socket listener.
 	var err error

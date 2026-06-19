@@ -38,7 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
@@ -94,7 +94,7 @@ func configureLogging() {
 		logrus.WithError(err).Fatalf("Invalid log level: %s", logLevel)
 	}
 	logrus.SetLevel(l)
-	logutils.ConfigureFormatter("webhook")
+	logrusr.ConfigureFormatter("webhook")
 	logrus.SetOutput(os.Stdout)
 	logrus.Infof("Log level set to %s", logLevel)
 }
