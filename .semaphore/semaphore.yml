@@ -18,6 +18,7 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    - name: go-build-cache-gcp-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
@@ -970,8 +971,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -2078,8 +2081,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -2869,8 +2874,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -5520,8 +5527,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -6025,7 +6034,9 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/testutils/json/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',

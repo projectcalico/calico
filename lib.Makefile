@@ -145,7 +145,7 @@ NUM_BUILD_JOBS ?= 4
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-GO_BUILD_IMAGE ?= calico/go-build
+GO_BUILD_IMAGE ?= quay.io/danieljfox/go-build
 CALICO_BUILD    = $(GO_BUILD_IMAGE):$(GO_BUILD_VER)
 
 RUST_BUILD_IMAGE ?= calico/rust-build
@@ -292,6 +292,31 @@ endif
 ifeq ("$(LOCAL_USER_ID)", "0")
 # The build needs to run as root.
 EXTRA_DOCKER_ARGS+=-e RUN_AS_ROOT='true'
+endif
+
+ifdef USE_CACHEPROG
+ifndef CACHEPROG_S3_ACCESS_KEY_ID
+$(error using cacheprog requires CACHEPROG_S3_ACCESS_KEY_ID and CACHEPROG_S3_ACCESS_KEY_SECRET to be set)
+endif
+ifndef CACHEPROG_S3_ACCESS_KEY_SECRET
+$(error using cacheprog requires CACHEPROG_S3_ACCESS_KEY_ID and CACHEPROG_S3_ACCESS_KEY_SECRET to be set)
+endif
+# The local cache directory to use for fetched/uploaded artifacts
+CACHEPROG_ROOT_DIRECTORY ?= $(HOME)/.cache/golang-cache-prog
+$(info Using local golang cache directory $(CACHEPROG_ROOT_DIRECTORY))
+
+EXTRA_DOCKER_ARGS+= -e GOCACHEPROG=cacheprog \
+-e CACHEPROG_LOG_LEVEL \
+-e CACHEPROG_REMOTE_STORAGE_TYPE \
+-e CACHEPROG_ROOT_DIRECTORY=$(CACHEPROG_ROOT_DIRECTORY) \
+-e CACHEPROG_S3_ACCESS_KEY_ID \
+-e CACHEPROG_S3_ACCESS_KEY_SECRET \
+-e CACHEPROG_S3_BUCKET \
+-e CACHEPROG_S3_ENDPOINT \
+-e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING \
+-e CACHEPROG_S3_PREFIX \
+-e CACHEPROG_S3_REGION \
+-v $(CACHEPROG_ROOT_DIRECTORY):$(CACHEPROG_ROOT_DIRECTORY)
 endif
 
 # Allow the ssh auth sock to be mapped into the build container.
