@@ -1271,15 +1271,23 @@ func (r *CalicoManager) buildContainerImages() error {
 			return fmt.Errorf("failed to build %s: %s", dir, err)
 		}
 		logrus.Info(out)
-		if slices.Contains(windowsReleaseDirs, dir) {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
-			if err != nil {
-				logrus.Error(out)
-				return fmt.Errorf("failed to build %s windows images: %s", dir, err)
-			}
-			logrus.Info(out)
+	}
 
+	// Build Windows images only after every Linux image is built. image-windows
+	// runs setup-windows-builder, which does `docker buildx create --use` and
+	// switches the global default buildx builder to the docker-container
+	// "calico-windows-builder". That builder cannot resolve the nft-rpms
+	// `--build-context docker-image://calico/nftables-rpms:<sha>-<arch>`
+	// reference, which only exists in the local docker daemon (node and istio
+	// rely on this). Running the Windows builds in a separate trailing loop
+	// keeps the builder switch from poisoning those Linux builds.
+	for _, dir := range windowsReleaseDirs {
+		out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "image-windows", env...)
+		if err != nil {
+			logrus.Error(out)
+			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
 		}
+		logrus.Info(out)
 	}
 	return nil
 }
@@ -1369,10 +1377,10 @@ func (r *CalicoManager) publishContainerImages() error {
 	// We allow for a certain number of retries when publishing each directory, since
 	// network flakes can occasionally result in images failing to push.
 	maxRetries := 1
-	for _, dir := range imageReleaseDirs {
+	publish := func(dir, target string) error {
 		attempt := 0
 		for {
-			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-publish", env...)
+			out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), target, env...)
 			if err != nil {
 				if attempt < maxRetries {
 					logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
@@ -1380,31 +1388,25 @@ func (r *CalicoManager) publishContainerImages() error {
 					continue
 				}
 				logrus.Error(out)
-				return fmt.Errorf("failed to publish %s: %s", dir, err)
+				return fmt.Errorf("failed to publish %s (%s): %s", dir, target, err)
 			}
 
-			// Success - move on to the next directory.
+			// Success.
 			logrus.Info(out)
-			break
+			return nil
 		}
-		if slices.Contains(windowsReleaseDirs, dir) {
-			attempt := 0
-			for {
-				out, err := r.makeInDirectoryWithOutput(filepath.Join(r.repoRoot, dir), "release-windows", env...)
-				if err != nil {
-					if attempt < maxRetries {
-						logrus.WithField("attempt", attempt).WithError(err).Warn("Publish failed, retrying")
-						attempt++
-						continue
-					}
-					logrus.Error(out)
-					return fmt.Errorf("failed to publish %s windows images: %s", dir, err)
-				}
-
-				// Success - move on to the next directory.
-				logrus.Info(out)
-				break
-			}
+	}
+	for _, dir := range imageReleaseDirs {
+		if err := publish(dir, "release-publish"); err != nil {
+			return err
+		}
+	}
+	// Publish Windows images in a separate trailing loop, mirroring the build
+	// step: release-windows runs setup-windows-builder, which switches the
+	// global default buildx builder, so keep it out of the Linux publish loop.
+	for _, dir := range windowsReleaseDirs {
+		if err := publish(dir, "release-windows"); err != nil {
+			return err
 		}
 	}
 	return nil
