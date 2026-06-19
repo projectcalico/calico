@@ -35,8 +35,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -294,7 +293,7 @@ type NftablesTable struct {
 	peakNftablesWriteTime time.Duration
 
 	logCxt               *logrus.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *logrusr.RateLimitedLogger
 
 	gaugeNumChains           prometheus.Gauge
 	gaugeNumRules            prometheus.Gauge
@@ -308,7 +307,7 @@ type NftablesTable struct {
 	timeNow   func() time.Time
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	reason       string
 
 	contextTimeout time.Duration
@@ -338,7 +337,7 @@ type TableOptions struct {
 	OnStillAlive func()
 
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder logrusr.OpRecorder
 }
 
 func NewTable(
@@ -484,9 +483,9 @@ func newTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		logCxt:                 logrus.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(30*time.Second),
+			logrusr.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,
