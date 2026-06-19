@@ -1,6 +1,52 @@
 after_pipeline:
   task:
+    secrets:
+      # SLACK_CORE_WEBHOOK_URL + RELEASE_MONITOR_AGENT_URL / RELEASE_MONITOR_AGENT_TOKEN.
+      - name: slack-master-release-monitor
     jobs:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
+      - name: Branch CI monitor to Slack
+        commands:
+          # On EVERY master/release-* pipeline (pass AND fail), hand the run to the
+          # branch-monitor agent. The agent records the run in its state engine
+          # (which dedups, escalates back-to-back/intermittent, and tracks recovery)
+          # and returns a Slack message body only when there is something to post — a
+          # new/escalated red or a recovery; otherwise the sentinel NO_NOTIFY. A pass
+          # is recorded too so the engine can recover open incidents for the branch.
+          - |
+            case "$SEMAPHORE_GIT_BRANCH" in
+              master|release-*) ;;
+              *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
+            esac
+            case "$SEMAPHORE_PIPELINE_RESULT" in
+              passed) result=pass ;;
+              failed) result=fail ;;
+              *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
+            esac
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/send",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
+            # Cold agent through Cloudflare can take a while (a failed run also runs
+            # sem-ai triage); retry a few times.
+            text=""
+            for i in 1 2 3; do
+              resp=$(curl -sS -m 200 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+                -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
+                -H "Content-Type: application/json" -d "$req" || true)
+              # Echo the raw a2a response so the parsing below can be debugged
+              # from the Semaphore log if it ever goes wrong.
+              echo "attempt $i raw agent response: $resp"
+              text=$(printf '%s' "$resp" | jq -r '.result.artifacts[0].parts[0].text // .result.history[-1].parts[0].text // empty' 2>/dev/null || true)
+              [ -n "$text" ] && break
+              echo "attempt $i: no reply yet (agent may be cold) — retrying"; sleep 15
+            done
+            case "$text" in
+              NO_NOTIFY*) echo "branch-monitor: nothing to post"; exit 0 ;;
+            esac
+            # Best-effort: if the agent never replied, stay silent rather than spam
+            # (passing runs are frequent); the next run re-records anyway.
+            [ -n "$text" ] || { echo "branch-monitor: no agent reply after retries — skipping"; exit 0; }
+            jq -n --arg t "$text" '{text:$t}' | curl -sS -m 30 -X POST \
+              -H 'Content-Type: application/json' --data @- "$SLACK_CORE_WEBHOOK_URL"
