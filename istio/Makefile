@@ -131,29 +131,29 @@ $(ISTIO_CNI_IMAGE): $(ISTIO_CNI_IMAGE_CREATED)
 # builds, fresh local builds). Other base images are pinned by tag so cache
 # freshness is fine without --pull.
 $(ISTIO_CNI_IMAGE_CREATED): DOCKER_PULL :=
-$(ISTIO_CNI_IMAGE_CREATED): Dockerfile-install-cni bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) | register nft-rpms-image
-	$(DOCKER_BUILD) --build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile-install-cni .
+$(ISTIO_CNI_IMAGE_CREATED): Dockerfile.install-cni bin/install-cni-$(ARCH) bin/istio-cni-$(ARCH) | register nft-rpms-image
+	$(DOCKER_BUILD) --build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) -t $(ISTIO_CNI_IMAGE):latest-$(ARCH) -f Dockerfile.install-cni .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_CNI_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # istio-pilot image
 $(ISTIO_PILOT_IMAGE): $(ISTIO_PILOT_IMAGE_CREATED)
-$(ISTIO_PILOT_IMAGE_CREATED): Dockerfile-pilot bin/pilot-discovery-$(ARCH)
-	$(DOCKER_BUILD) -t $(ISTIO_PILOT_IMAGE):latest-$(ARCH) -f Dockerfile-pilot .
+$(ISTIO_PILOT_IMAGE_CREATED): Dockerfile.pilot bin/pilot-discovery-$(ARCH)
+	$(DOCKER_BUILD) -t $(ISTIO_PILOT_IMAGE):latest-$(ARCH) -f Dockerfile.pilot .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_PILOT_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # istio-proxyv2 image
 $(ISTIO_PROXYV2_IMAGE): $(ISTIO_PROXYV2_IMAGE_CREATED)
-$(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile-proxyv2 bin/pilot-agent-$(ARCH)
-	$(DOCKER_BUILD) --build-arg ISTIO_VERSION=$(ISTIO_VERSION) -t $(ISTIO_PROXYV2_IMAGE):latest-$(ARCH) -f Dockerfile-proxyv2 .
+$(ISTIO_PROXYV2_IMAGE_CREATED): Dockerfile.proxyv2 bin/pilot-agent-$(ARCH)
+	$(DOCKER_BUILD) --build-arg ISTIO_VERSION=$(ISTIO_VERSION) -t $(ISTIO_PROXYV2_IMAGE):latest-$(ARCH) -f Dockerfile.proxyv2 .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_PROXYV2_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
 # istio-ztunnel image
 $(ISTIO_ZTUNNEL_IMAGE): $(ISTIO_ZTUNNEL_IMAGE_CREATED)
-$(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile-ztunnel bin/ztunnel-$(ARCH)
-	$(DOCKER_BUILD) -t $(ISTIO_ZTUNNEL_IMAGE):latest-$(ARCH) -f Dockerfile-ztunnel .
+$(ISTIO_ZTUNNEL_IMAGE_CREATED): Dockerfile.ztunnel bin/ztunnel-$(ARCH)
+	$(DOCKER_BUILD) -t $(ISTIO_ZTUNNEL_IMAGE):latest-$(ARCH) -f Dockerfile.ztunnel .
 	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(ISTIO_ZTUNNEL_IMAGE) VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 

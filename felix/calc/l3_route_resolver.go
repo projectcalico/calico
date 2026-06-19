@@ -17,9 +17,11 @@ package calc
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"time"
 
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/dispatcher"
@@ -588,12 +590,12 @@ func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 	if update.Value != nil {
 		newPool = c.getPoolInfo(update)
 	}
-	if newPool != nil && newPool.PoolType != proto.IPPoolType_NONE {
+	if newPool != nil {
 		logrus.WithFields(logrus.Fields{
 			"oldType": oldPool.PoolType,
 			"newType": newPool.PoolType,
 			"newPool": *newPool,
-		}).Info("Pool is active")
+		}).Info("Pool update")
 		c.allPools[poolKey] = *newPool
 		c.trie.UpdatePool(newPool.CIDR, newPool.PoolType, newPool.NATOutgoing, newPool.CrossSubnet)
 	} else if oldPoolExists {
@@ -625,6 +627,9 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 	if pool == nil {
 		return proto.IPPoolType_NONE
 	}
+	if isLoadBalancerOnlyPool(pool) {
+		return proto.IPPoolType_NONE
+	}
 	if pool.VXLANMode != encap.Never {
 		return proto.IPPoolType_VXLAN
 	}
@@ -632,6 +637,17 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) proto.IPPoolType {
 		return proto.IPPoolType_IPIP
 	}
 	return proto.IPPoolType_NO_ENCAP
+}
+
+// isLoadBalancerOnlyPool returns true if the pool's AllowedUses contains only
+// "LoadBalancer". Such pools should not contribute to route pool type because
+// their CIDRs do not represent workload/tunnel addresses and traffic destined
+// to them should still be masqueraded (not exempted from SNAT via the
+// FlagInIPAMPool BPF route flag or the network-ip-pools ipset).
+//
+// NOTE: keep in sync with isLoadBalancerOnly in felix/dataplane/linux/masq_mgr.go.
+func isLoadBalancerOnlyPool(pool *model.IPPool) bool {
+	return len(pool.AllowedUses) == 1 && slices.Contains(pool.AllowedUses, apiv3.IPPoolAllowedUseLoadBalancer)
 }
 
 // routesFromBlock returns a list of routes which should exist based on the provided

@@ -3081,6 +3081,31 @@ spec:
                     - name
                     - namespace
                   type: object
+                extensions:
+                  description: |-
+                    Extensions enables and configures Tigera-built add-ons that sit on top of the
+                    Gateway API data plane.  Each add-on is opt-in: an unset Extensions, an unset
+                    add-on field, and an empty add-on object all leave the add-on disabled.
+                  properties:
+                    waf:
+                      description: |-
+                        WAF enables and configures the Tigera Web Application Firewall (Coraza WASM
+                        when WAF.State is nil, and when WAF.State is "Disabled", the operator does
+                        not render the WAF env vars or RBAC on calico-kube-controllers.  Set
+                        WAF.State = "Enabled" to turn the feature on.  See design
+                        `tigera/designs#25` (PMREQ-384) for the full surface.
+                      properties:
+                        state:
+                          description: |-
+                            State turns the WAF Gateway API add-on on or off.  Default (nil or
+                            "Disabled") means the operator does not render the WAF surface on
+                            calico-kube-controllers.  Set to "Enabled" to opt in.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
+                  type: object
                 gatewayCertgenJob:
                   description: Allows customization of the gateway certgen job.
                   properties:
@@ -13318,9 +13343,10 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                          Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                          Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                         enum:
                                           - install-cni
+                                          - cni-plugins
                                           - hostpath-init
                                           - flexvol-driver
                                           - ebpf-bootstrap
@@ -16123,6 +16149,22 @@ spec:
                         * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
                         * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                         * Otherwise, this field defaults to "/etc/cni/net.d".
+                      type: string
+                    installMode:
+                      description: |-
+                        InstallMode controls which CNI plugin binaries the operator installs onto each node
+                        when CNI.Type is Calico.
+                        * All (default): the operator runs a cni-plugins init container that stages upstream
+                          CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                          volume, and the install-cni init container copies them onto the host alongside
+                          Calico's own binaries.
+                        * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                          installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                          certain managed node images).
+                        Default: All
+                      enum:
+                        - All
+                        - CalicoOnly
                       type: string
                     ipam:
                       description: |-
@@ -22672,9 +22714,10 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                              Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                              Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                             enum:
                                               - install-cni
+                                              - cni-plugins
                                               - hostpath-init
                                               - flexvol-driver
                                               - ebpf-bootstrap
@@ -25523,6 +25566,22 @@ spec:
                             * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
                             * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                             * Otherwise, this field defaults to "/etc/cni/net.d".
+                          type: string
+                        installMode:
+                          description: |-
+                            InstallMode controls which CNI plugin binaries the operator installs onto each node
+                            when CNI.Type is Calico.
+                            * All (default): the operator runs a cni-plugins init container that stages upstream
+                              CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                              volume, and the install-cni init container copies them onto the host alongside
+                              Calico's own binaries.
+                            * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                              installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                              certain managed node images).
+                            Default: All
+                          enum:
+                            - All
+                            - CalicoOnly
                           type: string
                         ipam:
                           description: |-
@@ -37883,6 +37942,15 @@ spec:
                   enum:
                     - Disabled
                     - PodsAndLoadBalancers
+                  type: string
+                localSubnetL2ReachabilityRefreshInterval:
+                  description: |-
+                    LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+                    (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+                    forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+                    to disable periodic re-announcement, leaving only the one-shot announce when an
+                    IP is added. [Default: 120s]
                   type: string
                 logActionRateLimit:
                   description: |-

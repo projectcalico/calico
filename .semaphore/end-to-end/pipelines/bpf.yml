@@ -697,6 +697,26 @@ blocks:
       secrets:
         - name: dynamo-read-creds
 
+  - name: KubeVirt e2e tests
+    dependencies: []
+    task:
+      jobs:
+        - name: KubeVirt IP persistence and live migration
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable-1.35"
+      env_vars:
+        - name: PROVISIONER
+          value: "gcp-kubeadm"
+        - name: NUM_KUBEVIRT_VMS
+          value: "2"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/gcp-kubevirt.yaml"
+
 promotions:
   - name: Cleanup jobs
     pipeline_file: cleanup.yml

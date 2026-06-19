@@ -623,7 +623,7 @@ var (
 	policyJumpMap                                                                                                                                            []maps.Map
 	ringBufMap, ringBufDropsMap                                                                                                                              maps.Map
 	profilingMap, ipfragsMapTmp                                                                                                                              maps.Map
-	qosMap                                                                                                                                                   maps.Map
+	qosMap, qosConnMap                                                                                                                                       maps.Map
 	ctlbProgsMap                                                                                                                                             []maps.Map
 	progMap                                                                                                                                                  []maps.Map
 	allMaps                                                                                                                                                  []maps.Map
@@ -662,6 +662,7 @@ func initMapsOnce() {
 		ctlbProgsMap = nat.ProgramsMaps()
 		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
+		qosConnMap = qos.ConnMap()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
 		allowSourcesMap = allowsources.Map()
@@ -673,7 +674,7 @@ func initMapsOnce() {
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ipfragsFwdMap, ifstateMap, profilingMap,
-			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, qosConnMap, maglevMap, maglevMapV6,
 			allowSourcesMap, allowSourcesMapV6, ringBufMap, ringBufDropsMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -2230,6 +2231,7 @@ func resetBPFMaps() {
 	resetMap(natMap)
 	resetMap(natBEMap)
 	resetMap(qosMap)
+	resetMap(qosConnMap)
 	resetMap(maglevMap)
 }
 

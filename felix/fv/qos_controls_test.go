@@ -291,41 +291,53 @@ var _ = infrastructure.DatastoreDescribe(
 				}
 
 				qosMapName := qos.MapParams.VersionedName()
+				qosConnMapName := qos.ConnMapParams.VersionedName()
 
-				getBPFQoSValue := func(felixId, wlId int, hook string) *qos.Value {
-					var ingress uint32
+				ingressFromHook := func(hook string) uint16 {
 					switch hook {
 					case "ingress":
-						ingress = 1
+						return 1
 					case "egress":
-						ingress = 0
+						return 0
 					default:
 						Expect(true).To(BeFalse(), "hook must be either 'ingress' or 'egress', '%s' is invalid", hook)
 					}
+					return 0
+				}
 
-					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), uint16(ingress), qos.IPFamilyV4)
+				dumpQoSEntry := func(felixId int, mapName string, key qos.Key) string {
 					keyStr := bytesToHexString(key.AsBytes())
-
-					args := []string{"bash", "-c", fmt.Sprintf(`bpftool map dump name %s -j | jq '.[].elements[] | select(.key | join(" ") == "%s") | .value | join(" ")'`, qosMapName, keyStr)}
-
+					args := []string{"bash", "-c", fmt.Sprintf(`bpftool map dump name %s -j | jq '.[].elements[] | select(.key | join(" ") == "%s") | .value | join(" ")'`, mapName, keyStr)}
 					out, _ := tc.Felixes[felixId].ExecOutput(args...)
 					logrus.Infof("%s output:\n%v", strings.Join(args, " "), out)
-					valueStr := strings.Trim(strings.TrimSuffix(out, "\n"), "\"")
+					return strings.Trim(strings.TrimSuffix(out, "\n"), "\"")
+				}
+
+				getBPFQoSRateValue := func(felixId, wlId int, hook string) *qos.Value {
+					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), ingressFromHook(hook), qos.IPFamilyV4)
+					valueStr := dumpQoSEntry(felixId, qosMapName, key)
 					if valueStr == "" {
 						return nil
 					}
-					valueBytes := hexStringToBytes(valueStr)
+					value := qos.ValueFromBytes(hexStringToBytes(valueStr))
+					logrus.Infof("rate value: %s", value.String())
+					return &value
+				}
 
-					value := qos.ValueFromBytes(valueBytes)
-
-					logrus.Infof("value: %s", value.String())
-
+				getBPFQoSConnValue := func(felixId, wlId int, hook string) *qos.ConnValue {
+					key := qos.NewKey(uint32(w[wlId].InterfaceIndex()), ingressFromHook(hook), qos.IPFamilyV4)
+					valueStr := dumpQoSEntry(felixId, qosConnMapName, key)
+					if valueStr == "" {
+						return nil
+					}
+					value := qos.ConnValueFromBytes(hexStringToBytes(valueStr))
+					logrus.Infof("conn value: %s", value.String())
 					return &value
 				}
 
 				getBPFPacketRateAndBurst := func(felixId, wlId int, hook string) func() string {
 					return func() string {
-						value := getBPFQoSValue(felixId, wlId, hook)
+						value := getBPFQoSRateValue(felixId, wlId, hook)
 						if value == nil {
 							return "0 0"
 						}
@@ -335,7 +347,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				getBPFMaxConnections := func(felixId, wlId int, hook string) func() uint32 {
 					return func() uint32 {
-						value := getBPFQoSValue(felixId, wlId, hook)
+						value := getBPFQoSConnValue(felixId, wlId, hook)
 						if value == nil {
 							return 0
 						}
@@ -345,7 +357,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 				getBPFCurrentCount := func(felixId, wlId int, hook string) func() uint32 {
 					return func() uint32 {
-						value := getBPFQoSValue(felixId, wlId, hook)
+						value := getBPFQoSConnValue(felixId, wlId, hook)
 						if value == nil {
 							return 0
 						}
@@ -818,12 +830,15 @@ var _ = infrastructure.DatastoreDescribe(
 							// and wait one scan cycle for the recount to drop
 							// to 0 before opening the phase-2 connections.
 							By("Flushing conntrack entries until egress count is 0")
+							// Poll once per scanner cycle (~12s): each tick flushes
+							// conntrack on both nodes, so a 1s interval would fire
+							// many expensive Execs before the recount can drop the
+							// count.
 							Eventually(func() uint32 {
 								tc.Felixes[0].Exec("calico-bpf", "conntrack", "clean")
 								tc.Felixes[1].Exec("calico-bpf", "conntrack", "clean")
-								time.Sleep(12 * time.Second)
 								return getBPFCurrentCount(1, 1, "egress")()
-							}, "60s", "1s").Should(Equal(uint32(0)))
+							}, "60s", "12s").Should(Equal(uint32(0)))
 						}
 
 						By("Starting persistent connections on workload 1")
