@@ -19,7 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -80,7 +80,7 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	logutils.ConfigureFormatter("deps")
+	logrusr.ConfigureFormatter("deps")
 
 	args := flag.Args()
 	if len(args) == 0 {

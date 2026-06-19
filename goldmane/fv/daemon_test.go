@@ -22,7 +22,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -38,8 +38,8 @@ var (
 func daemonSetup(t *testing.T, cfg daemon.Config) func() {
 	RegisterTestingT(t)
 	logrus.SetLevel(logrus.DebugLevel)
-	logutils.ConfigureFormatter("daemonfv")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logrusr.ConfigureFormatter("daemonfv")
+	logCancel := logrusr.RedirectLogrusToTestingT(t)
 
 	// The context acts as a global timeout for the test to make sure we don't hang.
 	var cancel context.CancelFunc
