@@ -20,12 +20,12 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func setupTest(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	logutils.RedirectLogrusToTestingT(t)
-	logutils.ConfigureFormatter("test")
+	logrusr.RedirectLogrusToTestingT(t)
+	logrusr.ConfigureFormatter("test")
 	RegisterTestingT(t)
 }

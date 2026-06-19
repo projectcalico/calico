@@ -23,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -83,7 +83,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	logutils.ConfigureFormatter("release")
+	logrusr.ConfigureFormatter("release")
 
 	app := &cli.Command{
 		Name:                  "release",
