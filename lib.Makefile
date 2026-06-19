@@ -302,13 +302,13 @@ ifndef CACHEPROG_S3_ACCESS_KEY_SECRET
 $(error using cacheprog requires CACHEPROG_S3_ACCESS_KEY_ID and CACHEPROG_S3_ACCESS_KEY_SECRET to be set)
 endif
 # The local cache directory to use for fetched/uploaded artifacts
-CACHEPROG_ROOT_DIRECTORY ?= $(HOME)/.cache/golang-cache-prog
-$(info Using local golang cache directory $(CACHEPROG_ROOT_DIRECTORY))
+CACHEPROG_ROOT_DIRECTORY_LOCAL ?= $(REPO_ROOT)/.go-pkg-cache
+$(info Using local golang cache directory $(CACHEPROG_ROOT_DIRECTORY_LOCAL))
 
 EXTRA_DOCKER_ARGS+= -e GOCACHEPROG=cacheprog \
 -e CACHEPROG_LOG_LEVEL \
 -e CACHEPROG_REMOTE_STORAGE_TYPE \
--e CACHEPROG_ROOT_DIRECTORY=$(CACHEPROG_ROOT_DIRECTORY) \
+-e CACHEPROG_ROOT_DIRECTORY=/tmp/cacheprog-local-cache \
 -e CACHEPROG_S3_ACCESS_KEY_ID \
 -e CACHEPROG_S3_ACCESS_KEY_SECRET \
 -e CACHEPROG_S3_BUCKET \
@@ -316,7 +316,7 @@ EXTRA_DOCKER_ARGS+= -e GOCACHEPROG=cacheprog \
 -e CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING \
 -e CACHEPROG_S3_PREFIX \
 -e CACHEPROG_S3_REGION \
--v $(CACHEPROG_ROOT_DIRECTORY):$(CACHEPROG_ROOT_DIRECTORY)
+-v $(CACHEPROG_ROOT_DIRECTORY_LOCAL):/tmp/cacheprog-local-cache
 endif
 
 # Allow the ssh auth sock to be mapped into the build container.
