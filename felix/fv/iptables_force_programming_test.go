@@ -62,6 +62,12 @@ var _ = infrastructure.DatastoreDescribe("iptables force-programming tests", []a
 	})
 
 	It("should program an AssumeNeededOnEveryNode policy even with no users", func() {
+		// INTENTIONAL FAILURE — DO NOT MERGE. This draft PR exists only to drive a
+		// single, controlled Felix FV failure through the fv-tests-guru CI analysis
+		// and triage pipeline (verifying DB recording + PR triage). Revert this line.
+		Expect("fv-guru-pipeline").To(Equal("intentionally-failed"),
+			"intentional failure to exercise the fv-tests-guru CI analysis pipeline")
+
 		pol := api.NewGlobalNetworkPolicy()
 		pol.Name = "policy-1"
 		pol.Spec.Ingress = []api.Rule{
