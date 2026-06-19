@@ -1888,24 +1888,32 @@ after_pipeline:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
-      - name: Failure triage to Slack
+      - name: Branch CI monitor to Slack
         commands:
-          # On a FAILED master/release-* run, ask the triage agent to assess the
-          # workflow. The agent only returns a message body when it judges the
-          # failure a genuine regression (red); for a flake / passed / needs-a-
-          # look verdict it returns the sentinel NO_NOTIFY and we post nothing.
+          # On EVERY master/release-* pipeline (pass AND fail), hand the run to the
+          # branch-monitor agent. The agent records the run in its state engine
+          # (which dedups, escalates back-to-back/intermittent, and tracks recovery)
+          # and returns a Slack message body only when there is something to post — a
+          # new/escalated red or a recovery; otherwise the sentinel NO_NOTIFY. A pass
+          # is recorded too so the engine can recover open incidents for the branch.
           - |
-            test "$SEMAPHORE_PIPELINE_RESULT" = failed || { echo "pipeline passed — nothing to triage"; exit 0; }
             case "$SEMAPHORE_GIT_BRANCH" in
               master|release-*) ;;
               *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
             esac
-            msg="Triage Semaphore workflow ${SEMAPHORE_WORKFLOW_ID} on branch ${SEMAPHORE_GIT_BRANCH}."
+            case "$SEMAPHORE_PIPELINE_RESULT" in
+              passed) result=pass ;;
+              failed) result=fail ;;
+              *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
+            esac
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
             req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/send",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
-            # Cold agent through Cloudflare can take ~40s — retry a few times.
+            # Cold agent through Cloudflare can take a while (a failed run also runs
+            # sem-ai triage); retry a few times.
             text=""
             for i in 1 2 3; do
-              resp=$(curl -sS -m 150 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+              resp=$(curl -sS -m 200 -X POST "$RELEASE_MONITOR_AGENT_URL" \
                 -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
                 -H "Content-Type: application/json" -d "$req" || true)
               # Echo the raw a2a response so the parsing below can be debugged
@@ -1916,8 +1924,10 @@ after_pipeline:
               echo "attempt $i: no reply yet (agent may be cold) — retrying"; sleep 15
             done
             case "$text" in
-              NO_NOTIFY*) echo "triage verdict is not a genuine regression — nothing to post"; exit 0 ;;
+              NO_NOTIFY*) echo "branch-monitor: nothing to post"; exit 0 ;;
             esac
-            [ -n "$text" ] || text=":warning: triage agent returned no summary for workflow ${SEMAPHORE_WORKFLOW_ID} (${SEMAPHORE_GIT_BRANCH})"
+            # Best-effort: if the agent never replied, stay silent rather than spam
+            # (passing runs are frequent); the next run re-records anyway.
+            [ -n "$text" ] || { echo "branch-monitor: no agent reply after retries — skipping"; exit 0; }
             jq -n --arg t "$text" '{text:$t}' | curl -sS -m 30 -X POST \
               -H 'Content-Type: application/json' --data @- "$SLACK_CORE_WEBHOOK_URL"
