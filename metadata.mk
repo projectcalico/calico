@@ -8,7 +8,7 @@ K8S_VERSION=v1.36.2
 # The version of LLVM to use for go-build and calico/base images.
 LLVM_VERSION=21.1.8
 # Calico toolchain versions and the calico/base image to use.
-GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
+GO_BUILD_VER=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)-cache
 RUST_BUILD_VER=1.96.0
 
 CALICO_BASE_VER=ubi9-1781568165
@@ -92,3 +92,11 @@ OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+
+# settings for the golang CACHEPROG
+export CACHEPROG_REMOTE_STORAGE_TYPE=s3
+export CACHEPROG_S3_ENDPOINT=https://storage.googleapis.com
+export CACHEPROG_S3_BUCKET=go-build-cache-eu
+export CACHEPROG_S3_REGION=auto
+export CACHEPROG_S3_EXCLUDE_HEADERS_FROM_SIGNING=Accept-Encoding
+export CACHEPROG_S3_PREFIX=calico

@@ -18,6 +18,7 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    - name: go-build-cache-gcp-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
