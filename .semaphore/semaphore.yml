@@ -18,6 +18,7 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    - name: go-build-cache-gcp-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
@@ -40,90 +41,9 @@ global_job_config:
         fi
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
-      # Try to restore the working copy from the cache, if available. Then,
-      # for PRs, also try to restore the build cache.  (We skip this on branch
-      # builds to ensure branches build cleanly.)
-      - sudo apt-get install -y zstd || true
-      - restored_wc_cache=false
-      - |-
-        if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
-          echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
-            echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
-            tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd & tar_pid=$!
-            downloaded_build_cache=false
-            if [[ -n "$BUILD_CACHE_GROUP" && -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
-              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
-                echo "Found build cache for group ${BUILD_CACHE_GROUP}"
-                downloaded_build_cache=true
-              fi
-            fi
-            if wait $tar_pid; then
-              restored_wc_cache=true
-            else
-              echo "ERROR: Failed to extract working copy"
-              restored_wc_cache=false
-            fi
-            if ${downloaded_build_cache}; then
-              echo "Extracting build cache"
-              tar --use-compress-program=zstd -xf /tmp/build-cache.tar.zstd -C .
-              rm /tmp/build-cache.tar.zstd
-            fi
-            cd "${CALICO_DIR_NAME}"
-          fi
-        fi || true
-      - |-
-        if [[ ${restored_wc_cache} != true && -z "$SKIP_CHECKOUT" ]]; then
-          echo "No cache restored, doing a fresh checkout..."
-          cd $HOME
-          rm -rf "${CALICO_DIR_NAME}"
-          git clone --filter=blob:none $SEMAPHORE_GIT_URL $CALICO_DIR_NAME
-          cd "${CALICO_DIR_NAME}" || exit 1
-        fi
-      - |-
-        if [[ -z "$SKIP_CHECKOUT" ]]; then
-          git fetch origin --tags --prune-tags ${SEMAPHORE_GIT_SHA}
-          if [ "$SEMAPHORE_GIT_REF_TYPE" = "branch" ]; then
-            git checkout ${SEMAPHORE_GIT_SHA} -B "${SEMAPHORE_GIT_BRANCH}"
-          else
-            git checkout ${SEMAPHORE_GIT_SHA}
-          fi
-          CALICO_DIR="$(pwd)"
-          export CALICO_DIR
-          mkdir -p artifacts
-        fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      # Best-effort: load calico/go-build from the GCS cache populated by the
-      # "Pull: go-build image" prerequisite job. Falls back to a Docker Hub pull
-      # on cache miss. Skipped on non-x86_64 / cross-compile agents since the
-      # cache is amd64-only.
-      - |-
-        if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
-          GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-          image="calico/go-build:${GO_BUILD_VER}"
-          if ! docker image inspect "$image" >/dev/null 2>&1; then
-            cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-            if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
-              echo "Loading ${image} from GCS cache"
-              zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
-              docker load -i /tmp/go-build.tar
-              rm -f /tmp/go-build.tar
-            else
-              echo "No GCS cache for ${image}, docker will pull from Docker Hub if needed"
-            fi
-          fi
-        fi
   epilogue:
     commands:
-      - cd $HOME
-      - |-
-        if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
-          echo "On branch, storing build cache group ${BUILD_CACHE_GROUP}"
-          tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
-        fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
 promotions:
@@ -326,21 +246,6 @@ blocks:
             - make fix-changed
             - make check-ocp-no-crds
             - make check-dirty
-  - name: Store working copy
-    run:
-      when: "branch =~ '.*'"
-    dependencies: []
-    task:
-      env_vars:
-        - name: SKIP_CACHE_RESTORE
-          value: "true"
-      jobs:
-        - name: Save working copy to cache
-          commands:
-            - cd ..
-            - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
-            - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
   - name: "Build: nftables RPMs"
     # Producer for the patched nftables + libnftnl RPMs that calico/node and the
     # istio CNI install image consume. The image tag is content-addressed (sha
@@ -654,34 +559,6 @@ blocks:
                 - s390x
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
-  - name: "Pull: go-build image"
-    # Populate the GCS cache of calico/go-build so that every downstream job can
-    # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
-    # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
-    # the tarball survives across workflows — the common case is a no-op
-    # `gcloud storage ls` on a cache hit.
-    run:
-      when: "true"
-    dependencies: []
-    task:
-      env_vars:
-        - name: SKIP_CACHE_RESTORE
-          value: "true"
-      jobs:
-        - name: "Cache calico/go-build to GCS"
-          commands:
-            - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-            - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-            - |-
-              if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
-                echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
-              else
-                echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
-                docker pull "calico/go-build:${GO_BUILD_VER}"
-                docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
-                zstd -3 --rm /tmp/go-build.tar
-                gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
-              fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
     # from GCS instead of rebuilding per component. This block is the sole
@@ -970,8 +847,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -1500,8 +1379,6 @@ blocks:
       - Check language/Dockerfiles
       - Check protobufs
       - Manifests and API docs
-      - Store working copy
-      - "Pull: go-build image"
     task:
       jobs:
         - name: Pre-flight checks
@@ -2078,8 +1955,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -2869,8 +2748,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -5520,8 +5401,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -6025,7 +5908,9 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/testutils/json/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
