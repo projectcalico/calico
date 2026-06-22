@@ -20,9 +20,11 @@ import (
 	"github.com/projectcalico/calico/node/pkg/node"
 )
 
-// On Windows the component subcommand exposes only node, felix, and confd —
-// the other in-cluster daemons (typha, kube-controllers, goldmane, etc.) have
-// Linux-only dependencies (netlink, eBPF, syscall.Mount, syslog).
+// On Windows the component subcommand exposes node, felix, confd, and cni. The
+// operator's install-cni container runs "calico component cni install", so cni
+// has to live here too. The other in-cluster daemons (typha, kube-controllers,
+// goldmane, etc.) have Linux-only dependencies (netlink, eBPF, syscall.Mount,
+// syslog) and stay off Windows.
 func addComponentCommand(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "component",
@@ -32,6 +34,7 @@ func addComponentCommand(parent *cobra.Command) {
 		node.NewCommand(),
 		node.NewFelixCommand(),
 		node.NewConfdCommand(),
+		newCNICommand(),
 	)
 	parent.AddCommand(cmd)
 }

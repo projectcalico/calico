@@ -19,6 +19,21 @@ import (
 	"testing"
 )
 
+// TestComponentHasCNIInstall guards the operator's install-cni container, which
+// runs "calico component cni install" on every platform. The Windows component
+// tree is assembled separately from Linux, so it is easy to drop cni from one
+// and not notice until a Windows node fails to set up CNI.
+func TestComponentHasCNIInstall(t *testing.T) {
+	root := newRootCommand()
+	cmd, _, err := root.Find([]string{"component", "cni", "install"})
+	if err != nil {
+		t.Fatalf("finding 'component cni install': %v", err)
+	}
+	if cmd.Name() != "install" {
+		t.Errorf("'component cni install' resolved to %q, want the cni install command", cmd.CommandPath())
+	}
+}
+
 func TestDispatch(t *testing.T) {
 	tests := []struct {
 		name       string
