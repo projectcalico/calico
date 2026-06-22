@@ -26,15 +26,20 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// configRetry backs off long enough to ride out a calico-apiserver pod that's
-// briefly rolling or unreachable, which is where the transient errors that
-// retriableAPIError covers come from.
+// configRetry keeps retrying for ~2 minutes so a calico-apiserver pod that is
+// rolling or unreachable is ridden out rather than failing the spec. That pod
+// is where the transient errors retriableAPIError covers come from: while it
+// restarts, the aggregated projectcalico.org/v3 API returns 503
+// ServiceUnavailable for the whole window, which routinely runs tens of seconds.
+//
+// wait.Backoff zeroes Steps as soon as Duration*Factor exceeds Cap, so a capped
+// exponential backoff quits early - the old 8-step/10s-cap budget only made ~7
+// attempts over ~13s, short of a real restart. Use a fixed interval instead so
+// the whole budget actually gets spent.
 var configRetry = wait.Backoff{
-	Steps:    8,
-	Duration: 100 * time.Millisecond,
-	Factor:   2.0,
-	Jitter:   0.1,
-	Cap:      10 * time.Second,
+	Steps:    30,
+	Duration: 4 * time.Second,
+	Factor:   1.0,
 }
 
 // ConfigureWithCleanup fetches an object by key, applies a mutation, and
