@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -37,6 +38,63 @@ func TestNATDump(t *testing.T) {
 	}
 
 	dumpNice(func(format string, i ...any) { fmt.Printf(format, i...) }, nat, back, false)
+}
+
+// TestAffinityDumpJSON checks that makeAffinityJSON exposes the client, the
+// frontend service tuple, and the chosen backend as structured fields.
+func TestAffinityDumpJSON(t *testing.T) {
+	m := nat2.AffinityMapMem{
+		nat2.NewAffinityKey(net.IPv4(10, 0, 0, 1), nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 8080)),
+	}
+
+	entries := makeAffinityJSON(m)
+
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %+v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.ClientIP != "10.0.0.1" || e.Addr != "1.1.1.1" || e.Port != 80 || e.Proto != 6 {
+		t.Fatalf("unexpected affinity key fields: %+v", e)
+	}
+	if e.Backend.Addr != "5.5.5.5" || e.Backend.Port != 8080 {
+		t.Fatalf("unexpected backend: %+v", e.Backend)
+	}
+	if _, err := json.Marshal(entries); err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+}
+
+// TestAffinityDumpJSONProtoOrdering verifies that affinity entries sharing the
+// same service addr+port and client IP but differing in protocol are ordered
+// deterministically (by protocol). Without proto in the sort key these entries
+// compare equal and slices.SortFunc leaves their order unspecified.
+func TestAffinityDumpJSONProtoOrdering(t *testing.T) {
+	client := net.IPv4(10, 0, 0, 1)
+	svc := net.IPv4(1, 1, 1, 1)
+	m := nat2.AffinityMapMem{
+		// Same client, same addr+port; only the protocol differs (TCP=6, UDP=17).
+		nat2.NewAffinityKey(client, nat2.NewNATKey(svc, 53, 17)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 5353)),
+		nat2.NewAffinityKey(client, nat2.NewNATKey(svc, 53, 6)): nat2.NewAffinityValue(
+			0, nat2.NewNATBackendValue(net.IPv4(5, 5, 5, 5), 5353)),
+	}
+
+	// Map iteration order is randomised, so a single deterministic ordering
+	// across repeated calls is what we assert.
+	first := makeAffinityJSON(m)
+	if len(first) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %+v", len(first), first)
+	}
+	if first[0].Proto != 6 || first[1].Proto != 17 {
+		t.Fatalf("entries not ordered by proto: %+v", first)
+	}
+	for i := 0; i < 20; i++ {
+		got := makeAffinityJSON(m)
+		if got[0].Proto != first[0].Proto || got[1].Proto != first[1].Proto {
+			t.Fatalf("non-deterministic ordering across calls: %+v vs %+v", first, got)
+		}
+	}
 }
 
 // TestDumpNiceGrouping verifies that dumpNiceGrouped groups frontends sharing the

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -34,6 +35,8 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
+	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -164,22 +167,48 @@ func collectDiags(opts *diagOpts) error {
 	dir := fmt.Sprintf("%s/%s", tempDir, directoryName)
 
 	// Create Kubernetes client from config or env vars.
-	kubeClient, _, _, err := clientmgr.GetClients(opts.Config)
+	kubeClient, calicoClient, _, err := clientmgr.GetClients(opts.Config)
 	if err != nil {
 		fmt.Printf("ERROR creating clients: %v\n", err)
 		return err
 	}
+	// Skip the per-node BPF dumps if the BPF dataplane isn't enabled —
+	// they are slow and on iptables/nftables clusters produce no useful data.
+	bpfEnabled := isBPFEnabled(calicoClient)
 	if kubeClient != nil {
 		collectTLSSecrets(kubeClient, dir+"/tls")
-		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts)
+		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts, bpfEnabled)
 	}
 	collectGlobalClusterInformation(dir + "/cluster")
+	collectUnsupportedAnnotations(tempDir, directoryName)
 	createArchive(tempDir, directoryName, archiveName)
 
 	return nil
 }
 
-func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts) {
+// isBPFEnabled reports whether the BPF dataplane is turned on in the cluster's
+// default FelixConfiguration. If the field is unset, BPF defaults to off and
+// we skip the BPF section. If we can't tell at all (no client, lookup error),
+// fall back to assuming it is on — better to collect noisy-but-empty BPF
+// diags than to silently drop them on a real BPF cluster we couldn't query.
+func isBPFEnabled(calicoClient clientv3.Interface) bool {
+	if calicoClient == nil {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	fc, err := calicoClient.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		log.WithError(err).Debug("Could not read default FelixConfiguration; assuming BPF is enabled")
+		return true
+	}
+	if fc.Spec.BPFEnabled == nil {
+		return false
+	}
+	return *fc.Spec.BPFEnabled
+}
+
+func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts, bpfEnabled bool) {
 	// If --focus-nodes is specified, put those node names at the start of the node list.
 	nodeList := strings.Split(opts.FocusNodes, ",")
 
@@ -223,7 +252,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because deployments or other namespaces might work.
 		} else {
 			for _, ds := range dsl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, ns.Name, ds.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, ds.Spec.Selector)
 			}
 		}
 
@@ -234,7 +263,7 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because other namespaces might work.
 		} else {
 			for _, d := range dl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, ns.Name, d.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, d.Spec.Selector)
 			}
 		}
 
@@ -245,13 +274,13 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 			// Continue because other namespaces might work.
 		} else {
 			for _, s := range sl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, ns.Name, s.Spec.Selector)
+				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, s.Spec.Selector)
 			}
 		}
 	}
 }
 
-func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, ns string, selector *v1.LabelSelector) {
+func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, bpfEnabled bool, ns string, selector *v1.LabelSelector) {
 	labelMap, err := v1.LabelSelectorAsMap(selector)
 	if err != nil {
 		fmt.Printf("ERROR forming pod selector: %v\n", err)
@@ -266,10 +295,10 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 		return
 	}
 
-	// Map the pod names against their node names.
-	podNamesByNode := map[string][]string{}
+	// Map the pods against their node names.
+	podsByNode := map[string][]apiv1.Pod{}
 	for _, p := range pl.Items {
-		podNamesByNode[p.Spec.NodeName] = append(podNamesByNode[p.Spec.NodeName], p.Name)
+		podsByNode[p.Spec.NodeName] = append(podsByNode[p.Spec.NodeName], p)
 	}
 
 	nextNodeIndex := 0
@@ -283,13 +312,13 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 		nodeName := nodeList[nextNodeIndex]
 		nextNodeIndex++
 
-		for _, podName := range podNamesByNode[nodeName] {
-			fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", podName, ns, nodeName)
-			if strings.HasPrefix(podName, "calico-node-") {
+		for _, pod := range podsByNode[nodeName] {
+			fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", pod.Name, ns, nodeName)
+			if strings.HasPrefix(pod.Name, "calico-node-") {
 				nodeDir := dir + "/" + nodeName
-				collectCalicoNodeDiags(nodeDir, nodeName, ns, podName)
+				collectCalicoNodeDiags(nodeDir, nodeName, ns, pod.Name, bpfEnabled)
 			}
-			cmds = append(cmds, diagsCmdsForPod(dir, linkDir, opts, nodeName, ns, podName)...)
+			cmds = append(cmds, diagsCmdsForPod(dir, linkDir, opts, nodeName, ns, &pod)...)
 			logsWanted--
 			if logsWanted <= 0 {
 				break
@@ -301,32 +330,111 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 
 func collectCalicoResource(dir string) {
 	log.Info("Auditing calico resource definitions")
-	buf, err := common.Exec([]string{"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template", "{{range .items}}{{.metadata.name}} {{end}}"})
+
+	collected := set.New[string]()
+	commands := []common.Cmd{}
+
+	// Phase 1: Discover Calico resources via CRD listing. This finds resources registered as
+	// CustomResourceDefinitions (both crd.projectcalico.org/v1 and projectcalico.org/v3 CRD modes).
+	// The template outputs "name=version" pairs where name is the CRD metadata.name (<plural>.<group>)
+	// and version is the storage version. We use these to construct fully qualified resource identifiers
+	// (<plural>.<version>.<group>) to avoid ambiguity when multiple API groups define the same resource
+	// name (e.g., apiservers.operator.tigera.io vs apiservers.config.openshift.io).
+	buf, err := common.Exec([]string{"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
+		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}"})
 	if err != nil {
 		fmt.Printf("Couldn't list CRDs: %s\n", err)
 		if buf != nil {
 			fmt.Printf("\tcmd output:\n\t\t%s", buf.String())
 		}
-		return
+	} else {
+		crds := strings.Fields(buf.String())
+		for _, entry := range crds {
+			parts := strings.SplitN(entry, "=", 2)
+			crdName := parts[0]
+			if !strings.Contains(crdName, "projectcalico") && !strings.Contains(crdName, "tigera") {
+				continue
+			}
+			collected.Add(crdName)
+
+			// Build the fully qualified resource: <plural>.<version>.<group>.
+			resource := crdName
+			if len(parts) == 2 && parts[1] != "" {
+				dotIdx := strings.Index(crdName, ".")
+				if dotIdx > 0 {
+					plural := crdName[:dotIdx]
+					group := crdName[dotIdx+1:]
+					resource = fmt.Sprintf("%s.%s.%s", plural, parts[1], group)
+				}
+			}
+
+			commands = append(commands, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
+				FilePath: fmt.Sprintf("%s/%v.yaml", dir, crdName),
+			}, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
+				FilePath: fmt.Sprintf("%s/%v.txt", dir, crdName),
+			})
+		}
 	}
 
-	rawStr := buf.String()
-	crds := strings.Fields(rawStr)
-	commands := []common.Cmd{}
-	for _, resource := range crds {
-		if !strings.Contains(resource, "projectcalico") && !strings.Contains(resource, "tigera") {
-			continue
+	// Phase 2: Discover v3 resources via the projectcalico.org API group. When the Calico API
+	// server is running, v3 resources are served via API aggregation rather than CRDs, so they
+	// won't appear in the CRD listing above. This catches them regardless of serving mode.
+	// Use --no-headers with default output to get APIVERSION and NAME columns for fully qualified lookups.
+	buf, err = common.Exec([]string{"kubectl", "api-resources", "--api-group=projectcalico.org", "--no-headers"})
+	if err != nil {
+		log.WithError(err).Warn("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery")
+		fmt.Printf("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery: %s\n", err)
+		if buf != nil {
+			fmt.Printf("\tcmd output:\n\t\t%s", buf.String())
 		}
+	} else {
+		for _, line := range strings.Split(buf.String(), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 3 {
+				continue
+			}
+			// api-resources output columns: NAME SHORTNAMES APIVERSION NAMESPACED KIND
+			// (SHORTNAMES may be empty, but fields are whitespace-separated so columns shift)
+			// The APIVERSION column contains <group>/<version> and KIND is always last.
+			// Find the APIVERSION field which contains a '/'.
+			var plural, apiVersion string
+			plural = fields[0]
+			for _, f := range fields[1:] {
+				if strings.Contains(f, "/") {
+					apiVersion = f
+					break
+				}
+			}
 
-		commands = append(commands, common.Cmd{
-			Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
-			FilePath: fmt.Sprintf("%s/%v.yaml", dir, resource),
-		}, common.Cmd{
-			Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
-			CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
-			FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
-		})
+			crdName := plural + ".projectcalico.org"
+			if collected.Contains(crdName) {
+				continue
+			}
+			collected.Add(crdName)
+
+			// Build fully qualified resource: <plural>.<version>.<group>.
+			resource := crdName
+			if apiVersion != "" {
+				parts := strings.SplitN(apiVersion, "/", 2)
+				if len(parts) == 2 {
+					resource = fmt.Sprintf("%s.%s.%s", plural, parts[1], parts[0])
+				}
+			}
+
+			commands = append(commands, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (yaml)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao yaml", resource),
+				FilePath: fmt.Sprintf("%s/%v.yaml", dir, crdName),
+			}, common.Cmd{
+				Info:     fmt.Sprintf("Collect Calico %v (wide text)", resource),
+				CmdStr:   fmt.Sprintf("kubectl get %v -Ao wide", resource),
+				FilePath: fmt.Sprintf("%s/%v.txt", dir, crdName),
+			})
+		}
 	}
 
 	common.ExecAllCmdsWriteToFile(commands)
@@ -440,6 +548,14 @@ func collectKubernetesResource(dir string) {
 		Info:     "Collect k8s baselineadminnetworkpolicies (text)",
 		CmdStr:   "kubectl get baselineadminnetworkpolicies.policy.networking.k8s.io -Ao wide",
 		FilePath: fmt.Sprintf("%s/baselineadminnetworkpolicies.txt", dir),
+	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (yaml)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao yaml",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.yaml", dir),
+	}, common.Cmd{
+		Info:     "Collect multus network-attachment-definitions (text)",
+		CmdStr:   "kubectl get network-attachment-definitions.k8s.cni.cncf.io -Ao wide",
+		FilePath: fmt.Sprintf("%s/network-attachment-definitions.txt", dir),
 	}, common.Cmd{
 		Info:     "Collect k8s validatingwebhookconfigurations (text)",
 		CmdStr:   "kubectl get validatingwebhookconfigurations.admissionregistration.k8s.io -o wide",
@@ -585,30 +701,77 @@ func collectGlobalClusterInformation(dir string) {
 	collectThirdPartyResource(dir + "/third-party")
 }
 
-// func diagsCmdsForPod(pod, namespace, dir /*node_name*/, sinceFlag string) {
-func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace, podName string) []common.Cmd {
+func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace string, pod *apiv1.Pod) []common.Cmd {
 	nodeDir := dir + "/" + nodeName
 	namespaceDir := nodeDir + "/" + namespace
 	cmds := []common.Cmd{
 		{
-			Info:     fmt.Sprintf("Collect logs for pod %s", podName),
-			CmdStr:   fmt.Sprintf("kubectl logs --since=%s -n %s %s --all-containers", opts.Since, namespace, podName),
-			FilePath: fmt.Sprintf("%s/%s.log", namespaceDir, podName),
-			SymLink:  fmt.Sprintf("%s/%s/%s.log", linkDir, namespace, podName),
+			Info:     fmt.Sprintf("Collect logs for pod %s", pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
+			FilePath: fmt.Sprintf("%s/%s.log", namespaceDir, pod.Name),
+			SymLink:  fmt.Sprintf("%s/%s/%s.log", linkDir, namespace, pod.Name),
 		},
 		{
-			Info:     fmt.Sprintf("Collect describe for pod %s", podName),
-			CmdStr:   fmt.Sprintf("kubectl -n %s describe pods %s", namespace, podName),
-			FilePath: fmt.Sprintf("%s/%s.txt", namespaceDir, podName),
-			SymLink:  fmt.Sprintf("%s/%s/%s.txt", linkDir, namespace, podName),
+			Info:     fmt.Sprintf("Collect describe for pod %s", pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl -n %s describe pods %s", namespace, pod.Name),
+			FilePath: fmt.Sprintf("%s/%s.txt", namespaceDir, pod.Name),
+			SymLink:  fmt.Sprintf("%s/%s/%s.txt", linkDir, namespace, pod.Name),
 		},
+	}
+	// If any container has restarted, also grab the previous incarnation's
+	// logs — those are usually the ones that explain the restart.
+	if hasPreviousLogs(pod) {
+		cmds = append(cmds, common.Cmd{
+			Info:     fmt.Sprintf("Collect previous logs for pod %s", pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
+			FilePath: fmt.Sprintf("%s/%s.previous.log", namespaceDir, pod.Name),
+			SymLink:  fmt.Sprintf("%s/%s/%s.previous.log", linkDir, namespace, pod.Name),
+		})
 	}
 	return cmds
 }
 
-func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName string) {
+// hasPreviousLogs reports whether any container in the pod has a prior
+// incarnation worth fetching logs from.
+func hasPreviousLogs(pod *apiv1.Pod) bool {
+	statuses := append([]apiv1.ContainerStatus{}, pod.Status.ContainerStatuses...)
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	for _, cs := range statuses {
+		if cs.RestartCount > 0 || cs.LastTerminationState.Terminated != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// bpfJSONCmd builds a diagnostic command that dumps calico-bpf state as JSON,
+// writing <file>.json.
+//
+// Current calico-node runs the combined `calico` binary and exposes the bpf
+// tool as `calico component node bpf <sub>`, with machine-parseable `--json`
+// output. Both that invocation path and the --json flag landed together; older
+// (pre-combined-binary) calico-node has neither — it only understands the
+// legacy `calico-node -bpf <sub>` form, with text output. calicoctl is
+// frequently run against an older cluster, so the command falls back to that
+// legacy text form (writing <file>.txt) when the modern invocation fails,
+// degrading gracefully rather than capturing an "unknown command" error.
+//
+// sub is the bpf subcommand, e.g. "nat dump" or "conntrack stats"; file is the
+// output basename without extension, e.g. "bpf-nat".
+func bpfJSONCmd(curNodeDir, nodeName, namespace, podName, info, sub, file string) common.Cmd {
+	kexec := fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node --", namespace, podName)
+	return common.Cmd{
+		Info:             fmt.Sprintf("Collect eBPF %s for node %s", info, nodeName),
+		CmdStr:           fmt.Sprintf("%s calico component node bpf %s --json", kexec, sub),
+		FilePath:         fmt.Sprintf("%s/%s.json", curNodeDir, file),
+		FallbackCmdStr:   fmt.Sprintf("%s calico-node -bpf %s", kexec, sub),
+		FallbackFilePath: fmt.Sprintf("%s/%s.txt", curNodeDir, file),
+	}
+}
+
+func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName string, bpfEnabled bool) {
 	fmt.Printf("Collecting dataplane diags for calico-node: %s\n", podName)
-	common.ExecAllCmdsWriteToFile([]common.Cmd{
+	cmds := []common.Cmd{
 		// ip diagnostics
 		{
 			Info:     fmt.Sprintf("Collect iptables (legacy) for node %s", nodeName),
@@ -665,79 +828,80 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
 			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
 		},
-		// eBPF diagnostics
-		{
-			Info:     fmt.Sprintf("Collect eBPF conntrack for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico-node -bpf conntrack dump", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-conntrack.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect eBPF ipsets for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico-node -bpf ipsets dump", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-ipsets.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect eBPF nat for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico-node -bpf nat dump", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-nat.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect eBPF routes for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- calico-node -bpf routes dump", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-routes.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-prog.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect eBPF map for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map list", namespace, podName),
-			FilePath: fmt.Sprintf("%s/bpf-maps.txt", curNodeDir),
-		},
 		{
 			Info:     fmt.Sprintf("Collect tc qdisc for node %s", nodeName),
 			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- tc qdisc show", namespace, podName),
 			FilePath: fmt.Sprintf("%s/tc-qdisc.txt", curNodeDir),
 		},
-	})
+	}
+	if bpfEnabled {
+		// eBPF diagnostics. The calico-bpf tool is reached via the combined
+		// calico binary's `component node bpf` subcommand. The dumps are
+		// collected in JSON format (the tool's --json flag) so the bundle
+		// carries machine-parseable output, falling back to plain text against
+		// older calico-node versions. The bpftool listings below have no
+		// equivalent calico-bpf JSON path here and stay as plain text.
+		cmds = append(cmds,
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack", "conntrack dump", "bpf-conntrack"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ipsets", "ipsets dump", "bpf-ipsets"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat", "nat dump", "bpf-nat"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "routes", "routes dump", "bpf-routes"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "counters", "counters dump", "bpf-counters"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "arp", "arp dump", "bpf-arp"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ifstate", "ifstate dump", "bpf-ifstate"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack stats", "conntrack stats", "bpf-conntrack-stats"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat affinity", "nat aff", "bpf-nat-aff"),
+			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-prog.txt", curNodeDir),
+			},
+			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF map for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map list", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-maps.txt", curNodeDir),
+			},
+		)
+	}
+	common.ExecAllCmdsWriteToFile(cmds)
 
-	output, err := common.ExecCmd(fmt.Sprintf(
-		"kubectl exec -n %s -t %s -c calico-node -- bpftool map list",
-		namespace,
-		podName,
-	))
-	if err != nil {
-		fmt.Printf("Could not retrieve eBPF maps: %s\n", err)
-	} else {
-		bpfMaps := strings.Split(strings.TrimSpace(output.String()), "\n")
-		log.Debugf("eBPF maps: %s\n", bpfMaps)
+	if bpfEnabled {
+		output, err := common.ExecCmd(fmt.Sprintf(
+			"kubectl exec -n %s -t %s -c calico-node -- bpftool map list",
+			namespace,
+			podName,
+		))
+		if err != nil {
+			fmt.Printf("Could not retrieve eBPF maps: %s\n", err)
+		} else {
+			bpfMaps := strings.Split(strings.TrimSpace(output.String()), "\n")
+			log.Debugf("eBPF maps: %s\n", bpfMaps)
 
-		// Output looks like this:
-		//
-		// 35: lru_hash  name cali_v4_srmsg  flags 0x0
-		//	key 16B  value 8B  max_entries 510000  memlock 12242944B
-		//	pids calico-node(28576)
+			// Output looks like this:
+			//
+			// 35: lru_hash  name cali_v4_srmsg  flags 0x0
+			//	key 16B  value 8B  max_entries 510000  memlock 12242944B
+			//	pids calico-node(28576)
 
-		bpfInfoLineRe := regexp.MustCompile(`^(\d+):.*name (cali\w+)`)
-		var bpfDumpCmds []common.Cmd
-		for _, line := range bpfMaps {
-			if m := bpfInfoLineRe.FindStringSubmatch(line); m != nil {
-				id := m[1]
-				name := m[2]
-				bpfDumpCmds = append(bpfDumpCmds, common.Cmd{
-					Info:     fmt.Sprintf("Collect eBPF map %s:%s for node %s", id, name, nodeName),
-					CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map dump id %s", namespace, podName, id),
-					FilePath: fmt.Sprintf("%s/bpf-maps/%s-id_%s.txt", curNodeDir, name, id),
-				})
+			bpfInfoLineRe := regexp.MustCompile(`^(\d+):.*name (cali\w+)`)
+			var bpfDumpCmds []common.Cmd
+			for _, line := range bpfMaps {
+				if m := bpfInfoLineRe.FindStringSubmatch(line); m != nil {
+					id := m[1]
+					name := m[2]
+					bpfDumpCmds = append(bpfDumpCmds, common.Cmd{
+						Info:     fmt.Sprintf("Collect eBPF map %s:%s for node %s", id, name, nodeName),
+						CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map dump id %s", namespace, podName, id),
+						FilePath: fmt.Sprintf("%s/bpf-maps/%s-id_%s.txt", curNodeDir, name, id),
+					})
+				}
 			}
+			common.ExecAllCmdsWriteToFile(bpfDumpCmds)
 		}
-		common.ExecAllCmdsWriteToFile(bpfDumpCmds)
 	}
 
 	// Collect all of the CNI logs
-	output, err = common.ExecCmd(fmt.Sprintf(
+	output, err := common.ExecCmd(fmt.Sprintf(
 		"kubectl exec -n %s -t %s -c calico-node -- ls /var/log/calico/cni",
 		namespace,
 		podName,
@@ -755,6 +919,46 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			})
 		}
 		common.ExecAllCmdsWriteToFile(cmds)
+	}
+}
+
+func collectUnsupportedAnnotations(tempDir string, directoryName string) {
+	// Check for files containing unsupported.operator.tigera.io
+	var filesWithString []string
+	fullPath := fmt.Sprintf("%s/%s", tempDir, directoryName)
+	err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(string(content), "unsupported.operator.tigera.io") {
+				relPath, err := filepath.Rel(fullPath, path)
+				if err != nil {
+					return err
+				}
+				filesWithString = append(filesWithString, relPath)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf("Error checking files for unsupported annotation: %s\n", err)
+		return
+	}
+
+	// If files were found containing the string, write them to a file
+	if len(filesWithString) > 0 {
+		fmt.Println("\n==== WARNING: Unsupported annotation usage detected in the cluster ====")
+		content := strings.Join(filesWithString, "\n")
+		filePath := fmt.Sprintf("%s/%s/files_with_unsupported_annotation.txt", tempDir, directoryName)
+		err = os.WriteFile(filePath, []byte(content), 0644)
+		if err != nil {
+			fmt.Printf("Error writing list of files with unsupported annotation: %s\n", err)
+		}
 	}
 }
 
