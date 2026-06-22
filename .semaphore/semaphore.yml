@@ -970,8 +970,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -2078,8 +2080,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -2869,8 +2873,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -5520,8 +5526,10 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/chanutil/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
@@ -5711,7 +5719,9 @@ blocks:
           - gcloud config set project unique-caldron-775
           - cd node
           - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-          - export ZONE=europe-west3-c
+          # Spread the test VMs across the zones of this region (by available
+          # capacity); see .semaphore/vms/run-tests-on-vms.
+          - export REGION=europe-west3
           - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
           - echo VM_PREFIX=${VM_PREFIX}
           - export COMPONENT=node
@@ -6025,7 +6035,9 @@ blocks:
         '/lib/httpmachinery/pkg/header/*.go',
         '/lib/httpmachinery/pkg/server/*.go',
         '/lib/httpmachinery/pkg/server/adaptors/gorilla/*.go',
+        '/lib/logrusr/*.go',
         '/lib/std/cryptoutils/*.go',
+        '/lib/std/log/*.go',
         '/lib/std/testutils/json/*.go',
         '/lib/std/time/*.go',
         '/lib/std/uniquelabels/*.go',

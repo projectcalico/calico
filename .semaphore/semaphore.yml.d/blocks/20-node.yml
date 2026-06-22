@@ -91,7 +91,9 @@
         - gcloud config set project unique-caldron-775
         - cd node
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export ZONE=europe-west3-c
+        # Spread the test VMs across the zones of this region (by available
+        # capacity); see .semaphore/vms/run-tests-on-vms.
+        - export REGION=europe-west3
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=node
