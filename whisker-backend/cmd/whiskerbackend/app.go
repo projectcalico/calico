@@ -23,11 +23,15 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/server"
 	gorillaadpt "github.com/projectcalico/calico/lib/httpmachinery/pkg/server/adaptors/gorilla"
+	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/lib/std/log"
 	"github.com/projectcalico/calico/whisker-backend/pkg/config"
 	v1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
 
 func Run(ctx context.Context, cfg *config.Config) {
+	log.SetDefaultLogger(logrusr.New(logrus.StandardLogger()))
+
 	// Config fields are file paths and host:port only — no inline credentials or key material.
 	logrus.WithField("cfg", cfg.String()).Info("Applying configuration...")
 
