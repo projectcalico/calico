@@ -103,7 +103,11 @@ module.exports = async ({ github, context, core }) => {
   //    tests / docs). Filter out the bot's own label so the agent's
   //    verdict is not influenced by a prior classification round.
   const labels = (pr.labels || []).map(l => l.name).filter(n => n !== LABEL);
-  const filesResp = await github.rest.pulls.listFiles({
+  // Paginate so big PRs (the monorepo regularly has changes touching
+  // 100+ files) don't get silently truncated to the first page, which
+  // would bias the classifier or let a fork-PR pad with unrelated
+  // paths past the page boundary.
+  const files = await github.paginate(github.rest.pulls.listFiles, {
     owner, repo, pull_number: pr.number, per_page: 100,
   });
   const labelsText = labels.length === 0 ? '(none)' : labels.join(', ');
@@ -112,14 +116,13 @@ module.exports = async ({ github, context, core }) => {
   // and deleted. Status + size lets the classifier separate new API
   // surface (`[added +N]` on api types) from small API fixes
   // (`[modified +2/-1]`), and small defensive tweaks from substantial
-  // rewrites.
-  const filesText = filesResp.data.length === 0
+  // rewrites. previous_filename shows on any status that carries it
+  // (typically renamed, sometimes copied).
+  const filesText = files.length === 0
     ? '(none)'
-    : filesResp.data.map(f => {
+    : files.map(f => {
         const base = `- [${f.status} +${f.additions}/-${f.deletions}] ${f.filename}`;
-        return f.status === 'renamed' && f.previous_filename
-          ? `${base} (was ${f.previous_filename})`
-          : base;
+        return f.previous_filename ? `${base} (was ${f.previous_filename})` : base;
       }).join('\n');
 
   // 4. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
