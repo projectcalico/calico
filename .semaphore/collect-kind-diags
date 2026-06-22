@@ -50,22 +50,41 @@ if ! "$kubectl_bin" --kubeconfig="$kubeconfig" cluster-info >/dev/null 2>&1; the
   exit 0
 fi
 
-# Extract the calico binary from the image that's already loaded for the
-# e2e run. The combined `calico` binary dispatches `ctl` to the calicoctl
-# subcommand.
-calico_image="${CALICO_IMAGE:-localhost:5000/calico/calico:test-build}"
+# Extract the calico binary from an image in the local Docker daemon. The
+# combined `calico` binary dispatches `ctl` to the calicoctl subcommand.
+#
+# Try the daemon-local source tag first. When images come from the GCS cache,
+# load-cached-images `docker load`s calico/calico:latest-<arch> but kind-up
+# skips the retag, so the localhost:5000/...:test-build tag the cluster pulls
+# from never lands in the daemon - only the latest-<arch> tag does.
+arch="${ARCH:-amd64}"
 calico_bin="$(mktemp -d)/calico"
-cid="$(docker create "$calico_image" 2>/dev/null)"
-if [ -z "$cid" ]; then
-  echo "collect-kind-diags: could not create container from $calico_image, skipping"
-  exit 0
-fi
-if ! docker cp "$cid:/usr/bin/calico" "$calico_bin"; then
+
+extract_calico_bin() {
+  local image="$1" cid
+  cid="$(docker create "$image" 2>/dev/null)" || return 1
+  [ -n "$cid" ] || return 1
+  docker cp "$cid:/usr/bin/calico" "$calico_bin"
+  local rc=$?
   docker rm -f "$cid" >/dev/null 2>&1 || true
-  echo "collect-kind-diags: could not extract calico binary, skipping"
+  return $rc
+}
+
+extracted=false
+for image in \
+  ${CALICO_IMAGE:+"$CALICO_IMAGE"} \
+  "calico/calico:latest-${arch}" \
+  "localhost:5000/calico/calico:test-build"; do
+  if extract_calico_bin "$image"; then
+    echo "collect-kind-diags: extracted calico binary from $image"
+    extracted=true
+    break
+  fi
+done
+if [ "$extracted" != true ]; then
+  echo "collect-kind-diags: no local calico image to extract a binary from, skipping"
   exit 0
 fi
-docker rm -f "$cid" >/dev/null 2>&1 || true
 chmod +x "$calico_bin"
 
 mkdir -p "$artifacts_dir"
