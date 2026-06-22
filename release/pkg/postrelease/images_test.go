@@ -28,8 +28,9 @@ func TestImagesPublished(t *testing.T) {
 		checkImages(t, images)
 
 		for _, reg := range registry.DefaultCalicoRegistries {
-			for _, image := range strings.Split(images, " ") {
-				t.Run(image, func(t *testing.T) {
+			for image := range strings.SplitSeq(images, " ") {
+				t.Run(fmt.Sprintf("%s/%s", reg, image), func(t *testing.T) {
+					t.Parallel()
 					fqImage := fmt.Sprintf("%s/%s:%s", reg, image, releaseVersion)
 					if ok, err := registry.CheckImage(fqImage); err != nil {
 						t.Fatalf("failed to check image %s: %v", fqImage, err)
@@ -46,6 +47,7 @@ func TestImagesPublished(t *testing.T) {
 							continue
 						}
 						t.Run(fmt.Sprintf("linux %s", arch), func(t *testing.T) {
+							t.Parallel()
 							fqArchImage := fmt.Sprintf("%s-%s", fqImage, arch)
 							if ok, err := registry.CheckImage(fqArchImage); err != nil {
 								t.Fatalf("failed to check image %s: %v", fqArchImage, err)
