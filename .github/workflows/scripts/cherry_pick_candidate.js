@@ -96,7 +96,23 @@ module.exports = async ({ github, context, core }) => {
   const present = pr.labels.some(l => l.name === LABEL);
   core.info(`Label authority: bot (last actor: ${lastActor || 'none'}, present=${present})`);
 
-  // 3. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
+  // 3. Gather extra context for the classifier: existing labels and
+  //    changed file paths. Both are stronger signals than parsing the
+  //    body alone (labels are deliberate human classifications, paths
+  //    reveal whether the change touches production code or only CI /
+  //    tests / docs). Filter out the bot's own label so the agent's
+  //    verdict is not influenced by a prior classification round.
+  const labels = (pr.labels || []).map(l => l.name).filter(n => n !== LABEL);
+  const filesResp = await github.rest.pulls.listFiles({
+    owner, repo, pull_number: pr.number, per_page: 100,
+  });
+  const changedFiles = filesResp.data.map(f => f.filename);
+  const labelsText = labels.length === 0 ? '(none)' : labels.join(', ');
+  const filesText = changedFiles.length === 0
+    ? '(none)'
+    : changedFiles.map(p => `- ${p}`).join('\n');
+
+  // 4. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
   const msgId = `calico-backport-classifier-${pr.number}-${process.env.GITHUB_RUN_ID}`;
   const payload = {
     jsonrpc: '2.0',
@@ -108,7 +124,7 @@ module.exports = async ({ github, context, core }) => {
         role: 'user',
         parts: [{
           kind: 'text',
-          text: `PR number: ${pr.number}\nPR title: ${pr.title}\nPR body:\n${pr.body || ''}`,
+          text: `PR number: ${pr.number}\nPR title: ${pr.title}\nPR body:\n${pr.body || ''}\n\nLabels: ${labelsText}\nChanged files:\n${filesText}`,
         }],
       },
       configuration: { acceptedOutputModes: ['application/json', 'text/plain'] },
