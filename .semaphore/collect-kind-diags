@@ -50,14 +50,20 @@ if ! "$kubectl_bin" --kubeconfig="$kubeconfig" cluster-info >/dev/null 2>&1; the
   exit 0
 fi
 
-# Extract the calico binary from the image that's already loaded for the
-# e2e run. The combined `calico` binary dispatches `ctl` to the calicoctl
-# subcommand.
-calico_image="${CALICO_IMAGE:-localhost:5000/calico/calico:test-build}"
+# Extract the calico binary from the locally-built image to run cluster diags.
+# The combined `calico` binary dispatches `ctl` to the calicoctl subcommand.
+#
+# Use the daemon-local calico/calico:latest-<arch> tag, which is present in both
+# paths: load-cached-images `docker load`s it on a cache hit, and the build
+# produces it on a miss. The localhost:5000/...:test-build tag the cluster pulls
+# from is only ever `docker tag`d from latest-<arch> for the push, so it isn't
+# reliably left in the daemon - extracting from it was silently skipping diags.
+arch="${ARCH:-amd64}"
+calico_image="${CALICO_IMAGE:-calico/calico:latest-${arch}}"
 calico_bin="$(mktemp -d)/calico"
 cid="$(docker create "$calico_image" 2>/dev/null)"
 if [ -z "$cid" ]; then
-  echo "collect-kind-diags: could not create container from $calico_image, skipping"
+  echo "collect-kind-diags: no local $calico_image to extract a binary from, skipping"
   exit 0
 fi
 if ! docker cp "$cid:/usr/bin/calico" "$calico_bin"; then
