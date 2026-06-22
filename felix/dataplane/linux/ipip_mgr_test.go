@@ -125,12 +125,15 @@ var _ = Describe("IPIPManager", func() {
 
 		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		Expect(dataplane.NameToLink[dataplanedefs.IPIPIfaceName]).ToNot(BeNil())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
 		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
 		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
 		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		// Empty addr skips address configuration, existing address is preserved.
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Len()).To(BeZero())
 		Expect(tunnelLink.Addrs).To(HaveLen(1))
 		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
 	})
