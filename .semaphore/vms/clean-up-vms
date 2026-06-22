@@ -28,17 +28,27 @@ gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key
 gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
 
+# The test VMs are spread across the zones of a region (see run-tests-on-vms),
+# so we list project-wide by name prefix and delete each instance in whichever
+# zone it ended up in.  This is zone-agnostic, so it also reclaims any leaked
+# VMs regardless of where they landed.
 while true; do
   gcloud --quiet compute instances list \
         "--filter=name~'${vm_prefix}.*'" \
-        --zones=${ZONE} \
-        --format='table[no-heading](name)' > instance-list
-  instances="$(cat instance-list)"
-  if [ "${instances}" = "" ]; then
+        --format='csv[no-heading](name,zone.basename())' > instance-list
+  if [ ! -s instance-list ]; then
     echo "All instances deleted"
     break
   fi
-  echo "Instances to delete: $instances"
-  gcloud --quiet beta compute instances delete ${instances} --zone=${ZONE} --no-graceful-shutdown
+  echo "Instances to delete:"
+  cat instance-list
+  while IFS=, read -r name zone; do
+    [ -n "$name" ] || continue
+    # Best-effort: don't let one failed delete (instance vanished between list
+    # and delete, or a transient API error) abort the whole sweep under 'set -e'
+    # and leak the rest.  Anything still present is retried on the next pass.
+    gcloud --quiet beta compute instances delete "$name" --zone="$zone" --no-graceful-shutdown \
+      || echo "WARNING: failed to delete $name in $zone; will retry."
+  done < instance-list
   sleep 1
 done
