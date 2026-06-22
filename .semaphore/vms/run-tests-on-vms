@@ -186,8 +186,14 @@ for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
   # Each VM may be in a different zone; look up the one it landed in.  Every
   # downstream command in this iteration (vm-ip, on-test-vm, configure-test-vm,
-  # the delete, and the watchdog's serial/snapshot capture) uses $zone.
+  # the delete, and the watchdog's serial/snapshot capture) uses $zone.  We also
+  # export ZONE: run_batch (sourced from batches.sh) shells out to
+  # 'gcloud get-serial-port-output --zone="${ZONE}"' to grab the serial console
+  # when a VM wedges, and it reads ZONE from the environment.  The backgrounded
+  # per-batch subshell below captures this value at fork time, so each batch
+  # sees its own VM's zone.
   zone="${vm_zone[$vm_name]}"
+  export ZONE="$zone"
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"

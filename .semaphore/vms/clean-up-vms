@@ -44,7 +44,11 @@ while true; do
   cat instance-list
   while IFS=, read -r name zone; do
     [ -n "$name" ] || continue
-    gcloud --quiet beta compute instances delete "$name" --zone="$zone" --no-graceful-shutdown
+    # Best-effort: don't let one failed delete (instance vanished between list
+    # and delete, or a transient API error) abort the whole sweep under 'set -e'
+    # and leak the rest.  Anything still present is retried on the next pass.
+    gcloud --quiet beta compute instances delete "$name" --zone="$zone" --no-graceful-shutdown \
+      || echo "WARNING: failed to delete $name in $zone; will retry."
   done < instance-list
   sleep 1
 done
