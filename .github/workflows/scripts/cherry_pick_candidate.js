@@ -107,13 +107,16 @@ module.exports = async ({ github, context, core }) => {
     owner, repo, pull_number: pr.number, per_page: 100,
   });
   const labelsText = labels.length === 0 ? '(none)' : labels.join(', ');
-  // Each entry is "- [status] path" where status is added / removed /
-  // modified / renamed / copied. Status disambiguates new API surface
-  // (`[added] api/**/*types.go`) from API bug fixes (`[modified]` only).
+  // Each entry is "- [status +A/-D] path" where status is added /
+  // removed / modified / renamed / copied and +A/-D are lines added
+  // and deleted. Status + size lets the classifier separate new API
+  // surface (`[added +N]` on api types) from small API fixes
+  // (`[modified +2/-1]`), and small defensive tweaks from substantial
+  // rewrites.
   const filesText = filesResp.data.length === 0
     ? '(none)'
     : filesResp.data.map(f => {
-        const base = `- [${f.status}] ${f.filename}`;
+        const base = `- [${f.status} +${f.additions}/-${f.deletions}] ${f.filename}`;
         return f.status === 'renamed' && f.previous_filename
           ? `${base} (was ${f.previous_filename})`
           : base;
