@@ -106,11 +106,18 @@ module.exports = async ({ github, context, core }) => {
   const filesResp = await github.rest.pulls.listFiles({
     owner, repo, pull_number: pr.number, per_page: 100,
   });
-  const changedFiles = filesResp.data.map(f => f.filename);
   const labelsText = labels.length === 0 ? '(none)' : labels.join(', ');
-  const filesText = changedFiles.length === 0
+  // Each entry is "- [status] path" where status is added / removed /
+  // modified / renamed / copied. Status disambiguates new API surface
+  // (`[added] api/**/*types.go`) from API bug fixes (`[modified]` only).
+  const filesText = filesResp.data.length === 0
     ? '(none)'
-    : changedFiles.map(p => `- ${p}`).join('\n');
+    : filesResp.data.map(f => {
+        const base = `- [${f.status}] ${f.filename}`;
+        return f.status === 'renamed' && f.previous_filename
+          ? `${base} (was ${f.previous_filename})`
+          : base;
+      }).join('\n');
 
   // 4. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
   const msgId = `calico-backport-classifier-${pr.number}-${process.env.GITHUB_RUN_ID}`;
