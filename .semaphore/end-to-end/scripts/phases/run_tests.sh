@@ -73,6 +73,19 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
+  # EKS kubeconfigs authenticate via an `aws-iam-authenticator` exec credential
+  # plugin (a bare command name -> PATH lookup inside the runner). The stock
+  # golang image used for the hashrelease path doesn't include it, so client-go
+  # fails with "executable aws-iam-authenticator not found" in
+  # SynchronizedBeforeSuite and no tests run. The aws-eks provisioner already
+  # installs the binary on the host (under ${BZ_LOCAL_DIR}/bin); bind-mount it
+  # onto the container PATH when present. The -x guard makes this a no-op for
+  # non-EKS runs, where the host binary doesn't exist.
+  auth_mount=()
+  if [[ -x "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator" ]]; then
+    auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
+  fi
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -83,6 +96,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+    "${auth_mount[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
