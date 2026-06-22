@@ -43,24 +43,29 @@ clean-windows: clean-windows-builder
 ###############################################################################
 # Building the binary
 ###############################################################################
-# Only the Windows image is built standalone here; Linux ships in calico/calico.
+# Linux binaries are only built locally for unit tests; the production Linux
+# CNI plugin ships in the calico/calico image. The Windows binary is the
+# combined `calico` binary from cmd/calico, dispatched by name.
 .PHONY: build
 build:
 ifeq ($(ARCH),amd64)
-# Go only supports amd64 for Windows builds.
 WINDOWS_BIN=bin/windows
-# calico-ipam.exe is not built: "calico.exe component cni install" stages calico.exe under both names on the host.
+# `calico cni install` copies calico.exe to both names on the host.
 build: $(WINDOWS_BIN)/calico.exe
 endif
 
-# calico.exe is the combined Windows binary (cmd/calico-windows), the same one
-# shipped in the node image. The operator runs it as "calico.exe component cni
-# install"; install.Install() then stages it onto the host as the calico and
-# calico-ipam CNI plugins. Built from the repo-root package, not cni-plugin/cmd/calico,
-# so it carries the "component" subcommand tree the operator drives.
-$(WINDOWS_BIN)/calico.exe: $(SRC_FILES)
+# The Linux bin/calico and bin/calico-ipam fixtures used by the unit tests are
+# sourced from the combined cmd/calico binary further down this Makefile.
+
+## Hard-link the combined cmd/calico binary as calico.exe. FORCE refreshes the
+## link each run, since go build's atomic -o write replaces the source inode.
+$(WINDOWS_BIN)/calico.exe: FORCE
+	$(MAKE) -C ../cmd/calico bin/calicoctl-windows-amd64.exe
 	mkdir -p $(WINDOWS_BIN)
-	$(call build_windows_binary, github.com/projectcalico/calico/cmd/calico-windows, $@)
+	cp -fl ../cmd/calico/bin/calicoctl-windows-amd64.exe $@
+
+.PHONY: FORCE
+FORCE:
 
 protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cnibackend.proto
 	$(DOCKER_RUN) -v $(CURDIR)/pkg/dataplane/grpc/proto:/proto:rw \

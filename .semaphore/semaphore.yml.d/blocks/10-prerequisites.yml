@@ -228,7 +228,7 @@
   # superset of the win-fv-felix block's trigger (felix's full test closure plus
   # its own CI block), so win-fv-felix never runs without this image in GCS.
   run:
-    when: "${CHANGE_IN(felix,cmd/calico,typha,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN(felix,cmd/calico,typha,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/node/windows-packaging/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies: []
   task:
     env_vars:
@@ -291,7 +291,7 @@
   # the rest of felix's test closure, keeping this a superset of win-fv-felix so
   # it never runs without this image in GCS.
   run:
-    when: "${CHANGE_IN(node,felix,non-go:/felix/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN(node,felix,non-go:/felix/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/node/windows-packaging/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies:
     - "Build: nftables RPMs"
   task:
