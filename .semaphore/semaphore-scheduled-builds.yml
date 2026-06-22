@@ -49,12 +49,30 @@ global_job_config:
         if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
+          # On master, use Semaphore's free built-in cache; other branches still
+          # use GCS. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
+          # targeting master restore master's Semaphore cache.) Note: `cache
+          # restore` exits 0 even on a miss, so we test for the restored file.
+          use_sem_cache=false
+          [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]] && use_sem_cache=true
+          rm -f /tmp/working-copy.tar.zstd
+          if ${use_sem_cache}; then
+            cache restore "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+          else
+            gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
+          fi
+          if [[ -f /tmp/working-copy.tar.zstd ]]; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
             tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd & tar_pid=$!
             downloaded_build_cache=false
             if [[ -n "$BUILD_CACHE_GROUP" && -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
-              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
+              rm -f /tmp/build-cache.tar.zstd
+              if ${use_sem_cache}; then
+                cache restore "build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}" || true
+              else
+                gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
+              fi
+              if [[ -f /tmp/build-cache.tar.zstd ]]; then
                 echo "Found build cache for group ${BUILD_CACHE_GROUP}"
                 downloaded_build_cache=true
               fi
@@ -94,26 +112,6 @@ global_job_config:
           mkdir -p artifacts
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      # Best-effort: load calico/go-build from the GCS cache populated by the
-      # "Pull: go-build image" prerequisite job. Falls back to a Docker Hub pull
-      # on cache miss. Skipped on non-x86_64 / cross-compile agents since the
-      # cache is amd64-only.
-      - |-
-        if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
-          GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-          image="calico/go-build:${GO_BUILD_VER}"
-          if ! docker image inspect "$image" >/dev/null 2>&1; then
-            cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-            if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
-              echo "Loading ${image} from GCS cache"
-              zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
-              docker load -i /tmp/go-build.tar
-              rm -f /tmp/go-build.tar
-            else
-              echo "No GCS cache for ${image}, docker will pull from Docker Hub if needed"
-            fi
-          fi
-        fi
   epilogue:
     commands:
       - cd $HOME
@@ -121,8 +119,16 @@ global_job_config:
         if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
           echo "On branch, storing build cache group ${BUILD_CACHE_GROUP}"
           tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+          if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+            # master uses Semaphore's free cache; delete-then-store guarantees a
+            # refresh each master build regardless of `cache store` overwrite semantics.
+            key="build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}"
+            cache delete "$key" || true
+            cache store "$key" /tmp/build-cache.tar.zstd
+          else
+            gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+            gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+          fi
         fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
@@ -334,8 +340,15 @@ blocks:
           commands:
             - cd ..
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
-            - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+            - |-
+              if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+                # master uses Semaphore's free cache; other branches still use GCS.
+                cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+                cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
+              else
+                gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+                gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+              fi
   - name: "Build: nftables RPMs"
     # Producer for the patched nftables + libnftnl RPMs that calico/node and the
     # istio CNI install image consume. The image tag is content-addressed (sha
@@ -380,34 +393,6 @@ blocks:
                 - s390x
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
-  - name: "Pull: go-build image"
-    # Populate the GCS cache of calico/go-build so that every downstream job can
-    # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
-    # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
-    # the tarball survives across workflows — the common case is a no-op
-    # `gcloud storage ls` on a cache hit.
-    run:
-      when: "true"
-    dependencies: []
-    task:
-      env_vars:
-        - name: SKIP_CACHE_RESTORE
-          value: "true"
-      jobs:
-        - name: "Cache calico/go-build to GCS"
-          commands:
-            - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-            - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-            - |-
-              if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
-                echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
-              else
-                echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
-                docker pull "calico/go-build:${GO_BUILD_VER}"
-                docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
-                zstd -3 --rm /tmp/go-build.tar
-                gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
-              fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
     # from GCS instead of rebuilding per component. This block is the sole
@@ -555,7 +540,6 @@ blocks:
       - Check protobufs
       - Manifests and API docs
       - Store working copy
-      - "Pull: go-build image"
     task:
       jobs:
         - name: Pre-flight checks
