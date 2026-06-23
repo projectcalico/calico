@@ -154,9 +154,17 @@ func schema_libcalico_go_lib_apis_internalapi_AllocationAttribute(ref common.Ref
 							},
 						},
 					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
 	}
 }
 
@@ -637,6 +645,13 @@ func schema_libcalico_go_lib_apis_internalapi_IPAMConfigSpec(ref common.Referenc
 							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events. When set to VMAddressPersistenceEnabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations such as reboot, live migration, or pod eviction. IP persistency is ensured when the VirtualMachineInstance (VMI) resource is deleted and recreated by the VM controller. When set to VMAddressPersistenceDisabled, VMs receive new IP addresses whenever their pods are recreated, following standard pod IP allocation behavior. Live migration target pods are not allowed when this is set to VMAddressPersistenceDisabled and will result in an error. If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"ipCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to minimize immediate reuse).",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
