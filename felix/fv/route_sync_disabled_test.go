@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 var _ = infrastructure.DatastoreDescribe(
@@ -110,15 +111,15 @@ var _ = infrastructure.DatastoreDescribe(
 		// assigned an address to the veth via LinkAddrsManager.
 		assertNoRouteEntry := func(iface string, addrs ...string) {
 			for _, addr := range addrs {
-				flag := "-4"
-				if strings.Contains(addr, ":") {
-					flag = "-6"
-				}
-				query := func() string {
-					out, err := tc.Felixes[0].ExecOutput(
-						"ip", flag, "route", "show", "table", "all", addr, "dev", iface)
+				v6 := strings.Contains(addr, ":")
+				query := func() []iputils.Route {
+					routes, err := iputils.New(tc.Felixes[0]).Family(v6).Routes(
+						iputils.WithDestination(addr),
+						iputils.WithTable("all"),
+						iputils.WithDevice(iface),
+					)
 					Expect(err).NotTo(HaveOccurred())
-					return out
+					return routes
 				}
 				Eventually(query, "5s", "500ms").Should(BeEmpty(),
 					"Felix should not program a route for %s on %s when RouteSyncDisabled is true",
@@ -136,10 +137,10 @@ var _ = infrastructure.DatastoreDescribe(
 			wl.ConfigureInInfra(infra)
 
 			By("Waiting for the workload's veth to exist on the host")
-			Eventually(func() string {
-				out, _ := tc.Felixes[0].ExecOutput("ip", "link", "show", wl.InterfaceName)
-				return out
-			}, "30s").Should(ContainSubstring(wl.InterfaceName))
+			Eventually(func() error {
+				_, err := iputils.New(tc.Felixes[0]).LinkShowDev(wl.InterfaceName)
+				return err
+			}, "30s").Should(Succeed())
 
 			By("Verifying no routes are programmed for the workload IPs")
 			// With RouteSyncDisabled=true, Felix's endpoint manager writes
@@ -183,10 +184,10 @@ var _ = infrastructure.DatastoreDescribe(
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for the workload's veth to exist on the host")
-			Eventually(func() string {
-				out, _ := tc.Felixes[0].ExecOutput("ip", "link", "show", wl.InterfaceName)
-				return out
-			}, "30s").Should(ContainSubstring(wl.InterfaceName))
+			Eventually(func() error {
+				_, err := iputils.New(tc.Felixes[0]).LinkShowDev(wl.InterfaceName)
+				return err
+			}, "30s").Should(Succeed())
 
 			By("Verifying no routes are programmed for the workload IPs or the peer IPs")
 			assertNoRouteEntry(

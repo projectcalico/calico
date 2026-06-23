@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -35,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 // proxy_neigh_test.go exercises Felix's LocalSubnetL2Reachability feature —
@@ -164,27 +164,16 @@ var _ = infrastructure.DatastoreDescribe(
 // given Felix's eth0 — the host L2 segment proxy-neigh operates on — straight
 // from the container
 func felixSubnet(felix *infrastructure.Felix, v6 bool) (*net.IPNet, error) {
-	fam := "-4"
-	if v6 {
-		fam = "-6"
-	}
-	out, err := felix.ExecOutput("ip", fam, "-o", "addr", "show", "dev", "eth0", "scope", "global")
+	link, err := iputils.New(felix).Family(v6).AddrShow("dev", "eth0", "scope", "global")
 	if err != nil {
-		return nil, fmt.Errorf("ip %s addr show eth0 on %s: %w (output: %s)", fam, felix.Name, err, out)
+		return nil, fmt.Errorf("ip addr show eth0 on %s: %w", felix.Name, err)
 	}
-	// One-line form, e.g. "2: eth0  inet 172.17.0.3/16 ..." or
-	// "2: eth0  inet6 2001:db8::3/64 ...".
-	fields := strings.Fields(out)
-	for i := 0; i+1 < len(fields); i++ {
-		if fields[i] == "inet" || fields[i] == "inet6" {
-			_, n, err := net.ParseCIDR(fields[i+1])
-			if err != nil {
-				return nil, fmt.Errorf("parsing %q from ip output on %s: %w", fields[i+1], felix.Name, err)
-			}
-			return n, nil
+	for _, l := range link {
+		for _, a := range l.AddrInfo {
+			return a.Network()
 		}
 	}
-	return nil, fmt.Errorf("no global %s address on eth0 of %s (output: %q)", fam, felix.Name, out)
+	return nil, fmt.Errorf("no global address on eth0 of %s (v6=%v)", felix.Name, v6)
 }
 
 // subnetOffset ORs the offset CIDR's address bits into the parent network's

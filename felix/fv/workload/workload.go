@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 type Workload struct {
@@ -897,12 +898,10 @@ func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 }
 
 func (w *Workload) InterfaceIndex() int {
-	out, err := w.C.ExecOutput("ip", "link", "show", "dev", w.InterfaceName)
+	link, err := iputils.New(w.C).LinkShowDev(w.InterfaceName)
 	Expect(err).NotTo(HaveOccurred())
-	ifIndex, err := strconv.Atoi(strings.SplitN(out, ":", 2)[0])
-	Expect(err).NotTo(HaveOccurred())
-	log.Infof("%v is ifindex %v", w.InterfaceName, ifIndex)
-	return ifIndex
+	log.Infof("%v is ifindex %v", w.InterfaceName, link.IfIndex)
+	return link.IfIndex
 }
 
 func (w *Workload) RenameInterface(from, to string) {
