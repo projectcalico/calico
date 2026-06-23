@@ -17,12 +17,7 @@ package networking
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"strconv"
 	"strings"
-	"time"
-
-	"github.com/onsi/ginkgo/v2"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
@@ -31,31 +26,9 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/routeproto"
 )
-
-// RouteProto identifies the netlink protocol that owns a kernel route. The
-// numeric values match the kernel's RTPROT_* constants. Felix-programmed
-// routes carry protocol 80 (felix/dataplane/linux/dataplanedefs.DefaultRouteProto);
-// BIRD-programmed routes carry protocol 12 (RTPROT_BIRD).
-type RouteProto int
-
-const (
-	RouteProtoUnknown RouteProto = -1
-	RouteProtoBIRD    RouteProto = 12
-	RouteProtoFelix   RouteProto = 80
-)
-
-func (p RouteProto) String() string {
-	switch p {
-	case RouteProtoBIRD:
-		return "bird"
-	case RouteProtoFelix:
-		return "felix"
-	case RouteProtoUnknown:
-		return "unknown"
-	}
-	return fmt.Sprintf("proto-%d", int(p))
-}
 
 // Route is a parsed entry from `ip -j route show` as seen from the host
 // network namespace of a calico-node pod.
@@ -63,7 +36,7 @@ type Route struct {
 	Dst     string
 	Gateway string
 	Dev     string
-	Proto   RouteProto
+	Proto   routeproto.Proto
 	Raw     string
 }
 
@@ -73,15 +46,15 @@ type Route struct {
 // `ip -j route show` so callers can assert on the route protocol owner.
 func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []Route {
 	pod := findCalicoNodePod(cli, nodeName)
-	out, err := conncheck.ExecInPod(pod, "sh", "-c", "ip -j route show")
+	routes, err := conncheck.PodIP(pod).Routes()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error running 'ip -j route show' in pod %s", pod.Name)
 
-	return parseRoutes(out, dstMatch)
+	return filterRoutes(routes, dstMatch)
 }
 
 // HasRouteProto returns true if the slice contains a route with the given proto.
 // Useful as an Eventually predicate when waiting for a route ownership change.
-func HasRouteProto(routes []Route, proto RouteProto) bool {
+func HasRouteProto(routes []Route, proto routeproto.Proto) bool {
 	for _, r := range routes {
 		if r.Proto == proto {
 			return true
@@ -92,7 +65,7 @@ func HasRouteProto(routes []Route, proto RouteProto) bool {
 
 // AllRoutesProto returns true if every route in the slice carries the given
 // proto. Returns false on an empty slice.
-func AllRoutesProto(routes []Route, proto RouteProto) bool {
+func AllRoutesProto(routes []Route, proto routeproto.Proto) bool {
 	if len(routes) == 0 {
 		return false
 	}
@@ -123,90 +96,39 @@ func findCalicoNodePod(cli ctrlclient.Client, nodeName string) *corev1.Pod {
 	return nil
 }
 
-// jsonRoute is the on-the-wire form emitted by `ip -j route show`.
-// Protocol is a string in iproute2's JSON output regardless of whether the
-// kernel proto has a name in /etc/iproute2/rt_protos: named protos appear as
-// e.g. "bird"; unnamed appear as the decimal value (e.g. "80").
-type jsonRoute struct {
-	Dst      string `json:"dst"`
-	Gateway  string `json:"gateway"`
-	Dev      string `json:"dev"`
-	Protocol string `json:"protocol"`
-}
-
-func parseRoutes(out, dstMatch string) []Route {
-	var parsed []jsonRoute
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		ExpectWithOffset(2, err).NotTo(HaveOccurred(), "Failed to parse `ip -j route show` output: %s", out)
-		return nil
-	}
-	rows := make([]Route, 0, len(parsed))
-	for _, jr := range parsed {
-		if dstMatch != "" && !strings.Contains(jr.Dst, dstMatch) {
+// filterRoutes converts iputils routes to the local Route type, keeping only
+// those whose Dst contains dstMatch (empty matches all). Protocol is a string
+// in iproute2's JSON output regardless of whether the kernel proto has a name
+// in /etc/iproute2/rt_protos: named protos appear as e.g. "bird"; unnamed
+// appear as the decimal value (e.g. "80").
+func filterRoutes(in []iputils.Route, dstMatch string) []Route {
+	rows := make([]Route, 0, len(in))
+	for _, r := range in {
+		if dstMatch != "" && !strings.Contains(r.Dst, dstMatch) {
 			continue
 		}
-		raw, _ := json.Marshal(jr)
+		raw, _ := json.Marshal(r)
 		rows = append(rows, Route{
-			Dst:     jr.Dst,
-			Gateway: jr.Gateway,
-			Dev:     jr.Dev,
-			Proto:   parseProto(jr.Protocol),
+			Dst:     r.Dst,
+			Gateway: r.Gateway,
+			Dev:     r.Dev,
+			Proto:   routeproto.Parse(r.Protocol),
 			Raw:     string(raw),
 		})
 	}
 	return rows
 }
 
-func parseProto(s string) RouteProto {
-	switch s {
-	case "":
-		return RouteProtoUnknown
-	case "bird":
-		return RouteProtoBIRD
-	}
-	if n, err := strconv.Atoi(s); err == nil {
-		return RouteProto(n)
-	}
-	return RouteProtoUnknown
-}
-
 // expectedClusterRouteProto returns the route protocol owner that the cluster
 // is currently configured to use for IPIP and no-encap cluster routes.
 // "Felix" => proto 80, anything else (including unset) => BIRD's proto 12.
-func expectedClusterRouteProto(cli ctrlclient.Client) RouteProto {
+func expectedClusterRouteProto(cli ctrlclient.Client) routeproto.Proto {
 	fc := v3.NewFelixConfiguration()
 	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "Error querying FelixConfiguration")
 	if fc.Spec.ProgramClusterRoutes != nil &&
 		*fc.Spec.ProgramClusterRoutes == "Enabled" {
-		return RouteProtoFelix
+		return routeproto.Felix
 	}
-	return RouteProtoBIRD
-}
-
-// assertRouteOwnership polls the kernel routing table on nodeName until at
-// least one route matching dstSubstring carries the expected dev (if
-// non-empty) and proto. The dev field is the empty string for direct
-// next-hop (no-encap) routes since the actual device varies by cluster
-// topology — for those, dev is left unchecked and only the proto byte
-// matters.
-func assertRouteOwnership(cli ctrlclient.Client, nodeName, dstSubstring, expectedDev string, expectedProto RouteProto) {
-	ginkgo.By(fmt.Sprintf("Asserting routes for %q on node %s use dev=%q proto=%s",
-		dstSubstring, nodeName, expectedDev, expectedProto))
-	Eventually(func() error {
-		routes := GetNodeRoutes(cli, nodeName, dstSubstring)
-		if len(routes) == 0 {
-			return fmt.Errorf("no routes found containing %q on node %s", dstSubstring, nodeName)
-		}
-		for _, r := range routes {
-			if expectedDev != "" && r.Dev != expectedDev {
-				continue
-			}
-			if r.Proto == expectedProto {
-				return nil
-			}
-		}
-		return fmt.Errorf("no route on node %s with dev=%q proto=%s found among %v",
-			nodeName, expectedDev, expectedProto, routes)
-	}, 60*time.Second, 2*time.Second).Should(Succeed())
+	return routeproto.BIRD
 }

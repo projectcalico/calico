@@ -29,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
+
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -338,6 +340,26 @@ func MustExecInCalicoNode(t testing.TB, nodeName, command string, opts ...RunOpt
 		t.Fatalf("exec in calico-node on %s (%q): %v", nodeName, command, err)
 	}
 	return out
+}
+
+// CalicoNodeIP returns an iputils.IP that runs the `ip` utility inside the
+// calico-node pod on nodeName, so tests can query addresses, links, routes,
+// neighbours and rules as typed structs instead of scraping text.
+func CalicoNodeIP(t testing.TB, nodeName string) *iputils.IP {
+	return iputils.New(calicoNodeRunner{t: t, nodeName: nodeName})
+}
+
+// calicoNodeRunner adapts ExecInCalicoNode to the iputils.Runner interface.
+// iputils passes the command as separate args; ExecInCalicoNode takes a single
+// string that execInPod re-splits on whitespace, so joining is safe for `ip`
+// invocations (whose args never contain spaces).
+type calicoNodeRunner struct {
+	t        testing.TB
+	nodeName string
+}
+
+func (r calicoNodeRunner) ExecOutput(args ...string) (string, error) {
+	return ExecInCalicoNode(r.t, r.nodeName, strings.Join(args, " "))
 }
 
 func lookupCalicoNodePod(t testing.TB, nodeName string) (*corev1.Pod, error) {
