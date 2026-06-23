@@ -191,6 +191,18 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.InSync)
 	})
 
+	It("should report ListAndWatch failures", func() {
+		listAndWatchErr := errors.New("list and watch failed")
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.fc.listAndWatchError = listAndWatchErr
+
+		rs.watcherSyncer.Start()
+		defer rs.watcherSyncer.Stop()
+
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectConnErrors([]error{listAndWatchErr})
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		// Since we are timing the processing, keep the interval sufficiently large
 		// to make the measurements more accurate.
@@ -1170,6 +1182,7 @@ func (rst *watcherSyncerTester) clientWatchResponse(r watchersyncer.ResourceType
 type fakeClient struct {
 	lws                map[string]*listWatchSource
 	listWatcherOptions api.ListWatcherOptions
+	listAndWatchError  error
 
 	// Allows us to track the revision that the syncer is using.
 	latestListRevision  string
@@ -1260,6 +1273,9 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, option
 func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface, handler api.EventHandler) error {
 	name := model.ListOptionsToDefaultPathRoot(list)
 	log.WithField("Name", name).Info("ListAndWatch request")
+	if c.listAndWatchError != nil {
+		return c.listAndWatchError
+	}
 
 	client := &fakeK8sClient{fakeClient: c}
 	lw := k8s.NewListWatcher(client, list, handler, api.WithListWatcherOptions(c.listWatcherOptions))

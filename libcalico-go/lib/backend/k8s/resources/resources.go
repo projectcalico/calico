@@ -364,7 +364,16 @@ func watchOptionsToK8sListOptions(wo api.WatchOptions) metav1.ListOptions {
 		Watch:                true,
 		AllowWatchBookmarks:  wo.AllowWatchBookmarks,
 		SendInitialEvents:    wo.SendInitialEvents,
-		ResourceVersionMatch: wo.ResourceVersionMatch,
+		ResourceVersionMatch: watchResourceVersionMatchToK8s(wo.ResourceVersionMatch),
+	}
+}
+
+func watchResourceVersionMatchToK8s(match api.ResourceVersionMatch) metav1.ResourceVersionMatch {
+	switch match {
+	case api.ResourceVersionMatchNotOlderThan:
+		return metav1.ResourceVersionMatchNotOlderThan
+	default:
+		return metav1.ResourceVersionMatch(match)
 	}
 }
 

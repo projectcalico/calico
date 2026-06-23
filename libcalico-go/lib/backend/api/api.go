@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"sync"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -174,11 +172,19 @@ type StatusClient interface {
 	UpdateStatus(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 }
 
+// ResourceVersionMatch controls how a watch request interprets its resource version.
+type ResourceVersionMatch string
+
+const (
+	// ResourceVersionMatchNotOlderThan requests data at least as new as the supplied resource version.
+	ResourceVersionMatchNotOlderThan ResourceVersionMatch = "NotOlderThan"
+)
+
 type WatchOptions struct {
 	Revision             string
 	AllowWatchBookmarks  bool
 	SendInitialEvents    *bool
-	ResourceVersionMatch metav1.ResourceVersionMatch
+	ResourceVersionMatch ResourceVersionMatch
 }
 
 // EventHandler defines the interface for processing list-watch events.

@@ -91,6 +91,7 @@ func (wc *watcherCache) run(ctx context.Context) {
 			return
 		}
 		wc.logger.WithError(err).Error("ListAndWatch failed")
+		wc.results <- errorSyncBackendError{Err: err}
 	}
 }
 

@@ -288,7 +288,7 @@ func TestListWatcher_CreateWatch_WatchListMode(t *testing.T) {
 	assert.True(t, client.lastWatchOptions.AllowWatchBookmarks)
 	assert.NotNil(t, client.lastWatchOptions.SendInitialEvents)
 	assert.True(t, *client.lastWatchOptions.SendInitialEvents)
-	assert.Equal(t, metav1.ResourceVersionMatchNotOlderThan, client.lastWatchOptions.ResourceVersionMatch)
+	assert.Equal(t, api.ResourceVersionMatchNotOlderThan, client.lastWatchOptions.ResourceVersionMatch)
 }
 
 func TestListWatcher_CreateWatch_ListWatchMode(t *testing.T) {

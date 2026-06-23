@@ -79,7 +79,7 @@ func (lw *ListWatcher) CreateWatch(ctx context.Context, useWatchList bool) (api.
 	if useWatchList {
 		watchOptions.Revision = ""
 		watchOptions.SendInitialEvents = pointer.Bool(true)
-		watchOptions.ResourceVersionMatch = metav1.ResourceVersionMatchNotOlderThan
+		watchOptions.ResourceVersionMatch = api.ResourceVersionMatchNotOlderThan
 	}
 
 	return lw.client.Watch(ctx, lw.List, watchOptions)
@@ -134,7 +134,7 @@ func (lw *ListWatcher) HandleWatchError(err error) {
 
 	// Check if WatchList is not supported
 	if lw.InitialSyncPending && kerrors.IsInvalid(err) {
-		lw.Logger.WithError(err).Warn("Backend not support WatchList, falling back to List")
+		lw.Logger.WithError(err).Warn("Backend does not support WatchList, falling back to List")
 		lw.fallbackToList = true
 		return
 	}

@@ -137,7 +137,8 @@ func supportsWatchList(backend ListWatchBackend) bool {
 //   - InitialSyncPending=true, CurrentRevision!="": Recovery/reconnection scenario.
 //     In both WatchList and ListThenWatch modes, the full dataset will be received:
 //   - WatchList mode: With SendInitialEvents=true, server re-sends all initial events
-//   - ListThenWatch mode: List API returns full dataset from that revision
+//   - ListThenWatch mode: List API returns a fresh full dataset, then watch starts
+//     from the list result revision
 //   - InitialSyncPending=false: Already synced, just watching for changes.
 //
 // In all cases where InitialSyncPending=true, OnResyncStarted() is called to prepare
