@@ -691,10 +691,10 @@ blocks:
             - env_var: CLUSTER_IMAGE
               values:
                 [
-                  "ubuntu-2404-lts",
+                  "ubuntu-2404-lts-amd64",
                   "ubuntu-2204-lts",
                   "rhel-10",
-                  "centos-stream-8",
+                  "centos-stream-9",
                   "rhel-9",
                   "rocky-linux-8",
                 ]
