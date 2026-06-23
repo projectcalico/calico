@@ -113,8 +113,11 @@ var _ = infrastructure.DatastoreDescribe(
 			for _, addr := range addrs {
 				v6 := strings.Contains(addr, ":")
 				query := func() []iputils.Route {
-					routes, err := iputils.New(tc.Felixes[0]).Family(v6).
-						RouteShow("table", "all", addr, "dev", iface)
+					routes, err := iputils.New(tc.Felixes[0]).Family(v6).Routes(
+						iputils.WithDestination(addr),
+						iputils.WithTable("all"),
+						iputils.WithDevice(iface),
+					)
 					Expect(err).NotTo(HaveOccurred())
 					return routes
 				}

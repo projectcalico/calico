@@ -71,7 +71,7 @@ type Route struct {
 // `ip -j route show` so callers can assert on the route protocol owner.
 func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []Route {
 	pod := findCalicoNodePod(cli, nodeName)
-	routes, err := conncheck.PodIP(pod).RouteShow()
+	routes, err := conncheck.PodIP(pod).Routes()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error running 'ip -j route show' in pod %s", pod.Name)
 
 	return filterRoutes(routes, dstMatch)

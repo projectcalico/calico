@@ -32,7 +32,7 @@
 //
 //	link, err := iputils.New(felix).Detailed().LinkShowDev("wireguard.cali")
 //	addrs, err := iputils.New(felix).V6().AddrShow("dev", "eth0", "scope", "global")
-//	routes, err := iputils.New(felix).RouteShow("table", "all", "dev", iface)
+//	routes, err := iputils.New(felix).Routes(iputils.WithTable("all"), iputils.WithDevice(iface))
 package iputils
 
 import (
@@ -171,12 +171,57 @@ func (i *IP) LinkShowDev(dev string) (Link, error) {
 	return links[0], nil
 }
 
-// RouteShow runs `ip route show <args...>` (e.g. "table", "all", "dev", iface)
-// and returns the matching routes.
-func (i *IP) RouteShow(args ...string) ([]Route, error) {
+// Routes runs `ip route show`, narrowed by the given filters, and returns the
+// matching routes. The filters map to the kernel-side selectors that
+// `ip route show` understands, so the kernel does the filtering, e.g.:
+//
+//	routes, err := iputils.New(felix).Routes(
+//		iputils.WithDestination("10.65.0.2/32"),
+//		iputils.WithTable("all"),
+//		iputils.WithDevice(iface),
+//	)
+func (i *IP) Routes(filters ...RouteFilter) ([]Route, error) {
+	var f routeFilter
+	for _, apply := range filters {
+		apply(&f)
+	}
 	var routes []Route
-	err := i.run(&routes, append([]string{"route", "show"}, args...)...)
+	err := i.run(&routes, append([]string{"route", "show"}, f.args...)...)
 	return routes, err
+}
+
+// RouteFilter narrows a Routes query to a subset of the routing table. Filters
+// are applied in the order given; pass none to list every route.
+type RouteFilter func(*routeFilter)
+
+type routeFilter struct {
+	args []string
+}
+
+// WithDestination filters to routes whose destination matches dst — an address
+// or CIDR, e.g. "10.65.0.2" or "dead:beef::/64" — i.e. `ip route show to <dst>`.
+func WithDestination(dst string) RouteFilter {
+	return func(f *routeFilter) { f.args = append(f.args, "to", dst) }
+}
+
+// WithTable filters to routes in the named routing table: a numeric id or one
+// of the reserved names "all", "main", "local", "default", i.e.
+// `ip route show table <table>`.
+func WithTable(table string) RouteFilter {
+	return func(f *routeFilter) { f.args = append(f.args, "table", table) }
+}
+
+// WithDevice filters to routes whose output device is dev, i.e.
+// `ip route show dev <dev>`.
+func WithDevice(dev string) RouteFilter {
+	return func(f *routeFilter) { f.args = append(f.args, "dev", dev) }
+}
+
+// WithArgs is an escape hatch for `ip route show` selectors that have no
+// dedicated filter (e.g. "proto", "kernel" or "scope", "link"). The args are
+// appended verbatim.
+func WithArgs(args ...string) RouteFilter {
+	return func(f *routeFilter) { f.args = append(f.args, args...) }
 }
 
 // RouteGet runs `ip route get <dst> <args...>` and returns the resolved

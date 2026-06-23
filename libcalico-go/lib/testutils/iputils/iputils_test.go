@@ -153,12 +153,16 @@ func TestNeighAndRuleShow(t *testing.T) {
 // result.
 func TestEmptyOutput(t *testing.T) {
 	r := &fakeRunner{out: map[string]string{
-		"-j -4 route show table all 10.65.0.2 dev cali123": "  \n",
+		"-j -4 route show to 10.65.0.2 table all dev cali123": "  \n",
 	}}
 
-	routes, err := New(r).V4().RouteShow("table", "all", "10.65.0.2", "dev", "cali123")
+	routes, err := New(r).V4().Routes(
+		WithDestination("10.65.0.2"),
+		WithTable("all"),
+		WithDevice("cali123"),
+	)
 	if err != nil {
-		t.Fatalf("RouteShow: %v", err)
+		t.Fatalf("Routes: %v", err)
 	}
 	if len(routes) != 0 {
 		t.Errorf("expected no routes, got %+v", routes)

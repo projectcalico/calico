@@ -63,7 +63,7 @@ type Route struct {
 // matches all).
 func GetNodeRoutes(t testing.TB, nodeName, dstMatch string) ([]Route, error) {
 	t.Helper()
-	routes, err := CalicoNodeIP(t, nodeName).RouteShow()
+	routes, err := CalicoNodeIP(t, nodeName).Routes()
 	if err != nil {
 		return nil, err
 	}
