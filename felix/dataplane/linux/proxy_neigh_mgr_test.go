@@ -41,12 +41,30 @@ const (
 	// than waiting the production readDeadlineInterval.
 	testReadTimeout = 10 * time.Millisecond
 
-	// testAnnounceInterval is a short periodic re-announce interval used by the
-	// re-announcement tests: comfortably larger than testReadTimeout so the loop
-	// gets several read iterations per interval, but small enough that a couple of
-	// refreshes land well within an Eventually timeout.
+	// testAnnounceInterval merely enables periodic re-announcement (any value > 0
+	// does). The re-announcement tests inject a mockTicker and fire ticks by
+	// hand, so the actual duration is never waited on — keeping the tests
+	// deterministic rather than racing a real wall-clock interval.
 	testAnnounceInterval = 40 * time.Millisecond
 )
+
+// mockTicker is a tickerShim whose ticks the test fires by hand via tick(), so
+// the periodic re-announce loop runs deterministically instead of racing a real
+// wall-clock interval.
+type mockTicker struct {
+	c chan time.Time
+}
+
+func newMockTicker() *mockTicker {
+	return &mockTicker{c: make(chan time.Time, 1)}
+}
+
+func (t *mockTicker) Chan() <-chan time.Time { return t.c }
+func (t *mockTicker) Stop()                  {}
+
+// tick fires a single re-announce tick. Tests gate successive ticks behind an
+// Eventually on the resulting writes, so the buffered channel never blocks.
+func (t *mockTicker) tick() { t.c <- time.Time{} }
 
 func newMockNetlinkForProxyNeigh() *mocknetlink.MockNetlinkDataplane {
 	dp := mocknetlink.New()
@@ -1045,6 +1063,8 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 		}
 		mgr := newProxyNeighManagerWithShims(config, 4, nl, af, nil, testReadTimeout, testAnnounceInterval)
+		ticker := newMockTicker()
+		mgr.newTicker = func(time.Duration) tickerShim { return ticker }
 		defer mgr.Stop()
 		sendNoEncapPool(mgr, "default-test-pool", "10.0.0.0/8")
 		setIfaceAddr(nl, "eth0", "10.0.0.1/24")
@@ -1052,12 +1072,14 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		mgr.OnUpdate(proxyNeighWepUpdate("k8s", "default/pod1", "eth0", "10.0.0.50/32"))
 		Expect(mgr.CompleteDeferredWork()).To(Succeed())
 
-		// The initial announce fires once; the periodic refresh then keeps
-		// sending more GARPs for the same IP without any reconcile.
+		// The initial announce fires once on add.
 		Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(1))
-		Eventually(func() int {
-			return len(arpClients["eth0"].getWrites())
-		}, "100ms").Should(BeNumerically(">=", 2))
+		// Each fired tick drives one more refresh round (one owned IP), with no
+		// reconcile in between.
+		ticker.tick()
+		Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(2))
+		ticker.tick()
+		Eventually(func() int { return len(arpClients["eth0"].getWrites()) }).Should(Equal(3))
 
 		// Every refresh is a well-formed GARP for the owned IP.
 		for _, w := range arpClients["eth0"].getWrites() {
@@ -1082,6 +1104,8 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 			return nil, nil, fmt.Errorf("no mock for %s", ifaceName)
 		}
 		mgr := newProxyNeighManagerWithShims(config, 6, nl, nil, nf, testReadTimeout, testAnnounceInterval)
+		ticker := newMockTicker()
+		mgr.newTicker = func(time.Duration) tickerShim { return ticker }
 		defer mgr.Stop()
 		sendNoEncapPool(mgr, "default-test-pool-v6", "fd00::/8")
 		setIfaceAddr(nl, "eth0", "fd00::1/64")
@@ -1089,10 +1113,11 @@ var _ = Describe("Proxy neighbor manager - periodic re-announcement", func() {
 		mgr.OnUpdate(wepUpdateV6("k8s", "default/pod1", "eth0", "fd00::50/128"))
 		Expect(mgr.CompleteDeferredWork()).To(Succeed())
 
-		// Periodic refresh keeps sending unsolicited NAs for the owned IP.
-		Eventually(func() int {
-			return len(ndpConns["eth0"].getWrites())
-		}, "100ms").Should(BeNumerically(">=", 2))
+		// The initial announce fires once on add; each fired tick drives one more
+		// unsolicited NA for the owned IP.
+		Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(1))
+		ticker.tick()
+		Eventually(func() int { return len(ndpConns["eth0"].getWrites()) }).Should(Equal(2))
 
 		// The solicited-node group is joined exactly once on add — the refresh
 		// must not re-join it every interval.
