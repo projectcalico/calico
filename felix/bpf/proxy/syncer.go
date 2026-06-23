@@ -446,6 +446,54 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint, magle
 	return nil
 }
 
+// isKubernetesAPIServerService reports whether sname is the default Kubernetes
+// API server service (default/kubernetes). In BPF bootstrap mode Felix reaches
+// the API server through this service's NAT entry, so it must not be allowed to
+// drop to zero backends. See the comment in apply().
+func isKubernetesAPIServerService(sname k8sp.ServicePortName) bool {
+	return sname.Namespace == "default" && sname.Name == "kubernetes"
+}
+
+// countReadyEndpoints returns the number of ready endpoints in eps.
+func countReadyEndpoints(eps []k8sp.Endpoint) int {
+	n := 0
+	for _, ep := range eps {
+		if ep.IsReady() {
+			n++
+		}
+	}
+	return n
+}
+
+// apiServerFallbackEps returns the last-known-good endpoints for the API server
+// service, marked ready, so they can be reprogrammed when the current state
+// reports none. It prefers endpoints that were ready in the previous iteration;
+// after a restart prevEpsMap is rebuilt from the BPF maps (see startupBuildPrev)
+// where endpoints are not flagged ready, so it falls back to all of them.
+func (s *Syncer) apiServerFallbackEps(sname k8sp.ServicePortName) []k8sp.Endpoint {
+	prev := s.prevEpsMap[sname]
+	if len(prev) == 0 {
+		return nil
+	}
+
+	src := make([]k8sp.Endpoint, 0, len(prev))
+	for _, ep := range prev {
+		if ep.IsReady() {
+			src = append(src, ep)
+		}
+	}
+	if len(src) == 0 {
+		src = prev
+	}
+
+	out := make([]k8sp.Endpoint, 0, len(src))
+	for _, ep := range src {
+		out = append(out, NewEndpointInfo(ep.IP(), ep.Port(),
+			EndpointInfoOptIsReady(true), EndpointInfoOptIsServing(true)))
+	}
+	return out
+}
+
 func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 	svcKey := servicePortToIPPortProto(svc)
 
@@ -647,6 +695,26 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			eps = FilterEpsByTrafficDistribution(state.EpsMap[sname], nodeName, nodeZone)
 		} else {
 			log.Debugf("Topology Aware Routing applied for service %s, mode %s.", sname, topologyMode)
+		}
+
+		// In BPF mode with bpfNetworkBootstrap, Felix reaches the API server
+		// through the kubernetes ClusterIP service's NAT entry. If that service
+		// transiently loses all of its ready endpoints, removing its backends
+		// would sever Felix's own connection to the API server and deadlock
+		// recovery: with no backend to NAT through, Felix can no longer learn
+		// the restored endpoints, so the entry stays empty until calico-node is
+		// restarted (which re-seeds it from the ebpf-bootstrap init container).
+		// Retain the last-known-good backends for the API server service so the
+		// lifeline survives the gap; a later update with real endpoints
+		// overwrites them. The API server's backend (the control-plane host IP)
+		// is stable across such an outage, so the retained backend is correct.
+		if isKubernetesAPIServerService(sname) && countReadyEndpoints(eps) == 0 {
+			if fallback := s.apiServerFallbackEps(sname); len(fallback) > 0 {
+				log.WithField("service", sname).Warn(
+					"Kubernetes API server service has no ready endpoints; retaining " +
+						"last-known-good backends to avoid severing Felix's connection to the API server.")
+				eps = fallback
+			}
 		}
 
 		var maglevEPs []k8sp.Endpoint
