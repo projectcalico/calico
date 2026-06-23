@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils/routeproto"
 )
 
 // Route is a parsed entry from `ip -j route show` as seen from the host
@@ -30,7 +29,7 @@ import (
 type Route struct {
 	Dst   string
 	Dev   string
-	Proto routeproto.Proto
+	Proto iputils.RouteProto
 	Raw   string
 }
 
@@ -56,7 +55,7 @@ func filterRoutes(in []iputils.Route, dstMatch string) []Route {
 		rows = append(rows, Route{
 			Dst:   r.Dst,
 			Dev:   r.Dev,
-			Proto: routeproto.Parse(r.Protocol),
+			Proto: r.Proto(),
 			Raw:   string(raw),
 		})
 	}
@@ -68,7 +67,7 @@ func filterRoutes(in []iputils.Route, dstMatch string) []Route {
 // and proto, fatally failing the test on timeout. The dev field is the empty
 // string for direct next-hop (no-encap) routes since the actual device varies
 // by cluster topology — for those, pass expectedDev="" to leave it unchecked.
-func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev string, expectedProto routeproto.Proto) {
+func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev string, expectedProto iputils.RouteProto) {
 	t.Helper()
 	t.Logf("Asserting routes for %q on node %s use dev=%q proto=%s",
 		dstSubstring, nodeName, expectedDev, expectedProto)

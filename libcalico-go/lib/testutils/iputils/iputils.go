@@ -40,6 +40,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -327,6 +328,53 @@ type Route struct {
 	Metric   int      `json:"metric"`
 	Table    string   `json:"table"`
 	Flags    []string `json:"flags"`
+}
+
+// Proto returns the netlink protocol that owns the route, parsed from its
+// Protocol field. See ParseRouteProto for the string-to-RouteProto mapping.
+func (r Route) Proto() RouteProto {
+	return ParseRouteProto(r.Protocol)
+}
+
+// RouteProto identifies the netlink protocol that owns a kernel route. The
+// numeric values match the kernel's RTPROT_* constants. Felix-programmed
+// routes carry protocol 80 (felix/dataplane/linux/dataplanedefs.DefaultRouteProto);
+// BIRD-programmed routes carry protocol 12 (RTPROT_BIRD).
+type RouteProto int
+
+const (
+	RouteProtoUnknown RouteProto = -1
+	RouteProtoBIRD    RouteProto = 12
+	RouteProtoFelix   RouteProto = 80
+)
+
+func (p RouteProto) String() string {
+	switch p {
+	case RouteProtoBIRD:
+		return "bird"
+	case RouteProtoFelix:
+		return "felix"
+	case RouteProtoUnknown:
+		return "unknown"
+	}
+	return fmt.Sprintf("proto-%d", int(p))
+}
+
+// ParseRouteProto maps the protocol string from `ip -j route show` to a
+// RouteProto. Protocol is a string in iproute2's JSON output regardless of
+// whether the kernel proto has a name in /etc/iproute2/rt_protos: named protos
+// appear as e.g. "bird"; unnamed appear as the decimal value (e.g. "80").
+func ParseRouteProto(s string) RouteProto {
+	switch s {
+	case "":
+		return RouteProtoUnknown
+	case "bird":
+		return RouteProtoBIRD
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return RouteProto(n)
+	}
+	return RouteProtoUnknown
 }
 
 // Neigh is one entry of `ip neigh show` output.

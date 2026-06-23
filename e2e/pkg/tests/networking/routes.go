@@ -27,7 +27,6 @@ import (
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils/routeproto"
 )
 
 // Route is a parsed entry from `ip -j route show` as seen from the host
@@ -36,7 +35,7 @@ type Route struct {
 	Dst     string
 	Gateway string
 	Dev     string
-	Proto   routeproto.Proto
+	Proto   iputils.RouteProto
 	Raw     string
 }
 
@@ -54,7 +53,7 @@ func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []Route {
 
 // HasRouteProto returns true if the slice contains a route with the given proto.
 // Useful as an Eventually predicate when waiting for a route ownership change.
-func HasRouteProto(routes []Route, proto routeproto.Proto) bool {
+func HasRouteProto(routes []Route, proto iputils.RouteProto) bool {
 	for _, r := range routes {
 		if r.Proto == proto {
 			return true
@@ -65,7 +64,7 @@ func HasRouteProto(routes []Route, proto routeproto.Proto) bool {
 
 // AllRoutesProto returns true if every route in the slice carries the given
 // proto. Returns false on an empty slice.
-func AllRoutesProto(routes []Route, proto routeproto.Proto) bool {
+func AllRoutesProto(routes []Route, proto iputils.RouteProto) bool {
 	if len(routes) == 0 {
 		return false
 	}
@@ -112,7 +111,7 @@ func filterRoutes(in []iputils.Route, dstMatch string) []Route {
 			Dst:     r.Dst,
 			Gateway: r.Gateway,
 			Dev:     r.Dev,
-			Proto:   routeproto.Parse(r.Protocol),
+			Proto:   r.Proto(),
 			Raw:     string(raw),
 		})
 	}
@@ -122,13 +121,13 @@ func filterRoutes(in []iputils.Route, dstMatch string) []Route {
 // expectedClusterRouteProto returns the route protocol owner that the cluster
 // is currently configured to use for IPIP and no-encap cluster routes.
 // "Felix" => proto 80, anything else (including unset) => BIRD's proto 12.
-func expectedClusterRouteProto(cli ctrlclient.Client) routeproto.Proto {
+func expectedClusterRouteProto(cli ctrlclient.Client) iputils.RouteProto {
 	fc := v3.NewFelixConfiguration()
 	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "Error querying FelixConfiguration")
 	if fc.Spec.ProgramClusterRoutes != nil &&
 		*fc.Spec.ProgramClusterRoutes == "Enabled" {
-		return routeproto.Felix
+		return iputils.RouteProtoFelix
 	}
-	return routeproto.BIRD
+	return iputils.RouteProtoBIRD
 }

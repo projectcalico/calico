@@ -34,7 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils/routeproto"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -147,12 +147,12 @@ func routeOwnerPod(namespace, name, nodeName, poolName string, server bool) *cor
 // is currently configured to use for IPIP and no-encap cluster routes.
 // "Enabled" => Felix (proto 80), anything else (including unset) => BIRD's
 // proto 12.
-func expectedClusterRouteProto(g *WithT, cli ctrlclient.Client) routeproto.Proto {
+func expectedClusterRouteProto(g *WithT, cli ctrlclient.Client) iputils.RouteProto {
 	fc := &v3.FelixConfiguration{}
 	g.Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "querying default FelixConfiguration")
 	if fc.Spec.ProgramClusterRoutes != nil && *fc.Spec.ProgramClusterRoutes == "Enabled" {
-		return routeproto.Felix
+		return iputils.RouteProtoFelix
 	}
-	return routeproto.BIRD
+	return iputils.RouteProtoBIRD
 }

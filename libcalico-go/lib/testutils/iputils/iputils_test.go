@@ -125,6 +125,30 @@ func TestRouteGet(t *testing.T) {
 	}
 }
 
+func TestRouteProto(t *testing.T) {
+	cases := []struct {
+		protocol string
+		want     RouteProto
+		wantStr  string
+	}{
+		{"", RouteProtoUnknown, "unknown"},
+		{"bird", RouteProtoBIRD, "bird"},
+		{"80", RouteProtoFelix, "felix"},
+		{"12", RouteProtoBIRD, "bird"},
+		{"42", RouteProto(42), "proto-42"},
+		{"bogus", RouteProtoUnknown, "unknown"},
+	}
+	for _, c := range cases {
+		got := Route{Protocol: c.protocol}.Proto()
+		if got != c.want {
+			t.Errorf("Route{Protocol:%q}.Proto() = %d, want %d", c.protocol, got, c.want)
+		}
+		if got.String() != c.wantStr {
+			t.Errorf("RouteProto(%d).String() = %q, want %q", got, got.String(), c.wantStr)
+		}
+	}
+}
+
 func TestNeighAndRuleShow(t *testing.T) {
 	r := &fakeRunner{out: map[string]string{
 		"-j neigh show": `[{"dst":"10.65.1.3","dev":"eth20","lladdr":"ee:ee:ee:ee:ee:ee","state":["PERMANENT"]}]`,
