@@ -53,10 +53,10 @@ import (
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
-	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -611,16 +611,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 				pol = createPolicy(pol)
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
+					return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
+					return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
+					return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[1].InterfaceName, "ingress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
+					return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[1].InterfaceName, "egress", "policy-1", "allow", true)
 				}, "5s", "200ms").Should(BeTrue())
 			})
 
@@ -1716,7 +1716,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							pol = createPolicy(pol)
 						})
 
-						bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "host-0-1")
+						polutil.WaitForGlobalNetworkPolicyBPF(tc.Felixes[0], "eth0", "egress", "host-0-1")
 					})
 
 					// With a HostEndpoint Deny policy (applyOnForward:false) on
@@ -1767,8 +1767,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							denyPol.Spec.Egress = []api.Rule{{Action: "Deny"}}
 							_ = createPolicy(denyPol)
 
-							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny")
-							bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], "eth0", "egress", "ci-1988-hep-deny")
+							polutil.WaitForGlobalNetworkPolicyBPF(tc.Felixes[0], "eth0", "ingress", "ci-1988-hep-deny")
+							polutil.WaitForGlobalNetworkPolicyBPF(tc.Felixes[0], "eth0", "egress", "ci-1988-hep-deny")
 
 							// externalClient sits outside the cluster — not a felix node and not
 							// in any IP pool — so NAT-outgoing applies regardless of
@@ -6639,130 +6639,6 @@ func checkServiceRoute(felix *infrastructure.Felix, ip string) bool {
 	rtRE := regexp.MustCompile(ip + " .* dev bpfin.cali")
 
 	return slices.ContainsFunc(lines, rtRE.MatchString)
-}
-
-func checkIfPolicyOrRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool, polType string, ipFamily proto.IPVersion) bool {
-	startStr := ""
-	endStr := ""
-	if polType != "" {
-		startStr = fmt.Sprintf("Start of %s %s", polType, polName)
-		endStr = fmt.Sprintf("End of %s %s", polType, polName)
-	}
-	actionStr := fmt.Sprintf("Start of rule %s action:\"%s\"", polName, action)
-	var policyDbg bpf.PolicyDebugInfo
-	out, err := felix.ExecOutput("cat", bpf.PolicyDebugJSONFileName(iface, hook, ipFamily))
-	if err != nil {
-		return false
-	}
-	dec := json.NewDecoder(strings.NewReader(string(out)))
-	err = dec.Decode(&policyDbg)
-	if err != nil {
-		return false
-	}
-
-	hookStr := "tc ingress"
-	if isWorkload {
-		if hook == "ingress" {
-			hookStr = "tc egress"
-		}
-	} else {
-		if hook == "egress" {
-			hookStr = "tc egress"
-		}
-	}
-	if policyDbg.IfaceName != iface || policyDbg.Hook != hookStr || policyDbg.Error != "" {
-		return false
-	}
-
-	startOfPolicy := false
-	endOfPolicy := false
-	actionMatch := false
-
-	for _, insn := range policyDbg.PolicyInfo {
-		for _, comment := range insn.Comments {
-			if strings.Contains(comment, startStr) {
-				startOfPolicy = true
-			}
-			if strings.Contains(comment, actionStr) && startOfPolicy && !endOfPolicy {
-				actionMatch = true
-			}
-			if startOfPolicy && actionMatch && strings.Contains(comment, endStr) {
-				endOfPolicy = true
-			}
-		}
-	}
-
-	return (startOfPolicy && endOfPolicy && actionMatch)
-}
-
-func bpfCheckIfRuleProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "", proto.IPVersion_IPV4)
-}
-
-func bpfCheckIfNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polNS, polName, action string, isWorkload bool) bool {
-	namespacedName := fmt.Sprintf("%s/%s", polNS, polName)
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, namespacedName, action, isWorkload, "NetworkPolicy", proto.IPVersion_IPV4)
-}
-
-func bpfCheckIfGlobalNetworkPolicyProgrammed(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "GlobalNetworkPolicy", proto.IPVersion_IPV4)
-}
-
-func bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix *infrastructure.Felix, iface, hook, polName, action string, isWorkload bool) bool {
-	return checkIfPolicyOrRuleProgrammed(felix, iface, hook, polName, action, isWorkload, "GlobalNetworkPolicy", proto.IPVersion_IPV6)
-}
-
-func bpfDumpPolicy(felix *infrastructure.Felix, iface, hook string) string {
-	var (
-		out string
-		err error
-	)
-
-	if felix.TopologyOptions.EnableIPv6 {
-		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook)
-	} else {
-		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook)
-	}
-	Expect(err).NotTo(HaveOccurred())
-	return out
-}
-
-func bpfDumpPolicyAsm(felix *infrastructure.Felix, iface, hook string) string {
-	var (
-		out string
-		err error
-	)
-
-	if felix.TopologyOptions.EnableIPv6 {
-		out, err = felix.ExecOutput("calico-bpf", "-6", "policy", "dump", iface, hook, "--asm")
-	} else {
-		out, err = felix.ExecOutput("calico-bpf", "policy", "dump", iface, hook, "--asm")
-	}
-	Expect(err).NotTo(HaveOccurred())
-	return out
-}
-
-// bpfWaitForGlobalNetworkPolicy waits for the given global network policy to appear in BPF policy.
-func bpfWaitForGlobalNetworkPolicy(felix *infrastructure.Felix, iface, hook, policyName string) string {
-	search := fmt.Sprintf("Policy: GlobalNetworkPolicy %s", policyName)
-	return bpfWaitForPolicy(felix, iface, hook, search)
-}
-
-// bpfWaitForNetworkPolicy waits for the given network policy in the given namespace to appear in BPF policy.
-func bpfWaitForNetworkPolicy(felix *infrastructure.Felix, iface, hook, ns, policyName string) string {
-	search := fmt.Sprintf("Policy: NetworkPolicy %s/%s", ns, policyName)
-	return bpfWaitForPolicy(felix, iface, hook, search)
-}
-
-// bpfWaitForNetworkPolicy waits for the given search string to appear in BPF policy.
-func bpfWaitForPolicy(felix *infrastructure.Felix, iface, hook, search string) string {
-	out := ""
-	EventuallyWithOffset(2, func() string {
-		out = bpfDumpPolicy(felix, iface, hook)
-		return out
-	}, "5s", "200ms").Should(ContainSubstring(search))
-
-	return out
 }
 
 func bpfDumpRoutes(felix *infrastructure.Felix) string {

@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/tcpdump"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
@@ -849,7 +850,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 						By("Waiting for the policy to apply")
 						if BPFMode() {
 							for _, felix := range topologyContainers.Felixes {
-								bpfWaitForGlobalNetworkPolicy(felix, "eth0", "egress", "deny-wg-port")
+								polutil.WaitForGlobalNetworkPolicyBPF(felix, "eth0", "egress", "deny-wg-port")
 							}
 						}
 

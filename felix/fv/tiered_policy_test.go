@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -362,8 +363,8 @@ var _ = infrastructure.DatastoreDescribe("connectivity tests and flow logs with 
 			}
 
 			// BPF
-			out0 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
-			out1 := bpfDumpPolicy(tc.Felixes[1], ep2_4.InterfaceName, "egress")
+			out0 := polutil.DumpBPF(tc.Felixes[1], ep2_4.InterfaceName, "ingress")
+			out1 := polutil.DumpBPF(tc.Felixes[1], ep2_4.InterfaceName, "egress")
 			return strings.Contains(out0, "End Tier: tier1  (action: deny)") &&
 				strings.Contains(out1, "End Tier: tier1  (action: deny)")
 		}

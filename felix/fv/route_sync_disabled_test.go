@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -99,7 +100,7 @@ var _ = infrastructure.DatastoreDescribe(
 			}
 
 			By("Verifying the default-allow policy is programmed in the dataplane")
-			Eventually(policyProgrammedOn(tc.Felixes[0], probeWl.InterfaceName, "default-allow"), "30s", "500ms").
+			Eventually(polutil.ProgrammedOn(tc.Felixes[0], probeWl.InterfaceName, "default-allow"), "30s", "500ms").
 				Should(BeTrue(), "Felix should program the default-allow policy even when RouteSyncDisabled is true")
 		})
 
@@ -197,40 +198,3 @@ var _ = infrastructure.DatastoreDescribe(
 		})
 	},
 )
-
-// policyProgrammedOn returns a function that reports whether the given policy
-// is programmed on the given workload interface. In BPF mode it inspects the
-// per-interface BPF policy dump for the canonical
-// "Policy: GlobalNetworkPolicy <name>" marker — the tool's "all" pseudo-iface
-// cannot be used because the debug JSON is keyed by real interface name and
-// the command silently produces no output when the file is missing. In
-// iptables/nftables mode, policy chain names embed the policy name, so a
-// ruleset grep is sufficient.
-func policyProgrammedOn(felix *infrastructure.Felix, ifaceName, policyName string) func() bool {
-	return func() bool {
-		if BPFMode() {
-			marker := "Policy: GlobalNetworkPolicy " + policyName
-			for _, hook := range []string{"ingress", "egress"} {
-				out, err := felix.ExecOutput("calico-bpf", "policy", "dump", ifaceName, hook)
-				if err != nil {
-					continue
-				}
-				if strings.Contains(out, marker) {
-					return true
-				}
-			}
-			return false
-		}
-		var cmd []string
-		if NFTMode() {
-			cmd = []string{"nft", "list", "ruleset"}
-		} else {
-			cmd = []string{"iptables-save", "-t", "filter"}
-		}
-		out, err := felix.ExecOutput(cmd...)
-		if err != nil {
-			return false
-		}
-		return strings.Contains(out, policyName)
-	}
-}
