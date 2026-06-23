@@ -266,6 +266,13 @@ func (c *profileClient) EnsureInitialized() error {
 	return nil
 }
 
+func (c *profileClient) SupportsWatchList() bool {
+	// Profile watches merge Namespace and ServiceAccount watches. The merged
+	// watcher needs to wait for both initial-events bookmarks before WatchList
+	// can safely signal sync completion.
+	return false
+}
+
 func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
 	// Build watch options to pass to k8s.
 	rlo, ok := list.(model.ResourceListOptions)
