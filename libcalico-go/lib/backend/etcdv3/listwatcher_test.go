@@ -230,7 +230,7 @@ func TestListWatcher_HandleWatchEvent_Error_ExceedsThreshold(t *testing.T) {
 	lw.CurrentRevision = "100"
 
 	// Set error count close to threshold
-	for i := 0; i < api.MaxErrorsPerRevision-1; i++ {
+	for i := 0; i < lw.Options.MaxErrorsPerRevision-1; i++ {
 		lw.IncrementErrorCount()
 	}
 
@@ -297,7 +297,7 @@ func TestListWatcher_HandleListError_ConnectionTimeout(t *testing.T) {
 		client:             nil,
 	}
 	// Set last connection to past timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-api.WatchRetryTimeout - time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout - time.Second)
 
 	genericErr := errors.New("connection error")
 
@@ -340,7 +340,7 @@ func TestListWatcher_HandleWatchError_ExceedsThreshold(t *testing.T) {
 	lw.CurrentRevision = "100"
 
 	// Set error count close to threshold
-	for i := 0; i < api.MaxErrorsPerRevision-1; i++ {
+	for i := 0; i < lw.Options.MaxErrorsPerRevision-1; i++ {
 		lw.IncrementErrorCount()
 	}
 
@@ -516,11 +516,11 @@ func TestListWatcher_ConnectionTimeoutBoundary(t *testing.T) {
 	}
 
 	// Just under timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-api.WatchRetryTimeout + time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout + time.Second)
 	assert.False(t, lw.CheckConnectionTimeout())
 
 	// Just over timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-api.WatchRetryTimeout - time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout - time.Second)
 	assert.True(t, lw.CheckConnectionTimeout())
 }
 

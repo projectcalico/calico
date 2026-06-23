@@ -45,9 +45,9 @@ type ListWatcher struct {
 var _ api.ListWatchBackend = (*ListWatcher)(nil)
 
 // NewListWatcher creates a new k8sListWatcher instance
-func NewListWatcher(client resources.K8sResourceClient, list model.ListInterface, handler api.EventHandler) *ListWatcher {
+func NewListWatcher(client resources.K8sResourceClient, list model.ListInterface, handler api.EventHandler, opts ...api.ListWatcherOption) *ListWatcher {
 	return &ListWatcher{
-		GenericListWatcher: api.NewGenericListWatcher(list, handler),
+		GenericListWatcher: api.NewGenericListWatcher(list, handler, opts...),
 		client:             client,
 	}
 }
@@ -97,7 +97,7 @@ func (lw *ListWatcher) HandleListError(err error) {
 		lw.Handler.OnSync()
 
 		// Schedule retry for a long time later
-		lw.RetryAfter(api.MissingAPIRetryTime)
+		lw.RetryAfter(lw.Options.MissingAPIRetryTime)
 		return
 	}
 
@@ -110,7 +110,7 @@ func (lw *ListWatcher) HandleListError(err error) {
 		// Error is a "layer 7" error; so connection is good!
 		lw.MarkSuccessfulConnection()
 		// Schedule a retry to avoid tight loop
-		lw.RetryAfter(api.ListRetryInterval)
+		lw.RetryAfter(lw.Options.ListRetryInterval)
 		return
 	}
 
@@ -122,7 +122,7 @@ func (lw *ListWatcher) HandleListError(err error) {
 	}
 
 	// Schedule retry with delay
-	lw.RetryAfter(api.ListRetryInterval)
+	lw.RetryAfter(lw.Options.ListRetryInterval)
 }
 
 // HandleWatchError implements ListWatchBackend.HandleWatchError for k8s.
@@ -171,7 +171,7 @@ func (lw *ListWatcher) HandleWatchError(err error) {
 		// let us watch if there are no resources yet). Pause for the watch poll interval.
 		// This loop effectively becomes a poll loop for this resource type.
 		lw.Logger.Debug("Watch operation not supported; reverting to poll.")
-		lw.RetryAfter(api.WatchPollInterval)
+		lw.RetryAfter(lw.Options.WatchPollInterval)
 
 		// Make sure we force a re-list of the resource even if the watch previously succeeded
 		// but now cannot.

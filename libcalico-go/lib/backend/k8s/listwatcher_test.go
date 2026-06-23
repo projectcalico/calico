@@ -392,7 +392,7 @@ func TestListWatcher_HandleListError_ConnectionTimeout(t *testing.T) {
 
 	lw := NewListWatcher(client, list, handler)
 	// Set last connection to past timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-api.WatchRetryTimeout - time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout - time.Second)
 
 	genericErr := errors.New("connection error")
 
@@ -502,7 +502,7 @@ func TestListWatcher_HandleWatchError_TooManyRequests_ConnectionTimeout(t *testi
 	lw := NewListWatcher(client, list, handler)
 	lw.CurrentRevision = "100"
 	// Set last connection to past timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-api.WatchRetryTimeout - time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout - time.Second)
 
 	// Create a TooManyRequests error
 	tooManyErr := kerrors.NewTooManyRequests("too many requests", 10)
@@ -564,7 +564,7 @@ func TestListWatcher_HandleWatchError_UnknownError_ExceedsThreshold(t *testing.T
 	lw.CurrentRevision = "100"
 
 	// Set error count close to threshold
-	for i := 0; i < api.MaxErrorsPerRevision-1; i++ {
+	for i := 0; i < lw.Options.MaxErrorsPerRevision-1; i++ {
 		lw.IncrementErrorCount()
 	}
 

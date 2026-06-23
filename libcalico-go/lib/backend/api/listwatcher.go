@@ -24,23 +24,53 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-// Default configuration values for list-watch operations.
-// These are variables (not constants) to allow tests to modify them.
-var (
-	MinResyncInterval = 500 * time.Millisecond
-	ListRetryInterval = 1000 * time.Millisecond
-	WatchPollInterval = 5000 * time.Millisecond
-	WatchRetryTimeout = 600 * time.Second
+const (
+	DefaultMinResyncInterval = 500 * time.Millisecond
+	DefaultListRetryInterval = 1000 * time.Millisecond
+	DefaultWatchPollInterval = 5000 * time.Millisecond
+	DefaultWatchRetryTimeout = 600 * time.Second
 
-	// MissingAPIRetryTime is the time to wait before retrying when the backing
-	// API is not installed. This is a long interval since missing APIs are expected
-	// to be a stable state.
-	MissingAPIRetryTime = 30 * time.Minute
+	// DefaultMissingAPIRetryTime is the time to wait before retrying when the
+	// backing API is not installed. This is a long interval since missing APIs
+	// are expected to be a stable state.
+	DefaultMissingAPIRetryTime = 30 * time.Minute
 
-	// MaxErrorsPerRevision is the maximum number of errors allowed at a single
-	// revision before triggering a full resync.
-	MaxErrorsPerRevision = 5
+	// DefaultMaxErrorsPerRevision is the maximum number of errors allowed at a
+	// single revision before triggering a full resync.
+	DefaultMaxErrorsPerRevision = 5
 )
+
+// ListWatcherOptions configures retry and timeout behavior for a GenericListWatcher.
+type ListWatcherOptions struct {
+	MinResyncInterval    time.Duration
+	ListRetryInterval    time.Duration
+	WatchPollInterval    time.Duration
+	WatchRetryTimeout    time.Duration
+	MissingAPIRetryTime  time.Duration
+	MaxErrorsPerRevision int
+}
+
+// ListWatcherOption updates ListWatcherOptions when constructing a GenericListWatcher.
+type ListWatcherOption func(*ListWatcherOptions)
+
+// DefaultListWatcherOptions returns the production defaults for list-watch operations.
+func DefaultListWatcherOptions() ListWatcherOptions {
+	return ListWatcherOptions{
+		MinResyncInterval:    DefaultMinResyncInterval,
+		ListRetryInterval:    DefaultListRetryInterval,
+		WatchPollInterval:    DefaultWatchPollInterval,
+		WatchRetryTimeout:    DefaultWatchRetryTimeout,
+		MissingAPIRetryTime:  DefaultMissingAPIRetryTime,
+		MaxErrorsPerRevision: DefaultMaxErrorsPerRevision,
+	}
+}
+
+// WithListWatcherOptions sets the full ListWatcherOptions for a GenericListWatcher.
+func WithListWatcherOptions(options ListWatcherOptions) ListWatcherOption {
+	return func(o *ListWatcherOptions) {
+		*o = options
+	}
+}
 
 // closedTimeC is a closed channel that triggers immediately in select statements.
 var closedTimeC <-chan time.Time
@@ -116,6 +146,7 @@ type GenericListWatcher struct {
 	List    model.ListInterface
 	Handler EventHandler
 	Logger  *log.Entry
+	Options ListWatcherOptions
 
 	// State tracking
 	CurrentRevision        string
@@ -131,11 +162,17 @@ type GenericListWatcher struct {
 }
 
 // NewGenericListWatcher creates a new GenericListWatcher with the given parameters.
-func NewGenericListWatcher(list model.ListInterface, handler EventHandler) *GenericListWatcher {
+func NewGenericListWatcher(list model.ListInterface, handler EventHandler, opts ...ListWatcherOption) *GenericListWatcher {
+	options := DefaultListWatcherOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+
 	return &GenericListWatcher{
 		List:                   list,
 		Handler:                handler,
 		Logger:                 log.WithField("list", list),
+		Options:                options,
 		CurrentRevision:        "", // Empty revision to request latest data
 		InitialSyncPending:     true,
 		LastSuccessfulConnTime: time.Now(),
@@ -208,7 +245,7 @@ func (g *GenericListWatcher) PerformListSync(ctx context.Context, backend ListWa
 		if len(list.KVPairs) == 0 {
 			g.Logger.Info("List returned no items and an empty/zero revision, reverting to poll.")
 			g.ResetForFullResync()
-			g.RetryAfter(WatchPollInterval)
+			g.RetryAfter(g.Options.WatchPollInterval)
 			return errors.New("list returned no items and an empty/zero revision")
 		}
 		g.Logger.Panic("BUG: List returned items with empty/zero revision. Watch would be inconsistent.")
@@ -235,13 +272,13 @@ func (g *GenericListWatcher) PerformListSync(ctx context.Context, backend ListWa
 // a full resync should be triggered.
 func (g *GenericListWatcher) IncrementErrorCount() bool {
 	g.ErrorCountAtCurrentRev++
-	return g.ErrorCountAtCurrentRev >= MaxErrorsPerRevision
+	return g.ErrorCountAtCurrentRev >= g.Options.MaxErrorsPerRevision
 }
 
 // CheckConnectionTimeout checks if the connection has been lost for too long.
 // Returns true if the timeout has been exceeded.
 func (g *GenericListWatcher) CheckConnectionTimeout() bool {
-	return time.Since(g.LastSuccessfulConnTime) > WatchRetryTimeout
+	return time.Since(g.LastSuccessfulConnTime) > g.Options.WatchRetryTimeout
 }
 
 // RunLoopWithBackend executes the main list-and-watch loop using the provided backend.
@@ -262,7 +299,7 @@ func (g *GenericListWatcher) RunLoopWithBackend(ctx context.Context, backend Lis
 		}
 
 		// Schedule minimum retry delay to avoid tight loops
-		g.RetryAfter(MinResyncInterval)
+		g.RetryAfter(g.Options.MinResyncInterval)
 
 		// Perform resync and watch cycle
 		g.resyncAndLoopReadingFromWatcher(ctx, backend)

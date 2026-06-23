@@ -98,7 +98,7 @@ func (lw *ListWatcher) HandleListError(err error) {
 	}
 
 	// Schedule retry with delay
-	lw.RetryAfter(api.ListRetryInterval)
+	lw.RetryAfter(lw.Options.ListRetryInterval)
 }
 
 // HandleWatchError implements ListWatchBackend.HandleWatchError for etcd.

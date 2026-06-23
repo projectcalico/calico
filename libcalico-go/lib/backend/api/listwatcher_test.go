@@ -198,6 +198,23 @@ func TestNewGenericListWatcher(t *testing.T) {
 	assert.Equal(t, "", lw.CurrentRevision)
 	assert.Equal(t, 0, lw.ErrorCountAtCurrentRev)
 	assert.NotNil(t, lw.Logger)
+	assert.Equal(t, DefaultListWatcherOptions(), lw.Options)
+}
+
+func TestNewGenericListWatcher_CustomOptions(t *testing.T) {
+	list := testListOptions()
+	handler := newMockEventHandler()
+	options := DefaultListWatcherOptions()
+	options.MinResyncInterval = 10 * time.Millisecond
+	options.ListRetryInterval = 20 * time.Millisecond
+	options.WatchPollInterval = 30 * time.Millisecond
+	options.WatchRetryTimeout = 40 * time.Millisecond
+	options.MissingAPIRetryTime = 50 * time.Millisecond
+	options.MaxErrorsPerRevision = 2
+
+	lw := NewGenericListWatcher(list, handler, WithListWatcherOptions(options))
+
+	assert.Equal(t, options, lw.Options)
 }
 
 func TestGenericListWatcher_UpdateRevision(t *testing.T) {
@@ -221,7 +238,7 @@ func TestGenericListWatcher_IncrementErrorCount_Threshold(t *testing.T) {
 	lw := NewGenericListWatcher(testListOptions(), newMockEventHandler())
 
 	// Increment errors up to threshold
-	for i := 1; i < MaxErrorsPerRevision; i++ {
+	for i := 1; i < lw.Options.MaxErrorsPerRevision; i++ {
 		exceeded := lw.IncrementErrorCount()
 		assert.False(t, exceeded, "Should not exceed at count %d", i)
 	}
@@ -229,7 +246,7 @@ func TestGenericListWatcher_IncrementErrorCount_Threshold(t *testing.T) {
 	// Next increment should exceed threshold
 	exceeded := lw.IncrementErrorCount()
 	assert.True(t, exceeded)
-	assert.Equal(t, MaxErrorsPerRevision, lw.ErrorCountAtCurrentRev)
+	assert.Equal(t, lw.Options.MaxErrorsPerRevision, lw.ErrorCountAtCurrentRev)
 }
 
 func TestGenericListWatcher_ResetForFullResync(t *testing.T) {
@@ -279,7 +296,7 @@ func TestGenericListWatcher_ConnectionTracking(t *testing.T) {
 	assert.False(t, lw.CheckConnectionTimeout())
 
 	// Set last connection to past timeout
-	lw.LastSuccessfulConnTime = time.Now().Add(-WatchRetryTimeout - time.Second)
+	lw.LastSuccessfulConnTime = time.Now().Add(-lw.Options.WatchRetryTimeout - time.Second)
 	assert.True(t, lw.CheckConnectionTimeout())
 
 	// Mark successful connection should reset
