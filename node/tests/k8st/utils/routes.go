@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 // RouteProto identifies the netlink protocol that owns a kernel route. The
@@ -56,49 +58,39 @@ type Route struct {
 	Raw   string
 }
 
-// jsonRoute is the on-the-wire form emitted by `ip -j route show`. Protocol is
-// a string in iproute2's JSON output regardless of whether the kernel proto has
-// a name in /etc/iproute2/rt_protos: named protos appear as e.g. "bird";
-// unnamed appear as the decimal value (e.g. "80").
-type jsonRoute struct {
-	Dst      string `json:"dst"`
-	Dev      string `json:"dev"`
-	Protocol string `json:"protocol"`
-}
-
 // GetNodeRoutes returns routes from the host routing table of the calico-node
 // pod running on nodeName, filtered to those whose Dst contains dstMatch (empty
 // matches all).
 func GetNodeRoutes(t testing.TB, nodeName, dstMatch string) ([]Route, error) {
 	t.Helper()
-	out, err := ExecInCalicoNode(t, nodeName, "ip -j route show")
+	routes, err := CalicoNodeIP(t, nodeName).RouteShow()
 	if err != nil {
 		return nil, err
 	}
-	return parseRoutes(out, dstMatch)
+	return filterRoutes(routes, dstMatch), nil
 }
 
-func parseRoutes(out, dstMatch string) ([]Route, error) {
-	var parsed []jsonRoute
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		return nil, fmt.Errorf("parsing `ip -j route show` output: %w (output: %s)", err, out)
-	}
-	rows := make([]Route, 0, len(parsed))
-	for _, jr := range parsed {
-		if dstMatch != "" && !strings.Contains(jr.Dst, dstMatch) {
+func filterRoutes(in []iputils.Route, dstMatch string) []Route {
+	rows := make([]Route, 0, len(in))
+	for _, r := range in {
+		if dstMatch != "" && !strings.Contains(r.Dst, dstMatch) {
 			continue
 		}
-		raw, _ := json.Marshal(jr)
+		raw, _ := json.Marshal(r)
 		rows = append(rows, Route{
-			Dst:   jr.Dst,
-			Dev:   jr.Dev,
-			Proto: parseProto(jr.Protocol),
+			Dst:   r.Dst,
+			Dev:   r.Dev,
+			Proto: parseProto(r.Protocol),
 			Raw:   string(raw),
 		})
 	}
-	return rows, nil
+	return rows
 }
 
+// parseProto maps the protocol string from `ip -j route show` to a RouteProto.
+// Protocol is a string in iproute2's JSON output regardless of whether the
+// kernel proto has a name in /etc/iproute2/rt_protos: named protos appear as
+// e.g. "bird"; unnamed appear as the decimal value (e.g. "80").
 func parseProto(s string) RouteProto {
 	switch s {
 	case "":
