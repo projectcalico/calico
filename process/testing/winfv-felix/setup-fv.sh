@@ -112,6 +112,29 @@ function get_logs(){
   # the ssh command is handed to cmd.exe on the Windows side, which treats
   # `|` as its own pipe separator before powershell ever sees it.
   ${WINDOWS_CONNECT_COMMAND} 'foreach ($f in (Get-ChildItem c:\CalicoWindows\logs -Recurse -File -ErrorAction SilentlyContinue)) { Write-Host "---- $($f.FullName) ----"; Get-Content $f.FullName -Tail 500 -ErrorAction SilentlyContinue }' || echo "Failed to fetch Windows service logs"
+
+  # Felix on Windows logs only to stdout (LogSeverityFile is "none" under HPC),
+  # so its Debug-level stream is at the mercy of containerd log rotation: the
+  # `kubectl logs` above returns only the most recent rotated segment, which is
+  # far too small to span a whole spec. Pull the full set of on-disk container
+  # log files for the felix container straight from the node instead - kubelet
+  # keeps several rotations, which is enough to cover the test window. A tree of
+  # the pod-log root goes in first so a wrong glob is self-diagnosing.
+  #
+  # No pipes in the remote command: ssh hands it to cmd.exe, which eats a `|`
+  # before powershell sees it (same gotcha as the CalicoWindows block above).
+  ${WINDOWS_CONNECT_COMMAND} 'Write-Host "== pod-log tree =="; foreach ($f in (Get-ChildItem C:\var\log\pods -Recurse -File -ErrorAction SilentlyContinue)) { Write-Host $f.FullName }; Write-Host "== felix logs =="; foreach ($f in (Get-ChildItem C:\var\log\pods\*calico-node-windows*\felix\* -File -ErrorAction SilentlyContinue)) { Write-Host "---- $($f.FullName) ----"; Get-Content $f.FullName -ErrorAction SilentlyContinue }' > ./pod-logs/win-felix-full.log 2>&1 || echo "Failed to fetch full Windows felix log"
+  # The full log is large, so don't echo it to the job log (it's uploaded as an
+  # artifact). Surface just the DNS-cache save lines, which are what we usually
+  # need: whether SaveMappingsV1 ran, the file path it used, and any save error.
+  echo "================ Windows felix DNS-cache save lines ================"
+  local dns_lines
+  dns_lines=$(grep -aE "Saving DNS mappings|Finished saving DNS mappings|Failed to save mappings|felix-dns-cache" ./pod-logs/win-felix-full.log || true)
+  if [[ -n "${dns_lines}" ]]; then
+    echo "${dns_lines}" | tr -d '\r'
+  else
+    echo "No DNS-cache save lines found in felix log"
+  fi
 }
 
 # Main execution
