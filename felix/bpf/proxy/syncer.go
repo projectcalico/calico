@@ -446,6 +446,49 @@ func (s *Syncer) applySvc(skey svcKey, sinfo Service, eps []k8sp.Endpoint, magle
 	return nil
 }
 
+// isKubernetesAPIServerService reports whether sname is the default Kubernetes
+// API server service (default/kubernetes).
+func isKubernetesAPIServerService(sname k8sp.ServicePortName) bool {
+	return sname.Namespace == "default" && sname.Name == "kubernetes"
+}
+
+// countReadyEndpoints returns the number of ready endpoints in eps.
+func countReadyEndpoints(eps []k8sp.Endpoint) int {
+	n := 0
+	for _, ep := range eps {
+		if ep.IsReady() {
+			n++
+		}
+	}
+	return n
+}
+
+// apiServerFallbackEps returns the API server service's last-known-good
+// endpoints, marked ready.
+func (s *Syncer) apiServerFallbackEps(sname k8sp.ServicePortName) []k8sp.Endpoint {
+	prev := s.prevEpsMap[sname]
+	if len(prev) == 0 {
+		return nil
+	}
+
+	src := make([]k8sp.Endpoint, 0, len(prev))
+	for _, ep := range prev {
+		if ep.IsReady() {
+			src = append(src, ep)
+		}
+	}
+	if len(src) == 0 {
+		src = prev
+	}
+
+	out := make([]k8sp.Endpoint, 0, len(src))
+	for _, ep := range src {
+		out = append(out, NewEndpointInfo(ep.IP(), ep.Port(),
+			EndpointInfoOptIsReady(true), EndpointInfoOptIsServing(true)))
+	}
+	return out
+}
+
 func (s *Syncer) addActiveEps(id uint32, svc Service, eps []k8sp.Endpoint) {
 	svcKey := servicePortToIPPortProto(svc)
 
@@ -647,6 +690,17 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			eps = FilterEpsByTrafficDistribution(state.EpsMap[sname], nodeName, nodeZone)
 		} else {
 			log.Debugf("Topology Aware Routing applied for service %s, mode %s.", sname, topologyMode)
+		}
+
+		// In bpfNetworkBootstrap mode Felix reaches the API server through this service's
+		// NAT; dropping its backends would sever and deadlock its own recovery, so keep the last-known-good.
+		if isKubernetesAPIServerService(sname) && countReadyEndpoints(eps) == 0 {
+			if fallback := s.apiServerFallbackEps(sname); len(fallback) > 0 {
+				log.WithField("service", sname).Warn(
+					"Kubernetes API server service has no ready endpoints; retaining " +
+						"last-known-good backends to avoid severing Felix's connection to the API server.")
+				eps = fallback
+			}
 		}
 
 		var maglevEPs []k8sp.Endpoint
