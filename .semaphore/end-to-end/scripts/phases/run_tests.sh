@@ -81,6 +81,16 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
   fi
 
+  # Some provisioners (notably OpenShift) taint control-plane nodes
+  # NoSchedule. The k8s e2e framework waits for *all* nodes to be schedulable
+  # (--allowed-not-ready-nodes 0) and otherwise hangs until the 30m
+  # SynchronizedBeforeSuite timeout, so untaint them first — matching what the
+  # legacy `bz tests` runner did. Harmless (`|| true`) on clusters with no such
+  # taint. Run on the host (API is reachable here; install used it).
+  for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
+    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" 2>/dev/null || true
+  done
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
