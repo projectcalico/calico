@@ -774,5 +774,5 @@ func (c *KubeClient) ListAndWatch(ctx context.Context, l model.ListInterface, ha
 
 	// Create a list-watcher that handles k8s-specific logic
 	lw := NewListWatcher(client, l, handler)
-	return lw.RunLoopWithBackend(ctx, lw)
+	return lw.ListAndWatchWithBackend(ctx, lw)
 }

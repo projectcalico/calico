@@ -16,7 +16,6 @@ package k8s
 
 import (
 	"context"
-	"errors"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // ListWatcher implements the ListAndWatch logic for Kubernetes backends.
@@ -37,8 +35,7 @@ import (
 // - k8s-specific error handling
 type ListWatcher struct {
 	*api.GenericListWatcher
-	client         resources.K8sResourceClient
-	fallbackToList bool
+	client resources.K8sResourceClient
 }
 
 // Ensure ListWatcher implements ListWatchBackend
@@ -54,9 +51,6 @@ func NewListWatcher(client resources.K8sResourceClient, list model.ListInterface
 
 // SupportsWatchList implements api.WatchListSupporter for k8s.
 func (lw *ListWatcher) SupportsWatchList() bool {
-	if lw.fallbackToList {
-		return false
-	}
 	if supporter, ok := lw.client.(api.WatchListSupporter); ok {
 		return supporter.SupportsWatchList()
 	}
@@ -101,11 +95,9 @@ func (lw *ListWatcher) HandleListError(err error) {
 		return
 	}
 
-	lw.Logger.WithError(err).Info("Failed to perform list of current data")
-
 	if kerrors.IsResourceExpired(err) || isTooLargeResourceVersionError(err) {
 		// Our current watch revision is out of sync, start again without a revision
-		lw.Logger.Info("Resource too old/new error from server, clearing cached watch revision")
+		lw.Logger.WithError(err).Info("Resource too old/new error from server, clearing cached watch revision")
 		lw.ResetForFullResync()
 		// Error is a "layer 7" error; so connection is good!
 		lw.MarkSuccessfulConnection()
@@ -114,28 +106,13 @@ func (lw *ListWatcher) HandleListError(err error) {
 		return
 	}
 
-	// Generic error handling
-	// Check if we've been disconnected too long
-	if lw.CheckConnectionTimeout() {
-		lw.Logger.Warn("Connection has failed for too long")
-		lw.Handler.OnError(err)
-	}
-
-	// Schedule retry with delay
-	lw.RetryAfter(lw.Options.ListRetryInterval)
+	lw.GenericListWatcher.HandleListError(err)
 }
 
 // HandleWatchError implements ListWatchBackend.HandleWatchError for k8s.
 func (lw *ListWatcher) HandleWatchError(err error) {
 	if kerrors.IsNotFound(err) {
 		lw.HandleListError(err)
-		return
-	}
-
-	// Check if WatchList is not supported
-	if lw.InitialSyncPending && kerrors.IsInvalid(err) {
-		lw.Logger.WithError(err).Warn("Backend does not support WatchList, falling back to List")
-		lw.fallbackToList = true
 		return
 	}
 
@@ -162,33 +139,11 @@ func (lw *ListWatcher) HandleWatchError(err error) {
 		return
 	}
 
-	var errNotSupp cerrors.ErrorOperationNotSupported
-	var errNotExist cerrors.ErrorResourceDoesNotExist
-	if errors.As(err, &errNotSupp) ||
-		errors.As(err, &errNotExist) {
-		// Watch is not supported on this resource type, either because the type fundamentally
-		// doesn't support it, or because there are no resources to watch yet (and Kubernetes won't
-		// let us watch if there are no resources yet). Pause for the watch poll interval.
-		// This loop effectively becomes a poll loop for this resource type.
-		lw.Logger.Debug("Watch operation not supported; reverting to poll.")
-		lw.RetryAfter(lw.Options.WatchPollInterval)
-
-		// Make sure we force a re-list of the resource even if the watch previously succeeded
-		// but now cannot.
-		lw.fallbackToList = true
-		lw.ResetForFullResync()
+	if lw.HandleWatchUnavailableError(err) {
 		return
 	}
 
-	// None of our expected errors, retry a few times before we give up
-	if lw.IncrementErrorCount() {
-		// Too many errors at the current revision, trigger a full resync
-		lw.Logger.WithError(err).Warn("Watch repeatedly failed without making progress, triggering full resync")
-		lw.ResetForFullResync()
-		return
-	}
-
-	lw.Logger.WithError(err).Warn("Watch of resource finished. Attempting to restart it...")
+	lw.GenericListWatcher.HandleWatchError(err)
 }
 
 // HandleWatchEvent implements ListWatchBackend.HandleWatchEvent for k8s.
@@ -221,8 +176,8 @@ func (lw *ListWatcher) HandleWatchEvent(event api.WatchEvent) error {
 //   - WatchList mode (default): Initial data comes through watch events with
 //     SendInitialEvents=true. Sync completion is signaled by a bookmark.
 //   - List+Watch mode (fallback): Performs a traditional List operation first.
-func (lw *ListWatcher) PerformInitialSync(ctx context.Context, g *api.GenericListWatcher) error {
-	if !lw.SupportsWatchList() {
+func (lw *ListWatcher) PerformInitialSync(ctx context.Context, g *api.GenericListWatcher, useWatchList bool) error {
+	if !useWatchList {
 		// Fall back to traditional List+Watch mode, use common implementation.
 		return g.PerformListSync(ctx, lw)
 	}

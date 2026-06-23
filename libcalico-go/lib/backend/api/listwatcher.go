@@ -22,6 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 const (
@@ -106,10 +107,10 @@ type ListWatchBackend interface {
 	HandleWatchError(err error)
 
 	// PerformInitialSync executes the initial synchronization.
-	// For WatchList mode (k8s): notifies resync started, sync completion is via bookmark
+	// For WatchList mode (k8s): prepares for initial events, sync completion is via bookmark
 	// For ListThenWatch mode (etcd): performs list, sends events, notifies sync complete
 	// Returns an error if the sync fails and should be retried.
-	PerformInitialSync(ctx context.Context, g *GenericListWatcher) error
+	PerformInitialSync(ctx context.Context, g *GenericListWatcher, useWatchList bool) error
 }
 
 // WatchListSupporter is optionally implemented by backends or resource clients
@@ -282,10 +283,45 @@ func (g *GenericListWatcher) CheckConnectionTimeout() bool {
 	return time.Since(g.LastSuccessfulConnTime) > g.Options.WatchRetryTimeout
 }
 
-// RunLoopWithBackend executes the main list-and-watch loop using the provided backend.
+// HandleListError performs generic list error handling.
+func (g *GenericListWatcher) HandleListError(err error) {
+	g.Logger.WithError(err).Info("Failed to list resources")
+	if g.CheckConnectionTimeout() {
+		g.Logger.Warn("Connection has failed for too long")
+		g.Handler.OnError(err)
+	}
+	g.RetryAfter(g.Options.ListRetryInterval)
+}
+
+// HandleWatchUnavailableError handles errors that indicate watch is not currently usable.
+// Returns true if the error was handled.
+func (g *GenericListWatcher) HandleWatchUnavailableError(err error) bool {
+	var errNotSupp cerrors.ErrorOperationNotSupported
+	var errNotExist cerrors.ErrorResourceDoesNotExist
+	if !errors.As(err, &errNotSupp) && !errors.As(err, &errNotExist) {
+		return false
+	}
+
+	g.Logger.WithError(err).Debug("Watch operation not supported; reverting to poll.")
+	g.RetryAfter(g.Options.WatchPollInterval)
+	g.ResetForFullResync()
+	return true
+}
+
+// HandleWatchError performs generic watch error handling.
+func (g *GenericListWatcher) HandleWatchError(err error) {
+	if g.IncrementErrorCount() {
+		g.Logger.WithError(err).Warn("Watch repeatedly failed without making progress, triggering full resync")
+		g.ResetForFullResync()
+		return
+	}
+	g.Logger.WithError(err).Warn("Watch of resource finished. Attempting to restart it...")
+}
+
+// ListAndWatchWithBackend executes the main list-and-watch loop using the provided backend.
 // This is the preferred method for running list-watch operations as it uses the
 // Backend interface for backend-specific operations while keeping common logic centralized.
-func (g *GenericListWatcher) RunLoopWithBackend(ctx context.Context, backend ListWatchBackend) error {
+func (g *GenericListWatcher) ListAndWatchWithBackend(ctx context.Context, backend ListWatchBackend) error {
 	g.Logger.Debug("Starting ListAndWatch loop with backend")
 
 	// Main loop, repeatedly resync with the store and then watch for changes
@@ -303,62 +339,83 @@ func (g *GenericListWatcher) RunLoopWithBackend(ctx context.Context, backend Lis
 		g.RetryAfter(g.Options.MinResyncInterval)
 
 		// Perform resync and watch cycle
-		g.resyncAndLoopReadingFromWatcher(ctx, backend)
+		g.listAndWatch(ctx, backend)
 	}
 
 	g.Logger.Debug("Context cancelled, stopping ListAndWatch")
 	return ctx.Err()
 }
 
-// resyncAndLoopReadingFromWatcher performs resync if needed, then loops reading from watcher.
-// This is a common implementation used by both k8s and etcd backends.
-func (g *GenericListWatcher) resyncAndLoopReadingFromWatcher(ctx context.Context, backend ListWatchBackend) {
-	defer g.CleanExistingWatcher()
-	g.maybeResyncAndCreateWatcher(ctx, backend)
-	if ctx.Err() != nil {
+// listAndWatch performs an initial sync if needed, then watches for changes.
+func (g *GenericListWatcher) listAndWatch(ctx context.Context, backend ListWatchBackend) {
+	watcher := g.startWatch(ctx, backend)
+	if watcher == nil {
 		return
 	}
-	// Only loop if watcher was successfully created
-	if g.Watch == nil {
-		return
-	}
-	g.loopReadingFromWatcherWithBackend(ctx, backend)
+
+	g.Watch = watcher
+	defer g.stopWatch()
+	g.watch(ctx, backend, watcher)
 }
 
-// CleanExistingWatcher cleans up the current watcher if it exists.
-// This is a common implementation that can be used by all backends.
-func (g *GenericListWatcher) CleanExistingWatcher() {
+func (g *GenericListWatcher) stopWatch() {
 	if g.Watch != nil {
 		g.Watch.Stop()
 		g.Watch = nil
 	}
 }
 
-// maybeResyncAndCreateWatcher performs a resync if needed and creates a new watcher.
-func (g *GenericListWatcher) maybeResyncAndCreateWatcher(ctx context.Context, backend ListWatchBackend) {
+// startWatch performs an initial sync if needed and returns a watcher.
+func (g *GenericListWatcher) startWatch(ctx context.Context, backend ListWatchBackend) WatchInterface {
 	if g.InitialSyncPending {
-		if err := backend.PerformInitialSync(ctx, g); err != nil {
-			// Backend handles error cases including scheduling retries
-			return
+		if supportsWatchList(backend) {
+			// Try WatchList first.  If it is unavailable, fall back to a regular
+			// List+Watch for this sync, matching client-go reflector behavior.
+			g.Logger.WithField("revision", g.CurrentRevision).Debug("Starting WatchList")
+			watcher, err := backend.CreateWatch(ctx, true)
+			if err == nil {
+				if err := backend.PerformInitialSync(ctx, g, true); err != nil {
+					watcher.Stop()
+					return nil
+				}
+				return watcher
+			}
+			stopUnexpectedWatcher(watcher)
+			if ctx.Err() != nil {
+				return nil
+			}
+			g.Logger.WithError(err).Info(
+				"Data couldn't be fetched in WatchList mode, falling back to List. This is expected if WatchList is not supported or disabled in the backend.")
+		}
+
+		if err := backend.PerformInitialSync(ctx, g, false); err != nil {
+			// PerformInitialSync has already recorded the backend-specific retry state.
+			return nil
 		}
 	}
 
 	// Start watching from the current revision.
 	g.Logger.WithField("revision", g.CurrentRevision).Debug("Starting watch")
-	useWatchList := g.InitialSyncPending && supportsWatchList(backend)
-	watcher, err := backend.CreateWatch(ctx, useWatchList)
+	watcher, err := backend.CreateWatch(ctx, false)
 	if err != nil {
+		stopUnexpectedWatcher(watcher)
 		g.Logger.WithError(err).Info("Failed to start watch")
 		backend.HandleWatchError(err)
-		return
+		return nil
 	}
 
-	g.Watch = watcher
+	return watcher
 }
 
-// loopReadingFromWatcherWithBackend reads events from the watcher using the backend's event handler.
-func (g *GenericListWatcher) loopReadingFromWatcherWithBackend(ctx context.Context, backend ListWatchBackend) {
-	g.LoopReadingFromWatcher(ctx, g.Watch, backend.HandleWatchEvent)
+// watch reads events from the watcher using the backend's event handler.
+func (g *GenericListWatcher) watch(ctx context.Context, backend ListWatchBackend, watcher WatchInterface) {
+	g.LoopReadingFromWatcher(ctx, watcher, backend.HandleWatchEvent)
+}
+
+func stopUnexpectedWatcher(watcher WatchInterface) {
+	if watcher != nil {
+		watcher.Stop()
+	}
 }
 
 // SendListAsAddEvents sends all KVPairs from a list result as Add events to the handler.

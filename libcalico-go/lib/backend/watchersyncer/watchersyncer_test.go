@@ -1266,7 +1266,7 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, option
 	}
 }
 
-// ListAndWatch implements the api.Client interface by using k8s.NewListWatcher.
+// ListAndWatch implements the optional api.ListAndWatchClient interface by using k8s.NewListWatcher.
 // We use a fakeK8sClient to adapt fakeClient to K8sResourceClient interface.
 // The fakeK8sClient.Watch returns an Invalid error for WatchList mode to trigger
 // fallback to traditional List+Watch mode.
@@ -1279,7 +1279,7 @@ func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface,
 
 	client := &fakeK8sClient{fakeClient: c}
 	lw := k8s.NewListWatcher(client, list, handler, api.WithListWatcherOptions(c.listWatcherOptions))
-	return lw.RunLoopWithBackend(ctx, lw)
+	return lw.ListAndWatchWithBackend(ctx, lw)
 }
 
 // fakeK8sClient adapts fakeClient to K8sResourceClient interface

@@ -41,7 +41,7 @@ func (c *etcdV3Client) ListAndWatch(ctx context.Context, l model.ListInterface, 
 		GenericListWatcher: api.NewGenericListWatcher(l, handler),
 		client:             c,
 	}
-	return lw.RunLoopWithBackend(ctx, lw)
+	return lw.ListAndWatchWithBackend(ctx, lw)
 }
 
 // PerformList implements ListWatchBackend.PerformList for etcd.
@@ -89,33 +89,16 @@ func (lw *ListWatcher) HandleWatchEvent(event api.WatchEvent) error {
 // HandleListError implements ListWatchBackend.HandleListError for etcd.
 // etcd uses generic error handling for all list errors.
 func (lw *ListWatcher) HandleListError(err error) {
-	lw.Logger.WithError(err).Info("Failed to list resources")
-
-	// Check if we've been disconnected too long
-	if lw.CheckConnectionTimeout() {
-		lw.Logger.Warn("Connection has failed for too long")
-		lw.Handler.OnError(err)
-	}
-
-	// Schedule retry with delay
-	lw.RetryAfter(lw.Options.ListRetryInterval)
+	lw.GenericListWatcher.HandleListError(err)
 }
 
 // HandleWatchError implements ListWatchBackend.HandleWatchError for etcd.
 func (lw *ListWatcher) HandleWatchError(err error) {
-	// None of our expected errors, retry a few times before we give up
-	if lw.IncrementErrorCount() {
-		// Too many errors at the current revision, trigger a full resync
-		lw.Logger.WithError(err).Warn("Watch repeatedly failed without making progress, triggering full resync")
-		lw.ResetForFullResync()
-		return
-	}
-
-	lw.Logger.WithError(err).Warn("Watch of resource finished. Attempting to restart it...")
+	lw.GenericListWatcher.HandleWatchError(err)
 }
 
 // PerformInitialSync implements ListWatchBackend.PerformInitialSync for etcd.
 // etcd uses traditional List+Watch mode: list all resources first, then watch for changes.
-func (lw *ListWatcher) PerformInitialSync(ctx context.Context, g *api.GenericListWatcher) error {
+func (lw *ListWatcher) PerformInitialSync(ctx context.Context, g *api.GenericListWatcher, useWatchList bool) error {
 	return g.PerformListSync(ctx, lw)
 }

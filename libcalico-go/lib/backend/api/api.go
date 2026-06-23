@@ -114,6 +114,21 @@ type Client interface {
 	// input list options.
 	Watch(ctx context.Context, list model.ListInterface, options WatchOptions) (WatchInterface, error)
 
+	// EnsureInitialized ensures that the backend is initialized
+	// any ready to be used.
+	EnsureInitialized() error
+
+	// Clean removes Calico data from the backend datastore.  Used for test purposes.
+	Clean() error
+
+	// Close attempts to close any connections to the datastore.  Using the
+	// client after calling this method may result in undefined behavior.
+	Close() error
+}
+
+// ListAndWatchClient is optionally implemented by backend clients that provide
+// backend-specific list-and-watch behavior.
+type ListAndWatchClient interface {
 	// ListAndWatch provides a unified interface for listing and watching resources.
 	// It runs a continuous loop that performs list-then-watch cycles until the context
 	// is cancelled. The method handles backend-specific logic including:
@@ -142,17 +157,6 @@ type Client interface {
 	//
 	// The method blocks until the context is cancelled, returning ctx.Err().
 	ListAndWatch(ctx context.Context, list model.ListInterface, handler EventHandler) error
-
-	// EnsureInitialized ensures that the backend is initialized
-	// any ready to be used.
-	EnsureInitialized() error
-
-	// Clean removes Calico data from the backend datastore.  Used for test purposes.
-	Clean() error
-
-	// Close attempts to close any connections to the datastore.  Using the
-	// client after calling this method may result in undefined behavior.
-	Close() error
 }
 
 // BackendAccessor is implemented by types that provide access to the underlying

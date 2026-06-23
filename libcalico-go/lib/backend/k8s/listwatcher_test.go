@@ -185,7 +185,6 @@ func TestNewListWatcher(t *testing.T) {
 	assert.Equal(t, list, lw.List)
 	assert.Equal(t, handler, lw.Handler)
 	assert.True(t, lw.InitialSyncPending)
-	assert.False(t, lw.fallbackToList)
 	assert.Equal(t, "", lw.CurrentRevision)
 }
 
@@ -194,12 +193,10 @@ func TestListWatcher_SupportsWatchList(t *testing.T) {
 
 	assert.True(t, lw.SupportsWatchList())
 
-	lw.fallbackToList = true
-	assert.False(t, lw.SupportsWatchList())
-
 	supportsWatchList := false
 	lw = NewListWatcher(&mockK8sResourceClient{supportsWatchList: &supportsWatchList}, testListOptions(), newMockEventHandler())
 	assert.False(t, lw.SupportsWatchList())
+
 }
 
 // ============================================================================
@@ -406,22 +403,6 @@ func TestListWatcher_HandleListError_ConnectionTimeout(t *testing.T) {
 // HandleWatchError Tests
 // ============================================================================
 
-func TestListWatcher_HandleWatchError_WatchListNotSupported(t *testing.T) {
-	client := &mockK8sResourceClient{}
-	list := testListOptions()
-	handler := newMockEventHandler()
-
-	lw := NewListWatcher(client, list, handler)
-
-	// Create an Invalid error (indicates WatchList not supported)
-	invalidErr := kerrors.NewInvalid(schema.GroupKind{Group: "test", Kind: "test"}, "test", nil)
-
-	lw.HandleWatchError(invalidErr)
-
-	// Should fall back to list mode
-	assert.True(t, lw.fallbackToList)
-}
-
 func TestListWatcher_HandleWatchError_NotFound(t *testing.T) {
 	client := &mockK8sResourceClient{}
 	list := testListOptions()
@@ -437,7 +418,6 @@ func TestListWatcher_HandleWatchError_NotFound(t *testing.T) {
 	lw.HandleWatchError(notFoundErr)
 
 	assert.Equal(t, 1, handler.syncCount)
-	assert.False(t, lw.fallbackToList)
 	assert.True(t, lw.RetryBlockedUntil.After(time.Now().Add(29*time.Minute)))
 }
 
@@ -528,8 +508,7 @@ func TestListWatcher_HandleWatchError_OperationNotSupported(t *testing.T) {
 
 	lw.HandleWatchError(notSuppErr)
 
-	// Should fall back to list mode and need initial sync
-	assert.True(t, lw.fallbackToList)
+	// Should force a resync without permanently disabling WatchList.
 	assert.True(t, lw.InitialSyncPending)
 	// Should schedule a poll interval retry
 	assert.True(t, lw.RetryBlockedUntil.After(time.Now()))
@@ -550,8 +529,7 @@ func TestListWatcher_HandleWatchError_ResourceDoesNotExist(t *testing.T) {
 
 	lw.HandleWatchError(notExistErr)
 
-	// Should fall back to list mode and need initial sync
-	assert.True(t, lw.fallbackToList)
+	// Should force a resync without permanently disabling WatchList.
 	assert.True(t, lw.InitialSyncPending)
 }
 
@@ -747,7 +725,7 @@ func TestListWatcher_PerformInitialSync_WatchListMode(t *testing.T) {
 	lw := NewListWatcher(client, list, handler)
 
 	// WatchList mode (default)
-	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher)
+	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher, true)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, handler.resyncStartedCt)
@@ -767,10 +745,9 @@ func TestListWatcher_PerformInitialSync_FallbackMode(t *testing.T) {
 	handler := newMockEventHandler()
 
 	lw := NewListWatcher(client, list, handler)
-	lw.fallbackToList = true
 
 	// Fallback to List+Watch mode
-	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher)
+	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, handler.resyncStartedCt)
@@ -798,7 +775,7 @@ func TestListWatcher_PerformInitialSync_ResourceDisablesWatchList(t *testing.T) 
 
 	lw := NewListWatcher(client, list, handler)
 
-	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher)
+	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher, lw.SupportsWatchList())
 	assert.NoError(t, err)
 	assert.Equal(t, 1, client.listCalls)
 	assert.Equal(t, "", client.lastListRevision)
@@ -913,10 +890,9 @@ func TestListWatcher_FullListThenWatch_Flow(t *testing.T) {
 	handler := newMockEventHandler()
 
 	lw := NewListWatcher(client, list, handler)
-	lw.fallbackToList = true // Force list-then-watch mode
 
 	// Perform the initial sync using PerformInitialSync
-	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher)
+	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, handler.resyncStartedCt)
@@ -934,7 +910,7 @@ func TestListWatcher_WatchListMode_Flow(t *testing.T) {
 	lw := NewListWatcher(client, list, handler)
 
 	// Perform the initial sync using WatchList mode
-	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher)
+	err := lw.PerformInitialSync(context.Background(), lw.GenericListWatcher, true)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, handler.resyncStartedCt)

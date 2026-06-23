@@ -107,13 +107,16 @@ func (w *mockWatcher) SendEvent(event WatchEvent) {
 
 // mockListWatchBackend implements ListWatchBackend for testing
 type mockListWatchBackend struct {
-	listResult           *model.KVPairList
-	listError            error
-	watchResult          WatchInterface
-	watchError           error
-	listErrorHandler     func(error)
-	watchErrorCalls      int
-	createWatchArguments []bool
+	listResult                  *model.KVPairList
+	listError                   error
+	watchResult                 WatchInterface
+	watchResults                []WatchInterface
+	watchError                  error
+	watchErrors                 []error
+	listErrorHandler            func(error)
+	watchErrorCalls             int
+	createWatchArguments        []bool
+	performInitialSyncArguments []bool
 }
 
 func newMockListWatchBackend() *mockListWatchBackend {
@@ -133,7 +136,17 @@ func (m *mockListWatchBackend) PerformList(ctx context.Context) (*model.KVPairLi
 
 func (m *mockListWatchBackend) CreateWatch(ctx context.Context, useWatchList bool) (WatchInterface, error) {
 	m.createWatchArguments = append(m.createWatchArguments, useWatchList)
-	return m.watchResult, m.watchError
+	watchResult := m.watchResult
+	if len(m.watchResults) > 0 {
+		watchResult = m.watchResults[0]
+		m.watchResults = m.watchResults[1:]
+	}
+	if len(m.watchErrors) > 0 {
+		err := m.watchErrors[0]
+		m.watchErrors = m.watchErrors[1:]
+		return watchResult, err
+	}
+	return watchResult, m.watchError
 }
 
 func (m *mockListWatchBackend) HandleWatchEvent(event WatchEvent) error {
@@ -150,7 +163,8 @@ func (m *mockListWatchBackend) HandleWatchError(err error) {
 	m.watchErrorCalls++
 }
 
-func (m *mockListWatchBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher) error {
+func (m *mockListWatchBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher, useWatchList bool) error {
+	m.performInitialSyncArguments = append(m.performInitialSyncArguments, useWatchList)
 	return g.PerformListSync(ctx, m)
 }
 
@@ -163,7 +177,11 @@ func (m *mockWatchListBackend) SupportsWatchList() bool {
 	return m.supportsWatchList
 }
 
-func (m *mockWatchListBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher) error {
+func (m *mockWatchListBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher, useWatchList bool) error {
+	m.performInitialSyncArguments = append(m.performInitialSyncArguments, useWatchList)
+	if !useWatchList {
+		return g.PerformListSync(ctx, m.mockListWatchBackend)
+	}
 	g.Handler.OnResyncStarted()
 	return nil
 }
@@ -172,9 +190,9 @@ type mockInitialSyncPendingBackend struct {
 	*mockListWatchBackend
 }
 
-func (m *mockInitialSyncPendingBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher) error {
-	g.Handler.OnResyncStarted()
-	return nil
+func (m *mockInitialSyncPendingBackend) PerformInitialSync(ctx context.Context, g *GenericListWatcher, useWatchList bool) error {
+	m.performInitialSyncArguments = append(m.performInitialSyncArguments, useWatchList)
+	return g.PerformListSync(ctx, m.mockListWatchBackend)
 }
 
 // testListOptions returns a real ListInterface for testing
@@ -565,7 +583,7 @@ func TestGenericListWatcher_LoopReadingFromWatcher_ErrorStopsLoop(t *testing.T) 
 // Watcher Cleanup Tests
 // ============================================================================
 
-func TestGenericListWatcher_CleanExistingWatcher(t *testing.T) {
+func TestGenericListWatcher_StopWatch(t *testing.T) {
 	lw := NewGenericListWatcher(testListOptions(), newMockEventHandler())
 
 	// With watcher - should stop and nil it
@@ -573,13 +591,13 @@ func TestGenericListWatcher_CleanExistingWatcher(t *testing.T) {
 	lw.Watch = watcher
 	assert.False(t, watcher.stopped)
 
-	lw.CleanExistingWatcher()
+	lw.stopWatch()
 	assert.True(t, watcher.stopped)
 	assert.Nil(t, lw.Watch)
 
 	// With nil watcher - should not panic
 	lw.Watch = nil
-	lw.CleanExistingWatcher()
+	lw.stopWatch()
 	assert.Nil(t, lw.Watch)
 }
 
@@ -677,10 +695,10 @@ func TestPerformListSync_ZeroRevisionWithItems_Panics(t *testing.T) {
 }
 
 // ============================================================================
-// RunLoopWithBackend Integration Tests
+// ListAndWatchWithBackend Integration Tests
 // ============================================================================
 
-func TestGenericListWatcher_RunLoopWithBackend_SuccessfulSync(t *testing.T) {
+func TestGenericListWatcher_ListAndWatchWithBackend_SuccessfulSync(t *testing.T) {
 	handler := newMockEventHandler()
 	lw := NewGenericListWatcher(testListOptions(), handler)
 
@@ -692,7 +710,7 @@ func TestGenericListWatcher_RunLoopWithBackend_SuccessfulSync(t *testing.T) {
 
 	done := make(chan error)
 	go func() {
-		done <- lw.RunLoopWithBackend(ctx, backend)
+		done <- lw.ListAndWatchWithBackend(ctx, backend)
 	}()
 
 	// Wait a bit for initial sync to complete
@@ -716,7 +734,7 @@ func TestGenericListWatcher_RunLoopWithBackend_SuccessfulSync(t *testing.T) {
 	assert.GreaterOrEqual(t, len(handler.addEvents), 1)
 }
 
-func TestGenericListWatcher_RunLoopWithBackend_WatchCreationFails(t *testing.T) {
+func TestGenericListWatcher_ListAndWatchWithBackend_WatchCreationFails(t *testing.T) {
 	handler := newMockEventHandler()
 	lw := NewGenericListWatcher(testListOptions(), handler)
 
@@ -726,13 +744,13 @@ func TestGenericListWatcher_RunLoopWithBackend_WatchCreationFails(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	err := lw.RunLoopWithBackend(ctx, backend)
+	err := lw.ListAndWatchWithBackend(ctx, backend)
 
 	assert.Equal(t, context.DeadlineExceeded, err)
 	assert.GreaterOrEqual(t, backend.watchErrorCalls, 1)
 }
 
-func TestGenericListWatcher_RunLoopWithBackend_NoResyncNeeded(t *testing.T) {
+func TestGenericListWatcher_ListAndWatchWithBackend_NoResyncNeeded(t *testing.T) {
 	handler := newMockEventHandler()
 	lw := NewGenericListWatcher(testListOptions(), handler)
 	lw.UpdateRevision("100")     // Already has a revision
@@ -746,7 +764,7 @@ func TestGenericListWatcher_RunLoopWithBackend_NoResyncNeeded(t *testing.T) {
 
 	done := make(chan error)
 	go func() {
-		done <- lw.RunLoopWithBackend(ctx, backend)
+		done <- lw.ListAndWatchWithBackend(ctx, backend)
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -814,15 +832,44 @@ func TestGenericListWatcher_CreateWatchUsesWatchListOnlyWhenInitialSyncPendingAn
 				}
 			}
 
-			lw.maybeResyncAndCreateWatcher(context.Background(), backend)
+			watcher := lw.startWatch(context.Background(), backend)
 
 			require.Len(t, baseBackend.createWatchArguments, 1)
 			assert.Equal(t, tt.expected, baseBackend.createWatchArguments[0])
+			assert.NotNil(t, watcher)
 		})
 	}
 }
 
-func TestGenericListWatcher_RunLoopWithBackend_WatchChannelClosed_Recreates(t *testing.T) {
+func TestGenericListWatcher_WatchListCreateFailureFallsBackToList(t *testing.T) {
+	handler := newMockEventHandler()
+	lw := NewGenericListWatcher(testListOptions(), handler)
+
+	watchListWatcher := newMockWatcher()
+	fallbackWatcher := newMockWatcher()
+	baseBackend := newMockListWatchBackend()
+	baseBackend.watchResults = []WatchInterface{watchListWatcher, fallbackWatcher}
+	baseBackend.watchErrors = []error{errors.New("watchlist failed"), nil}
+	backend := &mockWatchListBackend{
+		mockListWatchBackend: baseBackend,
+		supportsWatchList:    true,
+	}
+
+	createdWatcher := lw.startWatch(context.Background(), backend)
+
+	require.Equal(t, []bool{true, false}, baseBackend.createWatchArguments)
+	require.Equal(t, []bool{false}, baseBackend.performInitialSyncArguments)
+	assert.Equal(t, fallbackWatcher, createdWatcher)
+	assert.True(t, watchListWatcher.stopped)
+	assert.False(t, fallbackWatcher.stopped)
+	assert.Equal(t, 1, handler.resyncStartedCt)
+	assert.Equal(t, 1, handler.syncCount)
+	assert.Len(t, handler.addEvents, 1)
+	assert.Equal(t, "100", lw.CurrentRevision)
+	assert.False(t, lw.InitialSyncPending)
+}
+
+func TestGenericListWatcher_WatchChannelClosed_Recreates(t *testing.T) {
 	handler := newMockEventHandler()
 	lw := NewGenericListWatcher(testListOptions(), handler)
 
@@ -859,8 +906,7 @@ func TestGenericListWatcher_RunLoopWithBackend_WatchChannelClosed_Recreates(t *t
 				w.Stop()
 			}(currentWatcher)
 
-			lw.Watch = currentWatcher
-			lw.loopReadingFromWatcherWithBackend(ctx, backend)
+			lw.watch(ctx, backend, currentWatcher)
 			watcherCount++
 			if watcherCount >= 2 {
 				cancel()

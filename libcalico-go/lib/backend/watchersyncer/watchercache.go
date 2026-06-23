@@ -83,9 +83,8 @@ func (wc *watcherCache) run(ctx context.Context) {
 	// On shutdown, send deletions for all the objects we're tracking.
 	defer wc.sendDeletionsForAllResources()
 
-	// Run ListAndWatch - this will block until context is cancelled or an error occurs
-	// watcherCache directly implements the EventHandler interface
-	if err := wc.client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc); err != nil {
+	// Run ListAndWatch - this will block until context is cancelled or an error occurs.
+	if err := wc.listAndWatch(ctx); err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			wc.logger.WithError(err).Debug("ListAndWatch stopped")
 			return
@@ -93,6 +92,64 @@ func (wc *watcherCache) run(ctx context.Context) {
 		wc.logger.WithError(err).Error("ListAndWatch failed")
 		wc.results <- errorSyncBackendError{Err: err}
 	}
+}
+
+func (wc *watcherCache) listAndWatch(ctx context.Context) error {
+	if client, ok := wc.client.(api.ListAndWatchClient); ok {
+		return client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc)
+	}
+
+	lw := api.NewGenericListWatcher(wc.resourceType.ListInterface, wc)
+	backend := &clientListWatchBackend{
+		client:      wc.client,
+		list:        wc.resourceType.ListInterface,
+		listWatcher: lw,
+	}
+	return lw.ListAndWatchWithBackend(ctx, backend)
+}
+
+type clientListWatchBackend struct {
+	client      api.Client
+	list        model.ListInterface
+	listWatcher *api.GenericListWatcher
+}
+
+func (b *clientListWatchBackend) PerformList(ctx context.Context) (*model.KVPairList, error) {
+	return b.client.List(ctx, b.list, "")
+}
+
+func (b *clientListWatchBackend) CreateWatch(ctx context.Context, useWatchList bool) (api.WatchInterface, error) {
+	return b.client.Watch(ctx, b.list, api.WatchOptions{
+		AllowWatchBookmarks: true,
+		Revision:            b.listWatcher.CurrentRevision,
+	})
+}
+
+func (b *clientListWatchBackend) HandleWatchEvent(event api.WatchEvent) error {
+	if b.listWatcher.HandleBasicWatchEvent(event) {
+		return nil
+	}
+	if event.Type == api.WatchError {
+		b.HandleWatchError(event.Error)
+		return event.Error
+	}
+	b.listWatcher.Logger.WithField("eventType", event.Type).Warn("Unexpected watch event type")
+	return nil
+}
+
+func (b *clientListWatchBackend) HandleListError(err error) {
+	b.listWatcher.HandleListError(err)
+}
+
+func (b *clientListWatchBackend) HandleWatchError(err error) {
+	if b.listWatcher.HandleWatchUnavailableError(err) {
+		return
+	}
+	b.listWatcher.HandleWatchError(err)
+}
+
+func (b *clientListWatchBackend) PerformInitialSync(ctx context.Context, g *api.GenericListWatcher, useWatchList bool) error {
+	return g.PerformListSync(ctx, b)
 }
 
 // OnResyncStarted implements api.EventHandler interface.
@@ -197,9 +254,8 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	}
 }
 
-// handleWatchBookmark handles a bookmark event from the API server, these
-// update the revision that we should be watching from without sending
-// a KVP.  This prevents datastore compactions from invalidating our watches.
+// handleConvertedWatchEvent handles one converted watch event and sends the
+// appropriate update type to the main watcherSyncer.
 func (wc *watcherCache) handleConvertedWatchEvent(kvp *model.KVPair) {
 	if kvp.Value == nil {
 		wc.handleDeletedUpdate(kvp.Key)
