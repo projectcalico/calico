@@ -1929,7 +1929,56 @@ blocks:
             - cache store release-${SEMAPHORE_GIT_SHA} bin
 after_pipeline:
   task:
+    secrets:
+      # RELEASE_MONITOR_AGENT_URL / RELEASE_MONITOR_AGENT_TOKEN for the branch-monitor agent.
+      - name: slack-master-release-monitor
     jobs:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
+      - name: Branch CI monitor
+        commands:
+          # On EVERY master/release-* pipeline (pass AND fail), hand the run to the
+          # branch-monitor agent. The agent records the run in its state engine
+          # (which dedups, escalates back-to-back/intermittent, and tracks recovery)
+          # and posts to Slack itself when there is something worth reporting. A pass
+          # is recorded too so the engine can recover open incidents for the branch.
+          - |
+            case "$SEMAPHORE_GIT_BRANCH" in
+              master|release-*) ;;
+              *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
+            esac
+            case "$SEMAPHORE_PIPELINE_RESULT" in
+              passed) result=pass ;;
+              failed) result=fail ;;
+              *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
+            esac
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
+            # We only need the trigger to land: the agent records the run and posts
+            # to Slack itself, and its task runs to completion server-side even if
+            # this connection drops. Stream (SSE) rather than message/send so one
+            # connection rides out the cold agent boot and the sem-ai triage on a
+            # failure; the menagerie gateway caps a request at 300s, so allow a
+            # little over that and let the gateway be the limiter. Retry ONLY when
+            # we get nothing back (gateway error before the agent saw the task) —
+            # any SSE data means the agent has it, so re-POSTing would double-fire.
+            for i in 1 2 3; do
+              resp=$(curl -sS -N -m 320 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+                -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
+                -H "Content-Type: application/json" -H "Accept: text/event-stream" \
+                -d "$req" || true)
+              # Echo the SSE stream so a failed trigger can be debugged from the log.
+              echo "attempt $i SSE stream: $resp"
+              if [ -n "$resp" ]; then
+                if printf '%s' "$resp" | grep -Eq '"state":"(completed|failed)"|"final":[[:space:]]*true'; then
+                  echo "branch-monitor: agent run finished"
+                else
+                  echo "branch-monitor: agent received the trigger (stream ended without a terminal event; task continues server-side)"
+                fi
+                exit 0
+              fi
+              echo "attempt $i: no response (gateway/agent cold) — retrying"; sleep 15
+            done
+            echo "branch-monitor: agent unreachable after retries — skipping"
