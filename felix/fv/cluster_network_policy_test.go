@@ -17,7 +17,6 @@ package fv_test
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -109,40 +109,7 @@ var _ = infrastructure.DatastoreDescribe(
 
 		// policyProgrammed checks whether a policy name appears in Felix[1]'s w[1] dataplane.
 		policyProgrammed := func(policyName string) func() bool {
-			return func() bool {
-				if BPFMode() {
-					out := bpfDumpPolicy(tc.Felixes[1], w[1].InterfaceName, "ingress")
-					out += bpfDumpPolicy(tc.Felixes[1], w[1].InterfaceName, "egress")
-					return strings.Contains(out, policyName)
-				}
-				if NFTMode() {
-					out, err := tc.Felixes[1].ExecOutput("nft", "list", "ruleset")
-					Expect(err).NotTo(HaveOccurred())
-					return strings.Contains(out, policyName)
-				}
-				out, err := tc.Felixes[1].ExecOutput("iptables-save", "-t", "filter")
-				Expect(err).NotTo(HaveOccurred())
-				return strings.Contains(out, policyName)
-			}
-		}
-
-		// policyProgrammedOn checks whether a policy name appears on a specific Felix/interface.
-		policyProgrammedOn := func(felix *infrastructure.Felix, ifaceName, policyName string) func() bool {
-			return func() bool {
-				if BPFMode() {
-					out := bpfDumpPolicy(felix, ifaceName, "ingress")
-					out += bpfDumpPolicy(felix, ifaceName, "egress")
-					return strings.Contains(out, policyName)
-				}
-				if NFTMode() {
-					out, err := felix.ExecOutput("nft", "list", "ruleset")
-					Expect(err).NotTo(HaveOccurred())
-					return strings.Contains(out, policyName)
-				}
-				out, err := felix.ExecOutput("iptables-save", "-t", "filter")
-				Expect(err).NotTo(HaveOccurred())
-				return strings.Contains(out, policyName)
-			}
+			return polutil.ProgrammedOn(tc.Felixes[1], w[1].InterfaceName, policyName)
 		}
 
 		// --- KCNP helpers ---
@@ -521,11 +488,11 @@ var _ = infrastructure.DatastoreDescribe(
 				// KCNP: allow ingress in baseline tier so the pass from default tier is accepted.
 				createAllowTCPIngressKCNP("baseline-allow", clusternetpol.BaselineTier, 100)
 
-				Eventually(policyProgrammedOn(tc.Felixes[0], w[0].InterfaceName, "w0-allow-all"), "15s", "200ms").Should(BeTrue())
+				Eventually(polutil.ProgrammedOn(tc.Felixes[0], w[0].InterfaceName, "w0-allow-all"), "15s", "200ms").Should(BeTrue())
 				Eventually(policyProgrammed("pass-ingress"), "15s", "200ms").Should(BeTrue())
-				Eventually(policyProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "allow-w1"), "15s", "200ms").Should(BeTrue())
-				Eventually(policyProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "pass-w2"), "15s", "200ms").Should(BeTrue())
-				Eventually(policyProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "baseline-allow"), "15s", "200ms").Should(BeTrue())
+				Eventually(polutil.ProgrammedOn(tc.Felixes[1], w[1].InterfaceName, "allow-w1"), "15s", "200ms").Should(BeTrue())
+				Eventually(polutil.ProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "pass-w2"), "15s", "200ms").Should(BeTrue())
+				Eventually(polutil.ProgrammedOn(tc.Felixes[1], w[2].InterfaceName, "baseline-allow"), "15s", "200ms").Should(BeTrue())
 
 				cc = &connectivity.Checker{}
 				cc.ExpectSome(w[0], w[1]) // pass from admin, NP allow in default

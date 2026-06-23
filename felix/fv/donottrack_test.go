@@ -28,6 +28,7 @@ import (
 	. "github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -350,11 +351,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ do-not-track policy tests; 
 
 			for _, felix := range tc.Felixes {
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammed(felix, "bond0", "egress", "allow-egress", "allow", false)
+					return polutil.GlobalNetworkPolicyProgrammedBPF(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 				Eventually(func() bool {
-					return bpfCheckIfGlobalNetworkPolicyProgrammedV6(felix, "bond0", "egress", "allow-egress", "allow", false)
+					return polutil.GlobalNetworkPolicyProgrammedBPFV6(felix, "bond0", "egress", "allow-egress", "allow", false)
 				}, "5s", "200ms").Should(BeTrue())
 
 			}

@@ -34,6 +34,7 @@ import (
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/flowlogs"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	polutil "github.com/projectcalico/calico/felix/fv/policy"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -254,23 +255,23 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log tests", [
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[1], "eth0", "egress", "gnp-1", "allow", false)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[1], "eth0", "egress", "gnp-1", "allow", false)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[1], "eth0", "ingress", "gnp-1", "allow", false)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[1], "eth0", "ingress", "gnp-1", "allow", false)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfNetworkPolicyProgrammed(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default", "default.np-1", "deny", true)
+				return polutil.NetworkPolicyProgrammedBPF(tc.Felixes[1], wlHost2[1].InterfaceName, "ingress", "default", "default.np-1", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfRuleProgrammed(tc.Felixes[0], wlHost1[0].InterfaceName, "ingress", "default", "allow", true)
+				return polutil.RuleProgrammedBPF(tc.Felixes[0], wlHost1[0].InterfaceName, "ingress", "default", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfRuleProgrammed(tc.Felixes[0], wlHost1[0].InterfaceName, "egress", "default", "allow", true)
+				return polutil.RuleProgrammedBPF(tc.Felixes[0], wlHost1[0].InterfaceName, "egress", "default", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
 		}
 
@@ -683,19 +684,19 @@ var _ = infrastructure.DatastoreDescribe("goldmane flow log ipv6 tests", []apico
 				"Expected iptables rules to appear on the correct felix instances")
 		} else {
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "egress", "gnp-1", "allow", true)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0][0].InterfaceName, "egress", "gnp-1", "allow", true)
 			}, "15s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][0].InterfaceName, "ingress", "gnp-1", "allow", true)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0][0].InterfaceName, "ingress", "gnp-1", "allow", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "egress", "gnp-2", "deny", true)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0][1].InterfaceName, "egress", "gnp-2", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 
 			Eventually(func() bool {
-				return bpfCheckIfGlobalNetworkPolicyProgrammed(tc.Felixes[0], w[0][1].InterfaceName, "ingress", "gnp-2", "deny", true)
+				return polutil.GlobalNetworkPolicyProgrammedBPF(tc.Felixes[0], w[0][1].InterfaceName, "ingress", "gnp-2", "deny", true)
 			}, "5s", "200ms").Should(BeTrue())
 		}
 
@@ -1011,7 +1012,7 @@ var _ = infrastructure.DatastoreDescribe("flow log with deleted service pod test
 
 			Eventually(checkNat, "10s", "1s").Should(BeTrue(), "Expected NAT to be programmed")
 
-			bpfWaitForGlobalNetworkPolicy(tc.Felixes[0], ep1_1.InterfaceName, "egress", "ep1-1-allow-test-service")
+			polutil.WaitForGlobalNetworkPolicyBPF(tc.Felixes[0], ep1_1.InterfaceName, "egress", "ep1-1-allow-test-service")
 		}
 
 		if !bpfEnabled {
@@ -1227,8 +1228,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log networkse
 			Eventually(getRuleFuncTable(tc.Felixes[0], "API0|gnp/allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
 			Eventually(getRuleFuncTable(tc.Felixes[0], "APE0|gnp/allow-all", "filter"), "10s", "1s").ShouldNot(HaveOccurred())
 		} else {
-			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "ingress", "allow-all")
-			bpfWaitForPolicy(tc.Felixes[0], swl1.InterfaceName, "egress", "allow-all")
+			polutil.WaitForBPF(tc.Felixes[0], swl1.InterfaceName, "ingress", "allow-all")
+			polutil.WaitForBPF(tc.Felixes[0], swl1.InterfaceName, "egress", "allow-all")
 		}
 
 		// NetworkSets
