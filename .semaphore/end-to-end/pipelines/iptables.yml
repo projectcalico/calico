@@ -630,7 +630,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: CNI_PLUGIN
-              value: aws
+              value: AmazonVPC
 
         - name: kdd (Calico CNI)
           execution_time_limit:
@@ -639,7 +639,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: CNI_PLUGIN
-              value: calico
+              value: Calico
             # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
             # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
             # - [IT] "Proxy version v1 should proxy through a service and a pod"
