@@ -588,14 +588,20 @@ func (f *FlowStatsByProcess) collectIPs() (srcIPs, dstIPs []string) {
 	srcSeen := make(map[[16]byte]struct{})
 	dstSeen := make(map[[16]byte]struct{})
 	for t := range stats.flowsRefs {
-		if t.Src != EmptyIP {
-			if _, seen := srcSeen[t.Src]; !seen && len(srcSeen) < MaxIPsPerFlowLog {
+		srcFull := len(srcSeen) >= MaxIPsPerFlowLog
+		dstFull := len(dstSeen) >= MaxIPsPerFlowLog
+		if srcFull && dstFull {
+			// Both sets are at capacity; nothing more to collect.
+			break
+		}
+		if !srcFull && t.Src != EmptyIP {
+			if _, seen := srcSeen[t.Src]; !seen {
 				srcSeen[t.Src] = struct{}{}
 				srcIPs = append(srcIPs, net.IP(t.Src[:]).String())
 			}
 		}
-		if t.Dst != EmptyIP {
-			if _, seen := dstSeen[t.Dst]; !seen && len(dstSeen) < MaxIPsPerFlowLog {
+		if !dstFull && t.Dst != EmptyIP {
+			if _, seen := dstSeen[t.Dst]; !seen {
 				dstSeen[t.Dst] = struct{}{}
 				dstIPs = append(dstIPs, net.IP(t.Dst[:]).String())
 			}
