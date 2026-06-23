@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"unique"
@@ -38,12 +39,22 @@ type DiachronicFlow struct {
 	Windows []Window
 }
 
+// MaxIPsPerFlow bounds the number of distinct source / destination IP addresses retained per
+// flow window. A single FlowKey aggregates traffic from many connections (and across nodes and
+// time), so the IP sets are capped to keep memory and wire size bounded. Once the cap is reached,
+// additional distinct addresses are dropped, making the sets best-effort rather than exhaustive.
+const MaxIPsPerFlow = 100
+
 type Window struct {
 	start int64
 	end   int64
 
-	SourceLabels            unique.Handle[string]
-	DestLabels              unique.Handle[string]
+	SourceLabels unique.Handle[string]
+	DestLabels   unique.Handle[string]
+	// SourceIPs and DestIPs are the bounded sets of distinct source / destination IP addresses
+	// observed for the connections aggregated into this window. They are capped at MaxIPsPerFlow.
+	SourceIPs               []string
+	DestIPs                 []string
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -148,6 +159,8 @@ func (d *DiachronicFlow) addToWindow(flow *types.Flow, index int) {
 	d.Windows[index].NumConnectionsLive += flow.NumConnectionsLive
 	d.Windows[index].SourceLabels = intersection(d.Windows[index].SourceLabels, flow.SourceLabels)
 	d.Windows[index].DestLabels = intersection(d.Windows[index].DestLabels, flow.DestLabels)
+	d.Windows[index].SourceIPs = mergeBoundedIPs(d.Windows[index].SourceIPs, flow.SourceIps, MaxIPsPerFlow)
+	d.Windows[index].DestIPs = mergeBoundedIPs(d.Windows[index].DestIPs, flow.DestIps, MaxIPsPerFlow)
 }
 
 func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end int64) {
@@ -163,6 +176,8 @@ func (d *DiachronicFlow) insertWindow(flow *types.Flow, index int, start, end in
 		NumConnectionsLive:      flow.NumConnectionsLive,
 		SourceLabels:            flow.SourceLabels,
 		DestLabels:              flow.DestLabels,
+		SourceIPs:               mergeBoundedIPs(nil, flow.SourceIps, MaxIPsPerFlow),
+		DestIPs:                 mergeBoundedIPs(nil, flow.DestIps, MaxIPsPerFlow),
 	}
 	d.Windows = append(d.Windows[:index], append([]Window{w}, d.Windows[index:]...)...)
 
@@ -188,6 +203,8 @@ func (d *DiachronicFlow) appendWindow(flow *types.Flow, start, end int64) {
 		NumConnectionsLive:      flow.NumConnectionsLive,
 		SourceLabels:            flow.SourceLabels,
 		DestLabels:              flow.DestLabels,
+		SourceIPs:               mergeBoundedIPs(nil, flow.SourceIps, MaxIPsPerFlow),
+		DestIPs:                 mergeBoundedIPs(nil, flow.DestIps, MaxIPsPerFlow),
 	}
 	d.Windows = append(d.Windows, w)
 
@@ -266,6 +283,10 @@ func (d *DiachronicFlow) AggregateWindows(windows []*Window) *types.Flow {
 		} else {
 			f.DestLabels = w.DestLabels
 		}
+
+		// Merge the bounded IP sets across windows, deduplicating and truncating to the cap.
+		f.SourceIps = mergeBoundedIPs(f.SourceIps, w.SourceIPs, MaxIPsPerFlow)
+		f.DestIps = mergeBoundedIPs(f.DestIps, w.DestIPs, MaxIPsPerFlow)
 
 		// Update the flow's start and end times.
 		if f.StartTime == 0 || w.start < f.StartTime {
@@ -353,4 +374,40 @@ func sortedCSVIntersection(a, b string) string {
 		}
 	}
 	return buf.String()
+}
+
+// mergeBoundedIPs returns the union of the existing IP set and the incoming IPs, deduplicated and
+// truncated to at most maxIPs entries. The result is sorted for deterministic output. The existing
+// slice is assumed to already be within the cap; once the cap is reached, additional distinct
+// addresses are dropped, so the returned set is best-effort rather than exhaustive.
+func mergeBoundedIPs(existing, incoming []string, maxIPs int) []string {
+	if len(incoming) == 0 {
+		return existing
+	}
+
+	seen := make(map[string]struct{}, len(existing)+len(incoming))
+	merged := make([]string, 0, len(existing)+len(incoming))
+	add := func(ips []string) {
+		for _, ip := range ips {
+			if ip == "" {
+				continue
+			}
+			if maxIPs > 0 && len(merged) >= maxIPs {
+				return
+			}
+			if _, ok := seen[ip]; ok {
+				continue
+			}
+			seen[ip] = struct{}{}
+			merged = append(merged, ip)
+		}
+	}
+	add(existing)
+	add(incoming)
+
+	if len(merged) == 0 {
+		return existing
+	}
+	slices.Sort(merged)
+	return merged
 }
