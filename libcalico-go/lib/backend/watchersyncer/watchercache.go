@@ -129,12 +129,27 @@ func (b *clientListWatchBackend) HandleWatchEvent(event api.WatchEvent) error {
 	if b.listWatcher.HandleBasicWatchEvent(event) {
 		return nil
 	}
-	if event.Type == api.WatchError {
+
+	switch event.Type {
+	case api.WatchBookmark:
+		b.handleBookmark(event)
+		return nil
+	case api.WatchError:
 		b.HandleWatchError(event.Error)
 		return event.Error
+	default:
+		b.listWatcher.Logger.WithField("eventType", event.Type).Warn("Unexpected watch event type")
+		return nil
 	}
-	b.listWatcher.Logger.WithField("eventType", event.Type).Warn("Unexpected watch event type")
-	return nil
+}
+
+func (b *clientListWatchBackend) handleBookmark(event api.WatchEvent) {
+	if event.New == nil {
+		b.listWatcher.Logger.Warn("Watch bookmark received without revision")
+		return
+	}
+	b.listWatcher.UpdateRevision(event.New.Revision)
+	b.listWatcher.MarkSuccessfulConnection()
 }
 
 func (b *clientListWatchBackend) HandleListError(err error) {

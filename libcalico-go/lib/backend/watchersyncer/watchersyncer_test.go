@@ -431,6 +431,35 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Equal("bookmarkRevision"))
 	})
 
+	It("Should restart from the most recent watch bookmark with the fallback ListWatch backend", func() {
+		rs := newStartedPlainWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		By("Sending a bookmark.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type: api.WatchBookmark,
+			New: &model.KVPair{
+				Revision: "fallbackBookmarkRevision",
+			},
+		})
+		By("Sending a watch terminated error.")
+		rs.sendEvent(r1, api.WatchEvent{
+			Type:  api.WatchError,
+			Error: dsError,
+		})
+
+		rs.clientWatchResponse(r1, nil)
+		rs.ExpectStatusUnchanged()
+
+		Eventually(rs.fc.getLatestWatchRevision, api.DefaultMinResyncInterval*2, 10*time.Millisecond).Should(
+			Equal("fallbackBookmarkRevision"))
+	})
+
 	It("Should retry the same revision on connection refused", func() {
 		// Since we are timing the processing, keep the interval sufficiently large
 		// to make the measurements more accurate.
@@ -1024,6 +1053,13 @@ func newStartedWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, op
 	return rst
 }
 
+func newStartedPlainWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
+	rst := newWatcherSyncerTester(l)
+	rst.watcherSyncer = watchersyncer.New(&plainFakeClient{fc: rst.fc}, l, rst.SyncerTester)
+	rst.watcherSyncer.Start()
+	return rst
+}
+
 func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
 	return newWatcherSyncerTesterWithOptions(l, api.DefaultListWatcherOptions())
 }
@@ -1264,6 +1300,54 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, option
 		c.latestWatchRevision = options.Revision
 		return l.watch()
 	}
+}
+
+type plainFakeClient struct {
+	fc *fakeClient
+}
+
+func (c *plainFakeClient) Create(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return c.fc.Create(ctx, object)
+}
+
+func (c *plainFakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return c.fc.Update(ctx, object)
+}
+
+func (c *plainFakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+	return c.fc.Apply(ctx, object)
+}
+
+func (c *plainFakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	return c.fc.Delete(ctx, key, revision)
+}
+
+func (c *plainFakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.fc.DeleteKVP(ctx, kvp)
+}
+
+func (c *plainFakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	return c.fc.Get(ctx, key, revision)
+}
+
+func (c *plainFakeClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+	return c.fc.List(ctx, list, revision)
+}
+
+func (c *plainFakeClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
+	return c.fc.Watch(ctx, list, options)
+}
+
+func (c *plainFakeClient) EnsureInitialized() error {
+	return c.fc.EnsureInitialized()
+}
+
+func (c *plainFakeClient) Clean() error {
+	return c.fc.Clean()
+}
+
+func (c *plainFakeClient) Close() error {
+	return c.fc.Close()
 }
 
 // ListAndWatch implements the optional api.ListAndWatchClient interface by using k8s.NewListWatcher.
