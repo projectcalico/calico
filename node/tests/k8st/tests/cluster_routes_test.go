@@ -82,7 +82,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 		},
 	}
 	g.Expect(cli.Create(ctx, pool)).To(Succeed(), "creating IPPool")
-	t.Cleanup(func() { deletePool(cli, pool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, pool.Name) })
 
 	nsName := "cluster-routes"
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
