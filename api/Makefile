@@ -77,8 +77,7 @@ gen-files .generate_files: lint-cache-dir clean-generated
 	# can be shared with the standalone projectcalico/api and tigera/api repos,
 	# which mirror build/ but keep their own Makefile. CRD generation stays above
 	# because it uses the monorepo-only Calico-patched controller-gen.
-	$(DOCKER_RUN) -e PACKAGE_NAME=$(PACKAGE_NAME) $(CALICO_BUILD) \
-	   sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/codegen.sh'
+	$(DOCKER_RUN) -e PACKAGE_NAME=$(PACKAGE_NAME) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(BUILD_DIR)/codegen.sh'
 
 	touch .generate_files
 	$(MAKE) fix
