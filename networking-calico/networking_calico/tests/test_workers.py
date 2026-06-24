@@ -19,8 +19,17 @@ The shutdown path is the regression fix in
 https://github.com/projectcalico/calico/pull/13069 -- ``stop()`` must ask
 the elector to step down so its ``finally: _attempt_step_down()`` clause
 runs and the election key is removed from etcd promptly, rather than
-lingering for the lease ttl.  These tests verify all three branches of
-that path: elector present, elector absent, and elector raising.
+lingering for the lease ttl.  These tests verify all branches of that
+path: elector present, elector absent, and elector raising.
+
+Lives under ``networking_calico/tests/`` rather than
+``networking_calico/plugins/ml2/drivers/calico/test/`` because the
+latter's ``lib.py`` replaces ``sys.modules['neutron_lib.worker']`` with
+a MagicMock at import time -- which collapses
+``CalicoManagerWorker`` itself into a MagicMock and makes its real
+shutdown code unreachable.  Running here keeps ``neutron_lib.worker``
+real (the two test directories are run in separate subunit processes
+per ``.testr.conf``).
 """
 
 import unittest
