@@ -870,6 +870,25 @@ func TestListWatcher_HandleBookmark_WithoutInitialEventsAnnotation(t *testing.T)
 	assert.True(t, lw.InitialSyncPending) // Still needs initial sync
 }
 
+func TestListWatcher_HandleBookmark_WithNilNew(t *testing.T) {
+	client := &mockK8sResourceClient{}
+	list := testListOptions()
+	handler := newMockEventHandler()
+
+	lw := NewListWatcher(client, list, handler)
+
+	event := api.WatchEvent{
+		Type: api.WatchBookmark,
+	}
+
+	err := lw.HandleWatchEvent(event)
+
+	assert.NoError(t, err)
+	assert.Empty(t, lw.CurrentRevision)
+	assert.Equal(t, 0, handler.syncCount)
+	assert.True(t, lw.InitialSyncPending)
+}
+
 // ============================================================================
 // Integration-like Tests
 // ============================================================================

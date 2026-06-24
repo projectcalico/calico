@@ -190,6 +190,11 @@ func (lw *ListWatcher) PerformInitialSync(ctx context.Context, g *api.GenericLis
 
 // handleBookmark processes a bookmark event
 func (lw *ListWatcher) handleBookmark(event api.WatchEvent) {
+	if event.New == nil {
+		lw.Logger.Warn("Watch bookmark received without revision")
+		return
+	}
+
 	lw.Logger.WithField("newRevision", event.New.Revision).Debug("Watch bookmark received")
 	lw.UpdateRevision(event.New.Revision)
 

@@ -103,7 +103,8 @@ type ListWatchBackend interface {
 	HandleListError(err error)
 
 	// HandleWatchError processes errors from the Watch operation.
-	// This is called when CreateWatch fails.
+	// This is called when the regular Watch fails. WatchList creation failures
+	// during initial sync are handled locally by falling back to List+Watch.
 	HandleWatchError(err error)
 
 	// PerformInitialSync executes the initial synchronization.
@@ -384,6 +385,9 @@ func (g *GenericListWatcher) startWatch(ctx context.Context, backend ListWatchBa
 			if ctx.Err() != nil {
 				return nil
 			}
+			// Match client-go reflector behavior: a WatchList create failure falls
+			// back to List+Watch for this sync without treating it as a regular
+			// watch failure.
 			g.Logger.WithError(err).Info(
 				"Data couldn't be fetched in WatchList mode, falling back to List. This is expected if WatchList is not supported or disabled in the backend.")
 		}

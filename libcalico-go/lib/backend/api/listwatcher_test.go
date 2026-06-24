@@ -859,6 +859,7 @@ func TestGenericListWatcher_WatchListCreateFailureFallsBackToList(t *testing.T) 
 
 	require.Equal(t, []bool{true, false}, baseBackend.createWatchArguments)
 	require.Equal(t, []bool{false}, baseBackend.performInitialSyncArguments)
+	assert.Equal(t, 0, baseBackend.watchErrorCalls)
 	assert.Equal(t, fallbackWatcher, createdWatcher)
 	assert.True(t, watchListWatcher.stopped)
 	assert.False(t, fallbackWatcher.stopped)
