@@ -17,6 +17,7 @@ package watchersyncer
 import (
 	"context"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -83,6 +84,17 @@ type Option func(*watcherSyncer)
 func WithListWatcherOptions(options api.ListWatcherOptions) Option {
 	return func(ws *watcherSyncer) {
 		ws.listWatcherOptions = options
+	}
+}
+
+// WithWatchRetryTimeout sets the maximum time a watch can fail to reconnect
+// before reporting a connection error.
+//
+// Deprecated: use WithListWatcherOptions to set
+// api.ListWatcherOptions.WatchRetryTimeout instead.
+func WithWatchRetryTimeout(t time.Duration) Option {
+	return func(ws *watcherSyncer) {
+		ws.listWatcherOptions.WatchRetryTimeout = t
 	}
 }
 

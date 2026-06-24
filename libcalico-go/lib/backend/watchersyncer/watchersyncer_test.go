@@ -203,6 +203,20 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectConnErrors([]error{listAndWatchErr})
 	})
 
+	It("should support deprecated WithWatchRetryTimeout option", func() {
+		rs := newWatcherSyncerTesterWithWatchersyncerOptions(
+			[]watchersyncer.ResourceType{r1},
+			watchersyncer.WithWatchRetryTimeout(time.Nanosecond),
+		)
+		rs.clientListResponse(r1, genError)
+
+		rs.watcherSyncer.Start()
+		defer rs.watcherSyncer.Stop()
+
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.ExpectConnErrors([]error{genError})
+	})
+
 	It("should fall back to generic ListAndWatch if backend-specific ListAndWatch is unsupported", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.fc.listAndWatchError = cerrors.ErrorOperationNotSupported{
@@ -1080,6 +1094,10 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 }
 
 func newWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, options api.ListWatcherOptions) *watcherSyncerTester {
+	return newWatcherSyncerTesterWithWatchersyncerOptions(l, watchersyncer.WithListWatcherOptions(options))
+}
+
+func newWatcherSyncerTesterWithWatchersyncerOptions(l []watchersyncer.ResourceType, options ...watchersyncer.Option) *watcherSyncerTester {
 	// Create the required watchers.  This has methods that we use to drive
 	// responses.
 	lws := map[string]*listWatchSource{}
@@ -1105,7 +1123,7 @@ func newWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, options a
 	rst := &watcherSyncerTester{
 		SyncerTester:  st,
 		fc:            fc,
-		watcherSyncer: watchersyncer.New(fc, l, st, watchersyncer.WithListWatcherOptions(options)),
+		watcherSyncer: watchersyncer.New(fc, l, st, options...),
 		lws:           lws,
 	}
 	return rst
