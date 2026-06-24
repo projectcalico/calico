@@ -262,7 +262,6 @@ func deletePool(t testing.TB, cli ctrlclient.Client, name string) {
 	defer cancel()
 	pool := &v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	if err := cli.Delete(ctx, pool); err != nil && !apierrors.IsNotFound(err) {
-		// Log via t (not stdout) so the test2json stream stays pure JSON.
 		t.Logf("WARNING: failed to delete IPPool %s: %v", name, err)
 	}
 }
