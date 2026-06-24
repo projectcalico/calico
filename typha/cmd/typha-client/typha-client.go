@@ -111,7 +111,7 @@ func main() {
 	}
 
 	hostname, _ := os.Hostname()
-	discoverer := discovery.New(discovery.WithAddrOverride(addr))
+	discoverer := discovery.New(discovery.NodeName(), discovery.WithAddrOverride(addr))
 	client := syncclient.New(discoverer, buildinfo.Version, hostname, "typha command-line client", callbacks, options)
 	err = client.Start(context.Background())
 	if err != nil {
