@@ -722,6 +722,51 @@ var _ = Describe("IPAM controller UTs", func() {
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
 	})
 
+	Describe("IPAM config caching", func() {
+		var fakeIPAM *fakeIPAMClient
+
+		BeforeEach(func() {
+			fakeIPAM = cli.IPAM().(*fakeIPAMClient)
+			// Push the periodic tick well past the test window so it doesn't refresh
+			// the config out from under the assertions.
+			c.config.LeakGracePeriod = &metav1.Duration{Duration: time.Hour}
+			c.Start(stopChan)
+		})
+
+		It("reads the IPAM config once and reuses it across syncs", func() {
+			cidr := net.MustParseCIDR("10.0.0.0/30")
+			aff := "host:cnode"
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{nil, nil, nil, nil},
+				Unallocated: []int{0, 1, 2, 3},
+			}
+			kvp := model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+			c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.allBlocks[cidr.String()]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			// Several GC passes read the config from the datastore only once.
+			done := c.pause()
+			for range 3 {
+				Expect(c.garbageCollectColdIPs()).To(Succeed())
+			}
+			done()
+			Expect(fakeIPAM.getIPAMConfigCallCount()).To(Equal(1))
+
+			// The periodic refresh re-reads it.
+			done = c.pause()
+			Expect(c.refreshIPAMConfig()).To(Succeed())
+			done()
+			Expect(fakeIPAM.getIPAMConfigCallCount()).To(Equal(2))
+		})
+	})
+
 	It("should refresh the sequence number of an already-tracked allocation on block update", func() {
 		// Regression test: if a reallocation bumps an allocation's sequence number
 		// but we keep the stale one, every GC release of that IP fails with "update
