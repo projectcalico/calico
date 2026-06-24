@@ -182,7 +182,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 	It("should handle when an API is not installed", func() {
 		// If an API isn't installed, the List will return a NotFound error. We expect the watcher cache to handle this gracefully,
-		// makring itself in sync and not retrying for an extended period.
+		// marking itself in sync and not retrying for an extended period.
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.clientListResponse(r1, kerrors.NewNotFound(apiv3.Resource("networkpolicies"), ""))
 		rs.watcherSyncer.Start()
@@ -1065,7 +1065,7 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 }
 
 func newWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, options api.ListWatcherOptions) *watcherSyncerTester {
-	// Create the required watchers.  This hs methods that we use to drive
+	// Create the required watchers.  This has methods that we use to drive
 	// responses.
 	lws := map[string]*listWatchSource{}
 	for _, r := range l {

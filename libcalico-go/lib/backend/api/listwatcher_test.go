@@ -650,57 +650,62 @@ func TestPerformListSync_ListError(t *testing.T) {
 	assert.Empty(t, handler.calls)
 }
 
-func TestPerformListSync_EmptyRevisionNoItems(t *testing.T) {
-	handler := newMockEventHandler()
-	lw := NewGenericListWatcher(testListOptions(), handler)
-
-	backend := newMockListWatchBackend()
-	backend.listResult = &model.KVPairList{
-		KVPairs:  []*model.KVPair{}, // No items
-		Revision: "",                // Empty revision
+func TestPerformListSync_EmptyOrZeroRevisionNoItems(t *testing.T) {
+	tests := []struct {
+		name     string
+		revision string
+	}{
+		{name: "empty revision", revision: ""},
+		{name: "zero revision", revision: "0"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := newMockEventHandler()
+			lw := NewGenericListWatcher(testListOptions(), handler)
 
-	err := lw.PerformListSync(context.Background(), backend)
+			backend := newMockListWatchBackend()
+			backend.listResult = &model.KVPairList{
+				KVPairs:  []*model.KVPair{}, // No items
+				Revision: tt.revision,
+			}
 
-	// Should return error and schedule retry (poll mode)
-	assert.Error(t, err)
-	assert.Equal(t, "", lw.CurrentRevision) // Should reset for resync
-	assert.True(t, lw.RetryBlockedUntil.After(time.Now()))
+			err := lw.PerformListSync(context.Background(), backend)
+
+			// Should return error and schedule retry (poll mode)
+			assert.Error(t, err)
+			assert.Equal(t, "", lw.CurrentRevision) // Should reset for resync
+			assert.True(t, lw.RetryBlockedUntil.After(time.Now()))
+		})
+	}
 }
 
-func TestPerformListSync_ZeroRevisionNoItems(t *testing.T) {
-	handler := newMockEventHandler()
-	lw := NewGenericListWatcher(testListOptions(), handler)
-
-	backend := newMockListWatchBackend()
-	backend.listResult = &model.KVPairList{
-		KVPairs:  []*model.KVPair{}, // No items
-		Revision: "",                // Zero revision
+func TestPerformListSync_EmptyOrZeroRevisionWithItems_Panics(t *testing.T) {
+	tests := []struct {
+		name     string
+		revision string
+	}{
+		{name: "empty revision", revision: ""},
+		{name: "zero revision", revision: "0"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := newMockEventHandler()
+			lw := NewGenericListWatcher(testListOptions(), handler)
 
-	err := lw.PerformListSync(context.Background(), backend)
+			backend := newMockListWatchBackend()
+			backend.listResult = &model.KVPairList{
+				KVPairs: []*model.KVPair{
+					{Key: model.GlobalConfigKey{Name: "key1"}, Value: "value1", Revision: "1"},
+				},
+				Revision: tt.revision,
+			}
 
-	// Should return error and schedule retry (poll mode)
-	assert.Error(t, err)
-	assert.Equal(t, "", lw.CurrentRevision)
-}
-
-func TestPerformListSync_ZeroRevisionWithItems_Panics(t *testing.T) {
-	handler := newMockEventHandler()
-	lw := NewGenericListWatcher(testListOptions(), handler)
-
-	backend := newMockListWatchBackend()
-	backend.listResult = &model.KVPairList{
-		KVPairs: []*model.KVPair{
-			{Key: model.GlobalConfigKey{Name: "key1"}, Value: "value1", Revision: "1"},
-		},
-		Revision: "", // Zero revision with items - BUG condition
+			// Should panic due to inconsistent state
+			assert.Panics(t, func() {
+				lw.PerformListSync(context.Background(), backend)
+			})
+		})
 	}
-
-	// Should panic due to inconsistent state
-	assert.Panics(t, func() {
-		lw.PerformListSync(context.Background(), backend)
-	})
 }
 
 // ============================================================================
