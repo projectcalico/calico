@@ -276,6 +276,6 @@ func newIPAMConfigureCommand() *cobra.Command {
 	cmd.Flags().String("strictaffinity", "", "Set StrictAffinity to true/false.")
 	cmd.Flags().String("max-blocks-per-host", "", "Set the maximum number of blocks that can be affine to a host.")
 	cmd.Flags().String("kubevirt-ip-persistence", "", "Control whether KubeVirt VMs retain persistent IP addresses (Enabled|Disabled).")
-	cmd.Flags().Int("ip-cooldown-seconds", -1, "Set the maximum time between release and re-allocation of an IP address.")
+	cmd.Flags().Int("ip-cooldown-seconds", -1, "Set the minimum time between release and re-allocation of an IP address.")
 	return cmd
 }

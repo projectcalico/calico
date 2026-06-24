@@ -472,8 +472,9 @@ func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.Allocatio
 
 	attr := b.Attributes[*attrIndex]
 	if attr.ReleasedAt != nil {
-		// This block has just been garbage collected so we can assume
-		// the cooldown period has not expired.
+		// This block has probably just been garbage collected in
+		// `newBlock`, so we can conservatively assume the block is
+		// stil in cooldown.
 		log.Debugf("IP %s is currently in cooldown", ip)
 		return nil, cerrors.ErrorIPInCooldown{IP: ip.String()}
 	}
@@ -634,7 +635,7 @@ func (b allocationBlock) clone() *allocationBlock {
 	return &allocationBlock{b.AllocationBlock.Clone()}
 }
 
-// garbageCollect normalizes the block, including marking blocks as Unallocated
+// garbageCollect normalizes the block, including marking ordinals as Unallocated
 // if their ReleasedAt property is far enough in the past. Returns true if the
 // block was changed.
 func (b *allocationBlock) garbageCollect(ipCooldownSeconds int) bool {
