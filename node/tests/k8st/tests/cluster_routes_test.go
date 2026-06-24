@@ -17,8 +17,6 @@
 // pool, the route to a remote node's IPAM block must go out tunl0 and carry the
 // netlink protocol of whichever component owns in-cluster routing: Felix (proto
 // 80) when ProgramClusterRoutes is Enabled, otherwise BIRD (proto 12).
-//
-// Ported from the former e2e test e2e/pkg/tests/networking/cluster_routes.go.
 
 package k8stests
 
