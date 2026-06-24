@@ -1368,10 +1368,13 @@ func (c *IPAMController) garbageCollectColdIPs() error {
 	for cidr, earliestReleasedAt := range c.coldBlocks {
 		if earliestReleasedAt.Add(cooldown).After(now) {
 			// The oldest cooldown IP in this block hasn't finished cooling down yet.
+			log.WithField("block", cidr).Debug("Block has IPs in cooldown but none are ready to deallocate yet")
 			continue
 		}
 		kvp, ok := c.allBlocks[cidr]
 		if !ok {
+			// coldBlocks should always be a subset of allBlocks; see assertConsistentState.
+			log.WithField("block", cidr).Warn("Block tracked as having cooldown IPs is missing from the block cache")
 			continue
 		}
 		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, ipamConfig, &kvp); err != nil {
