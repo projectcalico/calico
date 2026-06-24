@@ -6,6 +6,8 @@
 
 #### Bug fixes
 
+- This is a test bug fix. [calico 789](https://github.com/projectcalico/calico/pull/789) (@)
+
 #### Other changes
 
 - This is a test release note. [calico 123](https://github.com/projectcalico/calico/pull/123) (@)
