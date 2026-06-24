@@ -185,6 +185,36 @@
         commands:
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
 
+- name: "Pull: go-build image"
+  # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+  # a Docker Hub pull fails (which we still see occasionally even with an
+  # authenticated session). Jobs pull from Docker Hub first and only fall back to
+  # this GCS copy on failure (see the global prologue), so this is just an
+  # insurance upload — uploads are free and the common case is a no-op
+  # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+  # across workflows.
+  run:
+    when: "true"
+  dependencies: []
+  task:
+    env_vars:
+      - name: SKIP_CACHE_RESTORE
+        value: "true"
+    jobs:
+      - name: "Cache calico/go-build to GCS"
+        commands:
+          - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
+          - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+          - |-
+            if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+              echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
+            else
+              echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
+              docker pull "calico/go-build:${GO_BUILD_VER}"
+              docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
+              zstd -3 --rm /tmp/go-build.tar
+              gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+            fi
 - name: "Build: calico image"
   # Build and cache the calico image so that downstream CI blocks can load it
   # from GCS instead of rebuilding per component. This block is the sole
@@ -332,6 +362,7 @@
     - Check protobufs
     - Manifests and API docs
     - Store working copy
+    - "Pull: go-build image"
   task:
     jobs:
       - name: Pre-flight checks
