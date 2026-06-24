@@ -80,7 +80,7 @@ var (
 	notSupported = cerrors.ErrorOperationNotSupported{}
 	notExists    = cerrors.ErrorResourceDoesNotExist{}
 	k8sTooOldRV  = kerrors.NewResourceExpired("test error")
-	caliTooOldRV = kerrors.FromObject(&k8sTooOldRV.ErrStatus) // Our wrapper around above error.
+	caliTooOldRV = kerrors.FromObject(&k8sTooOldRV.ErrStatus)
 	genError     = errors.New("Generic error")
 )
 

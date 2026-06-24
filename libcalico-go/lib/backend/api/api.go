@@ -131,7 +131,8 @@ type Client interface {
 type ListAndWatchClient interface {
 	// ListAndWatch provides a unified interface for listing and watching resources.
 	// It runs a continuous loop that performs list-then-watch cycles until the context
-	// is cancelled. The method handles backend-specific logic including:
+	// is cancelled or the backend returns a terminal error. The method handles
+	// backend-specific logic including:
 	//
 	// Common behavior (via GenericListWatcher):
 	//   - Retry throttling with configurable minimum intervals
@@ -155,7 +156,7 @@ type ListAndWatchClient interface {
 	//   - OnSync(): Called when initial list completes and watcher is in sync
 	//   - OnError(err): Called when connection timeout or critical error occurs
 	//
-	// The method blocks until the context is cancelled, returning ctx.Err().
+	// The method blocks until the context is cancelled or a terminal error occurs.
 	ListAndWatch(ctx context.Context, list model.ListInterface, handler EventHandler) error
 }
 

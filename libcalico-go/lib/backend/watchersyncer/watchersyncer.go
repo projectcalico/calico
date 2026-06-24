@@ -69,17 +69,12 @@ type SyncerUpdateProcessor interface {
 	OnSyncerStarting()
 }
 
-type Option func(*watcherSyncer)
-
 // New creates a new multiple Watcher-backed api.Syncer.
-func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
+func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks) api.Syncer {
 	rs := &watcherSyncer{
 		watcherCaches: make([]*watcherCache, len(resourceTypes)),
 		results:       make(chan any, 2000),
 		callbacks:     callbacks,
-	}
-	for _, o := range options {
-		o(rs)
 	}
 	for i, r := range resourceTypes {
 		rs.watcherCaches[i] = newWatcherCache(client, r, rs.results)
