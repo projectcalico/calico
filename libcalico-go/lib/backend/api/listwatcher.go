@@ -227,12 +227,9 @@ func (g *GenericListWatcher) MarkInitialSyncComplete() {
 
 // PerformListSync performs a full list-based synchronization.
 // This is the common implementation for List+Watch mode used by etcd and k8s fallback.
-// It notifies the handler, performs the list, sends events, and marks sync complete.
+// It performs the list, notifies the handler, sends events, and marks sync complete.
 func (g *GenericListWatcher) PerformListSync(ctx context.Context, backend ListWatchBackend) error {
 	g.Logger.Info("Full resync is required (ListThenWatch mode)")
-
-	// Notify handler that resync is starting
-	g.Handler.OnResyncStarted()
 
 	// Perform the list operation
 	list, err := backend.PerformList(ctx)
@@ -258,6 +255,10 @@ func (g *GenericListWatcher) PerformListSync(ctx context.Context, backend ListWa
 		"numKVs":   len(list.KVPairs),
 		"revision": list.Revision,
 	}).Debug("List completed")
+
+	// Notify handler after a valid list result but before emitting events so
+	// it can prepare resync bookkeeping.
+	g.Handler.OnResyncStarted()
 
 	// Send add events for each resource
 	g.SendListAsAddEvents(list)

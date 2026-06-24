@@ -38,6 +38,7 @@ type mockEventHandler struct {
 	syncCount       int
 	resyncStartedCt int
 	errors          []error
+	calls           []string
 }
 
 func newMockEventHandler() *mockEventHandler {
@@ -51,26 +52,32 @@ func newMockEventHandler() *mockEventHandler {
 
 func (m *mockEventHandler) OnResyncStarted() {
 	m.resyncStartedCt++
+	m.calls = append(m.calls, "resync-started")
 }
 
 func (m *mockEventHandler) OnAdd(kvp *model.KVPair) {
 	m.addEvents = append(m.addEvents, kvp)
+	m.calls = append(m.calls, "add")
 }
 
 func (m *mockEventHandler) OnUpdate(kvp *model.KVPair) {
 	m.updateEvents = append(m.updateEvents, kvp)
+	m.calls = append(m.calls, "update")
 }
 
 func (m *mockEventHandler) OnDelete(kvp *model.KVPair) {
 	m.deleteEvents = append(m.deleteEvents, kvp)
+	m.calls = append(m.calls, "delete")
 }
 
 func (m *mockEventHandler) OnSync() {
 	m.syncCount++
+	m.calls = append(m.calls, "sync")
 }
 
 func (m *mockEventHandler) OnError(err error) {
 	m.errors = append(m.errors, err)
+	m.calls = append(m.calls, "error")
 }
 
 // mockWatcher implements WatchInterface for testing
@@ -617,6 +624,7 @@ func TestPerformListSync_Success(t *testing.T) {
 	assert.Equal(t, 1, handler.resyncStartedCt)
 	assert.Equal(t, 1, handler.syncCount)
 	assert.Len(t, handler.addEvents, 1)
+	assert.Equal(t, []string{"resync-started", "add", "sync"}, handler.calls)
 	assert.Equal(t, "100", lw.CurrentRevision)
 	assert.False(t, lw.InitialSyncPending) // Should be cleared after successful sync
 }
@@ -637,8 +645,9 @@ func TestPerformListSync_ListError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.True(t, listErrorCalled)
-	assert.Equal(t, 1, handler.resyncStartedCt)
+	assert.Equal(t, 0, handler.resyncStartedCt)
 	assert.Equal(t, 0, handler.syncCount) // Sync should not be called on error
+	assert.Empty(t, handler.calls)
 }
 
 func TestPerformListSync_EmptyRevisionNoItems(t *testing.T) {
