@@ -37,8 +37,7 @@ global_job_config:
           # use GCS. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
           # targeting master restore master's Semaphore cache.) Note: `cache
           # restore` exits 0 even on a miss, so we test for the restored file.
-          use_sem_cache=false
-          [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]] && use_sem_cache=true
+          if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then use_sem_cache=true; else use_sem_cache=false; fi
           rm -f /tmp/working-copy.tar.zstd
           if ${use_sem_cache}; then
             cache restore "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
