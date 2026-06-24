@@ -214,6 +214,10 @@ func (wc *watcherCache) OnUpdate(kvp *model.KVPair) {
 
 // OnDelete handles delete events from ListAndWatch
 func (wc *watcherCache) OnDelete(kvp *model.KVPair) {
+	if kvp == nil {
+		wc.logger.Warn("Received delete event without KVPair, skipping")
+		return
+	}
 	kvp.Value = nil
 	wc.handleWatchListEvent(kvp)
 }

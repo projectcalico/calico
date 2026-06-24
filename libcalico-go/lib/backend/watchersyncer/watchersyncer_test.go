@@ -217,6 +217,23 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectConnErrors([]error{genError})
 	})
 
+	It("should ignore nil delete events from backend ListAndWatch implementations", func() {
+		onDeleteCalled := make(chan struct{})
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.fc.listAndWatchFunc = func(ctx context.Context, list model.ListInterface, handler api.EventHandler, opts ...api.ListWatcherOption) error {
+			handler.OnDelete(nil)
+			close(onDeleteCalled)
+			<-ctx.Done()
+			return ctx.Err()
+		}
+
+		rs.watcherSyncer.Start()
+		defer rs.watcherSyncer.Stop()
+
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		Eventually(onDeleteCalled).Should(BeClosed())
+	})
+
 	It("should fall back to generic ListAndWatch if backend-specific ListAndWatch is unsupported", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.fc.listAndWatchError = cerrors.ErrorOperationNotSupported{
@@ -1250,6 +1267,7 @@ func (rst *watcherSyncerTester) clientWatchResponse(r watchersyncer.ResourceType
 type fakeClient struct {
 	lws               map[string]*listWatchSource
 	listAndWatchError error
+	listAndWatchFunc  func(context.Context, model.ListInterface, api.EventHandler, ...api.ListWatcherOption) error
 
 	// Allows us to track the revision that the syncer is using.
 	latestListRevision  string
@@ -1390,6 +1408,9 @@ func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface,
 	log.WithField("Name", name).Info("ListAndWatch request")
 	if c.listAndWatchError != nil {
 		return c.listAndWatchError
+	}
+	if c.listAndWatchFunc != nil {
+		return c.listAndWatchFunc(ctx, list, handler, opts...)
 	}
 
 	client := &fakeK8sClient{fakeClient: c}
