@@ -165,4 +165,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfiguration tests", testutils.Data
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"), err.Error())
 	})
+
+	It("should reject IPCooldownSeconds less than zero", func() {
+		_, err := c.IPAMConfiguration().Create(ctx, &v3.IPAMConfiguration{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: v3.IPAMConfigurationSpec{
+				IPCooldownSeconds: -1,
+			},
+		}, options.SetOptions{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.ipCooldownSeconds in body should be greater than or equal to 0"), err.Error())
+	})
 })
