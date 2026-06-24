@@ -33,7 +33,8 @@ from __future__ import print_function
 #
 # So this entire file is opt-in via the CALICO_RUN_FV_TESTS=1 environment
 # variable.  Without it, the module imports cleanly (no monkey_patch) and
-# the test class is skipped at setUpClass time.  See the eventlet docs:
+# the test class is marked skipped at class-decoration time by
+# @unittest.skipUnless -- no setUpClass needs to run.  See the eventlet docs:
 # https://eventlet.readthedocs.io/en/latest/patching.html
 import os
 
