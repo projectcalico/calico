@@ -16,7 +16,6 @@ package networking
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -29,21 +28,11 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
-// Route is a parsed entry from `ip -j route show` as seen from the host
-// network namespace of a calico-node pod.
-type Route struct {
-	Dst     string
-	Gateway string
-	Dev     string
-	Proto   iputils.RouteProto
-	Raw     string
-}
-
 // GetNodeRoutes returns routes from the host routing table of the calico-node
 // pod running on nodeName. If dstMatch is non-empty, only routes whose Dst
 // contains it (as a substring) are returned. Parses the JSON output of
 // `ip -j route show` so callers can assert on the route protocol owner.
-func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []Route {
+func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []iputils.Route {
 	pod := findCalicoNodePod(cli, nodeName)
 	routes, err := conncheck.PodIP(pod).Routes()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error running 'ip -j route show' in pod %s", pod.Name)
@@ -53,9 +42,9 @@ func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []Route {
 
 // HasRouteProto returns true if the slice contains a route with the given proto.
 // Useful as an Eventually predicate when waiting for a route ownership change.
-func HasRouteProto(routes []Route, proto iputils.RouteProto) bool {
+func HasRouteProto(routes []iputils.Route, proto iputils.RouteProto) bool {
 	for _, r := range routes {
-		if r.Proto == proto {
+		if r.Proto() == proto {
 			return true
 		}
 	}
@@ -64,12 +53,12 @@ func HasRouteProto(routes []Route, proto iputils.RouteProto) bool {
 
 // AllRoutesProto returns true if every route in the slice carries the given
 // proto. Returns false on an empty slice.
-func AllRoutesProto(routes []Route, proto iputils.RouteProto) bool {
+func AllRoutesProto(routes []iputils.Route, proto iputils.RouteProto) bool {
 	if len(routes) == 0 {
 		return false
 	}
 	for _, r := range routes {
-		if r.Proto != proto {
+		if r.Proto() != proto {
 			return false
 		}
 	}
@@ -95,25 +84,17 @@ func findCalicoNodePod(cli ctrlclient.Client, nodeName string) *corev1.Pod {
 	return nil
 }
 
-// filterRoutes converts iputils routes to the local Route type, keeping only
-// those whose Dst contains dstMatch (empty matches all). Protocol is a string
-// in iproute2's JSON output regardless of whether the kernel proto has a name
-// in /etc/iproute2/rt_protos: named protos appear as e.g. "bird"; unnamed
-// appear as the decimal value (e.g. "80").
-func filterRoutes(in []iputils.Route, dstMatch string) []Route {
-	rows := make([]Route, 0, len(in))
+// filterRoutes keeps only the routes whose Dst contains dstMatch; an empty
+// dstMatch returns every route.
+func filterRoutes(in []iputils.Route, dstMatch string) []iputils.Route {
+	if dstMatch == "" {
+		return in
+	}
+	rows := make([]iputils.Route, 0, len(in))
 	for _, r := range in {
-		if dstMatch != "" && !strings.Contains(r.Dst, dstMatch) {
-			continue
+		if strings.Contains(r.Dst, dstMatch) {
+			rows = append(rows, r)
 		}
-		raw, _ := json.Marshal(r)
-		rows = append(rows, Route{
-			Dst:     r.Dst,
-			Gateway: r.Gateway,
-			Dev:     r.Dev,
-			Proto:   r.Proto(),
-			Raw:     string(raw),
-		})
 	}
 	return rows
 }
