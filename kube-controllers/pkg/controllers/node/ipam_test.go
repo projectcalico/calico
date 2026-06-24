@@ -16,6 +16,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/big"
 	"time"
 
@@ -76,6 +77,10 @@ func assertConsistentState(c *IPAMController) {
 	for cidr := range c.allocationsByBlock {
 		_, ok := c.allBlocks[cidr]
 		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in allocationsByBlock", cidr))
+	}
+	for cidr := range c.coldBlocks {
+		_, ok := c.allBlocks[cidr]
+		Expect(ok).To(BeTrue(), fmt.Sprintf("Block %s not present in allBlocks, but is present in coldBlocks", cidr))
 	}
 
 	// Make sure blocksByNode and nodesByBlock are consistent.
@@ -720,6 +725,108 @@ var _ = Describe("IPAM controller UTs", func() {
 			defer done()
 			return c.allocationsByBlock[blockCIDR]
 		}, 1*time.Second, 100*time.Millisecond).Should(BeNil())
+	})
+
+	Describe("cold IP garbage collection", func() {
+		var fakeIPAM *fakeIPAMClient
+
+		cidrOf := func(kvp model.KVPair) string {
+			return kvp.Key.(model.BlockKey).CIDR.String()
+		}
+
+		// coldBlock builds a block affine to cnode containing a single IP whose
+		// ReleasedAt is set to releasedAt, i.e. an IP in cooldown.
+		coldBlock := func(cidrStr string, releasedAt metav1.Time) model.KVPair {
+			cidr := net.MustParseCIDR(cidrStr)
+			aff := "host:cnode"
+			idx := 0
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes:  []model.AllocationAttribute{{ReleasedAt: &releasedAt}},
+			}
+			return model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+		}
+
+		// liveBlock builds a block affine to cnode with a single normal allocation
+		// and no IPs in cooldown.
+		liveBlock := func(cidrStr string) model.KVPair {
+			cidr := net.MustParseCIDR(cidrStr)
+			aff := "host:cnode"
+			idx := 0
+			handle := "live-handle"
+			b := model.AllocationBlock{
+				CIDR:        cidr,
+				Affinity:    &aff,
+				Allocations: []*int{&idx, nil, nil, nil},
+				Unallocated: []int{1, 2, 3},
+				Attributes: []model.AllocationAttribute{{
+					HandleID:         &handle,
+					ActiveOwnerAttrs: map[string]string{ipam.AttributeNode: "cnode"},
+				}},
+			}
+			return model.KVPair{Key: model.BlockKey{CIDR: model.PrefixFromIPNet(cidr)}, Value: &b}
+		}
+
+		BeforeEach(func() {
+			fakeIPAM = cli.IPAM().(*fakeIPAMClient)
+			fakeIPAM.config.IPCooldownSeconds = 3600
+			c.Start(stopChan)
+		})
+
+		It("only garbage collects blocks whose cooldown has elapsed", func() {
+			expired := coldBlock("10.0.0.0/30", metav1.NewTime(time.Now().Add(-2*time.Hour)))
+			cooling := coldBlock("10.0.1.0/30", metav1.NewTime(time.Now()))
+			live := liveBlock("10.0.2.0/30")
+
+			for _, kvp := range []model.KVPair{expired, cooling, live} {
+				c.onUpdate(bapi.Update{KVPair: kvp, UpdateType: bapi.UpdateTypeKVNew})
+			}
+
+			// Both cooldown blocks are tracked; the live block is not.
+			Eventually(func() map[string]metav1.Time {
+				done := c.pause()
+				defer done()
+				return maps.Clone(c.coldBlocks)
+			}, 1*time.Second, 100*time.Millisecond).Should(And(
+				HaveKey(cidrOf(expired)),
+				HaveKey(cidrOf(cooling)),
+				Not(HaveKey(cidrOf(live))),
+			))
+
+			// Only the block past its cooldown is visited.
+			done := c.pause()
+			Expect(c.garbageCollectColdIPs()).To(Succeed())
+			done()
+			Expect(fakeIPAM.gcBlocks()).To(ConsistOf(cidrOf(expired)))
+		})
+
+		It("stops tracking a block once its cooldown IPs are deallocated", func() {
+			block := coldBlock("10.0.0.0/30", metav1.NewTime(time.Now().Add(-2*time.Hour)))
+			c.onUpdate(bapi.Update{KVPair: block, UpdateType: bapi.UpdateTypeKVNew})
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.coldBlocks[cidrOf(block)]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeTrue())
+
+			// The IP is deallocated, so the block no longer carries a ReleasedAt.
+			b := block.Value.(*model.AllocationBlock)
+			b.Allocations[0] = nil
+			b.Unallocated = []int{0, 1, 2, 3}
+			b.Attributes = []model.AllocationAttribute{}
+			c.onUpdate(bapi.Update{KVPair: block, UpdateType: bapi.UpdateTypeKVUpdated})
+
+			Eventually(func() bool {
+				done := c.pause()
+				defer done()
+				_, ok := c.coldBlocks[cidrOf(block)]
+				return ok
+			}, 1*time.Second, 100*time.Millisecond).Should(BeFalse())
+		})
 	})
 
 	It("should refresh the sequence number of an already-tracked allocation on block update", func() {
