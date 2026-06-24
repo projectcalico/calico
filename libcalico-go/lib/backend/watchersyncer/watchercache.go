@@ -49,7 +49,7 @@ type watcherCache struct {
 	listWatcherOptions     api.ListWatcherOptions
 }
 
-// cacheEntry is an entry in our cache.  It groups the a key with the last known
+// cacheEntry is an entry in our cache.  It groups a key with the last known
 // revision that we processed.  We store the revision so that we can determine
 // if an entry has been updated (and therefore whether we need to send an update
 // event in the syncer callback).
