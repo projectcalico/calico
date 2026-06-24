@@ -1082,8 +1082,7 @@ func newWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, options a
 	}
 
 	fc := &fakeClient{
-		lws:                lws,
-		listWatcherOptions: options,
+		lws: lws,
 	}
 
 	// Create the syncer tester.
@@ -1091,7 +1090,7 @@ func newWatcherSyncerTesterWithOptions(l []watchersyncer.ResourceType, options a
 	rst := &watcherSyncerTester{
 		SyncerTester:  st,
 		fc:            fc,
-		watcherSyncer: watchersyncer.New(fc, l, st),
+		watcherSyncer: watchersyncer.New(fc, l, st, watchersyncer.WithListWatcherOptions(options)),
 		lws:           lws,
 	}
 	return rst
@@ -1216,9 +1215,8 @@ func (rst *watcherSyncerTester) clientWatchResponse(r watchersyncer.ResourceType
 // fakeClient implements the api.Client interface.  We mock this out so that we can control
 // the events
 type fakeClient struct {
-	lws                map[string]*listWatchSource
-	listWatcherOptions api.ListWatcherOptions
-	listAndWatchError  error
+	lws               map[string]*listWatchSource
+	listAndWatchError error
 
 	// Allows us to track the revision that the syncer is using.
 	latestListRevision  string
@@ -1354,7 +1352,7 @@ func (c *plainFakeClient) Close() error {
 // We use a fakeK8sClient to adapt fakeClient to K8sResourceClient interface.
 // The fakeK8sClient.Watch returns an Invalid error for WatchList mode to trigger
 // fallback to traditional List+Watch mode.
-func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface, handler api.EventHandler) error {
+func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface, handler api.EventHandler, opts ...api.ListWatcherOption) error {
 	name := model.ListOptionsToDefaultPathRoot(list)
 	log.WithField("Name", name).Info("ListAndWatch request")
 	if c.listAndWatchError != nil {
@@ -1362,7 +1360,7 @@ func (c *fakeClient) ListAndWatch(ctx context.Context, list model.ListInterface,
 	}
 
 	client := &fakeK8sClient{fakeClient: c}
-	lw := k8s.NewListWatcher(client, list, handler, api.WithListWatcherOptions(c.listWatcherOptions))
+	lw := k8s.NewListWatcher(client, list, handler, opts...)
 	return lw.ListAndWatchWithBackend(ctx, lw)
 }
 

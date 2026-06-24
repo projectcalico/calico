@@ -46,6 +46,7 @@ type watcherCache struct {
 	results                chan<- any
 	hasSynced              bool
 	resourceType           ResourceType
+	listWatcherOptions     api.ListWatcherOptions
 }
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -59,13 +60,14 @@ type cacheEntry struct {
 }
 
 // Create a new watcherCache.
-func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- any) *watcherCache {
+func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- any, options api.ListWatcherOptions) *watcherCache {
 	return &watcherCache{
-		logger:       logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
-		client:       client,
-		resourceType: resourceType,
-		results:      results,
-		resources:    make(map[string]cacheEntry),
+		logger:             logrus.WithField("ListRoot", listRootForLog(resourceType.ListInterface)),
+		client:             client,
+		resourceType:       resourceType,
+		results:            results,
+		resources:          make(map[string]cacheEntry),
+		listWatcherOptions: options,
 	}
 }
 
@@ -96,10 +98,10 @@ func (wc *watcherCache) run(ctx context.Context) {
 
 func (wc *watcherCache) listAndWatch(ctx context.Context) error {
 	if client, ok := wc.client.(api.ListAndWatchClient); ok {
-		return client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc)
+		return client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc, api.WithListWatcherOptions(wc.listWatcherOptions))
 	}
 
-	lw := api.NewGenericListWatcher(wc.resourceType.ListInterface, wc)
+	lw := api.NewGenericListWatcher(wc.resourceType.ListInterface, wc, api.WithListWatcherOptions(wc.listWatcherOptions))
 	backend := &clientListWatchBackend{
 		client:      wc.client,
 		list:        wc.resourceType.ListInterface,

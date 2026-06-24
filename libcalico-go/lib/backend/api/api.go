@@ -157,7 +157,7 @@ type ListAndWatchClient interface {
 	//   - OnError(err): Called when connection timeout or critical error occurs
 	//
 	// The method blocks until the context is cancelled or a terminal error occurs.
-	ListAndWatch(ctx context.Context, list model.ListInterface, handler EventHandler) error
+	ListAndWatch(ctx context.Context, list model.ListInterface, handler EventHandler, opts ...ListWatcherOption) error
 }
 
 // BackendAccessor is implemented by types that provide access to the underlying

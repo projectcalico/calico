@@ -759,7 +759,7 @@ func (c *KubeClient) Watch(ctx context.Context, l model.ListInterface, options a
 // - WatchList support with fallback to List+Watch
 // - Error handling for k8s-specific errors (NotFound, ResourceExpired, etc.)
 // - Connection failure detection and recovery
-func (c *KubeClient) ListAndWatch(ctx context.Context, l model.ListInterface, handler api.EventHandler) error {
+func (c *KubeClient) ListAndWatch(ctx context.Context, l model.ListInterface, handler api.EventHandler, opts ...api.ListWatcherOption) error {
 	log.Debugf("Performing 'ListAndWatch' for %+v %v", l, reflect.TypeOf(l))
 
 	// Get the resource client
@@ -773,6 +773,6 @@ func (c *KubeClient) ListAndWatch(ctx context.Context, l model.ListInterface, ha
 	}
 
 	// Create a list-watcher that handles k8s-specific logic
-	lw := NewListWatcher(client, l, handler)
+	lw := NewListWatcher(client, l, handler, opts...)
 	return lw.ListAndWatchWithBackend(ctx, lw)
 }

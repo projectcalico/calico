@@ -36,9 +36,9 @@ var _ api.ListWatchBackend = (*ListWatcher)(nil)
 // For etcd, this uses the existing watcher implementation which already handles
 // both list and watch operations internally. Unlike kubernetes, etcd doesn't need
 // separate handling for bookmarks, CRD installation, or WatchList fallbacks.
-func (c *etcdV3Client) ListAndWatch(ctx context.Context, l model.ListInterface, handler api.EventHandler) error {
+func (c *etcdV3Client) ListAndWatch(ctx context.Context, l model.ListInterface, handler api.EventHandler, opts ...api.ListWatcherOption) error {
 	lw := &ListWatcher{
-		GenericListWatcher: api.NewGenericListWatcher(l, handler),
+		GenericListWatcher: api.NewGenericListWatcher(l, handler, opts...),
 		client:             c,
 	}
 	return lw.ListAndWatchWithBackend(ctx, lw)

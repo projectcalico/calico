@@ -38,6 +38,13 @@ type ResourceType struct {
 	// UpdateProcessor converts the raw KVPairs returned from the datastore into the appropriate
 	// KVPairs required for the syncer.  This is optional.
 	UpdateProcessor SyncerUpdateProcessor
+
+	// SendDeletesOnConnFail will send deletes for all resources (and therefore do a full resync) if
+	// the connection fails at any point.
+	//
+	// Deprecated: watcher caches now resync through GenericListWatcher and
+	// delete stale entries after successful full resyncs.
+	SendDeletesOnConnFail bool
 }
 
 // Error indicating a problem with a watcher communicating with the backend.
@@ -69,29 +76,46 @@ type SyncerUpdateProcessor interface {
 	OnSyncerStarting()
 }
 
+type Option func(*watcherSyncer)
+
+// WithListWatcherOptions sets the list-watch retry and timeout options used by
+// watcher caches.
+func WithListWatcherOptions(options api.ListWatcherOptions) Option {
+	return func(ws *watcherSyncer) {
+		ws.listWatcherOptions = options
+	}
+}
+
 // New creates a new multiple Watcher-backed api.Syncer.
-func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks) api.Syncer {
+func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
-		watcherCaches: make([]*watcherCache, len(resourceTypes)),
-		results:       make(chan any, 2000),
-		callbacks:     callbacks,
+		watcherCaches:      make([]*watcherCache, len(resourceTypes)),
+		results:            make(chan any, 2000),
+		callbacks:          callbacks,
+		listWatcherOptions: api.DefaultListWatcherOptions(),
+	}
+	for _, o := range options {
+		if o != nil {
+			o(rs)
+		}
 	}
 	for i, r := range resourceTypes {
-		rs.watcherCaches[i] = newWatcherCache(client, r, rs.results)
+		rs.watcherCaches[i] = newWatcherCache(client, r, rs.results, rs.listWatcherOptions)
 	}
 	return rs
 }
 
 // watcherSyncer implements the api.Syncer interface.
 type watcherSyncer struct {
-	status        api.SyncStatus
-	watcherCaches []*watcherCache
-	results       chan any
-	numSynced     int
-	callbacks     api.SyncerCallbacks
-	wgwc          *sync.WaitGroup
-	wgws          *sync.WaitGroup
-	cancel        context.CancelFunc
+	status             api.SyncStatus
+	watcherCaches      []*watcherCache
+	results            chan any
+	numSynced          int
+	callbacks          api.SyncerCallbacks
+	wgwc               *sync.WaitGroup
+	wgws               *sync.WaitGroup
+	cancel             context.CancelFunc
+	listWatcherOptions api.ListWatcherOptions
 }
 
 func (ws *watcherSyncer) Start() {
