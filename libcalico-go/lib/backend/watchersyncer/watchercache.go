@@ -211,7 +211,7 @@ func (wc *watcherCache) OnSync() {
 	if wc.resyncEpoch != wc.lastHandledResyncEpoch {
 		// We just completed a resync with a non-empty cache, we need to scan
 		// the cache to look for resources that were deleted during the resync.
-		updates := make([]api.Update, 0)
+		updates := make([]api.Update, 0, len(wc.resources))
 		for k, r := range wc.resources {
 			if r.resyncEpoch == wc.resyncEpoch {
 				// This resource was validated during the resync.

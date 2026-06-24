@@ -336,12 +336,21 @@ func TestListWatcher_HandleListError_NotFound(t *testing.T) {
 	handler := newMockEventHandler()
 
 	lw := NewListWatcher(client, list, handler)
+	lw.CurrentRevision = "100"
+	lw.ErrorCountAtCurrentRev = 3
+	lw.MarkInitialSyncComplete()
 
 	// Create a NotFound error
 	notFoundErr := kerrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, "test")
+	before := time.Now()
 
 	lw.HandleListError(notFoundErr)
 
+	// Should reset for a full resync if the API becomes available later.
+	assert.Equal(t, "", lw.CurrentRevision)
+	assert.Equal(t, 0, lw.ErrorCountAtCurrentRev)
+	assert.True(t, lw.InitialSyncPending)
+	assert.False(t, lw.LastSuccessfulConnTime.Before(before))
 	// Should call OnSync to mark as in-sync even though API is not installed
 	assert.Equal(t, 1, handler.syncCount)
 	// Should schedule a long retry

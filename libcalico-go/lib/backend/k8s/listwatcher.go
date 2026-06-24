@@ -86,6 +86,11 @@ func (lw *ListWatcher) HandleListError(err error) {
 		// This is a valid long-term state, so we don't want to keep retrying rapidly
 		lw.Logger.Info("Backing API not installed, marking as in-sync and retrying later")
 
+		// Treat the response as healthy, but force a full resync if the API
+		// becomes available later.
+		lw.ResetForFullResync()
+		lw.MarkSuccessfulConnection()
+
 		// Notify handler that we're in sync (even though API is not installed)
 		// This allows the syncer to proceed without this resource type
 		lw.Handler.OnSync()
