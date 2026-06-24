@@ -16,7 +16,7 @@
     jobs:
       - name: "OpenStack: Unit and FV tests (tox) on Caracal"
         commands:
-          - ../.semaphore/run-and-monitor tox.log make tox-caracal
+          - ../.semaphore/run-and-monitor tox.log make tox-caracal tox-fv-caracal
       - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
         commands:
           # Env vars needed for saving performance results.
