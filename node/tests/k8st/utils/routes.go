@@ -17,53 +17,20 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
-
-// RouteProto identifies the netlink protocol that owns a kernel route. The
-// numeric values match the kernel's RTPROT_* constants. Felix-programmed
-// routes carry protocol 80 (felix/dataplane/linux/dataplanedefs.DefaultRouteProto);
-// BIRD-programmed routes carry protocol 12 (RTPROT_BIRD).
-type RouteProto int
-
-const (
-	RouteProtoUnknown RouteProto = -1
-	RouteProtoBIRD    RouteProto = 12
-	RouteProtoFelix   RouteProto = 80
-)
-
-func (p RouteProto) String() string {
-	switch p {
-	case RouteProtoBIRD:
-		return "bird"
-	case RouteProtoFelix:
-		return "felix"
-	case RouteProtoUnknown:
-		return "unknown"
-	}
-	return fmt.Sprintf("proto-%d", int(p))
-}
 
 // Route is a parsed entry from `ip -j route show` as seen from the host
 // network namespace of a calico-node pod.
 type Route struct {
 	Dst   string
 	Dev   string
-	Proto RouteProto
+	Proto iputils.RouteProto
 	Raw   string
-}
-
-// jsonRoute is the on-the-wire form emitted by `ip -j route show`. Protocol is
-// a string in iproute2's JSON output regardless of whether the kernel proto has
-// a name in /etc/iproute2/rt_protos: named protos appear as e.g. "bird";
-// unnamed appear as the decimal value (e.g. "80").
-type jsonRoute struct {
-	Dst      string `json:"dst"`
-	Dev      string `json:"dev"`
-	Protocol string `json:"protocol"`
 }
 
 // GetNodeRoutes returns routes from the host routing table of the calico-node
@@ -71,45 +38,28 @@ type jsonRoute struct {
 // matches all).
 func GetNodeRoutes(t testing.TB, nodeName, dstMatch string) ([]Route, error) {
 	t.Helper()
-	out, err := ExecInCalicoNode(t, nodeName, "ip -j route show")
+	routes, err := CalicoNodeIP(t, nodeName).Routes()
 	if err != nil {
 		return nil, err
 	}
-	return parseRoutes(out, dstMatch)
+	return filterRoutes(routes, dstMatch), nil
 }
 
-func parseRoutes(out, dstMatch string) ([]Route, error) {
-	var parsed []jsonRoute
-	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		return nil, fmt.Errorf("parsing `ip -j route show` output: %w (output: %s)", err, out)
-	}
-	rows := make([]Route, 0, len(parsed))
-	for _, jr := range parsed {
-		if dstMatch != "" && !strings.Contains(jr.Dst, dstMatch) {
+func filterRoutes(in []iputils.Route, dstMatch string) []Route {
+	rows := make([]Route, 0, len(in))
+	for _, r := range in {
+		if dstMatch != "" && !strings.Contains(r.Dst, dstMatch) {
 			continue
 		}
-		raw, _ := json.Marshal(jr)
+		raw, _ := json.Marshal(r)
 		rows = append(rows, Route{
-			Dst:   jr.Dst,
-			Dev:   jr.Dev,
-			Proto: parseProto(jr.Protocol),
+			Dst:   r.Dst,
+			Dev:   r.Dev,
+			Proto: r.Proto(),
 			Raw:   string(raw),
 		})
 	}
-	return rows, nil
-}
-
-func parseProto(s string) RouteProto {
-	switch s {
-	case "":
-		return RouteProtoUnknown
-	case "bird":
-		return RouteProtoBIRD
-	}
-	if n, err := strconv.Atoi(s); err == nil {
-		return RouteProto(n)
-	}
-	return RouteProtoUnknown
+	return rows
 }
 
 // AssertRouteOwnership polls the kernel routing table on nodeName until at
@@ -117,7 +67,7 @@ func parseProto(s string) RouteProto {
 // and proto, fatally failing the test on timeout. The dev field is the empty
 // string for direct next-hop (no-encap) routes since the actual device varies
 // by cluster topology — for those, pass expectedDev="" to leave it unchecked.
-func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev string, expectedProto RouteProto) {
+func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev string, expectedProto iputils.RouteProto) {
 	t.Helper()
 	t.Logf("Asserting routes for %q on node %s use dev=%q proto=%s",
 		dstSubstring, nodeName, expectedDev, expectedProto)

@@ -150,7 +150,7 @@ var _ = describe.CalicoDescribe(
 				}
 				for _, r := range routes {
 					if r.Dev == "tunl0" {
-						return fmt.Errorf("route for test IP pool is still using tunl0: %s", r.Raw)
+						return fmt.Errorf("route for test IP pool is still using tunl0: %+v", r)
 					}
 				}
 				return nil
@@ -192,7 +192,7 @@ var _ = describe.CalicoDescribe(
 					return fmt.Errorf("no routes found for test IP pool")
 				}
 				for _, r := range routes {
-					if r.Dev == "tunl0" && r.Proto == expectedProto {
+					if r.Dev == "tunl0" && r.Proto() == expectedProto {
 						return nil
 					}
 				}
