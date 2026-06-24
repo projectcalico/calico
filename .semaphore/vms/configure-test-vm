@@ -77,11 +77,16 @@ fi
 
 set +x
 echo "$DOCKERHUB_PASSWORD" | ssh "ubuntu@${vm_ip}" -- docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+# Ship the s3cmd credentials to the VM inside the secrets dir that is scp'd
+# below, so the VM can pull its fv-artifacts from S3 with `s3cmd -c`. The
+# .semaphore/s3-cmd wrapper itself isn't usable on the VM yet (the working copy
+# it lives in is downloaded by the very command below), so the VM calls s3cmd
+# directly.
+"$my_dir/../s3-cmd" write-config "$HOME/secrets/s3cfg"
 scp -r -C "$HOME/secrets" "ubuntu@${vm_ip}:/home/ubuntu/secrets"
 set -x
 
-"${ssh_cmd[@]}" "gcloud config set project unique-caldron-775 && \
-  gcloud storage cp '${GCS_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/*' /tmp && \
+"${ssh_cmd[@]}" "s3cmd -c /home/ubuntu/secrets/s3cfg get --recursive --force '${S3_WORKFLOW_DIR}/${COMPONENT}/fv-artifacts/' /tmp/ && \
   tar -xzf /tmp/working-copy.tgz && \
   ${CALICO_DIR_NAME}/${COMPONENT}/.semaphore/load-test-artifacts"
 

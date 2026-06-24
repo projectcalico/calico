@@ -18,11 +18,21 @@ global_job_config:
   secrets:
     - name: docker-hub
     - name: google-service-account-for-gce
+    # Provides the S3 object-storage credentials consumed by .semaphore/s3-cmd
+    # and the cache restore/store steps below: CALICO_S3_ACCESS_KEY,
+    # CALICO_S3_SECRET_KEY and (optionally, for a non-AWS endpoint)
+    # CALICO_S3_HOST / CALICO_S3_HOST_BUCKET.
+    - name: go-build-cache-hetzner-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
       value: unique-caldron-775
-    - name: GCS_BUILD_CACHE_BUCKET
-      value: calico-transient-build-artifacts-europe-west3
+    # Destination for the CI build cache and per-workflow artifacts. The bucket
+    # and key prefix are plain configuration; the credentials come from the
+    # go-build-cache-hetzner-s3-credentials secret above.
+    - name: CALICO_S3_BUCKET
+      value: calico-transient-build-artifacts
+    - name: CALICO_S3_KEY_PREFIX
+      value: ci
     - name: BUILDKIT_PROGRESS
       value: plain
     - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
@@ -30,27 +40,41 @@ global_job_config:
   prologue:
     commands:
       - export CALICO_DIR_NAME=${SEMAPHORE_GIT_DIR}
-      - export GCS_CACHE_DIR=gs://$GCS_BUILD_CACHE_BUCKET/cache/${CALICO_DIR_NAME}
-      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
+      - export S3_CACHE_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/cache/${CALICO_DIR_NAME}
+      - export S3_WORKFLOW_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/workflow/${SEMAPHORE_WORKFLOW_ID}
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - |-
         if [[ $(uname -m) != "x86_64" || -n "$ARCH" ]]; then
           echo "Non-x86_64 build: $(uname -m) / $ARCH";
           export BUILD_CACHE_GROUP=$BUILD_CACHE_GROUP-$(uname -m)-$ARCH;
         fi
+      # gcloud auth is still required for the gcloud compute (test VM) calls in
+      # the Felix/Node FV blocks; object storage now goes through s3cmd.
       - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" || true
       - gcloud config set project ${GOOGLE_PROJECT} || true
+      - sudo apt-get install -y zstd s3cmd || true
+      # Write the s3cmd config from the env so the cache restore/store steps in
+      # this prologue can run before the working copy (and the .semaphore/s3-cmd
+      # wrapper) has been checked out.
+      - |-
+        umask 077
+        cat >"$HOME/.s3cfg" <<S3CFG
+        [default]
+        access_key = ${CALICO_S3_ACCESS_KEY}
+        secret_key = ${CALICO_S3_SECRET_KEY}
+        ${CALICO_S3_HOST:+host_base = ${CALICO_S3_HOST}}
+        ${CALICO_S3_HOST:+host_bucket = ${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}}
+        S3CFG
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)
-      - sudo apt-get install -y zstd || true
       - restored_wc_cache=false
       - |-
         if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+          s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
           # On master, use Semaphore's free built-in cache; other branches still
-          # use GCS. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
+          # use S3. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
           # targeting master restore master's Semaphore cache.) Note: `cache
           # restore` exits 0 even on a miss, so we test for the restored file.
           if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then use_sem_cache=true; else use_sem_cache=false; fi
@@ -58,7 +82,7 @@ global_job_config:
           if ${use_sem_cache}; then
             cache restore "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
           else
-            gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
+            s3cmd get --force "$s3_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
           fi
           if [[ -f /tmp/working-copy.tar.zstd ]]; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
@@ -69,7 +93,7 @@ global_job_config:
               if ${use_sem_cache}; then
                 cache restore "build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}" || true
               else
-                gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
+                s3cmd get --force "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
               fi
               if [[ -f /tmp/build-cache.tar.zstd ]]; then
                 echo "Found build cache for group ${BUILD_CACHE_GROUP}"
@@ -112,12 +136,12 @@ global_job_config:
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
       # Ensure calico/go-build is present, cheaply. Pull from Docker Hub first
-      # (free egress) and only fall back to the GCS cache — populated by the
+      # (free egress) and only fall back to the S3 cache — populated by the
       # "Pull: go-build image" prerequisite job — if the pull fails. This keeps
-      # GCS egress near zero in the common case while keeping GCS as a robustness
-      # fallback for the occasional Docker Hub pull failure (which we still see
-      # even with an authenticated session). Skipped on non-x86_64 / cross-compile
-      # agents since the cache is amd64-only.
+      # object-storage egress near zero in the common case while keeping S3 as a
+      # robustness fallback for the occasional Docker Hub pull failure (which we
+      # still see even with an authenticated session). Skipped on non-x86_64 /
+      # cross-compile agents since the cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
           GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
@@ -126,15 +150,15 @@ global_job_config:
             if docker pull "$image"; then
               echo "Pulled ${image} from Docker Hub"
             else
-              echo "Docker Hub pull failed for ${image}, falling back to GCS cache"
-              cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-              if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
-                echo "Loading ${image} from GCS cache"
+              echo "Docker Hub pull failed for ${image}, falling back to S3 cache"
+              cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+              if s3cmd get --force "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+                echo "Loading ${image} from S3 cache"
                 zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
                 docker load -i /tmp/go-build.tar
                 rm -f /tmp/go-build.tar
               else
-                echo "No GCS fallback for ${image}; later docker use will retry the pull"
+                echo "No S3 fallback for ${image}; later docker use will retry the pull"
               fi
             fi
           fi
@@ -153,8 +177,8 @@ global_job_config:
             cache delete "$key" || true
             cache store "$key" /tmp/build-cache.tar.zstd
           else
-            gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+            s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+            s3cmd put /tmp/build-cache.tar.zstd "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
           fi
         fi
       - cd "$CALICO_DIR"
@@ -374,31 +398,34 @@ blocks:
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
             - |-
               if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
-                # master uses Semaphore's free cache (other branches use GCS). This
+                # master uses Semaphore's free cache (other branches use S3). This
                 # block only runs on branch builds (its `when: "branch =~ '.*'"`),
                 # so PRs never store here — they only restore, in the prologue.
                 # Cache keys are not overwritten, so delete-then-store to refresh.
                 cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
                 cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
               else
-                gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-                gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+                # Bare s3cmd (config-based) rather than the .semaphore/s3-cmd
+                # wrapper: we have cd'd out of the working copy, so the wrapper
+                # path is awkward here. ~/.s3cfg was written by the global prologue.
+                s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+                s3cmd put /tmp/working-copy.tar.zstd "$s3_branch_cache_dir/working-copy.tar.zstd"
               fi
   - name: "Build: nftables RPMs"
     # Producer for the patched nftables + libnftnl RPMs that calico/node and the
     # istio CNI install image consume. The image tag is content-addressed (sha
     # of specs+patches+versions in hack/rpms/nftables/Makefile), so on cache hit
-    # this block is just a `docker manifest inspect` + GCS upload of the
+    # this block is just a `docker manifest inspect` + S3 upload of the
     # pre-existing tarball. On cache miss, it builds (~16-20 min on emulated
-    # arches) and uploads the image tarball to GCS for downstream consumers.
+    # arches) and uploads the image tarball to S3 for downstream consumers.
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+    # Consumers (untolerated s3-cmd cp): "Build: node image" (10-prerequisites.yml),
     # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
     # block's CHANGE_IN must be a superset of the union of all three consumer
     # triggers — otherwise the consumer fires, the producer skips, and the
-    # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+    # consumer hard-fails on `a missing object`. The
     # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
     # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
     run:
@@ -429,12 +456,12 @@ blocks:
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
-    # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+    # Populate the S3 cache of calico/go-build so it can serve as a fallback when
     # a Docker Hub pull fails (which we still see occasionally even with an
     # authenticated session). Jobs pull from Docker Hub first and only fall back to
-    # this GCS copy on failure (see the global prologue), so this is just an
+    # this S3 copy on failure (see the global prologue), so this is just an
     # insurance upload — uploads are free and the common case is a no-op
-    # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+    # `s3-cmd ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
     # across workflows.
     run:
       when: "true"
@@ -444,29 +471,29 @@ blocks:
         - name: SKIP_CACHE_RESTORE
           value: "true"
       jobs:
-        - name: "Cache calico/go-build to GCS"
+        - name: "Cache calico/go-build to S3"
           commands:
             - GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
-            - cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+            - cache_path="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
             - |-
-              if gcloud storage ls "$cache_path" >/dev/null 2>&1; then
+              if .semaphore/s3-cmd ls "$cache_path" >/dev/null 2>&1; then
                 echo "Cache hit for calico/go-build:${GO_BUILD_VER}"
               else
                 echo "Cache miss for calico/go-build:${GO_BUILD_VER}, pulling and uploading"
                 docker pull "calico/go-build:${GO_BUILD_VER}"
                 docker save "calico/go-build:${GO_BUILD_VER}" -o /tmp/go-build.tar
                 zstd -3 --rm /tmp/go-build.tar
-                gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
+                .semaphore/s3-cmd cp /tmp/go-build.tar.zst "$cache_path"
               fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
-    # from GCS instead of rebuilding per component. This block is the sole
+    # from S3 instead of rebuilding per component. This block is the sole
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
     # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
     # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
-    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated s3-cmd cp of
     # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
     # producer must run whenever they do — including on felix-test-only PRs.
     #
@@ -481,10 +508,10 @@ blocks:
     # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
     #
     # The process/testing paths trigger this so the win-fv-felix block (which now
-    # installs the locally-built calico image) has it cached in GCS. The libcalico
+    # installs the locally-built calico image) has it cached in S3. The libcalico
     # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
     # superset of the win-fv-felix block's trigger (felix's full test closure plus
-    # its own CI block), so win-fv-felix never runs without this image in GCS.
+    # its own CI block), so win-fv-felix never runs without this image in S3.
     run:
       when: "true"
     dependencies: []
@@ -509,13 +536,13 @@ blocks:
             - make -C cmd/calico build-cgo build-race
             - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
-            - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/calico-image.tar.zst "${S3_WORKFLOW_DIR}/calico-image.tar.zst"
             # Upload the cgo + race binaries so Felix FV can consume them
             # directly instead of rebuilding. Felix Build downloads these into
             # cmd/calico/bin/ so the working-copy tarball carries them through
             # to the test VMs.
-            - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
-            - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-cgo-amd64 "${S3_WORKFLOW_DIR}/calico-cgo-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-race-amd64 "${S3_WORKFLOW_DIR}/calico-race-amd64"
             # Upload the libbpf clone + compiled static lib. `make -C
             # cmd/calico build-cgo` above transitively built it via the Felix
             # CGO dependency chain; the test-or-build below keeps this a
@@ -532,7 +559,7 @@ blocks:
             - test -d felix/bpf-gpl/libbpf || (echo "ERROR libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1)
             - test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || (echo "ERROR libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1)
             - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-            - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/libbpf-amd64.tar.zst "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
   - name: "Build: node image"
     # Builds the node image on top of the combined calico binary. calico/node is
     # still the canonical DaemonSet image for OSS users, so it continues to ship
@@ -540,14 +567,14 @@ blocks:
     # "calico" build cache populated by "Build: calico image" — only the Docker
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
-    # can depend on the shared producer→GCS→consumer upload pattern.
+    # can depend on the shared producer→S3→consumer upload pattern.
     # felix + process/testing paths trigger this so the win-fv-felix block (which
-    # now installs the locally-built node image) has it cached in GCS. felix is a
+    # now installs the locally-built node image) has it cached in S3. felix is a
     # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
     # (test + non-Go files) that the win-fv-felix block triggers on as a primary
     # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
     # the rest of felix's test closure, keeping this a superset of win-fv-felix so
-    # it never runs without this image in GCS.
+    # it never runs without this image in S3.
     run:
       when: "true"
     dependencies:
@@ -563,14 +590,14 @@ blocks:
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
             - zstd -d --rm /tmp/nft-rpms.tar.zst
             - docker load -i /tmp/nft-rpms.tar
             - rm -f /tmp/nft-rpms.tar
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
-            - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/node-image.tar.zst "${S3_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
     # Whisker is a TypeScript/React frontend that won't consolidate into the
     # calico binary — it ships as its own image indefinitely. No Go build cache
@@ -587,7 +614,7 @@ blocks:
             - make -C whisker image
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
             - zstd -3 --rm /tmp/whisker-image.tar
-            - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/whisker-image.tar.zst "${S3_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -1018,7 +1045,7 @@ blocks:
         - name: BUILD_CACHE_GROUP
           value: "calico"
         # Fail loud if `make` tries to clone libbpf — the prologue restores
-        # the pre-built tarball from GCS, and a re-clone would negate the
+        # the pre-built tarball from S3, and a re-clone would negate the
         # cache and re-expose the github.com/libbpf HTTP 500 flake.
         - name: NO_LIBBPF_CLONE
           value: "true"
@@ -1030,14 +1057,14 @@ blocks:
           # build-calico-race skip their rebuilds.
           - .semaphore/load-cached-images
           - mkdir -p cmd/calico/bin
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
           # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
           # produced by "Build: calico image". Verify the compiled static
           # lib landed so a broken tarball fails fast rather than triggering
           # the NO_LIBBPF_CLONE guard mid-build.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
           - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
           - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
           - cd felix
@@ -1102,10 +1129,10 @@ blocks:
         commands:
           - .semaphore/load-cached-images
           - mkdir -p cmd/calico/bin
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
           - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
           - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
           - cd felix
@@ -1163,7 +1190,7 @@ blocks:
         - name: private-repo
       prologue:
         commands:
-          # Load the locally-built calico + node images from the GCS cache so the
+          # Load the locally-built calico + node images from the S3 cache so the
           # local-build install uses images from the commit under test.
           - .semaphore/load-cached-images
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
@@ -1329,7 +1356,7 @@ blocks:
           commands:
             - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
             - 'artifact push job ./report/ --destination semaphore/gateway-conformance-reports || true'
-            # Permanent copy in GCS for upstream submission and historical
+            # Permanent copy in S3 for upstream submission and historical
             # comparison. Semaphore's job artifacts are GC'd after ~30 days,
             # which isn't long enough for "go fish out the v3.30 report next
             # year". PRs are skipped — their Semaphore artifact is plenty,
@@ -1338,9 +1365,9 @@ blocks:
               if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -d ./report ]]; then
                 ref="${SEMAPHORE_GIT_TAG_NAME:-${SEMAPHORE_GIT_BRANCH}}"
                 sha="${SEMAPHORE_GIT_SHA:0:12}"
-                dst="gs://${GCS_BUILD_CACHE_BUCKET}/gateway-conformance/${ref}/${sha}/"
+                dst="s3://${CALICO_S3_BUCKET}/${CALICO_S3_KEY_PREFIX}/gateway-conformance/${ref}/${sha}/"
                 echo "Publishing conformance report to ${dst}"
-                gcloud storage cp ./report/* "${dst}" || true
+                .semaphore/s3-cmd cp ./report/* "${dst}" || true
               fi
   - name: Goldmane
     run:
@@ -1405,7 +1432,7 @@ blocks:
           commands:
             # Load the amd64 patched nftables RPMs producer image so the
             # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+            - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
             - zstd -d --rm /tmp/nft-rpms.tar.zst
             - docker load -i /tmp/nft-rpms.tar
             - rm -f /tmp/nft-rpms.tar
@@ -1610,7 +1637,7 @@ blocks:
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+            - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
             - zstd -d --rm /tmp/nft-rpms.tar.zst
             - docker load -i /tmp/nft-rpms.tar
             - rm -f /tmp/nft-rpms.tar
@@ -1637,7 +1664,8 @@ blocks:
           value: "kind-cluster-tests"
       prologue:
         commands:
-          # Set up access to GCP buckets.
+          # Authenticate gcloud for the test-VM (gcloud compute) calls in
+          # .semaphore/vms; object storage is handled separately via s3cmd.
           - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
           - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
           - gcloud config set project unique-caldron-775
