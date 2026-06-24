@@ -287,3 +287,87 @@ class TestElection(unittest.TestCase):
         )
         elector.start()
         self._wait_and_stop(client, elector)
+
+
+class TestCheckMasterProcess(unittest.TestCase):
+    """Direct tests for Elector._check_master_process.
+
+    These tests instantiate the Elector but never start the election greenlet;
+    they call _check_master_process synchronously with mocked /proc and
+    etcdv3.delete.
+    """
+
+    HOST = "this-host"
+    OTHER_HOST = "other-host"
+    KEY = "/calico/v2/no-region/neutron_election"
+
+    def setUp(self):
+        super(TestCheckMasterProcess, self).setUp()
+        self.elector = election.Elector(
+            self.HOST,
+            self.KEY,
+            mock.MagicMock(),
+            interval=5,
+            ttl=15,
+        )
+
+    def test_same_host_live_pid_does_nothing(self):
+        with mock.patch("os.path.exists", return_value=True) as m_exists, mock.patch(
+            "networking_calico.etcdv3.delete"
+        ) as m_delete:
+            # No RestartElection, no delete call.
+            self.elector._check_master_process("%s:12345" % self.HOST)
+        m_exists.assert_called_once_with("/proc/12345")
+        m_delete.assert_not_called()
+
+    def test_same_host_dead_pid_deletes_then_returns(self):
+        # On a successful CAS-delete the method returns normally (the watch
+        # in _vote will then see the delete event and we will try to become
+        # master through the normal path).
+        with mock.patch("os.path.exists", return_value=False), mock.patch(
+            "networking_calico.etcdv3.delete", return_value=True
+        ) as m_delete:
+            self.elector._check_master_process("%s:99999" % self.HOST)
+        m_delete.assert_called_once_with(
+            self.KEY, existing_value="%s:99999" % self.HOST
+        )
+
+    def test_same_host_dead_pid_cas_fail_raises(self):
+        # CAS-delete returning False means somebody else has already moved
+        # the election on; we restart so the next _vote sees the new state.
+        with mock.patch("os.path.exists", return_value=False), mock.patch(
+            "networking_calico.etcdv3.delete", return_value=False
+        ):
+            with self.assertRaises(election.RestartElection):
+                self.elector._check_master_process("%s:99999" % self.HOST)
+
+    def test_same_host_dead_pid_etcd_exception_raises(self):
+        # etcd-side error during the cleanup delete: log and restart.
+        with mock.patch("os.path.exists", return_value=False), mock.patch(
+            "networking_calico.etcdv3.delete",
+            side_effect=e3e.ConnectionFailedError(),
+        ):
+            with self.assertRaises(election.RestartElection):
+                self.elector._check_master_process("%s:99999" % self.HOST)
+
+    def test_different_host_does_nothing(self):
+        # Previous master was on another node -- not our problem; defer to
+        # the lease TTL for cleanup if that node has died.
+        with mock.patch("os.path.exists") as m_exists, mock.patch(
+            "networking_calico.etcdv3.delete"
+        ) as m_delete:
+            self.elector._check_master_process("%s:12345" % self.OTHER_HOST)
+        m_exists.assert_not_called()
+        m_delete.assert_not_called()
+
+    def test_unparseable_value_does_nothing(self):
+        # A value that doesn't match "<host>:<pid>" is left alone; warn but
+        # do not attempt any cleanup.
+        with mock.patch("os.path.exists") as m_exists, mock.patch(
+            "networking_calico.etcdv3.delete"
+        ) as m_delete, mock.patch.object(election.LOG, "warning") as m_warn:
+            self.elector._check_master_process("not-a-valid-id")
+        m_exists.assert_not_called()
+        m_delete.assert_not_called()
+        m_warn.assert_called_once()
+        self.assertIn("Unable to parse master ID", m_warn.call_args.args[0])
