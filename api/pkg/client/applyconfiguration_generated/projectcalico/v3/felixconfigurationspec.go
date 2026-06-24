@@ -690,6 +690,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
 	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
 	LocalSubnetL2Reachability *projectcalicov3.LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty"`
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+	// LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+	// forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+	// to disable periodic re-announcement, leaving only the one-shot announce when an
+	// IP is added. [Default: 120s]
+	LocalSubnetL2ReachabilityRefreshInterval *v1.Duration `json:"localSubnetL2ReachabilityRefreshInterval,omitempty"`
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	WindowsManageFirewallRules *projectcalicov3.WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty"`
 	// GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is
@@ -2185,6 +2192,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithFloatingIPs(value project
 // If called multiple times, the LocalSubnetL2Reachability field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithLocalSubnetL2Reachability(value projectcalicov3.LocalSubnetL2ReachabilityMode) *FelixConfigurationSpecApplyConfiguration {
 	b.LocalSubnetL2Reachability = &value
+	return b
+}
+
+// WithLocalSubnetL2ReachabilityRefreshInterval sets the LocalSubnetL2ReachabilityRefreshInterval field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LocalSubnetL2ReachabilityRefreshInterval field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLocalSubnetL2ReachabilityRefreshInterval(value v1.Duration) *FelixConfigurationSpecApplyConfiguration {
+	b.LocalSubnetL2ReachabilityRefreshInterval = &value
 	return b
 }
 

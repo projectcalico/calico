@@ -43,13 +43,15 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
-// single socket read before waking to re-check for context cancellation.
-// A read that hits the deadline simply loops
-const readDeadlineInterval = 1 * time.Second
+const (
+	// readDeadlineInterval bounds how long an ARP/NDP listener blocks in a
+	// single socket read before waking to re-check for context cancellation.
+	// A read that hits the deadline simply loops
+	readDeadlineInterval = 1 * time.Second
 
-// ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
-const ipv6AllNodesMulticast = "ff02::1"
+	// ipv6AllNodesMulticast is the IPv6 all-nodes link-local multicast address
+	ipv6AllNodesMulticast = "ff02::1"
+)
 
 // serviceID identifies a Kubernetes Service by namespace and name. Used as a
 // map key for tracking LoadBalancer service IPs.
@@ -77,8 +79,26 @@ type ndpConn interface {
 	Close() error
 }
 
-type arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
-type ndpConnFactory func(ifaceName string) (ndpConn, net.HardwareAddr, error)
+type (
+	arpClientFactory func(ifaceName string) (arpClient, net.HardwareAddr, error)
+	ndpConnFactory   func(ifaceName string) (ndpConn, net.HardwareAddr, error)
+)
+
+// tickerShim is the minimal slice of *time.Ticker the periodic re-announce loop
+// uses, abstracted so unit tests can drive ticks by hand rather than waiting on
+// a real wall-clock interval (which flakes under load).
+type tickerShim interface {
+	Chan() <-chan time.Time
+	Stop()
+}
+
+// newTickerFunc constructs a tickerShim for the given interval.
+type newTickerFunc func(time.Duration) tickerShim
+
+// realTicker adapts *time.Ticker to tickerShim.
+type realTicker struct{ *time.Ticker }
+
+func (t realTicker) Chan() <-chan time.Time { return t.C }
 
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
@@ -91,6 +111,10 @@ type proxyNeighManager struct {
 	// readTimeout bounds how long each listener blocks in a single socket read
 	// before looping to re-check for cancellation.
 	readTimeout time.Duration
+
+	// announceInterval is how often each listener re-announces every IP it owns.
+	// Zero or negative disables periodic re-announcement.
+	announceInterval time.Duration
 
 	// hostIfaceToCIDRs maps host interface name to the parsed CIDRs on that interface.
 	hostIfaceToCIDRs map[string][]net.IPNet
@@ -116,6 +140,11 @@ type proxyNeighManager struct {
 
 	arpFactory arpClientFactory
 	ndpFactory ndpConnFactory
+
+	// newTicker constructs the ticker that drives periodic re-announcement.
+	// Real time in production; overridden by unit tests to fire ticks
+	// deterministically.
+	newTicker newTickerFunc
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -176,7 +205,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			return conn, ifi.HardwareAddr, nil
 		}
 	}
-	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval)
+	return newProxyNeighManagerWithShims(dpConfig, ipVersion, nl, af, nf, readDeadlineInterval, dpConfig.LocalSubnetL2ReachabilityRefreshInterval)
 }
 
 // setIgnoreOutgoing sets PACKET_IGNORE_OUTGOING on the raw socket so the kernel
@@ -205,6 +234,7 @@ func newProxyNeighManagerWithShims(
 	af arpClientFactory,
 	nf ndpConnFactory,
 	readTimeout time.Duration,
+	announceInterval time.Duration,
 ) *proxyNeighManager {
 	wlIfacesPattern := "^(" + strings.Join(dpConfig.RulesConfig.WorkloadIfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -215,6 +245,7 @@ func newProxyNeighManagerWithShims(
 		hostname:         dpConfig.Hostname,
 		wlIfacesRegexp:   wlIfacesRegexp,
 		readTimeout:      readTimeout,
+		announceInterval: announceInterval,
 		hostIfaceToCIDRs: make(map[string][]net.IPNet),
 		localWorkloadIPs: make(map[types.WorkloadEndpointID][]string),
 		lbServiceIPs:     make(map[serviceID][]string),
@@ -224,6 +255,7 @@ func newProxyNeighManagerWithShims(
 		nlHandle:         nl,
 		arpFactory:       af,
 		ndpFactory:       nf,
+		newTicker:        func(d time.Duration) tickerShim { return realTicker{time.NewTicker(d)} },
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -391,11 +423,7 @@ func (m *proxyNeighManager) CompleteDeferredWork() error {
 		"numNodes":      m.nodeRing.Len(),
 	}).Debug("Proxy neighbor manager CompleteDeferredWork")
 
-	desiredByIface := m.buildDesiredState()
-	err := m.reconcileListeners(desiredByIface)
-	m.publishDesiredIPs(desiredByIface)
-
-	return err
+	return m.reconcileListeners()
 }
 
 func (m *proxyNeighManager) Stop() {
@@ -473,9 +501,13 @@ func (m *proxyNeighManager) addMatchingIPs(desiredByIface map[string]set.Set[str
 }
 
 // reconcileListeners drops listeners that are no longer desired or have failed,
-// then starts one for each desired interface that has no listener, which
-// recreates any failed listener just dropped.
-func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set[string]) error {
+// (re)starts one for each desired interface that has no listener (this recreates
+// any failed listener just dropped), then hands each listener its latest desired
+// IP set and wakes its goroutine to reconcile. The listener goroutine owns the
+// raw socket and performs every write itself.
+func (m *proxyNeighManager) reconcileListeners() error {
+	desiredByIface := m.buildDesiredState()
+
 	// Drop listeners that are no longer desired or whose goroutine reported an
 	// unrecoverable socket error.
 	for ifaceName, l := range m.listeners {
@@ -485,67 +517,39 @@ func (m *proxyNeighManager) reconcileListeners(desiredByIface map[string]set.Set
 		l.stop()
 		delete(m.listeners, ifaceName)
 	}
-	// Start a listener for each desired interface that doesn't have one (this
-	// recreates any failed listener dropped above).
+	// Start a listener for each desired interface that doesn't have one, then
+	// publish the latest desired set to it and wake its goroutine.
 	var err error
-	for ifaceName := range desiredByIface {
-		if _, ok := m.listeners[ifaceName]; !ok {
+	for ifaceName, desired := range desiredByIface {
+		l, ok := m.listeners[ifaceName]
+		if !ok {
 			if err = m.startListener(ifaceName); err != nil {
 				logrus.WithError(err).WithField("iface", ifaceName).Warn("Failed to start listener; will retry")
 				// Re-mark dirty so the next CompleteDeferredWork retries,
 				// and remember the error to surface it to the dataplane loop.
 				m.dirty = true
+				continue
 			}
+			l = m.listeners[ifaceName]
 		}
+		l.desired.Store(&desired)
+		l.signalReconcile()
+		l.wake()
 	}
 	return err
-}
-
-// publishDesiredIPs atomically swaps each listener's desired IP set and sends a
-// gratuitous ARP (IPv4) / unsolicited NA (IPv6) for every IP that is newly
-// appearing on that interface.
-func (m *proxyNeighManager) publishDesiredIPs(desiredByIface map[string]set.Set[string]) {
-	for ifaceName, desired := range desiredByIface {
-		l, ok := m.listeners[ifaceName]
-		if !ok {
-			continue
-		}
-		// Atomically swap in the new desired set; the previous pointer tells
-		// us which IPs are new and which are gone.
-		old := l.desired.Swap(&desired)
-		for ip := range desired.All() {
-			if old == nil || !(*old).Contains(ip) {
-				addr, err := netip.ParseAddr(ip)
-				if err != nil {
-					logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for GARP")
-					continue
-				}
-				if m.ipVersion == 6 {
-					l.joinNDPGroup(ip)
-					l.sendUNA(addr)
-				} else {
-					l.sendGARP(addr)
-				}
-			}
-		}
-		// Drop multicast subscriptions for IPs we no longer answer for.
-		if old != nil && m.ipVersion == 6 {
-			for ip := range (*old).All() {
-				if !desired.Contains(ip) {
-					l.leaveNDPGroup(ip)
-				}
-			}
-		}
-	}
 }
 
 // startListener opens a raw socket on the given interface and starts a
 // listener goroutine.
 func (m *proxyNeighManager) startListener(ifaceName string) error {
 	l := &ifaceListener{
-		ifaceName:   ifaceName,
-		readTimeout: m.readTimeout,
-		done:        make(chan struct{}),
+		ifaceName:        ifaceName,
+		readTimeout:      m.readTimeout,
+		announceInterval: m.announceInterval,
+		newTicker:        m.newTicker,
+		reconcile:        make(chan struct{}, 1),
+		announced:        set.New[string](),
+		done:             make(chan struct{}),
 	}
 
 	l.ctx, l.cancel = context.WithCancel(m.ctx)
@@ -576,39 +580,175 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 }
 
 // ifaceListener manages a raw socket listener for a single host interface.
+//
+// The listener goroutine is the sole owner of the raw socket: it performs all
+// reads, replies, announcements, multicast group
+// join/leave, and the final close. The manager never touches the socket — it
+// hands off a new desired set via the atomic desired pointer and wakes the
+// goroutine through the reconcile channel.
 type ifaceListener struct {
 	ifaceName string
+
 	// desired is the set of IPs this listener answers ARP/NDP for. Built fresh
-	// and swapped atomically; never mutated after publishing.
-	desired     atomic.Pointer[set.Set[string]]
+	// and swapped atomically by the manager; read by both the goroutine's
+	// reply path and applyDesiredState. Never mutated after publishing.
+	desired atomic.Pointer[set.Set[string]]
+
+	// reconcile signals the goroutine to apply the latest desired set. Only one
+	// signal is buffered; extra ones are dropped, which is fine because
+	// applyDesiredState always reads the newest set.
+	reconcile chan struct{}
+
+	// announced tracks the IPs the goroutine has already announced/joined for,
+	// so it can compute the delta against a new desired set. Goroutine-local:
+	// only ever touched by the listener goroutine, so it needs no synchronization.
+	announced set.Set[string]
+
 	arpCli      arpClient // IPv4 only
 	ndpCli      ndpConn   // IPv6 only
 	hwAddr      net.HardwareAddr
 	readTimeout time.Duration
-	ctx         context.Context
-	cancel      context.CancelFunc
-	done        chan struct{}
-	failed      atomic.Bool
+
+	// announceInterval is how often the goroutine re-announces every owned IP.
+	// Zero or negative disables periodic re-announcement (only the initial
+	// announce on add fires).
+	announceInterval time.Duration
+
+	// newTicker constructs the re-announce ticker; injectable so tests drive it.
+	newTicker newTickerFunc
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
+	failed atomic.Bool
 }
 
-// stop cancels the listener goroutine, closes its raw socket, and waits for the
-// goroutine to exit.
+// stop cancels the listener goroutine and waits for it to exit. The goroutine
+// owns the raw socket, so it leaves any joined NDP multicast groups and closes
+// the socket on its way out (see closeSocket). wake() interrupts the in-flight
+// read so the goroutine observes the cancellation immediately rather than
+// waiting out its read deadline.
 func (l *ifaceListener) stop() {
 	l.cancel()
-	if l.arpCli != nil {
-		err := l.arpCli.Close()
-		if err != nil {
-			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to close ARP client")
+	l.wake()
+	<-l.done
+	logrus.WithField("iface", l.ifaceName).Info("Stopped proxy neighbor listener")
+}
+
+// signalReconcile queues a request for the listener goroutine to apply the
+// latest desired set.
+func (l *ifaceListener) signalReconcile() {
+	select {
+	case l.reconcile <- struct{}{}:
+	default:
+	}
+}
+
+// wake forces a blocked Read on the listener's socket to return immediately by
+// moving its read deadline into the past. It is the one place a goroutine other
+// than the listener's touches the socket; setting a read deadline concurrently
+// with a Read is the standard, safe way to interrupt it. This cuts the
+// up-to-readTimeout latency between the manager publishing a new desired set
+// (or cancelling) and the goroutine acting on it.
+//
+// Best-effort: if wake lands in the narrow window after the goroutine has
+// re-armed its own read deadline but before it next blocks in Read, the wake is
+// clobbered and the goroutine falls back to its next readTimeout tick. Nothing
+// is lost — the reconcile signal is buffered and the context cancellation
+// sticks — only delayed, i.e. it degrades to the no-wake behavior.
+func (l *ifaceListener) wake() {
+	var setReadDeadline func(time.Time) error
+	switch {
+	case l.arpCli != nil:
+		setReadDeadline = l.arpCli.SetReadDeadline
+	case l.ndpCli != nil:
+		setReadDeadline = l.ndpCli.SetReadDeadline
+	default:
+		return
+	}
+	if err := setReadDeadline(time.Now()); err != nil {
+		logrus.WithError(err).WithField("iface", l.ifaceName).Debug("Failed to wake listener read")
+	}
+}
+
+// applyDesiredState reconciles the IPs this listener announces for against the
+// latest desired set published by the manager. For newly desired IPs it sends
+// a gratuitous ARP (IPv4) or an unsolicited NA plus a solicited-node group join
+// (IPv6); for IPs that dropped out it leaves the group (IPv6). It runs only on
+// the listener goroutine, so every socket write funnels through here.
+func (l *ifaceListener) applyDesiredState() {
+	var desired set.Set[string] = set.New[string]()
+	if d := l.desired.Load(); d != nil {
+		desired = *d
+	}
+
+	// Newly desired IPs: announce ourselves as their owner.
+	for ip := range desired.All() {
+		if l.announced.Contains(ip) {
+			continue
+		}
+		if l.ndpCli != nil {
+			l.joinNDPGroup(ip)
+		}
+		l.announce(ip)
+	}
+
+	// Release the multicast subscription for IPs that dropped out of the desired set.
+	for ip := range l.announced.All() {
+		if desired.Contains(ip) {
+			continue
+		}
+		if l.ndpCli != nil {
+			l.leaveNDPGroup(ip)
 		}
 	}
+
+	l.announced = desired
+}
+
+// announce sends a single gratuitous ARP (IPv4) or unsolicited NA (IPv6) for
+// addr. It does not touch multicast group membership, so it is safe to call
+// both for a newly desired IP (after joinNDPGroup) and for periodic refresh of
+// an already-joined IP.
+func (l *ifaceListener) announce(ip string) {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		logrus.WithError(err).WithField("ip", ip).Debug("Failed to parse IP for announce")
+		return
+	}
 	if l.ndpCli != nil {
-		err := l.ndpCli.Close()
-		if err != nil {
+		l.sendUNA(addr)
+	} else {
+		l.sendGARP(addr)
+	}
+}
+
+// reannounceAll re-sends a gratuitous ARP / unsolicited NA for every IP this
+// listener currently owns, refreshing neighbor caches and switch tables without
+// changing group membership. Driven by announceInterval from the listener loop.
+func (l *ifaceListener) reannounceAll() {
+	for ip := range l.announced.All() {
+		l.announce(ip)
+	}
+}
+
+// closeSocket leaves any joined NDP multicast groups and closes the raw socket.
+// It runs on the listener goroutine (deferred from runListener) so the socket
+// stays single-owner; stop() only cancels the context and waits.
+func (l *ifaceListener) closeSocket() {
+	if l.ndpCli != nil {
+		for ip := range l.announced.All() {
+			l.leaveNDPGroup(ip)
+		}
+		if err := l.ndpCli.Close(); err != nil {
 			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to close NDP client")
 		}
 	}
-	<-l.done
-	logrus.WithField("iface", l.ifaceName).Info("Stopped proxy neighbor listener")
+	if l.arpCli != nil {
+		if err := l.arpCli.Close(); err != nil {
+			logrus.WithError(err).WithField("iface", l.ifaceName).Warn("Failed to close ARP client")
+		}
+	}
 }
 
 // runARPListener listens for ARP requests on a raw socket and replies for
@@ -699,35 +839,55 @@ func (l *ifaceListener) runNDPListener() {
 
 // runListener is the read loop shared by the ARP and NDP listeners, handling
 // context cancellation, read deadlines, timeouts and listener recreation on
-// unrecoverable errors, while readAndRespond does the protocol-specific read
-// and reply.
+// unrecoverable errors, while readAndRespond does the protocol-specific read and reply.
 func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) error, readAndRespond func() error) {
 	defer close(l.done)
+	defer l.closeSocket()
+
+	// Periodically re-announce every owned IP so neighbor caches and switch
+	// forwarding tables stay warm even when the desired set is unchanged.
+	var refreshC <-chan time.Time
+	if l.announceInterval > 0 {
+		ticker := l.newTicker(l.announceInterval)
+		defer ticker.Stop()
+		refreshC = ticker.Chan()
+	}
 
 	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})
 	for {
-		if l.ctx.Err() != nil {
+		select {
+		case <-l.ctx.Done():
 			logCtx.Debug("Listener stopping: context cancelled")
 			return
-		}
 
-		if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
-			logCtx.WithError(err).Warn("Failed to set read deadline")
-		}
+		case <-l.reconcile:
+			// Apply any desired-set change the manager published. All socket
+			// writes (GARP / NA / multicast join+leave) happen here, on this
+			// goroutine, keeping the listener the sole owner of the raw socket.
+			l.applyDesiredState()
 
-		if err := readAndRespond(); err != nil {
-			if l.ctx.Err() != nil {
-				logCtx.Debug("Listener stopping: context cancelled during read")
+		case <-refreshC:
+			l.reannounceAll()
+
+		default:
+			if err := setDeadline(time.Now().Add(l.readTimeout)); err != nil {
+				logCtx.WithError(err).Warn("Failed to set read deadline")
+			}
+
+			if err := readAndRespond(); err != nil {
+				if l.ctx.Err() != nil {
+					logCtx.Debug("Listener stopping: context cancelled during read")
+					return
+				}
+				if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+					continue
+				}
+				// Unrecoverable socket error: flag this listener so the manager
+				// drops it and recreates a fresh one on the next reconcile.
+				logCtx.WithError(err).Warn("Listener read failed; recreating listener")
+				l.failed.Store(true)
 				return
 			}
-			if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
-				continue
-			}
-			// Unrecoverable socket error: flag this listener so the manager
-			// drops it and recreates a fresh one on the next reconcile.
-			logCtx.WithError(err).Warn("Listener read failed; recreating listener")
-			l.failed.Store(true)
-			return
 		}
 	}
 }

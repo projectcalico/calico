@@ -188,7 +188,8 @@ type Config struct {
 
 	FloatingIPsEnabled bool
 
-	LocalSubnetL2Reachability string
+	LocalSubnetL2Reachability                string
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration
 
 	Wireguard wireguard.Config
 
@@ -1130,11 +1131,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 			if conntrackScannerV4 != nil {
 				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSMap, connLimitProvider, qos.IPFamilyV4))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4))
 			}
 			if conntrackScannerV6 != nil {
 				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
-					bpfMaps.CommonMaps.QoSMap, connLimitProvider, qos.IPFamilyV6))
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6))
 			}
 		}
 

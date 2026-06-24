@@ -2056,6 +2056,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(LocalSubnetL2ReachabilityMode)
 		**out = **in
 	}
+	if in.LocalSubnetL2ReachabilityRefreshInterval != nil {
+		in, out := &in.LocalSubnetL2ReachabilityRefreshInterval, &out.LocalSubnetL2ReachabilityRefreshInterval
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.WindowsManageFirewallRules != nil {
 		in, out := &in.WindowsManageFirewallRules, &out.WindowsManageFirewallRules
 		*out = new(WindowsManageFirewallRulesMode)

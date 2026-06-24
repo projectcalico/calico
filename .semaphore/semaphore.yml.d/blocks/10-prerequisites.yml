@@ -124,8 +124,18 @@
         commands:
           - cd ..
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
-          - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+          - |-
+            if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+              # master uses Semaphore's free cache (other branches use GCS). This
+              # block only runs on branch builds (its `when: "branch =~ '.*'"`),
+              # so PRs never store here — they only restore, in the prologue.
+              # Cache keys are not overwritten, so delete-then-store to refresh.
+              cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+              cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
+            else
+              gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+              gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+            fi
 
 - name: "Build: nftables RPMs"
   # Producer for the patched nftables + libnftnl RPMs that calico/node and the
@@ -173,11 +183,13 @@
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
 
 - name: "Pull: go-build image"
-  # Populate the GCS cache of calico/go-build so that every downstream job can
-  # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
-  # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
-  # the tarball survives across workflows — the common case is a no-op
-  # `gcloud storage ls` on a cache hit.
+  # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+  # a Docker Hub pull fails (which we still see occasionally even with an
+  # authenticated session). Jobs pull from Docker Hub first and only fall back to
+  # this GCS copy on failure (see the global prologue), so this is just an
+  # insurance upload — uploads are free and the common case is a no-op
+  # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+  # across workflows.
   run:
     when: "true"
   dependencies: []

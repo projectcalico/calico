@@ -43,7 +43,7 @@ type connlimitKey struct {
 
 // ConnLimitScanner is an EntryScannerSynced that periodically recounts active
 // TCP connections per interface+direction using the BPF CT map and writes the
-// true count to the cali_qos BPF map. This corrects any drift from LRU
+// true count to the cali_qos_conn BPF map. This corrects any drift from LRU
 // eviction or connection close without explicit decrement.
 //
 // The BPF dataplane increments the count on new TCP SYN. This scanner
@@ -58,10 +58,14 @@ type connlimitKey struct {
 // network partition), so a ~30s recovery window is adequate.
 const connLimitScannerRunEveryN = 3
 
-// connLimitQoSMap is the subset of the QoS BPF map API that the scanner needs.
-// Narrowed from maps.MapWithUpdateWithFlags so tests can supply a small fake
-// without taking a dependency on the full Map interface (avoids an import
-// cycle with felix/bpf/mock, which itself depends on conntrack).
+// connLimitQoSMap is the subset of the cali_qos_conn BPF map API that the
+// scanner needs. Narrowed from maps.MapWithUpdateWithFlags so tests can
+// supply a small fake without taking a dependency on the full Map interface
+// (avoids an import cycle with felix/bpf/mock, which itself depends on
+// conntrack). The scanner only touches the connection-limit map — packet-
+// rate state lives in a separate cali_qos map that the scanner never
+// reads or writes; this is what prevents the lost-update race that
+// motivated the split (see qos.h).
 type connLimitQoSMap interface {
 	Get(k []byte) ([]byte, error)
 	BatchUpdate(ks, vs [][]byte, flags uint64) (int, error)
@@ -73,8 +77,8 @@ type ConnLimitScanner struct {
 	podInfo    map[string]ConnLimitPodInfo
 	counts     map[connlimitKey]uint32
 	// family is the IP family this scanner runs over (4 or 6). Used as
-	// the family dimension when writing back to the cali_qos map so v4
-	// and v6 each update their own counter, avoiding the dual-stack
+	// the family dimension when writing back to the cali_qos_conn map so
+	// v4 and v6 each update their own counter, avoiding the dual-stack
 	// overwrite that would otherwise happen with a shared map entry.
 	family      uint16
 	iterCount   int
@@ -83,8 +87,8 @@ type ConnLimitScanner struct {
 
 // NewConnLimitScanner creates a new ConnLimitScanner. family must be either
 // qos.IPFamilyV4 (4) or qos.IPFamilyV6 (6) — it identifies which family's
-// CT map this scanner is walking and which family's QoS map entry it
-// writes back to.
+// CT map this scanner is walking and which family's cali_qos_conn entry
+// it writes back to.
 func NewConnLimitScanner(
 	qosMap connLimitQoSMap,
 	getPodInfo ConnLimitPodInfoProvider,
@@ -243,28 +247,25 @@ func (s *ConnLimitScanner) IterationEnd() {
 	}
 }
 
-// prepareUpdate reads the existing QoS map entry and returns the key bytes
-// and a new value with current_count replaced by `count` (preserving the
-// packet-rate fields and max_connections). Returns changed=false when the
-// existing count already matches `count`, or when the read fails.
+// prepareUpdate reads the existing cali_qos_conn entry and returns the key
+// bytes and a new value with current_count replaced by `count` (preserving
+// max_connections). Returns changed=false when the existing count already
+// matches `count`, or when the read fails. Packet-rate state lives in a
+// separate map (cali_qos) that the scanner never touches.
 func (s *ConnLimitScanner) prepareUpdate(ifindex uint32, direction uint16, count uint32) (keyBytes, valBytes []byte, changed bool) {
 	qosKey := qos.NewKey(ifindex, direction, s.family)
 	qosValBytes, err := s.qosMap.Get(qosKey.AsBytes())
 	if err != nil {
 		if !maps.IsNotExists(err) {
-			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading QoS map entry.")
+			log.WithField("ifindex", ifindex).WithField("direction", direction).WithError(err).Debug("ConnLimitScanner: error reading cali_qos_conn entry.")
 		}
 		return nil, nil, false
 	}
-	existing := qos.ValueFromBytes(qosValBytes)
+	existing := qos.ConnValueFromBytes(qosValBytes)
 	if existing.CurrentCount() == count {
 		return nil, nil, false
 	}
-	newVal := qos.NewValue(
-		existing.PacketRate(), existing.PacketBurst(),
-		existing.PacketRateTokens(), existing.PacketRateLastUpdate(),
-		existing.MaxConnections(), count,
-	)
+	newVal := qos.NewConnValue(existing.MaxConnections(), count)
 	return qosKey.AsBytes(), newVal.AsBytes(), true
 }
 

@@ -216,6 +216,9 @@ class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
         pass
 
+    def start(self):
+        pass
+
     def master(self):
         return True
 
@@ -597,12 +600,12 @@ class Lib(object):
         the one UT process, which means:
 
         - Do the same startup preparations - DB connection etc. - that the API worker
-          process would do.  These are all coded in ``_post_fork_init()``.  This allows
-          tests to later call driver entrypoints like ``update_port_postcommit()``,
-          similarly as production Neutron would.
+          process would do.  These are all coded in ``_post_fork_init()``.
+          This allows tests to later call driver entrypoints like
+          ``update_port_postcommit()``, similarly as production Neutron would.
 
         - Spawn the threads for "other work" (as above) as the RPC worker process would
-          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
+          do.  This is achieved by calling ``_post_fork_init()``.
 
         - Do the startup resync that the Calico resync process would do.  This is coded
           in ``_do_startup_resync()``.
@@ -612,7 +615,7 @@ class Lib(object):
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            self.driver._post_fork_init(voting=True)
+            self.driver._post_fork_init()
             if mech_calico.cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 

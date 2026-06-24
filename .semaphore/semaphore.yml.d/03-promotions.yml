@@ -66,5 +66,10 @@ promotions:
     pipeline_file: push-images/e2e-test.yml
   - name: Push istio images
     pipeline_file: push-images/istio.yml
+  # Auto-fires (unlike the component pushes above) because this is a build-time
+  # prerequisite node/istio pull before building, not a release artifact. No-op
+  # when the tag is already published.
   - name: Push nftables RPM images
     pipeline_file: push-images/nft-rpms.yml
+    auto_promote:
+      when: "branch =~ 'master|release-.*'"

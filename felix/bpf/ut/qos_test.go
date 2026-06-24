@@ -63,7 +63,7 @@ func TestQoSPacketRate(t *testing.T) {
 	defer resetQoSMap(qosMap)
 	key1 := qos.NewKey(uint32(ifIndex), 1, qos.IPFamilyV4)
 	key2 := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV4)
-	value := qos.NewValue(1, 1, -1, 0, 0, 0)
+	value := qos.NewValue(1, 1, -1, 0)
 
 	err = qosMap.Update(
 		key1.AsBytes(),
@@ -404,20 +404,19 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 	}
 
-	// seedQoSCount populates the egress QoS map entry for ifIndex with
-	// max=maxConnections and the given current_count.
+	// seedQoSCount populates the egress connlimit map entry for ifIndex
+	// with max=maxConnections and the given current_count.
 	seedQoSCount := func(current uint32) {
 		key := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
-		// Packet-rate fields zero; max=maxConnections; current=current.
-		v := qos.NewValue(0, 0, 0, 0, maxConnections, current)
-		Expect(qosMap.Update(key.AsBytes(), v.AsBytes())).NotTo(HaveOccurred())
+		v := qos.NewConnValue(maxConnections, current)
+		Expect(qosConnMap.Update(key.AsBytes(), v.AsBytes())).NotTo(HaveOccurred())
 	}
 
 	readQoSCount := func() uint32 {
 		key := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV4)
-		b, err := qosMap.Get(key.AsBytes())
+		b, err := qosConnMap.Get(key.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
-		return qos.ValueFromBytes(b).CurrentCount()
+		return qos.ConnValueFromBytes(b).CurrentCount()
 	}
 
 	// SYN packet from srcIP:srcPort → dstIP:dstPort.
@@ -427,9 +426,9 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 	t.Run("recycle of properly-closed entry: counter stays at 1", func(t *testing.T) {
 		RegisterTestingT(t)
 		resetCTMap(ctMap)
-		resetQoSMap(qosMap)
+		resetQoSMap(qosConnMap)
 		defer resetCTMap(ctMap)
-		defer resetQoSMap(qosMap)
+		defer resetQoSMap(qosConnMap)
 
 		// Close-time decrement already fired on the old entry, leaving
 		// CONNLIMIT_DEC set and the QoS counter at 0.
@@ -455,9 +454,9 @@ func TestQoSConnLimitEgressRecycleNotDoubleCounted(t *testing.T) {
 	t.Run("recycle of never-decremented entry: counter stays at 1, not 2", func(t *testing.T) {
 		RegisterTestingT(t)
 		resetCTMap(ctMap)
-		resetQoSMap(qosMap)
+		resetQoSMap(qosConnMap)
 		defer resetCTMap(ctMap)
-		defer resetQoSMap(qosMap)
+		defer resetQoSMap(qosConnMap)
 
 		// Old entry was counted at SYN time (CONNLIMIT_EGRESS set) but
 		// never decremented (CONNLIMIT_DEC NOT set). QoS counter is at
@@ -541,20 +540,20 @@ func TestQoSConnLimitIngressRetransmissionOfRejectedStillOverLimit(t *testing.T)
 		legA, legB)
 	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 
-	// Pre-populate the ingress QoS map entry with the counter AT the
-	// limit. The retransmission's second-chance check should re-run and
-	// fail (current_count >= max_connections), keeping the rejection.
-	defer resetQoSMap(qosMap)
-	resetQoSMap(qosMap)
+	// Pre-populate the ingress connlimit map entry with the counter AT
+	// the limit. The retransmission's second-chance check should re-run
+	// and fail (current_count >= max_connections), keeping the rejection.
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
 	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
-	Expect(qosMap.Update(qosKey.AsBytes(),
-		qos.NewValue(0, 0, 0, 0, maxConnections, maxConnections).AsBytes())).
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections).AsBytes())).
 		NotTo(HaveOccurred())
 
 	readQoSCount := func() uint32 {
-		b, err := qosMap.Get(qosKey.AsBytes())
+		b, err := qosConnMap.Get(qosKey.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
-		return qos.ValueFromBytes(b).CurrentCount()
+		return qos.ConnValueFromBytes(b).CurrentCount()
 	}
 
 	// Retransmitted SYN matching the same 5-tuple as the rejected entry.
@@ -640,17 +639,17 @@ func TestQoSConnLimitIngressRetransmissionOfRejectedSecondChance(t *testing.T) {
 	// QoS counter is one below the limit — slot has freed since the
 	// original rejection. The retransmission's second-chance check
 	// should re-run and succeed.
-	defer resetQoSMap(qosMap)
-	resetQoSMap(qosMap)
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
 	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
-	Expect(qosMap.Update(qosKey.AsBytes(),
-		qos.NewValue(0, 0, 0, 0, maxConnections, maxConnections-1).AsBytes())).
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, maxConnections-1).AsBytes())).
 		NotTo(HaveOccurred())
 
 	readQoSCount := func() uint32 {
-		b, err := qosMap.Get(qosKey.AsBytes())
+		b, err := qosConnMap.Get(qosKey.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
-		return qos.ValueFromBytes(b).CurrentCount()
+		return qos.ConnValueFromBytes(b).CurrentCount()
 	}
 
 	_, _, _, _, pktBytes, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
@@ -726,18 +725,18 @@ func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
 		legA, legB)
 	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
 
-	// QoS map: max=3, current=1 (this entry was already counted).
-	defer resetQoSMap(qosMap)
-	resetQoSMap(qosMap)
+	// Connlimit map: max=3, current=1 (this entry was already counted).
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
 	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
-	Expect(qosMap.Update(qosKey.AsBytes(),
-		qos.NewValue(0, 0, 0, 0, maxConnections, 1).AsBytes())).
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, 1).AsBytes())).
 		NotTo(HaveOccurred())
 
 	readQoSCount := func() uint32 {
-		b, err := qosMap.Get(qosKey.AsBytes())
+		b, err := qosConnMap.Get(qosKey.AsBytes())
 		Expect(err).NotTo(HaveOccurred())
-		return qos.ValueFromBytes(b).CurrentCount()
+		return qos.ConnValueFromBytes(b).CurrentCount()
 	}
 
 	// Retransmitted SYN matching the accepted entry's 5-tuple.

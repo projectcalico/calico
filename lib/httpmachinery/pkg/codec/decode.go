@@ -94,7 +94,7 @@ func DecodeAndValidateRequestParams[RequestParam any](ctx apicontext.Context, ur
 		jsonDec.DisallowUnknownFields()
 
 		if err := jsonDec.Decode(reqParams); err != nil {
-			ctx.Logger().WithError(err).Debug("Failed to decode request body.")
+			ctx.Logger().Debug("Failed to decode request body.", "error", err)
 			return nil, fmt.Errorf("malformed request body")
 		}
 	}
