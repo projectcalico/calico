@@ -77,6 +77,24 @@ every other tail-caller ([bpf-tc-programs.md → TC program layout](./bpf-tc-pro
 - `skb->cb[0]` = fast-path main index (no match → go here),
 - `skb->cb[1]` = debug-path main index (match → go here).
 
+### Loops and `ip6 protochain`
+
+Most pcap expressions compile to straight-line cBPF. A few — notably
+`ip6 protochain`, which walks the IPv6 extension-header chain — compile
+to a loop with a backward `BPF_JA`. Classic BPF only runs such filters in
+libpcap's userspace interpreter; the eBPF verifier rejects the unbounded
+back-edge outright. `cBPF2eBPF` therefore **unrolls** the loop: it locates
+the single backward-jump region, emits the instructions before and after it
+once, and emits the loop body `maxLoopUnroll` times. A forward jump stays in
+its copy, a back-edge becomes a forward jump into the next copy, and the
+last copy's back-edge falls through to `miss` — so a chain longer than the
+unroll bound is treated as no-match. This mirrors the bounded
+`for (i = 0; i < 8; i++)` walk in `felix/bpf-gpl/parsing6.h`. Only a single
+reducible loop is supported; anything more complex is rejected at compile
+time rather than mis-compiled. Extension headers beyond the first `maxData`
+bytes of the packet are unreachable, because the filter matches the
+pre-loaded scratch buffer rather than the full skb.
+
 ### Integration with the preamble
 
 `tc_preamble.c` checks `globals->data.log_filter_jmp`. If it is not
@@ -117,6 +135,11 @@ per-interface.
   machinery to load two path-variants of every sub-program is
   already there; duplicating it across filter types is how this
   area becomes unmaintainable.
+- `maxLoopUnroll` in `filter.go` is a correctness/size trade-off, not a
+  free knob: every increment replicates the whole loop body once more in
+  every filter that contains a loop. Raise it only with a concrete need,
+  and keep it in line with the extension-header bound the C dataplane
+  walks (`felix/bpf-gpl/parsing6.h`).
 
 
 
