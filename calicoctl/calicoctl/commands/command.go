@@ -116,21 +116,10 @@ node instance.`,
 		Use:   "version",
 		Short: "Display the version of this binary",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Bridge to the existing docopt-based Version function.
-			synthArgs := []string{"version"}
-			if config, _ := cmd.Flags().GetString("config"); config != "" {
-				synthArgs = append(synthArgs, "--config="+config)
-			}
-			if poll, _ := cmd.Flags().GetString("poll"); poll != "" {
-				synthArgs = append(synthArgs, "--poll="+poll)
-			}
-			if clientOnly, _ := cmd.Flags().GetBool("client"); clientOnly {
-				synthArgs = append(synthArgs, "--client")
-			}
-			if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
-				synthArgs = append(synthArgs, "--allow-version-mismatch")
-			}
-			return Version(synthArgs)
+			config, _ := cmd.Flags().GetString("config")
+			poll, _ := cmd.Flags().GetString("poll")
+			clientOnly, _ := cmd.Flags().GetBool("client")
+			return runVersion(config, poll, clientOnly)
 		},
 	}
 	versionCmd.Flags().StringP("config", "c", "", "Path to the file containing connection configuration.")
