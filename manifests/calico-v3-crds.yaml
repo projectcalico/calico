@@ -110,7 +110,6 @@ spec:
       - bgpconfig
       - bgpconfigs
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -412,7 +411,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -1315,7 +1313,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -1602,7 +1599,6 @@ spec:
       - affinity
       - affinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -1700,7 +1696,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -2058,7 +2053,6 @@ spec:
       - clusterinfo
       - clusterinfos
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -2146,7 +2140,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -3649,7 +3642,6 @@ spec:
       - gnp
       - cgnp
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -4969,7 +4961,6 @@ spec:
     shortNames:
       - gns
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5036,7 +5027,6 @@ spec:
       - hep
       - heps
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5178,7 +5168,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5352,7 +5341,6 @@ spec:
       - ipamconfig
       - ipamconfigs
     singular: ipamconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5466,7 +5454,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5543,7 +5530,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5831,7 +5817,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -5900,7 +5885,6 @@ spec:
       - kcc
       - kccs
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -6399,7 +6383,6 @@ spec:
       - cnp
       - caliconetworkpolicy
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -7665,7 +7648,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -7726,7 +7708,6 @@ spec:
     shortNames:
       - sgnp
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -9054,7 +9035,6 @@ spec:
     shortNames:
       - sknp
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -9593,7 +9573,6 @@ spec:
       - scnp
       - snp
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -10873,7 +10852,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:

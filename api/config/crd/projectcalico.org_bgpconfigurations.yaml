@@ -14,7 +14,6 @@ spec:
       - bgpconfig
       - bgpconfigs
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
