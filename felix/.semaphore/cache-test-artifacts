@@ -13,22 +13,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is run locally to push artifacts to our sub-directory in GCS.
-# The counterpart to this script is load-test-artifacts, which runs on the test
-# VM.  It can assume that the artifacts have been downloaded to /tmp.
+# This script is run locally to push artifacts to our sub-directory in the S3
+# cache. The counterpart to this script is load-test-artifacts, which runs on
+# the test VM.  It can assume that the artifacts have been downloaded to /tmp.
 
 set -e
 set -x
+
+# Resolve the s3-cmd wrapper before we cd out of the component directory.
+S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 artifact push job bin &
 docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 
 # The combined calico image (which provides Typha and other components used by
-# the FVs) is already published to ${GCS_WORKFLOW_DIR}/calico-image.tar.zst by
+# the FVs) is already published to ${S3_WORKFLOW_DIR}/calico-image.tar.zst by
 # the "Build: calico image" prerequisite block. Server-side copy it into this
 # component's fv-artifacts directory so the test VM sees it alongside the
 # working copy and felix-test image.
-gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-image.tar.zst" "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
+"$S3_CMD" cp "${S3_WORKFLOW_DIR}/calico-image.tar.zst" "${S3_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 
 cd ../..
 
@@ -40,5 +43,5 @@ tar -czf /tmp/working-copy.tgz \
   --exclude=${CALICO_DIR_NAME}/typha/docker-image/bin \
   --exclude=${CALICO_DIR_NAME}/artifacts \
   ${CALICO_DIR_NAME}
-gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
+"$S3_CMD" cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar "${S3_WORKFLOW_DIR}/felix/fv-artifacts/"
 wait
