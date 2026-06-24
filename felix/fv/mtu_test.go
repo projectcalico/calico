@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before adding host IPs to IP sets", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -48,14 +49,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			// timeout since after a Felix restart the devices may not
 			// exist yet.
 			felix := tc.Felixes[0]
-			EventuallyWithOffset(1, func() string {
-				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
-				return out
-			}, "10s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
-			EventuallyWithOffset(1, func() string {
-				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfout.cali")
-				return out
-			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+			linkMTU := func(dev string) func() int {
+				return func() int {
+					link, err := iputils.New(felix).LinkShowDev(dev)
+					if err != nil {
+						return 0
+					}
+					return link.MTU
+				}
+			}
+			EventuallyWithOffset(1, linkMTU("bpfin.cali"), "10s", "500ms").Should(Equal(mtu))
+			EventuallyWithOffset(1, linkMTU("bpfout.cali"), "5s", "500ms").Should(Equal(mtu))
 		}
 	}
 
