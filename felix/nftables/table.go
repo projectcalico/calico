@@ -41,6 +41,11 @@ import (
 const (
 	MaxChainNameLength = knftables.NameLengthMax
 	defaultTimeout     = 30 * time.Second
+
+	// Object type names as returned by knftables' ListAll, used to index its
+	// result map.
+	objectTypeChain = "chain"
+	objectTypeMap   = "map"
 )
 
 var (
@@ -178,6 +183,7 @@ type NftablesTable struct {
 
 	name      string
 	ipVersion uint8
+	family    knftables.Family
 	nft       knftables.Interface
 
 	// When true, the table will not program any rules or chains and insted functions
@@ -416,6 +422,7 @@ func newTable(
 	table := &NftablesTable{
 		IPSetsDataplane:        NewIPSets(ipv, nft, options.OpRecorder),
 		name:                   name,
+		family:                 nftFamily,
 		nft:                    nft,
 		baseChainDefs:          baseChainDefs,
 		render:                 NewNFTRenderer(hashPrefix, ipVersion),
@@ -642,25 +649,29 @@ func (t *NftablesTable) decrefChain(chainName string) {
 }
 
 func (t *NftablesTable) loadDataplaneState() {
-	// Fetch all object names from the dataplane in a single nft invocation.
-	// This replaces separate List("map") and List("chain") calls, halving
-	// the number of nft subprocesses during resync.
-	ctx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
-	defer cancel()
-	allObjects, err := t.nft.ListAll(ctx)
+	// List all of our table's objects in a single nft invocation, giving us the
+	// map and chain names without a separate List call for each type.
+	listCtx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	allObjects, err := t.nft.ListAll(listCtx)
+	cancel()
 	if err != nil {
-		if knftables.IsNotFound(err) {
-			t.logCxt.Debug("Table not found in dataplane, nothing to load.")
-		} else {
-			t.logCxt.WithError(err).Warn("Failed to list all nftables objects")
+		if !knftables.IsNotFound(err) {
+			// A transient list failure shouldn't be treated as an empty table:
+			// that would clear our in-memory view and trigger spurious
+			// reprogramming. Skip this resync and try again on the next one.
+			t.logCxt.WithError(err).Warn("Failed to list nftables objects, skipping resync")
+			return
 		}
-		// Fall through — maps and chains will get empty slices, which is
-		// correct when the table doesn't exist yet.
-		allObjects = map[string][]string{}
+		// Table doesn't exist yet. Carry on with no objects so we program it
+		// from scratch.
+		t.logCxt.Debug("Table not found in dataplane, nothing to load.")
 	}
 
-	// Sync maps using the pre-fetched map names.
-	if err := t.LoadDataplaneState(ctx, allObjects["map"]); err != nil {
+	// Sync maps using the pre-fetched map names. Give the maps resync its own
+	// timeout so a slow one doesn't eat into the chain read below.
+	mapsCtx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer cancel()
+	if err := t.LoadDataplaneState(mapsCtx, allObjects[objectTypeMap]); err != nil {
 		t.logCxt.WithError(err).Warn("Failed to load maps state")
 	}
 
@@ -673,7 +684,7 @@ func (t *NftablesTable) loadDataplaneState() {
 
 	t.lastReadTime = t.timeNow()
 
-	dataplaneHashes := t.getHashesFromDataplane(allObjects["chain"])
+	dataplaneHashes := t.getHashesFromDataplane(allObjects[objectTypeChain])
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -833,7 +844,7 @@ func (t *NftablesTable) attemptToGetHashesFromDataplane(chainNames []string) (ha
 	if chainNames == nil {
 		// List chains separately, as chains may exist without rules.
 		countNumListCalls.Inc()
-		chainNames, err = t.nft.List(ctx, "chain")
+		chainNames, err = t.nft.List(ctx, objectTypeChain)
 		if err != nil {
 			if knftables.IsNotFound(err) {
 				err = nil
@@ -942,7 +953,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				continue
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
-				cmd := t.newCmd("nft", "list", "table", t.name)
+				cmd := t.newCmd("nft", "list", "table", string(t.family), t.name)
 				output, err2 := cmd.Output()
 				if err2 != nil {
 					t.logCxt.WithError(err2).Error("Failed to load nftables state")
@@ -1167,7 +1178,7 @@ func (t *NftablesTable) applyUpdates() error {
 			// own table rather than using "nft list ruleset" to avoid
 			// parsing objects from other tables that may contain udata
 			// written by a newer nft, which can crash older nft binaries.
-			cmd := t.newCmd("nft", "list", "table", t.name)
+			cmd := t.newCmd("nft", "list", "table", string(t.family), t.name)
 			output, err2 := cmd.Output()
 			if err2 != nil {
 				t.logCxt.WithError(err2).Error("Failed to load nftables table state")
@@ -1241,6 +1252,8 @@ func (t *NftablesTable) CheckRulesPresent(chain string, rules []generictables.Ru
 	features := t.featureDetector.GetFeatures()
 	hashes := CalculateRuleHashes(chain, rules, features)
 
+	// Pass nil so the helper lists chains itself. This is a one-off rule check,
+	// not a full resync where we already have the chain names to hand.
 	dpHashes := t.getHashesFromDataplane(nil)
 	dpHashesSet := set.New[string]()
 	for _, h := range dpHashes[chain] {

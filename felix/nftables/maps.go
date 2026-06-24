@@ -291,6 +291,7 @@ func (s *Maps) LoadDataplaneState(ctx context.Context, maps []string) error {
 		}).Debug("Finished Maps resync")
 	}()
 
+	// Clear the dataplane metadata view, we'll build it back up again as we scan.
 	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
 
 	// We'll process each map in parallel, so we need a struct to hold the results.
