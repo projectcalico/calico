@@ -29,10 +29,6 @@ global_job_config:
     # Destination for the CI build cache and per-workflow artifacts. The bucket
     # and key prefix are plain configuration; the credentials come from the
     # go-build-cache-hetzner-s3-credentials secret above.
-    - name: CALICO_S3_BUCKET
-      value: calico-transient-build-artifacts
-    - name: CALICO_S3_KEY_PREFIX
-      value: ci
     - name: BUILDKIT_PROGRESS
       value: plain
     - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
