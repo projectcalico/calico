@@ -242,6 +242,16 @@ func TestNewGenericListWatcher_CustomOptions(t *testing.T) {
 	assert.Equal(t, options, lw.Options)
 }
 
+func TestNewGenericListWatcher_NilOption(t *testing.T) {
+	list := testListOptions()
+	handler := newMockEventHandler()
+
+	assert.NotPanics(t, func() {
+		lw := NewGenericListWatcher(list, handler, nil)
+		assert.Equal(t, DefaultListWatcherOptions(), lw.Options)
+	})
+}
+
 func TestGenericListWatcher_UpdateRevision(t *testing.T) {
 	lw := NewGenericListWatcher(testListOptions(), newMockEventHandler())
 

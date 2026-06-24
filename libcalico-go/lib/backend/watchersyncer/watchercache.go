@@ -23,6 +23,7 @@ import (
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
 // Compile-time check that watcherCache implements api.EventHandler interface
@@ -98,9 +99,21 @@ func (wc *watcherCache) run(ctx context.Context) {
 
 func (wc *watcherCache) listAndWatch(ctx context.Context) error {
 	if client, ok := wc.client.(api.ListAndWatchClient); ok {
-		return client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc, api.WithListWatcherOptions(wc.listWatcherOptions))
+		err := client.ListAndWatch(ctx, wc.resourceType.ListInterface, wc, api.WithListWatcherOptions(wc.listWatcherOptions))
+		if err == nil {
+			return nil
+		}
+		var errNotSupported cerrors.ErrorOperationNotSupported
+		if !errors.As(err, &errNotSupported) {
+			return err
+		}
+		wc.logger.WithError(err).Debug("Backend-specific ListAndWatch is not supported; falling back to generic List+Watch")
 	}
 
+	return wc.genericListAndWatch(ctx)
+}
+
+func (wc *watcherCache) genericListAndWatch(ctx context.Context) error {
 	lw := api.NewGenericListWatcher(wc.resourceType.ListInterface, wc, api.WithListWatcherOptions(wc.listWatcherOptions))
 	backend := &clientListWatchBackend{
 		client:      wc.client,

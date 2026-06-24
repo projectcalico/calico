@@ -168,6 +168,9 @@ type GenericListWatcher struct {
 func NewGenericListWatcher(list model.ListInterface, handler EventHandler, opts ...ListWatcherOption) *GenericListWatcher {
 	options := DefaultListWatcherOptions()
 	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
 		opt(&options)
 	}
 

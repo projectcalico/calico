@@ -203,6 +203,21 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectConnErrors([]error{listAndWatchErr})
 	})
 
+	It("should fall back to generic ListAndWatch if backend-specific ListAndWatch is unsupported", func() {
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.fc.listAndWatchError = cerrors.ErrorOperationNotSupported{
+			Operation:  "ListAndWatch",
+			Identifier: r1.ListInterface,
+		}
+
+		rs.watcherSyncer.Start()
+
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		// Since we are timing the processing, keep the interval sufficiently large
 		// to make the measurements more accurate.
