@@ -34,10 +34,29 @@ import (
 // `ip -j route show` so callers can assert on the route protocol owner.
 func GetNodeRoutes(cli ctrlclient.Client, nodeName, dstMatch string) []iputils.Route {
 	pod := findCalicoNodePod(cli, nodeName)
-	routes, err := conncheck.PodIP(pod).Routes()
+	routes, err := podIP(pod).Routes()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error running 'ip -j route show' in pod %s", pod.Name)
 
 	return filterRoutes(routes, dstMatch)
+}
+
+// podIP returns an iputils.IP that runs the `ip` utility inside pod via
+// `kubectl exec`, so tests can query routes as typed structs instead of
+// scraping text.
+func podIP(pod *corev1.Pod) *iputils.IP {
+	return iputils.New(podIPRunner{pod: pod})
+}
+
+// podIPRunner adapts conncheck.ExecInPod to the iputils.Runner interface.
+// iputils passes the command as separate args; ExecInPod runs them via
+// `sh -c`, so joining is safe for `ip` invocations (whose args never contain
+// spaces).
+type podIPRunner struct {
+	pod *corev1.Pod
+}
+
+func (r podIPRunner) ExecOutput(args ...string) (string, error) {
+	return conncheck.ExecInPod(r.pod, "sh", "-c", strings.Join(args, " "))
 }
 
 // HasRouteProto returns true if the slice contains a route with the given proto.

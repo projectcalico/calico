@@ -39,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 	"github.com/projectcalico/calico/e2e/pkg/utils/remotecluster"
 	"github.com/projectcalico/calico/e2e/pkg/utils/windows"
-	"github.com/projectcalico/calico/libcalico-go/lib/testutils/iputils"
 )
 
 const (
@@ -704,24 +703,6 @@ func ExecInPod(pod *v1.Pod, sh, opt, cmd string) (string, error) {
 	return kubectl.NewKubectlCommand(pod.Namespace, args...).
 		WithTimeout(time.After(10 * time.Second)).
 		Exec()
-}
-
-// PodIP returns an iputils.IP that runs the `ip` utility inside pod via
-// `kubectl exec`, so tests can query addresses, links, routes, neighbours and
-// rules as typed structs instead of scraping text.
-func PodIP(pod *v1.Pod) *iputils.IP {
-	return iputils.New(podIPRunner{pod: pod})
-}
-
-// podIPRunner adapts ExecInPod to the iputils.Runner interface. iputils passes
-// the command as separate args; ExecInPod runs them via `sh -c`, so joining is
-// safe for `ip` invocations (whose args never contain spaces).
-type podIPRunner struct {
-	pod *v1.Pod
-}
-
-func (r podIPRunner) ExecOutput(args ...string) (string, error) {
-	return ExecInPod(r.pod, "sh", "-c", strings.Join(args, " "))
 }
 
 // checkpointer runs continuous connection probes in the background and lets
