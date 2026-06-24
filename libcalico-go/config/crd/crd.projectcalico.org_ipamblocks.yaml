@@ -74,6 +74,13 @@ spec:
                       handle_id:
                         description: HandleID is the primary identifier for the allocation.
                         type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
+                        type: string
                       secondary:
                         additionalProperties:
                           type: string

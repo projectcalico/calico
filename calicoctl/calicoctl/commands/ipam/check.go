@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/docopt/docopt-go"
 	corev1 "k8s.io/api/core/v1"
@@ -205,9 +207,11 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	c.clusterGUID = clusterInfo.Spec.ClusterGUID
 
 	var numAllocs int
+	var blocks *model.KVPairList
 	{
 		fmt.Println("Loading all IPAM blocks...")
-		blocks, err := c.backendClient.List(ctx, model.BlockListOptions{}, "")
+		var err error
+		blocks, err = c.backendClient.List(ctx, model.BlockListOptions{}, "")
 		if err != nil {
 			return fmt.Errorf("failed to list IPAM blocks: %w", err)
 		}
@@ -374,6 +378,18 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		fmt.Printf("Scanning for IPs that are allocated but not actually in use...\n")
 		for ip, allocs := range c.allocations {
 			if _, ok := c.inUseIPs[ip]; !ok {
+				// If the IP is in a cooldown state, do not report it as a problem/leak.
+				coolingDown := false
+				for _, alloc := range allocs {
+					if alloc.CoolingDown {
+						coolingDown = true
+						break
+					}
+				}
+				if coolingDown {
+					continue
+				}
+
 				if c.showProblemIPs {
 					for _, alloc := range allocs {
 						fmt.Printf("  %s leaked; attrs %v\n", ip, alloc.GetAttrString())
@@ -466,6 +482,20 @@ func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 		fmt.Printf("Found %d handles mentioned in blocks with no matching handle resource.\n", len(missingHandles))
 	}
 
+	var invalidBlocks []string
+	{
+		fmt.Printf("Validating IPAMBlock structures...\n")
+		for _, kvp := range blocks.KVPairs {
+			b := kvp.Value.(*model.AllocationBlock)
+			if err := validateBlock(b); err != nil {
+				fmt.Printf("  IPAMBlock %s is invalid: %s\n", kvp.Key, err)
+				numProblems++
+				invalidBlocks = append(invalidBlocks, kvp.Key.String())
+			}
+		}
+		fmt.Printf("Found %d invalid IPAMBlocks.\n", len(invalidBlocks))
+	}
+
 	fmt.Printf("Check complete; found %d problems.\n", numProblems)
 
 	if c.outFile != "" {
@@ -488,7 +518,56 @@ func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
 	return ips, nil
 }
 
-type Report struct {
+func validateBlock(b *model.AllocationBlock) error {
+	// Check that all non-nil Allocations point to valid attributes.
+	seenAttribs := set.New[int]()
+	seenOrdinals := set.New[int]()
+	var o int
+	for o = 0; o < b.NumAddresses(); o++ {
+		if b.Allocations[o] == nil {
+			continue
+		}
+		attrIdx := *b.Allocations[o]
+		if attrIdx < 0 || attrIdx >= len(b.Attributes) {
+			return fmt.Errorf("allocation %d indexes a nonexistent attribute %d", o, attrIdx)
+		}
+		seenAttribs.Add(attrIdx)
+		seenOrdinals.Add(o)
+	}
+
+	// Check that all attributes are pointed to
+	for i := range b.Attributes {
+		if !seenAttribs.Contains(i) {
+			return fmt.Errorf("attribute index %d exists but is not indexed by an allocation", i)
+		}
+		releasedAt := b.Attributes[i].ReleasedAt
+		if releasedAt != nil && releasedAt.After(time.Now()) {
+			return fmt.Errorf("attribute index %d has releasedAt in the future, suggesting clock skew", i)
+		}
+	}
+
+	// Check that all unallocated ordinals are unique and not seen.
+	for i, o := range b.Unallocated {
+		if o < 0 || o >= len(b.Allocations) {
+			return fmt.Errorf("ordinal %d appears in the Unallocated array but is out of the block", o)
+		}
+		if slices.Contains(b.Unallocated[:i], o) {
+			return fmt.Errorf("ordinal %d appears more than once in Unallocated array", o)
+		}
+		if seenOrdinals.Contains(o) {
+			return fmt.Errorf("ordinal %d is allocated but appears in Unallocated", o)
+		}
+	}
+
+	if len(b.Unallocated)+seenOrdinals.Len() != b.NumAddresses() {
+		return fmt.Errorf("expected %d addresses in this block, but Unallocated (%d) + Allocated (%d) = %d",
+			b.NumAddresses(), len(b.Unallocated), seenOrdinals.Len(), len(b.Unallocated)+seenOrdinals.Len())
+	}
+
+	return nil
+}
+
+type CheckReport struct {
 	// Version of the code that produced the report.
 	Version string `json:"version"`
 
@@ -504,7 +583,7 @@ type Report struct {
 }
 
 func (c *IPAMChecker) printReport() {
-	r := Report{
+	r := CheckReport{
 		Version:             c.version,
 		ClusterGUID:         c.clusterGUID,
 		ClusterType:         c.clusterType,
@@ -541,6 +620,12 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 		} else if attrs.HandleID != nil {
 			alloc.Handle = *attrs.HandleID
 			c.recordInUseHandle(alloc.Handle)
+		}
+		if attrs.ReleasedAt != nil {
+			// Record this as cooling down. We do not have access
+			// to the IPAMConfig here to determine if this could
+			// be deallocated at this time.
+			alloc.CoolingDown = true
 		}
 		if n := attrs.ActiveOwnerAttrs["node"]; n != "" {
 			node = n
@@ -669,6 +754,9 @@ type Allocation struct {
 
 	// Borrowed is true if this IP is from a block that is not affine to the node.
 	Borrowed bool `json:"borrowed,omitempty"`
+
+	// CoolingDown is true if this IP is still allocatd but in its cooldown period.
+	CoolingDown bool `json:"coolingDown,omitempty"`
 
 	// List of objects which are using this IP.
 	Owners []string `json:"owners"`

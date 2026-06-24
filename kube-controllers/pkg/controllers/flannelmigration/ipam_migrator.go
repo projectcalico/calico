@@ -238,7 +238,7 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 	} else {
 		// Failed to get assignment attributes, datastore connection issues possible.
 		log.WithError(err).Errorf("Failed to get assignment attributes for vtep IP '%s'", vtepIP.String())
-		return fmt.Errorf("failed to get vtep IP %s attribute", vtepIP.String())
+		return fmt.Errorf("failed to get vtep IP %s attribute: %w", vtepIP.String(), err)
 	}
 
 	if assign {
