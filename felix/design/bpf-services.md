@@ -515,6 +515,34 @@ the BPF program ever runs.
   the Kubernetes draining semantics.
 - Session affinity populated and refreshed (Service session affinity).
 - Maglev LUTs regenerated consistently across nodes (Maglev load balancer).
+- The `default/kubernetes` API server service is never allowed to
+  drop to zero backends — see below.
+
+### API server service: never drop to zero backends
+
+With `bpfNetworkBootstrap` enabled, Felix reaches the API server
+*through* the `default/kubernetes` ClusterIP service's NAT entry
+(`KUBERNETES_SERVICE_HOST` is the ClusterIP, and the
+`ebpf-bootstrap` init container seeds the frontend/backend from
+`KUBERNETES_SERVICE_IPS_PORTS` / `KUBERNETES_APISERVER_ENDPOINTS`
+before Felix starts — see `node/pkg/nodeinit/calico-init_linux.go`).
+
+This creates a hazard the generic kube-proxy model doesn't have:
+if that service transiently loses all its (ready) endpoints — e.g.
+the API server's own endpoint reconciler de-lists it across a
+restart — the syncer would write `count=0` and delete the backend,
+**severing Felix's own connection to the API server**. Felix can
+then no longer learn the restored endpoints, so the NAT stays empty
+until calico-node is restarted (which re-seeds it from the init
+container). The deadlock is therefore unique to bootstrap mode.
+
+The syncer therefore retains the last-known-good backend for the
+API server service whenever an update would leave it with zero ready
+endpoints (`apiServerFallbackEps` in `syncer.go`, sourced from
+`prevEpsMap`, which is rebuilt from the BPF maps on restart by
+`startupBuildPrev`). The API server's backend (the control-plane
+host IP) is stable across such an outage, so the retained backend is
+correct; a later update with real ready endpoints overwrites it.
 
 ### Review notes
 
@@ -531,6 +559,12 @@ the BPF program ever runs.
 - Syncer changes should preserve the "converge, then apply" model
   — don't emit partial state to BPF mid-update. A partially-synced
   service can serve traffic to a non-existent backend.
+- Don't weaken the "API server service never drops to zero
+  backends" guarantee (above) without accounting for the bootstrap
+  deadlock. Generalising the preservation to other services would
+  be wrong: a normal service legitimately scaling to zero must clear
+  its backends so clients get a connection refusal rather than NAT
+  to a dead backend.
 
 
 

@@ -54,6 +54,10 @@ blocks:
           env_vars:
             - name: PROVISIONER
               value: gcp-kubeadm
+            - name: GOOGLE_REGION
+              value: us-central1 # Needed for arm machines
+            - name: GOOGLE_ZONE
+              value: us-central1-a # Needed for arm machines
             - name: GOOGLE_MACHINE_TYPE
               value: t2a-standard-2
             - name: K8S_VERSION
