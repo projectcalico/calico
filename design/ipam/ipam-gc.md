@@ -116,8 +116,8 @@ if !c.handleTracker.isConfirmedLeak(a.handle) {
 If even one IP on a handle is still valid, the entire handle is skipped this sync. Otherwise the per-block `IPAMHandle` counters (`Block[blockCIDR]int`) would desync from the
 actual block bitmap and the controller would lose track of the live IPs.
 
-Periodic sweep: every full sync rebuilds `confirmedLeaks` via `checkAllocations`, calls `garbageCollectKnownLeaks`, then `releaseUnusedBlocks` and `releaseNodes` (`syncIPAM`,
-`ipam.go:1174`). Unreleased items roll over to the next sync.
+Periodic sweep: every full sync rebuilds `confirmedLeaks` via `checkAllocations`, calls `garbageCollectKnownLeaks`, then [cold-IP GC](#cold-ip-garbage-collection),
+`releaseUnusedBlocks`, and `releaseNodes` (`syncIPAM`). Unreleased items roll over to the next sync.
 
 The GC calls `ReleaseIPs` rather than [`ReleaseByHandle`](./ipam-core-library.md) because it operates at the per-allocation level (`ReleaseOptions`), preserving sequence-number
 protection for each ordinal.
@@ -131,6 +131,30 @@ protection for each ordinal.
   https://github.com/projectcalico/calico/pull/12713 must hold this line.
 - `ReleaseIPs` plumbs sequence numbers through `ReleaseOptions`. Any new release path here must do the same.
 - The crash at `ipam.go:1281` (`log.Fatalf("BUG: unable to find allocation for release options")`) is reachable if released options can't be mapped back to tracked allocations.
+
+## Cold IP garbage collection
+
+A released IP sits in cooldown - its attribute stamped with `ReleasedAt`, its ordinal still in `Allocations` - until it is deallocated. Deallocation happens in `garbageCollect`,
+which the core library runs on every block read but only persists on write paths (see [IP release and cooldown](./ipam-core-library.md#ip-release-and-cooldown)). A block that sees
+no further allocation or release activity is never rewritten, so its cooled-down IPs would never be deallocated. `garbageCollectColdIPs` is the backstop that deallocates them.
+
+Invariants:
+
+- **The backstop is required, not just an optimization.** Without it, the last cooled-down IPs in an otherwise-idle block keep the block non-empty forever. That blocks empty-block
+  release and node cleanup indefinitely, not just for the cooldown window. Read-time GC alone does not cover the idle-block case.
+- **It must stay cheap.** It runs on every sync trigger - each batched pod/node delete, syncer update, and the periodic tick - and shares the sync loop with leak GC, which is
+  latency-sensitive in some clusters. The cost scales with the number of blocks actually in cooldown, not the total number of blocks.
+
+The controller keeps a `coldBlocks` map - block CIDR to the earliest `ReleasedAt` among that block's cooldown IPs - built up incrementally from streamed block updates in
+`onBlockUpdated`. The backstop visits only those blocks, and only once that earliest timestamp plus `IPCooldownSeconds` has passed. When nothing is in cooldown it does no work. The
+global IPAM config (for `IPCooldownSeconds`) is cached and refreshed on the periodic sync rather than read from the datastore on every trigger.
+
+**Review notes**
+
+- Don't reintroduce a walk over all blocks here. Visiting every block on every trigger is the regression this is built to avoid; the loop is shared with leak GC.
+- `coldBlocks` is in-memory state derived from the block stream, like every other map in this controller. It must satisfy `assertConsistentState` (every CIDR present in `allBlocks`)
+  and be cleaned up on block deletion. A new mutation needs the consistency check, or it joins the memory-leak class of bug.
+- The backstop is a failsafe, not the primary path. The common case is read-time GC folding deallocation into a write; don't move primary reclamation here.
 
 ## Empty block release
 

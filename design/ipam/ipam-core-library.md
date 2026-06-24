@@ -93,6 +93,30 @@ Block release is parallelised per block via a semaphore sized at `GOMAXPROCS`.
   (relevant to https://github.com/projectcalico/calico/issues/12638).
 - Older blocks may not have per-ordinal sequence numbers. New code must tolerate the absent case (default + heal-forward), not crash.
 
+## IP release and cooldown
+
+Releasing an IP and freeing it for reuse are two distinct steps, separated by a configurable cooldown. This sits on top of the `Unallocated` FIFO queue: the queue cycles freed
+ordinals so the longest-idle IP is reused first, and the cooldown adds a wall-clock floor on how soon any released IP can come back.
+
+- **Release marks the IP, it does not free it.** `release` / `releaseByHandle` ([`ipam_block.go`](../../libcalico-go/lib/ipam/ipam_block.go)) clear the handle association and stamp
+  the allocation's `ReleasedAt` with the current time. The ordinal stays in `Allocations` - the IP is no longer tied to a workload, but it is not yet available for reallocation. An
+  IP in this state is "in cooldown".
+- **`garbageCollect` deallocates IPs whose cooldown has elapsed.** It moves an ordinal to `Unallocated`, clears its sequence number, and prunes the now-unreferenced attribute, but
+  only once `ReleasedAt` is older than `IPCooldownSeconds`. With `IPCooldownSeconds=0` the IP is deallocated on the next GC pass. This is the only place ordinals move to
+  `Unallocated`.
+- **GC runs implicitly on every read by the IPAM client.** `blockFromBackend` calls `garbageCollect` whenever a block is loaded. On write paths (`AutoAssign`, `release`,
+  `releaseByHandle`, `SetOwnerAttributes`) the reclamation folds into the same CAS write, so a new allocation can reuse IPs that finished cooling down in one transaction. On
+  read-only paths the GC'd view is computed and then discarded - the caller sees cooled-down IPs as not-yet-reusable, but nothing is persisted.
+- **Blocks with no write activity need a backstop.** Because read-only GC doesn't persist, a block that sees no further allocation or release never gets rewritten, so its
+  cooled-down IPs would never be deallocated. The kube-controllers GC closes that gap; see [ipam-gc](./ipam-gc.md#cold-ip-garbage-collection).
+
+**Review notes**
+
+- Release and deallocation are distinct states. Code that counts "allocated" IPs has to decide whether cooldown counts as allocated, released, or its own state - don't silently fold
+  it into one. `calicoctl ipam check` treats it as its own state.
+- A release call against an IP already in cooldown is not an error - it's already released. Don't return an error for the idempotent case.
+- The cooldown floor is on top of the `Unallocated` FIFO, not a replacement for it. Both exist; don't remove the queue cycling thinking the timestamp covers it.
+
 ## Handle IDs
 
 A handle ID is an opaque string from the library's point of view, but its **format is a convention every IPAM caller has to follow** because `calicoctl datastore migrate` parses
@@ -141,6 +165,7 @@ Fields:
 | `MaxBlocksPerHost` | Per-host cap on the number of affine blocks. 0 means default (20). Once a host hits the cap, `allowNewClaim` is forced false; existing blocks still fill. |
 | `AutoAllocateBlocks` | When false, `AutoAssign` will never claim a new block - only allocate from blocks the host already owns. |
 | `KubeVirtVMAddressPersistence` | Default for whether KubeVirt VM addresses survive VM restart / migration. Auto-detection is on by default. |
+| `IPCooldownSeconds` | Minimum age of a released IP before it can be reused. Release stamps the IP's `ReleasedAt`; `garbageCollect` only deallocates it once this many seconds have passed. 0 deallocates on the next GC pass. Capped at 1200. See [IP release and cooldown](#ip-release-and-cooldown). |
 
 **Review notes**
 
