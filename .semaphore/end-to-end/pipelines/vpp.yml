@@ -55,16 +55,16 @@ global_job_config:
     - name: PRIVATE_REGISTRY
       value: "quay.io/"
     - name: RELEASE_STREAM
-      value: "master"
+      value: "v3.32.0"
     - name: VPP_VERSION
-      value: "master"
+      value: "v3.32.0"
 
 blocks:
   - name: k8s-e2e ST
     dependencies: []
     task:
       jobs:
-        - name: v3.28 regression test
+        - name: v3.31 regression test
           commands:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           matrix:
@@ -75,9 +75,9 @@ blocks:
               values:
                 - "calico-vpp-nohuge.yaml"
             - env_var: RELEASE_STREAM
-              values: ["v3.28"]
+              values: ["v3.31"]
             - env_var: VPP_VERSION
-              values: ["v3.28.0"]
+              values: ["v3.31.0"]
 
         - name: VPP-kadm
           execution_time_limit:
