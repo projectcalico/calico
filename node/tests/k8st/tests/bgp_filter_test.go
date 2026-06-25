@@ -34,6 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,6 +74,10 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 const (
 	externalNodeV4 = "kube-node-extra"
 	externalNodeV6 = "kube-node-extra-v6"
+
+	// anchorNamespace holds the idle pod that pins an IPAM block to the egress
+	// node so it has something to advertise to the external routers.
+	anchorNamespace = "bgp-filter-anchor"
 
 	peerNameV4 = "node-extra.peer"
 	peerNameV6 = "node-extra-v6.peer"
@@ -173,11 +178,49 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	// Mark the egress node so the node-selected BGPPeers attach to it.
 	labelNode(t, ctx, env.egressNode, "egress", "true")
 
+	// Ensure the egress node actually owns an IPAM block to advertise. The
+	// export assertions check that the egress node's own default-pool block
+	// reaches the external routers, but nothing else guarantees a pod is
+	// scheduled there — in a dual-stack kind cluster the scheduler may place
+	// every application pod on other nodes, leaving the egress node with only a
+	// stale/empty IPv4 affinity (so the v4 checks pass by luck) and no IPv6
+	// block at all (so the v6 checks time out). Pin an idle pod here to claim a
+	// block in each family before any assertion runs.
+	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode)
+
 	// Establish BGPPeers from the egress node to each external router.
 	createBGPPeer(t, ctx, g, cli, peerNameV4, env.externalNodeIP)
 	createBGPPeer(t, ctx, g, cli, peerNameV6, env.externalNodeIP6)
 
 	return env
+}
+
+// ensureEgressNodeOwnsBlock pins an idle pod to the egress node so Calico
+// allocates it IPAM block affinities. The pod uses the default pools (no IPAM
+// annotation), so its block CIDRs match clusterRouteRegexV4/V6 and are covered
+// by the export-filter CIDRs. Because the kind cluster is dual-stack, a single
+// pod yields both an IPv4 and an IPv6 block; waiting for both IPs guarantees the
+// egress node has something to advertise in each family before the export
+// assertions run.
+func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node string) {
+	t.Helper()
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: anchorNamespace}}
+	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: anchorNamespace},
+		Spec: corev1.PodSpec{
+			NodeName:   node,
+			Containers: []corev1.Container{{Name: "anchor", Image: utils.Agnhost, Args: []string{"pause"}}},
+		},
+	}
+	g.Expect(cli.Create(ctx, pod)).To(Succeed(), "creating block-anchor pod on egress node %s", node)
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), pod) })
+
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv4Protocol)
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv6Protocol)
 }
 
 // testBGPFilterBasic adds a route to the external router, verifies import and
