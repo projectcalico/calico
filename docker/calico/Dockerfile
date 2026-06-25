@@ -17,6 +17,17 @@ COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
 RUN ln -s calico /shim/usr/bin/calicoctl && \
     ln -s calico /shim/usr/bin/calico-ipam
 
+# Pre-create a writable runtime directory for Calico's unix domain sockets
+# (e.g. Typha's diagnostics socket at /var/run/calico/typha.sock). The image
+# runs as uid 10001 (see USER in the final stage) with all capabilities
+# dropped, so it cannot create this directory itself under the root-owned
+# filesystem. /var and /var/run keep their normal root-owned 0755 perms (the
+# mkdir runs as root); only the calico subdirectory is chowned to the runtime
+# uid so that, and nothing above it, is writable by Typha. The minimal
+# CALICO_BASE has no /var or /var/run -> /run symlink, so this just adds the
+# tree to the image.
+RUN mkdir -p /shim/var/run/calico && chown 10001:10001 /shim/var/run/calico
+
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
 # (hash)releases — only the staged layer above it changes from one build to
