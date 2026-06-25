@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -417,6 +417,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			// ep1-1 -> ep2-1 goes via the service cluster IP, so Felix can report an un-stamped
+			// duplicate of the service flow if a flush beats DNAT correlation. Require the
+			// service-stamped flow but tolerate the empty-DstService duplicate.
+			TolerateServiceCorrelationRace: true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
@@ -733,8 +737,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ aggregation of flow log wit
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.IPIPMode = api.IPIPModeNever
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "5"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
@@ -1402,8 +1406,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 	BeforeEach(func() {
 		infra = getInfra()
 		opts = infrastructure.DefaultTopologyOptions()
-		opts.IPIPMode = api.IPIPModeNever
 		opts.FlowLogSource = infrastructure.FlowLogSourceLocalSocket
+		opts.IPIPMode = api.IPIPModeNever
 
 		opts.ExtraEnvVars["FELIX_FLOWLOGSFLUSHINTERVAL"] = "3"
 		opts.ExtraEnvVars["FELIX_FLOWLOGSCOLLECTORDEBUGTRACE"] = "true"
