@@ -5,8 +5,18 @@ PACKAGE_NAME ?= github.com/projectcalico/calico/third_party/envoy-gateway
 ENVOY_GATEWAY_IMAGE ?= envoy-gateway
 BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
-# For updating this version please see
-# https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
+# This is the single source of truth for the Envoy Gateway version. Renovate
+# bumps it here; tigera/operator picks it up via `make gen-versions`, which reads
+# this line and pins github.com/envoyproxy/gateway in the operator's go.mod (see
+# the operator's update-envoy-gateway-version target). The operator then pulls and
+# embeds the matching gateway-helm chart itself.
+# Keep literal `KEY=value` form (no spaces, no `?=`); Renovate regex + the
+# operator's update-envoy-gateway-version both parse this line.
+# Renovate only bumps this version, and patch releases only. On any bump,
+# especially a minor, manually verify the Envoy Gateway compatibility
+# matrix (https://gateway.envoyproxy.io/news/releases/matrix/) and update the
+# matching envoy-proxy (ENVOYBINARY_IMAGE) and envoy-ratelimit
+# (ENVOY_RATELIMIT_VERSION) pins; Renovate does not track those.
 ENVOY_GATEWAY_VERSION=v1.7.2
 
 ##############################################################################
