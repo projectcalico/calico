@@ -31,6 +31,13 @@
 #                            s3cmd's built-in AWS endpoint)
 #   CALICO_S3_HOST_BUCKET  - host-bucket template          (optional; defaults to
 #                            "%(bucket)s.${CALICO_S3_HOST}" when a host is set)
+#   CALICO_S3_EXPIRY_DAYS  - default object expiry in days  (optional). When set,
+#                            uploads carry an "Expires: <now + N days>" header.
+#                            NOTE: the Expires header is object metadata; it does
+#                            not by itself delete the object on most S3 backends.
+#                            Configure a matching bucket lifecycle rule (e.g.
+#                            `s3cmd expire s3://bucket --expiry-days=N`) for the
+#                            objects to actually be reclaimed.
 #
 # Callers refer to objects with s3:// URLs, typically via $S3_WORKFLOW_DIR or
 # $S3_CACHE_DIR, which the Semaphore global job config builds from
@@ -65,6 +72,20 @@ build_s3cmd_args() {
       "--host=${CALICO_S3_HOST}"
       "--host-bucket=${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}"
     )
+  fi
+}
+
+# Populate EXPIRY_ARGS with the --add-header flag for the configured default
+# object expiry, or leave it empty when CALICO_S3_EXPIRY_DAYS is unset.
+build_expiry_args() {
+  EXPIRY_ARGS=()
+  if [[ -n "${CALICO_S3_EXPIRY_DAYS:-}" ]]; then
+    local expires
+    if ! expires="$(date -u -d "+${CALICO_S3_EXPIRY_DAYS} days" '+%a, %d %b %Y %H:%M:%S GMT' 2>/dev/null)"; then
+      echo "s3-cmd: invalid CALICO_S3_EXPIRY_DAYS='${CALICO_S3_EXPIRY_DAYS}' (want an integer number of days)" >&2
+      exit 2
+    fi
+    EXPIRY_ARGS=("--add-header=Expires:${expires}")
   fi
 }
 
@@ -105,8 +126,9 @@ cmd_cp() {
       # Server-side copy (single source).
       s3cmd "${S3CMD_ARGS[@]}" cp "${recursive[@]}" "${srcs[0]}" "$dst"
     else
-      # Upload one or more local sources.
-      s3cmd "${S3CMD_ARGS[@]}" put "${recursive[@]}" "${srcs[@]}" "$dst"
+      # Upload one or more local sources, applying the default expiry (if any).
+      build_expiry_args
+      s3cmd "${S3CMD_ARGS[@]}" put "${recursive[@]}" "${EXPIRY_ARGS[@]}" "${srcs[@]}" "$dst"
     fi
   else
     # Download. s3cmd get has no wildcard support, so a trailing "/*" on the
