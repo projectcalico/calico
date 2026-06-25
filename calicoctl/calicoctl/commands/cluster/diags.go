@@ -15,9 +15,14 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -317,6 +322,10 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 			if strings.HasPrefix(pod.Name, "calico-node-") {
 				nodeDir := dir + "/" + nodeName
 				collectCalicoNodeDiags(nodeDir, nodeName, ns, pod.Name, bpfEnabled)
+			}
+			if strings.HasPrefix(pod.Name, "calico-typha") {
+				nodeDir := dir + "/" + nodeName
+				collectTyphaDiags(nodeDir, nodeName, ns, pod.Name)
 			}
 			cmds = append(cmds, diagsCmdsForPod(dir, linkDir, opts, nodeName, ns, &pod)...)
 			logsWanted--
@@ -921,6 +930,84 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 		}
 		common.ExecAllCmdsWriteToFile(cmds)
 	}
+}
+
+// collectTyphaDiags runs "calico component typha client dump" inside a Typha pod
+// and stores the snapshot that Typha is serving in the bundle.  Each Typha has
+// its own datastore connection, so capturing what each instance serves lets us
+// spot Typhas that have drifted out of sync with one another.
+//
+// The dump is requested in gzip+base64 form: a raw snapshot can be large and
+// can contain very long lines, and "kubectl exec" is known to drop the
+// connection on overly long lines.  We stream the result back through a base64
+// decoder and gunzip so that the bundle ends up containing directly-readable
+// newline-delimited JSON.
+//
+// This needs its own collector rather than the generic common.Cmd machinery
+// because that runs commands without a shell (so it can't pipe through
+// base64/gunzip) and buffers all output in memory; here we decode the stream
+// and write straight to disk, keeping memory bounded for large snapshots.
+func collectTyphaDiags(curNodeDir, nodeName, namespace, podName string) {
+	fmt.Printf("Collecting served snapshot for calico-typha pod %v in namespace %v on node %v...\n", podName, namespace, nodeName)
+
+	outDir := filepath.Join(curNodeDir, namespace)
+	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
+		fmt.Printf("ERROR creating directory %v: %v\n", outDir, err)
+		return
+	}
+	outPath := filepath.Join(outDir, podName+".typha-snapshot.ndjson")
+
+	// No "-t" (TTY): a pseudo-terminal would translate newlines and corrupt the
+	// base64 stream.
+	cmd := exec.Command("kubectl", "exec", "-n", namespace, podName, "-c", "calico-typha",
+		"--", "calico", "component", "typha", "client", "dump", "--format=gzip-base64")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Printf("ERROR setting up Typha dump for %v: %v\n", podName, err)
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("ERROR starting Typha dump for %v: %v\n", podName, err)
+		return
+	}
+	// Ensure the child can always finish writing (avoids a blocked pipe) and is
+	// reaped, whatever happens below.
+	defer func() {
+		_, _ = io.Copy(io.Discard, stdout)
+		if waitErr := cmd.Wait(); waitErr != nil {
+			fmt.Printf("WARNING: Typha dump for %v exited with error (snapshot may be missing/partial): %v\n%s\n",
+				podName, waitErr, stderr.String())
+		}
+	}()
+
+	out, err := os.Create(outPath)
+	if err != nil {
+		fmt.Printf("ERROR creating %v: %v\n", outPath, err)
+		return
+	}
+	defer out.Close()
+
+	if err := decodeBase64Gzip(stdout, out); err != nil {
+		// Typically means there was no decodable output, e.g. a Typha image that
+		// predates this command.  Don't treat it as fatal.
+		fmt.Printf("WARNING: Typha snapshot for %v is missing or incomplete (the Typha image may predate the dump command): %v\n", podName, err)
+	}
+}
+
+// decodeBase64Gzip reverses the dump command's "gzip-base64" encoding: it reads
+// (newline-wrapped) base64 from src, base64-decodes it, gunzips the result, and
+// writes the recovered newline-delimited JSON to dst.  base64.NewDecoder
+// transparently skips the newlines used to wrap the base64.
+func decodeBase64Gzip(src io.Reader, dst io.Writer) error {
+	gz, err := gzip.NewReader(base64.NewDecoder(base64.StdEncoding, src))
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	_, err = io.Copy(dst, gz)
+	return err
 }
 
 func collectUnsupportedAnnotations(tempDir string, directoryName string) {
