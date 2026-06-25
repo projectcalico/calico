@@ -1,0 +1,43 @@
+# Maps changed file paths to e2e profiles and ginkgo labels.
+# Used by the e2e-recommend workflow and the ci-e2e CLI wrapper
+# to suggest relevant tests for a PR.
+#
+# paths: glob patterns matched against files changed in the PR
+# profiles: which /e2e profiles to suggest
+# labels: ginkgo label-filter expression to suggest
+# reason: short description shown in the recommendation comment
+path_labels:
+  - paths: ["felix/bpf-*", "felix/bpf_*"]
+    profiles: ["bpf-gcp"]
+    labels: "Feature:BPF"
+    reason: "BPF dataplane changes"
+
+  - paths: ["felix/nft*"]
+    profiles: ["nft-gcp"]
+    labels: "Feature:NFTables"
+    reason: "nftables dataplane changes"
+
+  - paths: ["felix/ipsets*", "felix/iptables*"]
+    profiles: ["iptables-gcp"]
+    labels: "Feature:IPTables"
+    reason: "iptables dataplane changes"
+
+  - paths: ["felix/rules*", "felix/calc*"]
+    profiles: ["bpf-gcp", "iptables-gcp", "nft-gcp"]
+    labels: "Feature:Policy"
+    reason: "policy calculation changes"
+
+  - paths: ["felix/dataplane/windows*", "node/windows*"]
+    profiles: ["windows"]
+    labels: ""
+    reason: "Windows dataplane changes"
+
+  - paths: ["node/pkg/lifecycle*"]
+    profiles: ["iptables-gcp"]
+    labels: "Feature:NodeLifecycle"
+    reason: "node lifecycle changes"
+
+  - paths: ["e2e/*"]
+    profiles: ["iptables-gcp"]
+    labels: ""
+    reason: "e2e test changes"
