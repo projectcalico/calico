@@ -15,6 +15,7 @@
 package tlsutils
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -111,6 +112,37 @@ func CertificateVerifier(logCxt *log.Entry, roots *x509.CertPool, requiredCN, re
 	}
 }
 
+// CertificateVerifierAllowingSelf returns a peer-certificate verifier that
+// behaves exactly like CertificateVerifier, except that it also accepts a peer
+// that presents the exact certificate given in selfCertDER (the server's own
+// leaf certificate, in raw ASN.1 DER form).
+//
+// This exists so that a process running alongside Typha — for example
+// "calico typha client dump" inside the Typha pod — can make a loopback
+// connection to the local Typha by presenting Typha's own server certificate
+// as its client identity.  The Typha pod only has its server key/cert mounted,
+// not a Felix-style client certificate, so without this allowance it could not
+// satisfy the server's ClientCN/ClientURISAN check.  Accepting the server's own
+// certificate grants no extra privilege: anyone holding the server's private
+// key is already as trusted as Typha itself.
+//
+// If selfCertDER is empty this is equivalent to CertificateVerifier.
+func CertificateVerifierAllowingSelf(
+	logCxt *log.Entry,
+	roots *x509.CertPool,
+	requiredCN, requiredURISAN string,
+	selfCertDER []byte,
+) func([][]byte, [][]*x509.Certificate) error {
+	base := CertificateVerifier(logCxt, roots, requiredCN, requiredURISAN)
+	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if len(selfCertDER) > 0 && len(rawCerts) > 0 && bytes.Equal(rawCerts[0], selfCertDER) {
+			logCxt.Debug("Peer presented our own certificate; accepting loopback self-connection.")
+			return nil
+		}
+		return base(rawCerts, verifiedChains)
+	}
+}
+
 // The following certificate generators panic if they hit any error.  This is a bit poor, but OK in
 // practice because they are only used by test code.
 func PanicIfErr(err error) {
@@ -158,10 +190,18 @@ func MakeCACert(name string) (*x509.Certificate, *rsa.PrivateKey) {
 }
 
 func MakePeerCert(cn, uriSAN string, extKeyUsage x509.ExtKeyUsage, caCert *x509.Certificate, caKey *rsa.PrivateKey) ([]byte, *rsa.PrivateKey) {
+	return MakePeerCertWithEKUs(cn, uriSAN, []x509.ExtKeyUsage{extKeyUsage}, caCert, caKey)
+}
+
+// MakePeerCertWithEKUs is like MakePeerCert but allows more than one extended
+// key usage.  Real Calico certificates carry both server-auth and client-auth
+// usages (see key-cert-provisioner), which is what lets a process present
+// Typha's server certificate as a client certificate on a loopback connection.
+func MakePeerCertWithEKUs(cn, uriSAN string, extKeyUsages []x509.ExtKeyUsage, caCert *x509.Certificate, caKey *rsa.PrivateKey) ([]byte, *rsa.PrivateKey) {
 	log.WithFields(log.Fields{
-		"cn":          cn,
-		"uriSAN":      uriSAN,
-		"extKeyUsage": extKeyUsage,
+		"cn":           cn,
+		"uriSAN":       uriSAN,
+		"extKeyUsages": extKeyUsages,
 	}).Info("Make peer cert")
 	key, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
 	PanicIfErr(err)
@@ -179,7 +219,7 @@ func MakePeerCert(cn, uriSAN string, extKeyUsage x509.ExtKeyUsage, caCert *x509.
 		NotAfter:  notAfter,
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{extKeyUsage},
+		ExtKeyUsage:           extKeyUsages,
 		BasicConstraintsValid: true,
 	}
 
@@ -202,7 +242,7 @@ func MakePeerCert(cn, uriSAN string, extKeyUsage x509.ExtKeyUsage, caCert *x509.
 		rootPool.AddCert(caCert)
 		_, err = peerCert.Verify(x509.VerifyOptions{
 			Roots:     rootPool,
-			KeyUsages: []x509.ExtKeyUsage{extKeyUsage},
+			KeyUsages: extKeyUsages,
 		})
 		PanicIfErr(err)
 	}

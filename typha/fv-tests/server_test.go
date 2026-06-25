@@ -1326,6 +1326,15 @@ var _ = Describe("with server requiring TLS", func() {
 		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-untrusted.key"))
 		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-untrusted.crt"))
 
+		// Typha server cert with both server-auth and client-auth usages, as real
+		// Calico certificates have.  This lets a loopback client (e.g. "calico
+		// typha client dump" inside the Typha pod) present the server's own cert
+		// as its client identity.
+		serverCert, serverKey = tlsutils.MakePeerCertWithEKUs(serverCN, serverURISAN,
+			[]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}, caCert, caKey)
+		tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server-dualeku.key"))
+		tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server-dualeku.crt"))
+
 		// Typha client with good CN.
 		clientCert, clientKey := tlsutils.MakePeerCert(clientCN, "", x509.ExtKeyUsageClientAuth, caCert, caKey)
 		tlsutils.WriteKey(clientKey, filepath.Join(certDir, "goodcn.key"))
@@ -1617,6 +1626,27 @@ var _ = Describe("with server requiring TLS", func() {
 		It("TLS connection with good URI should fail", testTLSGoodURI(false))
 
 		It("TLS connection with good CN and URI should fail", testTLSGoodCNURI(false))
+	})
+
+	Describe("loopback self-connection", func() {
+		// The server requires a client CN that the server's own certificate does
+		// NOT have, so a normal client presenting the server cert would be
+		// rejected on CN.  The server is configured to accept a client that
+		// presents its own (dual-usage) certificate, which is how "calico typha
+		// client dump" connects to the local Typha inside the Typha pod.
+		BeforeEach(func() {
+			requiredClientCN = clientCN
+			requiredClientURISAN = clientURISAN
+			serverCertName = "server-dualeku"
+		})
+
+		It("should allow a client presenting the server's own certificate", func() {
+			testConnection("server-dualeku", true)
+		})
+
+		It("should still allow a normal client with a good CN", testTLSGoodCN(true))
+
+		It("should still reject a non-self client with a bad CN and URI", testTLSBadCNURI(false))
 	})
 
 	Describe("handshake", func() {
