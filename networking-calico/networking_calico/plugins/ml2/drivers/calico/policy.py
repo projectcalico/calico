@@ -24,15 +24,14 @@ from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
 LOG = log.getLogger(__name__)
 
-# Each OpenStack security group is mapped to a Calico NetworkPolicy.  A VM's
-# security group membership is represented by the VM having a label for each
-# security group that it belongs to; thus the selector
-# 'has(<security-group-label>)' represents the VMs that belong to that security
-# group.
+# Each OpenStack security group is mapped to a Calico NetworkPolicy.  A VM's security
+# group membership is represented by the VM having a label for each security group that
+# it belongs to; thus the selector 'has(<security-group-label>)' represents the VMs that
+# belong to that security group.
 #
-# The label for each security group is 'sg.projectcalico.org/openstack-'
-# followed by the security group ID, and the name of the NetworkPolicy for each
-# security group is 'ossg.default.'  followed by the security group ID.
+# The label for each security group is 'sg.projectcalico.org/openstack-' followed by the
+# security group ID, and the name of the NetworkPolicy for each security group is
+# 'ossg.default.'  followed by the security group ID.
 SG_LABEL_PREFIX = "sg.projectcalico.org/openstack-"
 SG_NAME_LABEL_PREFIX = "sg-name.projectcalico.org/openstack-"
 SG_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH - len(SG_NAME_LABEL_PREFIX)
@@ -45,24 +44,22 @@ class PolicySyncer(ResourceSyncer):
         super(PolicySyncer, self).__init__(db, "NetworkPolicy")
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
-        # When set (during resync), maps each security-group ID to the list
-        # of its rules.  Populated by get_from_neutron() before calling
-        # through to the base class, and read by neutron_to_etcd_write_data()
-        # to avoid per-SG DB round-trips.
+
+        # When set (during resync), maps each security-group ID to the list of its
+        # rules.  Populated by get_from_neutron() and read by
+        # neutron_to_etcd_write_data() to avoid per-SG DB round-trips.
         self._rules_by_sg = None
 
     def resync(self, context, scope):
-        # The bulk-fetch happens inside get_from_neutron, AFTER the base
-        # class's etcd-first read.  Clear self._rules_by_sg in finally
-        # so a subsequent resync on the same instance starts cold.  In
-        # production this is dead code: each resync runs on a fresh
-        # PolicySyncer constructed by Scope.run() and GC'd when the
-        # resync returns.  But the test framework reuses the driver's
-        # syncer across multiple _trigger_resync() calls, and without
-        # the reset the second call's compare loop would read stale
-        # rules from the first call's snapshot.  The postcommit-hook
-        # path doesn't read self._rules_by_sg at all -- write_sgs_to_etcd
-        # always does a fresh DB query -- so the reset has no effect
+        # The bulk-fetch happens inside get_from_neutron, AFTER the base class's
+        # etcd-first read.  Clear self._rules_by_sg in finally so a subsequent resync on
+        # the same instance starts cold.  In production this is dead code: each resync
+        # runs on a fresh PolicySyncer constructed by Scope.run() and GC'd when the
+        # resync returns.  But the test framework reuses the driver's syncer across
+        # multiple _trigger_resync() calls, and without the reset the second call's
+        # compare loop would read stale rules from the first call's snapshot.  The
+        # postcommit-hook path doesn't read self._rules_by_sg at all --
+        # write_sgs_to_etcd always does a fresh DB query -- so the reset has no effect
         # there.
         try:
             return super(PolicySyncer, self).resync(context, scope)
@@ -77,13 +74,12 @@ class PolicySyncer(ResourceSyncer):
                 context, filters={"id": list(scope.ids())}
             )
 
-        # Bulk-fetch the rules for every SG in scope in one query, rather
-        # than one query per SG during the compare loop.  At scale this is
-        # what changes the policy resync DB cost from O(N) round-trips to
-        # O(1).  Done here, after the base class's etcd read, so the rules
-        # we cache reflect a Neutron snapshot taken AFTER our etcd snapshot
-        # -- preserving the etcd-first ordering's CAS-based protection
-        # against concurrent dynamic SG-rule updates.
+        # Bulk-fetch the rules for every SG in scope in one query, rather than one query
+        # per SG during the compare loop.  At scale this is what changes the policy
+        # resync DB cost from O(N) round-trips to O(1).  Done here, after the base
+        # class's etcd read, so the rules we cache reflect a Neutron snapshot taken
+        # AFTER our etcd snapshot -- preserving the etcd-first ordering's CAS-based
+        # protection against concurrent dynamic SG-rule updates.
         sg_ids = [sg["id"] for sg in sgs]
         rules_by_sg = {}
         if sg_ids:
@@ -139,13 +135,13 @@ class PolicySyncer(ResourceSyncer):
 
     def neutron_to_etcd_write_data(self, name, sg, context, reread=False):
         if reread:
-            # We don't need to reread the SG row itself here, because we don't
-            # use any information from it, apart from its ID as a key for the
-            # following rules.
+            # We don't need to reread the SG row itself here, because we don't use any
+            # information from it, apart from its ID as a key for the following rules.
             pass
-        # Use the bulk-prefetched rule cache when running inside resync;
-        # fall back to a per-SG query otherwise (e.g. when called from
-        # write_sgs_to_etcd on a postcommit hook).
+
+        # Use the bulk-prefetched rule cache when running inside resync; fall back to a
+        # per-SG query otherwise (e.g. when called from write_sgs_to_etcd on a
+        # postcommit hook).
         if self._rules_by_sg is not None:
             rules = self._rules_by_sg.get(sg["id"], [])
         else:
@@ -165,8 +161,8 @@ class PolicySyncer(ResourceSyncer):
 def policy_spec(sgid, rules):
     """Generate JSON NetworkPolicySpec for the given security group."""
 
-    # <rules> can include those for several security groups.  Pick out the
-    # rules for the security group that we are translating right now.
+    # <rules> can include those for several security groups.  Pick out the rules for the
+    # security group that we are translating right now.
     sg_rules = (r for r in rules if r["security_group_id"] == sgid)
 
     # Split the rules based on direction, and map to Calico form.
@@ -203,21 +199,17 @@ def _neutron_rule_to_etcd_rule(rule):
     # ?expanded=create-security-group-rule-detail#
     # security-group-rules-security-group-rules:
     #
-    # "The IP protocol can be represented by a string, an integer, or
-    # null. Valid string or integer values are any or 0, ah or 51,
-    # dccp or 33, egp or 8, esp or 50, gre or 47, icmp or 1, icmpv6 or
-    # 58, igmp or 2, ipip or 4, ipv6-encap or 41, ipv6-frag or 44,
-    # ipv6-icmp or 58, ipv6-nonxt or 59, ipv6-opts or 60, ipv6-route
-    # or 43, ospf or 89, pgm or 113, rsvp or 46, sctp or 132, tcp or
-    # 6, udp or 17, udplite or 136, vrrp or 112. Additionally, any
-    # integer value between [0-255] is also valid. The string any (or
-    # integer 0) means all IP protocols. See the constants in
-    # neutron_lib.constants for the most up-to-date list of supported
-    # strings."
+    # "The IP protocol can be represented by a string, an integer, or null. Valid string
+    # or integer values are any or 0, ah or 51, dccp or 33, egp or 8, esp or 50, gre or
+    # 47, icmp or 1, icmpv6 or 58, igmp or 2, ipip or 4, ipv6-encap or 41, ipv6-frag or
+    # 44, ipv6-icmp or 58, ipv6-nonxt or 59, ipv6-opts or 60, ipv6-route or 43, ospf or
+    # 89, pgm or 113, rsvp or 46, sctp or 132, tcp or 6, udp or 17, udplite or 136, vrrp
+    # or 112. Additionally, any integer value between [0-255] is also valid. The string
+    # any (or integer 0) means all IP protocols. See the constants in
+    # neutron_lib.constants for the most up-to-date list of supported strings."
     #
-    # In addition we have previously supported -1 for any, and 'icmp'
-    # to mean 'icmpv6' when the ethertype is IPv6; so we also retain
-    # those for back-compatibility.
+    # In addition we have previously supported -1 for any, and 'icmp' to mean 'icmpv6'
+    # when the ethertype is IPv6; so we also retain those for back-compatibility.
     if rule["protocol"] is None or rule["protocol"] in [-1, 0, "any"]:
         # In the Calico data model, 'any' is represented by omitting
         # the 'protocol' field.
@@ -235,8 +227,7 @@ def _neutron_rule_to_etcd_rule(rule):
 
     port_spec = None
     if rule["protocol"] == "icmp" or rule["protocol"] == "ipv6-icmp":
-        # OpenStack stashes the ICMP match criteria in
-        # port_range_min/max.
+        # OpenStack stashes the ICMP match criteria in port_range_min/max.
         icmp_fields = {}
         icmp_type = rule["port_range_min"]
         if icmp_type is not None and icmp_type != -1:
@@ -247,8 +238,8 @@ def _neutron_rule_to_etcd_rule(rule):
         if icmp_fields:
             etcd_rule["icmp"] = icmp_fields
     else:
-        # src/dst_ports is a list in which each entry can be a
-        # single number, or a string describing a port range.
+        # src/dst_ports is a list in which each entry can be a single number, or a
+        # string describing a port range.
         if rule["port_range_min"] == -1:
             port_spec = None
         elif rule["port_range_min"] == rule["port_range_max"]:
