@@ -216,6 +216,7 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFOverlayIPOnDevice               bool
 	BPFPolicyDebugEnabled              bool
 	BPFDisableUnprivileged             bool
 	BPFJITHardening                    string
