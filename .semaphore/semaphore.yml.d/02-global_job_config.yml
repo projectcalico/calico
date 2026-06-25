@@ -13,6 +13,13 @@ global_job_config:
     # Destination for the CI build cache and per-workflow artifacts. The bucket
     # and key prefix are plain configuration; the credentials come from the
     # go-build-cache-hetzner-s3-credentials secret above.
+    #
+    # Default object expiry, in days, applied to every upload via .semaphore/s3-cmd
+    # (as an "Expires" header). This is metadata only — a matching bucket lifecycle
+    # rule must be configured on the S3 bucket for objects to actually be deleted
+    # (e.g. `s3cmd expire s3://<bucket> --expiry-days=14`). Leave unset to disable.
+    - name: CALICO_S3_EXPIRY_DAYS
+      value: "14"
     - name: BUILDKIT_PROGRESS
       value: plain
     - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
@@ -157,8 +164,11 @@ global_job_config:
             cache delete "$key" || true
             cache store "$key" /tmp/build-cache.tar.zstd
           else
+            # We have cd'd to $HOME; the working copy (with the s3-cmd wrapper)
+            # lives at ./${CALICO_DIR_NAME}. Going through the wrapper rather than
+            # bare s3cmd applies the CALICO_S3_EXPIRY_DAYS default expiry.
             s3_branch_cache_dir="${S3_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            s3cmd put /tmp/build-cache.tar.zstd "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+            "${CALICO_DIR_NAME}/.semaphore/s3-cmd" cp /tmp/build-cache.tar.zstd "$s3_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
           fi
         fi
       - cd "$CALICO_DIR"
