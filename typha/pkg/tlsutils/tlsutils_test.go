@@ -203,6 +203,47 @@ var _ = DescribeTable("CertificateVerifier",
 	},
 	genTestCases())
 
+var _ = Describe("CertificateVerifierAllowingSelf", func() {
+	// The "self" certificate is signed by the untrusted CA and has a CN that
+	// does not match the required client CN, so the normal verifier would reject
+	// it on both counts.  Presenting it should nonetheless be accepted because
+	// it is byte-identical to the server's own certificate.
+	selfCertBytes := makePeerCert(&certConfig{Signature: "SignedByUntrusted", CN: "typha-server"})
+	// A genuine, correctly-signed client cert, used to check the base path still
+	// works through the wrapper.
+	goodClientBytes := makePeerCert(&certConfig{Signature: "SignedCA1", CN: goodCN})
+	// Some other untrusted cert that is neither self nor valid.
+	impostorBytes := makePeerCert(&certConfig{Signature: "SignedByUntrusted", CN: badCN})
+
+	roots := x509.NewCertPool()
+	roots.AddCert(certCA1)
+
+	newVerifier := func(selfDER []byte) func([][]byte, [][]*x509.Certificate) error {
+		return tlsutils.CertificateVerifierAllowingSelf(
+			log.WithField("test", "self"), roots, goodCN, "", selfDER)
+	}
+
+	It("accepts a peer presenting the server's own certificate", func() {
+		err := newVerifier(selfCertBytes)([][]byte{selfCertBytes}, nil)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("still rejects a different, untrusted certificate", func() {
+		err := newVerifier(selfCertBytes)([][]byte{impostorBytes}, nil)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("still accepts a valid client cert via the normal path", func() {
+		err := newVerifier(selfCertBytes)([][]byte{goodClientBytes}, nil)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("behaves like the base verifier when no self cert is given", func() {
+		err := newVerifier(nil)([][]byte{selfCertBytes}, nil)
+		Expect(err).To(HaveOccurred())
+	})
+})
+
 func makePeerCert(cfg *certConfig) []byte {
 	log.WithField("cfg", cfg).Info("Make peer cert")
 	var (

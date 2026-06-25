@@ -140,6 +140,43 @@ with, for example:
 docker run --privileged --net=host -e TYPHA_LOGSEVERITYSCREEN=INFO calico/typha
 ```
 
+## Diagnostics: dumping a Typha's snapshot
+
+Because each Typha has its own datastore connection, separate Typha instances
+can drift out of sync with one another.  To capture what a particular Typha is
+serving, use the `client dump` subcommand of the combined `calico` binary
+(which ships in the Typha image):
+
+```bash
+# Inside a Typha pod (reads Typha's own config to find the port and certs):
+calico component typha client dump                 # all syncer types, NDJSON
+calico component typha client dump --type=felix    # one syncer type
+calico component typha client dump --format=gzip-base64   # compact, kubectl-exec-safe
+```
+
+The dump connects to the Typha as a sync client once per syncer type and
+streams the resulting snapshot to stdout.  Each syncer type's keys are framed
+with `begin`/`end` marker lines.  `--format=gzip-base64` gzips the
+newline-delimited JSON and base64-encodes it, wrapped into short lines so it
+survives `kubectl exec`; decode it with `base64 -d | gunzip`.
+
+The dump is bounded: if no updates arrive for `--idle-timeout` (default 10s)
+and a syncer type has not yet reached in-sync, that syncer type is stopped and
+its `end` marker records a `timed-out` status, so a stuck or never-in-sync
+Typha can't hang the dump.  The timer resets on every batch of updates, so a
+large but healthy snapshot that keeps streaming will not time out.  Pass
+`--idle-timeout=0` to wait indefinitely.
+
+`calicoctl cluster diags` runs this command in every Typha pod automatically and
+stores the decoded snapshot in the bundle so out-of-sync Typhas can be compared.
+
+When run inside the Typha pod with no explicit TLS flags, the command presents
+Typha's *own* server certificate as its client identity.  The Typha server is
+configured to accept a loopback client that presents its own certificate (see
+`CertificateVerifierAllowingSelf` in `pkg/tlsutils`); this grants no extra
+privilege because holding the server key already makes the caller as trusted as
+Typha itself.
+
 ## License
 
 Calico binaries are licensed under the [Apache v2.0 license](LICENSE), with the exception of some [GPL licensed eBPF programs](https://github.com/projectcalico/felix/tree/master/bpf-gpl).

@@ -408,11 +408,20 @@ func (s *Server) serve(cxt context.Context) {
 		if !ok {
 			logCxt.Panic("Failed to add CA data to pool")
 		}
-		tlsConfig.VerifyPeerCertificate = tlsutils.CertificateVerifier(
+		// Allow a loopback client that presents our own server certificate as its
+		// client identity (e.g. "calico typha client dump" running inside the
+		// Typha pod, which only has the server cert/key mounted).  cert.Certificate
+		// is the chain in DER form; element 0 is our leaf certificate.
+		var selfCertDER []byte
+		if len(cert.Certificate) > 0 {
+			selfCertDER = cert.Certificate[0]
+		}
+		tlsConfig.VerifyPeerCertificate = tlsutils.CertificateVerifierAllowingSelf(
 			logCxt,
 			tlsConfig.ClientCAs,
 			s.config.ClientCN,
 			s.config.ClientURISAN,
+			selfCertDER,
 		)
 		l, err = tls.Listen("tcp", laddr, tlsConfig)
 	} else {
