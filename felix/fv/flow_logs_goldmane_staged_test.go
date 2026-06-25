@@ -417,6 +417,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ goldmane flow log with stag
 			MatchEnforcedPolicies:  true,
 			MatchPendingPolicies:   true,
 			Includes:               []flowlogs.IncludeFilter{flowlogs.IncludeByDestPort(wepPort)},
+			// ep1-1 -> ep2-1 goes via the service cluster IP, so Felix can report an un-stamped
+			// duplicate of the service flow if a flush beats DNAT correlation. Require the
+			// service-stamped flow but tolerate the empty-DstService duplicate.
+			TolerateServiceCorrelationRace: true,
 		})
 
 		ep1_1_Meta := endpoint.Metadata{
