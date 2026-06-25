@@ -226,7 +226,7 @@ class ResourceSyncer(object):
                     # because they're what etcd_write_data_matches_existing
                     # just declared unequal.
                     LOG.info(
-                        "Resync updating %s %s in etcd: old=%s, new=%s",
+                        "Resync needs to update %s %s in etcd: old=%s, new=%s",
                         self.resource_kind,
                         name,
                         data,
