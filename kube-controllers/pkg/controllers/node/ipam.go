@@ -638,17 +638,22 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	blockCIDR := key.CIDR.String()
 	log.WithField("block", blockCIDR).Info("Received block delete")
+	c.forgetBlock(blockCIDR)
+}
 
-	// Remove allocations that were contributed by this block.
-	allocations := c.allocationsByBlock[blockCIDR]
-	for _, alloc := range allocations {
+// forgetBlock removes all cached state for a block. Every path that stops tracking a
+// block - a block delete from the datastore, or an affinity release of an empty block
+// in releaseUnusedBlocks - must funnel through here so the cache maps can't drift out
+// of sync.
+func (c *IPAMController) forgetBlock(blockCIDR string) {
+	// Release any allocations the block contributed.
+	for _, alloc := range c.allocationsByBlock[blockCIDR] {
 		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
-	// Remove from raw block storage.
+	// Drop the block from its node, removing the node entry if it has no blocks left.
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
-		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
 		if len(c.blocksByNode[n]) == 0 {
 			delete(c.blocksByNode, n)
@@ -817,20 +822,11 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 			continue
 		}
 
-		// Update internal state. We released affinity on an empty block, and so
-		// it will have been deleted. It's important that we update blocksByNode here
-		// in case there are other empty blocks allocated to the node so that we don't
+		// Update internal state. We released affinity on an empty block, and so it will
+		// have been deleted. Forgetting the block updates blocksByNode, which matters in
+		// case there are other empty blocks affine to the node, so that we don't
 		// accidentally release all of the node's blocks.
-		delete(c.emptyBlocks, blockCIDR)
-		delete(c.blocksByNode[node], blockCIDR)
-		if len(c.blocksByNode[node]) == 0 {
-			delete(c.blocksByNode, node)
-		}
-		delete(c.nodesByBlock, blockCIDR)
-		delete(c.allBlocks, blockCIDR)
-
-		c.blockReleaseTracker.onBlockDeleted(blockCIDR)
-		c.poolManager.onBlockDeleted(blockCIDR)
+		c.forgetBlock(blockCIDR)
 	}
 	return nil
 }
