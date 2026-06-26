@@ -62,6 +62,11 @@ HELM=${REPO_ROOT}/bin/helm
 CHART=${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz
 VALUES_FILE=${VALUES_FILE:-${INFRA_DIR}/values.yaml}
 
+# Readiness gate timeouts, in seconds. Overridable so callers that bring up a
+# slower or more heavily loaded cluster can give it more time.
+KIND_TIGERASTATUS_TIMEOUT=${KIND_TIGERASTATUS_TIMEOUT:-600}
+KIND_POD_READY_TIMEOUT=${KIND_POD_READY_TIMEOUT:-300}
+
 : ${kubectl:=${REPO_ROOT}/hack/test/kind/kubectl}
 
 # collect_diags prints detailed cluster diagnostics on failure.
@@ -138,10 +143,10 @@ function wait_pod_ready() {
       ${kubectl} get po -o wide $args || true
       sleep 1
     done;
-    ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
+    ${kubectl} wait pod --for=condition=Ready --timeout=${KIND_POD_READY_TIMEOUT}s $args
   ) & pid=$!
   # Start a second background process that implements the actual timeout.
-  ( sleep 300; kill $pid ) 2>/dev/null & watchdog=$!
+  ( sleep ${KIND_POD_READY_TIMEOUT}; kill $pid ) 2>/dev/null & watchdog=$!
   set +e
 
   wait $pid 2>/dev/null
@@ -150,7 +155,7 @@ function wait_pod_ready() {
   wait $watchdog 2>/dev/null
 
   if [ $rc -ne 0 ]; then
-    echo "Pod $args failed to become ready within 300s"
+    echo "Pod $args failed to become ready within ${KIND_POD_READY_TIMEOUT}s"
   fi
 
   set -e
@@ -158,10 +163,17 @@ function wait_pod_ready() {
 }
 
 echo "Set ipv6 address on each node"
-docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
-docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
-docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
-docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
+# Iterate over the actual node containers for this KIND_NAME rather than
+# hardcoding kind-* names, so the script works for clusters with a non-default
+# name or a different worker count.
+i=1
+for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
+  case "${node}" in
+    *-control-plane) docker exec "${node}" ip -6 addr replace 2001:20::8/64 dev eth0 ;;
+    *)               docker exec "${node}" ip -6 addr replace "2001:20::${i}/64" dev eth0
+                     i=$((i+1)) ;;
+  esac
+done
 
 echo
 
@@ -202,7 +214,8 @@ ${kubectl} wait --for=condition=Established --timeout=2m \
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
 echo "Wait for all TigeraStatus resources to become Available"
-for attempt in $(seq 1 120); do
+tigerastatus_attempts=$(( KIND_TIGERASTATUS_TIMEOUT / 5 ))
+for attempt in $(seq 1 ${tigerastatus_attempts}); do
   # Get all tigerastatus resources and check if any are not Available.
   not_ready=$(${kubectl} get tigerastatus -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.conditions[?(@.type=="Available")]}{.status}{end}{"\n"}{end}' 2>/dev/null \
     | grep -v "True$" || true)
@@ -217,8 +230,8 @@ for attempt in $(seq 1 120); do
     fi
   fi
 
-  if [ "$attempt" -eq 120 ]; then
-    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after 600s"
+  if [ "$attempt" -eq "${tigerastatus_attempts}" ]; then
+    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after ${KIND_TIGERASTATUS_TIMEOUT}s"
     ${kubectl} get tigerastatus 2>&1 || true
     echo "Not ready:"
     echo "$not_ready"
