@@ -236,6 +236,15 @@ rules:
       - watch
   - apiGroups:
       - apps
+    resources:
+      # The status manager reads ReplicaSets to find a Deployment's active revision.
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
     resourceNames:
       - tigera-operator
     resources:
