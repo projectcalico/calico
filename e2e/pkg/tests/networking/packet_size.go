@@ -96,6 +96,10 @@ func withPacketSizeServer(pod *v1.Pod) {
 	for i := range pod.Spec.Containers {
 		pod.Spec.Containers[i].Image = images.PacketSizeServer
 		pod.Spec.Containers[i].Args = nil
+		// PacketSizeServer is the multi-mode rapidclient image; MODE=server
+		// selects the HTTP/UDP dataplane server.
+		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+			v1.EnvVar{Name: "MODE", Value: "server"})
 		if pod.Spec.Containers[i].ReadinessProbe != nil && pod.Spec.Containers[i].ReadinessProbe.HTTPGet != nil {
 			pod.Spec.Containers[i].ReadinessProbe.HTTPGet.Path = "/length/1"
 		}
