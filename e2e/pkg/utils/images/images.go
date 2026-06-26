@@ -66,13 +66,15 @@ const (
 	EchoServer = Agnhost
 
 	// PacketSizeServer is an HTTP/UDP server for tests that need controlled
-	// payload sizes (e.g. MTU boundary, fragmentation, encap overhead).
-	// Endpoints, all on the same port (default 5000):
+	// payload sizes (e.g. MTU boundary, fragmentation, encap overhead). It is the
+	// multi-mode rapidclient image (same as RapidClient) run with MODE=server,
+	// set by the packet-size pod customizer. Endpoints, all on the same port
+	// (default 5000):
 	//   - GET /length/<N>: response body is exactly N bytes.
-	//   - POST /post: echoes the request body.
-	//   - UDP: echoes received datagrams (socat-backed, 10KB buffer).
-	// Source: tigera/k8s-e2e/images/flask.
-	PacketSizeServer = "calico/k8s-e2e-dataplane-server:stable"
+	//   - POST /post: returns the number of bytes received.
+	//   - UDP: echoes received datagrams.
+	// Source: e2e/images/rapidclient/server.go (see that dir's DESIGN.md).
+	PacketSizeServer = "quay.io/tigeradev/rapidclient"
 
 	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
 	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"

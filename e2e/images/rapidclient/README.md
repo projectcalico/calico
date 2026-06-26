@@ -1,4 +1,31 @@
-# RapidClient
+# rapidclient
+
+A multi-mode e2e test utility image. The mode is selected by the `MODE`
+environment variable; an unset `MODE` defaults to `client` (the original
+behaviour). See [DESIGN.md](DESIGN.md) for the full contract and rationale.
+
+## Modes
+
+| `MODE` | Purpose |
+|---|---|
+| `client` (default) | HTTP client that forces source-port reuse — for Maglev / load-balancer tests. Configured via flags (below). |
+| `server` | HTTP + UDP "dataplane server" for packet-size tests (ports the former `k8s-e2e-dataplane-server` flask image). Configured via the `PORT` env (default 5000). |
+
+### `server` mode
+
+Listens for TCP HTTP and UDP echo on the same port (`PORT`, default 5000),
+dual-stack:
+
+- `GET /length/{N}` — response body of exactly `N` whitespace-free bytes.
+- `POST /post` — returns the number of bytes received (GET returns help text).
+- `GET /` — static sanity string.
+- UDP — echoes each datagram back verbatim.
+
+```bash
+docker run --rm -e MODE=server -p 5000:5000 quay.io/tigeradev/rapidclient
+```
+
+## `client` mode
 
 A simple HTTP client tool that forces source port reuse by bypassing TIME_WAIT state, designed for testing Maglev consistent hashing and load balancer behavior.
 
