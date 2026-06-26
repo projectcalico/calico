@@ -479,8 +479,14 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
           ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
           one neutron-server in the deployment.
         """
+        # CalicoManagerWorker gets a back-reference to the driver so its
+        # stop() can reach self.elector and step down cleanly on graceful
+        # shutdown -- otherwise the elector greenlet is killed without
+        # running its finally _attempt_step_down, the election key stays
+        # in etcd until the lease expires, and the next neutron-server
+        # restart has to wait out that TTL before anyone can win.
         services = [
-            CalicoManagerWorker(),
+            CalicoManagerWorker(driver=self),
             CalicoAgentStatusWatcherWorker(),
             CalicoEndpointStatusWatcherWorker(),
         ]
