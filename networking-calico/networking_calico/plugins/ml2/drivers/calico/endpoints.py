@@ -239,19 +239,23 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                         }
                     )
 
-            # Network rows, indexed by id.
+            # Network rows, indexed by id.  We materialise just the columns we need
+            # ({"name": ...}) inside the reader, rather than caching the ORM instance:
+            # that way the downstream attribute access happens while the row is
+            # guaranteed attached to an active session, and we do not rely on oslo.db's
+            # expire_on_commit / detached-attribute behaviour after the reader exits.
             networks_by_id = {}
             if network_ids:
                 q = context.session.query(models_v2.Network).filter(
                     models_v2.Network.id.in_(network_ids)
                 )
                 for net in q:
-                    networks_by_id[net.id] = net
+                    networks_by_id[net.id] = {"name": net.name}
 
-            # SG bindings, grouped by port_id (a port can have multiple SGs).
-            # Use the plugin API (with a list filter) rather than
-            # session.query(SecurityGroupPortBinding) so this path is
-            # consistent with the per-port code that uses the same API.
+            # SG bindings, grouped by port_id (a port can have multiple SGs).  Use the
+            # plugin API (with a list filter) rather than
+            # session.query(SecurityGroupPortBinding) so this path is consistent with
+            # the per-port code that uses the same API.
             sg_ids_by_port = {}
             if port_ids:
                 bindings = self.db._get_port_security_group_bindings(
@@ -262,7 +266,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                         b["security_group_id"]
                     )
 
-            # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.
+            # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.  Materialise
+            # each rule into a plain dict containing only the columns build_qos_controls
+            # reads, so that subsequent access (in
+            # _get_extra_port_information_from_bulk, after the reader exits) does not
+            # depend on the ORM instances still being attached to a live session.  This
+            # mirrors the per-port path's choice to call build_qos_controls inside its
+            # CONTEXT_READER block.
             qos_bw_by_policy = {}
             qos_pr_by_policy = {}
             if qos_ids:
@@ -270,12 +280,23 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                     qos_models.QosBandwidthLimitRule.qos_policy_id.in_(qos_ids)
                 )
                 for r in q:
-                    qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(r)
+                    qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kbps": r.max_kbps,
+                            "max_burst_kbps": r.max_burst_kbps,
+                        }
+                    )
                 q = context.session.query(qos_models.QosPacketRateLimitRule).filter(
                     qos_models.QosPacketRateLimitRule.qos_policy_id.in_(qos_ids)
                 )
                 for r in q:
-                    qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(r)
+                    qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kpps": r.max_kpps,
+                        }
+                    )
 
         # Subnet rows for every subnet referenced by any fixed IP (for gateway_ip).
         subnet_ids = list(
@@ -712,7 +733,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         if network is not None:
             try:
                 port_extra.network_name = datamodel_v3.sanitize_label_name_value(
-                    network.name,
+                    network["name"],
                     NETWORK_NAME_MAX_LENGTH,
                 )
             except Exception:
