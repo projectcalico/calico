@@ -248,17 +248,34 @@ func curatedConfig(name string) (curatedSet, error) {
 	}
 }
 
-// envoyGatewayCuratedSet mirrors the curated configuration in
-// envoyproxy/gateway v1.7.0's internal/gatewayapi/conformance/suite.go
-// for the default (non-gatewayNamespaceMode) operating mode. Calico's
-// Gateway API implementation is a Calico-deployed Envoy Gateway, so the
-// supported feature surface is, by construction, the same.
+// envoyGatewayCuratedSet mirrors the curated conformance configuration in
+// envoyproxy/gateway's own conformance suite. Calico's Gateway API
+// implementation is a Calico-deployed Envoy Gateway, so the supported
+// feature surface is, by construction, the same. The tigera-operator
+// deploys Envoy Gateway with provider.kubernetes.deploy.type=GatewayNamespace,
+// so we mirror the GatewayNamespace-mode skip lists.
 //
-// Source ref: https://github.com/envoyproxy/gateway/blob/v1.7.0/internal/gatewayapi/conformance/suite.go
+// Source ref (v1.8.0, the bundled version):
+// https://github.com/envoyproxy/gateway/blob/v1.8.0/test/conformance/suite.go
 func envoyGatewayCuratedSet() curatedSet {
 	skipFeatures := sets.New(
 		features.GatewayStaticAddressesFeature.Name,
 		features.GatewayInfrastructurePropagationFeature.Name,
+		// Envoy Gateway v1.8.0 skips this in its own conformance suite
+		// (SkipFeatures, both modes): detecting misdirected HTTPS requests
+		// (SNI vs Host mismatch -> 421) is not supported by the data plane
+		// as deployed. Skipping the feature skips the
+		// HTTPRouteHTTPSListenerDetectMisdirectedRequests test.
+		features.GatewayHTTPSListenerDetectMisdirectedRequestsFeature.Name,
+		// ListenerSet (gateway-api v1.5.x, experimental channel) requires the
+		// Envoy Gateway controller to be started with
+		// extensionApis.enableListenerSet=true. The tigera-operator does not
+		// set that today, so a Calico-deployed Envoy Gateway does not honor
+		// ListenerSet resources -- claiming the feature here makes the suite
+		// run the ListenerSet tests and they fail. Opt out until the operator
+		// enables the feature by default. Remove this line once enableListenerSet
+		// is on, at which point the ListenerSet tests run.
+		features.ListenerSetFeature.Name,
 	)
 
 	supported := sets.New[features.FeatureName]()
@@ -285,6 +302,10 @@ func envoyGatewayCuratedSet() curatedSet {
 		SkipTests: []string{
 			tests.GatewayStaticAddresses.ShortName,
 			tests.GatewayInfrastructure.ShortName,
+			// Skipped by Envoy Gateway v1.8.0's own conformance suite
+			// (SkipTests, marked "TODO: fix following conformance tests").
+			tests.ListenerSetHostnameConflict.ShortName,
+			tests.ListenerSetProtocolConflict.ShortName,
 		},
 		Profiles: sets.New(
 			suite.GatewayHTTPConformanceProfileName,
