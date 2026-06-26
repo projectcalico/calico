@@ -11,6 +11,7 @@ include:
   - Conformance && sig-calico
   - Conformance && sig-network
   - Feature:BGPPeer
+  - Feature:Typha
 
 exclude:
   labels:
