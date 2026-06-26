@@ -1838,6 +1838,11 @@ kind-build-images: kind-registry-up
 # Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
 KIND_CALICO_API_GROUP ?= projectcalico.org/v3
 
+# Readiness gate timeouts (seconds) passed to deploy_resources.sh. Override to
+# give a slower cluster more time to come up.
+KIND_TIGERASTATUS_TIMEOUT ?= 600
+KIND_POD_READY_TIMEOUT ?= 300
+
 # Install Calico via Helm and wait for readiness on an existing kind cluster.
 # Images are pulled from the local kind-registry on demand, so no image
 # loading happens here. Use kind-up for end-to-end bringup.
@@ -1851,6 +1856,8 @@ kind-deploy:
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
+	KIND_TIGERASTATUS_TIMEOUT=$(KIND_TIGERASTATUS_TIMEOUT) \
+	KIND_POD_READY_TIMEOUT=$(KIND_POD_READY_TIMEOUT) \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
 # Rebuild any images whose source files have changed, push changed layers to
