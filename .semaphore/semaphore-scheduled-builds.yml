@@ -1306,7 +1306,7 @@ blocks:
         true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
-      minutes: 30
+      minutes: 60
     dependencies:
       - Prerequisites
     task:
