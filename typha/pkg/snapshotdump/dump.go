@@ -159,23 +159,29 @@ func dumpOne(ctx context.Context, cfg Config, st syncproto.SyncerType, em *emitt
 	cancel()
 	client.Finished.Wait()
 
+	return resultForOutcome(outcome, cb.count, cb.writeErr, ctx.Err(), cfg.IdleTimeout)
+}
+
+// resultForOutcome maps the wait outcome and the callback's final state to a
+// dumpResult.  A write error encountered while streaming is a hard failure no
+// matter how the wait ended: the emitted snapshot is incomplete, so it must be
+// reported as an error rather than masked by a "timed-out" or "cancelled"
+// status (which would produce a corrupt/partial dump with no error marker).
+func resultForOutcome(outcome waitOutcome, count int, writeErr, ctxErr error, idleTimeout time.Duration) dumpResult {
+	if writeErr != nil {
+		return dumpResult{count: count, status: "error: " + writeErr.Error(), err: writeErr}
+	}
 	switch outcome {
 	case outcomeIdleTimeout:
 		return dumpResult{
-			count:    cb.count,
-			status:   fmt.Sprintf("timed-out: no updates for %s and not in-sync", cfg.IdleTimeout),
+			count:    count,
+			status:   fmt.Sprintf("timed-out: no updates for %s and not in-sync", idleTimeout),
 			timedOut: true,
 		}
 	case outcomeCancelled:
-		if cb.writeErr != nil {
-			return dumpResult{count: cb.count, status: "error: " + cb.writeErr.Error(), err: cb.writeErr}
-		}
-		return dumpResult{count: cb.count, status: "cancelled", err: ctx.Err()}
+		return dumpResult{count: count, status: "cancelled", err: ctxErr}
 	default: // outcomeInSync
-		if cb.writeErr != nil {
-			return dumpResult{count: cb.count, status: "error: " + cb.writeErr.Error(), err: cb.writeErr}
-		}
-		return dumpResult{count: cb.count, status: "in-sync"}
+		return dumpResult{count: count, status: "in-sync"}
 	}
 }
 

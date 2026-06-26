@@ -16,7 +16,10 @@ package typha
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -117,7 +120,15 @@ func runClientDump(ctx context.Context, f dumpFlags) error {
 
 	var syncerTypes []syncproto.SyncerType
 	if f.syncerType != "" {
-		syncerTypes = []syncproto.SyncerType{syncproto.SyncerType(f.syncerType)}
+		st := syncproto.SyncerType(f.syncerType)
+		if !knownSyncerType(st) {
+			return fmt.Errorf("unknown syncer type %q; supported types: %s", f.syncerType, supportedSyncerTypes())
+		}
+		syncerTypes = []syncproto.SyncerType{st}
+	}
+
+	if err := validateTLSFlags(f); err != nil {
+		return err
 	}
 
 	server, clientOpts := resolveConnection(f)
@@ -151,4 +162,46 @@ func resolveConnection(f dumpFlags) (string, syncclient.Options) {
 		ServerCN:     f.serverCN,
 		ServerURISAN: f.serverURISAN,
 	}
+}
+
+// knownSyncerType reports whether st is a syncer type Typha serves.  Validating
+// up front lets the CLI fail with a clear message and the list of valid types,
+// rather than connecting and having the server reject the unknown type with a
+// less obvious ErrUnsupportedClientFeature.
+func knownSyncerType(st syncproto.SyncerType) bool {
+	for _, k := range syncproto.AllSyncerTypes {
+		if k == st {
+			return true
+		}
+	}
+	return false
+}
+
+func supportedSyncerTypes() string {
+	names := make([]string, len(syncproto.AllSyncerTypes))
+	for i, st := range syncproto.AllSyncerTypes {
+		names[i] = string(st)
+	}
+	return strings.Join(names, ", ")
+}
+
+// validateTLSFlags rejects an incomplete set of TLS flags up front with a normal
+// error, instead of letting syncclient.New log.Fatal deep in the stack.  The
+// rule mirrors syncclient.Options.validate: if any TLS flag is set they must all
+// be set, except that either --server-cn or --server-uri may be omitted.  TLS
+// only applies to the --server (TCP) path; the local unix socket is plaintext,
+// so flags supplied without --server are simply ignored.
+func validateTLSFlags(f dumpFlags) error {
+	if f.server == "" {
+		return nil
+	}
+	anySet := f.keyFile != "" || f.certFile != "" || f.caFile != "" || f.serverCN != "" || f.serverURISAN != ""
+	if !anySet {
+		return nil // Plaintext TCP: fine if the server doesn't require TLS.
+	}
+	if f.keyFile == "" || f.certFile == "" || f.caFile == "" || (f.serverCN == "" && f.serverURISAN == "") {
+		return errors.New("incomplete TLS configuration: --key-file, --cert-file and --ca-file " +
+			"are required together (plus either --server-cn or --server-uri)")
+	}
+	return nil
 }

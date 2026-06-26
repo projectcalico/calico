@@ -16,9 +16,52 @@ package snapshotdump
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
+
+func TestResultForOutcomeInSync(t *testing.T) {
+	r := resultForOutcome(outcomeInSync, 7, nil, nil, time.Second)
+	if r.err != nil || r.timedOut || r.status != "in-sync" || r.count != 7 {
+		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+func TestResultForOutcomeIdleTimeout(t *testing.T) {
+	r := resultForOutcome(outcomeIdleTimeout, 3, nil, nil, 10*time.Second)
+	if r.err != nil || !r.timedOut || r.count != 3 {
+		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+func TestResultForOutcomeCancelled(t *testing.T) {
+	ctxErr := context.Canceled
+	r := resultForOutcome(outcomeCancelled, 1, nil, ctxErr, time.Second)
+	if !errors.Is(r.err, context.Canceled) || r.timedOut || r.status != "cancelled" {
+		t.Fatalf("unexpected result: %+v", r)
+	}
+}
+
+// TestResultForOutcomeWriteErrorBeatsTimeout is the regression test for the
+// case where the snapshot stream hit a write error and then the connection went
+// idle: the write error must surface as a hard error, not be masked by a
+// "timed-out" status that would leave a corrupt/partial dump with no marker.
+func TestResultForOutcomeWriteErrorBeatsTimeout(t *testing.T) {
+	writeErr := errors.New("disk full")
+	for _, outcome := range []waitOutcome{outcomeInSync, outcomeIdleTimeout, outcomeCancelled} {
+		r := resultForOutcome(outcome, 5, writeErr, context.Canceled, time.Second)
+		if !errors.Is(r.err, writeErr) {
+			t.Fatalf("outcome %v: expected write error to surface, got %+v", outcome, r)
+		}
+		if r.timedOut {
+			t.Fatalf("outcome %v: write error must not be reported as timed-out: %+v", outcome, r)
+		}
+		if r.status != "error: disk full" {
+			t.Fatalf("outcome %v: unexpected status %q", outcome, r.status)
+		}
+	}
+}
 
 func TestWaitForSnapshotInSync(t *testing.T) {
 	done := make(chan struct{})
