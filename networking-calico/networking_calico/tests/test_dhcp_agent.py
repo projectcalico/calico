@@ -69,6 +69,36 @@ class TestFakePlugin(base.BaseTestCase):
         self.plugin.release_dhcp_port("calico", "dhcp")
 
 
+class TestImportIsolation(base.BaseTestCase):
+    """Regression test: importing ``networking_calico.agent.dhcp_agent``
+    must not call ``eventlet.monkey_patch()``.
+
+    Module-level ``monkey_patch()`` was the cause of an indefinite hang
+    in ``tox -e py38`` -- subunit's runner ended up parked in
+    epoll_wait() on an empty FD set because every test process inherited
+    the patched interpreter via this module's import.  The patch is now
+    confined to the production wrapper at
+    ``networking_calico.agent.dhcp_agent_main``.  If anyone ever adds
+    ``monkey_patch()`` back to a unit-test-imported module this test
+    will fail immediately.
+
+    By the time this test runs, the test runner has already imported
+    test_dhcp_agent.py, which in turn imported the dhcp_agent module
+    (line 35-36), so the global socket-patched flag accurately reflects
+    what an import of that module does.
+    """
+
+    def test_dhcp_agent_import_does_not_monkey_patch_socket(self):
+        import eventlet.patcher
+
+        self.assertFalse(
+            eventlet.patcher.is_monkey_patched("socket"),
+            "Importing networking_calico.agent.dhcp_agent must not call"
+            " eventlet.monkey_patch(); see networking_calico/agent/"
+            "dhcp_agent_main.py for the production wrapper that does.",
+        )
+
+
 class TestDhcpAgent(base.BaseTestCase):
     def setUp(self):
         super(TestDhcpAgent, self).setUp()

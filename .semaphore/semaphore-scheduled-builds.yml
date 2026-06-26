@@ -1876,7 +1876,12 @@ blocks:
       jobs:
         - name: "OpenStack: Unit and FV tests (tox) on Caracal"
           commands:
-            - ../.semaphore/run-and-monitor tox.log make tox-caracal
+            # Run sequentially via `bash -c '... && ...'` rather than as
+            # multiple targets on a single make invocation: a make invoked
+            # with MAKEFLAGS=-j would otherwise schedule the two targets in
+            # parallel and have two concurrent tox runs contend over the
+            # shared .tox/ working tree.
+            - ../.semaphore/run-and-monitor tox.log bash -c 'make tox-caracal && make tox-fv-caracal'
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
             # Env vars needed for saving performance results.
@@ -1996,6 +2001,14 @@ after_pipeline:
           # and posts to Slack itself when there is something worth reporting. A pass
           # is recorded too so the engine can recover open incidents for the branch.
           - |
+            # Only true pushes to master/release-*. On a pull-request pipeline
+            # SEMAPHORE_GIT_BRANCH is the PR's *target* branch (so a PR against
+            # master reads as "master"); gate on the ref type / PR number first
+            # so PR builds don't masquerade as branch builds.
+            if [ "$SEMAPHORE_GIT_REF_TYPE" != "branch" ] || [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+              echo "not a branch push (ref_type=${SEMAPHORE_GIT_REF_TYPE} pr=${SEMAPHORE_GIT_PR_NUMBER}) — not monitored"
+              exit 0
+            fi
             case "$SEMAPHORE_GIT_BRANCH" in
               master|release-*) ;;
               *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;

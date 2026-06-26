@@ -17,8 +17,6 @@
 // pool, the route to a remote node's IPAM block must go out tunl0 and carry the
 // netlink protocol of whichever component owns in-cluster routing: Felix (proto
 // 80) when ProgramClusterRoutes is Enabled, otherwise BIRD (proto 12).
-//
-// Ported from the former e2e test e2e/pkg/tests/networking/cluster_routes.go.
 
 package k8stests
 
@@ -84,7 +82,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 		},
 	}
 	g.Expect(cli.Create(ctx, pool)).To(Succeed(), "creating IPPool")
-	t.Cleanup(func() { deletePool(cli, pool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, pool.Name) })
 
 	nsName := "cluster-routes"
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}

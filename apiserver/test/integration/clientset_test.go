@@ -2038,6 +2038,10 @@ func testIPAMConfigClient(client calicoclient.Interface) error {
 		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
 
+	// Delete any pre-existing "default" left by a prior test run or by Calico
+	// initialization on the test cluster (GetIPAMConfig auto-creates it).
+	_ = ipamConfigClient.Delete(ctx, name, metav1.DeleteOptions{})
+
 	// Should not be able to create a non-default IPAM config.
 	badConfig := ipamConfig.DeepCopy()
 	badConfig.Name = "not-default"

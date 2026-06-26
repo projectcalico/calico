@@ -15,13 +15,17 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-# It's advised always to do eventlet monkey-patching before anything else.
-# https://eventlet.readthedocs.io/en/latest/patching.html
-import eventlet
-
-eventlet.monkey_patch()
-
-import logging  # noqa: I100
+# eventlet.monkey_patch() must run before any module that captures references
+# to socket / threading / etc. is imported.  We do NOT call it here, because
+# importing this module from a unit-test process would then contaminate the
+# whole test process with eventlet -- which in turn causes subunit's runner
+# (used by tox / .testr.conf) to deadlock its own stdout writes through the
+# eventlet hub, hanging the test run.  Instead the production entry-point
+# wrapper (networking_calico.agent.dhcp_agent_main, registered in setup.py
+# as `calico-dhcp-agent`) does the monkey_patch *before* importing this
+# module, so all the imports below still happen under the patched socket /
+# threading machinery in production.
+import logging
 import os
 import re
 import socket
@@ -31,6 +35,7 @@ import time
 
 from etcd3gw.exceptions import Etcd3Exception
 
+import eventlet
 from eventlet.event import Event
 from eventlet.queue import Empty
 from eventlet.queue import LightQueue
