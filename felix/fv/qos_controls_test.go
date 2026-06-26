@@ -943,7 +943,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 
 							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Removing limits from workload 0")
 							w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -996,7 +996,7 @@ var _ = infrastructure.DatastoreDescribe(
 							}
 
 							By("Waiting for ingress counter to drop to 0 via BPF fast-path")
-							Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
+							Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 							By("Tearing down the workload netns (final cleanup)")
 							w[1].Stop()
@@ -1130,8 +1130,13 @@ var _ = infrastructure.DatastoreDescribe(
 								}
 
 								By("Waiting for cleanup-time decrement after TCPFinsSeen expiry")
-								// 5s TCPFinsSeen + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
+								// Half-closed TCPFinsSeen (5s) then cleaner/scanner cadence
+								// (~10s/~30s) drains the counter. Unloaded this is ~12s,
+								// but under CI batch contention the cleaner/scanner Go
+								// loops are CPU-starved and the drain stretches well past
+								// 30s, so use a generous 90s window (verified on a loaded
+								// 6.8 VM: 30s flakes, 90s is stable).
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1167,8 +1172,13 @@ var _ = infrastructure.DatastoreDescribe(
 								}
 
 								By("Waiting for cleanup-time decrement after TCPEstablished expiry")
-								// 5s TCPEstablished + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
+								// Idle TCPEstablished (5s) then cleaner/scanner cadence
+								// (~10s/~30s) drains the counter. Unloaded this is ~12s,
+								// but under CI batch contention the cleaner/scanner Go
+								// loops are CPU-starved and the drain stretches well past
+								// 30s, so use a generous 90s window (verified on a loaded
+								// 6.8 VM: 30s flakes, 90s is stable).
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
@@ -1215,8 +1225,13 @@ var _ = infrastructure.DatastoreDescribe(
 								}()
 
 								By("Waiting for CT entries to age out and cleanup-time decrement to fire")
-								// 5s TCPEstablished + ~10s scan period + margin.
-								Eventually(getBPFCurrentCount(0, 0, "ingress"), "30s", "1s").Should(Equal(uint32(0)))
+								// Idle TCPEstablished (5s) then cleaner/scanner cadence
+								// (~10s/~30s) drains the counter. Unloaded this is ~12s,
+								// but under CI batch contention the cleaner/scanner Go
+								// loops are CPU-starved and the drain stretches well past
+								// 30s, so use a generous 90s window (verified on a loaded
+								// 6.8 VM: 30s flakes, 90s is stable).
+								Eventually(getBPFCurrentCount(0, 0, "ingress"), "90s", "1s").Should(Equal(uint32(0)))
 
 								By("Removing limits from workload 0")
 								w[0].WorkloadEndpoint.Spec.QoSControls = nil
