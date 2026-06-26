@@ -20,15 +20,21 @@
 # (matches what envoyproxy/gateway's tools/hack/create-cluster.sh does).
 #
 # serviceAllocation.priority is higher than the default BGP pool so the
-# conformance LB Services pin here deterministically. Only tigera-gateway
-# needs to be listed: Envoy Gateway runs in its default mode (rather than
-# GatewayNamespaceMode), so it provisions all data-plane Services in the
-# EG controller namespace, which Calico's tigera-operator hard-codes to
-# tigera-gateway. The Gateway resources themselves live in
-# gateway-conformance-infra, but those are CRs, not LB Services.
-# (Reference: envoyproxy/gateway internal/infrastructure/kubernetes/
-# proxy_infra.go GetResourceNamespace, and tigera-operator's gatewayapi
-# render which leaves Provider.Kubernetes.Deploy unset.)
+# conformance LB Services pin here deterministically. The namespace to list
+# is where Envoy Gateway provisions its data-plane Service for each Gateway:
+# Calico's tigera-operator configures Envoy Gateway with
+# provider.kubernetes.deploy.type=GatewayNamespace (see the operator's
+# gatewayapi render, pkg/render/gatewayapi/gateway_api.go), so the envoy
+# Deployment + LoadBalancer Service for each Gateway is created in that
+# Gateway's own namespace -- not the EG controller namespace. The
+# conformance suite creates all of its Gateways in gateway-conformance-infra,
+# so that is where the LB Services to allocate live.
+#
+# (Earlier this listed tigera-gateway, from when the operator left
+# Deploy.Type unset and EG ran in controller-namespace mode. Once the
+# operator moved to GatewayNamespace mode the Services moved to the Gateway
+# namespace, leaving every Gateway stuck Programmed=False/AddressNotAssigned
+# because metallb had no pool scoped to gateway-conformance-infra.)
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -40,7 +46,7 @@ spec:
   serviceAllocation:
     priority: 100
     namespaces:
-      - tigera-gateway
+      - gateway-conformance-infra
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
