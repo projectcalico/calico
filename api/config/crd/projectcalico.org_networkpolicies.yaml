@@ -14,7 +14,6 @@ spec:
       - cnp
       - caliconetworkpolicy
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
