@@ -132,6 +132,12 @@ class ResourceSyncer(object):
         neutron_items, correct, updated, deleted, created).  The runner exposes these in
         the JSON ResyncResult; the same numbers are also logged in a single summary line
         on completion.
+
+        For each resource that needs fixing -- create, update or delete -- a single
+        per-item INFO line is emitted naming the resource kind and name.  Resources
+        whose etcd data already matches Neutron are not enumerated at INFO; they are
+        only logged at DEBUG.  This is the per-item observability surface for
+        CORE-12922 / PMREQ-839 User Story #2.
         """
         resync_start = time.monotonic()
 
@@ -206,11 +212,25 @@ class ResourceSyncer(object):
                         name, neutron_map[name], context, reread=False
                     )
                 if self.etcd_write_data_matches_existing(write_data, data):
+                    # CORE-12922: items already correct are not enumerated
+                    # at INFO -- only ones that need fixing (the create /
+                    # update / delete branches below) get a per-item line.
                     LOG.debug("etcd data good for %s %s", self.resource_kind, name)
                     n_correct += 1
                 else:
-                    LOG.warning(
-                        "etcd rewrite needed for %s %s", self.resource_kind, name
+                    # Include the existing etcd data and the new Neutron-derived
+                    # data so the operator can see what changed.  The shape of
+                    # each varies by resource kind -- for endpoints it's a
+                    # (spec, labels, annotations) tuple, for the others just the
+                    # spec dict -- but in every case both halves are comparable
+                    # because they're what etcd_write_data_matches_existing
+                    # just declared unequal.
+                    LOG.info(
+                        "Resync updating %s %s in etcd: old=%s, new=%s",
+                        self.resource_kind,
+                        name,
+                        data,
+                        write_data,
                     )
                     if self.update_in_etcd(name, write_data, mod_revision):
                         n_updated += 1
@@ -228,6 +248,11 @@ class ResourceSyncer(object):
                     try:
                         write_data = self.neutron_to_etcd_write_data(
                             name, neutron_map[name], context, reread=True
+                        )
+                        LOG.info(
+                            "Resync creating %s %s in etcd",
+                            self.resource_kind,
+                            name,
                         )
                         if self.create_in_etcd(name, write_data):
                             n_created += 1
@@ -248,7 +273,11 @@ class ResourceSyncer(object):
             elif in_etcd:
                 # In etcd but not in Neutron: delete.
                 _, mod_revision = etcd_map[name]
-                LOG.warning("etcd deletion needed for %s %s", self.resource_kind, name)
+                LOG.info(
+                    "Resync deleting %s %s from etcd",
+                    self.resource_kind,
+                    name,
+                )
                 if self.delete_from_etcd(name, mod_revision):
                     n_deleted += 1
                 else:
