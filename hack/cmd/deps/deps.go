@@ -18,6 +18,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v2"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -174,6 +175,16 @@ var extraPrereqRegexps = map[string]*regexp.Regexp{
 	"/libcalico-go/lib/ipam": regexp.MustCompile(`\.IPAM\(\)`),
 }
 
+// changeInRe matches the ${CHANGE_IN(<spec>)} macro.  changeInWithDependentsRe
+// matches the ${CHANGE_IN_WITH_DEPENDENTS(<own spec>)} macro.  The two are
+// disjoint: CHANGE_IN requires "(" immediately after "CHANGE_IN", which the
+// _WITH_DEPENDENTS form does not satisfy, so the CHANGE_IN regex never matches
+// (a substring of) the longer macro.
+var (
+	changeInRe               = regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
+	changeInWithDependentsRe = regexp.MustCompile(`\$\{CHANGE_IN_WITH_DEPENDENTS\(([^)]*)\)}`)
+)
+
 // calculateDeps calculates the file-level dependencies of the input package
 // specs.  Each package spec is a comma-delimited list of directories relative
 // to the root of the repo.  The first entry in the list is the "primary"
@@ -297,6 +308,265 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	}
 
 	return &Deps{inclusions, exclusions}, nil
+}
+
+// blockInfo is the slice of a Semaphore block that we need to resolve
+// CHANGE_IN_WITH_DEPENDENTS macros: its name, the file it lives in, its raw
+// run.when, its dependencies, and (if it uses the macro) the macro's own-spec.
+type blockInfo struct {
+	name         string
+	file         string // originating template path, e.g. .semaphore/semaphore.yml.d/blocks/20-node.yml
+	when         string
+	dependencies []string
+	isMacro      bool
+	macroArg     string // own-spec inside CHANGE_IN_WITH_DEPENDENTS(...) (may be empty)
+}
+
+// blockGraph models the block dependency graph parsed from the template files.
+type blockGraph struct {
+	blocks     []*blockInfo            // in document order
+	byName     map[string]*blockInfo   // name -> block
+	dependents map[string][]*blockInfo // producer name -> blocks that depend on it
+}
+
+// parseBlockGraph YAML-parses the (un-indented) block templates into a
+// dependency graph.  Block names are globally unique in Semaphore, so the
+// reverse (producer -> dependents) map is unambiguous.
+func parseBlockGraph(blocks []templateData) (*blockGraph, error) {
+	g := &blockGraph{
+		byName:     map[string]*blockInfo{},
+		dependents: map[string][]*blockInfo{},
+	}
+	for _, t := range blocks {
+		var parsed []struct {
+			Name string `yaml:"name"`
+			Run  struct {
+				When string `yaml:"when"`
+			} `yaml:"run"`
+			Dependencies []string `yaml:"dependencies"`
+		}
+		if err := yaml.Unmarshal([]byte(t.content), &parsed); err != nil {
+			return nil, fmt.Errorf("failed to parse blocks from %s: %w", t.originalPath, err)
+		}
+		for _, p := range parsed {
+			b := &blockInfo{
+				name:         p.Name,
+				file:         t.originalPath,
+				when:         p.Run.When,
+				dependencies: p.Dependencies,
+			}
+			if m := changeInWithDependentsRe.FindStringSubmatch(p.Run.When); m != nil {
+				b.isMacro = true
+				b.macroArg = strings.TrimSpace(m[1])
+			}
+			if prev, dup := g.byName[b.name]; dup {
+				return nil, fmt.Errorf("duplicate block name %q (in %s and %s)", b.name, prev.file, b.file)
+			}
+			g.byName[b.name] = b
+			g.blocks = append(g.blocks, b)
+		}
+	}
+	// Build the reverse map and validate that every dependency names a real
+	// block (catches typos and renames now that we have a block model).
+	for _, b := range g.blocks {
+		for _, dep := range b.dependencies {
+			if _, ok := g.byName[dep]; !ok {
+				return nil, fmt.Errorf("block %q (%s) depends on unknown block %q", b.name, b.file, dep)
+			}
+			g.dependents[dep] = append(g.dependents[dep], b)
+		}
+	}
+	return g, nil
+}
+
+// macroBlocksInFile returns the CHANGE_IN_WITH_DEPENDENTS blocks originating in
+// the given file, in document order.  buildSemaphoreYAML uses this to map the
+// Nth macro occurrence in a file's content to the Nth such block.
+func (g *blockGraph) macroBlocksInFile(file string) []*blockInfo {
+	var out []*blockInfo
+	for _, b := range g.blocks {
+		if b.isMacro && b.file == file {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+// calculateDependentMacroDeps resolves every ${CHANGE_IN_WITH_DEPENDENTS(...)}
+// macro to a single merged Deps that is a superset of the producer's own spec
+// and of every block that depends on the producer.  The result is keyed by
+// block name; buildSemaphoreYAML maps each macro occurrence to its block by
+// document order, so two blocks may share an identical own-spec arg.
+//
+// Producers can chain: a dependent may itself be a CHANGE_IN_WITH_DEPENDENTS
+// producer (e.g. "Build: node image" both consumes "Build: nftables RPMs" and
+// produces for others).  We resolve recursively so that a chained dependent
+// contributes its *final* effective trigger (its own merge, transitively), which
+// keeps the superset invariant intact up the chain.  The block dependency graph
+// is a DAG (Semaphore forbids cycles), but we still guard against cycles.
+func calculateDependentMacroDeps(g *blockGraph, deps map[string]*Deps) (map[string]*Deps, error) {
+	resolved := map[string]*Deps{} // block name -> final effective trigger
+	inProgress := set.New[string]()
+
+	var resolve func(b *blockInfo) (*Deps, error)
+	resolve = func(b *blockInfo) (*Deps, error) {
+		if d, ok := resolved[b.name]; ok {
+			return d, nil
+		}
+		if inProgress.Contains(b.name) {
+			return nil, fmt.Errorf("dependency cycle detected involving block %q", b.name)
+		}
+		inProgress.Add(b.name)
+		defer inProgress.Discard(b.name)
+
+		// Start from the producer's own intrinsic trigger.
+		own, err := calculateMacroOwnDeps(b.macroArg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve own-spec for block %q: %w", b.name, err)
+		}
+		parts := []*Deps{own}
+
+		dependents := g.dependents[b.name]
+		if len(dependents) == 0 {
+			logrus.Warnf("Block %q uses CHANGE_IN_WITH_DEPENDENTS but no block depends on it; its trigger reflects only its own spec.", b.name)
+		}
+		for _, dep := range dependents {
+			var depDeps *Deps
+			if dep.isMacro {
+				// Chained producer: use its full (recursively-resolved) trigger.
+				depDeps, err = resolve(dep)
+			} else {
+				depDeps, err = dependentChangeInDeps(dep, deps)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("block %q: dependent %q: %w", b.name, dep.name, err)
+			}
+			parts = append(parts, depDeps)
+		}
+
+		merged := mergeDepsSuperset(parts)
+		// A dependent also runs when its own block file changes (its clause gets
+		// that path added at format time), so the producer must too.
+		for _, dep := range dependents {
+			merged.Inclusions.Add("/" + dep.file)
+		}
+		resolved[b.name] = merged
+		return merged, nil
+	}
+
+	out := map[string]*Deps{}
+	for _, b := range g.blocks {
+		if !b.isMacro {
+			continue
+		}
+		merged, err := resolve(b)
+		if err != nil {
+			return nil, err
+		}
+		out[b.name] = merged
+	}
+	return out, nil
+}
+
+// dependentChangeInDeps returns the resolved Deps of a non-macro block that
+// depends on a CHANGE_IN_WITH_DEPENDENTS producer.  The dependent's run.when
+// must reduce to a single ${CHANGE_IN(...)} clause, optionally prefixed/suffixed
+// by a *constant* boolean combinator (`${FORCE_RUN} or ...`, `false or ...`).
+// A non-constant condition (branch matching, `and`, parentheses) could let the
+// dependent run when its CHANGE_IN is false — which a single merged change_in
+// clause cannot represent — so we fail loudly rather than emit an unsound
+// superset.  The constant `or`-prefix is safe: in PR builds it is false (so the
+// dependent reduces to CHANGE_IN), and in scheduled builds the producer's own
+// macro resolves to `true` anyway.
+func dependentChangeInDeps(dep *blockInfo, deps map[string]*Deps) (*Deps, error) {
+	when := strings.TrimSpace(dep.when)
+	matches := changeInRe.FindAllStringSubmatch(when, -1)
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("its run.when must contain exactly one ${CHANGE_IN(...)} to be a CHANGE_IN_WITH_DEPENDENTS dependent, got %q", when)
+	}
+	full, arg := matches[0][0], matches[0][1]
+	residual := strings.Replace(when, full, "", 1)
+	for _, tok := range strings.Fields(residual) {
+		switch tok {
+		case "or", "false", "true", "${FORCE_RUN}":
+		default:
+			return nil, fmt.Errorf("its run.when has an unsupported form (only a single ${CHANGE_IN(...)} optionally combined with a constant `or` is allowed): %q", when)
+		}
+	}
+	d := deps[arg]
+	if d == nil {
+		return nil, fmt.Errorf("no resolved deps for CHANGE_IN(%s)", arg)
+	}
+	return d, nil
+}
+
+// calculateMacroOwnDeps resolves a CHANGE_IN_WITH_DEPENDENTS own-spec.  Unlike a
+// CHANGE_IN spec it has no "primary" whole-package element: every comma-separated
+// entry is treated like a CHANGE_IN secondary (a non-go: path, or a Go package
+// whose main-package deps are included), plus the default inclusions/exclusions.
+func calculateMacroOwnDeps(spec string) (*Deps, error) {
+	inclusions := set.New[string]()
+	inclusions.AddAll(defaultInclusions)
+	exclusions := set.From(defaultExclusions...)
+	if strings.TrimSpace(spec) == "" {
+		return &Deps{inclusions, exclusions}, nil
+	}
+	for _, part := range strings.Split(spec, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if after, ok := strings.CutPrefix(part, "non-go:"); ok {
+			inclusions.Add(after)
+			continue
+		}
+		dirs, err := loadLocalDirs(part, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load local dirs for %s: %w", part, err)
+		}
+		for _, dir := range dirs {
+			inclusions.Add(dir + "/*.go")
+		}
+		inclusions.Add(part + "/Makefile")
+		inclusions.Add(part + "/deps.txt")
+		inclusions.Add(part + "/**/*Dockerfile*")
+		inclusions.AddAll(nonGoDeps[part])
+	}
+	return &Deps{inclusions, exclusions}, nil
+}
+
+// mergeDepsSuperset merges Deps into a single change_in clause that fires
+// whenever any input clause would fire.  Inclusions are unioned; exclusions are
+// INTERSECTED.  Intersecting is the sound direction: a pattern survives only if
+// every input excludes it, so no input's exclusion can suppress another input's
+// inclusion (which would cause an under-fire).  The result is a superset and may
+// slightly over-fire (e.g. on a test file one input excludes but another's
+// inclusion still matches) — harmless for a cache-cheap producer.
+func mergeDepsSuperset(parts []*Deps) *Deps {
+	inclusions := set.New[string]()
+	var exclusions set.Set[string]
+	for i, p := range parts {
+		inclusions.AddAll(p.Inclusions.Slice())
+		if i == 0 {
+			exclusions = p.Exclusions.Copy()
+		} else {
+			exclusions = intersectSets(exclusions, p.Exclusions)
+		}
+	}
+	if exclusions == nil {
+		exclusions = set.New[string]()
+	}
+	return &Deps{Inclusions: inclusions, Exclusions: exclusions}
+}
+
+func intersectSets(a, b set.Set[string]) set.Set[string] {
+	out := set.New[string]()
+	for x := range a.All() {
+		if b.Contains(x) {
+			out.Add(x)
+		}
+	}
+	return out
 }
 
 func filterInclusions(primaryPkg string, inclusions set.Set[string]) set.Typed[string] {
@@ -598,6 +868,15 @@ func generateSemaphoreYamls() {
 	if err != nil {
 		logrus.Fatalf("Failed to read templates: %v", err)
 	}
+
+	// Parse the (still un-indented) blocks into a dependency graph so we can
+	// resolve ${CHANGE_IN_WITH_DEPENDENTS(...)} macros: a "producer" block that
+	// must run whenever any block that depends on it runs.
+	graph, err := parseBlockGraph(blocks)
+	if err != nil {
+		logrus.Fatalf("Failed to parse block dependency graph: %v", err)
+	}
+
 	// For convenience when writing blocks we add an indent here.
 	blocks = indentBlocks(blocks)
 
@@ -613,10 +892,18 @@ func generateSemaphoreYamls() {
 	placeholders := extractChangeInPlaceholders(templates)
 	deps := calculateDeps(placeholders)
 
+	// Resolve the ${CHANGE_IN_WITH_DEPENDENTS(...)} macros now that every plain
+	// CHANGE_IN clause has been resolved: each macro merges the producer's own
+	// spec with the resolved change_in of every block that depends on it.
+	macroDeps, err := calculateDependentMacroDeps(graph, deps)
+	if err != nil {
+		logrus.Fatalf("Failed to calculate CHANGE_IN_WITH_DEPENDENTS dependencies: %v", err)
+	}
+
 	// Build the main file, which is triggered by PRs and uses the calculated
 	// dependencies.
 	mainFile := filepath.Join(semaphoreDir, "semaphore.yml")
-	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, false, defaultBranchStanza)
+	err = buildSemaphoreYAML(mainFile, templates, globalExtraDeps, deps, macroDeps, graph, false, defaultBranchStanza)
 	if err != nil {
 		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
@@ -624,7 +911,7 @@ func generateSemaphoreYamls() {
 	// Build the scheduled file, which builds all our code, but not slow
 	// third-party builds.
 	scheduledFile := filepath.Join(semaphoreDir, "semaphore-scheduled-builds.yml")
-	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, false, defaultBranchStanza)
+	err = buildSemaphoreYAML(scheduledFile, templates, globalExtraDeps, nil, nil, graph, false, defaultBranchStanza)
 	if err != nil {
 		logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 	}
@@ -649,7 +936,7 @@ func generateSemaphoreYamls() {
 	}
 	if foundWeekly {
 		logrus.Infof("Found templates that run weekly, generating %s.", thirdPartyFile)
-		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, true, defaultBranchStanza)
+		err = buildSemaphoreYAML(thirdPartyFile, weeklyTemplates, globalExtraDeps, nil, nil, graph, true, defaultBranchStanza)
 		if err != nil {
 			logrus.Fatalf("Failed to build semaphore YAML: %v", err)
 		}
@@ -658,7 +945,7 @@ func generateSemaphoreYamls() {
 	logrus.Info("Semaphore YAML generation complete")
 }
 
-func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, weekly bool, defaultBranchStanza string) error {
+func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps []string, deps map[string]*Deps, macroDeps map[string]*Deps, graph *blockGraph, weekly bool, defaultBranchStanza string) error {
 	var data bytes.Buffer
 
 	data.WriteString(
@@ -681,9 +968,8 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 	}
 	for _, t := range templates {
 		extraDeps := append(globalExtraDeps, "/"+t.originalPath)
-		changeInPattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
-		content := changeInPattern.ReplaceAllStringFunc(t.content, func(match string) string {
-			pkg := changeInPattern.FindStringSubmatch(match)[1]
+		content := changeInRe.ReplaceAllStringFunc(t.content, func(match string) string {
+			pkg := changeInRe.FindStringSubmatch(match)[1]
 			if deps == nil {
 				// Generating a daily/weekly file.
 				return "true"
@@ -694,6 +980,31 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 				inclusions.Add(d)
 			}
 			return formatChangeIn(inclusions, dep.Exclusions, false, defaultBranchStanza)
+		})
+		// CHANGE_IN_WITH_DEPENDENTS expands, like CHANGE_IN, to a single
+		// change_in(...) clause (so the folded-scalar post-processing applies
+		// unchanged) — but its dependency set was pre-merged from the producer's
+		// dependents in calculateDependentMacroDeps. The replacement is
+		// block-specific (two blocks may share an arg), so we map each macro
+		// occurrence to its block by document order within this file.
+		fileMacroBlocks := graph.macroBlocksInFile(t.originalPath)
+		macroIdx := 0
+		content = changeInWithDependentsRe.ReplaceAllStringFunc(content, func(match string) string {
+			if deps == nil {
+				// Generating a daily/weekly file.
+				return "true"
+			}
+			b := fileMacroBlocks[macroIdx]
+			macroIdx++
+			md := macroDeps[b.name]
+			if md == nil {
+				logrus.Fatalf("No resolved CHANGE_IN_WITH_DEPENDENTS dependencies for block %q", b.name)
+			}
+			inclusions := md.Inclusions.Copy()
+			for _, d := range extraDeps {
+				inclusions.Add(d)
+			}
+			return formatChangeIn(inclusions, md.Exclusions, false, defaultBranchStanza)
 		})
 		content = strings.ReplaceAll(content, "${FORCE_RUN}", forceRun)
 		content = strings.ReplaceAll(content, "${WEEKLY_RUN}", weeklyRun)
@@ -761,10 +1072,9 @@ func mustReadFile(path string) []byte {
 }
 
 func extractChangeInPlaceholders(templates []templateData) set.Set[string] {
-	pattern := regexp.MustCompile(`\$\{CHANGE_IN\(([^)]+)\)}`)
 	out := set.New[string]()
 	for _, t := range templates {
-		matches := pattern.FindAllStringSubmatch(t.content, -1)
+		matches := changeInRe.FindAllStringSubmatch(t.content, -1)
 		for _, m := range matches {
 			out.Add(m[1])
 		}

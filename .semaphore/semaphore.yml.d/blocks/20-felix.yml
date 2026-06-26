@@ -1,6 +1,10 @@
 - name: "Felix: Build"
+  # Producer: uploads the felix binaries that "Felix: FV" downloads from GCS, so
+  # it must run whenever that consumer runs. CHANGE_IN_WITH_DEPENDENTS() derives
+  # that superset from the `dependencies:` graph; the arg is this block's
+  # intrinsic trigger (felix's own Go closure).
   run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(felix)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
@@ -128,8 +132,14 @@
           - ./.semaphore/analyze-test-failures --ut || true
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: Build Windows binaries"
+  # Producer for the Windows felix binaries consumed by "Felix: Windows FV".
+  # Its old trigger CHANGE_IN(felix) was NARROWER than that consumer (which also
+  # triggers on process/testing/{aso,util,winfv-felix}), so a PR touching only
+  # those paths could run the FV while skipping this build. CHANGE_IN_WITH_DEPENDENTS()
+  # closes that gap by merging in the consumer's trigger automatically; the arg
+  # is this block's intrinsic trigger (felix's own Go closure).
   run:
-    when: "${CHANGE_IN(felix)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(felix)}"
   dependencies:
     - Prerequisites
   task:
