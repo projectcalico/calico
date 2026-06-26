@@ -568,16 +568,31 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 	if ipv6 {
 		birdCmd = "birdcl6"
 	}
-	// IPv6 routes are advertised with a connected link-local next-hop, so the
-	// peer's global address appears in BIRD's "from" field (inside the protocol
-	// brackets) rather than in "via"; IPv4 routes have no "from" and use the
-	// global address as the next-hop.
+	// IPv4 routes use the peer's global address as the next-hop, with no "from"
+	// field:
 	//   v4: <route> via <peerIP> on eth0 [<proto> <time>] ...
-	//   v6: <route> via fe80::... on eth0 [<proto> <time> from <peerIP>] ...
+	//
+	// IPv6 depends on how the peer is configured in bird6.cfg.template:
+	//   - OSS pins "gateway recursive" on every peer, so the route is advertised
+	//     with the peer's global address as the next-hop (same shape as v4).
+	//   - Enterprise emits "direct" for a directly-connected peer (the external
+	//     router shares the egress node's segment), so BIRD uses a link-local
+	//     next-hop and carries the peer's global address in the "from" field:
+	//       v6: <route> via fe80::... on eth0 [<proto> <time> from <peerIP>] ...
+	//
+	// Accept either form so the assertion holds in both repos regardless of
+	// which next-hop BIRD emits. The query is already scoped with
+	// "show route protocol <proto>", so the link-local branch needn't re-verify
+	// the peer IP.
 	pattern := routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto
 	if ipv6 {
-		pattern = routeRegex + ` *via fe80:[0-9a-f:]+ on .* \[` + proto + `.*from ` + peerIPRegex
+		pattern = `(?:` +
+			routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto +
+			`|` +
+			routeRegex + ` *via fe80:[0-9a-f:]+ on .* \[` + proto +
+			`)`
 	}
+
 	re := regexp.MustCompile(pattern)
 
 	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
