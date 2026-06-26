@@ -13,7 +13,6 @@ spec:
     shortNames:
       - gns
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:

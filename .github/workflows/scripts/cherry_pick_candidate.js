@@ -96,7 +96,19 @@ module.exports = async ({ github, context, core }) => {
   const present = pr.labels.some(l => l.name === LABEL);
   core.info(`Label authority: bot (last actor: ${lastActor || 'none'}, present=${present})`);
 
-  // 3. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
+  const labels = (pr.labels || []).map(l => l.name).filter(n => n !== LABEL);
+  const files = await github.paginate(github.rest.pulls.listFiles, {
+    owner, repo, pull_number: pr.number, per_page: 100,
+  });
+  const labelsText = labels.length === 0 ? '(none)' : labels.join(', ');
+  const filesText = files.length === 0
+    ? '(none)'
+    : files.map(f => {
+        const base = `- [${f.status} +${f.additions}/-${f.deletions}] ${f.filename}`;
+        return f.previous_filename ? `${base} (was ${f.previous_filename})` : base;
+      }).join('\n');
+
+  // 4. Call the classifier agent. Up to 3 attempts with 5s, 10s backoff.
   const msgId = `calico-backport-classifier-${pr.number}-${process.env.GITHUB_RUN_ID}`;
   const payload = {
     jsonrpc: '2.0',
@@ -108,7 +120,7 @@ module.exports = async ({ github, context, core }) => {
         role: 'user',
         parts: [{
           kind: 'text',
-          text: `PR number: ${pr.number}\nPR title: ${pr.title}\nPR body:\n${pr.body || ''}`,
+          text: `PR number: ${pr.number}\nPR title: ${pr.title}\nPR body:\n${pr.body || ''}\n\nLabels: ${labelsText}\nChanged files:\n${filesText}`,
         }],
       },
       configuration: { acceptedOutputModes: ['application/json', 'text/plain'] },

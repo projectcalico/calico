@@ -49,12 +49,29 @@ global_job_config:
         if [[ -n "${SEMAPHORE_GIT_BRANCH}" && -z "$SKIP_CACHE_RESTORE" ]]; then
           echo "Looking for cached working copy for branch ${SEMAPHORE_GIT_BRANCH}"
           gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          if gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd; then
+          # On master, use Semaphore's free built-in cache; other branches still
+          # use GCS. (For PRs, SEMAPHORE_GIT_BRANCH is the base branch, so PRs
+          # targeting master restore master's Semaphore cache.) Note: `cache
+          # restore` exits 0 even on a miss, so we test for the restored file.
+          if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then use_sem_cache=true; else use_sem_cache=false; fi
+          rm -f /tmp/working-copy.tar.zstd
+          if ${use_sem_cache}; then
+            cache restore "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+          else
+            gcloud storage cp "$gcs_branch_cache_dir/working-copy.tar.zstd" /tmp/working-copy.tar.zstd || true
+          fi
+          if [[ -f /tmp/working-copy.tar.zstd ]]; then
             echo "Restoring cache for branch ${SEMAPHORE_GIT_BRANCH}"
             tar --use-compress-program=zstd -xf /tmp/working-copy.tar.zstd & tar_pid=$!
             downloaded_build_cache=false
             if [[ -n "$BUILD_CACHE_GROUP" && -n "${SEMAPHORE_GIT_PR_NUMBER}" ]]; then
-              if gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd; then
+              rm -f /tmp/build-cache.tar.zstd
+              if ${use_sem_cache}; then
+                cache restore "build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}" || true
+              else
+                gcloud storage cp "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd" /tmp/build-cache.tar.zstd || true
+              fi
+              if [[ -f /tmp/build-cache.tar.zstd ]]; then
                 echo "Found build cache for group ${BUILD_CACHE_GROUP}"
                 downloaded_build_cache=true
               fi
@@ -94,23 +111,31 @@ global_job_config:
           mkdir -p artifacts
         fi
       - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-      # Best-effort: load calico/go-build from the GCS cache populated by the
-      # "Pull: go-build image" prerequisite job. Falls back to a Docker Hub pull
-      # on cache miss. Skipped on non-x86_64 / cross-compile agents since the
-      # cache is amd64-only.
+      # Ensure calico/go-build is present, cheaply. Pull from Docker Hub first
+      # (free egress) and only fall back to the GCS cache — populated by the
+      # "Pull: go-build image" prerequisite job — if the pull fails. This keeps
+      # GCS egress near zero in the common case while keeping GCS as a robustness
+      # fallback for the occasional Docker Hub pull failure (which we still see
+      # even with an authenticated session). Skipped on non-x86_64 / cross-compile
+      # agents since the cache is amd64-only.
       - |-
         if [[ $(uname -m) == "x86_64" && -z "$ARCH" ]]; then
           GO_BUILD_VER=$(make --no-print-directory -f metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
           image="calico/go-build:${GO_BUILD_VER}"
           if ! docker image inspect "$image" >/dev/null 2>&1; then
-            cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
-            if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
-              echo "Loading ${image} from GCS cache"
-              zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
-              docker load -i /tmp/go-build.tar
-              rm -f /tmp/go-build.tar
+            if docker pull "$image"; then
+              echo "Pulled ${image} from Docker Hub"
             else
-              echo "No GCS cache for ${image}, docker will pull from Docker Hub if needed"
+              echo "Docker Hub pull failed for ${image}, falling back to GCS cache"
+              cache_path="gs://${GCS_BUILD_CACHE_BUCKET}/images/calico-go-build-${GO_BUILD_VER}.tar.zst"
+              if gcloud storage cp "$cache_path" /tmp/go-build.tar.zst 2>/dev/null; then
+                echo "Loading ${image} from GCS cache"
+                zstd -d --rm -o /tmp/go-build.tar /tmp/go-build.tar.zst
+                docker load -i /tmp/go-build.tar
+                rm -f /tmp/go-build.tar
+              else
+                echo "No GCS fallback for ${image}; later docker use will retry the pull"
+              fi
             fi
           fi
         fi
@@ -121,8 +146,16 @@ global_job_config:
         if [[ -z "${SEMAPHORE_GIT_PR_NUMBER}" && -n "$BUILD_CACHE_GROUP" && "$STORE_BUILD_CACHE" = "true" ]]; then
           echo "On branch, storing build cache group ${BUILD_CACHE_GROUP}"
           tar --use-compress-program="zstd -3" -cf /tmp/build-cache.tar.zstd go ${CALICO_DIR_NAME}/.go-pkg-cache
-          gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+          if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+            # master uses Semaphore's free cache; delete-then-store guarantees a
+            # refresh each master build regardless of `cache store` overwrite semantics.
+            key="build-cache-${SEMAPHORE_GIT_BRANCH}-${BUILD_CACHE_GROUP}"
+            cache delete "$key" || true
+            cache store "$key" /tmp/build-cache.tar.zstd
+          else
+            gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+            gcloud storage cp /tmp/build-cache.tar.zstd "$gcs_branch_cache_dir/build-cache-${BUILD_CACHE_GROUP}.tar.zstd"
+          fi
         fi
       - cd "$CALICO_DIR"
       - .semaphore/publish-artifacts
@@ -339,8 +372,18 @@ blocks:
           commands:
             - cd ..
             - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
-            - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-            - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+            - |-
+              if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+                # master uses Semaphore's free cache (other branches use GCS). This
+                # block only runs on branch builds (its `when: "branch =~ '.*'"`),
+                # so PRs never store here — they only restore, in the prologue.
+                # Cache keys are not overwritten, so delete-then-store to refresh.
+                cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+                cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
+              else
+                gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+                gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+              fi
   - name: "Build: nftables RPMs"
     # Producer for the patched nftables + libnftnl RPMs that calico/node and the
     # istio CNI install image consume. The image tag is content-addressed (sha
@@ -386,11 +429,13 @@ blocks:
           commands:
             - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
   - name: "Pull: go-build image"
-    # Populate the GCS cache of calico/go-build so that every downstream job can
-    # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
-    # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
-    # the tarball survives across workflows — the common case is a no-op
-    # `gcloud storage ls` on a cache hit.
+    # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+    # a Docker Hub pull fails (which we still see occasionally even with an
+    # authenticated session). Jobs pull from Docker Hub first and only fall back to
+    # this GCS copy on failure (see the global prologue), so this is just an
+    # insurance upload — uploads are free and the common case is a no-op
+    # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+    # across workflows.
     run:
       when: "true"
     dependencies: []
@@ -496,13 +541,10 @@ blocks:
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
     # can depend on the shared producer→GCS→consumer upload pattern.
-    # felix + process/testing paths trigger this so the win-fv-felix block (which
-    # now installs the locally-built node image) has it cached in GCS. felix is a
-    # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
-    # (test + non-Go files) that the win-fv-felix block triggers on as a primary
-    # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
-    # the rest of felix's test closure, keeping this a superset of win-fv-felix so
-    # it never runs without this image in GCS.
+    # felix is primary (not node) so a felix-test-only PR still triggers this
+    # producer: the deps tool keeps /**/*_test.go coverage only for the primary
+    # arg. That matches the win-fv-felix consumer which installs this image. See
+    # the "Build: calico image" comment for the full rationale.
     run:
       when: "true"
     dependencies:
@@ -1824,7 +1866,12 @@ blocks:
       jobs:
         - name: "OpenStack: Unit and FV tests (tox) on Caracal"
           commands:
-            - ../.semaphore/run-and-monitor tox.log make tox-caracal
+            # Run sequentially via `bash -c '... && ...'` rather than as
+            # multiple targets on a single make invocation: a make invoked
+            # with MAKEFLAGS=-j would otherwise schedule the two targets in
+            # parallel and have two concurrent tox runs contend over the
+            # shared .tox/ working tree.
+            - ../.semaphore/run-and-monitor tox.log bash -c 'make tox-caracal && make tox-fv-caracal'
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
             # Env vars needed for saving performance results.
@@ -1929,7 +1976,64 @@ blocks:
             - cache store release-${SEMAPHORE_GIT_SHA} bin
 after_pipeline:
   task:
+    secrets:
+      # RELEASE_MONITOR_AGENT_URL / RELEASE_MONITOR_AGENT_TOKEN for the branch-monitor agent.
+      - name: slack-master-release-monitor
     jobs:
       - name: Reports
         commands:
           - test-results gen-pipeline-report --force
+      - name: Branch CI monitor
+        commands:
+          # On EVERY master/release-* pipeline (pass AND fail), hand the run to the
+          # branch-monitor agent. The agent records the run in its state engine
+          # (which dedups, escalates back-to-back/intermittent, and tracks recovery)
+          # and posts to Slack itself when there is something worth reporting. A pass
+          # is recorded too so the engine can recover open incidents for the branch.
+          - |
+            # Only true pushes to master/release-*. On a pull-request pipeline
+            # SEMAPHORE_GIT_BRANCH is the PR's *target* branch (so a PR against
+            # master reads as "master"); gate on the ref type / PR number first
+            # so PR builds don't masquerade as branch builds.
+            if [ "$SEMAPHORE_GIT_REF_TYPE" != "branch" ] || [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+              echo "not a branch push (ref_type=${SEMAPHORE_GIT_REF_TYPE} pr=${SEMAPHORE_GIT_PR_NUMBER}) — not monitored"
+              exit 0
+            fi
+            case "$SEMAPHORE_GIT_BRANCH" in
+              master|release-*) ;;
+              *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
+            esac
+            case "$SEMAPHORE_PIPELINE_RESULT" in
+              passed) result=pass ;;
+              failed) result=fail ;;
+              *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
+            esac
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
+            # We only need the trigger to land: the agent records the run and posts
+            # to Slack itself, and its task runs to completion server-side even if
+            # this connection drops. Stream (SSE) rather than message/send so one
+            # connection rides out the cold agent boot and the sem-ai triage on a
+            # failure; the menagerie gateway caps a request at 300s, so allow a
+            # little over that and let the gateway be the limiter. Retry ONLY when
+            # we get nothing back (gateway error before the agent saw the task) —
+            # any SSE data means the agent has it, so re-POSTing would double-fire.
+            for i in 1 2 3; do
+              resp=$(curl -sS -N -m 320 -X POST "$RELEASE_MONITOR_AGENT_URL" \
+                -H "Authorization: Bearer $RELEASE_MONITOR_AGENT_TOKEN" \
+                -H "Content-Type: application/json" -H "Accept: text/event-stream" \
+                -d "$req" || true)
+              # Echo the SSE stream so a failed trigger can be debugged from the log.
+              echo "attempt $i SSE stream: $resp"
+              if [ -n "$resp" ]; then
+                if printf '%s' "$resp" | grep -Eq '"state":"(completed|failed)"|"final":[[:space:]]*true'; then
+                  echo "branch-monitor: agent run finished"
+                else
+                  echo "branch-monitor: agent received the trigger (stream ended without a terminal event; task continues server-side)"
+                fi
+                exit 0
+              fi
+              echo "attempt $i: no response (gateway/agent cold) — retrying"; sleep 15
+            done
+            echo "branch-monitor: agent unreachable after retries — skipping"

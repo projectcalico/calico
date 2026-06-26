@@ -104,6 +104,14 @@ EOF
                     iniset $NEUTRON_CONF calico etcd_host $SERVICE_HOST
                     iniset $NEUTRON_CONF calico etcd_port $ETCD_PORT
 
+                    # Turn on the connection-fairy GC diagnostics in the
+                    # mech driver so any in-hub fairy finalisation in CI
+                    # logs a WARNING with the originating-checkout stack.
+                    # Cheap enough to leave on for benchmark runs and
+                    # essential for catching the deadlock pattern that
+                    # has hung resync_scale_test in the past.
+                    iniset $NEUTRON_CONF calico fairy_gc_diagnostics True
+
                     # If CALICO_ETCD_COMPACTION_PERIOD_MINS is
                     # defined, set that as the value of the
                     # etcd_compaction_period_mins setting.
