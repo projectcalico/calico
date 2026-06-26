@@ -987,7 +987,13 @@ func collectTyphaDiags(curNodeDir, nodeName, namespace, podName string) {
 		fmt.Printf("ERROR creating %v: %v\n", outPath, err)
 		return
 	}
-	defer out.Close()
+	defer func() {
+		// A close error on the output file can mean the snapshot was not fully
+		// flushed to disk, so surface it rather than silently dropping it.
+		if cerr := out.Close(); cerr != nil {
+			fmt.Printf("WARNING: failed to close %v (snapshot may be truncated): %v\n", outPath, cerr)
+		}
+	}()
 
 	if err := decodeBase64Gzip(stdout, out); err != nil {
 		// Typically means there was no decodable output, e.g. a Typha image that
@@ -1005,7 +1011,9 @@ func decodeBase64Gzip(src io.Reader, dst io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	// io.Copy reads to EOF, which validates the gzip trailer/checksum, so any
+	// corruption surfaces there; the reader's Close error is redundant.
+	defer func() { _ = gz.Close() }()
 	_, err = io.Copy(dst, gz)
 	return err
 }

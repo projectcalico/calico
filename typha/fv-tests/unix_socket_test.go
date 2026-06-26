@@ -45,13 +45,17 @@ func TestUnixSocketDump(t *testing.T) {
 	cache := snapcache.New(snapcache.Config{MaxBatchSize: 10, WakeUpInterval: 50 * time.Millisecond})
 	valFilter := calc.NewValidationFilter(cache)
 
-	// Cancelling the context tears the server down.  We don't block on
-	// server.Finished here: this test is about the dump round-trip (which
-	// completes below), not server shutdown ordering, and tearing the whole
-	// server down mid-snapshot races with the shared snapshot goroutines.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go decoupler.SendToContext(ctx, valFilter)
+	// Use separate contexts for the cache and the server, and tear them down in
+	// the same order as the Ginkgo harness (cancel the server, wait for it to
+	// fully drain, then cancel the cache).  This matters: the server's
+	// per-client goroutines log as they shut down, and if any logs after the
+	// test function returns the test harness turns it into a panic.  Waiting on
+	// server.Finished guarantees those goroutines (including readFromClient) are
+	// done before we return; keeping the cache alive until then avoids racing
+	// the shared snapshot goroutines during shutdown.
+	cacheCtx, cacheCancel := context.WithCancel(context.Background())
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	go decoupler.SendToContext(cacheCtx, valFilter)
 
 	server := syncserver.New(
 		map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
@@ -61,17 +65,24 @@ func TestUnixSocketDump(t *testing.T) {
 			SocketPath:   socketPath,
 		},
 	)
-	cache.Start(ctx)
-	server.Start(ctx)
+	cache.Start(cacheCtx)
+	server.Start(serverCtx)
+	defer func() {
+		serverCancel()
+		server.Finished.Wait()
+		cacheCancel()
+	}()
 
 	// Seed a snapshot and mark it in-sync.
 	decoupler.OnStatusUpdated(api.ResyncInProgress)
 	decoupler.OnUpdates([]api.Update{configFoobarBazzBiff})
 	decoupler.OnStatusUpdated(api.InSync)
 
-	// Dump the felix snapshot over the unix socket.
+	// Dump the felix snapshot over the unix socket.  The dump uses its own
+	// context (it disconnects once the snapshot is in-sync, and is bounded by
+	// the idle timeout), independent of the server/cache lifetimes.
 	var out strings.Builder
-	err := snapshotdump.Dump(ctx, snapshotdump.Config{
+	err := snapshotdump.Dump(context.Background(), snapshotdump.Config{
 		Server:      "unix://" + socketPath,
 		SyncerTypes: []syncproto.SyncerType{syncproto.SyncerTypeFelix},
 		Format:      snapshotdump.FormatNDJSON,
