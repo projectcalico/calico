@@ -41,6 +41,7 @@ import (
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/networking"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/operator"
 	_ "github.com/projectcalico/calico/e2e/pkg/tests/policy"
+	_ "github.com/projectcalico/calico/e2e/pkg/tests/typha"
 )
 
 func init() {
