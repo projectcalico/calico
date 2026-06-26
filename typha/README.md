@@ -185,10 +185,13 @@ socket is private to the pod.  (A Linux *abstract* socket would be wrong here â€
 it lives in the network namespace, which `hostNetwork` shares with the host.)
 The socket file is created `0600`.  Typha runs as a non-root uid with all
 capabilities dropped and cannot create a directory under the root-owned
-filesystem, so the `calico` image pre-creates `/var/run/calico` owned by that
-uid (with `/var` and `/var/run` keeping their normal root-owned perms).  If the
-socket cannot be set up, Typha logs a warning and continues serving Felix
-normally.
+filesystem, so the `calico` image pre-creates the socket directory owned by
+that uid.  It creates the real directory at `/run/calico` and ships `/var/run`
+as a symlink to `/run`, so `/var/run/calico` resolves to the writable
+`/run/calico` regardless of the base image (the minimal `calico/base` ships no
+`/var/run` at all, while UBI-based images ship `/var/run` as a symlink to
+`/run`).  If the socket cannot be set up, Typha logs a warning and continues
+serving Felix normally.
 
 ## License
 
