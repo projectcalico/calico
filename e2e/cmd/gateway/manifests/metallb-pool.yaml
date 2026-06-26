@@ -20,21 +20,12 @@
 # (matches what envoyproxy/gateway's tools/hack/create-cluster.sh does).
 #
 # serviceAllocation.priority is higher than the default BGP pool so the
-# conformance LB Services pin here deterministically. The namespace to list
-# is where Envoy Gateway provisions its data-plane Service for each Gateway:
-# Calico's tigera-operator configures Envoy Gateway with
-# provider.kubernetes.deploy.type=GatewayNamespace (see the operator's
-# gatewayapi render, pkg/render/gatewayapi/gateway_api.go), so the envoy
-# Deployment + LoadBalancer Service for each Gateway is created in that
-# Gateway's own namespace -- not the EG controller namespace. The
-# conformance suite creates all of its Gateways in gateway-conformance-infra,
-# so that is where the LB Services to allocate live.
+# conformance LB Services pin here deterministically.
 #
-# (Earlier this listed tigera-gateway, from when the operator left
-# Deploy.Type unset and EG ran in controller-namespace mode. Once the
-# operator moved to GatewayNamespace mode the Services moved to the Gateway
-# namespace, leaving every Gateway stuck Programmed=False/AddressNotAssigned
-# because metallb had no pool scoped to gateway-conformance-infra.)
+# serviceAllocation.namespaces lists where Envoy Gateway provisions data-plane
+# LB Services: each Gateway's Service lands in the Gateway's own namespace
+# (gateway-conformance-infra for the conformance suite). Without the right
+# namespace metallb leaves the Services <pending> (Gateway Programmed=False).
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:

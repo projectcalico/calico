@@ -58,13 +58,14 @@ import (
 // curatedFlag selects a pre-baked feature/test/profile set. Empty means
 // "honour the individual upstream flags". Currently supports:
 //
-//	envoy-gateway   - mirrors envoyproxy/gateway v1.7.0's
-//	                  EnvoyGatewaySuite (default mode, no
-//	                  gatewayNamespaceMode): full upstream features
-//	                  minus mesh, plus UDP, with GatewayStaticAddresses
-//	                  and GatewayInfrastructure tests skipped.
-//	                  See internal/gatewayapi/conformance/suite.go in
-//	                  the envoyproxy/gateway v1.7.0 tag.
+//	envoy-gateway   - mirrors envoyproxy/gateway v1.8.0's
+//	                  EnvoyGatewaySuite for GatewayNamespace mode (the
+//	                  mode the tigera-operator deploys): full upstream
+//	                  features minus mesh, plus UDP, with the features
+//	                  and tests EG and Calico's deployment don't support
+//	                  skipped. See test/conformance/suite.go in the
+//	                  envoyproxy/gateway v1.8.0 tag, and
+//	                  envoyGatewayCuratedSet for the exact set.
 var curatedFlag = flag.String("curated", "", "Pre-baked feature/test/profile set: \"envoy-gateway\" or empty.")
 
 func TestGatewayAPIConformance(t *testing.T) {
@@ -248,33 +249,21 @@ func curatedConfig(name string) (curatedSet, error) {
 	}
 }
 
-// envoyGatewayCuratedSet mirrors the curated conformance configuration in
-// envoyproxy/gateway's own conformance suite. Calico's Gateway API
-// implementation is a Calico-deployed Envoy Gateway, so the supported
-// feature surface is, by construction, the same. The tigera-operator
-// deploys Envoy Gateway with provider.kubernetes.deploy.type=GatewayNamespace,
-// so we mirror the GatewayNamespace-mode skip lists.
+// envoyGatewayCuratedSet mirrors the curated configuration in
+// envoyproxy/gateway v1.8.0's test/conformance/suite.go for the
+// GatewayNamespace operating mode (the mode the tigera-operator deploys).
+// Calico's Gateway API implementation is a Calico-deployed Envoy Gateway,
+// so the supported feature surface is, by construction, the same.
 //
-// Source ref (v1.8.0, the bundled version):
-// https://github.com/envoyproxy/gateway/blob/v1.8.0/test/conformance/suite.go
+// Source ref: https://github.com/envoyproxy/gateway/blob/v1.8.0/test/conformance/suite.go
 func envoyGatewayCuratedSet() curatedSet {
 	skipFeatures := sets.New(
 		features.GatewayStaticAddressesFeature.Name,
 		features.GatewayInfrastructurePropagationFeature.Name,
-		// Envoy Gateway v1.8.0 skips this in its own conformance suite
-		// (SkipFeatures, both modes): detecting misdirected HTTPS requests
-		// (SNI vs Host mismatch -> 421) is not supported by the data plane
-		// as deployed. Skipping the feature skips the
-		// HTTPRouteHTTPSListenerDetectMisdirectedRequests test.
+		// New in gateway-api v1.5.x / EG v1.8.0: EG does not implement
+		// misdirected-request detection on HTTPS listeners.
 		features.GatewayHTTPSListenerDetectMisdirectedRequestsFeature.Name,
-		// ListenerSet (gateway-api v1.5.x, experimental channel) requires the
-		// Envoy Gateway controller to be started with
-		// extensionApis.enableListenerSet=true. The tigera-operator does not
-		// set that today, so a Calico-deployed Envoy Gateway does not honor
-		// ListenerSet resources -- claiming the feature here makes the suite
-		// run the ListenerSet tests and they fail. Opt out until the operator
-		// enables the feature by default. Remove this line once enableListenerSet
-		// is on, at which point the ListenerSet tests run.
+		// ListenerSet works on EG v1.8.0 (routes traffic) but isn't yet status-conformant to gateway-api v1.5.1's ListenerSet tests.
 		features.ListenerSetFeature.Name,
 	)
 
@@ -302,10 +291,8 @@ func envoyGatewayCuratedSet() curatedSet {
 		SkipTests: []string{
 			tests.GatewayStaticAddresses.ShortName,
 			tests.GatewayInfrastructure.ShortName,
-			// Skipped by Envoy Gateway v1.8.0's own conformance suite
-			// (SkipTests, marked "TODO: fix following conformance tests").
-			tests.ListenerSetHostnameConflict.ShortName,
-			tests.ListenerSetProtocolConflict.ShortName,
+			// EG v1.8.0 fails only the uri-type SAN case (dns/multi SAN pass); skip until EG fixes URI SAN verification — revisit full support later (likely an Envoy-side fix).
+			tests.BackendTLSPolicySANValidation.ShortName,
 		},
 		Profiles: sets.New(
 			suite.GatewayHTTPConformanceProfileName,
