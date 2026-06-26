@@ -114,6 +114,14 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresTypha marks tests that depend on Typha (the datastore fan-out proxy)
+// being deployed. Operator-managed clusters deploy Typha by default; clusters
+// that do not run Typha must exclude these tests via the RequiresTypha label in
+// their test-selection config. Tests must not self-skip on Typha-less clusters.
+func RequiresTypha() any {
+	return framework.WithLabel("RequiresTypha")
+}
+
 // RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed
 // in the cluster. These tests read flow logs via the Whisker API, which requires
 // the Goldmane flow aggregation backend. Skip on clusters without Goldmane

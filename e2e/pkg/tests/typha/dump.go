@@ -21,9 +21,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
-
-	//nolint:staticcheck // Ignore ST1001: should not use dot imports
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2ekubectl "k8s.io/kubernetes/test/e2e/framework/kubectl"
@@ -37,14 +35,19 @@ import (
 // calico-typha pod and checks that the pod-private unix socket
 // (/var/run/calico/typha.sock) serves a complete, in-sync snapshot.  Unit and
 // FV tests cover the dump logic in isolation, but only an E2E test catches the
-// environment-dependent failure modes that the feature depends on: the image
-// pre-creating a writable /var/run/calico, Typha opening the socket as a
+// environment-dependent failure modes the feature depends on: the image
+// pre-creating a writable runtime directory, Typha opening the socket as a
 // non-root, all-caps-dropped process, and the platform permitting the
-// sync-protocol-over-UDS path at all.
+// sync-protocol-over-unix-socket path at all.
+//
+// The test is gated by the RequiresTypha label so it is only selected on
+// clusters that actually deploy Typha; clusters without Typha exclude it in
+// their test-selection config rather than having the test self-skip.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Typha"),
 	describe.WithCategory(describe.Configuration),
+	describe.RequiresTypha(),
 	"Typha snapshot dump",
 	func() {
 		f := utils.NewDefaultFramework("typha-dump")
@@ -55,20 +58,27 @@ var _ = describe.CalicoDescribe(
 
 			// Typha lives in calico-system for operator installs and kube-system
 			// for manifest installs; match by label across all namespaces.
+			ginkgo.By("finding a running calico-typha pod")
 			pods, err := f.ClientSet.CoreV1().Pods(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
 				LabelSelector: "k8s-app=calico-typha",
 			})
-			Expect(err).NotTo(HaveOccurred())
-
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "failed to list calico-typha pods")
+			// This test is gated by the RequiresTypha label, so it only runs on
+			// clusters that deploy Typha. A missing Typha pod is a real failure
+			// here, not a reason to skip (self-skipping is banned).
+			gomega.Expect(pods.Items).NotTo(
+				gomega.BeEmpty(),
+				"no calico-typha pods found, but this test is gated by RequiresTypha; "+
+					"check the cluster's Typha deployment or the RequiresTypha exclusion in the test config",
+			)
 			pod := firstRunning(pods.Items)
-			if pod == nil {
-				ginkgo.Skip("no running calico-typha pod; cluster has no Typha")
-			}
+			gomega.Expect(pod).NotTo(gomega.BeNil(), "found calico-typha pods but none are Running")
 
 			// Exec the dump directly: the calico image has no shell, so we pass
 			// the binary and its arguments as explicit argv tokens after "--".
 			// The dump logs to stderr and writes NDJSON to stdout, which Exec()
 			// returns.
+			ginkgo.By("running 'calico component typha client dump' in the typha pod")
 			args := []string{
 				"exec", pod.Name, "-n", pod.Namespace, "-c", "calico-typha", "--",
 				"calico", "component", "typha", "client", "dump", "--type=felix",
@@ -76,12 +86,13 @@ var _ = describe.CalicoDescribe(
 			out, err := e2ekubectl.NewKubectlCommand(pod.Namespace, args...).
 				WithTimeout(time.After(75 * time.Second)).
 				Exec()
-			Expect(err).NotTo(HaveOccurred(), "dump command failed: %s", out)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "typha dump command failed: %s", out)
 
-			// Parse the NDJSON stream.  Each line is one event; we only care
-			// about the felix section: at least one key line, plus an "end"
-			// marker reporting in-sync with a non-empty snapshot.  Parsing into
-			// a map keeps this robust to field reordering in the encoder.
+			// Parse the NDJSON stream.  We only care about the felix section: at
+			// least one key line, plus an "end" marker reporting in-sync with a
+			// non-empty snapshot.  Parsing into a map keeps this robust to
+			// encoder field reordering.
+			ginkgo.By("verifying the felix snapshot is framed, in-sync, and non-empty")
 			sawKey := false
 			var end map[string]any
 			for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
@@ -97,10 +108,10 @@ var _ = describe.CalicoDescribe(
 				}
 			}
 
-			Expect(end).NotTo(BeNil(), "no felix end marker in dump:\n%s", out)
-			Expect(end["status"]).To(Equal("in-sync"), "felix snapshot did not reach in-sync:\n%s", out)
-			Expect(end["numKVs"]).To(BeNumerically(">", 0), "felix snapshot reported no KVs:\n%s", out)
-			Expect(sawKey).To(BeTrue(), "felix snapshot had no key lines:\n%s", out)
+			gomega.Expect(end).NotTo(gomega.BeNil(), "no felix end marker in dump:\n%s", out)
+			gomega.Expect(end["status"]).To(gomega.Equal("in-sync"), "felix snapshot did not reach in-sync:\n%s", out)
+			gomega.Expect(end["numKVs"]).To(gomega.BeNumerically(">", 0), "felix snapshot reported no KVs:\n%s", out)
+			gomega.Expect(sawKey).To(gomega.BeTrue(), "felix snapshot had no key lines:\n%s", out)
 		})
 	})
 
