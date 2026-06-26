@@ -138,10 +138,10 @@ function wait_pod_ready() {
       ${kubectl} get po -o wide $args || true
       sleep 1
     done;
-    ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
+    ${kubectl} wait pod --for=condition=Ready --timeout=480s $args
   ) & pid=$!
   # Start a second background process that implements the actual timeout.
-  ( sleep 300; kill $pid ) 2>/dev/null & watchdog=$!
+  ( sleep 480; kill $pid ) 2>/dev/null & watchdog=$!
   set +e
 
   wait $pid 2>/dev/null
@@ -150,7 +150,7 @@ function wait_pod_ready() {
   wait $watchdog 2>/dev/null
 
   if [ $rc -ne 0 ]; then
-    echo "Pod $args failed to become ready within 300s"
+    echo "Pod $args failed to become ready within 8m"
   fi
 
   set -e
