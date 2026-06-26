@@ -36,7 +36,6 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
@@ -176,7 +175,7 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	t.Cleanup(func() { _, _ = utils.Run(t, "docker rm -f "+externalNodeV6, utils.RunOptions{AllowFail: true}) })
 
 	// Mark the egress node so the node-selected BGPPeers attach to it.
-	labelNode(t, ctx, env.egressNode, "egress", "true")
+	labelNode(t, env.egressNode, "egress", "true")
 
 	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode)
 
@@ -447,18 +446,6 @@ func testBGPFilterGlobalPeer(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 }
 
 // --- Fixture + resource helpers ---
-
-// labelNode applies a single label to a node via a strategic-merge patch (the
-// client-go equivalent of `kubectl label node ... --overwrite`).
-func labelNode(t *testing.T, ctx context.Context, nodeName, key, value string) {
-	t.Helper()
-	cs := utils.K8sClient(t)
-	patch := fmt.Appendf(nil, `{"metadata":{"labels":{%q:%q}}}`, key, value)
-	_, err := cs.CoreV1().Nodes().Patch(ctx, nodeName, types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("labelling node %s with %s=%s: %v", nodeName, key, value, err)
-	}
-}
 
 // createBGPPeer creates a node-selected BGPPeer to the given external router
 // address and registers a cleanup that removes it.

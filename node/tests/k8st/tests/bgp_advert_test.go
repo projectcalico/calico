@@ -162,7 +162,7 @@ func TestBGPAdvert(t *testing.T) {
 		"BGP advert test needs a control-plane node and three workers")
 
 	birdConf := fmt.Sprintf(birdConfMeshTmpl, ips[0], ips[1], ips[2], ips[3])
-	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf)
+	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
 	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP}
@@ -204,7 +204,7 @@ func TestBGPAdvertRR(t *testing.T) {
 		"BGP advert RR test needs a control-plane node and three workers")
 
 	birdConf := fmt.Sprintf(birdConfRRTmpl, ips[2])
-	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf)
+	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
 	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP}
