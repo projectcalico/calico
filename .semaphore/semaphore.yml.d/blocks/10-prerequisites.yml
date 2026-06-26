@@ -295,15 +295,12 @@
   # stage assembly (copying binaries onto the base image) runs here, not the Go
   # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
   # can depend on the shared producer→GCS→consumer upload pattern.
-  # felix + process/testing paths trigger this so the win-fv-felix block (which
-  # now installs the locally-built node image) has it cached in GCS. felix is a
-  # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
-  # (test + non-Go files) that the win-fv-felix block triggers on as a primary
-  # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
-  # the rest of felix's test closure, keeping this a superset of win-fv-felix so
-  # it never runs without this image in GCS.
+  # felix is primary (not node) so a felix-test-only PR still triggers this
+  # producer: the deps tool keeps /**/*_test.go coverage only for the primary
+  # arg. That matches the win-fv-felix consumer which installs this image. See
+  # the "Build: calico image" comment for the full rationale.
   run:
-    when: "${CHANGE_IN(node,felix,non-go:/felix/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN(felix,node,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies:
     - "Build: nftables RPMs"
   task:
