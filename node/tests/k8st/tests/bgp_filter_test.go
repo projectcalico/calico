@@ -568,7 +568,17 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 	if ipv6 {
 		birdCmd = "birdcl6"
 	}
-	re := regexp.MustCompile(routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto)
+	// IPv6 routes are advertised with a connected link-local next-hop, so the
+	// peer's global address appears in BIRD's "from" field (inside the protocol
+	// brackets) rather than in "via"; IPv4 routes have no "from" and use the
+	// global address as the next-hop.
+	//   v4: <route> via <peerIP> on eth0 [<proto> <time>] ...
+	//   v6: <route> via fe80::... on eth0 [<proto> <time> from <peerIP>] ...
+	pattern := routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto
+	if ipv6 {
+		pattern = routeRegex + ` *via fe80:[0-9a-f:]+ on .* \[` + proto + `.*from ` + peerIPRegex
+	}
+	re := regexp.MustCompile(pattern)
 
 	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
 		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s show route protocol %s", container, birdCmd, proto),
