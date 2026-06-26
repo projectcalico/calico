@@ -13,7 +13,7 @@
         commands:
           # Load the amd64 patched nftables RPMs producer image so the
           # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+          - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
           - zstd -d --rm /tmp/nft-rpms.tar.zst
           - docker load -i /tmp/nft-rpms.tar
           - rm -f /tmp/nft-rpms.tar
