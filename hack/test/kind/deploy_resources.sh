@@ -158,10 +158,17 @@ function wait_pod_ready() {
 }
 
 echo "Set ipv6 address on each node"
-docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
-docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
-docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
-docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
+# Iterate over the actual node containers for this KIND_NAME rather than
+# hardcoding kind-* names, so the script works for clusters with a non-default
+# name or a different worker count.
+i=1
+for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
+  case "${node}" in
+    *-control-plane) docker exec "${node}" ip -6 addr replace 2001:20::8/64 dev eth0 ;;
+    *)               docker exec "${node}" ip -6 addr replace "2001:20::${i}/64" dev eth0
+                     i=$((i+1)) ;;
+  esac
+done
 
 echo
 
