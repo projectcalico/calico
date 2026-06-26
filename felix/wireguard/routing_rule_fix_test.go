@@ -338,79 +338,79 @@ var _ = Describe("Source-scoped routing rules fix (Issue #9751)", func() {
 			Expect(link.WireguardPeers).To(HaveLen(1))
 		})
 
-Context("when switching EncryptHostTraffic modes at runtime", func() {
-It("should remove old unscoped rule when switching from true to false", func() {
-// Start with EncryptHostTraffic=true
-config.EncryptHostTraffic = true
-key_local := mustGeneratePrivateKey().PublicKey()
-wg.EndpointWireguardUpdate(hostname, key_local, nil)
-wg.EndpointUpdate(hostname, ipv4_local)
-wg.RouteUpdate(hostname, cidr_pool1)
+		Context("when switching EncryptHostTraffic modes at runtime", func() {
+			It("should remove old unscoped rule when switching from true to false", func() {
+				// Start with EncryptHostTraffic=true
+				config.EncryptHostTraffic = true
+				key_local := mustGeneratePrivateKey().PublicKey()
+				wg.EndpointWireguardUpdate(hostname, key_local, nil)
+				wg.EndpointUpdate(hostname, ipv4_local)
+				wg.RouteUpdate(hostname, cidr_pool1)
 
-err := wg.Apply()
-Expect(err).ToNot(HaveOccurred())
+				err := wg.Apply()
+				Expect(err).ToNot(HaveOccurred())
 
-// Verify unscoped rule was added
-Expect(rrDataplane.AddedRules).To(HaveLen(1))
-unscopedRule := rrDataplane.AddedRules[0]
-Expect(unscopedRule.Src).To(BeNil()) // Unscoped
+				// Verify unscoped rule was added
+				Expect(rrDataplane.AddedRules).To(HaveLen(1))
+				unscopedRule := rrDataplane.AddedRules[0]
+				Expect(unscopedRule.Src).To(BeNil()) // Unscoped
 
-// Switch to EncryptHostTraffic=false
-config.EncryptHostTraffic = false
-rrDataplane.AddedRules = nil
-rrDataplane.DeletedRules = nil
+				// Switch to EncryptHostTraffic=false
+				config.EncryptHostTraffic = false
+				rrDataplane.AddedRules = nil
+				rrDataplane.DeletedRules = nil
 
-err = wg.Apply()
-Expect(err).ToNot(HaveOccurred())
+				err = wg.Apply()
+				Expect(err).ToNot(HaveOccurred())
 
-// Verify old unscoped rule was removed and per-CIDR rule was added
-Expect(rrDataplane.DeletedRules).To(HaveLen(1))
-deletedRule := rrDataplane.DeletedRules[0]
-Expect(deletedRule.Src).To(BeNil()) // Unscoped rule deleted
+				// Verify old unscoped rule was removed and per-CIDR rule was added
+				Expect(rrDataplane.DeletedRules).To(HaveLen(1))
+				deletedRule := rrDataplane.DeletedRules[0]
+				Expect(deletedRule.Src).To(BeNil()) // Unscoped rule deleted
 
-Expect(rrDataplane.AddedRules).To(HaveLen(1))
-newRule := rrDataplane.AddedRules[0]
-Expect(newRule.Src).ToNot(BeNil())
-Expect(newRule.Src.String()).To(Equal(cidr_pool1.String()))
-})
+				Expect(rrDataplane.AddedRules).To(HaveLen(1))
+				newRule := rrDataplane.AddedRules[0]
+				Expect(newRule.Src).ToNot(BeNil())
+				Expect(newRule.Src.String()).To(Equal(cidr_pool1.String()))
+			})
 
-It("should remove old per-CIDR rules when switching from false to true", func() {
-// Start with EncryptHostTraffic=false
-config.EncryptHostTraffic = false
-key_local := mustGeneratePrivateKey().PublicKey()
-wg.EndpointWireguardUpdate(hostname, key_local, nil)
-wg.EndpointUpdate(hostname, ipv4_local)
-wg.RouteUpdate(hostname, cidr_pool1)
-wg.RouteUpdate(hostname, cidr_pool2)
+			It("should remove old per-CIDR rules when switching from false to true", func() {
+				// Start with EncryptHostTraffic=false
+				config.EncryptHostTraffic = false
+				key_local := mustGeneratePrivateKey().PublicKey()
+				wg.EndpointWireguardUpdate(hostname, key_local, nil)
+				wg.EndpointUpdate(hostname, ipv4_local)
+				wg.RouteUpdate(hostname, cidr_pool1)
+				wg.RouteUpdate(hostname, cidr_pool2)
 
-err := wg.Apply()
-Expect(err).ToNot(HaveOccurred())
+				err := wg.Apply()
+				Expect(err).ToNot(HaveOccurred())
 
-// Verify per-CIDR rules were added
-Expect(rrDataplane.AddedRules).To(HaveLen(2))
-for _, rule := range rrDataplane.AddedRules {
-Expect(rule.Src).ToNot(BeNil()) // Source-scoped
-}
+				// Verify per-CIDR rules were added
+				Expect(rrDataplane.AddedRules).To(HaveLen(2))
+				for _, rule := range rrDataplane.AddedRules {
+					Expect(rule.Src).ToNot(BeNil()) // Source-scoped
+				}
 
-// Switch to EncryptHostTraffic=true
-config.EncryptHostTraffic = true
-rrDataplane.AddedRules = nil
-rrDataplane.DeletedRules = nil
+				// Switch to EncryptHostTraffic=true
+				config.EncryptHostTraffic = true
+				rrDataplane.AddedRules = nil
+				rrDataplane.DeletedRules = nil
 
-err = wg.Apply()
-Expect(err).ToNot(HaveOccurred())
+				err = wg.Apply()
+				Expect(err).ToNot(HaveOccurred())
 
-// Verify old per-CIDR rules were removed and unscoped rule was added
-Expect(rrDataplane.DeletedRules).To(HaveLen(2))
-for _, rule := range rrDataplane.DeletedRules {
-Expect(rule.Src).ToNot(BeNil()) // Per-CIDR rules deleted
-}
+				// Verify old per-CIDR rules were removed and unscoped rule was added
+				Expect(rrDataplane.DeletedRules).To(HaveLen(2))
+				for _, rule := range rrDataplane.DeletedRules {
+					Expect(rule.Src).ToNot(BeNil()) // Per-CIDR rules deleted
+				}
 
-Expect(rrDataplane.AddedRules).To(HaveLen(1))
-newRule := rrDataplane.AddedRules[0]
-Expect(newRule.Src).To(BeNil()) // Unscoped
-})
-})
+				Expect(rrDataplane.AddedRules).To(HaveLen(1))
+				newRule := rrDataplane.AddedRules[0]
+				Expect(newRule.Src).To(BeNil()) // Unscoped
+			})
+		})
 	})
 })
 
