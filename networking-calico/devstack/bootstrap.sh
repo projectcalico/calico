@@ -303,8 +303,27 @@ EOF
 # driver namespace.  Runs last so all the other tests have already
 # exercised the driver paths first.
 sudo -u stack -H -E bash <<'EOF'
+# Strict mode: the outer script's `set -ex` does not propagate into this
+# fresh bash invocation, so re-enable it here.  Without `-e`, a failure
+# of `mktemp` or `journalctl` itself (e.g. service rename, permission
+# change) would leave LOG empty, none of the greps below would match,
+# and the script would fall through to the final "PASSED" echo --
+# silently turning the check into a no-op.
+set -e
+# (deliberately *not* `pipefail`: the `grep | head -N` lines below would
+# SIGPIPE grep when head closes its end after N matches, which under
+# pipefail would abort the loop before all forbidden patterns have been
+# checked.)
 LOG=$(mktemp)
+trap 'rm -f "${LOG}"' EXIT
 sudo journalctl -u devstack@q-svc --no-pager > "${LOG}"
+# Defence-in-depth against a journalctl that exits 0 but emits nothing
+# (e.g. unit not found on a future devstack version): treat that as a
+# check failure rather than an implicit PASS.
+if [ ! -s "${LOG}" ]; then
+  echo "FAIL: q-svc journal capture produced no output"
+  exit 1
+fi
 
 # Patterns that should NEVER appear in a healthy run.  Each is
 # something we have specifically fixed in driver code; reappearance
