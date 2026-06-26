@@ -79,7 +79,11 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig string) string 
 		if err != nil {
 			t.Fatalf("creating temp peers.conf: %v", err)
 		}
-		defer os.Remove(f.Name())
+		defer func() {
+			if err := os.Remove(f.Name()); err != nil {
+				t.Logf("WARNING: failed removing file %s: %v", f.Name(), err)
+			}
+		}()
 		if _, err := f.WriteString(peerConf); err != nil {
 			t.Fatalf("writing temp peers.conf: %v", err)
 		}

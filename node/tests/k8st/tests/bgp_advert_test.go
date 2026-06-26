@@ -696,7 +696,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 
 	// LB ExternalTrafficPolicy=Local service with one endpoint on node-1.
 	svc := e.createRRWorkload(t, func(s *corev1.Service) {
-		s.ObjectMeta.Annotations = map[string]string{
+		s.Annotations = map[string]string{
 			"projectcalico.org/loadBalancerIPs": `["80.15.0.100"]`,
 		}
 		s.Spec.Type = corev1.ServiceTypeLoadBalancer
