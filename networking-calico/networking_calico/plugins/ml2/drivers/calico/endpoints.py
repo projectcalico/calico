@@ -199,74 +199,106 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         qos_ids.discard(None)
         qos_ids = list(qos_ids)
 
-        # IPAllocation rows, grouped by port_id.
-        ip_allocs_by_port = {}
-        if port_ids:
-            q = context.session.query(models_v2.IPAllocation).filter(
-                models_v2.IPAllocation.port_id.in_(port_ids)
-            )
-            for ip in q:
-                ip_allocs_by_port.setdefault(ip.port_id, []).append(
-                    {
-                        "subnet_id": ip.subnet_id,
-                        "ip_address": ip.ip_address,
-                    }
+        # The ``context.session.query(...)`` calls below need
+        # ``session.in_transaction()`` to be True, or SQLAlchemy emits "ORM session: SQL
+        # execution without transaction in progress" warnings and (depending on the
+        # Neutron release) drops their results.  We arrange that here via
+        # ``CONTEXT_READER.using(...)`` -- mirroring the wrap in
+        # ``get_extra_port_information`` for the per-port (non-bulk) path.  The wrap is
+        # scoped to this function alone so it does not subsume the resync's other
+        # ``self.db.get_*`` calls (in the subnet / policy syncers, and in the resync
+        # compare loop), which are ``@retry_if_session_inactive``-decorated and manage
+        # their own transactions -- per the Neutron devref, an outer transaction would
+        # render that retry "useless".
+        with db_api.CONTEXT_READER.using(context):
+            # IPAllocation rows, grouped by port_id.
+            ip_allocs_by_port = {}
+            if port_ids:
+                q = context.session.query(models_v2.IPAllocation).filter(
+                    models_v2.IPAllocation.port_id.in_(port_ids)
                 )
+                for ip in q:
+                    ip_allocs_by_port.setdefault(ip.port_id, []).append(
+                        {
+                            "subnet_id": ip.subnet_id,
+                            "ip_address": ip.ip_address,
+                        }
+                    )
 
-        # FloatingIP rows, grouped by fixed_port_id.
-        float_ips_by_port = {}
-        if port_ids:
-            q = context.session.query(FloatingIP).filter(
-                FloatingIP.fixed_port_id.in_(port_ids)
-            )
-            for fip in q:
-                float_ips_by_port.setdefault(fip.fixed_port_id, []).append(
-                    {
-                        "int_ip": fip.fixed_ip_address,
-                        "ext_ip": fip.floating_ip_address,
-                    }
+            # FloatingIP rows, grouped by fixed_port_id.
+            float_ips_by_port = {}
+            if port_ids:
+                q = context.session.query(FloatingIP).filter(
+                    FloatingIP.fixed_port_id.in_(port_ids)
                 )
+                for fip in q:
+                    float_ips_by_port.setdefault(fip.fixed_port_id, []).append(
+                        {
+                            "int_ip": fip.fixed_ip_address,
+                            "ext_ip": fip.floating_ip_address,
+                        }
+                    )
 
-        # Network rows, indexed by id.
-        networks_by_id = {}
-        if network_ids:
-            q = context.session.query(models_v2.Network).filter(
-                models_v2.Network.id.in_(network_ids)
-            )
-            for net in q:
-                networks_by_id[net.id] = net
-
-        # SG bindings, grouped by port_id (a port can have multiple SGs).
-        # Use the plugin API (with a list filter) rather than
-        # session.query(SecurityGroupPortBinding) so this path is
-        # consistent with the per-port code that uses the same API.
-        sg_ids_by_port = {}
-        if port_ids:
-            bindings = self.db._get_port_security_group_bindings(
-                context, filters={"port_id": port_ids}
-            )
-            for b in bindings:
-                sg_ids_by_port.setdefault(b["port_id"], []).append(
-                    b["security_group_id"]
+            # Network rows, indexed by id.  We materialise just the columns we need
+            # ({"name": ...}) inside the reader, rather than caching the ORM instance:
+            # that way the downstream attribute access happens while the row is
+            # guaranteed attached to an active session, and we do not rely on oslo.db's
+            # expire_on_commit / detached-attribute behaviour after the reader exits.
+            networks_by_id = {}
+            if network_ids:
+                q = context.session.query(models_v2.Network).filter(
+                    models_v2.Network.id.in_(network_ids)
                 )
+                for net in q:
+                    networks_by_id[net.id] = {"name": net.name}
 
-        # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.
-        qos_bw_by_policy = {}
-        qos_pr_by_policy = {}
-        if qos_ids:
-            q = context.session.query(qos_models.QosBandwidthLimitRule).filter(
-                qos_models.QosBandwidthLimitRule.qos_policy_id.in_(qos_ids)
-            )
-            for r in q:
-                qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(r)
-            q = context.session.query(qos_models.QosPacketRateLimitRule).filter(
-                qos_models.QosPacketRateLimitRule.qos_policy_id.in_(qos_ids)
-            )
-            for r in q:
-                qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(r)
+            # SG bindings, grouped by port_id (a port can have multiple SGs).  Use the
+            # plugin API (with a list filter) rather than
+            # session.query(SecurityGroupPortBinding) so this path is consistent with
+            # the per-port code that uses the same API.
+            sg_ids_by_port = {}
+            if port_ids:
+                bindings = self.db._get_port_security_group_bindings(
+                    context, filters={"port_id": port_ids}
+                )
+                for b in bindings:
+                    sg_ids_by_port.setdefault(b["port_id"], []).append(
+                        b["security_group_id"]
+                    )
 
-        # Subnet rows for every subnet referenced by any fixed IP (for
-        # gateway_ip).
+            # QoS bandwidth + packet-rate rules, grouped by qos_policy_id.  Materialise
+            # each rule into a plain dict containing only the columns build_qos_controls
+            # reads, so that subsequent access (in
+            # _get_extra_port_information_from_bulk, after the reader exits) does not
+            # depend on the ORM instances still being attached to a live session.  This
+            # mirrors the per-port path's choice to call build_qos_controls inside its
+            # CONTEXT_READER block.
+            qos_bw_by_policy = {}
+            qos_pr_by_policy = {}
+            if qos_ids:
+                q = context.session.query(qos_models.QosBandwidthLimitRule).filter(
+                    qos_models.QosBandwidthLimitRule.qos_policy_id.in_(qos_ids)
+                )
+                for r in q:
+                    qos_bw_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kbps": r.max_kbps,
+                            "max_burst_kbps": r.max_burst_kbps,
+                        }
+                    )
+                q = context.session.query(qos_models.QosPacketRateLimitRule).filter(
+                    qos_models.QosPacketRateLimitRule.qos_policy_id.in_(qos_ids)
+                )
+                for r in q:
+                    qos_pr_by_policy.setdefault(r.qos_policy_id, []).append(
+                        {
+                            "direction": r.direction,
+                            "max_kpps": r.max_kpps,
+                        }
+                    )
+
+        # Subnet rows for every subnet referenced by any fixed IP (for gateway_ip).
         subnet_ids = list(
             {ip["subnet_id"] for ips in ip_allocs_by_port.values() for ip in ips}
         )
@@ -701,7 +733,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         if network is not None:
             try:
                 port_extra.network_name = datamodel_v3.sanitize_label_name_value(
-                    network.name,
+                    network["name"],
                     NETWORK_NAME_MAX_LENGTH,
                 )
             except Exception:
