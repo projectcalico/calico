@@ -121,6 +121,14 @@ function Install-CNIPlugin()
     Write-Host "Copying CNI binaries to $env:CNI_BIN_DIR"
     cp "$baseDir\cni\*.exe" "$env:CNI_BIN_DIR"
 
+    # The Calico CNI plugin is a monobinary that also serves as the IPAM plugin
+    # when invoked as calico-ipam (the cni-plugin install-cni installs the binary
+    # under both names). The Windows archive only ships calico.exe, but the
+    # generated CNI conf references ipam type "calico-ipam", so also install the
+    # binary as calico-ipam.exe; otherwise pod sandbox creation fails with
+    # "failed to find plugin calico-ipam".
+    cp "$env:CNI_BIN_DIR\calico.exe" "$env:CNI_BIN_DIR\calico-ipam.exe"
+
     $cniConfFile = $env:CNI_CONF_DIR + "\" + $env:CNI_CONF_FILENAME
     Write-Host "Writing CNI configuration to $cniConfFile."
     $nodeNameFile = "$baseDir\nodename".replace('\', '\\')
