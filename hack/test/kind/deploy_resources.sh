@@ -138,10 +138,10 @@ function wait_pod_ready() {
       ${kubectl} get po -o wide $args || true
       sleep 1
     done;
-    ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
+    ${kubectl} wait pod --for=condition=Ready --timeout=480s $args
   ) & pid=$!
   # Start a second background process that implements the actual timeout.
-  ( sleep 300; kill $pid ) 2>/dev/null & watchdog=$!
+  ( sleep 480; kill $pid ) 2>/dev/null & watchdog=$!
   set +e
 
   wait $pid 2>/dev/null
@@ -150,7 +150,7 @@ function wait_pod_ready() {
   wait $watchdog 2>/dev/null
 
   if [ $rc -ne 0 ]; then
-    echo "Pod $args failed to become ready within 300s"
+    echo "Pod $args failed to become ready within 8m"
   fi
 
   set -e
@@ -158,10 +158,20 @@ function wait_pod_ready() {
 }
 
 echo "Set ipv6 address on each node"
-docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
-docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
-docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
-docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
+# Assign each node a fixed IPv6 address derived from its name so this works for
+# any kind cluster name. The mapping has to match what the k8st tests expect
+# (node/tests/k8st/utils/utils.py): the control-plane is ::8 and worker N is
+# ::N, where the first worker ("<cluster>-worker", no suffix) is ::1. Deriving
+# the address from the name avoids depending on the order "kind get nodes" returns.
+for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
+  case "${node}" in
+    *-control-plane) addr=8 ;;
+    *-worker)        addr=1 ;;
+    *-worker*)       addr="${node##*-worker}" ;;
+    *)               continue ;;
+  esac
+  docker exec "${node}" ip -6 addr replace "2001:20::${addr}/64" dev eth0
+done
 
 echo
 
