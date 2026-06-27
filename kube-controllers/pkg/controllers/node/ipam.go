@@ -125,6 +125,14 @@ type rateLimiterItemKey struct {
 	Name string
 }
 
+// backendAccessor exposes the raw datastore client. The clientv3 implementation
+// satisfies it via Backend(); FakeCalicoClient does too. Used by the handle
+// reconciler for direct CAS write/delete on IPAMHandle objects, mirroring
+// kube-controllers/pkg/controllers/networkpolicy/policy_name_migrator.go.
+type backendAccessor interface {
+	Backend() bapi.Client
+}
+
 func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs kubernetes.Interface, pi, ni cache.Indexer, deferredInformers *kubevirt.DeferredInformers) *IPAMController {
 	var leakGracePeriod *time.Duration
 	if cfg.LeakGracePeriod != nil {
@@ -153,8 +161,17 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		func() { rl.Forget(retryKey) },
 	)
 
+	// The handle reconciler uses CAS-based writes via the backend client.
+	// Acquire it once at construction; tests assert that FakeCalicoClient
+	// satisfies the interface as well.
+	var bc bapi.Client
+	if a, ok := c.(backendAccessor); ok {
+		bc = a.Backend()
+	}
+
 	return &IPAMController{
 		client:            c,
+		bc:                bc,
 		clientset:         cs,
 		config:            cfg,
 		deferredInformers: deferredInformers,
@@ -171,6 +188,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
+		allHandles:                  make(map[string]*model.KVPair),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
@@ -187,6 +205,9 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		// Track blocks which we might want to release.
 		blockReleaseTracker: newBlockReleaseTracker(leakGracePeriod),
 
+		// Cross-cycle state for the handle reconciler.
+		handleGC: newHandleGCState(),
+
 		// For unit testing purposes.
 		pauseRequestChannel: make(chan pauseRequest),
 
@@ -196,7 +217,14 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 }
 
 type IPAMController struct {
-	client     client.Interface
+	client client.Interface
+	// bc is the raw datastore backend used by the handle reconciler for CAS
+	// writes. Sourced from client.(backendAccessor).Backend() at
+	// construction. May be nil if the supplied client doesn't expose a
+	// backend (e.g. some narrow test fakes); the handle reconciler
+	// short-circuits in that case.
+	bc bapi.Client
+
 	clientset  kubernetes.Interface
 	podLister  v1lister.PodLister
 	nodeLister v1lister.NodeLister
@@ -221,6 +249,13 @@ type IPAMController struct {
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
+	// Raw handle storage, keyed by HandleID. Populated/cleared by the
+	// IPAMHandleKey syncer notifications via handleHandleUpdate. The KVPair
+	// value carries the live Revision and *model.IPAMHandle, which the
+	// handle GC reads (without further datastore round-trips) to compute
+	// divergence and CAS-update / delete handles via the backend.
+	allHandles map[string]*model.KVPair
+
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
 	allocationState *allocationState
 
@@ -240,6 +275,10 @@ type IPAMController struct {
 
 	// blockReleaseTracker is used to track blocks that are candidates for GC due to both redundancy and inactivity.
 	blockReleaseTracker *blockReleaseTracker
+
+	// handleGC tracks per-handle stability across sync cycles for the handle
+	// reconciler in ipam_handle_gc.go.
+	handleGC *handleGCState
 
 	emptyBlocks map[string]string
 
@@ -307,6 +346,7 @@ func (c *IPAMController) Start(stop chan struct{}) {
 
 func (c *IPAMController) RegisterWith(f *utils.DataFeed) {
 	f.RegisterForNotification(model.BlockKey{}, c.onUpdate)
+	f.RegisterForNotification(model.IPAMHandleKey{}, c.onUpdate)
 	f.RegisterForNotification(model.ResourceKey{}, c.onUpdate)
 	f.RegisterForSyncStatus(c.onStatusUpdate)
 }
@@ -323,6 +363,8 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
+		c.syncerUpdates <- update.KVPair
+	case model.IPAMHandleKey:
 		c.syncerUpdates <- update.KVPair
 	}
 }
@@ -446,9 +488,39 @@ func (c *IPAMController) handleUpdate(upd any) {
 		case model.BlockKey:
 			c.handleBlockUpdate(upd)
 			return
+		case model.IPAMHandleKey:
+			c.handleHandleUpdate(upd)
+			return
 		}
 	}
 	log.WithField("update", upd).Warn("Unexpected update received")
+}
+
+// handleHandleUpdate maintains c.allHandles in response to syncer events.
+// Mirrors handleBlockUpdate but for IPAMHandle. The IPAMController consumes
+// this cache during reconcileHandles to detect divergence between handle
+// reference counts and block reality.
+func (c *IPAMController) handleHandleUpdate(kvp model.KVPair) {
+	id := kvp.Key.(model.IPAMHandleKey).HandleID
+	if kvp.Value != nil {
+		// Store a deep-enough copy: the syncer reuses these structs, and we
+		// need a stable view across stability cycles for the GC.
+		stored := kvp
+		if h, ok := kvp.Value.(*model.IPAMHandle); ok && h != nil {
+			cp := make(map[string]int, len(h.Block))
+			for k, v := range h.Block {
+				cp[k] = v
+			}
+			stored.Value = &model.IPAMHandle{
+				HandleID: h.HandleID,
+				Block:    cp,
+				Deleted:  h.Deleted,
+			}
+		}
+		c.allHandles[id] = &stored
+	} else {
+		delete(c.allHandles, id)
+	}
 }
 
 // handleBlockUpdate wraps up the logic to execute when receiving a block update.
@@ -1222,6 +1294,17 @@ func (c *IPAMController) syncIPAM() error {
 	err = c.releaseUnusedBlocks()
 	if err != nil {
 		return err
+	}
+
+	// Reconcile IPAMHandle state against block reality. This catches handles
+	// whose reference counts have drifted (e.g. CNI crashed mid-release leaving
+	// a handle inflated relative to the block it points to), orphan handles,
+	// missing handles whose block still references them, and stuck soft-deleted
+	// handles (CNI crashed between marking Deleted=true and the hard-delete).
+	// See ipam_handle_gc.go for safety rules.
+	if err := c.reconcileHandles(context.TODO()); err != nil {
+		// Non-fatal: log and continue. The retry controller will reschedule.
+		log.WithError(err).Warn("IPAM handle reconciliation failed; will retry next sync")
 	}
 
 	// Delete any nodes that we determined can be removed in checkAllocations. These
