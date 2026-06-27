@@ -158,16 +158,19 @@ function wait_pod_ready() {
 }
 
 echo "Set ipv6 address on each node"
-# Iterate over the actual node containers for this KIND_NAME rather than
-# hardcoding kind-* names, so the script works for clusters with a non-default
-# name or a different worker count.
-i=1
+# Assign each node a fixed IPv6 address derived from its name so this works for
+# any kind cluster name. The mapping has to match what the k8st tests expect
+# (node/tests/k8st/utils/utils.py): the control-plane is ::8 and worker N is
+# ::N, where the first worker ("<cluster>-worker", no suffix) is ::1. Deriving
+# the address from the name avoids depending on the order "kind get nodes" returns.
 for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
   case "${node}" in
-    *-control-plane) docker exec "${node}" ip -6 addr replace 2001:20::8/64 dev eth0 ;;
-    *)               docker exec "${node}" ip -6 addr replace "2001:20::${i}/64" dev eth0
-                     i=$((i+1)) ;;
+    *-control-plane) addr=8 ;;
+    *-worker)        addr=1 ;;
+    *-worker*)       addr="${node##*-worker}" ;;
+    *)               continue ;;
   esac
+  docker exec "${node}" ip -6 addr replace "2001:20::${addr}/64" dev eth0
 done
 
 echo
