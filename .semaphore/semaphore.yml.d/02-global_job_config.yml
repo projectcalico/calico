@@ -18,16 +18,6 @@ global_job_config:
     # with the google-service-account-for-gce secret — not via s3cmd.
     - name: GCS_BUILD_CACHE_BUCKET
       value: calico-transient-build-artifacts-europe-west3
-    # Destination for the CI build cache and per-workflow artifacts. The bucket
-    # and key prefix are plain configuration; the credentials come from the
-    # go-build-cache-hetzner-s3-credentials secret above.
-    #
-    # Default object expiry, in days, applied to every upload via .semaphore/s3-cmd
-    # (as an "Expires" header). This is metadata only — a matching bucket lifecycle
-    # rule must be configured on the S3 bucket for objects to actually be deleted
-    # (e.g. `s3cmd expire s3://<bucket> --expiry-days=14`). Leave unset to disable.
-    - name: CALICO_S3_EXPIRY_DAYS
-      value: "14"
     - name: BUILDKIT_PROGRESS
       value: plain
     - name: SEMAPHORE_AGENT_UPLOAD_JOB_LOGS
