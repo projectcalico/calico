@@ -17,6 +17,12 @@
 
 set -ex
 
+# Capture the directory containing this script so we can invoke sibling
+# scripts (pxc_setup.sh, qos_responsiveness_tests.py, galera_repro.sh)
+# regardless of where bootstrap.sh was called from.  Done before any cd
+# so the path is still resolvable later.
+CALICO_DEVSTACK_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 sudo pip uninstall -y setuptools
 sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
 sudo find / -name "*setuptools*" || true
@@ -109,9 +115,11 @@ cd
 mkdir -p devstack-bootstrap
 cd devstack-bootstrap
 
-# Ensure that Git is installed.
+# Ensure that Git, crudini, and the packages pxc_setup.sh / galera_repro.sh
+# need are installed.  Percona XtraDB Cluster itself is installed inside
+# pxc_setup.sh (from Percona's apt repo).
 sudo apt-get update
-sudo apt-get -y install git
+sudo apt-get -y install git crudini curl lsb-release gnupg haproxy cpulimit
 
 # crudini is used by resync_concurrency_test.py's `startup` scenario to
 # set/unset [calico] startup_resync_inject_per_item_delay_ms in neutron.conf
@@ -128,15 +136,28 @@ test -e devstack || \
     git clone -b ${DEVSTACK_BRANCH:-master} ${DEVSTACK_REPO:-https://github.com/openstack/devstack} --depth=1
 cd devstack
 
-# Prepare DevStack config.
+# Password used both inside DevStack (via local.conf below) and by
+# pxc_setup.sh when it sets the cluster's MySQL root password.  Export
+# it so the pxc_setup.sh invocation inherits it.
+export DATABASE_PASSWORD=d0060b07d3f3631ece78
+
+# Prepare DevStack config.  MYSQL_HOST/PORT/SERVER_PACKAGE point DevStack
+# at the HAProxy front-end of the PXC cluster we'll have brought up by
+# pxc_setup.sh before stack.sh runs.  MYSQL_SERVER_PACKAGE is set so
+# DevStack's install_database_mysql sees the percona-xtradb-cluster
+# package as already installed and skips its own install.
 cat > local.conf <<EOF
 [[local|localrc]]
 SERVICE_HOST=${SERVICE_HOST:-$HOST_IP}
 ADMIN_PASSWORD=015133ea2bdc46ed434c
-DATABASE_PASSWORD=d0060b07d3f3631ece78
+DATABASE_PASSWORD=${DATABASE_PASSWORD}
 RABBIT_PASSWORD=6366743536a8216bde26
 SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
+
+MYSQL_SERVER_PACKAGE=percona-xtradb-cluster
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3320
 
 enable_plugin calico $NC_PLUGIN_REPO $NC_PLUGIN_REF
 disable_service horizon
@@ -183,6 +204,12 @@ NEUTRON_CREATE_INITIAL_NETWORKS=False
 EOF
 fi
 
+# Stand up the 3-node Percona XtraDB Cluster + HAProxy front-end *before*
+# stack.sh runs, so DevStack creates every schema (Keystone, Nova, Neutron,
+# Glance, ...) through the cluster from day one.  pxc_setup.sh reads
+# DATABASE_PASSWORD from the environment (exported above).
+bash "${CALICO_DEVSTACK_DIR}/pxc_setup.sh"
+
 # Create stack user.
 sudo tools/create-stack-user.sh
 cd ..
@@ -219,7 +246,11 @@ EOF
 # it appears there is something in the stack.sh setup that closes stdin, and that means that bash
 # doesn't read any further commands from stdin after the exit of the ./stack.sh line.
 
-# Run QoS responsiveness tests
+# Run the baseline QoS responsiveness tests first.  All these run against
+# the PXC cluster (which has been up since before stack.sh) and should pass
+# regardless of any Galera-protocol bug.  Explicitly enumerate test classes
+# so GaleraQoSResyncTest is excluded here -- it runs separately under
+# CPU throttle via galera_repro.sh.
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 
@@ -231,7 +262,17 @@ cd /opt/stack/devstack
 sudo pip install openstacksdk etcd3 pymysql
 
 export ETCD_HOST=${SERVICE_HOST}
-python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
+python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v \
+    QoSResponsivenessTest QoSResyncTest
+EOF
+
+# Run the Galera-specific resync repro test, with cpulimit throttling
+# PXC node 3 to widen its apply lag.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+export ETCD_HOST=${SERVICE_HOST}
+bash /opt/stack/calico/networking-calico/devstack/galera_repro.sh
 EOF
 
 # Run resync concurrency test.  Prints one RESYNC_CONCURRENCY_RESULT
