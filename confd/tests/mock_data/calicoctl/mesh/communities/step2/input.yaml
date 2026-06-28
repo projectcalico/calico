@@ -3,6 +3,7 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: node.kube-master
 spec:
+  programClusterRoutes: Enabled
   logSeverityScreen: Info
   communities:
     - name: bgp-comm-large

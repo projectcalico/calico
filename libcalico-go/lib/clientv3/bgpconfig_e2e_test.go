@@ -24,6 +24,7 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -70,6 +71,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			},
 		},
 		NodeMeshMaxRestartTime: &restartTime,
+		ProgramClusterRoutes:   ptr.To("Disabled"),
 	}
 	specDefault2 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Warning",
@@ -79,6 +81,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			{CIDR: ipCidr1},
 		},
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           ptr.To("Disabled"),
 	}
 	specDefault3 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Info",
@@ -113,10 +116,12 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	specInfo := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:              "Info",
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           ptr.To("Disabled"),
 	}
 	specDebug := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:              "Debug",
 		ServiceLoadBalancerAggregation: &enabled,
+		ProgramClusterRoutes:           ptr.To("Disabled"),
 	}
 
 	DescribeTable("BGPConfiguration e2e CRUD tests",

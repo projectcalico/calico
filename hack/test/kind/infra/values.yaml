@@ -22,6 +22,7 @@ installation:
   calicoNetwork:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
+    clusterRoutingMode: "BIRD"
 
     # Pin IPv6 node-address autodetection to the 2001:20::/64 range that
     # deploy_resources.sh assigns to each node. The kind docker network now
