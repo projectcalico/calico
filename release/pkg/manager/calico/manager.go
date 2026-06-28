@@ -28,6 +28,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
@@ -1254,20 +1255,37 @@ func (r *CalicoManager) buildContainerImages() error {
 		env = append(env, fmt.Sprintf("ARCHES=%s", strings.Join(r.architectures, " ")))
 	}
 
+	// Build linux images concurrently. Each component writes its make output
+	// to its own per-component log file under logsDir, so per-component output
+	// stays disambiguated even when builds overlap.
+	var g errgroup.Group
 	for _, dir := range releaseDirs {
-		fullDir := filepath.Join(r.repoRoot, dir)
-		if _, err := r.makeInDirectoryToFile(fullDir, "release-build", "build", env...); err != nil {
-			return fmt.Errorf("failed to build %s: %s", dir, err)
-		}
+		g.Go(func() error {
+			fullDir := filepath.Join(r.repoRoot, dir)
+			if _, err := r.makeInDirectoryToFile(fullDir, "release-build", "build", env...); err != nil {
+				return fmt.Errorf("failed to build %s: %s", dir, err)
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
+	// Windows images run after linux finishes: node's linux release-build
+	// also produces the windows release archive into node/dist, so we keep
+	// the two phases sequential to avoid concurrent writes to that directory.
+	var gw errgroup.Group
 	for _, dir := range windowsReleaseDirs {
-		fullDir := filepath.Join(r.repoRoot, dir)
-		if _, err := r.makeInDirectoryToFile(fullDir, "image-windows", "build-windows", env...); err != nil {
-			return fmt.Errorf("failed to build %s windows images: %s", dir, err)
-		}
+		gw.Go(func() error {
+			fullDir := filepath.Join(r.repoRoot, dir)
+			if _, err := r.makeInDirectoryToFile(fullDir, "image-windows", "build-windows", env...); err != nil {
+				return fmt.Errorf("failed to build %s windows images: %s", dir, err)
+			}
+			return nil
+		})
 	}
-	return nil
+	return gw.Wait()
 }
 
 func (r *CalicoManager) publishGitTag() error {
@@ -1371,17 +1389,29 @@ func (r *CalicoManager) publishContainerImages() error {
 			return nil
 		}
 	}
+
+	// Publish linux images concurrently. Each component writes its make output
+	// to its own per-component log file, so per-component output stays
+	// disambiguated even when publishes overlap.
+	var g errgroup.Group
 	for _, dir := range imageReleaseDirs {
-		if err := publish(dir, "release-publish", "publish"); err != nil {
-			return err
-		}
+		g.Go(func() error {
+			return publish(dir, "release-publish", "publish")
+		})
 	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// Windows publish runs after linux finishes to mirror the build-side
+	// ordering (see buildContainerImages).
+	var gw errgroup.Group
 	for _, dir := range windowsReleaseDirs {
-		if err := publish(dir, "release-windows", "publish-windows"); err != nil {
-			return err
-		}
+		gw.Go(func() error {
+			return publish(dir, "release-windows", "publish-windows")
+		})
 	}
-	return nil
+	return gw.Wait()
 }
 
 func (r *CalicoManager) publishHelmCharts() error {
