@@ -15,8 +15,6 @@
 
 import time
 
-from neutron_lib.db import api as db_api
-
 from oslo_log import log
 
 LOG = log.getLogger(__name__)
@@ -142,8 +140,14 @@ class ResourceSyncer(object):
             etcd_map = self.get_from_etcd(scope)
             t_etcd_read = time.monotonic()
 
-            with db_api.CONTEXT_WRITER.using(context):
-                neutron_map = self.get_from_neutron(context, scope)
+            # ``get_from_neutron`` calls ``self.db.get_*`` methods (or, in the endpoint
+            # syncer's case, an internal helper that wraps its own raw queries in a
+            # CONTEXT_READER), all of which are ``@retry_if_session_inactive``-decorated
+            # and manage their own transactions.  We deliberately do NOT wrap them in an
+            # outer writer/reader: the Neutron devref calls that pattern an anti-pattern
+            # because the inner retry "would be always called from inside an active
+            # transaction making it useless".
+            neutron_map = self.get_from_neutron(context, scope)
             t_neutron_read = time.monotonic()
 
             # Resource-specific post-processing of etcd_map now that we have neutron_map
@@ -185,10 +189,9 @@ class ResourceSyncer(object):
                 # is at least as fresh as our etcd read; the CAS on mod_revision
                 # protects against any etcd change since.
                 data, mod_revision = etcd_map[name]
-                with db_api.CONTEXT_WRITER.using(context):
-                    write_data = self.neutron_to_etcd_write_data(
-                        name, neutron_map[name], context, reread=False
-                    )
+                write_data = self.neutron_to_etcd_write_data(
+                    name, neutron_map[name], context, reread=False
+                )
                 if self.etcd_write_data_matches_existing(write_data, data):
                     LOG.debug("etcd data good for %s %s", self.resource_kind, name)
                     n_correct += 1
@@ -208,27 +211,26 @@ class ResourceSyncer(object):
             elif in_neutron:
                 # In Neutron but not in etcd: create.  reread=True so we don't race with
                 # a concurrent dynamic delete.
-                with db_api.CONTEXT_WRITER.using(context):
-                    try:
-                        write_data = self.neutron_to_etcd_write_data(
-                            name, neutron_map[name], context, reread=True
-                        )
-                        if self.create_in_etcd(name, write_data):
-                            n_created += 1
-                        else:
-                            LOG.warning(
-                                "failed etcd write for %s %s; presume"
-                                " data created by another writer",
-                                self.resource_kind,
-                                name,
-                            )
-                    except ResourceGone:
+                try:
+                    write_data = self.neutron_to_etcd_write_data(
+                        name, neutron_map[name], context, reread=True
+                    )
+                    if self.create_in_etcd(name, write_data):
+                        n_created += 1
+                    else:
                         LOG.warning(
-                            "Neutron resource gone for %s %s; presume"
-                            " deleted by another writer",
+                            "failed etcd write for %s %s; presume"
+                            " data created by another writer",
                             self.resource_kind,
                             name,
                         )
+                except ResourceGone:
+                    LOG.warning(
+                        "Neutron resource gone for %s %s; presume"
+                        " deleted by another writer",
+                        self.resource_kind,
+                        name,
+                    )
             elif in_etcd:
                 # In etcd but not in Neutron: delete.
                 _, mod_revision = etcd_map[name]
