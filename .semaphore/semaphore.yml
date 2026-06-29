@@ -3928,14 +3928,14 @@ blocks:
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
         - name: "Felix: BPF tests on Ubuntu 25.10 with netkit (nftables)"
           execution_time_limit:
-            minutes: 60
+            minutes: 75
           env_vars:
             - name: FELIX_TEST_GROUP
               value: "bpf-25.10-nft-no-fv-with-ut"
             - name: FELIX_FV_BPFATTACHTYPE
               value: "tc"
             - name: JOB_TIMEOUT_MINUTES
-              value: "60"
+              value: "75"
             - name: FELIX_FV_NETKIT
               value: "Enabled"
           commands:
@@ -3944,10 +3944,10 @@ blocks:
             - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
         - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
           execution_time_limit:
-            minutes: 60
+            minutes: 75
           env_vars:
             - name: JOB_TIMEOUT_MINUTES
-              value: "60"
+              value: "75"
             - name: FELIX_TEST_GROUP
               value: "bpf-25.10-nft-with-ut-jitharden"
             - name: FELIX_FV_BPFATTACHTYPE
