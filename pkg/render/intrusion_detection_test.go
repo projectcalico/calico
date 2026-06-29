@@ -862,9 +862,9 @@ var _ = Describe("Intrusion Detection rendering tests", func() {
 func assertEnvVarlistMatch(envVars []corev1.EnvVar, expectedEnvVars []expectedEnvVar) {
 	for _, expected := range expectedEnvVars {
 		if expected.val != "" {
-			Expect(envVars).To(ContainElement(corev1.EnvVar{Name: expected.name, Value: expected.val}))
+			ExpectWithOffset(1, envVars).To(ContainElement(corev1.EnvVar{Name: expected.name, Value: expected.val}))
 		} else {
-			Expect(envVars).To(ContainElement(corev1.EnvVar{
+			ExpectWithOffset(1, envVars).To(ContainElement(corev1.EnvVar{
 				Name: expected.name,
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{

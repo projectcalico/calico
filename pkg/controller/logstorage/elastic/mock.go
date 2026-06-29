@@ -41,7 +41,7 @@ func (m *MockESClient) CreateUser(_ context.Context, _ *utils.User) error {
 	return fmt.Errorf("CreateUser not implemented in mock client")
 }
 
-func (m *MockESClient) SetILMPolicies(_ context.Context, _ *operatorv1.LogStorage) error {
+func (m *MockESClient) SetILMPolicies(_ context.Context, _ *operatorv1.LogStorage, _ bool) error {
 	return nil
 }
 

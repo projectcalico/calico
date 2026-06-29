@@ -117,6 +117,10 @@ type ComplianceConfiguration struct {
 	Tenant          *operatorv1.Tenant
 	ExternalElastic bool
 	Compliance      *operatorv1.Compliance
+
+	// Cloud indicates compliance is being rendered for a Calico Cloud install. When false the cloud
+	// NetworkPolicy below is not created and enterprise behavior is unchanged.
+	Cloud bool
 }
 
 type complianceComponent struct {
@@ -225,6 +229,20 @@ func (c *complianceComponent) Objects() ([]client.Object, []client.Object) {
 			c.complianceServerServiceAccount(),
 			c.complianceServerClusterRoleBinding(),
 		)
+
+		if c.cfg.Cloud {
+			// Cloud modifications: add a network policy to talk to the OIDC issuer if one is being used.
+			// Note this is only strictly required when not using dex and the provider is outside the
+			// cluster, but that knowledge is not currently available in the compliance renderer, so
+			// enable it for all OIDC providers.
+			if c.cfg.KeyValidatorConfig != nil {
+				complianceObjs = append(complianceObjs, c.cloudComplianceServerAllowTigeraNetworkPolicy(c.cfg.KeyValidatorConfig.Issuer()))
+			}
+			// allow-tigera Tier was renamed to calico-system
+			objsToDelete = append(objsToDelete,
+				networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("cloud-compliance-server", c.cfg.Namespace),
+			)
+		}
 	} else {
 		// Compliance server is only for Standalone or Management clusters
 		objsToDelete = append(objsToDelete, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: ComplianceServerName, Namespace: c.cfg.Namespace}})

@@ -232,7 +232,7 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		return reconcile.Result{}, err
 	}
 
-	keyValidatorConfig, err := utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain)
+	keyValidatorConfig, err := utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain, false)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceValidationError, "Failed to process the authentication CR.", err, reqLogger)
 		return reconcile.Result{}, err

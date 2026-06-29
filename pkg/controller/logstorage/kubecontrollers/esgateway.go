@@ -112,6 +112,13 @@ func (r *ESKubeControllersController) createESGateway(
 		LogStorage:                 logStorage,
 	}
 
+	// Calico Cloud modifications. Only applied for cloud external-ES installs.
+	if r.cloud && r.elasticExternal {
+		if proceed, err := r.esGatewayAddCloudModificationsToConfig(cfg, esAdminUserSecret, reqLogger, ctx); err != nil || !proceed {
+			return err
+		}
+	}
+
 	esGatewayComponent := esgateway.EsGateway(cfg)
 	if err = imageset.ApplyImageSet(ctx, r.client, variant, esGatewayComponent); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)

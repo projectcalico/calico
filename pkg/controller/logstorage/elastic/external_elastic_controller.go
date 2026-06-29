@@ -37,6 +37,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/render"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/logstorage/externalelasticsearch"
 )
@@ -101,6 +102,13 @@ func AddExternalES(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("log-storage-external-es-controller failed to watch tigera-elasticsearch namespace: %w", err)
 	}
 
+	if opts.Cloud {
+		// Calico Cloud addition.
+		if err := utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("log-storage-controller failed to watch the ConfigMap resource: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -151,6 +159,23 @@ func (r *ExternalESController) Reconcile(ctx context.Context, request reconcile.
 
 	flowShards := logstoragecommon.CalculateFlowShards(ls.Spec.Nodes, logstoragecommon.DefaultElasticsearchShards)
 	clusterConfig := relasticsearch.NewClusterConfig(render.DefaultElasticsearchClusterName, ls.Replicas(), logstoragecommon.DefaultElasticsearchShards, flowShards)
+
+	// Calico Cloud addition. For Calico Cloud single-tenant management clusters connected to a
+	// multi-tenant external ES, augment the cluster config with this management cluster's tenant ID.
+	if r.opts.Cloud && !r.opts.MultiTenant {
+		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve tigera-secure-cloud-config config map", err, reqLogger)
+				return reconcile.Result{}, nil
+			}
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve tigera-secure-cloud-config config map", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		if cloudConfig.TenantId() != "" {
+			clusterConfig.AddTenantId(cloudConfig.TenantId())
+		}
+	}
 
 	hdler := utils.NewComponentHandler(reqLogger, r.client, r.scheme, ls)
 	externalElasticsearch := externalelasticsearch.ExternalElasticsearch(installationSpec, clusterConfig, pullSecrets, r.opts.MultiTenant)

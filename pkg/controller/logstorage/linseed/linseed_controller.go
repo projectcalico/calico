@@ -47,6 +47,7 @@ import (
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/render"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/logstorage"
@@ -67,6 +68,7 @@ type LinseedSubController struct {
 	dpiAPIReady     *utils.ReadyFlag
 	multiTenant     bool
 	elasticExternal bool
+	cloud           bool
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
@@ -84,6 +86,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		multiTenant:     opts.MultiTenant,
 		status:          status.New(mgr.GetClient(), "log-storage-access", opts.KubernetesVersion),
 		elasticExternal: opts.ElasticExternal,
+		cloud:           opts.Cloud,
 	}
 	r.status.Run(opts.ShutdownContext)
 
@@ -176,6 +179,13 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		{Name: linseed.PolicyName, Namespace: helper.InstallNamespace()},
 	})
 	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, log, r.dpiAPIReady, []client.Object{&v3.DeepPacketInspection{TypeMeta: metav1.TypeMeta{Kind: v3.KindDeepPacketInspection}}})
+
+	if opts.Cloud && opts.ElasticExternal {
+		// This ConfigMap is needed for utils.GetCloudConfig
+		if err = utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("log-storage-linseed-controller failed to watch the ConfigMap resource: %w", err)
+		}
+	}
 
 	// Perform periodic reconciliation. This acts as a backstop to catch reconcile issues,
 	// and also makes sure we spot when things change that might not trigger a reconciliation.
@@ -310,11 +320,22 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 		}
 	} else {
-		// If we're using an external ES, the Tenant resource must specify the ES endpoint.
-		if tenant == nil || tenant.Spec.Elastic == nil || tenant.Spec.Elastic.URL == "" {
-			reqLogger.Error(nil, "Elasticsearch URL must be specified for this tenant")
-			r.status.SetDegraded(operatorv1.ResourceValidationError, "Elasticsearch URL must be specified for this tenant", nil, reqLogger)
-			return reconcile.Result{}, nil
+		if r.multiTenant || !r.cloud {
+			// If we're using an external ES, the Tenant resource must specify the ES endpoint.
+			if tenant == nil || tenant.Spec.Elastic == nil || tenant.Spec.Elastic.URL == "" {
+				reqLogger.Error(nil, "Elasticsearch URL must be specified for this tenant")
+				r.status.SetDegraded(operatorv1.ResourceValidationError, "Elasticsearch URL must be specified for this tenant", nil, reqLogger)
+				return reconcile.Result{}, nil
+			}
+		} else {
+			// This is a Calico Cloud single-tenant cluster connected to a multi-tenant ES. Read the
+			// tenant configuration from the CloudConfig ConfigMap.
+			cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+			if err != nil {
+				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, reqLogger)
+				return reconcile.Result{}, err
+			}
+			tenant = cloudConfig.ToTenant()
 		}
 
 		// Determine the host and port from the URL.
@@ -447,6 +468,7 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 		ElasticClientSecret:            esClientSecret,
 		ElasticClientCredentialsSecret: &credentials,
 		LogStorage:                     logStorage,
+		Cloud:                          r.cloud,
 	}
 	linseedComponent := linseed.Linseed(cfg)
 

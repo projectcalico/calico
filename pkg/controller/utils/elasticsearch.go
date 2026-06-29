@@ -112,7 +112,7 @@ func GetElasticsearchClusterConfig(ctx context.Context, cli client.Client) (*rel
 type ElasticsearchClientCreator func(client client.Client, ctx context.Context, elasticHTTPSEndpoint string, external bool) (ElasticClient, error)
 
 type ElasticClient interface {
-	SetILMPolicies(context.Context, *operatorv1.LogStorage) error
+	SetILMPolicies(context.Context, *operatorv1.LogStorage, bool) error
 	CreateUser(context.Context, *User) error
 	DeleteUser(context.Context, *User) error
 	GetUsers(ctx context.Context) ([]User, error)
@@ -422,9 +422,13 @@ func (es *esClient) GetUsers(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-// SetILMPolicies creates ILM policies for each timeseries based index using the retention period and storage size in LogStorage
-func (es *esClient) SetILMPolicies(ctx context.Context, ls *operatorv1.LogStorage) error {
+// SetILMPolicies creates ILM policies for each timeseries based index using the retention period and storage size in LogStorage.
+// When cloud is true, additional Calico Cloud specific ILM policies are added.
+func (es *esClient) SetILMPolicies(ctx context.Context, ls *operatorv1.LogStorage, cloud bool) error {
 	policyList := es.listILMPolicies(ls)
+	if cloud {
+		es.tweakILMPoliciesForCloud(ls, policyList)
+	}
 	return es.createOrUpdatePolicies(ctx, policyList)
 }
 

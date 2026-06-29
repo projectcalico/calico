@@ -1,0 +1,4 @@
+components:
+  cloud-rbac-api:
+    image: tigera/cc-rbac-api
+    version: v0.1.3-0-g79a7349

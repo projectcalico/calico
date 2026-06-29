@@ -109,6 +109,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, promethe
 		licenseAPIReady: licenseAPIReady,
 		clusterDomain:   opts.ClusterDomain,
 		multiTenant:     opts.MultiTenant,
+		cloud:           opts.Cloud,
 	}
 
 	r.status.AddStatefulSets([]types.NamespacedName{
@@ -189,6 +190,7 @@ type ReconcileMonitor struct {
 	licenseAPIReady *utils.ReadyFlag
 	clusterDomain   string
 	multiTenant     bool
+	cloud           bool
 }
 
 func (r *ReconcileMonitor) getMonitor(ctx context.Context) (*operatorv1.Monitor, error) {
@@ -368,7 +370,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 	var keyValidatorConfig rauth.KeyValidatorConfig
 	if authenticationCR != nil && authenticationCR.Status.State == operatorv1.TigeraStatusReady {
-		keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.clusterDomain)
+		keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.clusterDomain, r.cloud && !r.multiTenant)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to process the authentication CR.", err, reqLogger)
 			return reconcile.Result{}, err

@@ -38,7 +38,11 @@ import (
 
 // GetKeyValidatorConfig uses the operatorv1.Authentication CR given to create the KeyValidatorConfig. This may be
 // either a DexKeyValidatorConfig or a tigerakvc.KeyValidatorConfig.
-func GetKeyValidatorConfig(ctx context.Context, cli client.Client, authenticationCR *operatorv1.Authentication, clusterDomain string) (rauth.KeyValidatorConfig, error) {
+//
+// addTenancyClaim must only be set for Calico Cloud single-tenant management clusters; when true the
+// KeyValidatorConfig is configured to require the cloud tenant claim (read from the cloud-auth-config
+// ConfigMap). Regular Calico/Calico Enterprise callers pass false, leaving behavior unchanged.
+func GetKeyValidatorConfig(ctx context.Context, cli client.Client, authenticationCR *operatorv1.Authentication, clusterDomain string, addTenancyClaim bool) (rauth.KeyValidatorConfig, error) {
 	var keyValidatorConfig rauth.KeyValidatorConfig
 	if authenticationCR != nil {
 		_, idpSecret, err := GetSecretOrProviderClass(ctx, cli, authenticationCR)
@@ -49,6 +53,14 @@ func GetKeyValidatorConfig(ctx context.Context, cli client.Client, authenticatio
 		oidc := authenticationCR.Spec.OIDC
 		if oidc != nil && oidc.Type == operatorv1.OIDCTypeTigera {
 			var kvcOptions []tigerakvc.Option
+
+			if addTenancyClaim {
+				cloudOption, err := getCloudKeyValidatorOption(ctx, cli)
+				if err != nil {
+					return nil, err
+				}
+				kvcOptions = append(kvcOptions, cloudOption)
+			}
 
 			if oidc.UsernameClaim != "" {
 				kvcOptions = append(kvcOptions, tigerakvc.WithUsernameClaim(oidc.UsernameClaim))

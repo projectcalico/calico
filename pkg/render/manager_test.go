@@ -1980,8 +1980,11 @@ type renderConfig struct {
 	externalElastic         bool
 	// ldapConfigured, when true, sets Authentication.spec.ldap (gating the RBAC-UI
 	// LDAP egress rule); ldapHost sets Authentication.spec.ldap.host (scoping it).
-	ldapConfigured bool
-	ldapHost       string
+	ldapConfigured        bool
+	ldapHost              string
+	cloud                 bool
+	voltronMetricsEnabled bool
+	cloudResources        render.ManagerCloudResources
 }
 
 func renderObjects(roc renderConfig) ([]client.Object, []client.Object) {
@@ -2026,6 +2029,11 @@ func renderObjects(roc renderConfig) ([]client.Object, []client.Object) {
 		roc.bindingNamespaces = []string{roc.ns}
 	}
 
+	if roc.voltronMetricsEnabled {
+		roc.cloudResources.VoltronMetricsEnabled = true
+		roc.cloudResources.VoltronInternalHttpsPort = 9444
+	}
+
 	cfg := &render.ManagerConfiguration{
 		KeyValidatorConfig:      dexCfg,
 		TrustedCertBundle:       bundle,
@@ -2049,6 +2057,8 @@ func renderObjects(roc renderConfig) ([]client.Object, []client.Object) {
 		Manager:                 roc.manager,
 		ExternalElastic:         roc.externalElastic,
 		CACertCommonName:        certificateManager.CACertCommonName(),
+		Cloud:                   roc.cloud,
+		CloudResources:          roc.cloudResources,
 	}
 
 	if roc.ldapConfigured {

@@ -127,6 +127,10 @@ type Config struct {
 	ElasticPort string
 
 	LogStorage *operatorv1.LogStorage
+
+	// Cloud indicates Linseed is being rendered for a Calico Cloud install. When false (regular
+	// Calico/Calico Enterprise) all cloud decorations are inert.
+	Cloud bool
 }
 
 func (l *linseed) ResolveImages(is *operatorv1.ImageSet) error {
@@ -170,6 +174,13 @@ func (l *linseed) Objects() (toCreate, toDelete []client.Object) {
 	if l.cfg.ElasticClientSecret != nil {
 		// If using External ES, we need to copy the client certificates into Linseed's naespace to be mounted.
 		toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(l.cfg.Namespace, l.cfg.ElasticClientSecret)...)...)
+	}
+
+	if l.cfg.Cloud {
+		// Add in Calico Cloud resources.
+		ccToCreate, ccToDelete := l.getCloudObjects()
+		toCreate = append(toCreate, ccToCreate...)
+		toDelete = append(toDelete, ccToDelete...)
 	}
 
 	return toCreate, toDelete
@@ -387,6 +398,10 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 			// tenant ID in the name. Disable tenant suffix in index names to preserve
 			// backward compatibility while still enforcing tenant isolation at the query level.
 			envVars = append(envVars, corev1.EnvVar{Name: "ELASTIC_MULTI_INDEX_TENANT_SUFFIX_ENABLED", Value: "false"})
+		} else if l.cfg.Cloud {
+			// For Calico Cloud's external Elasticsearch, single-index-format indices are created
+			// out of band, so Linseed should not create them itself.
+			envVars = append(envVars, corev1.EnvVar{Name: "ELASTIC_INDICES_CREATION_DISABLED", Value: "true"})
 		}
 
 		if l.cfg.Tenant.MultiTenant() {
@@ -509,6 +524,10 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 			Template: *podTemplate,
 			Replicas: replicas,
 		},
+	}
+
+	if l.cfg.Cloud {
+		l.modifyDeploymentForCloud(&d)
 	}
 
 	if l.cfg.Tenant.MultiTenant() {

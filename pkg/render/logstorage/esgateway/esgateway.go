@@ -83,6 +83,8 @@ type Config struct {
 	Namespace                  string
 	TruthNamespace             string
 	LogStorage                 *operatorv1.LogStorage
+	// Cloud holds Calico Cloud specific configuration. Inert unless Cloud.Enabled is set.
+	Cloud CloudConfig
 }
 
 func (e *esGateway) ResolveImages(is *operatorv1.ImageSet) error {
@@ -115,6 +117,10 @@ func (e *esGateway) Objects() (toCreate, toDelete []client.Object) {
 	toCreate = append(toCreate, e.esGatewayRole())
 	toCreate = append(toCreate, e.esGatewayRoleBinding())
 	toCreate = append(toCreate, e.esGatewayServiceAccount())
+
+	ccToCreate, ccToDelete := e.getCloudObjects()
+	toCreate = append(toCreate, ccToCreate...)
+	toDelete = append(toDelete, ccToDelete...)
 
 	// allow-tigera Tier was renamed to calico-system
 	toDelete = append(toDelete, networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("es-gateway-access", e.cfg.Namespace))
@@ -304,8 +310,8 @@ func (e *esGateway) esGatewayDeployment() *appsv1.Deployment {
 		}
 	}
 
+	e.modifyDeploymentForCloud(&d)
 	return &d
-
 }
 
 func (e *esGateway) esGatewayServiceAccount() *corev1.ServiceAccount {

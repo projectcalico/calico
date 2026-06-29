@@ -16,6 +16,7 @@ package elastic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -80,6 +81,7 @@ type ElasticSubController struct {
 	clusterDomain  string
 	tierWatchReady *utils.ReadyFlag
 	multiTenant    bool
+	cloud          bool
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
@@ -102,6 +104,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		clusterDomain:  opts.ClusterDomain,
 		provider:       opts.DetectedProvider,
 		multiTenant:    opts.MultiTenant,
+		cloud:          opts.Cloud,
 	}
 	r.status.Run(opts.ShutdownContext)
 
@@ -480,6 +483,24 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve the Kibana service", err, reqLogger)
 			return reconcile.Result{}, err
 		}
+
+		if r.cloud {
+			// Read the cloud-kibana-config ConfigMap and parse it into a global map in the render package. The render code will read this map
+			// and use it to override the default Kibana configuration.
+			// TODO: We should instead be passing this via arguments to the render code.
+			kbCm := &corev1.ConfigMap{}
+			if err = r.client.Get(ctx, types.NamespacedName{Name: "cloud-kibana-config", Namespace: common.OperatorNamespace()}, kbCm); err != nil {
+				if !errors.IsNotFound(err) {
+					return reconcile.Result{}, fmt.Errorf("failed to read cloud-kibana-config ConfigMap: %s", err.Error())
+				}
+			} else {
+				kibana.CloudKibanaConfigOverrides = map[string]interface{}{}
+				if err = json.Unmarshal([]byte(kbCm.Data["config"]), &kibana.CloudKibanaConfigOverrides); err != nil {
+					r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Failed to unmarshal config in cloud-kibana-config ConfigMap", err, reqLogger)
+					return reconcile.Result{}, err
+				}
+			}
+		}
 	}
 
 	// Query the trusted bundle from the namespace.
@@ -656,7 +677,7 @@ func (r *ElasticSubController) applyILMPolicies(ls *operatorv1.LogStorage, reqLo
 		return err
 	}
 
-	if err = esClient.SetILMPolicies(ctx, ls); err != nil {
+	if err = esClient.SetILMPolicies(ctx, ls, r.cloud); err != nil {
 		return err
 	}
 	return nil

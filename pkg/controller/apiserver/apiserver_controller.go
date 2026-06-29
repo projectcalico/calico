@@ -462,7 +462,7 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 				trustedBundle.AddCertificates(certificate)
 			}
 
-			keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain)
+			keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain, false)
 			if err != nil {
 				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to get KeyValidator Config", err, reqLogger)
 				return reconcile.Result{}, err
@@ -536,6 +536,7 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 		KeyValidatorConfig:           keyValidatorConfig,
 		KubernetesVersion:            r.opts.KubernetesVersion,
 		ClusterDomain:                r.opts.ClusterDomain,
+		Cloud:                        r.opts.Cloud,
 		RequiresAggregationServer:    !r.opts.UseV3CRDs,
 		RBACManagementEnabled:        managerCR.RBACManagementEnabled(),
 		QueryServerTLSKeyPairCertificateManagementOnly: queryServerTLSSecretCertificateManagementOnly,

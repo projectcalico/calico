@@ -156,6 +156,12 @@ type APIServerConfiguration struct {
 	// tigera-network-admin.
 	RBACManagementEnabled bool
 
+	// Cloud indicates the API server is being rendered for a Calico Cloud install. It gates
+	// cloud-specific RBAC in the tigera-ui-user / tigera-network-admin cluster roles (Calico Cloud
+	// exposes only per-user UISettings and grants access to runtime logs). When false the RBAC is
+	// exactly the regular Calico/Calico Enterprise RBAC.
+	Cloud bool
+
 	// Whether or not we should run the aggregation API server for projectcalico.org/v3 APIs
 	// as part of this component.
 	RequiresAggregationServer bool
@@ -1815,22 +1821,40 @@ func (c *apiServerComponent) tigeraUserClusterRole() *rbacv1.ClusterRole {
 			},
 			Verbs: []string{"get", "watch", "list"},
 		},
-		// User can:
-		// - read UISettings in the cluster-settings group
-		// - read and write UISettings in the user-settings group
-		// Default settings group and settings are created in manager.go.
-		{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"uisettingsgroups"},
-			Verbs:         []string{"get"},
-			ResourceNames: []string{"cluster-settings", "user-settings"},
-		},
-		{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"uisettingsgroups/data"},
-			Verbs:         []string{"get", "list", "watch"},
-			ResourceNames: []string{"cluster-settings"},
-		},
+	}
+
+	// User can:
+	// - read UISettings in the cluster-settings group (non-cloud only)
+	// - read and write UISettings in the user-settings group
+	// Default settings group and settings are created in manager.go.
+	// Calico Cloud exposes only per-user UISettings, so the cluster-settings group is omitted there.
+	if c.cfg.Cloud {
+		rules = append(rules,
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups"},
+				Verbs:         []string{"get"},
+				ResourceNames: []string{"user-settings"},
+			},
+		)
+	} else {
+		rules = append(rules,
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups"},
+				Verbs:         []string{"get"},
+				ResourceNames: []string{"cluster-settings", "user-settings"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups/data"},
+				Verbs:         []string{"get", "list", "watch"},
+				ResourceNames: []string{"cluster-settings"},
+			},
+		)
+	}
+
+	rules = append(rules, []rbacv1.PolicyRule{
 		{
 			APIGroups:     []string{"projectcalico.org"},
 			Resources:     []string{"uisettingsgroups/data"},
@@ -1891,19 +1915,22 @@ func (c *apiServerComponent) tigeraUserClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{"securityeventwebhooks"},
 			Verbs:     []string{"get", "list"},
 		},
-	}
+	}...)
 
 	// Privileges for lma.tigera.io have no effect on managed clusters.
 	if c.cfg.ManagementClusterConnection == nil {
 		// Access to flow logs, audit logs, and statistics.
 		// Access to log into Kibana for oidc users.
+		// Calico Cloud additionally grants access to runtime logs.
+		resourceNames := []string{"flows", "audit*", "l7", "events", "dns", "waf", "kibana_login", "recommendations"}
+		if c.cfg.Cloud {
+			resourceNames = append([]string{"runtime"}, resourceNames...)
+		}
 		rules = append(rules, rbacv1.PolicyRule{
-			APIGroups: []string{"lma.tigera.io"},
-			Resources: []string{"*"},
-			ResourceNames: []string{
-				"flows", "audit*", "l7", "events", "dns", "waf", "kibana_login", "recommendations",
-			},
-			Verbs: []string{"get"},
+			APIGroups:     []string{"lma.tigera.io"},
+			Resources:     []string{"*"},
+			ResourceNames: resourceNames,
+			Verbs:         []string{"get"},
 		})
 	}
 
@@ -2049,22 +2076,46 @@ func (c *apiServerComponent) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole
 			},
 			Verbs: []string{"create", "update", "delete", "patch", "get", "watch", "list"},
 		},
-		// User can:
-		// - read and write UISettings in the cluster-settings group, and rename the group
-		// - read and write UISettings in the user-settings group, and rename the group
-		// Default settings group and settings are created in manager.go.
-		{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"uisettingsgroups"},
-			Verbs:         []string{"get", "patch", "update"},
-			ResourceNames: []string{"cluster-settings", "user-settings"},
-		},
-		{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"uisettingsgroups/data"},
-			Verbs:         []string{"*"},
-			ResourceNames: []string{"cluster-settings", "user-settings"},
-		},
+	}
+
+	// User can:
+	// - read and write UISettings in the cluster-settings group, and rename the group (non-cloud only)
+	// - read and write UISettings in the user-settings group, and rename the group
+	// Default settings group and settings are created in manager.go.
+	// Calico Cloud exposes only per-user UISettings, so the cluster-settings group is omitted there.
+	if c.cfg.Cloud {
+		rules = append(rules,
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups"},
+				Verbs:         []string{"get"},
+				ResourceNames: []string{"user-settings"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups/data"},
+				Verbs:         []string{"*"},
+				ResourceNames: []string{"user-settings"},
+			},
+		)
+	} else {
+		rules = append(rules,
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups"},
+				Verbs:         []string{"get", "patch", "update"},
+				ResourceNames: []string{"cluster-settings", "user-settings"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"uisettingsgroups/data"},
+				Verbs:         []string{"*"},
+				ResourceNames: []string{"cluster-settings", "user-settings"},
+			},
+		)
+	}
+
+	rules = append(rules, []rbacv1.PolicyRule{
 		// Allow the user to read and write applicationlayers to enable/disable WAF.
 		{
 			APIGroups: []string{"operator.tigera.io"},
@@ -2139,7 +2190,7 @@ func (c *apiServerComponent) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole
 			},
 			Verbs: []string{"patch"},
 		},
-	}
+	}...)
 
 	// Role/binding access for the RBAC management UI. ui-apis writes these
 	// impersonating the caller, so the apiserver enforces escalation against the
@@ -2164,13 +2215,16 @@ func (c *apiServerComponent) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole
 	if c.cfg.ManagementClusterConnection == nil {
 		// Access to flow logs, audit logs, and statistics.
 		// Elasticsearch superuser access once logged into Kibana.
+		// Calico Cloud additionally grants access to runtime logs.
+		resourceNames := []string{"flows", "audit*", "l7", "events", "dns", "waf", "kibana_login", "elasticsearch_superuser", "recommendations"}
+		if c.cfg.Cloud {
+			resourceNames = append([]string{"runtime"}, resourceNames...)
+		}
 		rules = append(rules, rbacv1.PolicyRule{
-			APIGroups: []string{"lma.tigera.io"},
-			Resources: []string{"*"},
-			ResourceNames: []string{
-				"flows", "audit*", "l7", "events", "dns", "waf", "kibana_login", "elasticsearch_superuser", "recommendations",
-			},
-			Verbs: []string{"get"},
+			APIGroups:     []string{"lma.tigera.io"},
+			Resources:     []string{"*"},
+			ResourceNames: resourceNames,
+			Verbs:         []string{"get"},
 		})
 	}
 

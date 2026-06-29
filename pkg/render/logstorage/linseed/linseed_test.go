@@ -128,6 +128,27 @@ var _ = Describe("Linseed rendering tests", func() {
 			compareResources(createResources, expectedResources, false)
 		})
 
+		It("should render Calico Cloud network policy and deployment tweaks when Cloud is enabled", func() {
+			cfg.Cloud = true
+			component := Linseed(cfg)
+			createResources, _ := component.Objects()
+
+			Expect(rtest.GetResource(createResources, CloudPolicyName, render.ElasticsearchNamespace, "projectcalico.org", "v3", "NetworkPolicy")).NotTo(BeNil())
+
+			d := rtest.GetResource(createResources, DeploymentName, render.ElasticsearchNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+			env := d.Spec.Template.Spec.Containers[0].Env
+			Expect(env).To(ContainElement(corev1.EnvVar{Name: "LINSEED_ENABLE_METRICS", Value: "true"}))
+			Expect(env).To(ContainElement(corev1.EnvVar{Name: "ELASTIC_POLICY_ACTIVITY_INDEX_REPLICAS", Value: "1"}))
+		})
+
+		It("should not render Calico Cloud resources when Cloud is disabled", func() {
+			component := Linseed(cfg)
+			createResources, _ := component.Objects()
+			Expect(rtest.GetResource(createResources, CloudPolicyName, render.ElasticsearchNamespace, "projectcalico.org", "v3", "NetworkPolicy")).To(BeNil())
+			d := rtest.GetResource(createResources, DeploymentName, render.ElasticsearchNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+			Expect(d.Spec.Template.Spec.Containers[0].Env).NotTo(ContainElement(corev1.EnvVar{Name: "LINSEED_ENABLE_METRICS", Value: "true"}))
+		})
+
 		It("should render Secrets RBAC permissions as part of ClusterRole", func() {
 			component := Linseed(cfg)
 			createResources, _ := component.Objects()

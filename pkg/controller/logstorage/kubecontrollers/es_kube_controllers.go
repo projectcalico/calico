@@ -45,6 +45,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/render"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
@@ -61,6 +62,7 @@ type ESKubeControllersController struct {
 	clusterDomain   string
 	elasticExternal bool
 	multiTenant     bool
+	cloud           bool
 	tierWatchReady  *utils.ReadyFlag
 }
 
@@ -85,6 +87,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		status:          status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageKubeController, opts.KubernetesVersion),
 		elasticExternal: opts.ElasticExternal,
 		multiTenant:     opts.MultiTenant,
+		cloud:           opts.Cloud,
 		tierWatchReady:  &utils.ReadyFlag{},
 	}
 	r.status.Run(opts.ShutdownContext)
@@ -142,6 +145,12 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 	if err := utils.AddDeploymentWatch(c, kubecontrollers.EsKubeController, esKubeControllersNamespace.InstallNamespace()); err != nil {
 		return fmt.Errorf("log-storage-access-controller failed to watch the Service resource: %w", err)
+	}
+	if opts.Cloud && opts.ElasticExternal {
+		// This ConfigMap is needed for utils.GetCloudConfig
+		if err = utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("log-storage-kubecontrollers failed to watch the ConfigMap resource: %w", err)
+		}
 	}
 
 	// Perform periodic reconciliation. This acts as a backstop to catch reconcile issues,
@@ -343,6 +352,12 @@ func (r *ESKubeControllersController) Reconcile(ctx context.Context, request rec
 		Namespace:                    helper.InstallNamespace(),
 		BindingNamespaces:            namespaces,
 		Tenant:                       nil,
+		Cloud:                        r.cloud,
+	}
+	if r.cloud {
+		if result, proceed, err := r.esKubeControllersAddCloudModificationsToConfig(&kubeControllersCfg, reqLogger, ctx); err != nil || !proceed {
+			return result, err
+		}
 	}
 	esKubeControllerComponents := kubecontrollers.NewElasticsearchKubeControllers(&kubeControllersCfg)
 
