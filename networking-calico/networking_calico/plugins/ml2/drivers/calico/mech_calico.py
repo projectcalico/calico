@@ -1051,17 +1051,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def create_subnet_postcommit(self, context):
         TrackTask("CREATE_SUBNET_POSTCOMMIT")
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
-        self.subnet_syncer.sync_subnet(context.current, context)
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     def update_subnet_postcommit(self, context):
         TrackTask("UPDATE_SUBNET_POSTCOMMIT")
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
-        self.subnet_syncer.sync_subnet(context.current, context)
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     def delete_subnet_postcommit(self, context):
         TrackTask("DELETE_SUBNET_POSTCOMMIT")
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
-        self.subnet_syncer.sync_subnet(context.current, context)
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     # Idealised method forms.
     def create_port_postcommit(self, context):
