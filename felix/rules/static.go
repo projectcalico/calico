@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -918,6 +918,17 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		}, rules...)
 	}
 
+	// The "Drop VXLAN packets from non-allowed hosts" filter rule drops any UDP packet
+	// destined for the VXLAN port, regardless of which interface it arrived on. If the
+	// masquerade below picks the VXLAN port as the source port, the reply (whose dest
+	// port is then the VXLAN port) gets dropped on the way back. Constrain masquerade to
+	// a port range that excludes the VXLAN port whenever that drop rule is in force.
+	// See https://github.com/projectcalico/calico/issues/12244.
+	masqToPorts := ""
+	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
+		masqToPorts = masqPortRangeExcluding(r.VXLANPort)
+	}
+
 	var tunnelIfaces []string
 
 	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
@@ -975,13 +986,29 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 				// prevents us from matching packets from workloads, which are
 				// remote as far as the routing table is concerned.
 				SrcAddrType(generictables.AddrTypeLocal, false),
-			Action: r.Masq(""),
+			Action: r.Masq(masqToPorts),
 		})
 	}
 	return []*generictables.Chain{{
 		Name:  ChainNATPostrouting,
 		Rules: rules,
 	}}
+}
+
+// masqPortRangeExcluding returns a masquerade "--to-ports" range that spans as many
+// ephemeral ports as possible while excluding the given port. iptables and nftables can
+// only target a single contiguous range, so we can't punch a hole in the middle; we take
+// whichever side of the excluded port is wider, keeping the low bound at 1024 to avoid
+// masquerading onto privileged ports. A non-positive port disables the exclusion.
+func masqPortRangeExcluding(port int) string {
+	if port <= 0 || port > 65535 {
+		return ""
+	}
+	const lo, hi = 1024, 65535
+	if port-lo >= hi-port {
+		return fmt.Sprintf("%d-%d", lo, port-1)
+	}
+	return fmt.Sprintf("%d-%d", port+1, hi)
 }
 
 func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generictables.Chain {
