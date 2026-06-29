@@ -98,17 +98,38 @@ services exec the subcommand directly (see
    `logutils.ConfigureFormatter("<name>")` so log lines carry a
    consistent component prefix.
 
-**Restart-on-config-change (exit 129):** A component that
-intentionally exits with `cmdwrapper.RestartReturnCode` (129) to
-request a live restart on config change (currently felix and
-kube-controllers) must wrap its cobra `Run` with
-`cmdwrapper.WrapSelf(innerEnvVar, fn)` from `pkg/cmdwrapper`.
-Without this, `exec calico component <name>` from runit just
-exits — there is no outer process to restart the child.
+**Restart-on-config-change (exit 129):** A component can request
+an in-place restart on a live config change by exiting with
+`cmdwrapper.RestartReturnCode` (129) — currently felix and
+kube-controllers do. The exit code only has an effect if *some*
+outer supervisor re-launches the process on it, and the codebase
+has three such supervisors depending on how the component is run:
+
+- **runit**, in the node container, restarts a service when its
+  `run` script's process exits. Felix runs this way:
+  `node/filesystem/etc/service/available/felix/run` ends in
+  `exec calico component felix`, and runit re-runs it on exit.
+- **`felix/docker-image/calico-felix-wrapper`**, a bash loop that
+  re-runs `calico component felix` whenever it exits 129. Used for
+  the standalone felix image and FV, where runit isn't present.
+- **`cmdwrapper.WrapSelf(innerEnvVar, fn)`** (`pkg/cmdwrapper`),
+  an in-process self-re-exec for components that run with no
+  external supervisor — currently only kube-controllers, whose
+  container entrypoint is `calico component kube-controllers`
+  directly. The outer invocation re-execs itself (setting
+  `innerEnvVar=1`) on exit 129; the inner runs the daemon body.
+
+When adding a component that wants exit-129 reload semantics, make
+sure one of these supervisors covers it — a bare
+`exec calico component <name>` with no supervising parent gives no
+restart.
+
+Notes specific to `cmdwrapper.WrapSelf` (the kube-controllers
+path; see `kube-controllers/pkg/kubecontrollers/command.go`):
 
 - Pick a unique `innerEnvVar` per component (e.g.
-  `CALICO_FELIX_INNER`, `CALICO_KUBE_CONTROLLERS_INNER`).
-  `WrapSelf` strips any pre-existing value before re-execing.
+  `CALICO_KUBE_CONTROLLERS_INNER`). `WrapSelf` strips any
+  pre-existing value before re-execing.
 - The caller configures logrus before calling `WrapSelf`; `fn`
   is the inner daemon body.
 - Don't change the log line format in `cmdwrapper` — integration
