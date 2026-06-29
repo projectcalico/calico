@@ -433,9 +433,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
         becomes one OS process.
         """
+        # CalicoManagerWorker gets a back-reference to the driver so its
+        # stop() can reach self.elector and step down cleanly on graceful
+        # shutdown -- otherwise the elector greenlet is killed without
+        # running its finally _attempt_step_down, the election key stays
+        # in etcd until the lease expires, and the next neutron-server
+        # restart has to wait out that TTL before anyone can win.
         return [
             CalicoResourceSyncerWorker(),
-            CalicoManagerWorker(),
+            CalicoManagerWorker(driver=self),
             CalicoAgentStatusWatcherWorker(),
             CalicoEndpointStatusWatcherWorker(),
         ]
