@@ -313,6 +313,7 @@ local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/datastructures/hashring
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
