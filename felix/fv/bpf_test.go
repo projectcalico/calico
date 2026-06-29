@@ -5390,6 +5390,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			BeforeEach(func() {
 				options.TestManagesBPF = true
+				// This context exercises the live iptables->BPF migration, i.e. the upgrade
+				// path. Upgrading clusters keep BPFOverlayIPOnDevice at its default (true) so
+				// the overlay device IP is preserved and pre-existing connections survive the
+				// switch. The no-IP path (false) is covered by the main matrix, and explicit
+				// legacy-mode connectivity by bpf_overlay_ip_test.go.
+				options.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "true"
 				setupCluster()
 
 				// Default to Allow...
