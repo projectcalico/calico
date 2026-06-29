@@ -123,11 +123,16 @@ function Install-CNIPlugin()
 
     # The Calico CNI plugin is a monobinary that also serves as the IPAM plugin
     # when invoked as calico-ipam (the cni-plugin install-cni installs the binary
-    # under both names). The Windows archive only ships calico.exe, but the
-    # generated CNI conf references ipam type "calico-ipam", so also install the
-    # binary as calico-ipam.exe; otherwise pod sandbox creation fails with
-    # "failed to find plugin calico-ipam".
-    cp "$env:CNI_BIN_DIR\calico.exe" "$env:CNI_BIN_DIR\calico-ipam.exe"
+    # under both names). The Windows archive only ships calico.exe, but with the
+    # default CNI_IPAM_TYPE of "calico-ipam" (which VXLAN requires, see the check
+    # in Test-CalicoConfiguration) the generated CNI conf references ipam type
+    # "calico-ipam", so also install the binary as calico-ipam.exe; otherwise pod
+    # sandbox creation fails with "failed to find plugin calico-ipam". (With
+    # CNI_IPAM_TYPE=host-local the conf references the built-in host-local plugin
+    # instead and this alias is unused but harmless.) Use -Force to overwrite any
+    # stale/read-only copy and -ErrorAction Stop so a failed copy is fatal rather
+    # than silently leaving the alias missing.
+    cp "$env:CNI_BIN_DIR\calico.exe" "$env:CNI_BIN_DIR\calico-ipam.exe" -Force -ErrorAction Stop
 
     $cniConfFile = $env:CNI_CONF_DIR + "\" + $env:CNI_CONF_FILENAME
     Write-Host "Writing CNI configuration to $cniConfFile."
