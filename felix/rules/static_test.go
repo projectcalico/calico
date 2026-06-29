@@ -1065,6 +1065,7 @@ var _ = Describe("Static", func() {
 			Describe("with IPv4 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(4, kubeIPVSEnabled)
@@ -1081,7 +1082,7 @@ var _ = Describe("Static", func() {
 										OutInterface(dataplanedefs.IPIPIfaceName).
 										NotSrcAddrType(generictables.AddrTypeLocal, true).
 										SrcAddrType(generictables.AddrTypeLocal, false),
-									Action: iptables.MasqAction{},
+									Action: iptables.MasqAction{ToPorts: "4790-65535"},
 								},
 							},
 						},
@@ -1170,18 +1171,29 @@ var _ = Describe("Static", func() {
 											OutInterface(dataplanedefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
-										Action: iptables.MasqAction{},
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
 											OutInterface(dataplanedefs.VXLANIfaceNameV4).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
-										Action: iptables.MasqAction{},
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 								},
 							},
 						}))
+					})
+
+					Describe("with a high custom VXLAN port", func() {
+						BeforeEach(func() {
+							conf.VXLANPort = 60000
+						})
+
+						It("IPv4: Should masquerade to the wider range below the VXLAN port", func() {
+							chains := rr.StaticNATPostroutingChains(4)
+							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+						})
 					})
 				})
 			})
@@ -1189,6 +1201,7 @@ var _ = Describe("Static", func() {
 			Describe("with IPv6 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabledV6 = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(6, kubeIPVSEnabled)
@@ -1264,7 +1277,7 @@ var _ = Describe("Static", func() {
 											OutInterface(dataplanedefs.VXLANIfaceNameV6).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
-										Action: iptables.MasqAction{},
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 								},
 							},
