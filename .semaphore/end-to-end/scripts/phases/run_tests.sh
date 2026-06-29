@@ -73,14 +73,9 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
-  # EKS kubeconfigs authenticate via an `aws-iam-authenticator` exec credential
-  # plugin (a bare command name -> PATH lookup inside the runner). The stock
-  # golang image used for the hashrelease path doesn't include it, so client-go
-  # fails with "executable aws-iam-authenticator not found" in
-  # SynchronizedBeforeSuite and no tests run. The aws-eks provisioner already
-  # installs the binary on the host (under ${BZ_LOCAL_DIR}/bin); bind-mount it
-  # onto the container PATH when present. The -x guard makes this a no-op for
-  # non-EKS runs, where the host binary doesn't exist.
+  # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
+  # golang image lacks, so client-go fails before any tests run. The aws-eks
+  # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
   auth_mount=()
   if [[ -x "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator" ]]; then
     auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
