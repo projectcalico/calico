@@ -20,7 +20,6 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/projectcalico/calico/node/tests/k8st/k8stutils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -84,7 +83,7 @@ func readinessFixture(t *testing.T) []string {
 	t.Cleanup(func() {
 		for _, node := range nodes {
 			for _, svc := range []string{"bird", "confd", "felix"} {
-				_, _ = k8stutils.ExecInCalicoNode(t, node,
+				_, _ = utils.ExecInCalicoNode(t, node,
 					"sv start /etc/service/enabled/"+svc,
 					utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			}
