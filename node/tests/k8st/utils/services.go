@@ -26,13 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// NginxImage is the web-server image deployed behind the test services.
-// Overridable via $NGINX_IMAGE to match utils.py.
+// NginxImage is the web-server image deployed behind the test services. Overridable via $NGINX_IMAGE .
 var NginxImage = envOr("NGINX_IMAGE", "nginx:1")
 
-// DeployOptions mirrors the keyword arguments of test_base.py:deploy /
-// create_service. The zero value reproduces the Python defaults: a single
-// replica, a NodePort service with externalTrafficPolicy=Local.
+// DeployOptions create_service. The zero value reproduces a single replica, a NodePort service with externalTrafficPolicy=Local.
 type DeployOptions struct {
 	// Replicas defaults to 1 when zero.
 	Replicas int32
@@ -81,7 +78,7 @@ func CreateNamespace(t testing.TB, name string) {
 }
 
 // Deploy creates a Deployment (with pod anti-affinity so replicas prefer
-// distinct nodes) and a matching Service. Mirrors test_base.py:deploy.
+// distinct nodes) and a matching Service.
 func Deploy(t testing.TB, image, name, ns string, port int32, opts DeployOptions) {
 	t.Helper()
 
@@ -200,8 +197,7 @@ func WaitForDeployment(t testing.TB, name, ns string) {
 	}
 }
 
-// ScaleDeployment sets the deployment's replica count. Mirrors
-// test_base.py:scale_deployment.
+// ScaleDeployment sets the deployment's replica count.
 func ScaleDeployment(t testing.TB, name, ns string, replicas int32) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -220,7 +216,7 @@ func ScaleDeployment(t testing.TB, name, ns string, replicas int32) {
 }
 
 // WaitUntilExists blocks until the named resource exists, fatally failing on
-// timeout. Mirrors test_base.py:wait_until_exists. Only "svc" is supported.
+// timeout. Only "svc" is supported.
 func WaitUntilExists(t testing.TB, name, resourceType, ns string) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -240,8 +236,7 @@ func WaitUntilExists(t testing.TB, name, resourceType, ns string) {
 }
 
 // DeleteAndConfirm deletes the named resource and blocks until it is gone from
-// the API, fatally failing on timeout. Mirrors test_base.py:delete_and_confirm.
-// Supports "svc" and "ns".
+// the API, fatally failing on timeout. Supports "svc" and "ns".
 func DeleteAndConfirm(t testing.TB, name, resourceType, ns string) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -282,8 +277,6 @@ func DeleteAndConfirm(t testing.TB, name, resourceType, ns string) {
 	}
 }
 
-// GetSvcClusterIP returns a service's clusterIP. Mirrors
-// test_base helper get_svc_cluster_ip.
 func GetSvcClusterIP(t testing.TB, svc, ns string) string {
 	t.Helper()
 	s, err := K8sClient(t).CoreV1().Services(ns).Get(context.Background(), svc, metav1.GetOptions{})
@@ -293,8 +286,7 @@ func GetSvcClusterIP(t testing.TB, svc, ns string) string {
 	return s.Spec.ClusterIP
 }
 
-// GetSvcLoadBalancerIP returns the allocated LoadBalancer ingress IP, retrying
-// for up to 10s. Mirrors get_svc_loadbalancer_ip.
+// GetSvcLoadBalancerIP returns the allocated LoadBalancer ingress IP, retrying for up to 10s.
 func GetSvcLoadBalancerIP(t testing.TB, svc, ns string) string {
 	t.Helper()
 	cs := K8sClient(t)
@@ -317,7 +309,7 @@ func GetSvcLoadBalancerIP(t testing.TB, svc, ns string) string {
 }
 
 // GetSvcHostIP returns the hostIP of the first pod backing the service (matched
-// by label app=<app>). Mirrors get_svc_host_ip.
+// by label app=<app>).
 func GetSvcHostIP(t testing.TB, app, ns string) string {
 	t.Helper()
 	pods, err := K8sClient(t).CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
@@ -332,8 +324,7 @@ func GetSvcHostIP(t testing.TB, app, ns string) string {
 	return pods.Items[0].Status.HostIP
 }
 
-// AddSvcExternalIPs sets the service's spec.externalIPs. Mirrors
-// add_svc_external_ips.
+// AddSvcExternalIPs sets the service's spec.externalIPs.
 func AddSvcExternalIPs(t testing.TB, svc, ns string, ips []string) {
 	t.Helper()
 	cs := K8sClient(t)

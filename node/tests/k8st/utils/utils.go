@@ -166,9 +166,9 @@ func mergeRunOptions(opts []RunOptions) RunOptions {
 // Retry.
 
 // RetryUntilSuccess invokes fn until it returns nil or the timeout
-// elapses. It uses exponential backoff starting at 0.5s and capped at 10s,
-// mirroring utils.py:retry_until_success. The time taken by fn counts
-// toward the wall-clock deadline so the overall budget is predictable.
+// elapses. It uses exponential backoff starting at 0.5s and capped at 10s.
+// The time taken by fn counts toward the wall-clock deadline
+// so the overall budget is predictable.
 //
 // Returns the last error from fn on timeout, or nil on success.
 func RetryUntilSuccess(t testing.TB, timeout time.Duration, fn func() error) error {
@@ -226,7 +226,7 @@ var (
 )
 
 // K8sClient returns a singleton clientset loaded from $KUBECONFIG (or the
-// default loading rules if unset). Mirrors test_base.py:k8s_client.
+// default loading rules if unset).
 func K8sClient(t testing.TB) *kubernetes.Clientset {
 	t.Helper()
 	initK8sClient(t)
@@ -264,7 +264,7 @@ func initK8sClient(t testing.TB) {
 
 // NodeInfo returns (nodes, IPv4s, IPv6s). The first entry is the control-plane
 // node; entries 1..3 are workers in their kubectl listing order. The IPv6
-// slice is filled from ipv6Map. Mirrors utils.py:node_info.
+// slice is filled from ipv6Map.
 func NodeInfo(t testing.TB) (nodes, ips, ip6s []string) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -308,8 +308,7 @@ func nodeAddress(n corev1.Node) string {
 	return n.Status.Addresses[0].Address
 }
 
-// CalicoNodePodName returns the calico-node pod scheduled on the given kind
-// node. Mirrors utils.py:calico_node_pod_name.
+// CalicoNodePodName returns the calico-node pod scheduled on the given kind node.
 func CalicoNodePodName(t testing.TB, nodeName string) string {
 	t.Helper()
 	pod, err := lookupCalicoNodePod(t, nodeName)
@@ -319,8 +318,7 @@ func CalicoNodePodName(t testing.TB, nodeName string) string {
 	return pod.Name
 }
 
-// ExecInCalicoNode runs the given command inside the calico-node pod
-// scheduled on nodeName. Mirrors utils.py:exec_in_calico_node.
+// ExecInCalicoNode runs the given command inside the calico-node pod scheduled on nodeName.
 func ExecInCalicoNode(t testing.TB, nodeName, command string, opts ...RunOptions) (string, error) {
 	t.Helper()
 	pod, err := lookupCalicoNodePod(t, nodeName)
@@ -633,8 +631,7 @@ func logCalicoNodeLogs(t testing.TB) {
 // ----------------------------------------------------------------------------
 // Pod-status assertions.
 
-// CheckPodStatus fails the test if any pod in the namespace is not in the
-// Running phase. Mirrors test_base.py:check_pod_status.
+// CheckPodStatus fails the test if any pod in the namespace is not in the Running phase.
 func CheckPodStatus(t testing.TB, namespace string) {
 	t.Helper()
 	cs := K8sClient(t)

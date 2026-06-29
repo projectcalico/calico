@@ -18,10 +18,9 @@
 // asserts that the routes the cluster advertises (and withdraws) appear in the
 // external node's routing table.
 //
-// Port of node/tests/k8st/tests/test_bgp_advert.py. TestBGPAdvert covers the
-// full node-to-node-mesh topology (the Python TestBGPAdvert class) and
-// TestBGPAdvertRR covers the route-reflector topology (TestBGPAdvertRR). Each
-// Python test method is a subtest run under the shared per-class fixture.
+// TestBGPAdvert covers the full node-to-node-mesh topology
+// (the Python TestBGPAdvert class) and TestBGPAdvertRR covers the
+// route-reflector topology (TestBGPAdvertRR).
 
 package k8stests
 
@@ -153,7 +152,7 @@ type bgpAdvertEnv struct {
 // TestBGPAdvert exercises service-IP advertisement under the full node-to-node
 // BGP mesh. A standalone BIRD router peers with every cluster node; each
 // subtest configures advertisement and asserts the resulting routes on that
-// router. Port of test_bgp_advert.py:TestBGPAdvert.
+// router.
 func TestBGPAdvert(t *testing.T) {
 	g := NewWithT(t)
 	cli := newClient(g)
@@ -195,7 +194,7 @@ func TestBGPAdvert(t *testing.T) {
 
 // TestBGPAdvertRR exercises service-IP advertisement under a route-reflector
 // topology: kube-node-2 acts as the RR and all other nodes (plus the external
-// node) peer with it. Port of test_bgp_advert.py:TestBGPAdvertRR.
+// node) peer with it.
 func TestBGPAdvertRR(t *testing.T) {
 	g := NewWithT(t)
 	cli := newClient(g)
@@ -226,7 +225,7 @@ func TestBGPAdvertRR(t *testing.T) {
 }
 
 // ----------------------------------------------------------------------------
-// Per-test setup / teardown (the Python _TestBGPAdvert setUp / tearDown).
+// Per-test setup / teardown.
 
 // startTest creates the per-test namespace and registers the shared teardown.
 // The teardown is registered first so any cleanups a subtest registers later

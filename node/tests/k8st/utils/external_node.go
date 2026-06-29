@@ -27,7 +27,7 @@ import (
 // The BGP advertisement tests peer the cluster with a standalone BIRD router
 // running in a docker container on the kind network. These helpers are the Go
 // port of utils.py:start_external_node_with_bgp and the get_routes / curl
-// helpers in test_base.py, all of which shell out to docker.
+// helpers, all of which shell out to docker.
 
 // ExternalNodeName is the docker container name of the external BGP router that
 // the advertisement tests peer with. Matches the Python "kube-node-extra".
@@ -37,8 +37,7 @@ const ExternalNodeName = "kube-node-extra"
 // kind docker network and configures it as a BGP peer. Exactly one of
 // birdPeerConfig / bird6PeerConfig should be set, selecting IPv4 or IPv6
 // peering; the literal "ip@local" in the config is replaced with the router's
-// own source address. Returns that source address (the "birdy" IP). Mirrors
-// utils.py:start_external_node_with_bgp.
+// own source address. Returns that source address (the "birdy" IP).
 func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfig string) string {
 	t.Helper()
 
@@ -88,8 +87,7 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfi
 }
 
 // installExternalPeerConfig writes the given BIRD peer config to destPath
-// inside the named container via a heredoc piped into `docker exec -i` — the
-// shell-out equivalent of the Python helper's local-file + `docker cp` dance.
+// inside the named container via a heredoc piped into `docker exec -i`.
 func installExternalPeerConfig(t testing.TB, name, destPath, config string) {
 	t.Helper()
 	MustRun(t, fmt.Sprintf("cat <<'PEEREOF' | docker exec -i %s sh -c 'cat > %s'\n%s\nPEEREOF\n", name, destPath, config))
@@ -103,14 +101,14 @@ func RemoveExternalNode(t testing.TB, name string) {
 }
 
 // ExternalNodeRoutes returns the IPv4 routing table of the external BGP node, as
-// produced by `ip r`. It is the Go port of test_base.py:get_routes.
+// produced by `ip r`.
 func ExternalNodeRoutes(t testing.TB) string {
 	t.Helper()
 	return MustRun(t, "docker exec "+ExternalNodeName+" ip r")
 }
 
 // Curl runs `curl` from the external BGP node against the given host. An IPv6
-// literal is wrapped in brackets. It is the Go port of utils.py:curl.
+// literal is wrapped in brackets.
 func Curl(t testing.TB, hostname string) (string, error) {
 	t.Helper()
 	if strings.Contains(hostname, ":") {
