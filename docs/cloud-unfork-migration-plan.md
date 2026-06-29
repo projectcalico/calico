@@ -210,11 +210,26 @@ component as its own PR with its tests, verifying enterprise golden files are un
   Cloud image overrides happen at runtime where wired (e.g. manager via `CloudResources.ManagerImage`);
   any further cloud image pinning (kibana/kube-controllers) is a Phase 4 build/release concern.
 
-### Phase 4 — Cloud build/release pipeline (separate effort)
+### Phase 4 — Cloud build/release pipeline
 
-This is infrastructure, not operator code. See the classification below; re-implement cloud build
-targets and Semaphore/Argo pipelines so they **coexist** with enterprise's quay/multi-arch `v*`
-flow rather than clobbering it. Track as a follow-up; not required for the code merge.
+**Build/release tooling — DONE** (coexists with enterprise, verified):
+- `hack/release/cloud.go` + `hack/release/internal/versions/cloud.go` + `hack/release/cloud_test.go`
+  are guarded by the **`cloud` build tag**, so they compile only into the cloud release tool
+  (`go build -tags cloud`). The enterprise/OSS release tool is byte-for-byte unaffected (verified:
+  untagged build + tests pass unchanged). `cloud.go`'s `init()` reassigns the OSS package-level hooks
+  (`isValidReleaseVersion`, `setupHashreleaseBuild`, `publishImages`, command `Before` funcs) — so
+  `checks.go`/`flags.go` were **not** edited (unlike the fork, which swapped them globally).
+- `Makefile`: `make release-cloud` / `make release-publish-cloud` build `hack/bin/release-cloud` with
+  `-tags cloud`. A gated `ifeq ($(VARIANT),cloud)` block overrides image identity (GCR /
+  `tigera-tesla/operator-cloud`, amd64-only) — verified that enterprise vars are unchanged when
+  `VARIANT` is unset and switch correctly when `VARIANT=cloud`.
+- `hack/release/CLOUD.md` documents the cloud release/hashrelease flow.
+
+**CI pipelines — follow-up (not in this PR):** the Semaphore `cloud-v*` GCR push/release blocks and
+the Argo hashrelease build + cluster-rollout workflows (`.argoci/`, `hack/hashrelease/*.py`) are
+environment-specific (operator-cloud Semaphore project, ArgoCD apps, GCR service accounts) and won't
+run until cloud CI is wired into this repo. The OBSOLETE fork-sync machinery is dropped entirely (see
+classification below).
 
 ---
 

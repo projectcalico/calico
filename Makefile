@@ -176,6 +176,19 @@ EXCLUDE_MANIFEST_REGISTRIES?=""
 PUSH_MANIFEST_IMAGE_PREFIXES=$(PUSH_IMAGE_PREFIXES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
 PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(PUSH_IMAGE_PREFIXES))
 
+# Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
+# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only, instead of the enterprise quay
+# image. Enterprise/OSS builds (VARIANT unset) are completely unaffected. PUSH_MANIFEST_IMAGE_PREFIXES
+# and PUSH_NONMANIFEST_IMAGE_PREFIXES above use recursive `=`, so they pick up these overrides.
+ifeq ($(VARIANT),cloud)
+REPO:=tigera/operator-cloud
+BUILD_IMAGE:=tigera-tesla/operator-cloud
+IMAGE_REGISTRY:=gcr.io
+PUSH_IMAGE_PREFIXES:=gcr.io/
+EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
+VALIDARCHES:=amd64
+endif
+
 
 imagetag:
 ifndef IMAGETAG
@@ -563,6 +576,23 @@ hack/bin/release: $(shell find ./hack/release -type f)
 	$(CONTAINERIZED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o hack/bin/release ./hack/release'
+
+# Calico Cloud release tooling. The cloud release tool is the same tool compiled with `-tags cloud`,
+# which activates hack/release/cloud.go (GCR/tesla image defaults, cloud-vX.Y.Z version format,
+# hashrelease support). The regular `release`/`release-publish` targets above are unaffected.
+hack/bin/release-cloud: $(shell find ./hack/release -type f)
+	mkdir -p hack/bin
+	$(CONTAINERIZED) $(CALICO_BUILD) \
+	sh -c '$(GIT_CONFIG_SSH) \
+	go build -buildvcs=false -tags cloud -o hack/bin/release-cloud ./hack/release'
+
+## Build a Calico Cloud release from start to finish.
+release-cloud: clean hack/bin/release-cloud
+	hack/bin/release-cloud build
+
+## Publish a previously built Calico Cloud release.
+release-publish-cloud: hack/bin/release-cloud
+	hack/bin/release-cloud publish
 
 hack/release/ut:
 	mkdir -p report/release
