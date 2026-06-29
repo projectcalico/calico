@@ -92,6 +92,26 @@ var _ = DescribeTable("vxlanLinksIncompat",
 	}, &netlink.Vxlan{
 		VxlanId: 4096, Port: 4789, L2miss: false,
 	}, "l2miss: true vs false"),
+	Entry("identical source-port range", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, ""),
+	Entry("source-port range mismatch (low)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 32768, PortHigh: 65535,
+	}, "source port range: [49152,65535] vs [32768,65535]"),
+	Entry("source-port range mismatch (high)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 60000,
+	}, "source port range: [49152,65535] vs [49152,60000]"),
+	Entry("one side has no source-port range (treated as kernel default)", &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789, PortLow: 49152, PortHigh: 65535,
+	}, &netlink.Vxlan{
+		VxlanId: 4096, Port: 4789,
+	}, ""),
 )
 
 var _ = Describe("VXLANManager", func() {
@@ -747,5 +767,58 @@ var _ = Describe("VXLANManager", func() {
 
 		// Expect no routes.
 		Expect(rt.currentRoutes[dataplanedefs.VXLANIfaceNameV6]).To(HaveLen(0))
+	})
+
+	It("plumbs the VXLAN source-port range into the netlink device", func() {
+		// Re-create the manager with a configured port range. Avoid using
+		// the BeforeEach-provided manager since we want different config.
+		la := netlink.NewLinkAttrs()
+		la.Name = "eth0"
+		dpConfig := Config{
+			MaxIPSetSize:       5,
+			Hostname:           "node1",
+			ExternalNodesCidrs: []string{"10.0.0.0/24"},
+			VXLANSrcPortMin:    49152,
+			VXLANSrcPortMax:    65535,
+			RulesConfig: rules.Config{
+				VXLANVNI:  1,
+				VXLANPort: 20,
+			},
+		}
+		mgr := newVXLANManagerWithShims(
+			dpsets.NewMockIPSets(),
+			rt,
+			fdb,
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			4444,
+			dpConfig,
+			logutils.NewSummarizer("test"),
+			&mockTunnelDataplane{
+				links:          []netlink.Link{&mockLink{attrs: la}},
+				tunnelLinkName: dataplanedefs.VXLANIfaceNameV4,
+				ipVersion:      4,
+			},
+		)
+
+		mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
+			Node:           "node1",
+			Mac:            "00:0a:74:9d:68:16",
+			Ipv4Addr:       "10.0.0.0",
+			ParentDeviceIp: "172.0.0.2",
+		})
+		mgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		parent, err := mgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(parent).NotTo(BeNil())
+
+		link, _, err := mgr.device(parent)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		vxlan, ok := link.(*netlink.Vxlan)
+		Expect(ok).To(BeTrue())
+		Expect(vxlan.PortLow).To(Equal(49152))
+		Expect(vxlan.PortHigh).To(Equal(65535))
 	})
 })
