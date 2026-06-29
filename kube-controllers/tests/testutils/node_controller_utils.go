@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		"-v", fmt.Sprintf("%s:/admin.pem", admin),
 		"-v", fmt.Sprintf("%s:/admin-key.pem", adminKey),
-		os.Getenv("CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
 }
 
 func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string, env map[string]string) *containers.Container {
@@ -76,7 +76,7 @@ func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kco
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		os.Getenv("CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
 
 	return containers.Run("calico-kube-controllers",
 		containers.RunOpts{AutoRemove: true},

@@ -1,0 +1,137 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: export-only-filter-1
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.0.0.0/16
+    - action: Reject
+      interface: "*.calico"
+      source: RemotePeers
+      matchOperator: In
+      cidr: 44.1.0.0/16
+    - action: Accept
+      source: RemotePeers
+    - action: Reject
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000::0/64
+    - action: Reject
+      source: RemotePeers
+      matchOperator: In
+      cidr: 5000:1::0/64
+    - action: Accept
+      interface: "*"
+      source: RemotePeers
+    - action: Reject
+---
+kind: BGPFilter
+apiVersion: projectcalico.org/v3
+metadata:
+  name: export-only-filter-2
+spec:
+  exportV4:
+    - action: Accept
+      matchOperator: In
+      cidr: 44.2.0.0/16
+    - action: Reject
+      interface: "eth9"
+      source: RemotePeers
+      matchOperator: In
+      cidr: 44.3.0.0/16
+    - action: Accept
+      source: RemotePeers
+    - action: Reject
+  exportV6:
+    - action: Accept
+      matchOperator: In
+      cidr: 5000:2::0/64
+    - action: Reject
+      source: RemotePeers
+      matchOperator: In
+      cidr: 5000:3::0/64
+    - action: Accept
+      interface: "*.calico"
+      source: RemotePeers
+    - action: Reject
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.3
+  asNumber: 64517
+  filters:
+    - export-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-1-v6
+spec:
+  node: kube-master
+  peerIP: 2001::103
+  asNumber: 64517
+  filters:
+    - export-only-filter-1
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v4
+spec:
+  node: kube-master
+  peerIP: 10.192.0.4
+  asNumber: 64517
+  filters:
+    - export-only-filter-2
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: test-explicit-peer-with-filter-2-v6
+spec:
+  node: kube-master
+  peerIP: 2001::104
+  asNumber: 64517
+  filters:
+    - export-only-filter-2

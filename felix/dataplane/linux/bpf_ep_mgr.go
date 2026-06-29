@@ -1,6 +1,6 @@
 //go:build !windows
 
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/asm"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
 	"github.com/projectcalico/calico/felix/bpf/bpfmap"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
 	"github.com/projectcalico/calico/felix/bpf/filter"
 	"github.com/projectcalico/calico/felix/bpf/hook"
@@ -86,11 +87,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
 	bpfEPManagerHealthName = "BPFEndpointManager"
+	bpfHostIPHealthName    = "BPFHostIP"
 )
 
 var (
@@ -141,6 +144,7 @@ const (
 	IfaceTypeL3
 	IfaceTypeBond
 	IfaceTypeBondSlave
+	IfaceTypeNetkit
 	IfaceTypeUnknown
 )
 
@@ -320,9 +324,14 @@ type bpfEndpointManager struct {
 	legacyCleanUp           bool
 	hostIfaceTrees          bpfIfaceTrees
 
-	jumpMapAllocs    map[hook.Hook]*jumpMapAlloc
-	policyTcAllowFDs [2]bpf.ProgFD
-	policyTcDenyFDs  [2]bpf.ProgFD
+	jumpMapAllocs        map[hook.Hook]*jumpMapAlloc
+	netkitJumpMapAllocs  map[hook.Hook]*jumpMapAlloc
+	policyTcAllowFDs     [2]bpf.ProgFD
+	policyTcDenyFDs      [2]bpf.ProgFD
+	policyNetkitAllowFDs [2]bpf.ProgFD
+	policyNetkitDenyFDs  [2]bpf.ProgFD
+	netkitPoliciesLoaded bool
+	netkitPoliciesMu     sync.Mutex
 
 	ruleRenderer bpfAllowChainRenderer
 
@@ -402,13 +411,32 @@ type bpfEndpointManager struct {
 	v4 *bpfEndpointManagerDataplane
 	v6 *bpfEndpointManagerDataplane
 
-	healthAggregator     *health.HealthAggregator
-	permanentBPFErr      error // set when BPF programs fail to load permanently; prevents retries
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
-	istioDSCP            uint8
+	healthAggregator        *health.HealthAggregator
+	permanentBPFErr         error // set when BPF programs fail to load permanently; prevents retries
+	disabledOptionalProgs   set.Typed[hook.SubProg]
+	failedOptionalProgsLock sync.Mutex
+	failedOptionalProgs     map[string]*hook.OptionalSubProgInfo // keyed by FeatureName; guarded by failedOptionalProgsLock
+	updateRateLimitedLog    *logutilslc.RateLimitedLogger
+	istioDSCP               uint8
 
-	QoSMap        maps.MapWithUpdateWithFlags
+	QoSMap     maps.MapWithUpdateWithFlags
+	QoSConnMap maps.MapWithUpdateWithFlags
+
+	// connLimitPodInfo maps each connection-limited pod's IP (as a 4- or
+	// 16-byte string) to the info the CT scanner needs (ifindex + which
+	// directions are limited). Maintained incrementally by the WEP and
+	// interface event handlers; read by the scanner via GetConnLimitedPodInfo.
+	// The map is mutated only on the main dataplane goroutine, but the
+	// scanner reads from a different goroutine, so we guard reads/writes
+	// with an RWMutex. connLimitWLToIPs is a secondary index from
+	// workload ID to the IP keys it owns in connLimitPodInfo, so we can
+	// remove a WEP's entries in O(IPs-per-WEP) without scanning the map.
+	connLimitPodInfoMu sync.RWMutex
+	connLimitPodInfo   map[string]bpfconntrack.ConnLimitPodInfo
+	connLimitWLToIPs   map[types.WorkloadEndpointID][]string
+
 	maglevLUTSize int
+	ipFragTimeout uint32
 
 	workloadSourceSpoofing bool
 }
@@ -416,8 +444,18 @@ type bpfEndpointManager struct {
 type bpfEndpointManagerDataplane struct {
 	*bpfmap.IPMaps
 	ipFamily proto.IPVersion
-	hostIP   net.IP
 	mgr      *bpfEndpointManager
+
+	// lastSeenHostIP is the most recent host IP of this family we have been
+	// told about by the calc graph. We keep using it as the source of
+	// truth in BPF program globals even after the calc graph stops
+	// reporting it (Node deleted, IP patched out, parse failure), so
+	// already-established connectivity holds; hostIPPresent /
+	// hostIPAbsentSince track the calc-graph signal separately and
+	// drive the BPFHostIP readiness reporter.
+	lastSeenHostIP    net.IP
+	hostIPPresent     bool
+	hostIPAbsentSince time.Time
 
 	ifaceToIpMap map[string]net.IP
 
@@ -442,6 +480,45 @@ type bpfAllowChainRenderer interface {
 type ManagerWithHEPUpdate interface {
 	Manager
 	OnHEPUpdate(hostIfaceToEpMap map[string]*proto.HostEndpoint)
+}
+
+// getIPFragTimeout returns the IP fragment timeout in seconds.
+// If configuredTimeout is 0, it reads the value from the Linux kernel sysctl
+// net.ipv4.ipfrag_time. Otherwise, it converts the configured duration to seconds.
+func getIPFragTimeout(configuredTimeout time.Duration) uint32 {
+	var timeoutSecs int64
+
+	if configuredTimeout == 0 {
+		// Try to read from /proc/sys/net/ipv4/ipfrag_time
+		data, err := os.ReadFile("/proc/sys/net/ipv4/ipfrag_time")
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to read net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutStr := strings.TrimSpace(string(data))
+		timeout, err := strconv.Atoi(timeoutStr)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to parse net.ipv4.ipfrag_time, using default of 30 seconds")
+			return 30
+		}
+
+		timeoutSecs = int64(timeout)
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout read from net.ipv4.ipfrag_time")
+	} else {
+		timeoutSecs = int64(configuredTimeout.Seconds())
+		logrus.WithField("timeout", timeoutSecs).Info("BPF IP fragment timeout set from configuration")
+	}
+
+	if timeoutSecs < 1 {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too low, clamping to 1 second")
+		timeoutSecs = 1
+	} else if timeoutSecs > int64(^uint32(0)) {
+		logrus.WithField("timeout", timeoutSecs).Warn("IP fragment timeout too high, clamping to max uint32")
+		timeoutSecs = int64(^uint32(0))
+	}
+
+	return uint32(timeoutSecs)
 }
 
 func NewBPFEndpointManager(
@@ -510,6 +587,10 @@ func NewBPFEndpointManager(
 			hook.Egress:  newJumpMapAlloc("egress", jump.TCMaxEntryPoints),
 			hook.XDP:     newJumpMapAlloc("xdp", jump.XDPMaxEntryPoints),
 		},
+		netkitJumpMapAllocs: map[hook.Hook]*jumpMapAlloc{
+			hook.Ingress: newJumpMapAlloc("netkit-ingress", jump.TCMaxEntryPoints),
+			hook.Egress:  newJumpMapAlloc("netkit-egress", jump.TCMaxEntryPoints),
+		},
 		ruleRenderer:     iptablesRuleRenderer,
 		onStillAlive:     livenessCallback,
 		lookupsCache:     lookupsCache,
@@ -535,8 +616,18 @@ func NewBPFEndpointManager(
 		bpfAttachType:      config.BPFAttachType,
 
 		QoSMap:                 bpfmaps.CommonMaps.QoSMap,
+		QoSConnMap:             bpfmaps.CommonMaps.QoSConnMap,
+		connLimitPodInfo:       map[string]bpfconntrack.ConnLimitPodInfo{},
+		connLimitWLToIPs:       map[types.WorkloadEndpointID][]string{},
 		maglevLUTSize:          config.BPFMaglevLUTSize,
+		ipFragTimeout:          getIPFragTimeout(config.BPFIPFragTimeout),
 		workloadSourceSpoofing: config.WorkloadSourceSpoofing,
+		failedOptionalProgs:    map[string]*hook.OptionalSubProgInfo{},
+	}
+
+	m.disabledOptionalProgs = set.New[hook.SubProg]()
+	if !config.BPFIPFragmentReassemblyEnabled {
+		m.disabledOptionalProgs.Add(hook.SubProgIPFrag)
 	}
 
 	m.policyTrampolineStride.Store(int32(asm.TrampolineStrideDefault))
@@ -578,6 +669,16 @@ func NewBPFEndpointManager(
 		healthAggregator.Report(bpfEPManagerHealthName, &health.HealthReport{
 			Ready:  false,
 			Detail: "Not yet synced.",
+		})
+		healthAggregator.RegisterReporter(bpfHostIPHealthName, &health.HealthReport{
+			Ready: true,
+			Live:  false,
+		}, 0)
+		// Start out not-ready: we have not heard from the calc graph
+		// yet, so we don't know whether the local Node has a host IP.
+		healthAggregator.Report(bpfHostIPHealthName, &health.HealthReport{
+			Ready:  false,
+			Detail: "Host IP not yet known.",
 		})
 	}
 
@@ -752,7 +853,11 @@ func (m *bpfEndpointManager) repinJumpMaps() error {
 	for _, mp := range m.commonMaps.JumpMaps {
 		mps = append(mps, mp)
 	}
+	for _, mp := range m.commonMaps.NetkitJumpMaps {
+		mps = append(mps, mp)
+	}
 	mps = append(mps, m.commonMaps.ProgramsMaps...)
+	mps = append(mps, m.commonMaps.NetkitProgramsMaps...)
 	for _, mp := range mps {
 		pin := path.Join(tmp, mp.GetName())
 		if err := libbpf.ObjPin(int(mp.MapFD()), pin); err != nil {
@@ -814,42 +919,82 @@ func (m *bpfEndpointManager) withIface(ifaceName string, fn func(iface *bpfInter
 	m.dirtyIfaceNames.Add(ifaceName)
 }
 
-func (m *bpfEndpointManager) updateHostIP(ipAddr string, ipFamily int) {
-	ip, _, err := net.ParseCIDR(ipAddr)
-	if err != nil {
-		ip = net.ParseIP(ipAddr)
-	}
-	if ip != nil {
-		if ipFamily == 4 {
-			if m.v4.hostIP.Equal(ip) {
-				return
-			}
-			m.v4.hostIP = ip
-		} else {
-			if m.v6.hostIP.Equal(ip) {
-				return
-			}
-			m.v6.hostIP = ip
-		}
-		// Should be safe without the lock since there shouldn't be any active background threads
-		// but taking it now makes us robust to refactoring.
-		m.ifacesLock.Lock()
-		for ifaceName := range m.nameToIface {
-			m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
-				iface.dpState.v4Readiness = ifaceNotReady
-				iface.dpState.v6Readiness = ifaceNotReady
-				return true
-			})
-		}
-		m.ifacesLock.Unlock()
-		// We use host IP as the source when routing service for the ctlb workaround. We
-		// need to update those routes, so make them all dirty.
-		for svc := range m.services {
-			m.dirtyServices.Add(svc)
-		}
+// updateOurHostIP records a host IP change for the local Node, received
+// via the calc graph. The caller passes the parsed `net.IP` (or `nil`
+// to mean "we no longer have a host IP of this family" — Node deleted,
+// address patched out, or unparseable input).
+//
+// The cached `lastSeenHostIP` is updated only on a non-nil change; the
+// nil case (host IP unknown) deliberately keeps the last-known value
+// so the BPF programs continue running with a usable HOST_IP for the
+// few features that need it (VXLAN encap source, RPF link-local
+// check). The BPFHostIP readiness reporter is updated either way so
+// the missing host IP is visible to operators.
+func (m *bpfEndpointManager) updateOurHostIP(ip net.IP, ipFamily int) {
+	var d *bpfEndpointManagerDataplane
+	if ipFamily == 4 {
+		d = m.v4
 	} else {
-		logrus.Warn("Cannot parse hostip, no change applied")
+		d = m.v6
 	}
+	if d == nil {
+		return
+	}
+	// Always refresh the BPFHostIP readiness signal — setHostIPPresence
+	// is idempotent when presence hasn't changed, so it's safe to call
+	// on every update and ensures readiness flips back to ready when
+	// the calc graph re-asserts a previously-cached IP.
+	m.setHostIPPresence(ipFamily, ip != nil)
+	if ip == nil || d.lastSeenHostIP.Equal(ip) {
+		// Either host IP is unknown (keep cached value so pinned BPF
+		// programs continue functioning) or the cache already matches
+		// the new value (nothing to re-attach). Either way, no dirty
+		// mark.
+		return
+	}
+	d.lastSeenHostIP = ip
+	m.markEverythingDirty()
+}
+
+// markEverythingDirty marks every interface and service known to the BPF
+// endpoint manager as dirty, forcing the next apply pass to rebuild the
+// attach points and service routes. Used when a change (e.g. a new host
+// IP) invalidates the program globals or the service source-IP.
+func (m *bpfEndpointManager) markEverythingDirty() {
+	// Should be safe without the lock since there shouldn't be any active background threads
+	// but taking it now makes us robust to refactoring.
+	m.ifacesLock.Lock()
+	for ifaceName := range m.nameToIface {
+		m.withIface(ifaceName, func(iface *bpfInterface) (forceDirty bool) {
+			iface.dpState.v4Readiness = ifaceNotReady
+			iface.dpState.v6Readiness = ifaceNotReady
+			return true
+		})
+	}
+	m.ifacesLock.Unlock()
+	// We use host IP as the source when routing service for the ctlb workaround. We
+	// need to update those routes, so make them all dirty.
+	for svc := range m.services {
+		m.dirtyServices.Add(svc)
+	}
+}
+
+// parseHostIP parses a host IP address string (CIDR or bare IP). Returns
+// nil for empty strings and for unparseable inputs; parse failures are
+// logged. The caller treats both as "host IP unknown for this family".
+func parseHostIP(ipAddr string, ipFamily int) net.IP {
+	if ipAddr == "" {
+		return nil
+	}
+	ip, _, err := cnet.ParseCIDROrIP(ipAddr)
+	if err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"ipAddr":   ipAddr,
+			"ipFamily": ipFamily,
+		}).Warn("Cannot parse host IP; treating as unknown")
+		return nil
+	}
+	return ip.IP
 }
 
 func (m *bpfEndpointManager) OnUpdate(msg any) {
@@ -880,26 +1025,34 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 		m.onProfileRemove(msg)
 
 	case *proto.HostMetadataUpdate:
-		if m.v4 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
-		}
-	case *proto.HostMetadataV6Update:
-		if m.v6 != nil && msg.Hostname == m.hostname {
-			logrus.WithField("HostMetadataV6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
-		}
-	case *proto.HostMetadataV4V6Update:
 		if msg.Hostname != m.hostname {
 			break
 		}
 		if m.v4 != nil {
-			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
-			m.updateHostIP(msg.Ipv4Addr, 4)
+			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IP changed: %s", msg.Ipv4Addr)
+			m.updateOurHostIP(parseHostIP(msg.Ipv4Addr, 4), 4)
 		}
 		if m.v6 != nil {
-			logrus.WithField("HostMetadataV4V6Update", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
-			m.updateHostIP(msg.Ipv6Addr, 6)
+			logrus.WithField("HostMetadataUpdate", msg).Infof("Host IPv6 changed: %s", msg.Ipv6Addr)
+			m.updateOurHostIP(parseHostIP(msg.Ipv6Addr, 6), 6)
+		}
+	case *proto.HostMetadataRemove:
+		if msg.Hostname != m.hostname {
+			break
+		}
+		// Local Node metadata has gone away (Node deleted, or BGP spec
+		// removed). Treated identically to the empty-IP case in
+		// HostMetadataUpdate: updateOurHostIP keeps the cached
+		// last-known host IP so pinned BPF programs continue running,
+		// and the BPFHostIP readiness reporter goes degraded so the
+		// missing Node is visible to operators.
+		logrus.WithField("hostname", msg.Hostname).Info(
+			"Local host metadata removed; keeping last-known host IP in BPF programs, marking readiness degraded.")
+		if m.v4 != nil {
+			m.updateOurHostIP(nil, 4)
+		}
+		if m.v6 != nil {
+			m.updateOurHostIP(nil, 6)
 		}
 	case *proto.ServiceUpdate:
 		m.onServiceUpdate(msg)
@@ -988,22 +1141,34 @@ func (m *bpfEndpointManager) reclaimPolicyIdx(name string, ipFamily int, iface *
 	if ipFamily == 6 {
 		idx = &iface.dpState.v6
 	}
+	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
 	for _, attachHook := range []hook.Hook{hook.XDP, hook.Ingress, hook.Egress} {
-		if err := m.jumpMapDelete(attachHook, idx.policyIdx[attachHook]); err != nil {
+		// XDP is never netkit-attached; only ingress/egress use netkit jump maps.
+		useNetkit := isNetkit && attachHook != hook.XDP
+		if err := m.jumpMapDelete(attachHook, idx.policyIdx[attachHook], useNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
-		if err := m.jumpMapAllocs[attachHook].Put(idx.policyIdx[attachHook], name); err != nil {
+		allocs := m.jumpMapAllocs
+		if useNetkit {
+			allocs = m.netkitJumpMapAllocs
+		}
+		if err := allocs[attachHook].Put(idx.policyIdx[attachHook], name); err != nil {
 			logrus.WithError(err).Errorf("Policy family %d, hook %s", ipFamily, attachHook)
 		}
 	}
 }
 
 func (m *bpfEndpointManager) reclaimFilterIdx(name string, iface *bpfInterface) {
+	isNetkit := iface.info.ifaceType == IfaceTypeNetkit
+	allocs := m.jumpMapAllocs
+	if isNetkit {
+		allocs = m.netkitJumpMapAllocs
+	}
 	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook]); err != nil {
+		if err := m.jumpMapDelete(attachHook, iface.dpState.filterIdx[attachHook], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Filter program may leak.")
 		}
-		if err := m.jumpMapAllocs[attachHook].Put(iface.dpState.filterIdx[attachHook], name); err != nil {
+		if err := allocs[attachHook].Put(iface.dpState.filterIdx[attachHook], name); err != nil {
 			logrus.WithError(err).Errorf("Filter hook %s", attachHook)
 		}
 		iface.dpState.filterIdx[attachHook] = -1
@@ -1124,6 +1289,18 @@ func cleanupTcxPins(iface string) {
 	}
 }
 
+func cleanupNetkitPins(iface string) {
+	for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
+		ap := tc.AttachPoint{
+			AttachPoint: bpf.AttachPoint{
+				Iface: iface,
+				Hook:  attachHook,
+			},
+		}
+		os.Remove(ap.NetkitProgPinPath())
+	}
+}
+
 func (m *bpfEndpointManager) cleanupOldTcAttach(iface string) error {
 	ap := tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
@@ -1189,12 +1366,13 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 		return
 	}
 
-	if update.State == ifacemonitor.StateNotPresent && m.bpfAttachType == apiv3.BPFAttachOptionTCX {
-		// Delete the tcx pins if the interface is gone.
+	if update.State == ifacemonitor.StateNotPresent {
+		// Delete tcx/netkit pins if the interface is gone.
 		// Check if the interface still exists, as we might get events out of order.
 		_, err := m.dp.getIfaceLink(update.Name)
 		if err != nil {
 			cleanupTcxPins(update.Name)
+			cleanupNetkitPins(update.Name)
 		}
 	}
 	// Should be safe without the lock since there shouldn't be any active background threads
@@ -1229,12 +1407,31 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			m.hostIfaceTrees.deleteIface(update.Name)
 			m.dirtyIfaceNames.AddSet(allIfaces)
 		}
+	} else if update.State != ifacemonitor.StateNotPresent {
+		// For workload interfaces, detect netkit devices so Felix can use
+		// native BPF attachment instead of TC/TCX.
+		if link, err := m.dp.getIfaceLink(update.Name); err == nil {
+			curIfaceType = m.getIfaceTypeFromLink(link)
+		}
 	}
+
+	// Captured inside the withIface callback; used after it returns to
+	// refresh the connlimit pod info snapshot for the bound WEP (if any).
+	var (
+		ifaceEndpointID *types.WorkloadEndpointID
+		ifaceIfIndex    uint32
+	)
 
 	m.withIface(update.Name, func(iface *bpfInterface) (forceDirty bool) {
 		ifaceIsUp := update.State == ifacemonitor.StateUp
 		iface.info.masterIfIndex = masterIfIndex
-		iface.info.ifaceType = curIfaceType
+		// Only update ifaceType when we successfully determined it;
+		// IfaceTypeUnknown means getIfaceLink failed (e.g. device
+		// already removed), so preserve the previous type for correct
+		// jump map cleanup.
+		if curIfaceType != IfaceTypeUnknown {
+			iface.info.ifaceType = curIfaceType
+		}
 		// Note, only need to handle the mapping and unmapping of the host-* endpoint here.
 		// For specific host endpoints OnHEPUpdate doesn't depend on iface state, and has
 		// already stored and mapped as needed.
@@ -1282,8 +1479,20 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.masterIfIndex = 0
 			iface.info.ifaceType = 0
 		}
+		// Capture the WEP binding + (possibly zero) ifIndex so we can
+		// refresh the connlimit pod info snapshot after the withIface
+		// callback returns. On iface up this picks up a WEP that arrived
+		// before the interface; on iface down it clears the entries.
+		if iface.info.endpointID != nil {
+			ifaceEndpointID = iface.info.endpointID
+			ifaceIfIndex = uint32(iface.info.ifIndex)
+		}
 		return true // Force interface to be marked dirty in case we missed a transition during a resync.
 	})
+
+	if ifaceEndpointID != nil {
+		m.updateConnLimitForWEP(*ifaceEndpointID, m.allWEPs[*ifaceEndpointID], ifaceIfIndex)
+	}
 }
 
 // onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
@@ -1304,6 +1513,12 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 	})
 
 	m.updateAllowSourceSets(wlID, wl)
+
+	// Refresh the connlimit pod info snapshot for the CT scanner. If the
+	// interface hasn't come up yet (ifIndex == 0), updateConnLimitForWEP
+	// will defer; the onInterfaceUpdate hook resolves it when the ifindex
+	// is delivered.
+	m.updateConnLimitForWEP(wlID, wl, uint32(m.nameToIface[wl.Name].info.ifIndex))
 }
 
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
@@ -1313,6 +1528,9 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	oldWEP := m.allWEPs[wlID]
 	m.removeWEPFromIndexes(wlID, oldWEP)
 	delete(m.allWEPs, wlID)
+
+	// Drop any connlimit pod info entries owned by this WEP.
+	m.clearConnLimitForWEP(wlID)
 
 	if m.happyWEPs[wlID] != nil {
 		delete(m.happyWEPs, wlID)
@@ -1497,6 +1715,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				} {
 					if idx := fn(); idx != -1 {
 						_ = jumpMapDeleteSubProgs(m.commonMaps.JumpMaps[hook.Ingress], idx, jump.TCMaxEntryPoints)
+						_ = jumpMapDeleteSubProgs(m.commonMaps.NetkitJumpMaps[hook.Ingress], idx, jump.TCMaxEntryPoints)
 					}
 				}
 				for _, fn := range []func() int{
@@ -1506,6 +1725,7 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				} {
 					if idx := fn(); idx != -1 {
 						_ = jumpMapDeleteSubProgs(m.commonMaps.JumpMaps[hook.Egress], idx, jump.TCMaxEntryPoints)
+						_ = jumpMapDeleteSubProgs(m.commonMaps.NetkitJumpMaps[hook.Egress], idx, jump.TCMaxEntryPoints)
 					}
 				}
 			} else {
@@ -1529,11 +1749,33 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 						iface.dpState.v6Readiness = ifaceIsReadyNotAssured
 					}
 				}
+				// Workload interfaces backed by netkit allocate their jump map
+				// indices from netkitJumpMapAllocs rather than jumpMapAllocs (see
+				// allocJumpIndicesForWEP / wepStateFillJumps). Determine the type
+				// here so that we reclaim each persisted index from the same
+				// allocator the apply path will use. If a netkit WEP's index were
+				// reclaimed into the regular allocator, the netkit allocator would
+				// believe that index is free and later hand it to another WEP,
+				// leaving two endpoints sharing one jump map slot and corrupting
+				// one of their policy programs.
+				isNetkit := false
+				if m.isWorkloadIface(netiface.Name) {
+					if link, err := m.dp.getIfaceLink(netiface.Name); err == nil {
+						if t := m.getIfaceTypeFromLink(link); t != IfaceTypeUnknown {
+							iface.info.ifaceType = t
+							isNetkit = t == IfaceTypeNetkit
+						}
+					}
+				}
 				checkAndReclaimIdx := func(idx int, h hook.Hook, indexMap []int) {
 					if idx < 0 {
 						return
 					}
-					if err := m.jumpMapAllocs[h].Assign(idx, netiface.Name); err != nil {
+					allocs := m.jumpMapAllocs
+					if isNetkit && h != hook.XDP {
+						allocs = m.netkitJumpMapAllocs
+					}
+					if err := allocs[h].Assign(idx, netiface.Name); err != nil {
 						// Conflict with another program; need to alloc a new index.
 						logrus.WithError(err).Error("Start of day resync found invalid jump map index, " +
 							"allocate a fresh one.")
@@ -1626,59 +1868,125 @@ func (m *bpfEndpointManager) syncIfaceProperties() error {
 	return nil
 }
 
-// loadDefaultPolicies loads the default allow and deny policy programs for the given hook
-// and not policy direction.
+// loadDefaultPolicies loads the default allow and deny policy programs for the given hook.
 func (m *bpfEndpointManager) loadDefaultPolicies(hk hook.Hook) error {
+	allowFD, denyFD, err := m.loadDefaultPolicyPrograms(hk, string(m.bpfAttachType), nil)
+	if err != nil {
+		return err
+	}
+	m.policyTcAllowFDs[hk] = allowFD
+	m.policyTcDenyFDs[hk] = denyFD
+	return nil
+}
+
+// ensureNetkitDefaultPolicies lazily loads netkit default policy programs on first use.
+func (m *bpfEndpointManager) ensureNetkitDefaultPolicies() error {
+	m.netkitPoliciesMu.Lock()
+	defer m.netkitPoliciesMu.Unlock()
+
+	if m.netkitPoliciesLoaded {
+		return nil
+	}
+
+	for _, hk := range []hook.Hook{hook.Ingress, hook.Egress} {
+		var pinOverrides map[string]string
+		if hk == hook.Ingress {
+			pinOverrides = hook.NetkitPinOverridesIngress()
+		} else {
+			pinOverrides = hook.NetkitPinOverridesEgress()
+		}
+		allowFD, denyFD, err := m.loadDefaultPolicyPrograms(hk, tc.AttachOptionNetkit, pinOverrides)
+		if err != nil {
+			return fmt.Errorf("loading netkit default policies for %s: %w", hk, err)
+		}
+		m.policyNetkitAllowFDs[hk] = allowFD
+		m.policyNetkitDenyFDs[hk] = denyFD
+	}
+
+	m.netkitPoliciesLoaded = true
+	return nil
+}
+
+// loadDefaultPolicyPrograms loads the default allow/deny policy programs for the
+// given hook and attach type. mapPinOverrides allows redirecting prog_array maps
+// to alternate pin paths (used for netkit).
+func (m *bpfEndpointManager) loadDefaultPolicyPrograms(
+	hk hook.Hook,
+	progAttachType string,
+	mapPinOverrides map[string]string,
+) (allowFD, denyFD bpf.ProgFD, err error) {
 	file := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("policy_default_%s.o", hk))
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
-		return fmt.Errorf("file %s: %w", file, err)
+		return 0, 0, fmt.Errorf("file %s: %w", file, err)
 	}
 
-	for m, err := obj.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
-		mapName := m.Name()
+	for mp, err := obj.FirstMap(); mp != nil && err == nil; mp, err = mp.NextMap() {
+		mapName := mp.Name()
 		if strings.HasPrefix(mapName, ".rodata") {
 			continue
 		}
 		if size := maps.Size(mapName); size != 0 {
-			if err := m.SetSize(size); err != nil {
-				return fmt.Errorf("error resizing map %s: %w", mapName, err)
+			if err := mp.SetSize(size); err != nil {
+				return 0, 0, fmt.Errorf("error resizing map %s: %w", mapName, err)
 			}
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
-			return fmt.Errorf("error pinning map %s: %w", mapName, err)
+		pinPath := path.Join(bpfdefs.GlobalPinDir, mapName)
+		if override, ok := mapPinOverrides[mapName]; ok {
+			pinPath = override
+		}
+		if err := mp.SetPinPath(pinPath); err != nil {
+			return 0, 0, fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 	}
 
-	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+	if attachType, ok := linkAttachTypeForHook(progAttachType, hk); ok {
 		for p, err := obj.FirstProgram(); p != nil && err == nil; p, err = p.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if hk == hook.Ingress {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
 			if err := obj.SetAttachType(p.Name(), attachType); err != nil {
-				return fmt.Errorf("error setting attach type for program %s: %w", p.Name(), err)
+				return 0, 0, fmt.Errorf("error setting %s attach type for program %s: %w", progAttachType, p.Name(), err)
 			}
 		}
 	}
 
 	if err := obj.Load(); err != nil {
-		return fmt.Errorf("default policies: %w", err)
+		return 0, 0, fmt.Errorf("default policies (%s): %w", progAttachType, err)
 	}
 
 	fd, err := obj.ProgramFD("calico_tc_deny")
 	if err != nil {
-		return fmt.Errorf("failed to load default deny policy program: %w", err)
+		return 0, 0, fmt.Errorf("failed to load default deny policy program: %w", err)
 	}
-	m.policyTcDenyFDs[hk] = bpf.ProgFD(fd)
+	denyFD = bpf.ProgFD(fd)
 
 	fd, err = obj.ProgramFD("calico_tc_allow")
 	if err != nil {
-		return fmt.Errorf("failed to load default allow policy program: %w", err)
+		return 0, 0, fmt.Errorf("failed to load default allow policy program: %w", err)
 	}
-	m.policyTcAllowFDs[hk] = bpf.ProgFD(fd)
+	allowFD = bpf.ProgFD(fd)
 
-	return nil
+	return allowFD, denyFD, nil
+}
+
+// linkAttachTypeForHook returns the libbpf attach type for the given
+// link-based attachment mode and hook direction. The bool is false for
+// modes that don't use libbpf-link attachment (e.g. classic TC).
+func linkAttachTypeForHook(progAttachType string, hk hook.Hook) (uint32, bool) {
+	switch progAttachType {
+	case string(apiv3.BPFAttachOptionTCX):
+		if hk == hook.Ingress {
+			return libbpf.AttachTypeTcxIngress, true
+		}
+		return libbpf.AttachTypeTcxEgress, true
+	case tc.AttachOptionNetkit:
+		// Map TC hook direction to netkit attach type:
+		// hook.Ingress (traffic from pod) -> BPF_NETKIT_PEER (peer transmits)
+		// hook.Egress (traffic to pod) -> BPF_NETKIT_PRIMARY (primary transmits)
+		if hk == hook.Ingress {
+			return libbpf.AttachTypeNetkitPeer, true
+		}
+		return libbpf.AttachTypeNetkitPrimary, true
+	}
+	return 0, false
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
@@ -1789,6 +2097,11 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.reportHealth(false,
 			"BPF program load failed: program rejected by kernel BPF verifier. "+
 				"Calico eBPF dataplane requires kernel 5.10+. See Felix logs for details.")
+	} else if names := m.failedOptionalProgFeatureNames(); len(names) > 0 {
+		m.reportHealth(false,
+			fmt.Sprintf("Optional BPF program(s) failed to load: %s. "+
+				"Disable the feature(s) in FelixConfiguration or upgrade the kernel. "+
+				"See Felix logs for details.", strings.Join(names, ", ")))
 	} else if m.dirtyIfaceNames.Len() == 0 {
 		if m.removeOldJumps {
 			oldBase := path.Join(bpfdefs.GlobalPinDir, "old_jumps")
@@ -1810,6 +2123,10 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		m.reportHealth(false, "Failed to configure some interfaces.")
 	}
 
+	// The connlimit pod info snapshot used by the CT scanner is maintained
+	// incrementally by onWorkloadEndpointUpdate / onWorkloadEndpointRemove /
+	// onInterfaceUpdate. No rebuild needed here.
+
 	return nil
 }
 
@@ -1821,6 +2138,82 @@ func (m *bpfEndpointManager) reportHealth(ready bool, detail string) {
 		Ready:  ready,
 		Detail: detail,
 	})
+}
+
+// setHostIPPresence records whether the calc graph currently reports a host
+// IP of the given family. It updates the BPFHostIP readiness signal but
+// does not touch the cached d.lastSeenHostIP that the dataplane uses to program
+// BPF globals — the two are deliberately decoupled so that the dataplane
+// can keep using the last-known host IP after Node deletion while
+// readiness reflects the missing Node.
+func (m *bpfEndpointManager) setHostIPPresence(ipFamily int, present bool) {
+	var d *bpfEndpointManagerDataplane
+	if ipFamily == 4 {
+		d = m.v4
+	} else {
+		d = m.v6
+	}
+	if d == nil {
+		return
+	}
+	if d.hostIPPresent == present {
+		return
+	}
+	d.hostIPPresent = present
+	if present {
+		d.hostIPAbsentSince = time.Time{}
+	} else {
+		d.hostIPAbsentSince = time.Now()
+	}
+	m.reportHostIPHealth()
+}
+
+// reportHostIPHealth computes the BPFHostIP readiness signal from the
+// current per-family presence state. The rule:
+//   - IPv6 disabled: require an IPv4 host IP.
+//   - IPv6 enabled (always implies IPv4 also enabled): require at least
+//     one of IPv4 or IPv6.
+//
+// If a configured family is missing, Detail names it and records when
+// it went absent (RFC3339 UTC) so operators can correlate with their
+// own change history.
+func (m *bpfEndpointManager) reportHostIPHealth() {
+	if m.healthAggregator == nil {
+		return
+	}
+	v4Present := m.v4 != nil && m.v4.hostIPPresent
+	v6Present := m.v6 != nil && m.v6.hostIPPresent
+
+	var ready bool
+	if m.v6 == nil {
+		ready = v4Present
+	} else {
+		ready = v4Present || v6Present
+	}
+
+	var detail string
+	if !ready {
+		var parts []string
+		if m.v4 != nil && !m.v4.hostIPPresent {
+			parts = append(parts, hostIPAbsenceDetail("IPv4", m.v4.hostIPAbsentSince))
+		}
+		if m.v6 != nil && !m.v6.hostIPPresent {
+			parts = append(parts, hostIPAbsenceDetail("IPv6", m.v6.hostIPAbsentSince))
+		}
+		detail = "Host IP unknown: " + strings.Join(parts, "; ") +
+			" (BPF programs continue running with last-known host IP if any)."
+	}
+	m.healthAggregator.Report(bpfHostIPHealthName, &health.HealthReport{
+		Ready:  ready,
+		Detail: detail,
+	})
+}
+
+func hostIPAbsenceDetail(family string, since time.Time) string {
+	if since.IsZero() {
+		return family + " not yet known"
+	}
+	return family + " unknown since " + since.UTC().Format(time.RFC3339)
 }
 
 func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string, xdpMode XDPMode) (bpfInterfaceState, error) {
@@ -1933,33 +2326,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 		return state, xdpErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	return state, errors.Join(err4, err6)
@@ -2204,11 +2575,15 @@ func (m *bpfEndpointManager) updateWEPsInDataplane() {
 	}
 }
 
-func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, idx *bpfInterfaceJumpIndices) error {
+func (m *bpfEndpointManager) allocJumpIndicesForWEP(ifaceName string, isNetkit bool, idx *bpfInterfaceJumpIndices) error {
+	allocs := m.jumpMapAllocs
+	if isNetkit {
+		allocs = m.netkitJumpMapAllocs
+	}
 	for _, h := range []hook.Hook{hook.Ingress, hook.Egress} {
 		if idx.policyIdx[h] == -1 {
 			var err error
-			idx.policyIdx[h], err = m.jumpMapAllocs[h].Get(ifaceName)
+			idx.policyIdx[h], err = allocs[h].Get(ifaceName)
 			if err != nil {
 				return err
 			}
@@ -2245,9 +2620,11 @@ func (m *bpfEndpointManager) allocJumpIndicesForDataIface(ifaceName string, xdpM
 func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInterfaceState) error {
 	var err error
 
+	isNetkit := ap.IsNetkit()
+
 	// Allocate indices for IPv4
 	if m.v4 != nil {
-		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v4)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), isNetkit, &state.v4)
 		if err != nil {
 			return err
 		}
@@ -2255,16 +2632,20 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 
 	// Allocate indices for IPv6
 	if m.v6 != nil {
-		err = m.allocJumpIndicesForWEP(ap.IfaceName(), &state.v6)
+		err = m.allocJumpIndicesForWEP(ap.IfaceName(), isNetkit, &state.v6)
 		if err != nil {
 			return err
 		}
 	}
 
+	filterAllocs := m.jumpMapAllocs
+	if isNetkit {
+		filterAllocs = m.netkitJumpMapAllocs
+	}
 	if ap.LogLevel == "debug" {
 		for _, h := range []hook.Hook{hook.Ingress, hook.Egress} {
 			if state.filterIdx[h] == -1 {
-				state.filterIdx[h], err = m.jumpMapAllocs[h].Get(ap.IfaceName())
+				state.filterIdx[h], err = filterAllocs[h].Get(ap.IfaceName())
 				if err != nil {
 					return err
 				}
@@ -2272,10 +2653,10 @@ func (m *bpfEndpointManager) wepStateFillJumps(ap *tc.AttachPoint, state *bpfInt
 		}
 	} else {
 		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook], isNetkit); err != nil {
 				logrus.WithError(err).Warn("Filter program may leak.")
 			}
-			if err := m.jumpMapAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
+			if err := filterAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
 				logrus.WithError(err).Errorf("Filter hook %s", attachHook)
 			}
 			state.filterIdx[attachHook] = -1
@@ -2312,7 +2693,7 @@ func (m *bpfEndpointManager) dataIfaceStateFillJumps(ap *tc.AttachPoint, xdpMode
 		}
 	} else {
 		for _, attachHook := range []hook.Hook{hook.Ingress, hook.Egress} {
-			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook]); err != nil {
+			if err := m.jumpMapDelete(attachHook, state.filterIdx[attachHook], false); err != nil {
 				logrus.WithError(err).Warn("Filter program may leak.")
 			}
 			if err := m.jumpMapAllocs[attachHook].Put(state.filterIdx[attachHook], ap.IfaceName()); err != nil {
@@ -2340,6 +2721,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		endpointID   *types.WorkloadEndpointID
 		ifaceUp      bool
 		ifindex      int
+		ifaceType    IfaceType
 		hasIstioDSCP bool
 	)
 
@@ -2350,6 +2732,7 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		ifindex = iface.info.ifIndex
 		endpointID = iface.info.endpointID
 		state = iface.dpState
+		ifaceType = iface.info.ifaceType
 		hasIstioDSCP = iface.info.hasIstioDSCP
 		return false
 	})
@@ -2366,22 +2749,25 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 	// datastore.  If we don't have an endpoint then we'll attach a program to block traffic and we'll
 	// get the jump map ready to insert the policy if the endpoint shows up.
 
-	// Attach the qdisc first; it is shared between the directions.
-	existed, err := m.dp.ensureQdisc(ifaceName)
-	if err != nil {
-		if isLinkNotFoundError(err) {
-			// Interface is gone, nothing to do.
-			logrus.WithField("ifaceName", ifaceName).Debug(
-				"Ignoring request to program interface that is not present.")
-			return state, nil
+	// Netkit devices don't need a qdisc — only legacy TC does.
+	if ifaceType != IfaceTypeNetkit {
+		// Attach the qdisc first; it is shared between the directions.
+		existed, err := m.dp.ensureQdisc(ifaceName)
+		if err != nil {
+			if isLinkNotFoundError(err) {
+				// Interface is gone, nothing to do.
+				logrus.WithField("ifaceName", ifaceName).Debug(
+					"Ignoring request to program interface that is not present.")
+				return state, nil
+			}
+			return state, err
 		}
-		return state, err
-	}
-	if !existed {
-		// Cannot be ready if the qdisc is not there so no program can be
-		// attached. Do the full attach!
-		state.v4Readiness = ifaceNotReady
-		state.v6Readiness = ifaceNotReady
+		if !existed {
+			// Cannot be ready if the qdisc is not there so no program can be
+			// attached. Do the full attach!
+			state.v4Readiness = ifaceNotReady
+			state.v6Readiness = ifaceNotReady
+		}
 	}
 
 	var (
@@ -2413,6 +2799,23 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 
 	ap := m.calculateTCAttachPoint(ifaceName)
 	ap.IfIndex = ifindex
+
+	// For workload netkit devices, override the attachment mechanism to use native
+	// netkit BPF attachment instead of TC/TCX. Only workload interfaces are ours to
+	// manage this way — other netkit devices (host/data interfaces) are not ours.
+	if ifaceType == IfaceTypeNetkit && m.isWorkloadIface(ifaceName) && tc.IsNetkitSupported() {
+		ap.Netkit = true
+		// Netkit programs have a different expected_attach_type and cannot
+		// share prog_array maps with TC/TCX programs. Use separate maps.
+		// Note: the AP is copied for both directions in applyPolicyToWeps,
+		// so we set overrides for both ingress and egress here. The ProgramsMap
+		// is set per-direction in wepApplyPolicyToDirection.
+		ap.MapPinOverrides = hook.NetkitPinOverridesBoth()
+		// bpf_redirect_peer requires a TC ingress context (skb_at_tc_ingress),
+		// but netkit programs run in xmit context. Disable redirect_peer so the
+		// FIB path uses plain bpf_redirect instead.
+		ap.RedirectPeer = false
+	}
 	if wep != nil && wep.QosControls != nil {
 		// QoSControls are present, update state
 
@@ -2420,96 +2823,73 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 			ap.SkipEgressRedirect = true
 		}
 
-		if wep.QosControls.IngressPacketRate > 0 {
-			// Ingress packet rate is configured
+		// Handle ingress QoS. Packet-rate and connection-limit live in
+		// separate maps (cali_qos and cali_qos_conn) so the two field
+		// groups never share a value — see qos.h for the rationale.
+		hasIngressPR := wep.QosControls.IngressPacketRate > 0
+		hasIngressCL := wep.QosControls.IngressMaxConnections > 0
+		if hasIngressPR {
 			ap.IngressPacketRateConfigured = true
+		}
+		if hasIngressCL {
+			ap.IngressConnLimitConfigured = true
+		}
 
-			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving ingress entry from QoS map.")
+		// One entry per IP family — v4 and v6 traffic count against
+		// independent counters, matching iptables/nftables.
+		for _, family := range m.qosFamilies() {
+			qosKey := qos.NewKey(uint32(ifindex), 1, family) // ingress=1
+			if err := m.writeQoSRateEntry(qosKey, hasIngressPR,
+				int16(wep.QosControls.IngressPacketRate),
+				int16(wep.QosControls.IngressPacketBurst)); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating ingress packet-rate entry.")
 				return state, err
 			}
-			qosVal := qos.ValueFromBytes(qosValBytes)
-			qosPacketRate := qosVal.PacketRate()
-			qosPacketBurst := qosVal.PacketBurst()
-			qosTokens := qosVal.PacketRateTokens()
-			qosLastUpdate := qosVal.PacketRateLastUpdate()
-			// Reset state if config changed. Safe to cast to int16 since the maximum value is 10000
-			if qosVal.PacketRate() != int16(wep.QosControls.IngressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.IngressPacketBurst) {
-				qosPacketRate = int16(wep.QosControls.IngressPacketRate)
-				qosPacketBurst = int16(wep.QosControls.IngressPacketBurst)
-				qosTokens = int16(-1)
-				qosLastUpdate = uint64(0)
-			}
-
-			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
-
-			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating ingress entry in QoS map.")
-				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
-			}
-		} else {
-			// Ingress packet rate not configured, clean up existing state if present
-			qosKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-			err = m.QoSMap.Delete(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
+			if err := m.writeQoSConnEntry(qosKey, hasIngressCL,
+				uint32(wep.QosControls.IngressMaxConnections)); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating ingress connlimit entry.")
 				return state, err
 			}
 		}
-		if wep.QosControls.EgressPacketRate > 0 {
-			// Egress packet rate is configured
-			ap.EgressPacketRateConfigured = true
 
-			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
-			qosValBytes, err := m.QoSMap.Get(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error retrieving egress entry from QoS map.")
+		// Handle egress QoS. Same shape as ingress, two separate maps.
+		hasEgressPR := wep.QosControls.EgressPacketRate > 0
+		hasEgressCL := wep.QosControls.EgressMaxConnections > 0
+		if hasEgressPR {
+			ap.EgressPacketRateConfigured = true
+		}
+		if hasEgressCL {
+			ap.EgressConnLimitConfigured = true
+		}
+
+		for _, family := range m.qosFamilies() {
+			qosKey := qos.NewKey(uint32(ifindex), 0, family) // egress=0
+			if err := m.writeQoSRateEntry(qosKey, hasEgressPR,
+				int16(wep.QosControls.EgressPacketRate),
+				int16(wep.QosControls.EgressPacketBurst)); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating egress packet-rate entry.")
 				return state, err
 			}
-			qosVal := qos.ValueFromBytes(qosValBytes)
-			qosPacketRate := qosVal.PacketRate()
-			qosPacketBurst := qosVal.PacketBurst()
-			qosTokens := qosVal.PacketRateTokens()
-			qosLastUpdate := qosVal.PacketRateLastUpdate()
-			// Reset state if config changed
-			if qosVal.PacketRate() != int16(wep.QosControls.EgressPacketRate) || qosVal.PacketBurst() != int16(wep.QosControls.EgressPacketBurst) {
-				// Safe to cast to int16 since the maximum value is 10000
-				qosPacketRate = int16(wep.QosControls.EgressPacketRate)
-				qosPacketBurst = int16(wep.QosControls.EgressPacketBurst)
-				qosTokens = int16(-1)
-				qosLastUpdate = uint64(0)
-			}
-
-			qosVal = qos.NewValue(qosPacketRate, qosPacketBurst, qosTokens, qosLastUpdate)
-
-			if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), qosVal.AsBytes(), unix.BPF_F_LOCK); err != nil {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error updating egress entry in QoS map.")
-				return state, fmt.Errorf("failed to update QoS map. err=%w", err)
-			}
-		} else {
-			// Egress packet rate not configured, clean up existing state if present
-			qosKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
-			err = m.QoSMap.Delete(qosKey.AsBytes())
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
+			if err := m.writeQoSConnEntry(qosKey, hasEgressCL,
+				uint32(wep.QosControls.EgressMaxConnections)); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error updating egress connlimit entry.")
 				return state, err
 			}
 		}
 	} else {
-		// Either the workload endpoint or QoSControls were removed, clean up both ingress and egress state from map
-		qosIngressKey := qos.NewKey(uint32(ifindex), 1) // ingress=1
-		err = m.QoSMap.Delete(qosIngressKey.AsBytes())
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing ingress entry from QoS map.")
-			return state, err
-		}
-		qosEgressKey := qos.NewKey(uint32(ifindex), 0) // ingress=0
-		err = m.QoSMap.Delete(qosEgressKey.AsBytes())
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			logrus.WithField("ifindex", ifindex).WithError(err).Debug("Error removing egress entry from QoS map.")
-			return state, err
+		// Either the workload endpoint or QoSControls were removed, clean up
+		// both ingress and egress state from both maps.
+		for _, family := range m.qosFamilies() {
+			qosIngressKey := qos.NewKey(uint32(ifindex), 1, family) // ingress=1
+			if err := m.deleteQoSEntry(qosIngressKey); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing ingress QoS entries.")
+				return state, err
+			}
+			qosEgressKey := qos.NewKey(uint32(ifindex), 0, family) // egress=0
+			if err := m.deleteQoSEntry(qosEgressKey); err != nil {
+				logrus.WithField("ifindex", ifindex).WithField("family", family).WithError(err).Debug("Error removing egress QoS entries.")
+				return state, err
+			}
 		}
 	}
 
@@ -2578,33 +2958,11 @@ func (m *bpfEndpointManager) doApplyPolicy(ifaceName string) (bpfInterfaceState,
 		return state, egressErr
 	}
 
-	if err4 != nil && err6 != nil {
-		// This covers the case when we don't have hostIP on both paths.
-		return state, errors.Join(err4, err6)
+	if m.v6 != nil && err6 == nil {
+		state.v6Readiness = ifaceIsReady
 	}
-
-	if m.v6 != nil {
-		if err6 == nil {
-			state.v6Readiness = ifaceIsReady
-		}
-		if m.v6.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err6 = nil
-		}
-	}
-
-	if m.v4 != nil {
-		if err4 == nil {
-			state.v4Readiness = ifaceIsReady
-		}
-		if m.v4.hostIP == nil {
-			// If we do not have host IP for the IP version, we certainly error.
-			// But that should not prevent the other IP version path from
-			// working correctly.
-			err4 = nil
-		}
+	if m.v4 != nil && err4 == nil {
+		state.v4Readiness = ifaceIsReady
 	}
 
 	if errors.Join(err4, err6) != nil {
@@ -2637,6 +2995,95 @@ func (m *bpfEndpointManager) applyPolicy(ifaceName string) error {
 	m.ifacesLock.Unlock()
 
 	return err
+}
+
+// writeQoSRateEntry updates the cali_qos packet-rate map entry for one
+// (ifindex, direction, family) triple.
+//
+//   - If hasRate is false: the entry is deleted.
+//   - If the entry exists and (packetRate, packetBurst) match: no write.
+//     The BPF dataplane owns packet_rate_tokens and
+//     packet_rate_last_update; rewriting them from a userspace snapshot
+//     would race with packet-rate updates and re-introduce the same
+//     class of lost-update bug the cali_qos / cali_qos_conn split was
+//     introduced to fix.
+//   - Otherwise (fresh entry, or config changed): write the new config
+//     with the token-bucket state reset to the sentinel so the BPF
+//     dataplane re-initialises from burst on the next packet.
+func (m *bpfEndpointManager) writeQoSRateEntry(qosKey qos.Key, hasRate bool, packetRate, packetBurst int16) error {
+	if !hasRate {
+		if err := m.QoSMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	existingBytes, getErr := m.QoSMap.Get(qosKey.AsBytes())
+	if getErr != nil && !errors.Is(getErr, os.ErrNotExist) {
+		return getErr
+	}
+	if getErr == nil {
+		existing := qos.ValueFromBytes(existingBytes)
+		if existing.PacketRate() == packetRate && existing.PacketBurst() == packetBurst {
+			// Config unchanged — leave the dataplane's running state alone.
+			return nil
+		}
+	}
+	val := qos.NewValue(packetRate, packetBurst, int16(-1), 0)
+	if err := m.QoSMap.UpdateWithFlags(qosKey.AsBytes(), val.AsBytes(), unix.BPF_F_LOCK); err != nil {
+		return fmt.Errorf("failed to update cali_qos map: %w", err)
+	}
+	return nil
+}
+
+// writeQoSConnEntry updates the cali_qos_conn connlimit map entry for one
+// (ifindex, direction, family) triple.
+//
+//   - If hasLimit is false: the entry is deleted.
+//   - If the entry exists and max_connections matches: no write. The
+//     BPF dataplane (SYN / FIN/RST / cleanup) and the Go scanner both
+//     write current_count concurrently; rewriting it from a userspace
+//     snapshot would race with both.
+//   - Otherwise (fresh entry, or config changed): write the new
+//     max_connections, preserving current_count from the snapshot when
+//     present. The race here is bounded to the rare config-change event
+//     and the Go scanner reconciles drift within ~30s.
+func (m *bpfEndpointManager) writeQoSConnEntry(qosKey qos.Key, hasLimit bool, maxConnections uint32) error {
+	if !hasLimit {
+		if err := m.QoSConnMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	existingBytes, getErr := m.QoSConnMap.Get(qosKey.AsBytes())
+	if getErr != nil && !errors.Is(getErr, os.ErrNotExist) {
+		return getErr
+	}
+	var currentCount uint32
+	if getErr == nil {
+		existing := qos.ConnValueFromBytes(existingBytes)
+		if existing.MaxConnections() == maxConnections {
+			// Config unchanged — leave current_count to the dataplane and the scanner.
+			return nil
+		}
+		currentCount = existing.CurrentCount()
+	}
+	val := qos.NewConnValue(maxConnections, currentCount)
+	if err := m.QoSConnMap.UpdateWithFlags(qosKey.AsBytes(), val.AsBytes(), unix.BPF_F_LOCK); err != nil {
+		return fmt.Errorf("failed to update cali_qos_conn map: %w", err)
+	}
+	return nil
+}
+
+// deleteQoSEntry deletes the entry for one (ifindex, direction, family)
+// from both the packet-rate and the connlimit map.
+func (m *bpfEndpointManager) deleteQoSEntry(qosKey qos.Key) error {
+	if err := m.QoSMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := m.QoSConnMap.Delete(qosKey.AsBytes()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func mergeAttachPoints(ap4, ap6 attachPoint) attachPoint {
@@ -2691,15 +3138,15 @@ func (d *bpfEndpointManagerDataplane) wepTCAttachPoint(ap *tc.AttachPoint, polic
 		ip, err := d.getInterfaceIP(ifaceName)
 		if err != nil {
 			logrus.Debugf("Error getting IP for interface %+v: %+v", ifaceName, err)
-			ap.IntfIPv6 = d.hostIP
+			ap.IntfIPv6 = d.lastSeenHostIP
 		} else {
 			ap.IntfIPv6 = *ip
 		}
-		ap.HostIPv6 = d.hostIP
+		ap.HostIPv6 = d.lastSeenHostIP
 		ap.PolicyIdxV6 = policyIdx
 	} else {
 		ap.IntfIPv4 = calicoRouterIP
-		ap.HostIPv4 = d.hostIP
+		ap.HostIPv4 = d.lastSeenHostIP
 		ap.PolicyIdxV4 = policyIdx
 	}
 	ap.LogFilterIdx = filterIdx
@@ -2711,10 +3158,16 @@ func (d *bpfEndpointManagerDataplane) wepApplyPolicyToDirection(readiness ifaceR
 	endpoint *proto.WorkloadEndpoint, polDirection PolDirection, ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
 	var policyIdx, filterIdx int
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
+	// d.lastSeenHostIP may be nil if Felix has never been told a host IP
+	// for this family (e.g. the local Node resource has no address yet
+	// at startup). The attach pipeline handles a nil HostIPv*:
+	// globalData.HostIPv* stays at zero, and the BPF datapath drops the
+	// few features that need HOST_IP (VXLAN encap source) with
+	// CALI_REASON_NO_HOST_IP. Once a host IP arrives via
+	// updateOurHostIP, all interfaces are marked dirty and re-attach.
+	// Note: when the calc graph later signals the host IP is gone
+	// (Node deleted, BGP address patched out), we deliberately keep
+	// d.lastSeenHostIP cached — see updateOurHostIP.
 
 	indices := state.v4
 	if d.ipFamily == proto.IPVersion_IPV6 {
@@ -2888,11 +3341,7 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	state *bpfInterfaceState,
 	ap *tc.AttachPoint,
 ) (*tc.AttachPoint, error) {
-	if d.hostIP == nil {
-		// Do not bother and wait
-		return nil, fmt.Errorf("unknown host IP")
-	}
-
+	// See wepApplyPolicyToDirection for why nil hostIP is allowed here.
 	ap = d.configureTCAttachPoint(polDirection, ap, true)
 
 	ip, err := d.getInterfaceIP(ifaceName)
@@ -2914,19 +3363,19 @@ func (d *bpfEndpointManagerDataplane) attachDataIfaceProgram(
 	filterIdx := state.filterIdx[attachHook]
 
 	if d.ipFamily == proto.IPVersion_IPV6 {
-		ap.HostIPv6 = d.hostIP
+		ap.HostIPv6 = d.lastSeenHostIP
 		if ip != nil {
 			ap.IntfIPv6 = *ip
 		} else {
-			ap.IntfIPv6 = d.hostIP
+			ap.IntfIPv6 = d.lastSeenHostIP
 		}
 		ap.PolicyIdxV6 = policyIdx
 	} else {
-		ap.HostIPv4 = d.hostIP
+		ap.HostIPv4 = d.lastSeenHostIP
 		if ip != nil {
 			ap.IntfIPv4 = *ip
 		} else {
-			ap.IntfIPv4 = d.hostIP
+			ap.IntfIPv4 = d.lastSeenHostIP
 		}
 		ap.PolicyIdxV4 = policyIdx
 	}
@@ -3060,7 +3509,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	m.ifacesLock.Unlock()
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave:
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit:
 		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
 			return tcdefs.EpTypeVXLAN
 		}
@@ -3123,6 +3572,7 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.Attach
 	ap.UDPGSOLinearize = m.bpfUDPGSOLinearize
 	ap.OverlayTunnelID = m.overlayTunnelID
 	ap.AttachType = m.bpfAttachType
+	ap.IPFragTimeout = m.ipFragTimeout
 	ap.RedirectPeer = true
 	ap.WorkloadSrcSpoofingConfigured = m.workloadSourceSpoofing
 	if m.bpfRedirectToPeer == "Disabled" {
@@ -3168,9 +3618,10 @@ func (d *bpfEndpointManagerDataplane) configureTCAttachPoint(policyDirection Pol
 		}
 	}
 
-	ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Ingress]
-	if ap.Hook == hook.Egress {
-		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[hook.Egress]
+	if ap.IsNetkit() {
+		ap.ProgramsMap = d.mgr.commonMaps.NetkitProgramsMaps[ap.Hook]
+	} else {
+		ap.ProgramsMap = d.mgr.commonMaps.ProgramsMaps[ap.Hook]
 	}
 
 	if d.mgr.FlowLogsEnabled() {
@@ -3807,23 +4258,50 @@ func (m *bpfEndpointManager) ensureQdisc(iface string) (bool, error) {
 	return tc.EnsureQdisc(iface)
 }
 
-func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap) (hook.Layout, error) {
-	layout, err := pm.LoadObj(at, string(m.bpfAttachType))
+func (m *bpfEndpointManager) loadTCObj(at hook.AttachType, pm *hook.ProgramsMap, progAttachType string) (hook.Layout, error) {
+	result, err := pm.LoadObj(at, progAttachType, m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
+	m.recordSkippedOptional(result.SkippedOptional)
 
 	if at.LogLevel != "debug" {
-		return layout, nil
+		return result.Layout, nil
 	}
 
 	at.LogLevel = "off"
-	layoutNoDebug, err := pm.LoadObj(at, string(m.bpfAttachType))
+	resultNoDebug, err := pm.LoadObj(at, progAttachType, m.disabledOptionalProgs)
 	if err != nil {
 		return nil, err
 	}
+	m.recordSkippedOptional(resultNoDebug.SkippedOptional)
 
-	return hook.MergeLayouts(layoutNoDebug, layout), nil
+	return hook.MergeLayouts(resultNoDebug.Layout, result.Layout), nil
+}
+
+func (m *bpfEndpointManager) recordSkippedOptional(skipped []hook.OptionalSubProgInfo) {
+	if len(skipped) == 0 {
+		return
+	}
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
+	for i := range skipped {
+		info := &skipped[i]
+		m.failedOptionalProgs[info.FeatureName] = info
+	}
+}
+
+// failedOptionalProgFeatureNames returns a snapshot of the failed optional
+// program feature names, safe to use outside the lock.
+func (m *bpfEndpointManager) failedOptionalProgFeatureNames() []string {
+	m.failedOptionalProgsLock.Lock()
+	defer m.failedOptionalProgsLock.Unlock()
+	names := make([]string, 0, len(m.failedOptionalProgs))
+	for _, info := range m.failedOptionalProgs {
+		names = append(names, info.FeatureName)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // Ensure TC/XDP program is attached to the specified interface.
@@ -3831,37 +4309,54 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 	var err error
 
 	if aptc, ok := ap.(*tc.AttachPoint); ok {
+		// Derive the program attach type from the attach point. For netkit
+		// devices this will be "Netkit", otherwise it comes from the global config.
+		progAttachType := string(aptc.AttachType)
+		if aptc.IsNetkit() {
+			progAttachType = tc.AttachOptionNetkit
+		}
+
 		at := hook.AttachType{
 			Hook:       aptc.HookName(),
+			Family:     int(ipFamily),
 			Type:       aptc.Type,
 			LogLevel:   aptc.LogLevel,
 			ToHostDrop: aptc.ToHostDrop,
 			DSR:        aptc.DSR,
 		}
 
-		at.Family = int(ipFamily)
 		policyIdx := aptc.PolicyIdxV4
 		ap.Log().Debugf("ensureProgramLoaded %d", ipFamily)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
+			if aptc.HookLayoutV6, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 			policyIdx = aptc.PolicyIdxV6
 		} else {
-			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap)); err != nil {
+			if aptc.HookLayoutV4, err = m.loadTCObj(at, aptc.ProgramsMap.(*hook.ProgramsMap), progAttachType); err != nil {
 				return fmt.Errorf("loading generic v%d tc hook program: %w", ipFamily, err)
 			}
 		}
 
 		jmpMap := m.commonMaps.JumpMaps[aptc.Hook]
+		allowFDs := m.policyTcAllowFDs
+		denyFDs := m.policyTcDenyFDs
+		if aptc.IsNetkit() {
+			jmpMap = m.commonMaps.NetkitJumpMaps[aptc.Hook]
+			if err := m.ensureNetkitDefaultPolicies(); err != nil {
+				return err
+			}
+			allowFDs = m.policyNetkitAllowFDs
+			denyFDs = m.policyNetkitDenyFDs
+		}
 		// Load default policy before the real policy is created and loaded.
 		switch at.DefaultPolicy() {
 		case hook.DefPolicyAllow:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
-				jump.Key(policyIdx), jump.Value(m.policyTcAllowFDs[aptc.Hook].FD()))
+				jump.Key(policyIdx), jump.Value(allowFDs[aptc.Hook].FD()))
 		case hook.DefPolicyDeny:
 			err = maps.UpdateMapEntry(jmpMap.MapFD(),
-				jump.Key(policyIdx), jump.Value(m.policyTcDenyFDs[aptc.Hook].FD()))
+				jump.Key(policyIdx), jump.Value(denyFDs[aptc.Hook].FD()))
 		}
 
 		if err != nil {
@@ -3876,13 +4371,19 @@ func (m *bpfEndpointManager) ensureProgramLoaded(ap attachPoint, ipFamily proto.
 		at.Family = int(ipFamily)
 		pm := m.commonMaps.XDPProgramsMap.(*hook.ProgramsMap)
 		if ipFamily == proto.IPVersion_IPV6 {
-			if apxdp.HookLayoutV6, err = pm.LoadObj(at, ""); err != nil {
-				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			result, loadErr := pm.LoadObj(at, "", m.disabledOptionalProgs)
+			if loadErr != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", loadErr)
 			}
+			apxdp.HookLayoutV6 = result.Layout
+			m.recordSkippedOptional(result.SkippedOptional)
 		} else {
-			if apxdp.HookLayoutV4, err = pm.LoadObj(at, ""); err != nil {
-				return fmt.Errorf("loading generic xdp hook program: %w", err)
+			result, loadErr := pm.LoadObj(at, "", m.disabledOptionalProgs)
+			if loadErr != nil {
+				return fmt.Errorf("loading generic xdp hook program: %w", loadErr)
 			}
+			apxdp.HookLayoutV4 = result.Layout
+			m.recordSkippedOptional(result.SkippedOptional)
 		}
 	} else {
 		return fmt.Errorf("unknown attach type")
@@ -3902,32 +4403,37 @@ func (m *bpfEndpointManager) ensureNoProgram(ap attachPoint) error {
 	})
 	m.ifacesLock.Unlock()
 
+	isNetkit := false
+	if tcAP, ok := ap.(*tc.AttachPoint); ok {
+		isNetkit = tcAP.IsNetkit()
+	}
 	if m.v4 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()]); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v4.policyIdx[ap.HookName()], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 4, ap.HookName())
 	}
 	// Forget the policy debug info
 	if m.v6 != nil {
-		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()]); err != nil {
+		if err := m.jumpMapDelete(ap.HookName(), state.v6.policyIdx[ap.HookName()], isNetkit); err != nil {
 			logrus.WithError(err).Warn("Policy program may leak.")
 		}
 		m.removePolicyDebugInfo(ap.IfaceName(), 6, ap.HookName())
 	}
 
-	// Clean up QoS map
-	qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1) // ingress=1
-	qosErr := m.QoSMap.Delete(qosIngressKey.AsBytes())
-	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
-		err = qosErr
-		logrus.WithError(err).Warn("QoS map may leak.")
-	}
-	qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0) // ingress=0
-	qosErr = m.QoSMap.Delete(qosEgressKey.AsBytes())
-	if qosErr != nil && !errors.Is(qosErr, os.ErrNotExist) {
-		err = qosErr
-		logrus.WithError(err).Warn("QoS map may leak.")
+	// Clean up QoS maps: one entry per (direction, family) combination in
+	// each of cali_qos (packet-rate) and cali_qos_conn (connlimit).
+	for _, family := range m.qosFamilies() {
+		qosIngressKey := qos.NewKey(uint32(ap.IfaceIndex()), 1, family) // ingress=1
+		if qosErr := m.deleteQoSEntry(qosIngressKey); qosErr != nil {
+			err = qosErr
+			logrus.WithField("family", family).WithError(err).Warn("QoS maps may leak.")
+		}
+		qosEgressKey := qos.NewKey(uint32(ap.IfaceIndex()), 0, family) // egress=0
+		if qosErr := m.deleteQoSEntry(qosEgressKey); qosErr != nil {
+			err = qosErr
+			logrus.WithField("family", family).WithError(err).Warn("QoS maps may leak.")
+		}
 	}
 
 	return err
@@ -4041,7 +4547,12 @@ func (m *bpfEndpointManager) loadTCLogFilter(ap *tc.AttachPoint) (fileDescriptor
 	}
 
 	attachType := uint32(0)
-	if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+	if ap.IsNetkit() {
+		attachType = libbpf.AttachTypeNetkitPrimary
+		if ap.Hook == hook.Ingress {
+			attachType = libbpf.AttachTypeNetkitPeer
+		}
+	} else if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 		attachType = libbpf.AttachTypeTcxIngress
 		if ap.Hook == hook.Egress {
 			attachType = libbpf.AttachTypeTcxEgress
@@ -4064,7 +4575,11 @@ func (m *bpfEndpointManager) updateLogFilter(ap attachPoint) error {
 			return err
 		}
 		defer fd.Close()
-		if err := m.commonMaps.JumpMaps[t.Hook].Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
+		jmpMap := m.commonMaps.JumpMaps[t.Hook]
+		if t.IsNetkit() {
+			jmpMap = m.commonMaps.NetkitJumpMaps[t.Hook]
+		}
+		if err := jmpMap.Update(jump.Key(idx), jump.Value(fd.FD())); err != nil {
 			return fmt.Errorf("failed to update %s policy jump map [%d]=%d: %w", ap.HookName(), idx, fd.FD(), err)
 		}
 
@@ -4191,7 +4706,13 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	if apTc, ok := ap.(*tc.AttachPoint); ok {
 		staticProgsMap = apTc.ProgramsMap
 		polProgsMap = m.commonMaps.JumpMaps[apTc.Hook]
-		if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
+		if apTc.IsNetkit() {
+			polProgsMap = m.commonMaps.NetkitJumpMaps[apTc.Hook]
+			attachType = libbpf.AttachTypeNetkitPrimary
+			if apTc.Hook == hook.Ingress {
+				attachType = libbpf.AttachTypeNetkitPeer
+			}
+		} else if m.bpfAttachType == apiv3.BPFAttachOptionTCX {
 			attachType = libbpf.AttachTypeTcxIngress
 			if apTc.Hook == hook.Egress {
 				attachType = libbpf.AttachTypeTcxEgress
@@ -4290,15 +4811,19 @@ func (m *bpfEndpointManager) doUpdatePolicyProgram(
 	return insns, nil
 }
 
-func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int) error {
+func (m *bpfEndpointManager) jumpMapDelete(h hook.Hook, idx int, isNetkit bool) error {
 	if idx < 0 {
 		return nil
 	}
-	logrus.WithFields(logrus.Fields{"hook": h, "index": idx}).Debug("Deleting jump map entry")
+	logrus.WithFields(logrus.Fields{"hook": h, "index": idx, "netkit": isNetkit}).Debug("Deleting jump map entry")
 	jumpMap := m.commonMaps.XDPJumpMap
 	stride := jump.XDPMaxEntryPoints
 	if h != hook.XDP {
-		jumpMap = m.commonMaps.JumpMaps[h]
+		if isNetkit {
+			jumpMap = m.commonMaps.NetkitJumpMaps[h]
+		} else {
+			jumpMap = m.commonMaps.JumpMaps[h]
+		}
 		stride = jump.TCMaxEntryPoints
 	}
 
@@ -4318,7 +4843,15 @@ func (m *bpfEndpointManager) removePolicyProgram(ap attachPoint, ipFamily proto.
 		pm = m.commonMaps.XDPJumpMap
 	} else {
 		stride = jump.TCMaxEntryPoints
-		pm = m.commonMaps.JumpMaps[ap.HookName()]
+		isNetkit := false
+		if tcAP, ok := ap.(*tc.AttachPoint); ok {
+			isNetkit = tcAP.IsNetkit()
+		}
+		if isNetkit {
+			pm = m.commonMaps.NetkitJumpMaps[ap.HookName()]
+		} else {
+			pm = m.commonMaps.JumpMaps[ap.HookName()]
+		}
 	}
 
 	if err := jumpMapDeleteSubProgs(pm, idx, stride); err != nil {
@@ -4516,14 +5049,14 @@ func (m *bpfEndpointManager) setRoute(cidr ip.CIDR) {
 	}
 
 	if cidr.Version() == 6 {
-		if m.v6 != nil && m.v6.hostIP != nil {
+		if m.v6 != nil && m.v6.lastSeenHostIP != nil {
 			target.GW = bpfnatGWIPv6
-			target.Src = ip.FromNetIP(m.v6.hostIP)
+			target.Src = ip.FromNetIP(m.v6.lastSeenHostIP)
 			m.routeTableV6.RouteUpdate(dataplanedefs.BPFInDev, target)
 		}
-	} else if m.v4 != nil && m.v4.hostIP != nil {
+	} else if m.v4 != nil && m.v4.lastSeenHostIP != nil {
 		target.GW = bpfnatGWIP
-		target.Src = ip.FromNetIP(m.v4.hostIP)
+		target.Src = ip.FromNetIP(m.v4.lastSeenHostIP)
 		m.routeTableV4.RouteUpdate(dataplanedefs.BPFInDev, target)
 	}
 
@@ -4630,6 +5163,8 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	}
 
 	switch link.Type() {
+	case "netkit":
+		return IfaceTypeNetkit
 	case "ipip":
 		return IfaceTypeIPIP
 	case "wireguard":
@@ -5225,4 +5760,110 @@ func (pa *jumpMapAlloc) checkFreeLockHeld(idx int) {
 			"stack":     pa.freeStack,
 		}).Panic("Free set and free stack got out of sync")
 	}
+}
+
+// qosFamilies returns the IP families for which we program QoS map entries,
+// matching the set of enabled BPF dataplane programs. v4 is always present;
+// v6 is added when BPF IPv6 is enabled. The cali_qos map key carries the
+// family so v4 and v6 traffic count against independent connlimit (and
+// packet-rate) budgets, mirroring iptables/nftables per-family rules.
+func (m *bpfEndpointManager) qosFamilies() []uint16 {
+	if m.ipv6Enabled {
+		return []uint16{qos.IPFamilyV4, qos.IPFamilyV6}
+	}
+	return []uint16{qos.IPFamilyV4}
+}
+
+// GetConnLimitedPodInfo returns a snapshot of pod IPs to their connection
+// limit info. Safe to call from any goroutine — takes a brief read lock and
+// returns a shallow copy so callers can iterate without holding the lock.
+func (m *bpfEndpointManager) GetConnLimitedPodInfo() map[string]bpfconntrack.ConnLimitPodInfo {
+	m.connLimitPodInfoMu.RLock()
+	defer m.connLimitPodInfoMu.RUnlock()
+	if len(m.connLimitPodInfo) == 0 {
+		return nil
+	}
+	out := make(map[string]bpfconntrack.ConnLimitPodInfo, len(m.connLimitPodInfo))
+	for k, v := range m.connLimitPodInfo {
+		out[k] = v
+	}
+	return out
+}
+
+// updateConnLimitForWEP refreshes the connLimitPodInfo entries for the given
+// workload endpoint. Called from the dataplane goroutine after a WEP update
+// or after the workload's interface ifindex transitions. Removing the WEP's
+// existing entries first handles IP changes, limit changes, and the
+// "shouldn't be in the map any more" case (e.g., limit removed, iface went
+// down) in one path.
+func (m *bpfEndpointManager) updateConnLimitForWEP(
+	wlID types.WorkloadEndpointID,
+	wep *proto.WorkloadEndpoint,
+	ifIndex uint32,
+) {
+	m.connLimitPodInfoMu.Lock()
+	defer m.connLimitPodInfoMu.Unlock()
+
+	for _, key := range m.connLimitWLToIPs[wlID] {
+		delete(m.connLimitPodInfo, key)
+	}
+	delete(m.connLimitWLToIPs, wlID)
+
+	if wep == nil || wep.QosControls == nil {
+		return
+	}
+	hasIngress := wep.QosControls.IngressMaxConnections > 0
+	hasEgress := wep.QosControls.EgressMaxConnections > 0
+	if !hasIngress && !hasEgress {
+		return
+	}
+	if ifIndex == 0 {
+		// Defer: the next onInterfaceUpdate that delivers a non-zero
+		// ifindex for this WEP's iface will reattempt the add.
+		return
+	}
+
+	info := bpfconntrack.ConnLimitPodInfo{
+		IfIndex:         ifIndex,
+		HasIngressLimit: hasIngress,
+		HasEgressLimit:  hasEgress,
+	}
+	var keys []string
+	for _, ipNet := range wep.Ipv4Nets {
+		ip, _, err := net.ParseCIDR(ipNet)
+		if err != nil {
+			continue
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			k := string(ip4)
+			m.connLimitPodInfo[k] = info
+			keys = append(keys, k)
+		}
+	}
+	for _, ipNet := range wep.Ipv6Nets {
+		ip, _, err := net.ParseCIDR(ipNet)
+		if err != nil {
+			continue
+		}
+		if ip16 := ip.To16(); ip16 != nil {
+			k := string(ip16)
+			m.connLimitPodInfo[k] = info
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) > 0 {
+		m.connLimitWLToIPs[wlID] = keys
+	}
+}
+
+// clearConnLimitForWEP removes every connLimitPodInfo entry that belongs to
+// the given workload endpoint. Called from the dataplane goroutine when a
+// WEP is removed.
+func (m *bpfEndpointManager) clearConnLimitForWEP(wlID types.WorkloadEndpointID) {
+	m.connLimitPodInfoMu.Lock()
+	defer m.connLimitPodInfoMu.Unlock()
+	for _, key := range m.connLimitWLToIPs[wlID] {
+		delete(m.connLimitPodInfo, key)
+	}
+	delete(m.connLimitWLToIPs, wlID)
 }

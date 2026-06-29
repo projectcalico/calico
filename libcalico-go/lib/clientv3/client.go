@@ -35,6 +35,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
 )
 
 // client implements the client.Interface.
@@ -56,11 +57,28 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Enable in-process CRD validation (CEL rules, OpenAPI constraints,
+	// schema defaulting) for etcd mode. In KDD mode the kube-apiserver
+	// handles this on admission, so we skip it to avoid the expensive
+	// CEL compilation cost.
+	if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+		validator.SetCRDValidationEnabled(true)
+	}
+
+	return NewFromBackend(config, be), nil
+}
+
+// NewFromBackend wraps an existing backend client (e.g. one backed by fakes
+// in tests) in a clientv3 Interface. config drives behavior that depends on
+// the datastore type (e.g. ensureClusterInformation tagging clusters with a
+// "kdd"/"k8s" suffix); pass the same CalicoAPIConfig that produced be.
+func NewFromBackend(config apiconfig.CalicoAPIConfig, be bapi.Client) Interface {
 	return client{
 		config:    config,
 		backend:   be,
 		resources: &resources{backend: be},
-	}, nil
+	}
 }
 
 // NewFromEnv loads the config from ENV variables and returns a connected client.

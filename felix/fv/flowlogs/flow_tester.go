@@ -50,6 +50,7 @@ type FlowTester struct {
 	options FlowTesterOptions
 	flows   map[flowMeta]flowlog.FlowLog
 	errors  []string
+	checked []string
 }
 
 type FlowTesterOptions struct {
@@ -65,6 +66,20 @@ type FlowTesterOptions struct {
 
 	// Set of include filters used to only include certain flows. Set of filters is ORed.
 	Includes []IncludeFilter
+
+	// TolerateServiceCorrelationRace, when set, makes CheckFlow additionally absorb — without
+	// requiring — a flow that is identical to a checked service flow except that its DstService is
+	// empty. Felix stamps DstService only once it has correlated a connection's DNAT record (see
+	// the collector's reportMetrics, where the service lookup is gated on IsDNAT); a flush that
+	// happens before that correlation lands reports an un-stamped duplicate that differs only in
+	// DstService. The service-stamped flow is still required; this only stops the un-stamped
+	// duplicate being reported as an unchecked flow.
+	//
+	// The duplicate is matched with the same keying as CheckFlow (see flowMetaFromFlowLog), so it
+	// is only as discriminating as the Match* options below. Use this with policy matching enabled
+	// (MatchEnforcedPolicies / MatchPendingPolicies) so a stray empty-DstService flow that differs
+	// in its policy sets is not absorbed.
+	TolerateServiceCorrelationRace bool
 
 	// What values to check.
 	CheckPackets         bool // Checks packets in/out
@@ -200,7 +215,7 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 	}
 	existing, ok := t.flows[fm]
 	if !ok {
-		t.errors = append(t.errors, fmt.Sprintf("Flow was not present in logs: %#v", fm))
+		t.errors = append(t.errors, fmt.Sprintf("Flow was not present in logs: %#v\nReceived flows:%s", fm, t.dumpReceivedFlows()))
 		return
 	}
 	delete(t.flows, fm)
@@ -231,7 +246,23 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 	}
 
 	if len(errs) != 0 {
-		t.errors = append(t.errors, fmt.Sprintf("Statistics incorrect: %#v\n- %s", fl, strings.Join(errs, "/n- ")))
+		t.errors = append(t.errors, fmt.Sprintf("Statistics incorrect: %#v\n- %s", fl, strings.Join(errs, "\n- ")))
+	}
+
+	t.checked = append(t.checked, fmt.Sprintf("Checked flow: %s", formatFlow(fl)))
+
+	// Absorb the un-stamped service-correlation-race duplicate, if present. See
+	// TolerateServiceCorrelationRace. The duplicate is identical except DstService is empty, so we
+	// rebuild the key with DstService zeroed and delete it; the delete is a no-op when absent, so
+	// the duplicate is tolerated but never required.
+	if t.options.TolerateServiceCorrelationRace && fl.DstService != flowlog.EmptyService {
+		noSvc := fl
+		noSvc.DstService = flowlog.EmptyService
+		dupMeta := t.flowMetaFromFlowLog(noSvc)
+		if _, dup := t.flows[dupMeta]; dup {
+			delete(t.flows, dupMeta)
+			t.checked = append(t.checked, fmt.Sprintf("Tolerated no-service duplicate of: %s", formatFlow(fl)))
+		}
 	}
 }
 
@@ -239,13 +270,36 @@ func (t *FlowTester) CheckFlow(fl flowlog.FlowLog) {
 // deltas.
 func (t *FlowTester) Finish() error {
 	for _, fl := range t.flows {
-		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %#v", fl))
+		t.errors = append(t.errors, fmt.Sprintf("Unchecked flow: %s", formatFlow(fl)))
 	}
 
 	if len(t.errors) == 0 {
 		return nil
 	}
-	return errors.New(strings.Join(t.errors, "\n==============\n"))
+	// Build a fresh slice rather than append(t.errors, ...), so we never write into t.errors'
+	// backing array — that keeps Finish() idempotent if it is called more than once without a reset.
+	combined := append(append([]string{}, t.errors...), t.checked...)
+	return errors.New(strings.Join(combined, "\n==============\n"))
+}
+
+// dumpReceivedFlows renders every flow currently held by the tester. Used in
+// failure messages so that flake reports show the policy sets the dataplane
+// actually reported, not just the meta-key the expected flow didn't match.
+func (t *FlowTester) dumpReceivedFlows() string {
+	if len(t.flows) == 0 {
+		return " (none)"
+	}
+	var b strings.Builder
+	for _, fl := range t.flows {
+		b.WriteString("\n  - ")
+		b.WriteString(formatFlow(fl))
+	}
+	return b.String()
+}
+
+func formatFlow(fl flowlog.FlowLog) string {
+	return fmt.Sprintf("meta=%#v enforced=%v pending=%v",
+		fl.FlowMeta, fl.FlowEnforcedPolicySet, fl.FlowPendingPolicySet)
 }
 
 // Return a test-specific flowMeta from the flowLog.  We may include policies and labels in the metadata so that
@@ -291,6 +345,7 @@ func (t *FlowTester) flowMetaFromFlowLog(fl flowlog.FlowLog) flowMeta {
 func (t *FlowTester) reset() {
 	t.flows = make(map[flowMeta]flowlog.FlowLog)
 	t.errors = nil
+	t.checked = nil
 }
 
 func WaitForConntrackScan(bpfEnabled bool) {

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 type Protocol string
@@ -31,6 +32,13 @@ const (
 	ICMP Protocol = "ICMP"
 	TCP  Protocol = "TCP"
 	HTTP Protocol = "HTTP"
+	UDP  Protocol = "UDP"
+	// TCPConnect probes raw TCP reachability via `nc -w 3 -z`. Pass/fail
+	// is driven by exit code (0 = port open, nonzero = blocked/unreachable).
+	// Stdout is not consulted for the assertion, but the conncheck retry
+	// loop still surfaces it in diagnostic logs. Use when the server isn't
+	// an HTTP responder, so the default `wget`-based TCP probe would fail.
+	TCPConnect Protocol = "TCPConnect"
 )
 
 // AccessType represents how the target is accessed. A Kubenretes pod can be accessed in a variety of ways, such as
@@ -78,7 +86,7 @@ type Target interface {
 var _ Target = &target{}
 
 type target struct {
-	server      *Server
+	server      Server
 	destination string
 	port        int
 	protocol    Protocol
@@ -100,9 +108,7 @@ func (t *target) GetProtocol() Protocol {
 // String returns a human-readable name for the target.
 func (t *target) String() string {
 	if t.server != nil {
-		chunks := []string{
-			fmt.Sprintf("%s/%s", t.server.Pod().Namespace, t.server.Pod().Name),
-		}
+		chunks := []string{t.server.ID()}
 		if t.destination != "" {
 			chunks = append(chunks, t.destination)
 		}
@@ -148,12 +154,30 @@ func NewPodPingTarget(pod *v1.Pod) Target {
 	}
 }
 
-func NewTarget(dst string, targetType AccessType, proto Protocol) Target {
+// NewTCPConnectTarget returns a target that probes TCP reachability of ip:port
+// via `nc -z` (exit code is the signal). Use for raw-TCP servers; for HTTP
+// servers prefer NewTarget(..., TCP, ...).
+func NewTCPConnectTarget(ip string, port int) Target {
 	return &target{
+		destination: ip,
+		port:        port,
+		targetType:  TypePodIP,
+		protocol:    TCPConnect,
+	}
+}
+
+func NewTarget(dst string, targetType AccessType, proto Protocol, opts ...TargetOption) Target {
+	t := &target{
 		destination: dst,
 		targetType:  targetType,
 		protocol:    proto,
 	}
+	for _, opt := range opts {
+		if err := opt(t); err != nil {
+			framework.Failf("NewTarget option error: %v", err)
+		}
+	}
+	return t
 }
 
 type TargetOption func(*target) error
@@ -162,6 +186,10 @@ type HTTPParams struct {
 	Method  string
 	Path    string
 	Headers []string
+
+	// Body is the request body for HTTP POST requests, or the payload for
+	// UDP echo tests.
+	Body string
 }
 
 func WithHTTP(method, path string, headers []string) TargetOption {
@@ -172,6 +200,27 @@ func WithHTTP(method, path string, headers []string) TargetOption {
 			Path:    path,
 			Headers: headers,
 		}
+		return nil
+	}
+}
+
+// WithHTTPBody sets an HTTP POST body on the target.
+func WithHTTPBody(body string) TargetOption {
+	return func(t *target) error {
+		if t.http == nil {
+			return fmt.Errorf("WithHTTPBody requires WithHTTP to be set first")
+		}
+		t.http.Body = body
+		return nil
+	}
+}
+
+// WithUDP configures the target for UDP echo testing. The body is sent as
+// the UDP payload and the response is expected to echo it back.
+func WithUDP(body string) TargetOption {
+	return func(t *target) error {
+		t.protocol = UDP
+		t.http = &HTTPParams{Body: body}
 		return nil
 	}
 }

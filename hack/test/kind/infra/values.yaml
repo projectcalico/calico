@@ -1,7 +1,10 @@
 # Default values.yaml for Calico installation on kind clusters.
 installation:
   enabled: true
-  registry: docker.io
+
+  # Always re-pull so clusters pick up new digests under stable tags
+  # (e.g. test-build) on `make kind-reload`.
+  imagePullPolicy: Always
 
   # Disable HA control plane.
   controlPlaneReplicas: 1
@@ -10,10 +13,27 @@ installation:
   kubeletVolumePluginPath: "None"
   flexVolumePath: "None"
 
-  # Configure CIDRs to match kubeadm cluster.
+  # kind node images already ship the upstream CNI plugins under /opt/cni/bin,
+  # so skip the cni-plugins init container that stages them.
+  cni:
+    type: Calico
+    installMode: CalicoOnly
+
   calicoNetwork:
     # Enable policy setup timeout to increase test reliability.
     linuxPolicySetupTimeoutSeconds: 5
+
+    # Pin IPv6 node-address autodetection to the 2001:20::/64 range that
+    # deploy_resources.sh assigns to each node. The kind docker network now
+    # gets an auto-assigned IPv6 ULA (fc00:f853:ccd:e793::/64), so the default
+    # firstFound method non-deterministically picks that ULA instead of the
+    # 2001:20:: address. The k8st BGP tests peer external routers against the
+    # 2001:20:: addresses, so the node BGP IPv6 must be in that range.
+    nodeAddressAutodetectionV6:
+      cidrs:
+      - 2001:20::/64
+
+    # Configure CIDRs to match kubeadm cluster.
     ipPools:
     - cidr: 192.168.0.0/16
     - cidr: fd00:10:244::/64
@@ -137,14 +157,28 @@ whisker:
                 cpu: 200m
                 memory: 128Mi
 
+# Exercise the defaultFelixConfiguration helm template in CI. The value here
+# matches Felix's default, so it's a no-op - we just want to verify the
+# template renders with the correct API group.
+defaultFelixConfiguration:
+  enabled: true
+  logSeverityScreen: Info
+
 # CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
 manageCRDs: false
 
-# Configuration for the tigera operator
+# Enable zap development logging for the tigera/operator in CI so test failures surface debug-level
+# operator logs and stacktraces on warnings.
+zapDevel: true
+
+# Operator image lives in the local kind registry alongside everything else.
+# imagePullPolicy: Always so kubelet repulls when the test-build digest
+# changes under a stable tag on `make kind-reload`.
 tigeraOperator:
-  image: tigera/operator
+  image: calico/operator
   version: test-build
-  registry: docker.io
+  registry: localhost:5000
+  imagePullPolicy: Always
 
 resources:
   requests:

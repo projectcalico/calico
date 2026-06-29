@@ -17,7 +17,7 @@ describe('<NoPolicyCheckbox />', () => {
         expect(screen.getByRole('checkbox')).toBeInTheDocument();
         expect(screen.getByText(/No Policy/)).toBeInTheDocument();
         expect(
-            screen.getByText(/This filter will clear all existing queries\./),
+            screen.getByText(/This filter will clear any existing filters\./),
         ).toBeInTheDocument();
     });
 

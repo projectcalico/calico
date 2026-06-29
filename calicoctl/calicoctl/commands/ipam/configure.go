@@ -35,6 +35,7 @@ func updateIPAMConfig(
 	strictAffinity *bool,
 	maxBlocks *int,
 	persistence *ipam.VMAddressPersistence,
+	ipCooldownSeconds *int,
 ) error {
 	ipamConfig, err := ipamClient.GetIPAMConfig(ctx)
 	if err != nil {
@@ -56,6 +57,11 @@ func updateIPAMConfig(
 		ipamConfig.KubeVirtVMAddressPersistence = persistence
 	}
 
+	// Update IPCooldownSeconds if specified.
+	if ipCooldownSeconds != nil {
+		ipamConfig.IPCooldownSeconds = *ipCooldownSeconds
+	}
+
 	err = ipamClient.SetIPAMConfig(ctx, *ipamConfig)
 	if err != nil {
 		return fmt.Errorf("error: %v", err)
@@ -69,6 +75,9 @@ func updateIPAMConfig(
 	}
 	if persistence != nil {
 		fmt.Println("Successfully set KubeVirtVMAddressPersistence to:", *persistence)
+	}
+	if ipCooldownSeconds != nil {
+		fmt.Println("Successfully set IPCooldownSeconds to:", *ipCooldownSeconds)
 	}
 
 	return nil
@@ -88,6 +97,53 @@ func parsePersistence(val string) (*ipam.VMAddressPersistence, error) {
 	}
 }
 
+// ConfigureIPAM updates IPAM configuration from pre-parsed flag values.
+func ConfigureIPAM(ctx context.Context, config, strictAffinityStr, maxBlocksStr, persistenceStr string, ipCooldownSecondsInt int) error {
+	client, err := clientmgr.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	ipamClient := client.IPAM()
+
+	var strictAffinity *bool
+	if strictAffinityStr != "" {
+		enabled, err := strconv.ParseBool(strictAffinityStr)
+		if err != nil {
+			return fmt.Errorf("invalid value. Use true or false to set strictaffinity")
+		}
+		strictAffinity = &enabled
+	}
+
+	var maxBlocks *int
+	if maxBlocksStr != "" {
+		maxBlocksVal, err := strconv.Atoi(maxBlocksStr)
+		if err != nil {
+			return fmt.Errorf("invalid value for maxblockhost. Use a valid number")
+		}
+		maxBlocks = &maxBlocksVal
+	}
+
+	var persistence *ipam.VMAddressPersistence
+	if persistenceStr != "" {
+		persistence, err = parsePersistence(persistenceStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	var ipCooldownSeconds *int
+	if ipCooldownSecondsInt >= 0 {
+		ipCooldownSeconds = &ipCooldownSecondsInt
+	}
+
+	if strictAffinity == nil && maxBlocks == nil && persistence == nil && ipCooldownSeconds == nil {
+		return fmt.Errorf("at least one configuration option must be specified")
+	}
+
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence, ipCooldownSeconds)
+}
+
 // Configure IPAM.
 func Configure(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
@@ -105,6 +161,9 @@ Options:
      --kubevirt-ip-persistence=<Enabled|Disabled>
                                     Control whether KubeVirt VMs retain persistent IP addresses
                                     across lifecycle events.
+     --ip-cooldown-seconds=<number>
+                                    Set the maximum time between release and re-allocation of an IP
+                                    address.
   -c --config=<CONFIG>              Path to the file containing connection configuration in
                                     YAML or JSON format.
                                     [default: ` + constants.DefaultConfigPath + `]
@@ -170,9 +229,19 @@ Description:
 		}
 	}
 
-	if strictAffinity == nil && maxBlocks == nil && persistence == nil {
+	// Parse IPCooldownSeconds (optional).
+	var ipCooldownSeconds *int
+	if val, ok := parsedArgs["--ip-cooldown-seconds"].(string); ok && val != "" {
+		ipCooldownSecondsVal, err := strconv.Atoi(val)
+		if err != nil {
+			return err
+		}
+		ipCooldownSeconds = &ipCooldownSecondsVal
+	}
+
+	if strictAffinity == nil && maxBlocks == nil && persistence == nil && ipCooldownSeconds == nil {
 		return fmt.Errorf("at least one configuration option must be specified")
 	}
 
-	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence)
+	return updateIPAMConfig(ctx, ipamClient, strictAffinity, maxBlocks, persistence, ipCooldownSeconds)
 }

@@ -262,8 +262,8 @@ def kubectl(args, logerr=True, allow_fail=False, allow_codes=[], timeout=0, retu
                returnerr=returnerr)
 
 def calicoctl(args, allow_fail=False):
-    return kubectl("exec -i -n kube-system calicoctl -- calicoctl --allow-version-mismatch " + args,
-                   allow_fail=allow_fail)
+    return run("calico ctl --allow-version-mismatch " + args,
+               allow_fail=allow_fail)
 
 
 def calicoctl_apply_dict(object_dict):

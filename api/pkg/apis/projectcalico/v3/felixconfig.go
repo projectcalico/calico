@@ -36,6 +36,7 @@ type FelixConfigurationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:validation:XValidation:rule="self.metadata.name == 'default' || self.metadata.name.startsWith('node.') ? !has(self.spec.nodeSelector) : true",message="nodeSelector must not be set on the 'default' or per-node ('node.*') FelixConfiguration",reason=FieldValueForbidden
 
 type FelixConfiguration struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -92,6 +93,14 @@ type FloatingIPType string
 const (
 	FloatingIPsEnabled  FloatingIPType = "Enabled"
 	FloatingIPsDisabled FloatingIPType = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=Disabled;PodsAndLoadBalancers
+type LocalSubnetL2ReachabilityMode string
+
+const (
+	LocalSubnetL2ReachabilityDisabled             LocalSubnetL2ReachabilityMode = "Disabled"
+	LocalSubnetL2ReachabilityPodsAndLoadBalancers LocalSubnetL2ReachabilityMode = "PodsAndLoadBalancers"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -168,6 +177,22 @@ const (
 // +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress) == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family() == 4)",message="deviceRouteSourceAddress must be a valid IPv4 address",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6) == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family() == 6)",message="deviceRouteSourceAddressIPv6 must be a valid IPv6 address",reason=FieldValueInvalid
 type FelixConfigurationSpec struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to apply only to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// At most one selector-scoped FelixConfiguration should match any given node.
+	// If multiple selector-scoped resources match, the oldest (by creation
+	// timestamp) is used and a warning is logged. This prevents an accidentally
+	// created conflicting resource from disrupting an existing, working
+	// configuration.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	NodeSelector *string `json:"nodeSelector,omitempty" confignamev1:"-"`
+
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
@@ -443,7 +468,9 @@ type FelixConfigurationSpec struct {
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	IptablesMarkMask *uint32 `json:"iptablesMarkMask,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
+	IptablesMarkMask *int64 `json:"iptablesMarkMask,omitempty"`
 
 	// DisableConntrackInvalidCheck disables the check for invalid connections in conntrack. While the conntrack
 	// invalid check helps to detect malicious traffic, it can also cause issues with certain multi-NIC scenarios.
@@ -674,7 +701,9 @@ type FelixConfigurationSpec struct {
 	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4294967295
+	NftablesMarkMask *int64 `json:"nftablesMarkMask,omitempty"`
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
@@ -725,6 +754,16 @@ type FelixConfigurationSpec struct {
 	// incorrect values.
 	// +optional
 	BPFConntrackTimeouts *BPFConntrackTimeouts `json:"bpfConntrackTimeouts,omitempty" validate:"omitempty"`
+
+	// BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+	// This is the maximum time that the BPF dataplane will wait for all fragments of a
+	// fragmented IP packet to arrive before discarding them.  If left unset, the value
+	// is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+	// seconds).
+	// [Default: unset - read from net.ipv4.ipfrag_time]
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern=`^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$`
+	BPFIPFragTimeout *metav1.Duration `json:"bpfIPFragTimeout,omitempty" configv1timescale:"seconds"`
 
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
@@ -869,6 +908,13 @@ type FelixConfigurationSpec struct {
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
+
+	// BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+	// reassembles out-of-order IP fragments from external networks. This program requires
+	// a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+	// Felix reports not-ready until the user sets this to false. When false, fragmented
+	// packets from external sources are dropped. [Default: true]
+	BPFIPFragmentReassemblyEnabled *bool `json:"bpfIPFragmentReassemblyEnabled,omitempty" validate:"omitempty"`
 
 	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
@@ -1069,6 +1115,23 @@ type FelixConfigurationSpec struct {
 	//
 	// +optional
 	FloatingIPs *FloatingIPType `json:"floatingIPs,omitempty" validate:"omitempty"`
+
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	// +optional
+	LocalSubnetL2Reachability *LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty" validate:"omitempty,oneof=Disabled PodsAndLoadBalancers"`
+
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+	// LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+	// forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+	// to disable periodic re-announcement, leaving only the one-shot announce when an
+	// IP is added. [Default: 120s]
+	// +optional
+	LocalSubnetL2ReachabilityRefreshInterval *metav1.Duration `json:"localSubnetL2ReachabilityRefreshInterval,omitempty" configv1timescale:"seconds"`
 
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	// +optional

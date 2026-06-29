@@ -159,7 +159,12 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: flannel-migration-controller
-          image: quay.io/calico/flannel-migration-controller:master
+          image: quay.io/calico/calico:master
+          command:
+            - /usr/bin/calico
+            - component
+            - kube-controllers
+            - --health-port=9099
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -181,8 +186,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
-                - -r
+                - /usr/bin/calico
+                - health
+                - --port=9099
+                - --type=readiness
       volumes:
         - name: flannel-env-file
           hostPath:

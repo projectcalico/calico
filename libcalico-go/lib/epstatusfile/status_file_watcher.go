@@ -141,7 +141,7 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 			}).Debug("received file events")
 
 			filePath := event.Name
-			if event.Op == fsnotify.Remove {
+			if event.Op.Has(fsnotify.Remove) {
 				w.callbacks.OnFileDeletion(filePath)
 				delete(w.lastState, filePath)
 			} else {
@@ -149,11 +149,10 @@ func (w *FileWatcher) runFsnotifyWatcher(watcher *fsnotify.Watcher) error {
 				if err != nil {
 					log.WithError(err).Error("Failed to get file info on a fsnotify event.")
 				} else if !fileInfo.IsDir() {
-					if event.Op == fsnotify.Create {
+					if event.Op.Has(fsnotify.Create) {
 						w.lastState[filePath] = fileInfo
 						w.callbacks.OnFileCreation(filePath)
-					}
-					if event.Op == fsnotify.Write {
+					} else if event.Op.Has(fsnotify.Write) {
 						w.lastState[filePath] = fileInfo
 						w.callbacks.OnFileUpdate(filePath)
 					}
@@ -244,7 +243,7 @@ func (w *FileWatcher) scanDirectory() {
 		if !exists {
 			log.WithField("file", path).Debug("New file detected")
 			w.callbacks.OnFileCreation(path)
-		} else if oldInfo.ModTime() != info.ModTime() {
+		} else if !oldInfo.ModTime().Equal(info.ModTime()) || oldInfo.Size() != info.Size() {
 			log.WithField("file", path).Debug("File modified")
 			w.callbacks.OnFileUpdate(path)
 		}

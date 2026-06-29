@@ -176,7 +176,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			pools        *ipamtestutils.IPPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
-			kc           *kubernetes.Clientset
+			kc           kubernetes.Interface
 		)
 
 		BeforeEach(func() {
@@ -292,7 +292,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						// Expect that the IP address is within the affine block.
 						cidr := affs.KVPairs[0].Key.(model.BlockAffinityKey).CIDR
 						ip := ips[0]
-						Expect(cidr.Contains(ip.IP)).To(BeTrue())
+						ipAddr := model.AddrFromIP(ip)
+						Expect(cidr.Contains(ipAddr)).To(BeTrue())
 					}
 				}
 			})
@@ -471,11 +472,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Expect that hostA proc 1 fails to confirm the affinity, leaving it in pending state.
 
 			blockKVP := model.KVPair{
-				Key:   model.BlockKey{CIDR: *net},
+				Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 				Value: &model.AllocationBlock{},
 			}
 			affinityKVP := model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+				Key:   model.BlockAffinityKey{Host: hostA, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{},
 			}
 
@@ -553,11 +554,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("setting up the client for the test", func() {
 				b := newBlock(*net, nil)
 				blockKVP = model.KVPair{
-					Key:   model.BlockKey{CIDR: *net},
+					Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 					Value: b.AllocationBlock,
 				}
 				affinityKVP = model.KVPair{
-					Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+					Key:   model.BlockAffinityKey{Host: hostA, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 					Value: &model.BlockAffinity{},
 				}
 
@@ -620,7 +621,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("attempting to release the block", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -639,11 +641,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			// Creation function for a block affinity - actually create it.
 			affKVP := &model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+				Key:   model.BlockAffinityKey{Host: hostA, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{},
 			}
 			affKVP2 := &model.KVPair{
-				Key:   model.BlockAffinityKey{Host: hostB, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+				Key:   model.BlockAffinityKey{Host: hostB, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{State: model.StateConfirmed},
 			}
 
@@ -665,7 +667,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			now := metav1.NewTime(time.Now())
 			b.AffinityClaimTime = &now
 			blockKVP := &model.KVPair{
-				Key:   model.BlockKey{CIDR: *net},
+				Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 				Value: b.AllocationBlock,
 			}
 
@@ -673,7 +675,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			b2.Affinity = &affStrB
 			b2.AffinityClaimTime = &now
 			blockKVP2 := &model.KVPair{
-				Key:   model.BlockKey{CIDR: *net},
+				Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 				Value: b2.AllocationBlock,
 			}
 			fc.createFuncs[blockKVP.Key.String()] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
@@ -794,7 +796,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 		})
 
 		ageTheBlock := func() {
-			block, err := bc.Get(ctx, model.BlockKey{CIDR: *net}, "")
+			block, err := bc.Get(ctx, model.BlockKey{CIDR: model.PrefixFromIPNet(*net)}, "")
 			Expect(err).NotTo(HaveOccurred())
 			overAMinuteAgo := metav1.NewTime(time.Now().Add(-61 * time.Second))
 			block.Value.(*model.AllocationBlock).AffinityClaimTime = &overAMinuteAgo
@@ -914,7 +916,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			By("trying to claim the reclaimable block, with a context error queued", func() {
 				subCtx, cancel := context.WithCancel(ctx)
 				defer cancel()
-				fc.getFuncs[model.BlockKey{CIDR: *net}.String()] = func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+				fc.getFuncs[model.BlockKey{CIDR: model.PrefixFromIPNet(*net)}.String()] = func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 					cancel()
 					return nil, subCtx.Err()
 				}
@@ -936,12 +938,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			aff := "host:" + hostA
 			b.AllocationBlock.Affinity = &aff
 			blockKVP := model.KVPair{
-				Key:   model.BlockKey{CIDR: *net},
+				Key:   model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 				Value: b.AllocationBlock,
 			}
 
 			affinityKVP := model.KVPair{
-				Key: model.BlockAffinityKey{Host: hostA, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+				Key: model.BlockAffinityKey{Host: hostA, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 				Value: &model.BlockAffinity{
 					State: model.StateConfirmed,
 				},
@@ -966,7 +968,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						if err != nil {
 							return nil, err
 						}
-						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
+						config := IPAMConfig{}
+						b1 := blockFromBackend(&config, kvpb.Value.(*model.AllocationBlock))
 						affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: hostA}
 						b1.autoAssign(1, nil, affinityCfg, nil, false, nilAddrFilter{})
 						if _, err := bc.Update(ctx, kvpb); err != nil {
@@ -1099,70 +1102,73 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("checking the affinity exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
+				k := model.BlockAffinityKey{Host: host, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost}
 				aff, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(aff.Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
 			})
 
 			By("checking the virtual affinity exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *loadBalancerNet, AffinityType: model.IPAMAffinityTypeVirtual}
+				k := model.BlockAffinityKey{Host: host, CIDR: model.PrefixFromIPNet(*loadBalancerNet), AffinityType: model.IPAMAffinityTypeVirtual}
 				aff, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(aff.Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
 			})
 
 			By("checking the block exists", func() {
-				k := model.BlockKey{CIDR: *net}
+				k := model.BlockKey{CIDR: model.PrefixFromIPNet(*net)}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("checking the virtual block exists", func() {
-				k := model.BlockKey{CIDR: *loadBalancerNet}
+				k := model.BlockKey{CIDR: model.PrefixFromIPNet(*loadBalancerNet)}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("releasing the affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("releasing the virtual affinity", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			By("checking the affinity no longer exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *net, AffinityType: model.IPAMAffinityTypeHost}
+				k := model.BlockAffinityKey{Host: host, CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
 
 			By("checking the virtual affinity no longer exists", func() {
-				k := model.BlockAffinityKey{Host: host, CIDR: *loadBalancerNet, AffinityType: model.IPAMAffinityTypeVirtual}
+				k := model.BlockAffinityKey{Host: host, CIDR: model.PrefixFromIPNet(*loadBalancerNet), AffinityType: model.IPAMAffinityTypeVirtual}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
 
 			By("checking the block no longer exists", func() {
-				k := model.BlockKey{CIDR: *net}
+				k := model.BlockKey{CIDR: model.PrefixFromIPNet(*net)}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
 
 			By("checking the virtual block no longer exists", func() {
-				k := model.BlockKey{CIDR: *loadBalancerNet}
+				k := model.BlockKey{CIDR: model.PrefixFromIPNet(*loadBalancerNet)}
 				_, err := bc.Get(ctx, k, "")
 				Expect(err).To(HaveOccurred())
 			})
 
 			By("releasing the affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeHost, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *net, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *net, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
@@ -1170,7 +1176,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			By("releasing the virtual affinity again", func() {
 				affinityCfg := AffinityConfig{AffinityType: AffinityTypeVirtual, Host: host}
-				err := rw.releaseBlockAffinity(ctx, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
+				cfg := IPAMConfig{}
+				err := rw.releaseBlockAffinity(ctx, &cfg, affinityCfg, *loadBalancerNet, releaseAffinityOpts{})
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
@@ -1186,7 +1193,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			ctx      context.Context
 			host     string
 			net      *cnet.IPNet
-			kc       *kubernetes.Clientset
+			kc       kubernetes.Interface
 			rsvdAttr *HostReservedAttr
 		)
 
@@ -1276,7 +1283,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 	It("should respect Kubernetes UID for affinities", func() {
 		// Create a block affinity
 		initKVP := &model.KVPair{
-			Key:   model.BlockAffinityKey{Host: "somehost", CIDR: *net, AffinityType: model.IPAMAffinityTypeHost},
+			Key:   model.BlockAffinityKey{Host: "somehost", CIDR: model.PrefixFromIPNet(*net), AffinityType: model.IPAMAffinityTypeHost},
 			Value: &model.BlockAffinity{},
 		}
 		kvpa, err := bc.Create(ctx, initKVP)
@@ -1300,7 +1307,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 	It("should respect Kubernetes UID for blocks", func() {
 		// Create a block
 		initKVP := &model.KVPair{
-			Key: model.BlockKey{CIDR: *net},
+			Key: model.BlockKey{CIDR: model.PrefixFromIPNet(*net)},
 			Value: &model.AllocationBlock{
 				CIDR:        cnet.MustParseCIDR("10.0.1.0/29"),
 				Allocations: []*int{nil, nil, nil},

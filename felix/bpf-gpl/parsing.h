@@ -5,14 +5,6 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
-#include <linux/tcp.h>
-#include <linux/udp.h>
-#ifdef IPVER6
-#include <linux/icmpv6.h>
-#else
-#include <linux/icmp.h>
-#endif
-
 #include "counters.h"
 #include "routes.h"
 #include "skb.h"
@@ -21,6 +13,7 @@
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
+#define PARSING_FRAG_STORED 3
 #define PARSING_ERROR -1
 
 static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len);

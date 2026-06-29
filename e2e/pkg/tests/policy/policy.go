@@ -49,8 +49,8 @@ var _ = describe.CalicoDescribe(
 		var err error
 		var cli ctrlclient.Client
 		var checker conncheck.ConnectionTester
-		var server1 *conncheck.Server
-		var client1 *conncheck.Client
+		var server1 conncheck.Server
+		var client1 conncheck.Client
 
 		// Create a new framework for the tests.
 		f := utils.NewDefaultFramework("networkpolicy")

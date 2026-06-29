@@ -9,20 +9,22 @@ include ../lib.Makefile
 .PHONY: ut-validation
 ## Run CRD validation tests against the default K8s version.
 ut-validation: setup-envtest
+	mkdir -p report
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		go test -count=1 -v ./test/validation/...
+		gotestsum --junitfile test/report/ut-validation.xml -- -count=1 -v ./test/validation/...
 
 .PHONY: ut-validation-min-k8s
 ## Run CRD validation tests against the minimum supported K8s version (1.31).
 ut-validation-min-k8s: setup-envtest-min
+	mkdir -p report
 	$(DOCKER_RUN) \
 		-v $$(ls -d $(ENVTEST_DIR)/k8s/$(ENVTEST_MIN_K8S_MINOR)*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
 		-e KUBEBUILDER_ASSETS=/envtest \
 		$(CALICO_BUILD) \
-		go test -count=1 -v ./test/validation/...
+		gotestsum --junitfile test/report/ut-validation-min-k8s.xml -- -count=1 -v ./test/validation/...
 
 .PHONY: ci
 ## Run all test/ CI jobs.

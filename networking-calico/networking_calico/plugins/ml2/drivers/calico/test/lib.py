@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright 2015 Metaswitch Networks
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,13 +19,12 @@ networking_calico.plugins.ml2.drivers.calico.test.lib
 
 Common code for Neutron driver UT.
 """
-import inspect
+import contextlib
 import logging
 import sys
+from types import SimpleNamespace
 
 import eventlet
-import eventlet.queue
-
 import mock
 
 # When you're working on a test and need to see logging - both from the test
@@ -57,12 +57,18 @@ sys.modules["neutron.plugins"] = m_neutron.plugins
 sys.modules["neutron.plugins.ml2"] = m_neutron.plugins.ml2
 sys.modules["neutron.plugins.ml2.drivers"] = m_neutron.plugins.ml2.drivers
 sys.modules["neutron.plugins.ml2.rpc"] = m_neutron.plugins.ml2.rpc
+sys.modules["neutron.wsgi"] = m_neutron.wsgi
 sys.modules["neutron_lib"] = m_neutron_lib = mock.MagicMock()
 sys.modules["neutron_lib.agent"] = m_neutron_lib.agent
+sys.modules["neutron_lib.callbacks"] = m_neutron_lib.callbacks
+sys.modules["neutron_lib.callbacks.events"] = m_neutron_lib.callbacks.events
+sys.modules["neutron_lib.callbacks.registry"] = m_neutron_lib.callbacks.registry
+sys.modules["neutron_lib.callbacks.resources"] = m_neutron_lib.callbacks.resources
 sys.modules["neutron_lib.db"] = m_neutron_lib.db
 sys.modules["neutron_lib.constants"] = m_neutron_lib.constants
 sys.modules["neutron_lib.plugins"] = m_neutron_lib.plugins
 sys.modules["neutron_lib.plugins.ml2"] = m_neutron_lib.plugins.ml2
+sys.modules["neutron_lib.worker"] = m_neutron_lib.worker
 sys.modules["oslo_concurrency"] = m_oslo_concurrency = mock.Mock()
 sys.modules["oslo_config"] = m_oslo_config = mock.MagicMock()
 sys.modules["oslo_context"] = m_oslo_context = mock.Mock()
@@ -210,6 +216,9 @@ class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
         pass
 
+    def start(self):
+        pass
+
     def master(self):
         return True
 
@@ -233,6 +242,7 @@ from networking_calico.plugins.ml2.drivers.calico import policy
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.plugins.ml2.drivers.calico import subnets
 from networking_calico.plugins.ml2.drivers.calico import syncer
+from networking_calico.resync import scope
 
 # Replace the elector.
 mech_calico.Elector = GrandDukeOfSalzburg
@@ -249,8 +259,7 @@ def mock_projects_list():
 
 keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list
-mech_calico.KeystoneClient = mock.Mock()
-mech_calico.KeystoneClient.return_value = keystone_client
+endpoints.make_keystone_client = mock.Mock(return_value=keystone_client)
 mech_calico.TrackTask = mock.Mock()
 mech_calico.TrackTask.return_value = None
 
@@ -258,6 +267,28 @@ REAL_EVENTLET_SLEEP_TIME = 0.01
 
 # Value used to indicate 'timeout' in poll and sleep processing.
 TIMEOUT_VALUE = object()
+
+
+class _AttrDict(dict):
+    """dict subclass that also supports attribute access.
+
+    Used to mock SQLAlchemy row objects returned from bulk queries: the
+    driver code reads these via both r["col"] (dict style) and r.col
+    (attribute style), so the mock must support both.  An optional set
+    of kwargs can be passed to extend the base dict with additional
+    virtual columns (e.g. qos_policy_id).
+    """
+
+    def __init__(self, base=None, **extra):
+        super(_AttrDict, self).__init__(base or {})
+        for k, v in extra.items():
+            self[k] = v
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(key)
 
 
 class Lib(object):
@@ -343,7 +374,6 @@ class Lib(object):
         self.maxDiff = None
 
         # Create an instance of CalicoMechanismDriver.
-        mech_calico.mech_driver = None
         self.driver = mech_calico.CalicoMechanismDriver()
 
         # Hook the (mock) Neutron database.
@@ -462,53 +492,17 @@ class Lib(object):
         to (i) control when those expire, and (ii) allow time to appear to pass
         (to the code under test) without actually having to wait for that time.
         """
-        # Reset the simulated time (in seconds) that has passed since the
-        # beginning of the test.
-        self.current_time = 0
-
-        # Make time.time() return current_time.
-        self.old_time = sys.modules["time"].time
-        sys.modules["time"].time = lambda: self.current_time
-
-        # Reset the dict of current sleepers.  In each dict entry, the key is
-        # an eventlet.Queue object and the value is the time at which the sleep
-        # should complete.
-        self.sleepers = {}
-
         # Reset the list of spawned eventlet threads.
         self.threads = []
 
-        # Replacement for eventlet.sleep: sleep for some simulated passage of
-        # time (as directed by simulated_time_advance), instead of for real
-        # elapsed time.
-        def simulated_time_sleep(secs=None):
+        # Replacement for eventlet.sleep.  For the testing that uses this Lib class we
+        # only expect calls with no arg, i.e. to yield to other green threads.
+        def simulated_sleep(secs=None):
+            assert secs is None
             if secs is None:
                 # Thread just wants to yield to any other waiting thread.
-                self.give_way()
+                self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
                 return
-            # Create a new queue.
-            queue = eventlet.Queue(1)
-            queue.stack = inspect.stack()[1][3]
-
-            # Add it to the dict of sleepers, together with the waking up time.
-            self.sleepers[queue] = self.current_time + secs
-
-            _log.info(
-                "T=%s: %s: Start sleep for %ss until T=%s",
-                self.current_time,
-                queue.stack,
-                secs,
-                self.sleepers[queue],
-            )
-
-            # Do a zero time real sleep, to allow other threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
-
-            # Block until something is posted to the queue.
-            queue.get(True)
-
-            # Wake up.
-            return None
 
         # Replacement for eventlet.spawn: track spawned threads so that we can
         # kill them all when a test case ends.
@@ -526,14 +520,14 @@ class Lib(object):
 
         def simulated_spawn_after(secs, fn, *args, **kwargs):
             def sleep_then_run():
-                simulated_time_sleep(secs)
+                simulated_sleep(secs)
                 fn(*args, **kwargs)
 
             return simulated_spawn(sleep_then_run)
 
         # Hook sleeping.
         self.real_eventlet_sleep = eventlet.sleep
-        eventlet.sleep = simulated_time_sleep
+        eventlet.sleep = simulated_sleep
 
         # Similarly hook spawning.
         self.real_eventlet_spawn = eventlet.spawn
@@ -557,6 +551,7 @@ class Lib(object):
             policy,
             status,
             subnets,
+            scope,
             syncer,
             datamodel_v3,
             etcdutils,
@@ -566,7 +561,6 @@ class Lib(object):
 
     # Tear down after each test case.
     def tearDown(self):
-
         _log.info("Clean up remaining green threads...")
 
         for thread in self.threads:
@@ -581,62 +575,49 @@ class Lib(object):
         self.sys_exit_p.stop()
 
     def tearDown_eventlet(self):
-
         # Restore the real eventlet.sleep and eventlet.spawn.
         eventlet.sleep = self.real_eventlet_sleep
         eventlet.spawn = self.real_eventlet_spawn
         eventlet.spawn_after = self.real_eventlet_spawn_after
 
-        # Repair time.time()
-        sys.modules["time"].time = self.old_time
+    def do_post_fork_actions(self, uuid_str=None):
+        """Simulate the post-fork actions that Neutron runs in production.
 
-    # Method for the test code to call when it wants to advance the simulated
-    # time.
-    def simulated_time_advance(self, secs):
+        In production the Neutron server comprises (at least) three processes:
 
-        while secs > 0:
-            _log.info("T=%s: Want to advance by %s", self.current_time, secs)
+        - an "API worker" process, responsible for Neutron API requests, i.e. dynamic
+          CRUD of ports and other networking resources
 
-            # Determine the time to advance to in this iteration: either the
-            # full time that we've been asked for, or the time at which the
-            # next sleeper should wake up, whichever of those is earlier.
-            wake_up_time = self.current_time + secs
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] < wake_up_time:
-                    # This sleeper will wake up before the time that we've been
-                    # asked to advance to.
-                    wake_up_time = self.sleepers[queue]
+        - an "RPC worker" process, which is designed for RPC between the Neutron server
+          and compute node agents, but which we use for other work that is not driven
+          from the Neutron API, including port and agent status reporting and periodic
+          etcd compaction
 
-            # Advance to the determined time.
-            secs -= wake_up_time - self.current_time
-            self.current_time = wake_up_time
-            _log.info("T=%s", self.current_time)
+        - a "Calico resync" process, whose purpose is to sync from the Neutron DB to the
+          Calico datastore following Neutron server startup.
 
-            # Wake up all sleepers that should now wake up.
-            queues_to_wake = []
-            for queue in self.sleepers.keys():
-                if self.sleepers[queue] <= self.current_time:
-                    _log.info(
-                        "T=%s >= %s: %s: Wake up!",
-                        self.current_time,
-                        self.sleepers[queue],
-                        queue.stack,
-                    )
-                    queues_to_wake.append(queue)
-            for queue in queues_to_wake:
-                del self.sleepers[queue]
-                queue.put_nowait(TIMEOUT_VALUE)
+        In UT there is only one process, and we want to get the effects of all those in
+        the one UT process, which means:
 
-            # Allow woken (and possibly other) threads to run.
-            self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        - Do the same startup preparations - DB connection etc. - that the API worker
+          process would do.  These are all coded in ``_post_fork_init()``.
+          This allows tests to later call driver entrypoints like
+          ``update_port_postcommit()``, similarly as production Neutron would.
 
-    def give_way(self):
-        """give_way
+        - Spawn the threads for "other work" (as above) as the RPC worker process would
+          do.  This is achieved by calling ``_post_fork_init()``.
 
-        Method for test code to call when it wants to allow other eventlet
-        threads to run.
+        - Do the startup resync that the Calico resync process would do.  This is coded
+          in ``_do_startup_resync()``.
+
+        ``uuid_str`` controls the UUID generated during init (used for
+        ClusterInformation's clusterGUID).
         """
-        self.real_eventlet_sleep(REAL_EVENTLET_SLEEP_TIME)
+        cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
+        with cm:
+            self.driver._post_fork_init()
+            if mech_calico.cfg.CONF.calico.startup_resync == "always":
+                self.driver._do_startup_resync()
 
     def check_update_port_status_called(self, context):
         self.db.update_port_status.assert_called_once_with(
@@ -656,10 +637,13 @@ class Lib(object):
         if filters is None:
             return self.osdb_ports
 
-        assert list(filters.keys()) == ["id"]
-        allowed_ids = set(filters["id"])
-
-        return [p for p in self.osdb_ports if p["id"] in allowed_ids]
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [p for p in self.osdb_ports if p["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [p for p in self.osdb_ports if p["network_id"] in allowed]
+        raise AssertionError("unsupported get_ports filter: %s" % filters)
 
     def get_subnet(self, context, id):
         matches = [s for s in self.osdb_subnets if s["id"] == id]
@@ -671,12 +655,22 @@ class Lib(object):
             return {"gateway_ip": "10.65.0.1"}
 
     def get_subnets(self, context, filters=None):
-        if filters:
-            self.assertTrue("id" in filters)
-            matches = [s for s in self.osdb_subnets if s["id"] in filters["id"]]
-        else:
-            matches = [s for s in self.osdb_subnets]
-        return matches
+        # NB: unknown subnet IDs are filtered out (return list contains only
+        # IDs present in osdb_subnets).  Don't synthesise a "minimal" subnet
+        # to make this match get_subnet()'s fallback -- the narrow-resync
+        # delete-when-gone path needs an empty list for missing IDs to
+        # trigger the delete branch.  The bulk-prefetch in
+        # WorkloadEndpointSyncer already tolerates absent entries via
+        # ``subnets_by_id.get(...)``.
+        if not filters:
+            return list(self.osdb_subnets)
+        if "id" in filters:
+            allowed = set(filters["id"])
+            return [s for s in self.osdb_subnets if s["id"] in allowed]
+        if "network_id" in filters:
+            allowed = set(filters["network_id"])
+            return [s for s in self.osdb_subnets if s["network_id"] in allowed]
+        raise AssertionError("unsupported get_subnets filter: %s" % filters)
 
     def get_network(self, context, id):
         return self.get_networks(context, filters={"id": [id]})[0]
@@ -725,20 +719,30 @@ class Lib(object):
 
     def db_query(self, model, **kw):
         m = mock.MagicMock()
+        # Set up both filter_by (per-port, legacy) and filter (bulk,
+        # IN-clause) side effects.  The bulk path returns all relevant
+        # rows across all ports/policies; the caller groups them by the
+        # relevant id (port_id, qos_policy_id, ...) and looks up per
+        # item.  Returning more rows than strictly needed is harmless.
         if "IPAllocation" in str(model.name):
             m.filter_by.side_effect = self.db_query_ip_allocation
+            m.filter.side_effect = self.db_query_ip_allocation_bulk
             return m
         if "FloatingIP" in str(model.name):
             m.filter_by.side_effect = self.db_query_floating_ip
+            m.filter.side_effect = self.db_query_floating_ip_bulk
             return m
         if "Network" in str(model.name):
             m.filter_by.side_effect = self.db_query_network
+            m.filter.side_effect = self.db_query_network_bulk
             return m
         if "QosBandwidthLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_bw_rule
+            m.filter.side_effect = self.db_query_qos_policy_bw_rule_bulk
             return m
         if "QosPacketRateLimitRule" in str(model.name):
             m.filter_by.side_effect = self.db_query_qos_policy_pr_rule
+            m.filter.side_effect = self.db_query_qos_policy_pr_rule_bulk
             return m
         raise Exception("db_query model=%r kw=%r" % (model, kw))
 
@@ -775,6 +779,51 @@ class Lib(object):
         if policy:
             return [r for r in policy["rules"] if r["type"] == "packet_rate_limit"]
         return []
+
+    # Bulk-filter (IN-clause) variants used by the resync prefetch.  Each
+    # returns all rows for the corresponding model; the real code then
+    # groups them by the relevant id.  SimpleNamespace is used so that
+    # attribute-style access (row.port_id, row.name, ...) works as it
+    # would on a real SQLAlchemy model row.
+    def db_query_ip_allocation_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                port_id=p["id"],
+                subnet_id=ip["subnet_id"],
+                ip_address=ip["ip_address"],
+            )
+            for p in self.osdb_ports
+            for ip in p["fixed_ips"]
+        ]
+
+    def db_query_floating_ip_bulk(self, _expr):
+        return [
+            SimpleNamespace(
+                fixed_port_id=fip["fixed_port_id"],
+                fixed_ip_address=fip["fixed_ip_address"],
+                floating_ip_address=fip["floating_ip_address"],
+            )
+            for fip in floating_ports
+        ]
+
+    def db_query_network_bulk(self, _expr):
+        return [SimpleNamespace(id=n["id"], name=n["name"]) for n in self.osdb_networks]
+
+    def db_query_qos_policy_bw_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "bandwidth_limit"
+        ]
+
+    def db_query_qos_policy_pr_rule_bulk(self, _expr):
+        return [
+            _AttrDict(r, qos_policy_id=policy_id)
+            for policy_id, policy in self.qos_policies.items()
+            for r in policy.get("rules", [])
+            if r.get("type") == "packet_rate_limit"
+        ]
 
 
 class FixedUUID(object):

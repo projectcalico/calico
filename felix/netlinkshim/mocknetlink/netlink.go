@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -114,7 +114,7 @@ func init() {
 	}
 
 	// All good, proceed with the sketchy cast...
-	var lnf = (*myLinkNotFoundError)((unsafe.Pointer)(&ErrLinkNotFound))
+	lnf := (*myLinkNotFoundError)((unsafe.Pointer)(&ErrLinkNotFound))
 	lnf.error = ErrNotFound
 }
 
@@ -307,6 +307,8 @@ type MockNetlinkDataplane struct {
 	WireguardOpen               bool
 	NumLinkAddCalls             int
 	NumLinkDeleteCalls          int
+	NumLinkSetMTUCalls          int
+	NumLinkSetUpCalls           int
 	ImmediateLinkUp             bool
 	NumRuleListCalls            int
 	NumRuleAddCalls             int
@@ -357,6 +359,8 @@ func (d *MockNetlinkDataplane) ResetDeltas() {
 	d.UpdatedRouteKeys = set.New[string]()
 	d.NumLinkAddCalls = 0
 	d.NumLinkDeleteCalls = 0
+	d.NumLinkSetMTUCalls = 0
+	d.NumLinkSetUpCalls = 0
 	d.NumNewNetlinkCalls = 0
 	d.NumNewWireguardCalls = 0
 	d.NumRuleListCalls = 0
@@ -495,7 +499,7 @@ func (d *MockNetlinkDataplane) LinkList() ([]netlink.Link, error) {
 	}
 	var links []netlink.Link
 	for _, link := range d.NameToLink {
-		links = append(links, link.copy())
+		links = append(links, link.typedCopy())
 	}
 	return links, nil
 }
@@ -517,7 +521,7 @@ func (d *MockNetlinkDataplane) LinkByName(name string) (netlink.Link, error) {
 	}
 	log.Debugf("Looking for interface: %s", name)
 	if link, ok := d.NameToLink[name]; ok {
-		return link.copy(), nil
+		return link.typedCopy(), nil
 	}
 	return nil, ErrLinkNotFound
 }
@@ -544,8 +548,9 @@ func (d *MockNetlinkDataplane) LinkAdd(link netlink.Link) error {
 		attrs.Index = 100 + d.NumLinkAddCalls
 	}
 	d.NameToLink[link.Attrs().Name] = &MockLink{
-		LinkAttrs: attrs,
-		LinkType:  link.Type(),
+		LinkAttrs:    attrs,
+		LinkType:     link.Type(),
+		ConcreteLink: link,
 	}
 	d.AddedLinks.Add(link.Attrs().Name)
 	return nil
@@ -577,6 +582,8 @@ func (d *MockNetlinkDataplane) LinkSetMTU(link netlink.Link, mtu int) error {
 	defer d.mutex.Unlock()
 	defer ginkgo.GinkgoRecover()
 
+	d.NumLinkSetMTUCalls++
+
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkSetMTU) {
 		return ErrSimulated
@@ -593,6 +600,8 @@ func (d *MockNetlinkDataplane) LinkSetUp(link netlink.Link) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	defer ginkgo.GinkgoRecover()
+
+	d.NumLinkSetUpCalls++
 
 	Expect(d.NetlinkOpen).To(BeTrue())
 	if d.shouldFail(FailNextLinkSetUp) {
@@ -1173,6 +1182,12 @@ type MockLink struct {
 	Addrs     []netlink.Addr
 	LinkType  string
 
+	// ConcreteLink holds the concrete netlink.Link (e.g. *netlink.Vxlan) that
+	// was passed to LinkAdd, if the link was created through the netlink API.
+	// LinkByName/LinkList return a copy of it so that callers that type-assert
+	// the result (as they would with the real netlink library) keep working.
+	ConcreteLink netlink.Link
+
 	WireguardPrivateKey   wgtypes.Key
 	WireguardPublicKey    wgtypes.Key
 	WireguardListenPort   int
@@ -1202,9 +1217,10 @@ func (l *MockLink) copy() *MockLink {
 	}
 
 	return &MockLink{
-		LinkAttrs: l.LinkAttrs, // Shallow copy, but we don't use the nested pointers AFAICT.
-		Addrs:     addrsCopy,
-		LinkType:  l.LinkType,
+		LinkAttrs:    l.LinkAttrs, // Shallow copy, but we don't use the nested pointers AFAICT.
+		Addrs:        addrsCopy,
+		LinkType:     l.LinkType,
+		ConcreteLink: l.ConcreteLink,
 
 		WireguardPrivateKey:   l.WireguardPrivateKey,
 		WireguardPublicKey:    l.WireguardPublicKey,
@@ -1212,4 +1228,19 @@ func (l *MockLink) copy() *MockLink {
 		WireguardFirewallMark: l.WireguardFirewallMark,
 		WireguardPeers:        wgPeersCopy,
 	}
+}
+
+// typedCopy returns the link as the netlink API would: if the link was created
+// via LinkAdd, a copy of the original concrete type (e.g. *netlink.Vxlan) with
+// up-to-date attributes; otherwise, a copy of the MockLink itself.
+func (l *MockLink) typedCopy() netlink.Link {
+	if l.ConcreteLink == nil {
+		return l.copy()
+	}
+	v := reflect.ValueOf(l.ConcreteLink).Elem()
+	cp := reflect.New(v.Type())
+	cp.Elem().Set(v)
+	link := cp.Interface().(netlink.Link)
+	*link.Attrs() = l.LinkAttrs
+	return link
 }

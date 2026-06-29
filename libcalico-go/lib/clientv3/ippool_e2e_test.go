@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1175,6 +1175,68 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			_, err = c.IPPools().Delete(ctx, "ippool1", options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			_, err = c.IPPools().Delete(ctx, "ippool2", options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("IPPool UpdateStatus functionality", func() {
+		It("should set and preserve status across spec updates", func() {
+			c, err := clientv3.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+
+			By("Creating an IPPool")
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool-status-test"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "10.0.0.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Setting status via UpdateStatus")
+			pool.Status = &apiv3.IPPoolStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:               "Ready",
+						Status:             metav1.ConditionTrue,
+						Reason:             "PoolReady",
+						Message:            "Pool is ready",
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			}
+			pool, err = c.IPPools().UpdateStatus(ctx, pool, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(HaveLen(1))
+			Expect(pool.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Getting the pool and verifying status is present")
+			pool, err = c.IPPools().Get(ctx, "ippool-status-test", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(HaveLen(1))
+			Expect(pool.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Updating the pool spec and verifying status is preserved")
+			pool.Spec.NATOutgoing = true
+			pool, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Getting the pool and verifying status is still present after spec update")
+			pool, err = c.IPPools().Get(ctx, "ippool-status-test", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Spec.NATOutgoing).To(BeTrue())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(HaveLen(1))
+			Expect(pool.Status.Conditions[0].Type).To(Equal("Ready"))
+
+			By("Cleaning up")
+			_, err = c.IPPools().Delete(ctx, "ippool-status-test", options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

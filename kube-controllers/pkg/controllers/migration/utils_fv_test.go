@@ -132,7 +132,7 @@ func startController(
 
 	ctrl := NewController(ControllerConfig{
 		Ctx:                 ctx,
-		K8sClient:           fvK8sClient,
+		K8sClient:           fvTestEnv.K8sClient,
 		BackendClient:       bc,
 		RTClient:            rt,
 		DynamicClient:       fvDynamicClient,
@@ -140,6 +140,7 @@ func startController(
 		CRDClient:           fvCRDClient,
 		Migrators:           NewMigrators(bc, fvRTClient),
 		WaitingPollInterval: 500 * time.Millisecond,
+		RestartFunc:         func() {},
 	})
 
 	stop := make(chan struct{})

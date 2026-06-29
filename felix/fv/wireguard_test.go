@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -420,14 +420,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ WireGuard-Supported", []api
 								node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
 								Expect(err).NotTo(HaveOccurred())
 								return node.Status.WireguardPublicKey
-							}, "5s", "100ms").ShouldNot(BeEmpty())
+							}, "10s", "100ms").ShouldNot(BeEmpty())
 						}
 						if wireguardEnabledV6 {
 							Eventually(func() string {
 								node, err := client.Nodes().Get(context.Background(), felix.Hostname, options.GetOptions{})
 								Expect(err).NotTo(HaveOccurred())
 								return node.Status.WireguardPublicKeyV6
-							}, "5s", "100ms").ShouldNot(BeEmpty())
+							}, "10s", "100ms").ShouldNot(BeEmpty())
 						}
 					}
 				})

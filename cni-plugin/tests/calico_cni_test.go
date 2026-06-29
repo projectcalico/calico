@@ -906,6 +906,7 @@ var _ = Describe("CalicoCni", func() {
 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
+			c.Env = append(os.Environ(), "CNI_COMMAND=VERSION")
 			stdin, err := c.StdinPipe()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -936,6 +937,7 @@ var _ = Describe("CalicoCni", func() {
 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
+			c.Env = append(os.Environ(), "CNI_COMMAND=VERSION")
 			stdin, err := c.StdinPipe()
 			Expect(err).ToNot(HaveOccurred())
 

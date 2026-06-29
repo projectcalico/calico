@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,18 +77,18 @@ func (s *mockSyncer) ConntrackDestIsService(ip net.IP, port uint16, proto uint8)
 	return true
 }
 
-func TestMergeHostMetadataV4V6Updates(t *testing.T) {
+func TestMergeHostMetadataUpdates(t *testing.T) {
 	RegisterTestingT(t)
-	existing := map[string]*proto.HostMetadataV4V6Update{
+	existing := map[string]*proto.HostMetadataUpdate{
 		"host1": {Hostname: "host1", Ipv4Addr: "1.1.1.1"},
 		"host2": {Hostname: "host2", Ipv4Addr: "2.2.2.2"},
 	}
 	latest := map[string]any{
-		"host1": &proto.HostMetadataV4V6Remove{Hostname: "host1"},
-		"host2": &proto.HostMetadataV4V6Update{Hostname: "host2", Ipv4Addr: "5.5.5.5"},
-		"host3": &proto.HostMetadataV4V6Update{Hostname: "host3", Ipv4Addr: "3.3.3.3"},
+		"host1": &proto.HostMetadataRemove{Hostname: "host1"},
+		"host2": &proto.HostMetadataUpdate{Hostname: "host2", Ipv4Addr: "5.5.5.5"},
+		"host3": &proto.HostMetadataUpdate{Hostname: "host3", Ipv4Addr: "3.3.3.3"},
 	}
-	mergeHostMetadataV4V6Updates(existing, latest)
+	mergeHostMetadataUpdates(existing, latest)
 
 	Expect(existing).To(HaveLen(2), "Expected host1 to be removed and host3 to be added")
 	Expect(existing).NotTo(HaveKey("host1"))
@@ -106,25 +106,25 @@ func TestOnUpdateBatchesHostMetadataUpdates(t *testing.T) {
 		pendingHostMetadataUpdates: make(map[string]any),
 	}
 
-	update := &proto.HostMetadataV4V6Update{
+	update := &proto.HostMetadataUpdate{
 		Hostname: "hn1",
 		Ipv4Addr: "1.2.3.4",
 		Labels:   map[string]string{"label1": "label1val"},
 	}
 	kp.OnUpdate(update)
 
-	update2 := &proto.HostMetadataV4V6Update{
+	update2 := &proto.HostMetadataUpdate{
 		Hostname: "hn2",
 		Ipv4Addr: "2.2.2.2",
 		Labels:   map[string]string{"label2": "label2val"},
 	}
 	kp.OnUpdate(update2)
 
-	Consistently(kp.pollHostMetadataV4V6UpdatesNonBlocking(), 100*time.Millisecond).Should(BeNil(), "No updates should have been sent before CompleteDeferredWork")
+	Consistently(kp.pollHostMetadataUpdatesNonBlocking(), 100*time.Millisecond).Should(BeNil(), "No updates should have been sent before CompleteDeferredWork")
 
 	Expect(kp.CompleteDeferredWork()).To(Succeed(), "CompleteDeferredWork should succeed")
 	// Read the queued update from the channel.
-	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(Equal(map[string]any{
+	Expect(kp.pollHostMetadataUpdatesNonBlocking()).To(Equal(map[string]any{
 		"hn1": update,
 		"hn2": update2,
 	}))
@@ -140,25 +140,25 @@ func TestCompleteDeferredWorkSendsEmptyUpdateOnce(t *testing.T) {
 	// First call with no pending updates should still send an empty map
 	// to signal the KP loop to start.
 	Expect(kp.CompleteDeferredWork()).To(Succeed())
-	msg := kp.pollHostMetadataV4V6UpdatesNonBlocking()
+	msg := kp.pollHostMetadataUpdatesNonBlocking()
 	Expect(msg).NotTo(BeNil(), "First call should send an empty update to unblock the KP loop")
 	Expect(msg).To(BeEmpty(), "The update should be an empty map")
 
 	// Second call with no pending updates should be a no-op.
 	Expect(kp.CompleteDeferredWork()).To(Succeed())
-	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(BeNil(),
+	Expect(kp.pollHostMetadataUpdatesNonBlocking()).To(BeNil(),
 		"Second call with no pending updates should not send anything")
 
 	// Sending a real update should still work after we're in sync.
-	kp.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "host1", Ipv4Addr: "1.1.1.1"})
+	kp.OnUpdate(&proto.HostMetadataUpdate{Hostname: "host1", Ipv4Addr: "1.1.1.1"})
 	Expect(kp.CompleteDeferredWork()).To(Succeed())
-	msg = kp.pollHostMetadataV4V6UpdatesNonBlocking()
+	msg = kp.pollHostMetadataUpdatesNonBlocking()
 	Expect(msg).To(HaveLen(1))
 	Expect(msg).To(HaveKey("host1"))
 
 	// And after that, no-op again with no pending updates.
 	Expect(kp.CompleteDeferredWork()).To(Succeed())
-	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(BeNil(),
+	Expect(kp.pollHostMetadataUpdatesNonBlocking()).To(BeNil(),
 		"Should not send when in sync and no pending updates")
 }
 
@@ -169,15 +169,15 @@ func TestOnUpdateRemoveOverwritesPendingUpdate(t *testing.T) {
 		pendingHostMetadataUpdates: make(map[string]any),
 	}
 
-	update1 := &proto.HostMetadataV4V6Update{
+	update1 := &proto.HostMetadataUpdate{
 		Hostname: "hn1",
 		Ipv4Addr: "1.2.3.4",
 	}
-	update2 := &proto.HostMetadataV4V6Update{
+	update2 := &proto.HostMetadataUpdate{
 		Hostname: "hn2",
 		Ipv4Addr: "1.2.3.4",
 	}
-	update1Remove := &proto.HostMetadataV4V6Remove{Hostname: "hn1"}
+	update1Remove := &proto.HostMetadataRemove{Hostname: "hn1"}
 
 	// Queue an update, then an immediate remove for the same hostname.
 	kp.OnUpdate(update1)
@@ -186,7 +186,7 @@ func TestOnUpdateRemoveOverwritesPendingUpdate(t *testing.T) {
 
 	Expect(kp.CompleteDeferredWork()).To(Succeed(), "CompleteDeferredWork should succeed")
 
-	Expect(kp.pollHostMetadataV4V6UpdatesNonBlocking()).To(Equal(map[string]any{
+	Expect(kp.pollHostMetadataUpdatesNonBlocking()).To(Equal(map[string]any{
 		"hn1": update1Remove,
 		"hn2": update2,
 	}))

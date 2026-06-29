@@ -15,6 +15,19 @@ import (
 //
 // FelixConfigurationSpec contains the values of the Felix configuration.
 type FelixConfigurationSpecApplyConfiguration struct {
+	// NodeSelector is an optional label selector that restricts this FelixConfiguration
+	// to apply only to nodes that match the given selector. This field is only valid
+	// on FelixConfiguration resources whose name is not "default" and does not start
+	// with "node.". For resources named "default", the configuration applies globally
+	// to all nodes. For resources named "node.<nodename>", the configuration applies to
+	// the named node only.
+	//
+	// At most one selector-scoped FelixConfiguration should match any given node.
+	// If multiple selector-scoped resources match, the oldest (by creation
+	// timestamp) is used and a warning is logged. This prevents an accidentally
+	// created conflicting resource from disrupting an existing, working
+	// configuration.
+	NodeSelector *string `json:"nodeSelector,omitempty"`
 	// UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it
 	// will launch an external dataplane driver and communicate with it over protobuf.
 	UseInternalDataplaneDriver *bool `json:"useInternalDataplaneDriver,omitempty"`
@@ -200,7 +213,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	IptablesMarkMask *uint32 `json:"iptablesMarkMask,omitempty"`
+	IptablesMarkMask *int64 `json:"iptablesMarkMask,omitempty"`
 	// DisableConntrackInvalidCheck disables the check for invalid connections in conntrack. While the conntrack
 	// invalid check helps to detect malicious traffic, it can also cause issues with certain multi-NIC scenarios.
 	DisableConntrackInvalidCheck *bool `json:"disableConntrackInvalidCheck,omitempty"`
@@ -363,7 +376,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
 	// number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
 	// [Default: 0xffff0000]
-	NftablesMarkMask *uint32 `json:"nftablesMarkMask,omitempty"`
+	NftablesMarkMask *int64 `json:"nftablesMarkMask,omitempty"`
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty"`
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
@@ -401,6 +414,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// Unset values are replaced by the default values with a warning log for
 	// incorrect values.
 	BPFConntrackTimeouts *BPFConntrackTimeoutsApplyConfiguration `json:"bpfConntrackTimeouts,omitempty"`
+	// BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
+	// This is the maximum time that the BPF dataplane will wait for all fragments of a
+	// fragmented IP packet to arrive before discarding them.  If left unset, the value
+	// is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
+	// seconds).
+	// [Default: unset - read from net.ipv4.ipfrag_time]
+	BPFIPFragTimeout *v1.Duration `json:"bpfIPFragTimeout,omitempty"`
 	// BPFLogFilters is a map of key=values where the value is
 	// a pcap filter expression and the key is an interface name with 'all'
 	// denoting all interfaces, 'weps' all workload endpoints and 'heps' all host
@@ -513,6 +533,12 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// BPFHostConntrackBypass Controls whether to bypass Linux conntrack in BPF mode for
 	// workloads and services. [Default: true - bypass Linux conntrack]
 	BPFHostConntrackBypass *bool `json:"bpfHostConntrackBypass,omitempty"`
+	// BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
+	// reassembles out-of-order IP fragments from external networks. This program requires
+	// a kernel newer than 5.10. When enabled (the default) and the program fails to load,
+	// Felix reports not-ready until the user sets this to false. When false, fragmented
+	// packets from external sources are dropped. [Default: true]
+	BPFIPFragmentReassemblyEnabled *bool `json:"bpfIPFragmentReassemblyEnabled,omitempty"`
 	// BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of
 	// what is the per-interfaces or global setting. Possible values are Disabled, Strict
 	// or Loose. [Default: Loose]
@@ -658,6 +684,19 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived
 	// floating IPs are always programmed, regardless of this setting.)
 	FloatingIPs *projectcalicov3.FloatingIPType `json:"floatingIPs,omitempty"`
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that fall within the same subnet as the host
+	// interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+	// subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+	LocalSubnetL2Reachability *projectcalicov3.LocalSubnetL2ReachabilityMode `json:"localSubnetL2Reachability,omitempty"`
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+	// LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+	// forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+	// to disable periodic re-announcement, leaving only the one-shot announce when an
+	// IP is added. [Default: 120s]
+	LocalSubnetL2ReachabilityRefreshInterval *v1.Duration `json:"localSubnetL2ReachabilityRefreshInterval,omitempty"`
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules (to allow inbound access to its own metrics ports). [Default: Disabled]
 	WindowsManageFirewallRules *projectcalicov3.WindowsManageFirewallRulesMode `json:"windowsManageFirewallRules,omitempty"`
 	// GoGCThreshold Sets the Go runtime's garbage collection threshold.  I.e. the percentage that the heap is
@@ -709,6 +748,14 @@ type FelixConfigurationSpecApplyConfiguration struct {
 // apply.
 func FelixConfigurationSpec() *FelixConfigurationSpecApplyConfiguration {
 	return &FelixConfigurationSpecApplyConfiguration{}
+}
+
+// WithNodeSelector sets the NodeSelector field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NodeSelector field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNodeSelector(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NodeSelector = &value
+	return b
 }
 
 // WithUseInternalDataplaneDriver sets the UseInternalDataplaneDriver field in the declarative configuration to the given value
@@ -1098,7 +1145,7 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithEndpointStatusPathPrefix(
 // WithIptablesMarkMask sets the IptablesMarkMask field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the IptablesMarkMask field is set to the value of the last call.
-func (b *FelixConfigurationSpecApplyConfiguration) WithIptablesMarkMask(value uint32) *FelixConfigurationSpecApplyConfiguration {
+func (b *FelixConfigurationSpecApplyConfiguration) WithIptablesMarkMask(value int64) *FelixConfigurationSpecApplyConfiguration {
 	b.IptablesMarkMask = &value
 	return b
 }
@@ -1519,7 +1566,7 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesFilterDenyAction(
 // WithNftablesMarkMask sets the NftablesMarkMask field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the NftablesMarkMask field is set to the value of the last call.
-func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesMarkMask(value uint32) *FelixConfigurationSpecApplyConfiguration {
+func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesMarkMask(value int64) *FelixConfigurationSpecApplyConfiguration {
 	b.NftablesMarkMask = &value
 	return b
 }
@@ -1577,6 +1624,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithBPFConntrackCleanupMode(v
 // If called multiple times, the BPFConntrackTimeouts field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFConntrackTimeouts(value *BPFConntrackTimeoutsApplyConfiguration) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFConntrackTimeouts = value
+	return b
+}
+
+// WithBPFIPFragTimeout sets the BPFIPFragTimeout field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFIPFragTimeout field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFIPFragTimeout(value v1.Duration) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFIPFragTimeout = &value
 	return b
 }
 
@@ -1777,6 +1832,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithBPFMapSizeIfState(value i
 // If called multiple times, the BPFHostConntrackBypass field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFHostConntrackBypass(value bool) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFHostConntrackBypass = &value
+	return b
+}
+
+// WithBPFIPFragmentReassemblyEnabled sets the BPFIPFragmentReassemblyEnabled field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFIPFragmentReassemblyEnabled field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFIPFragmentReassemblyEnabled(value bool) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFIPFragmentReassemblyEnabled = &value
 	return b
 }
 
@@ -2121,6 +2184,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithMTUIfacePattern(value str
 // If called multiple times, the FloatingIPs field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithFloatingIPs(value projectcalicov3.FloatingIPType) *FelixConfigurationSpecApplyConfiguration {
 	b.FloatingIPs = &value
+	return b
+}
+
+// WithLocalSubnetL2Reachability sets the LocalSubnetL2Reachability field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LocalSubnetL2Reachability field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLocalSubnetL2Reachability(value projectcalicov3.LocalSubnetL2ReachabilityMode) *FelixConfigurationSpecApplyConfiguration {
+	b.LocalSubnetL2Reachability = &value
+	return b
+}
+
+// WithLocalSubnetL2ReachabilityRefreshInterval sets the LocalSubnetL2ReachabilityRefreshInterval field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LocalSubnetL2ReachabilityRefreshInterval field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLocalSubnetL2ReachabilityRefreshInterval(value v1.Duration) *FelixConfigurationSpecApplyConfiguration {
+	b.LocalSubnetL2ReachabilityRefreshInterval = &value
 	return b
 }
 

@@ -60,7 +60,7 @@ describe('<QueryLabel />', () => {
     it('renders placeholder when query is empty', () => {
         render(<QueryLabel query={{}} />);
 
-        expect(screen.getByText('Add a query...')).toBeInTheDocument();
+        expect(screen.getByText('No filters applied')).toBeInTheDocument();
     });
 
     it('renders a badge for a single field', () => {

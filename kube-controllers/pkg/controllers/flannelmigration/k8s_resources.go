@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
 package flannelmigration
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"os/exec"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -26,8 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/kubectl/pkg/drain"
 )
 
 // daemonset holds a collection of helper functions for Kubernetes daemonset.
@@ -459,7 +466,7 @@ func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespa
 }
 
 // Execute command in a pod on a node. Get command output.
-func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace, containerName string, label map[string]string, args ...string) (string, error) {
+func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, restConfig *rest.Config, namespace, containerName string, label map[string]string, args ...string) (string, error) {
 	nodeName := string(n)
 	var pod v1.Pod
 	found := false
@@ -492,51 +499,124 @@ func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace,
 		return "", fmt.Errorf("failed to execute command in pod. Pod %s is not ready", pod.Name)
 	}
 
-	cmdArgs := []string{"exec", pod.Name, fmt.Sprintf("--namespace=%s", namespace), fmt.Sprintf("-c=%s", containerName), "--"}
-	cmdArgs = append(cmdArgs, args...)
-	out, err := exec.Command("/usr/bin/kubectl", cmdArgs...).CombinedOutput()
+	req := k8sClientset.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(pod.Name).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&v1.PodExecOptions{
+			Container: containerName,
+			Command:   args,
+			Stdout:    true,
+			Stderr:    true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
 	if err != nil {
-		log.Errorf("Kubectl exec %s(%s) error. \n ---%v--- \n%s\n ------", pod.Name, containerName, cmdArgs, string(out))
+		return "", fmt.Errorf("failed to build SPDY executor for %s/%s: %w", namespace, pod.Name, err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := executor.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}); err != nil {
+		log.WithError(err).Errorf("Exec %s(%s) error. \n ---%v--- \nstdout:\n%s\nstderr:\n%s\n ------", pod.Name, containerName, args, stdout.String(), stderr.String())
 		return "", err
 	}
 
-	log.Infof("Kubectl exec %s(%s) completed successfully. \n ---%v--- \n%s\n ------", pod.Name, containerName, cmdArgs, string(out))
-	return string(out), nil
+	log.Infof("Exec %s(%s) completed successfully. \n ---%v--- \n%s\n ------", pod.Name, containerName, args, stdout.String())
+	return stdout.String(), nil
 }
 
-func (n k8snode) Drain() error {
+func (n k8snode) Drain(k8sClientset *kubernetes.Clientset) error {
 	nodeName := string(n)
 	log.Infof("Start drain node %s", nodeName)
-	out, err := exec.Command("/usr/bin/kubectl", "drain",
-		"--ignore-daemonsets", "--delete-emptydir-data", "--force", nodeName).CombinedOutput()
-	if err != nil {
-		log.Errorf("Drain node %s. \n ---Drain Node--- \n%s\n ------", nodeName, string(out))
-		return err
+
+	helper := newDrainHelper(k8sClientset)
+	if err := cordonNode(k8sClientset, nodeName, true); err != nil {
+		return fmt.Errorf("failed to cordon node %s: %w", nodeName, err)
 	}
 
-	log.Infof("Drain node %s completed successfully. \n ---Drain Node Logs--- \n%s\n ------", nodeName, string(out))
+	list, errs := helper.GetPodsForDeletion(nodeName)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to list pods for drain on node %s: %w", nodeName, errors.Join(errs...))
+	}
+	if warnings := list.Warnings(); warnings != "" {
+		log.Warnf("Drain warnings for node %s: %s", nodeName, warnings)
+	}
+	if err := helper.DeleteOrEvictPods(list.Pods()); err != nil {
+		return fmt.Errorf("failed to drain node %s: %w", nodeName, err)
+	}
+
+	log.Infof("Drain node %s completed successfully.", nodeName)
 	return nil
 }
 
-func (n k8snode) Uncordon() error {
+func (n k8snode) Uncordon(k8sClientset *kubernetes.Clientset) error {
 	nodeName := string(n)
 	log.Infof("Start uncordon node %s", nodeName)
-	out, err := exec.Command("/usr/bin/kubectl", "uncordon", nodeName).CombinedOutput()
-	if err != nil {
-		log.Errorf("Uncordon node %s. \n ---Uncordon Node Logs--- \n%s\n ------", nodeName, string(out))
-		return err
+	if err := cordonNode(k8sClientset, nodeName, false); err != nil {
+		return fmt.Errorf("failed to uncordon node %s: %w", nodeName, err)
 	}
-
 	log.Infof("Uncordon node %s completed successfully.", nodeName)
 	return nil
 }
 
-func removeLabelForAllNodes(key string) error {
-	log.Infof("Start remove node label %s", key)
-	out, err := exec.Command("/usr/bin/kubectl", "label", "node", key+"-", "--all").CombinedOutput()
+// newDrainHelper returns a kubectl drain.Helper configured with the same
+// semantics as `kubectl drain --ignore-daemonsets --delete-emptydir-data --force`.
+func newDrainHelper(k8sClientset *kubernetes.Clientset) *drain.Helper {
+	return &drain.Helper{
+		Ctx:                 context.Background(),
+		Client:              k8sClientset,
+		Force:               true,
+		IgnoreAllDaemonSets: true,
+		DeleteEmptyDirData:  true,
+		GracePeriodSeconds:  -1,
+		Out:                 log.StandardLogger().WriterLevel(log.InfoLevel),
+		ErrOut:              log.StandardLogger().WriterLevel(log.WarnLevel),
+	}
+}
+
+// cordonNode sets the node's Unschedulable flag to the desired value using
+// kubectl's CordonHelper, which patches only when an update is required.
+func cordonNode(k8sClientset *kubernetes.Clientset, nodeName string, desired bool) error {
+	node, err := k8sClientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
-		log.Errorf("Remove label node %s. \n ---Remove Node Label Logs--- \n %s \n ------", key, string(out))
 		return err
+	}
+	cordonHelper := drain.NewCordonHelper(node)
+	if !cordonHelper.UpdateIfRequired(desired) {
+		return nil
+	}
+	if err, patchErr := cordonHelper.PatchOrReplaceWithContext(context.Background(), k8sClientset, false); err != nil || patchErr != nil {
+		if err != nil {
+			return err
+		}
+		return patchErr
+	}
+	return nil
+}
+
+func removeLabelForAllNodes(k8sClientset *kubernetes.Clientset, key string) error {
+	log.Infof("Start remove node label %s", key)
+
+	nodes, err := k8sClientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	// Escape the label key per RFC 6901 so it can be used in a JSON Patch path.
+	escaped := strings.ReplaceAll(strings.ReplaceAll(key, "~", "~0"), "/", "~1")
+	patch := []byte(fmt.Sprintf(`[{"op":"remove","path":"/metadata/labels/%s"}]`, escaped))
+
+	for _, node := range nodes.Items {
+		if _, ok := node.Labels[key]; !ok {
+			continue
+		}
+		if _, err := k8sClientset.CoreV1().Nodes().Patch(context.Background(), node.Name, types.JSONPatchType, patch, metav1.PatchOptions{}); err != nil {
+			return fmt.Errorf("failed to remove label %s from node %s: %w", key, node.Name, err)
+		}
 	}
 
 	log.Infof("Remove node label %s completed successfully.", key)

@@ -48,6 +48,7 @@ import (
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
 	bpfnat "github.com/projectcalico/calico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/calico/felix/bpf/proxy"
+	"github.com/projectcalico/calico/felix/bpf/qos"
 	bpfringbuf "github.com/projectcalico/calico/felix/bpf/ringbuf"
 	bpfroutes "github.com/projectcalico/calico/felix/bpf/routes"
 	"github.com/projectcalico/calico/felix/bpf/tc"
@@ -166,15 +167,17 @@ type Config struct {
 
 	MaxIPSetSize int
 
-	RouteSyncDisabled              bool
-	IptablesBackend                string
-	IPSetsRefreshInterval          time.Duration
-	RouteRefreshInterval           time.Duration
-	DeviceRouteSourceAddress       net.IP
-	DeviceRouteSourceAddressIPv6   net.IP
-	DeviceRouteProtocol            netlink.RouteProtocol
-	RemoveExternalRoutes           bool
-	ProgramClusterRoutes           bool
+	RouteSyncDisabled            bool
+	IptablesBackend              string
+	IPSetsRefreshInterval        time.Duration
+	RouteRefreshInterval         time.Duration
+	DeviceRouteSourceAddress     net.IP
+	DeviceRouteSourceAddressIPv6 net.IP
+	DeviceRouteProtocol          netlink.RouteProtocol
+	RemoveExternalRoutes         bool
+	ProgramClusterRoutes         bool
+	NoEncapEnabled               bool
+
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -184,6 +187,9 @@ type Config struct {
 	XDPRefreshInterval             time.Duration
 
 	FloatingIPsEnabled bool
+
+	LocalSubnetL2Reachability                string
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration
 
 	Wireguard wireguard.Config
 
@@ -246,12 +252,14 @@ type Config struct {
 	BPFMaglevLUTSize                   int
 	BPFIpv6Enabled                     bool
 	BPFHostConntrackBypass             bool
+	BPFIPFragmentReassemblyEnabled     bool
 	BPFEnforceRPF                      string
 	BPFDisableGROForIfaces             *regexp.Regexp
 	BPFExcludeCIDRsFromNAT             []string
 	BPFExportBufferSizeMB              int
 	BPFRedirectToPeer                  string
 	BPFAttachType                      apiv3.BPFAttachOption
+	BPFIPFragTimeout                   time.Duration
 
 	BPFProfiling               string
 	KubeProxyMinSyncPeriod     time.Duration
@@ -269,7 +277,7 @@ type Config struct {
 
 	LookPathOverride func(file string) (string, error)
 
-	KubeClientSet *kubernetes.Clientset
+	KubeClientSet kubernetes.Interface
 
 	FeatureDetectOverrides map[string]string
 	FeatureGates           map[string]string
@@ -362,7 +370,7 @@ type InternalDataplane struct {
 	vxlanManagerV6      *vxlanManager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
-	linkAddrsManagers []*linkaddrs.LinkAddrsManager
+	linkAddrsManagers []linkaddrs.Interface
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -647,16 +655,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var routeTableV4 routetable.Interface
 	var routeTableV6 routetable.Interface
+	var mainTablePolV4 *ownershippol.MainTableOwnershipPolicy
+	var mainTablePolV6 *ownershippol.MainTableOwnershipPolicy
 
 	if !config.RouteSyncDisabled {
 		log.Debug("Route management is enabled.")
+		mainTablePolV4 = ownershippol.NewMainTable(
+			dataplanedefs.VXLANIfaceNameV4,
+			config.DeviceRouteProtocol,
+			config.RulesConfig.WorkloadIfacePrefixes,
+			config.RemoveExternalRoutes,
+		)
 		routeTableV4 = routetable.New(
-			ownershippol.NewMainTable(
-				dataplanedefs.VXLANIfaceNameV4,
-				config.DeviceRouteProtocol,
-				config.RulesConfig.WorkloadIfacePrefixes,
-				config.RemoveExternalRoutes,
-			),
+			mainTablePolV4,
 			4,
 			config.NetlinkTimeout,
 			config.DeviceRouteSourceAddress,
@@ -670,13 +681,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			routetable.WithRouteCleanupGracePeriod(routeCleanupGracePeriod),
 		)
 		if config.IPv6Enabled {
+			mainTablePolV6 = ownershippol.NewMainTable(
+				dataplanedefs.VXLANIfaceNameV6,
+				config.DeviceRouteProtocol,
+				config.RulesConfig.WorkloadIfacePrefixes,
+				config.RemoveExternalRoutes,
+			)
 			routeTableV6 = routetable.New(
-				ownershippol.NewMainTable(
-					dataplanedefs.VXLANIfaceNameV6,
-					config.DeviceRouteProtocol,
-					config.RulesConfig.WorkloadIfacePrefixes,
-					config.RemoveExternalRoutes,
-				),
+				mainTablePolV6,
 				6,
 				config.NetlinkTimeout,
 				config.DeviceRouteSourceAddressIPv6,
@@ -704,31 +716,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.mainRouteTables = append(dp.mainRouteTables, routeTableV6)
 	}
 
-	// If no overlay is enabled, and Felix is responsible for programming routes, starts a manager to
-	// program no encapsulation routes.
-	if config.ProgramClusterRoutes {
-		if !config.RulesConfig.VXLANEnabled && !config.RulesConfig.IPIPEnabled && !config.RulesConfig.WireguardEnabled {
-			log.Info("Unencapsulated IPv4 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
-			dp.noEncapManager = newNoEncapManager(
-				routeTableV4,
-				4,
-				config,
-				dp.loopSummarizer,
-			)
-			dp.noEncapParentIfaceC = make(chan string, 1)
-			go dp.noEncapManager.monitorParentDevice(
-				context.Background(),
-				time.Second*10,
-				dp.noEncapParentIfaceC,
-			)
-			dp.RegisterManager(dp.noEncapManager)
-		}
+	// Start a noEncap manager if an IP pool with no encapsulation exists.
+	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
+		dp.noEncapManager = newNoEncapManager(
+			routeTableV4,
+			4,
+			config,
+			dp.loopSummarizer,
+		)
+		dp.noEncapParentIfaceC = make(chan string, 1)
+		go dp.noEncapManager.monitorParentDevice(
+			context.Background(),
+			time.Second*10,
+			dp.noEncapParentIfaceC,
+		)
+		dp.RegisterManager(dp.noEncapManager)
 
-		if config.IPv6Enabled &&
-			!config.RulesConfig.VXLANEnabledV6 && !config.RulesConfig.WireguardEnabledV6 {
-			log.Info("Unencapsulated IPv6 route programming enabled, starting thread to keep no encapsulation routes in sync.")
-			// Add a manager to keep the all-hosts IP set up to date.
+		if config.IPv6Enabled {
+			log.Info("NoEncap IP pool present, starting thread to keep IPv6 noencap routes in sync.")
 			dp.noEncapManagerV6 = newNoEncapManager(
 				routeTableV6,
 				6,
@@ -742,6 +748,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				dp.noEncapParentIfaceCV6,
 			)
 			dp.RegisterManager(dp.noEncapManagerV6)
+		}
+	}
+
+	// Register the proxy neighbor managers when enabled. They listen on raw sockets
+	// and respond to ARP (IPv4) / NDP (IPv6) requests for pod and LB IPs that fall
+	// within the same subnet as a host physical interface.
+	if apiv3.LocalSubnetL2ReachabilityMode(config.LocalSubnetL2Reachability) != apiv3.LocalSubnetL2ReachabilityDisabled {
+		proxyNeighMgr4 := newProxyNeighManager(config, 4)
+		dp.RegisterManager(proxyNeighMgr4)
+		if config.IPv6Enabled {
+			proxyNeighMgr6 := newProxyNeighManager(config, 6)
+			dp.RegisterManager(proxyNeighMgr6)
 		}
 	}
 
@@ -1101,6 +1119,26 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			collectorConntrackInfoReader = collectorCtInfoReader
 		}
 
+		// Add connection limit scanner as a low-frequency drift safety net.
+		// It piggybacks on the CT scan loop but downsamples its recount work
+		// internally (see connLimitScannerRunEveryN in connlimit_scanner.go),
+		// so the actual recount runs roughly every 30s. It covers silent
+		// CT-entry purges that the BPF fast-path can't observe: half-close,
+		// idle TCPEstablished timeout, network partition, and LRU eviction.
+		if bpfEndpointManager != nil {
+			connLimitProvider := func() map[string]bpfconntrack.ConnLimitPodInfo {
+				return bpfEndpointManager.GetConnLimitedPodInfo()
+			}
+			if conntrackScannerV4 != nil {
+				conntrackScannerV4.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV4))
+			}
+			if conntrackScannerV6 != nil {
+				conntrackScannerV6.AddUnlocked(bpfconntrack.NewConnLimitScanner(
+					bpfMaps.CommonMaps.QoSConnMap, connLimitProvider, qos.IPFamilyV6))
+			}
+		}
+
 		if conntrackScannerV4 != nil {
 			conntrackScannerV4.Start()
 		}
@@ -1140,7 +1178,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.arpTables = append(dp.arpTables, arpFilterTable)
 	}
 
-	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	var linkAddrsManagerV4 linkaddrs.Interface
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled. Using default LinkAddrsManager")
+
+		linkAddrsManagerV4 = linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	} else {
+		log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+		linkAddrsManagerV4 = &linkaddrs.DummyLinkAddrsManager{}
+	}
+
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
@@ -1173,6 +1220,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
 	dp.liveMigrationMonitor.listener = epManager
+	if mainTablePolV4 != nil {
+		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
+	}
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4, config.FloatingIPsEnabled))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 
@@ -1353,10 +1403,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
-		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		var linkAddrsManagerV6 linkaddrs.Interface
+		if !config.RouteSyncDisabled {
+			log.Debug("Route management is enabled. Using default LinkAddrsManager")
+			linkAddrsManagerV6 = linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		} else {
+			log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+			linkAddrsManagerV6 = &linkaddrs.DummyLinkAddrsManager{}
+		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
-		dp.RegisterManager(newEndpointManager(
+		epManagerV6 := newEndpointManager(
 			&endpointManagerConfig{
 				kubeIPVSSupportEnabled: config.RulesConfig.KubeIPVSSupportEnabled,
 				wlInterfacePrefixes:    config.RulesConfig.WorkloadIfacePrefixes,
@@ -1382,7 +1439,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			linkAddrsManagerV6,
 			nil, // arpTable - ARP is IPv4 only
 			nil, // arpMaps
-		))
+		)
+		dp.RegisterManager(epManagerV6)
+		if mainTablePolV6 != nil {
+			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
+		}
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
@@ -3062,6 +3123,7 @@ func startBPFDataplaneComponents(
 	}
 
 	workloadRemoveChan := make(chan string, 1000)
+
 	conntrackScanner := bpfconntrack.NewScanner(maps.CtMap, ctKey, ctVal,
 		config.ConfigChangedRestartCallback,
 		config.BPFMapSizeConntrackScaling, maps.CtCleanupMap.(bpfmaps.MapWithExistsCheck),

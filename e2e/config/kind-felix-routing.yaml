@@ -1,0 +1,30 @@
+# kind-felix-routing.yaml - test selection for the Felix-routing kind e2e CI
+# job.
+#
+# Used by `make e2e-test` with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1,
+# which deploys the aggregated Calico API server. RequiresCalicoAPIServer tests
+# run here (and not in the BIRD job, which runs in v3 CRD mode). BGP tests are
+# excluded since Felix routing doesn't run BIRD.
+#
+# This config is standalone (doesn't extend base.yaml) because it uses a
+# narrower include scope (Conformance-only for sig-calico) that can't be
+# expressed as an additive extension of base's broader sig-calico include.
+
+include:
+  - Conformance && sig-calico
+  - Conformance && sig-network
+  - RequiresCalicoAPIServer
+
+exclude:
+  labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
+
+    - label: ExternalNode
+      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
+
+    - label: Feature:BGPPeer
+      reason: "Felix routing (no BIRD) can't run BGP tests"

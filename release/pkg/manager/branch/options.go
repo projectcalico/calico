@@ -51,7 +51,7 @@ func WithReleaseBranchPrefix(prefix string) Option {
 	}
 }
 
-func WithValidate(validate bool) Option {
+func WithValidation(validate bool) Option {
 	return func(b *BranchManager) error {
 		b.validate = validate
 		return nil

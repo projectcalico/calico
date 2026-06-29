@@ -27,6 +27,13 @@ import (
 // internal metadata. It is filtered out during conversion.
 const internalMetadataAnnotation = "projectcalico.org/metadata"
 
+// DefaultConvert is the exported form of defaultConvert. It is intended for
+// resource-specific converters that need to augment the standard deep-copy
+// and metadata-cleaning step with additional normalisation logic.
+func DefaultConvert[T any](kvp *model.KVPair) (*T, error) {
+	return defaultConvert[T](kvp)
+}
+
 // defaultConvert performs a deep copy of the v1 resource and cleans server-side
 // metadata fields. The UID and OwnerReferences are preserved so callers can
 // use them for UID mapping and OwnerRef remapping before creation.

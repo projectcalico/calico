@@ -36,6 +36,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: handle_id
       type:
         scalar: string
+    - name: releasedAt
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: secondary
       type:
         map:
@@ -87,7 +90,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Community
-          elementRelationship: associative
+          elementRelationship: atomic
     - name: ignoredInterfaces
       type:
         list:
@@ -126,7 +129,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.PrefixAdvertisement
-          elementRelationship: associative
+          elementRelationship: atomic
     - name: programClusterRoutes
       type:
         scalar: string
@@ -135,13 +138,13 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceClusterIPBlock
-          elementRelationship: associative
+          elementRelationship: atomic
     - name: serviceExternalIPs
       type:
         list:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceExternalIPBlock
-          elementRelationship: associative
+          elementRelationship: atomic
     - name: serviceLoadBalancerAggregation
       type:
         scalar: string
@@ -150,7 +153,7 @@ var schemaYAML = typed.YAMLObject(`types:
         list:
           elementType:
             namedType: com.github.projectcalico.api.pkg.apis.projectcalico.v3.ServiceLoadBalancerIPBlock
-          elementRelationship: associative
+          elementRelationship: atomic
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.BGPDaemonStatus
   map:
     fields:
@@ -894,6 +897,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfHostNetworkedNATWithoutCTLB
       type:
         scalar: string
+    - name: bpfIPFragTimeout
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: bpfIPFragmentReassemblyEnabled
+      type:
+        scalar: boolean
     - name: bpfJITHardening
       type:
         scalar: string
@@ -1170,6 +1179,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: liveMigrationRouteConvergenceTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: localSubnetL2Reachability
+      type:
+        scalar: string
+    - name: localSubnetL2ReachabilityRefreshInterval
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
     - name: logActionRateLimit
       type:
         scalar: string
@@ -1236,6 +1251,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: nftablesRefreshInterval
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: nodeSelector
+      type:
+        scalar: string
     - name: openstackRegion
       type:
         scalar: string
@@ -1656,6 +1674,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
+    - name: ipCooldownSeconds
+      type:
+        scalar: numeric
     - name: kubeVirtVMAddressPersistence
       type:
         scalar: string

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -213,14 +213,25 @@ func (c *loadBalancerController) onServiceUpdate(objNew any, objOld any) {
 	}
 }
 
-func (c *loadBalancerController) onServiceDelete(objNew any) {
-	if svc, ok := objNew.(*v1.Service); ok {
-		svcKey, err := serviceKeyFromService(svc)
-		if err != nil {
+func (c *loadBalancerController) onServiceDelete(obj any) {
+	svc, ok := obj.(*v1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in Service delete event")
 			return
 		}
-		c.serviceUpdates <- *svcKey
+		svc, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			log.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-Service object")
+			return
+		}
 	}
+	svcKey, err := serviceKeyFromService(svc)
+	if err != nil {
+		return
+	}
+	c.serviceUpdates <- *svcKey
 }
 
 func (c *loadBalancerController) RegisterWith(f *utils.DataFeed) {
@@ -429,6 +440,21 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) {
+	if c.syncStatus != bapi.InSync {
+		// Defer service sync until the syncer has replayed all existing IPAM blocks
+		// into allocationTracker. Otherwise a service event observed during the cold-start
+		// window would see an empty tracker and allocate a fresh IP alongside the historical
+		// one that arrives later, leaving the service with more IPs than its IPFamilyPolicy
+		// permits. Events received pre-InSync are picked up by syncIPAM, which is kicked
+		// once the syncer reaches InSync.
+		log.WithFields(log.Fields{
+			"status":    c.syncStatus,
+			"namespace": svcKey.namespace,
+			"name":      svcKey.name,
+		}).Debug("Syncer not yet InSync; deferring service sync")
+		return
+	}
+
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status

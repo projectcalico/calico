@@ -17,6 +17,15 @@ tox: build-test-container
 tox-%: upper-constraints-%.txt
 	$(MAKE) tox PIP_CONSTRAINT=/code/upper-constraints-$*.txt
 
+# Functional-verification tests.  Separate target because they spawn a
+# real etcd subprocess and use eventlet's cooperative I/O, so they can't
+# run alongside the standard unit-test discovery (see tox.ini's [testenv:fv]).
+tox-fv: build-test-container
+	$(RUN_TEST_CONTAINER) tox -e fv
+
+tox-fv-%: upper-constraints-%.txt
+	$(MAKE) tox-fv PIP_CONSTRAINT=/code/upper-constraints-$*.txt
+
 upper-constraints-caracal.txt:
 	curl -fsSL --retry 5 https://raw.githubusercontent.com/openstack/requirements/refs/heads/$$(./infer-openstack-branch.sh caracal requirements)/upper-constraints.txt -o $@
 

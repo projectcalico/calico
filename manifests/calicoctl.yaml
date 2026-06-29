@@ -1,7 +1,7 @@
 # Calico Version master
 # https://projectcalico.docs.tigera.io/releases#master
 # This manifest includes the following component versions:
-#   calico/ctl:master
+#   calico/calico:master
 
 apiVersion: v1
 kind: ServiceAccount
@@ -22,9 +22,9 @@ spec:
   serviceAccountName: calicoctl
   containers:
     - name: calicoctl
-      image: quay.io/calico/ctl:master
+      image: quay.io/calico/calico:master
       command:
-        - calicoctl
+        - /usr/bin/calicoctl
       args:
         - version
         - --poll=1m

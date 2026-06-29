@@ -215,7 +215,7 @@ var _ = Describe("Test the WorkloadEndpoint update processor", func() {
 
 		_, err := up.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: cnet.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(cnet.MustParseIP("1.2.3.4")),
 			},
 			Value:    res,
 			Revision: "abcde",

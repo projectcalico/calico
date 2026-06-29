@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/lib/std/chanutil"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/whisker-backend/cmd/app"
+	"github.com/projectcalico/calico/whisker-backend/cmd/whiskerbackend"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
 	wconfig "github.com/projectcalico/calico/whisker-backend/pkg/config"
 )
@@ -95,7 +95,7 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 		}
 		whiskerCfg.ConfigureLogging()
 		wg.Go(func() {
-			app.Run(ctx, whiskerCfg)
+			whiskerbackend.Run(ctx, whiskerCfg)
 		})
 
 		cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
@@ -204,7 +204,7 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 	whiskerCfg.ConfigureLogging()
 
 	wg.Go(func() {
-		app.Run(ctx, whiskerCfg)
+		whiskerbackend.Run(ctx, whiskerCfg)
 	})
 
 	// We want to actually wait 5 seconds, not use our fake time for this.

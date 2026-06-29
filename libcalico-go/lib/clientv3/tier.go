@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 type TierInterface interface {
 	Create(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error)
 	Update(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error)
+	UpdateStatus(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.Tier, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.Tier, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.TierList, error)
@@ -78,6 +79,16 @@ func (r tiers) Update(ctx context.Context, res *apiv3.Tier, opts options.SetOpti
 		return nil, err
 	}
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindTier, res)
+	if out != nil {
+		return out.(*apiv3.Tier), err
+	}
+	return nil, err
+}
+
+// UpdateStatus takes the representation of a Tier and updates its status.
+// Returns the stored representation of the Tier, and an error, if there is any.
+func (r tiers) UpdateStatus(ctx context.Context, res *apiv3.Tier, opts options.SetOptions) (*apiv3.Tier, error) {
+	out, err := r.client.resources.UpdateStatus(ctx, opts, apiv3.KindTier, res)
 	if out != nil {
 		return out.(*apiv3.Tier), err
 	}

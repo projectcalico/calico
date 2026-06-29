@@ -44,15 +44,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			}, "60s", "500ms").Should(Equal(fmt.Sprint(mtu)))
 		}
 		if BPFMode() {
-			// Wait for all BPF programs to be attached before checking
-			// bpfin/bpfout devices; they are only created after all BPF
-			// maps are loaded.
-			ensureAllNodesBPFProgramsAttached(tc.Felixes)
+			// Check the MTU on bpfin/bpfout devices.  Use a longer
+			// timeout since after a Felix restart the devices may not
+			// exist yet.
 			felix := tc.Felixes[0]
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfin.cali")
 				return out
-			}, "5s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
+			}, "10s", "500ms").Should(ContainSubstring(fmt.Sprintf("mtu %d", mtu)))
 			EventuallyWithOffset(1, func() string {
 				out, _ := felix.ExecOutput("ip", "link", "show", "dev", "bpfout.cali")
 				return out

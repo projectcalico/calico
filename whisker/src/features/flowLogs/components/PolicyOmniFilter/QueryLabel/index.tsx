@@ -2,7 +2,15 @@ import React from 'react';
 import { Badge, Text } from '@chakra-ui/react';
 import { QuerySelect } from '../QueryList';
 
-const QueryLabel: React.FC<{ query: QuerySelect }> = ({ query }) => {
+type QueryLabelProps = {
+    query: QuerySelect;
+    showEmptyMessage?: boolean;
+};
+
+const QueryLabel: React.FC<QueryLabelProps> = ({
+    query,
+    showEmptyMessage = true,
+}) => {
     const label = [
         query.kind && `(kind = ${query.kind.label})`,
         query.tier && `(tier = ${query.tier.label})`,
@@ -21,7 +29,7 @@ const QueryLabel: React.FC<{ query: QuerySelect }> = ({ query }) => {
 
     if (label.length > 0) {
         return (
-            <div className='flex gap-1'>
+            <div className='flex gap-1 mr-4 flex-wrap'>
                 {labels.map((label, index) => (
                     <div className='flex gap-1' key={label}>
                         <Badge
@@ -44,16 +52,16 @@ const QueryLabel: React.FC<{ query: QuerySelect }> = ({ query }) => {
     }
 
     return (
-        <span className='text-left flex-1 text-tigera-token-fg-subtle text-sm'>
-            Add a query...
+        <span
+            className={`text-left flex-1 text-tigera-token-fg-subtle text-sm min-h-[20px] transition-opacity duration-200 ${showEmptyMessage ? 'opacity-100' : 'opacity-0'}`}
+        >
+            No filters applied
         </span>
     );
 };
 
-export const arePropsEqual = (
-    prev: { query: QuerySelect },
-    next: { query: QuerySelect },
-) =>
+export const arePropsEqual = (prev: QueryLabelProps, next: QueryLabelProps) =>
+    prev.showEmptyMessage === next.showEmptyMessage &&
     prev.query.kind?.value === next.query.kind?.value &&
     prev.query.tier?.value === next.query.tier?.value &&
     prev.query.namespace?.value === next.query.namespace?.value &&

@@ -26,7 +26,7 @@ import (
 	"time"
 
 	"github.com/docopt/docopt-go"
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/shirou/gopsutil/v4/process"
 	log "github.com/sirupsen/logrus"
 
@@ -222,7 +222,7 @@ func printBIRDPeers(ipv string) error {
 	if err != nil {
 		// If that fails, try connecting to bird socket in `/var/run/bird` (which is the
 		// default socket location for bird install) for non-containerized installs
-		log.Debugln("Failed to connect to BIRD socket in /var/run/calic, trying /var/run/bird")
+		log.Debugln("Failed to connect to BIRD socket in /var/run/calico, trying /var/run/bird")
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
 			fmt.Printf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
@@ -337,23 +337,15 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 
 // printPeers prints out the slice of peers in table format.
 func printPeers(peers []bgpPeer) {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Peer address", "Peer type", "State", "Since", "Info"})
-
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.AppendHeader(table.Row{"Peer address", "Peer type", "State", "Since", "Info"})
 	for _, peer := range peers {
 		info := peer.BGPState
 		if peer.Info != "" {
 			info += " " + peer.Info
 		}
-		row := []string{
-			peer.PeerIP,
-			peer.PeerType,
-			peer.State,
-			peer.Since,
-			info,
-		}
-		table.Append(row)
+		t.AppendRow(table.Row{peer.PeerIP, peer.PeerType, peer.State, peer.Since, info})
 	}
-
-	table.Render()
+	t.Render()
 }

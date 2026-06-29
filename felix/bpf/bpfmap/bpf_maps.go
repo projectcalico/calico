@@ -57,17 +57,20 @@ type IPMaps struct {
 }
 
 type CommonMaps struct {
-	StateMap         maps.Map
-	IfStateMap       maps.Map
-	RuleCountersMap  maps.Map
-	CountersMap      maps.Map
-	ProgramsMaps     []maps.Map
-	JumpMaps         []maps.MapWithDeleteIfExists
-	XDPProgramsMap   maps.Map
-	XDPJumpMap       maps.MapWithDeleteIfExists
-	ProfilingMap     maps.Map
-	CTLBProgramsMaps []maps.Map
-	QoSMap           maps.MapWithUpdateWithFlags
+	StateMap           maps.Map
+	IfStateMap         maps.Map
+	RuleCountersMap    maps.Map
+	CountersMap        maps.Map
+	ProgramsMaps       []maps.Map
+	JumpMaps           []maps.MapWithDeleteIfExists
+	NetkitProgramsMaps []maps.Map
+	NetkitJumpMaps     []maps.MapWithDeleteIfExists
+	XDPProgramsMap     maps.Map
+	XDPJumpMap         maps.MapWithDeleteIfExists
+	ProfilingMap       maps.Map
+	CTLBProgramsMaps   []maps.Map
+	QoSMap             maps.MapWithUpdateWithFlags
+	QoSConnMap         maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -101,10 +104,16 @@ func getCommonMaps() *CommonMaps {
 		ProfilingMap:     profiling.Map(),
 		CTLBProgramsMaps: nat.ProgramsMaps(),
 		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
+		QoSConnMap:       qos.ConnMap().(maps.MapWithUpdateWithFlags),
 	}
 	jumpMaps := jump.Maps()
 	for _, jm := range jumpMaps {
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
+	}
+	commonMaps.NetkitProgramsMaps = hook.NewNetkitProgramsMaps()
+	netkitJumpMaps := jump.NetkitMaps()
+	for _, jm := range netkitJumpMaps {
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, jm.(maps.MapWithDeleteIfExists))
 	}
 	return commonMaps
 }
@@ -200,10 +209,15 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.XDPJumpMap,
 		c.ProfilingMap,
 		c.QoSMap,
+		c.QoSConnMap,
 	}
 	mapslice = append(mapslice, c.ProgramsMaps...)
+	mapslice = append(mapslice, c.NetkitProgramsMaps...)
 	mapslice = append(mapslice, c.CTLBProgramsMaps...)
 	for _, m := range c.JumpMaps {
+		mapslice = append(mapslice, m)
+	}
+	for _, m := range c.NetkitJumpMaps {
 		mapslice = append(mapslice, m)
 	}
 	return mapslice

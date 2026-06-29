@@ -5,12 +5,13 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
+import { Text } from '@/libs/tigera/ui-components/components/common/text';
 import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
-import { Flex, Text } from '@chakra-ui/react';
+import { Text as ChakraText, Flex } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
-import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
 import NoPolicyCheckbox from './NoPolicyCheckbox';
+import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
 import { transformToFilterOptions, transformToQueries } from './utils';
 
 export type PolicyFilter = Partial<Record<PolicyFilterKey, string>>;
@@ -39,7 +40,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
     const isNoPolicy = checkIsNoPolicy(selectedFilters);
     const [noPolicyChecked, setNoPolicyChecked] = React.useState(isNoPolicy);
     const [queryState, setQueryState] = React.useState<PolicyQuery[]>(
-        isNoPolicy ? [] : transformToQueries(selectedFilters),
+        isNoPolicy ? [{}] : transformToQueries(selectedFilters),
     );
     const filterCount = selectedFilters.length;
     const isActive = filterCount > 0;
@@ -81,7 +82,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                         isActive={isActive}
                         customContent={
                             <Flex>
-                                <Text>Policy</Text>
+                                <ChakraText>Policy</ChakraText>
                                 {isActive && (
                                     <Badge ml={2}>{filterCount}</Badge>
                                 )}
@@ -89,7 +90,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                         }
                     />
                     <OmniFilterContent
-                        width={noPolicyChecked ? '300px' : '800px'}
+                        width={noPolicyChecked ? '300px' : '850px'}
                     >
                         <OmniFilterBody
                             p={4}
@@ -99,6 +100,25 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                         >
                             {!noPolicyChecked && (
                                 <>
+                                    <div>
+                                        <Text size='base' className='font-bold'>
+                                            Policy filter
+                                        </Text>
+                                        <span className=' text-tigera-token-fg-support text-sm'>
+                                            Filter by policy attributes (kind,
+                                            tier, namespace, name) using{' '}
+                                            <span className='font-bold'>
+                                                AND
+                                            </span>
+                                            . Multiple filters are combined
+                                            using{' '}
+                                            <span className='font-bold'>
+                                                OR
+                                            </span>
+                                            .
+                                        </span>
+                                    </div>
+
                                     <QueryList
                                         queries={queryState}
                                         onChange={setQueryState}
@@ -123,6 +143,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
                             rightButtonProps={{
                                 onClick: () => {
                                     onClose();
+                                    setQueryState([{}]);
                                     handleChange();
                                 },
                             }}

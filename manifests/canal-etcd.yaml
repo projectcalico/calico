@@ -162,7 +162,7 @@ rules:
       - watch
       - list
   # Needed for policy name migrator.
-  - apiGroups: ["crd.projectcalico.org"]
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
@@ -175,14 +175,15 @@ rules:
       - create
       - update
       - delete
-  # Needed for policy name migrator to check calico/node daemonset status.
+  # Needed for migration controller to watch calico-node and calico-typha status.
   - apiGroups: ["apps"]
     resources:
       - daemonsets
+      - deployments
     verbs:
       - get
-    resourceNames:
-      - calico-node
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -448,9 +449,9 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          command: ["/opt/cni/bin/install"]
+          args: ["cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.
@@ -521,7 +522,7 @@ spec:
         - name: "ebpf-bootstrap"
           image: quay.io/calico/node:master
           imagePullPolicy: IfNotPresent
-          command: ["calico-node", "-init", "-best-effort"]
+          command: ["calico", "component", "node", "init", "--best-effort"]
           volumeMounts:
             - mountPath: /sys/fs
               name: sys-fs
@@ -625,13 +626,18 @@ spec:
             preStop:
               exec:
                 command:
-                  - /bin/calico-node
-                  - -shutdown
+                  - calico
+                  - component
+                  - node
+                  - shutdown
           livenessProbe:
             exec:
               command:
-                - /bin/calico-node
-                - -felix-live
+                - calico
+                - component
+                - node
+                - health
+                - --felix-live
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
@@ -847,8 +853,9 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:master
+          image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
+          args: ["component", "kube-controllers"]
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -884,7 +891,10 @@ spec:
           livenessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -l
             periodSeconds: 10
             initialDelaySeconds: 10
@@ -893,7 +903,10 @@ spec:
           readinessProbe:
             exec:
               command:
-                - /usr/bin/check-status
+                - /usr/bin/calico
+                - component
+                - kube-controllers
+                - kube-controllers-health
                 - -r
             periodSeconds: 10
           securityContext:

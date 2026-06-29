@@ -148,11 +148,6 @@ func (s *Maps) AddOrReplaceMap(meta MapMetadata, members map[string][]string) {
 	// If the map exists, but it has the wrong metadata then the
 	// DeltaTracker will catch that and mark it for recreation.
 	s.mapNameToAllMetadata[meta.Name] = meta
-
-	logCtx := s.logCxt.WithFields(logrus.Fields{"name": meta.Name, "type": meta.Type})
-
-	logCtx.Info("Queueing map for creation")
-	logCtx.WithField("members", members).Info("Queueing map for creation")
 	s.mapNameToProgrammedMetadata.Desired().Set(meta.Name, meta)
 
 	// Set the desired contents of the map.

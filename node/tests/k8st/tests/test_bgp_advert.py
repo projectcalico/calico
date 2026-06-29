@@ -764,8 +764,8 @@ spec:
     action: Reject
 EOF
 """)
-        kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
-        self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
+        kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --patch '{\"spec\": {\"filters\": [\"test-filter-export-1\"]}}'")
+        self.add_cleanup(lambda: kubectl("patch --type=merge bgppeer.projectcalico.org node-extra.peer --patch '{\"spec\": {\"filters\": []}}'"))
         self.add_cleanup(lambda: kubectl("delete bgpfilter test-filter-export-1"))
 
         # Assert that local clusterIP is no longer advertised.
@@ -933,19 +933,6 @@ spec:
         kubernetes.io/os: linux
         kubernetes.io/hostname: %s
 ---
-apiVersion: projectcalico.org/v3
-kind: IPPool
-metadata:
- name: loadbalancer-ip-pool
-spec:
- cidr: 80.15.0.100/32
- blockSize: 32
- natOutgoing: true
- disabled: false
- assignmentMode: Automatic
- allowedUses:
-  - LoadBalancer
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -964,6 +951,7 @@ spec:
     app: nginx
     run: nginx-rr
   type: LoadBalancer
+  loadBalancerClass: calico
   loadBalancerIP: 80.15.0.100
   externalTrafficPolicy: Local
 EOF
@@ -1011,4 +999,3 @@ EOF
         load_balancer_ip = svc_dict['spec']['loadBalancerIP']
         retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
         retry_until_success(lambda: self.assertIn(load_balancer_ip, self.get_routes()))
-        kubectl("delete ippool loadbalancer-ip-pool")

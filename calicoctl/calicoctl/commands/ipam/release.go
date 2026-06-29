@@ -113,7 +113,7 @@ Description:
 			if parsedArgs["--force"] != nil {
 				force = parsedArgs["--force"].(bool)
 			}
-			err = releaseFromReports(ctx, client, force, reportFiles, version)
+			err = ReleaseFromReports(ctx, client, force, reportFiles, version)
 			if err != nil {
 				return err
 			}
@@ -147,7 +147,7 @@ Description:
 	return nil
 }
 
-func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
+func ReleaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
 	// Grab the cluster info for checking against the report metadata.
 	clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
@@ -156,9 +156,9 @@ func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, r
 
 	// Load the reports.
 	var foundCurrent bool
-	var reports []Report
+	var reports []CheckReport
 	for _, reportFile := range reportFiles {
-		r := Report{}
+		r := CheckReport{}
 		bytes, err := os.ReadFile(reportFile)
 		if err != nil {
 			return err
@@ -243,12 +243,12 @@ func releaseIPs(ctx context.Context, c clientv3.Interface, notInUseIPs map[strin
 	}
 }
 
-func mergeReports(reports []Report) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
+func mergeReports(reports []CheckReport) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
 	for _, report := range reports {
 		mergedIPs := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
-				if a.InUse {
+				if a.InUse || a.CoolingDown {
 					continue
 				}
 				if _, ok := notInUseIPs[a.IP]; notInUseIPs != nil && !ok {

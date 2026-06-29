@@ -40,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/e2e/pkg/utils/conncheck"
 	"github.com/projectcalico/calico/e2e/pkg/utils/externalnode"
+	"github.com/projectcalico/calico/e2e/pkg/utils/format"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
@@ -47,7 +48,11 @@ import (
 
 // TODO:
 // DOCS_URL:
-// PRECONDITIONS: Enterprise v3.xx or later; OSS v3.xx or later
+// PRECONDITIONS: Enterprise v3.23 or later; OSS v3.32 or later
+
+func init() {
+	format.RegisterExitErrorFormatter()
+}
 
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
@@ -55,7 +60,8 @@ var _ = describe.CalicoDescribe(
 	describe.WithCategory(describe.Networking),
 	describe.WithExternalNode(),
 	describe.WithDataplane(describe.BPF),
-	describe.WithAWS(),
+	describe.WithSerial(),
+	describe.RequiresAWS(),
 	"Maglev load balancing tests",
 	func() {
 		var (
@@ -76,7 +82,7 @@ var _ = describe.CalicoDescribe(
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 10) // Get up to 10 nodes
-			Expect(err).ShouldNot(HaveOccurred())
+			Expect(err).ShouldNot(HaveOccurred(), "Failed to get schedulable nodes")
 			if len(nodes.Items) == 0 {
 				Fail("No schedulable nodes exist, can't continue test.")
 			}
@@ -85,7 +91,7 @@ var _ = describe.CalicoDescribe(
 			nodeNames = nodesInfo.GetNames()
 			nodeIPv4s := nodesInfo.GetIPv4s()
 			nodeIPv6s := nodesInfo.GetIPv6s()
-			Expect(len(nodeNames)).Should(BeNumerically(">", 0))
+			Expect(len(nodeNames)).Should(BeNumerically(">", 0), "Expected at least one schedulable node")
 			framework.Logf("Found %d nodes for testing: %v", len(nodeNames), nodeNames)
 
 			// Initialize the test helper
@@ -113,20 +119,12 @@ var _ = describe.CalicoDescribe(
 				ipVer = "IPv6"
 			}
 			return func() {
-				if isIPv6 {
-					if len(maglevTests.nodeNameToIPv6) == 0 {
-						Skip("IPv6 is not configured, skipping IPv6 Maglev test")
-					}
-				} else {
-					if len(maglevTests.nodeNameToIPv4) == 0 {
-						Skip("IPv4 is not configured, skipping IPv4 Maglev test")
-					}
-				}
+				maglevTests.SkipUnsupportedIPVersion(isIPv6)
 				// Ensure we have at least 3 nodes for the test
 				Expect(len(nodeNames)).Should(BeNumerically(">=", 3), "Need at least 3 nodes for this test")
 
 				// Deploy 20 backend pods on node 1 (first node)
-				maglevTests.DeployBackendPods(20, []string{nodeNames[0]})
+				_ = maglevTests.DeployBackendPods(20, []string{nodeNames[0]})
 				// Deploy service "netexec" backed by the 20 pods
 				maglevTests.DeployService()
 				// Add route to external node where packets to service cluster IP go to node 2
@@ -192,14 +190,13 @@ var _ = describe.CalicoDescribe(
 	})
 
 type MaglevTests struct {
-	f                   *framework.Framework
-	serviceClusterIPv4  string
-	serviceClusterIPv6  string
-	loadBalancerService *v1.Service
-	maglevConfig        *MaglevConfig
-	nodeNameToIPv4      map[string]string
-	nodeNameToIPv6      map[string]string
-	connTester          conncheck.ConnectionTester
+	f                  *framework.Framework
+	serviceClusterIPv4 string
+	serviceClusterIPv6 string
+	maglevConfig       *MaglevConfig
+	nodeNameToIPv4     map[string]string
+	nodeNameToIPv6     map[string]string
+	connTester         conncheck.ConnectionTester
 }
 
 type MaglevConfig struct {
@@ -240,6 +237,8 @@ func (m *MaglevTests) IPFamilies() []v1.IPFamily {
 	return families
 }
 
+var backendPodPattern = regexp.MustCompile(`^backend-pod-\d+$`)
+
 // parseBackendResponse parses the JSON response from netexec and returns the backend pod name
 func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	// NetexecResponse represents the JSON response from the netexec service
@@ -256,7 +255,6 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	backendName := strings.TrimSpace(response.Output)
 
 	// Verify this matches our expected backend pod naming pattern (backend-pod-0 to backend-pod-19)
-	backendPodPattern := regexp.MustCompile(`^backend-pod-\d+$`)
 	if !backendPodPattern.MatchString(backendName) {
 		return "", fmt.Errorf("response '%s' does not match expected backend pod naming pattern 'backend-pod-N'", backendName)
 	}
@@ -264,17 +262,33 @@ func (m *MaglevTests) parseBackendResponse(output string) (string, error) {
 	return backendName, nil
 }
 
-func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) {
+func (m *MaglevTests) SkipUnsupportedIPVersion(isIPv6 bool) {
+	if isIPv6 {
+		if len(m.nodeNameToIPv6) == 0 {
+			Skip("IPv6 is not configured, skipping")
+		}
+	} else {
+		if len(m.nodeNameToIPv4) == 0 {
+			Skip("IPv4 is not configured, skipping")
+		}
+	}
+}
+
+func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) map[string]string {
 	By(fmt.Sprintf("deploying %d backend pods for load balancing across %d nodes using conncheck package", numPods, len(nodes)))
 
 	// Create connection tester
 	m.connTester = conncheck.NewConnectionTester(m.f)
+
+	// Build pod-to-node mapping based on round-robin deployment.
+	podToNode := make(map[string]string)
 
 	// Create individual servers for each backend pod
 	for i := 1; i <= numPods; i++ {
 		podName := fmt.Sprintf("backend-pod-%d", i)
 		// Select node using round-robin: (i-1) % len(nodes) to distribute pods evenly
 		selectedNode := nodes[(i-1)%len(nodes)]
+		podToNode[podName] = selectedNode
 
 		// Create server with conncheck, disable automatic service creation
 		server := conncheck.NewServer(podName, m.f.Namespace,
@@ -326,6 +340,7 @@ func (m *MaglevTests) DeployBackendPods(numPods int, nodes []string) {
 	})
 
 	framework.Logf("All %d backend pods are now ready using conncheck", numPods)
+	return podToNode
 }
 
 func (m *MaglevTests) DeployService() {
@@ -352,9 +367,10 @@ func (m *MaglevTests) DeployService() {
 		},
 	}
 
-	createdService, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	m.loadBalancerService = createdService
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	createdService, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Create(ctx, service, metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to create service %s", m.maglevConfig.ServiceName)
 
 	// Store both IPv4 and IPv6 cluster IPs
 	if len(createdService.Spec.ClusterIPs) > 0 {
@@ -375,7 +391,9 @@ func (m *MaglevTests) DeployService() {
 	}
 
 	DeferCleanup(func() {
-		_ = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Delete(context.TODO(), createdService.Name, metav1.DeleteOptions{})
+		delCtx, delCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer delCancel()
+		_ = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Delete(delCtx, createdService.Name, metav1.DeleteOptions{})
 	})
 
 	framework.Logf("Service cluster IPv4: %s", m.serviceClusterIPv4)
@@ -384,7 +402,9 @@ func (m *MaglevTests) DeployService() {
 	// Wait for service endpoints to be ready
 	By("waiting for service endpoints to be ready")
 	Eventually(func() bool {
-		endpoints, err := m.f.ClientSet.CoreV1().Endpoints(m.f.Namespace.Name).Get(context.TODO(), m.maglevConfig.ServiceName, metav1.GetOptions{})
+		epCtx, epCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer epCancel()
+		endpoints, err := m.f.ClientSet.CoreV1().Endpoints(m.f.Namespace.Name).Get(epCtx, m.maglevConfig.ServiceName, metav1.GetOptions{})
 		if err != nil {
 			framework.Logf("Failed to get endpoints for service %s: %v", m.maglevConfig.ServiceName, err)
 			return false
@@ -410,8 +430,10 @@ func (m *MaglevTests) EnableMaglev() {
 	By("enabling Maglev on the service with annotation")
 
 	// Get the current service
-	service, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Get(context.TODO(), m.maglevConfig.ServiceName, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	getCtx, getCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer getCancel()
+	service, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Get(getCtx, m.maglevConfig.ServiceName, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to get service %s for Maglev annotation", m.maglevConfig.ServiceName)
 
 	// Add the Maglev annotation
 	if service.Annotations == nil {
@@ -420,8 +442,10 @@ func (m *MaglevTests) EnableMaglev() {
 	service.Annotations["lb.projectcalico.org/external-traffic-strategy"] = "maglev"
 
 	// Update the service
-	_, err = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Update(context.TODO(), service, metav1.UpdateOptions{})
-	Expect(err).NotTo(HaveOccurred())
+	updCtx, updCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer updCancel()
+	_, err = m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Update(updCtx, service, metav1.UpdateOptions{})
+	Expect(err).NotTo(HaveOccurred(), "Failed to update service %s with Maglev annotation", m.maglevConfig.ServiceName)
 
 	framework.Logf("Added Maglev annotation to service %s", m.maglevConfig.ServiceName)
 
@@ -429,7 +453,9 @@ func (m *MaglevTests) EnableMaglev() {
 	By("waiting for Maglev annotation to be applied and processed")
 	Eventually(func() bool {
 		// Verify the annotation is still present and has been processed
-		updatedService, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Get(context.TODO(), m.maglevConfig.ServiceName, metav1.GetOptions{})
+		svcCtx, svcCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer svcCancel()
+		updatedService, err := m.f.ClientSet.CoreV1().Services(m.f.Namespace.Name).Get(svcCtx, m.maglevConfig.ServiceName, metav1.GetOptions{})
 		if err != nil {
 			framework.Logf("Failed to get service while checking annotation: %v", err)
 			return false
@@ -565,12 +591,11 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 	for i := range totalRequests {
 		// Use external node to run rapidclient with netexec endpoint to get hostname
 		// Use configured source port for consistent testing
-		var cmd string
 		ep := net.JoinHostPort(clusterIP, fmt.Sprint(m.maglevConfig.ServicePort))
-		cmd = fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
+		cmd := fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
 			images.RapidClient, ep, m.maglevConfig.SourcePort)
 		output, err := extNode.Exec("sh", "-c", cmd)
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "Request %d (%s) to %s failed", i+1, ipVersion, ep)
 
 		framework.Logf("Request %d (%s): backend response: %s", i+1, ipVersion, output)
 

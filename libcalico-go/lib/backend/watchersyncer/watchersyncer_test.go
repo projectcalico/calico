@@ -17,6 +17,7 @@ package watchersyncer_test
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -34,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/watchersyncer"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -69,7 +69,7 @@ var (
 		Name: "ippool-2",
 	}
 	l3Key1 = model.BlockAffinityKey{
-		CIDR:         cnet.MustParseCIDR("1.2.3.0/24"),
+		CIDR:         netip.MustParsePrefix("1.2.3.0/24"),
 		Host:         "mynode",
 		AffinityType: string(ipam.AffinityTypeHost),
 	}

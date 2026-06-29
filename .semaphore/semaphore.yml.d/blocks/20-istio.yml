@@ -1,54 +1,31 @@
-- name: Istio Ztunnel
-  run:
-    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
-  dependencies:
-    - Prerequisites
-  task:
-    prologue:
-      commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
-    jobs:
-      - name: "Linux amd64"
-        commands:
-          - ../../.semaphore/run-and-monitor build.log make build
-- name: Istio Ztunnel - native arm64 runner
-  run:
-    when: "${CHANGE_IN(third_party/istio-ztunnel)}"
-  dependencies:
-    - Prerequisites
-  task:
-    agent:
-      machine:
-        type: s1-aws-arm64-2
-    prologue:
-      commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
-        - cd third_party/istio-ztunnel
-    jobs:
-      - name: "Linux arm64"
-        commands:
-          - ../../.semaphore/run-and-monitor build-arm64.log make build
-
 - name: Istio
   run:
     when: "${CHANGE_IN(istio)}"
   dependencies:
     - Prerequisites
+    - "Build: nftables RPMs"
   task:
     prologue:
       commands:
-        - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
         - cd istio
     jobs:
       - name: "Istio: CI"
         commands:
-          # build all images except ztunnel, which is built in the previous step
-          - ../.semaphore/run-and-monitor ci.log make clean istio-install-cni istio-pilot istio-proxyv2
+          # Load the amd64 patched nftables RPMs producer image so the
+          # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+          - zstd -d --rm /tmp/nft-rpms.tar.zst
+          - docker load -i /tmp/nft-rpms.tar
+          - rm -f /tmp/nft-rpms.tar
+          # Include the istio ztunnel build in the amd64 CI job.
+          - ../.semaphore/run-and-monitor ci.log make ci
       - name: "Istio: build arm64"
         matrix:
           - env_var: ARCH
             values:
               - arm64
         commands:
+          # Cross-builds all istio components including ztunnel.
+          # ztunnel uses Rust cross-compile via calico/rust-build's aarch64
+          # toolchain (clang + sysroot), no native arm64 runner needed.
           - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH

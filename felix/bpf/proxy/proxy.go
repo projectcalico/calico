@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ type ProxyFrontend interface {
 	Proxy
 	SetSyncer(DPSyncer)
 	SetHostIPs([]net.IP)
-	SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool)
+	SetHostMetadata(updates map[string]*proto.HostMetadataUpdate, requestResync bool)
 }
 
 // DPSyncerState groups the information passed to the DPSyncer's Apply
@@ -98,7 +98,7 @@ type proxy struct {
 	svcMap k8sp.ServicePortMap
 	epsMap k8sp.EndpointsMap
 
-	hostMetadataByHostname map[string]*proto.HostMetadataV4V6Update
+	hostMetadataByHostname map[string]*proto.HostMetadataUpdate
 
 	dpSyncer  DPSyncer
 	syncerLck sync.Mutex
@@ -152,7 +152,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		svcMap:   make(k8sp.ServicePortMap),
 		epsMap:   make(k8sp.EndpointsMap),
 
-		hostMetadataByHostname: make(map[string]*proto.HostMetadataV4V6Update),
+		hostMetadataByHostname: make(map[string]*proto.HostMetadataUpdate),
 
 		recorder: new(loggerRecorder),
 
@@ -365,6 +365,12 @@ func (p *proxy) SetSyncer(s DPSyncer) {
 	p.syncerLck.Lock()
 	p.dpSyncer.Stop()
 	p.dpSyncer = s
+	// Re-wire the trigger so that the new syncer's expand-NodePort fixup
+	// goroutine can schedule a dataplane Apply when previously-missed
+	// route lookups resolve. proxy.New() does this for the initial syncer;
+	// without it here, swapping in a fresh syncer (e.g. on a host-IP
+	// change) would silently lose that wakeup path.
+	s.SetTriggerFn(p.runner.Run)
 	p.syncerLck.Unlock()
 
 	p.forceSyncDP()
@@ -395,10 +401,10 @@ func (p *proxy) SetHostIPs(hostIPs []net.IP) {
 	npa := util.NewNodePortAddresses(p.v1IPFamily(), ips)
 	log.Infof("NodePortAddresses V%d for health checks: %s", p.ipFamily, npa.String())
 	p.svcHealthServer = healthcheck.NewServiceHealthServer(p.hostname, p.recorder,
-		npa, p.healthzServer)
+		npa, p.healthzServer, p.v1IPFamily())
 }
 
-func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataV4V6Update, requestResync bool) {
+func (p *proxy) SetHostMetadata(updates map[string]*proto.HostMetadataUpdate, requestResync bool) {
 	p.runnerLck.Lock()
 	defer p.runnerLck.Unlock()
 

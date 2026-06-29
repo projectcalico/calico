@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 )
 
@@ -2280,6 +2281,60 @@ var _ = Describe("Test ClusterNetworkPolicy conversion - Baseline tier", func() 
 	})
 })
 
+var _ = Describe("Test ClusterNetworkPolicy conversion - malformed policies", func() {
+	It("should return a tombstone KVPair for an invalid tier", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "bad-tier-policy",
+				ResourceVersion: "1234",
+			},
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Priority: 100,
+				Tier:     "InvalidTier",
+				Subject: clusternetpol.ClusterNetworkPolicySubject{
+					Namespaces: &metav1.LabelSelector{},
+				},
+			},
+		}
+
+		c := NewConverter()
+		kvp, err := c.K8sClusterNetworkPolicyToCalico(&cnp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvp).NotTo(BeNil())
+		Expect(kvp.Value).To(BeNil(), "tombstone KVPair should have nil Value")
+		Expect(kvp.Key).To(Equal(model.ResourceKey{
+			Name: "bad-tier-policy",
+			Kind: model.KindKubernetesClusterNetworkPolicy,
+		}))
+		Expect(kvp.Revision).To(Equal("1234"))
+	})
+
+	It("should return a tombstone KVPair when no subject selector is specified", func() {
+		cnp := clusternetpol.ClusterNetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "no-subject-policy",
+				ResourceVersion: "5678",
+			},
+			Spec: clusternetpol.ClusterNetworkPolicySpec{
+				Priority: 100,
+				Tier:     clusternetpol.AdminTier,
+				Subject:  clusternetpol.ClusterNetworkPolicySubject{},
+			},
+		}
+
+		c := NewConverter()
+		kvp, err := c.K8sClusterNetworkPolicyToCalico(&cnp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvp).NotTo(BeNil())
+		Expect(kvp.Value).To(BeNil(), "tombstone KVPair should have nil Value")
+		Expect(kvp.Key).To(Equal(model.ResourceKey{
+			Name: "no-subject-policy",
+			Kind: model.KindKubernetesClusterNetworkPolicy,
+		}))
+		Expect(kvp.Revision).To(Equal("5678"))
+	})
+})
+
 func convertToGNP(
 	cnp *clusternetpol.ClusterNetworkPolicy,
 	expectedErr *cerrors.ErrorClusterNetworkPolicyConversion,
@@ -2297,7 +2352,8 @@ func convertToGNP(
 	}
 
 	// Assert key fields are correct.
-	tier := clusterNetworkPolicyTier(cnp)
+	tier, err := clusterNetworkPolicyTier(cnp)
+	Expect(err).NotTo(HaveOccurred())
 
 	gnp, ok := pol.Value.(*apiv3.GlobalNetworkPolicy)
 	Expect(ok).To(BeTrue())

@@ -66,7 +66,7 @@ elif [ "$ubuntu_codename" = "plucky" ]; then
 fi
 
 retry apt-get update -y
-retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin"${buildx_version}" containerd.io make iproute2 wireguard
+retry apt-get install -y --no-install-recommends git docker-ce"${docker_version}" docker-ce-cli"${docker_version}" docker-buildx-plugin"${buildx_version}" containerd.io make iproute2 wireguard zstd
 usermod -a -G docker ubuntu
 
 # The IPIP module is loaded on demand, but pre-loading it prevents flakes in
