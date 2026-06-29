@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file is **operational guidance** for agents working in this repo: build commands, test invocation, debugging, conventions, and the process rules every PR follows. For **architecture, invariants, and review criteria**, see [`DESIGN.md`](../DESIGN.md) at the repo root, and the per-component `DESIGN.md` files it links to. Do not look here for architecture; look there.
+
 ## Repository Overview
 
 Project Calico is a large monorepo providing container networking and security 
@@ -39,6 +43,14 @@ make image
 # Build for specific architecture
 make -C felix build ARCH=arm64
 ```
+
+### Docker Build System
+
+- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
+- Base images configured in `metadata.mk`
+- Build cache in `.go-pkg-cache/` (speeds up rebuilds)
+- Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
+- Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
 
 ### Running Tests
 
@@ -167,103 +179,6 @@ eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX identif
   - Utility functions; can be interspersed with methods if tightly coupled with particular methods.
   - Larger secondary structs at the bottom.
 
-## Repository Architecture
-
-### Component Dependency Order
-
-Core components (dependency order):
-```
-api/              - Calico API definitions (CRDs, protobuf), separate go.mod
-libcalico-go/     - Core Go client library and data model
-typha/            - Datastore fan-out proxy for scaling (reduces etcd load)
-felix/            - Core per-host networking agent (eBPF/iptables/nftables dataplane)
-node/             - Node initialization container (includes Felix, confd, BIRD, startup scripts)
-calicoctl/        - CLI tool for Calico management
-kube-controllers/ - Kubernetes-specific controllers (namespace, pod, node, serviceaccount)
-cni-plugin/       - Kubernetes CNI integration
-confd/            - Configuration management daemon
-app-policy/       - Application layer policy (L7)
-apiserver/        - Kubernetes API aggregation layer
-```
-
-Additional components:
-```
-goldmane/             - Log aggregation and flow log storage
-guardian/             - Secure tunnel proxy for management cluster connections
-pod2daemon/           - Flex volume driver for injecting credentials into pods
-key-cert-provisioner/ - TLS certificate provisioner for Calico components
-whisker/              - Flow log UI (TypeScript/React frontend)
-whisker-backend/      - Backend for whisker flow log UI
-e2e/                  - End-to-end test suites
-release/              - Release tooling and automation
-lib/std/              - Internal shared Go library (separate go.mod)
-lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
-```
-
-### Key Architectural Concepts
-
-**Felix** is the core per-host agent responsible for:
-- Programming dataplane (eBPF, iptables, nftables)
-- Maintaining routing tables
-- Processing policy and programming ACLs
-- Source: `felix/daemon/daemon.go`
-- **Calculation graph** (`felix/calc/`): DAG that processes datastore updates and calculates dataplane state. Changes here require calc graph FV tests.
-
-**Typha** is a fan-out proxy that:
-- Sits between Felix instances and the datastore (etcd/K8s API)
-- Reduces load on datastore by caching and fanning out to multiple Felix instances
-- Optional but recommended for clusters >50 nodes
-
-**Node container** orchestrates node initialization:
-- Runs Felix, confd, and BIRD in a single container
-- Handles CNI plugin installation
-- Source: `node/pkg/lifecycle/startup/startup.go`
-
-### Combined `calico` binary
-
-Most component daemons are registered as subcommands of a single `calico` binary rather than shipping as independent binaries — felix, confd, kube-controllers, goldmane, guardian, whisker-backend, key-cert-provisioner, typha, dikastes, csi, flexvol, and webhooks all dispatch through `calico component <name>`. Inside the node container, runit services exec the subcommand directly (see `node/filesystem/etc/service/available/<name>/run`).
-
-**Adding a new component:**
-
-1. Expose a `NewCommand() *cobra.Command` from the component's package.
-2. Register it in `cmd/calico/component.go` under `newComponentCommand`.
-3. If the component runs in the node container, add a runit service at `node/filesystem/etc/service/available/<name>/run` whose body is `exec calico component <name>`.
-4. The component's `Run` handler should call `logutils.ConfigureFormatter("<name>")` so log lines carry a consistent component prefix.
-
-**Restart-on-config-change (exit 129):** A component that intentionally exits with `cmdwrapper.RestartReturnCode` (129) to request a live restart on config change (currently felix and kube-controllers) must wrap its cobra `Run` with `cmdwrapper.WrapSelf(innerEnvVar, fn)` from `pkg/cmdwrapper`. Without this, `exec calico component <name>` from runit just exits — there is no outer process to restart the child.
-
-- Pick a unique `innerEnvVar` per component (e.g. `CALICO_FELIX_INNER`, `CALICO_KUBE_CONTROLLERS_INNER`). `WrapSelf` strips any pre-existing value before re-execing.
-- The caller configures logrus before calling `WrapSelf`; `fn` is the inner daemon body.
-- Don't change the log line format in `cmdwrapper` — integration tests grep stdout for `"Received exit status N, restarting"`.
-
-### Health reporting
-
-Components expose liveness/readiness through the shared aggregator in `libcalico-go/lib/health`.
-
-1. Construct once per component: `ha := health.NewHealthAggregator()`.
-2. For each independent health source, register a named reporter declaring what it will report: `ha.RegisterReporter("Startup", &health.HealthReport{Live: true, Ready: true}, timeout)`. A non-zero timeout means reports must refresh before expiry or the aggregator treats that reporter as unhealthy — use this for long-running loops where silent stalls matter.
-3. Call `ha.Report(name, &health.HealthReport{...})` at startup and as state changes inside running goroutines.
-4. Serve the endpoints with `ha.ServeHTTP(enabled, host, port)` — this exposes `/readiness` and `/liveness` on the given port.
-
-For Kubernetes probes, use the generic `calico health --port=<port> --type=readiness|liveness` exec command (`cmd/calico/health.go`) rather than adding a per-component healthcheck binary or a bare `httpGet` probe. It does the HTTP GET and exits 0 on 2xx/3xx — that's the standard for pods running the combined image.
-
-Examples worth copying from: `kube-controllers/pkg/kubecontrollers/run.go` (Startup / CalicoDatastore / KubeAPIServer reporters, no timeout) and `felix/daemon/daemon.go` (lifecycle reporter plus per-subsystem reporters with timeouts).
-
-### Go Module Structure
-
-- Root `go.mod` (`github.com/projectcalico/calico`) is the primary module for most components
-- `api/go.mod` (`github.com/projectcalico/api`) is separate (API exported as independent repo)
-- `lib/std/go.mod` and `lib/httpmachinery/go.mod` are internal libraries
-- When adding Go dependencies: `cd <component> && go mod tidy && cd .. && make check-go-mod`
-
-### Docker Build System
-
-- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
-- Base images configured in `metadata.mk`
-- Build cache in `.go-pkg-cache/` (speeds up rebuilds)
-- Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
-- Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
-
 ## Documentation map
 
 This repo carries an extensive corpus of architecture and review
@@ -273,8 +188,13 @@ criteria that are hard to recover from the source alone.
 
 Where it lives:
 
-- **`<component>/DESIGN.md`** — architecture, invariants, and
-  per-section review notes for that component. Authoritative source
+- **[`DESIGN.md`](../DESIGN.md) at the repo root** — Calico's
+  cross-cutting architecture: the component dependency tables,
+  the combined `calico` binary pattern, health reporting, Go
+  module structure, build system, and entry points. The
+  authoritative starting point for *what the repo is*.
+- **`<component>/DESIGN.md`** — per-component architecture,
+  invariants, and per-section review notes. Authoritative source
   for "what does this code promise?". A coding agent writing a PR
   and a reviewer checking one read the same file and apply the
   same embedded review notes.
@@ -419,12 +339,7 @@ Image loading is incremental — `kind-reload` and `kind-deploy` compare local D
 - `lib.Makefile` - Shared Makefile logic for all components
 - `Makefile` - Root orchestration
 
-**Component Entry Points:**
-- `felix/daemon/daemon.go` - Felix main entry point
-- `felix/calc/` - Felix calculation graph (policy processing brain)
-- `felix/dataplane/` - Dataplane implementations (eBPF, iptables, nftables)
-- `node/pkg/lifecycle/startup/startup.go` - Node initialization
-- `calicoctl/calicoctl/calicoctl.go` - CLI entry point
+For component entry points and architectural code paths, see [`DESIGN.md`](../DESIGN.md) §5.
 
 **Kind Cluster Infrastructure:**
 - `hack/test/kind/` - Kind cluster scripts (creation, image loading, deployment, teardown)
