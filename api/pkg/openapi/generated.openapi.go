@@ -526,9 +526,17 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -5390,6 +5398,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction). When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations. When Disabled, VMs receive new IP addresses whenever their pods are recreated, and creating a live migration target pod is not supported because the migration target pod requires the same IP as the source pod, which is only possible with address persistence. Defaults to Enabled if not specified.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"ipCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to minimize immediate reuse).",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},

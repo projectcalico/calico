@@ -34,6 +34,7 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,6 +74,10 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 const (
 	externalNodeV4 = "kube-node-extra"
 	externalNodeV6 = "kube-node-extra-v6"
+
+	// anchorNamespace holds the idle pod that pins an IPAM block to the egress
+	// node so it has something to advertise to the external routers.
+	anchorNamespace = "bgp-filter-anchor"
 
 	peerNameV4 = "node-extra.peer"
 	peerNameV6 = "node-extra-v6.peer"
@@ -173,11 +178,39 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	// Mark the egress node so the node-selected BGPPeers attach to it.
 	labelNode(t, ctx, env.egressNode, "egress", "true")
 
+	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode)
+
 	// Establish BGPPeers from the egress node to each external router.
 	createBGPPeer(t, ctx, g, cli, peerNameV4, env.externalNodeIP)
 	createBGPPeer(t, ctx, g, cli, peerNameV6, env.externalNodeIP6)
 
 	return env
+}
+
+// ensureEgressNodeOwnsBlock pins an idle pod to the egress node so it owns an
+// IPAM block to advertise — otherwise the export assertions are checking a node
+// that may host no pods (and thus no block, especially for IPv6). The pod uses
+// the default pools so its block CIDRs match clusterRouteRegexV4/V6; waiting for
+// both IPs claims a block in each family before any assertion runs.
+func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node string) {
+	t.Helper()
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: anchorNamespace}}
+	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: anchorNamespace},
+		Spec: corev1.PodSpec{
+			NodeName:   node,
+			Containers: []corev1.Container{{Name: "anchor", Image: utils.Agnhost, Args: []string{"pause"}}},
+		},
+	}
+	g.Expect(cli.Create(ctx, pod)).To(Succeed(), "creating block-anchor pod on egress node %s", node)
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), pod) })
+
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv4Protocol)
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv6Protocol)
 }
 
 // testBGPFilterBasic adds a route to the external router, verifies import and
@@ -535,7 +568,32 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 	if ipv6 {
 		birdCmd = "birdcl6"
 	}
-	re := regexp.MustCompile(routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto)
+	// IPv4 routes use the peer's global address as the next-hop, with no "from"
+	// field:
+	//   v4: <route> via <peerIP> on eth0 [<proto> <time>] ...
+	//
+	// IPv6 depends on how the peer is configured in bird6.cfg.template:
+	//   - OSS pins "gateway recursive" on every peer, so the route is advertised
+	//     with the peer's global address as the next-hop (same shape as v4).
+	//   - Enterprise emits "direct" for a directly-connected peer (the external
+	//     router shares the egress node's segment), so BIRD uses a link-local
+	//     next-hop and carries the peer's global address in the "from" field:
+	//       v6: <route> via fe80::... on eth0 [<proto> <time> from <peerIP>] ...
+	//
+	// Accept either form so the assertion holds in both repos regardless of
+	// which next-hop BIRD emits. The query is already scoped with
+	// "show route protocol <proto>", so the link-local branch needn't re-verify
+	// the peer IP.
+	pattern := routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto
+	if ipv6 {
+		pattern = `(?:` +
+			routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto +
+			`|` +
+			routeRegex + ` *via fe80:[0-9a-f:]+ on .* \[` + proto +
+			`)`
+	}
+
+	re := regexp.MustCompile(pattern)
 
 	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
 		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s show route protocol %s", container, birdCmd, proto),

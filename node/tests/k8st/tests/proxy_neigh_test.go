@@ -133,7 +133,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 	}
 	g.Expect(cli.Create(ctx, workloadPool)).To(Succeed(), "creating workload IPPool")
-	t.Cleanup(func() { deletePool(cli, workloadPool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, workloadPool.Name) })
 
 	lbPool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "proxy-neigh-lb-" + suffix},
@@ -146,7 +146,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 	}
 	g.Expect(cli.Create(ctx, lbPool)).To(Succeed(), "creating LoadBalancer IPPool")
-	t.Cleanup(func() { deletePool(cli, lbPool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, lbPool.Name) })
 
 	// Turn on the feature under test, restoring the original value afterwards.
 	restore := setLocalSubnetL2Reachability(ctx, g, cli, v3.LocalSubnetL2ReachabilityPodsAndLoadBalancers)
@@ -257,12 +257,12 @@ func newClient(g *WithT) ctrlclient.Client {
 
 // deletePool best-effort removes an IPPool; runs during cleanup so it logs
 // rather than fails.
-func deletePool(cli ctrlclient.Client, name string) {
+func deletePool(t testing.TB, cli ctrlclient.Client, name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pool := &v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	if err := cli.Delete(ctx, pool); err != nil && !apierrors.IsNotFound(err) {
-		fmt.Printf("WARNING: failed to delete IPPool %s: %v\n", name, err)
+		t.Logf("WARNING: failed to delete IPPool %s: %v", name, err)
 	}
 }
 

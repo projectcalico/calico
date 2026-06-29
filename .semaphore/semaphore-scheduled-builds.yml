@@ -541,13 +541,10 @@ blocks:
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
     # can depend on the shared producer→GCS→consumer upload pattern.
-    # felix + process/testing paths trigger this so the win-fv-felix block (which
-    # now installs the locally-built node image) has it cached in GCS. felix is a
-    # secondary Go dep here, so non-go:/felix/ adds the recursive /felix/ coverage
-    # (test + non-Go files) that the win-fv-felix block triggers on as a primary
-    # package; the libcalico stacktrace path and 20-felix.yml self-trigger close
-    # the rest of felix's test closure, keeping this a superset of win-fv-felix so
-    # it never runs without this image in GCS.
+    # felix is primary (not node) so a felix-test-only PR still triggers this
+    # producer: the deps tool keeps /**/*_test.go coverage only for the primary
+    # arg. That matches the win-fv-felix consumer which installs this image. See
+    # the "Build: calico image" comment for the full rationale.
     run:
       when: "true"
     dependencies:
@@ -1309,7 +1306,7 @@ blocks:
         true or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'],
         {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
     execution_time_limit:
-      minutes: 30
+      minutes: 60
     dependencies:
       - Prerequisites
     task:
@@ -1869,7 +1866,12 @@ blocks:
       jobs:
         - name: "OpenStack: Unit and FV tests (tox) on Caracal"
           commands:
-            - ../.semaphore/run-and-monitor tox.log make tox-caracal
+            # Run sequentially via `bash -c '... && ...'` rather than as
+            # multiple targets on a single make invocation: a make invoked
+            # with MAKEFLAGS=-j would otherwise schedule the two targets in
+            # parallel and have two concurrent tox runs contend over the
+            # shared .tox/ working tree.
+            - ../.semaphore/run-and-monitor tox.log bash -c 'make tox-caracal && make tox-fv-caracal'
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
             # Env vars needed for saving performance results.
@@ -1989,6 +1991,14 @@ after_pipeline:
           # and posts to Slack itself when there is something worth reporting. A pass
           # is recorded too so the engine can recover open incidents for the branch.
           - |
+            # Only true pushes to master/release-*. On a pull-request pipeline
+            # SEMAPHORE_GIT_BRANCH is the PR's *target* branch (so a PR against
+            # master reads as "master"); gate on the ref type / PR number first
+            # so PR builds don't masquerade as branch builds.
+            if [ "$SEMAPHORE_GIT_REF_TYPE" != "branch" ] || [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
+              echo "not a branch push (ref_type=${SEMAPHORE_GIT_REF_TYPE} pr=${SEMAPHORE_GIT_PR_NUMBER}) — not monitored"
+              exit 0
+            fi
             case "$SEMAPHORE_GIT_BRANCH" in
               master|release-*) ;;
               *) echo "branch $SEMAPHORE_GIT_BRANCH not monitored"; exit 0 ;;
