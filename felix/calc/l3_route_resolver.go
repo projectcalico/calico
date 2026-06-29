@@ -733,6 +733,7 @@ func (c *L3RouteResolver) flush() {
 		var blockTypes proto.RouteType
 		var blockMatchesRoute bool
 		var hasTunnelRef bool
+		var hasHostRef bool
 		for _, entry := range buf {
 			ri := entry.Data.(RouteInfo)
 			if len(ri.Pools) > 0 {
@@ -782,6 +783,7 @@ func (c *L3RouteResolver) flush() {
 			}
 			if len(ri.Host.NodeNames) > 0 {
 				rt.DstNodeName = ri.Host.NodeNames[0]
+				hasHostRef = true
 
 				if rt.DstNodeName == c.myNodeName {
 					logCxt.Debug("Local host route.")
@@ -845,14 +847,16 @@ func (c *L3RouteResolver) flush() {
 		}
 
 		// Apply the accumulated block workload type flags unless the route is a tunnel
-		// IP that merely falls within a parent block. A tunnel IP inside a larger block
-		// (e.g., a /32 inside a /26) should not get REMOTE_WORKLOAD — that causes
-		// isRemoteTunnelRoute() in the route manager to program a spurious /32 route.
+		// or host IP that merely falls within a parent block. Such an IP inside a larger
+		// block (e.g. a /32 inside a /24) should not get REMOTE_WORKLOAD — for a tunnel
+		// IP that makes isRemoteTunnelRoute() program a spurious /32 route, and for a host
+		// IP it makes the route manager program the node's own IP via the tunnel device,
+		// which breaks connectivity to the node.
 		//
-		// However, if the block is at the same CIDR as the route (e.g., a /32 block from
-		// a dedicated tunnel pool), the workload type is still needed so the route manager
-		// programs the correct directly-connected route.
-		if blockSeen && (!hasTunnelRef || blockMatchesRoute) {
+		// If the block is at the same CIDR as the route (e.g. a /32 block from a dedicated
+		// pool), the workload type is still needed so the route manager programs the
+		// correct directly-connected route.
+		if blockSeen && (blockMatchesRoute || (!hasTunnelRef && !hasHostRef)) {
 			rt.Types |= blockTypes
 		}
 
