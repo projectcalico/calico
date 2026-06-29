@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2021,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -445,6 +445,30 @@ var _ = Describe("FV tests against a real etcd", func() {
 			[]EnvItem{{"CALICO_IPV4POOL_DISABLE_BGP_EXPORT", "false"}, {"CALICO_IPV6POOL_DISABLE_BGP_EXPORT", "false"}},
 			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()", false, false),
 	)
+
+	It("should honor CALICO_IPV6POOL_VXLAN when the IPv4 pool is disabled", func() {
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+		c, err := client.New(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		err = be.Clean()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer temporarilySetEnv("CALICO_IPV4POOL_CIDR", "none")()
+		defer temporarilySetEnv("CALICO_IPV6POOL_VXLAN", "Always")()
+
+		configureIPPools(ctx, c, kubeadmConfig)
+
+		poolList, err := c.IPPools().List(ctx, options.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(poolList.Items).To(HaveLen(1))
+
+		pool := poolList.Items[0]
+		Expect(pool.Name).To(Equal(DEFAULT_IPV6_POOL_NAME))
+		Expect(pool.Spec.VXLANMode).To(Equal(apiv3.VXLANModeAlways))
+	})
 
 	It("should properly clear node IPs", func() {
 		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
