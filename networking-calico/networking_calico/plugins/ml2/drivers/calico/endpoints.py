@@ -543,16 +543,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def sync_wep(self, port, host, context):
         """Sync the WorkloadEndpoint for ``(port_id, host)`` to etcd.
 
-        The slot is identified by ``(port["id"], host)``.  A given port can
-        own up to two WEP slots in etcd: one at its current ``binding:host_id``
-        (the "source" WEP, in the bound steady state) and one at its
-        ``binding:profile.migrating_to`` (the "dest" WEP, during live
-        migration).  Both share the same key shape ``endpoint_name(port_at_host)``
-        and the same WorkloadEndpoint resource type; they only differ in
-        which host's binding the spec describes.  ``sync_wep`` is therefore
-        agnostic as to "source" vs "dest" -- the caller passes the host they
-        want synced, and the function decides whether that slot should hold
-        a WEP based on a re-read of the port from the Neutron DB.
+        The slot is identified by ``(port["id"], host)``.  A given port can own up to
+        two WEP slots in etcd: one at its current ``binding:host_id`` (the "source" WEP,
+        in the bound steady state) and one at its ``binding:profile.migrating_to`` (the
+        "dest" WEP, during live migration).  Both share the same key shape
+        ``endpoint_name(port_at_host)`` and the same WorkloadEndpoint resource type;
+        they only differ in which host's binding the spec describes.  ``sync_wep`` is
+        therefore agnostic as to "source" vs "dest" -- the caller passes the host they
+        want synced, and the function decides whether that slot should hold a WEP based
+        on a re-read of the port from the Neutron DB.
 
         Each CAS attempt:
           1. Read the slot's mod_revision (KeyNotFound -> 0).
@@ -567,15 +566,14 @@ class WorkloadEndpointSyncer(ResourceSyncer):
              overlaid with ``binding:host_id=host``, re-sync the port's
              SGs (CAS-protected itself, idempotent on retry), then CAS-put.
 
-        On CAS conflict, retry from step 1.  After ``MAX_CAS_ATTEMPTS`` log
-        a warning and return None; persistent drift is repaired by the
-        next resync.
+        On CAS conflict, retry from step 1.  After ``MAX_CAS_ATTEMPTS`` log a warning
+        and return None; persistent drift is repaired by the next resync.
         """
         port_id = port["id"]
-        # Overlay binding:host_id=host before computing the etcd name so the
-        # caller can pass any convenient port dict -- the slot is identified
-        # by (port_id, host), not by whichever host the caller's dict happens
-        # to carry.
+
+        # Overlay binding:host_id=host before computing the etcd name so the caller can
+        # pass any convenient port dict -- the slot is identified by (port_id, host),
+        # not by whichever host the caller's dict happens to carry.
         name = endpoint_name({**port, "binding:host_id": host})
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
@@ -609,14 +607,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 continue
 
             # Present-branch: compose with binding:host_id overlaid.  For the
-            # source-role case the overlay is a no-op (db_port["binding:host_id"]
-            # == host already); for the dest-role case it switches the host so
+            # source-role case the overlay is a no-op (db_port["binding:host_id"] ==
+            # host already); for the dest-role case it switches the host so
             # endpoint_spec / labels / annotations see the dest binding.
             write_port = {**db_port, "binding:host_id": host}
             port_extra = self.get_extra_port_information(context, write_port)
-            # Sync the port's SGs first, so Felix sees the policy before the
-            # WEP that references it.  sync_sgs_to_etcd is CAS-protected per
-            # SG and idempotent across retries.
+
+            # Sync the port's SGs first, so Felix sees the policy before the WEP that
+            # references it.  sync_sgs_to_etcd is CAS-protected per SG and idempotent
+            # across retries.
             self.policy_syncer.sync_sgs_to_etcd(port_extra.security_groups, context)
             if datamodel_v3.put(
                 "WorkloadEndpoint",
@@ -646,9 +645,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def sync_lm(self, port, dest_host, context):
         """Sync the LiveMigration resource for ``(port_id, dest_host)`` to etcd.
 
-        The slot is identified by ``(port["id"], dest_host)`` and shares its
-        key shape (and resource name) with the dest-side WEP at the same host,
-        though they are stored as different resource types.
+        The slot is identified by ``(port["id"], dest_host)`` and shares its key shape
+        (and resource name) with the dest-side WEP at the same host, though they are
+        stored as different resource types.
 
         Each CAS attempt:
           1. Read the slot's mod_revision (KeyNotFound -> 0).
@@ -659,14 +658,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
           4b. Present: compose live_migration_spec from the re-read port
              plus dest_host overlay, then CAS-put.
 
-        On CAS conflict, retry.  After ``MAX_CAS_ATTEMPTS`` log a warning
-        and return None.
+        On CAS conflict, retry.  After ``MAX_CAS_ATTEMPTS`` log a warning and return
+        None.
 
         Callers that need the LiveMigration UID for logging should call
-        ``datamodel_v3.get_uid("LiveMigration", namespace, name)`` separately
-        -- either before invoking ``sync_lm`` (for end-of-migration logs,
-        where the UID will be lost once the LM is deleted) or after (for
-        start-of-migration logs).
+        ``datamodel_v3.get_uid("LiveMigration", namespace, name)`` separately -- either
+        before invoking ``sync_lm`` (for end-of-migration logs, where the UID will be
+        lost once the LM is deleted) or after (for start-of-migration logs).
         """
         port_id = port["id"]
         name = endpoint_name({**port, "binding:host_id": dest_host})

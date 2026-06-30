@@ -60,8 +60,7 @@ class PolicySyncer(ResourceSyncer):
         # multiple _trigger_resync() calls, and without the reset the second call's
         # compare loop would read stale rules from the first call's snapshot.  The
         # postcommit-hook path doesn't read self._rules_by_sg at all -- sync_sgs_to_etcd
-        # always does a fresh DB query -- so the reset has no effect
-        # there.
+        # always does a fresh DB query -- so the reset has no effect there.
         try:
             return super(PolicySyncer, self).resync(context, scope)
         finally:

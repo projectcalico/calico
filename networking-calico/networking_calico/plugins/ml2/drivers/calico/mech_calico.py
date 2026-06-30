@@ -1017,18 +1017,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # No outer writer/reader context here -- see the comment in
         # update_network_postcommit above for rationale.
         #
-        # We use the OVO ``QosPolicy`` only to discover which networks and
-        # ports are bound to this policy (``get_bound_networks`` /
-        # ``get_bound_ports``).  For the port data itself we go through
-        # ``self.db.get_ports``, which returns API-flat dicts with
-        # ``binding:host_id`` as a top-level key.  ``Port.get_objects(...)
-        # .to_dict()`` would return the OVO native shape (``bindings: [
-        # {host: ...}]``) which the downstream sync code -- and the rest
-        # of the driver -- does not understand.
+        # We use the OVO ``QosPolicy`` only to discover which networks and ports are
+        # bound to this policy (``get_bound_networks`` / ``get_bound_ports``).  For the
+        # port data itself we go through ``self.db.get_ports``, which returns API-flat
+        # dicts with ``binding:host_id`` as a top-level key.  ``Port.get_objects(...)
+        # .to_dict()`` would return the OVO native shape (``bindings: [ {host: ...}]``)
+        # which the downstream sync code -- and the rest of the driver -- does not
+        # understand.
         policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
-        # Ports whose network uses this QoS policy and that don't have a
-        # port-specific QoS policy.
+        # Ports whose network uses this QoS policy and that don't have a port-specific
+        # QoS policy.
         networks_ids = policy.get_bound_networks()
         ports = []
         if networks_ids:
@@ -1086,10 +1085,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # Ignore if the port binding VIF type is 'unbound'; then this port
-        # doesn't need to be networked yet.  ``sync_wep`` would correctly
-        # short-circuit here too (the re-read would say "absent" and the
-        # slot would not exist), but skipping saves the DB round-trip.
+        # Ignore if the port binding VIF type is 'unbound'; then this port doesn't need
+        # to be networked yet.  ``sync_wep`` would correctly short-circuit here too (the
+        # re-read would say "absent" and the slot would not exist), but skipping saves
+        # the DB round-trip.
         if port["binding:vif_type"] == "unbound":
             LOG.info("Creating unbound port: no work required.")
             return
@@ -1100,11 +1099,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def update_port_postcommit(self, context):
         """update_port_postcommit
 
-        Called after Neutron has committed a port update event to the
-        database.
-
-        This is a tricky event, because it can be called in a number of ways
-        during VM migration. We farm out to the appropriate method from here.
+        Called after Neutron has committed a port update event to the database.
         """
         TrackTask("UPDATE_PORT_POSTCOMMIT")
         LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
@@ -1128,46 +1123,44 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.debug("Old = %r", original)
         LOG.debug("New = %r", port)
 
-        # Sync every (port, host) WEP slot that could plausibly have
-        # changed: the old binding host, the new binding host, and any
-        # current/previous live-migration destination.  ``sync_wep`` is
-        # the single source of truth -- it re-reads the port from the
-        # Neutron DB, decides present-or-absent for the slot, and
-        # CAS-writes accordingly.  Same for ``sync_lm``.  This handles
-        # uniformly all the cases the previous if/elif tree enumerated
-        # individually: create on bind, delete on unbind, cold-migration
-        # cleanup, live-migration start, live-migration end (success or
-        # failure), and the rare migration-target-switch case.
+        # Sync every (port, host) WEP slot that could plausibly have changed: the old
+        # binding host, the new binding host, and any current/previous live-migration
+        # destination.  ``sync_wep`` is the single source of truth -- it re-reads the
+        # port from the Neutron DB, decides present-or-absent for the slot, and
+        # CAS-writes accordingly.  Same for ``sync_lm``.  This handles uniformly all the
+        # cases the previous if/elif tree enumerated individually: create on bind,
+        # delete on unbind, cold-migration cleanup, live-migration start, live-migration
+        # end (success or failure), and the rare migration-target-switch case.
         #
-        # We deliberately do NOT take a writer/reader context here:
-        # each ``self.db.get_port`` inside the sync methods is
-        # ``@db_api.retry_if_session_inactive``-decorated and manages
-        # its own transaction.  See ``create_port_postcommit`` for
-        # rationale and PR #12898 for the regression history.
+        # We deliberately do NOT take a writer/reader context here: each
+        # ``self.db.get_port`` inside the sync methods is
+        # ``@db_api.retry_if_session_inactive``-decorated and manages its own
+        # transaction.  See ``create_port_postcommit`` for rationale and PR #12898 for
+        # the regression history.
         plugin_context = context._plugin_context
         old_host = original.get("binding:host_id")
         new_host = port.get("binding:host_id")
-        old_dest = original.get("binding:profile", {}).get("migrating_to")
-        new_dest = port.get("binding:profile", {}).get("migrating_to")
+        old_migrating_to = original.get("binding:profile", {}).get("migrating_to")
+        new_migrating_to = port.get("binding:profile", {}).get("migrating_to")
 
-        # Sync LMs first so that, on a fresh migration, Felix sees the
-        # LiveMigration before the destination WEP.  (At end-of-migration
-        # the order does not matter, and the loop is idempotent if no
-        # destination is in play.)  Use dict.fromkeys to dedupe while
-        # preserving order, so the new destination is written after any
+        # Sync LMs first so that, on a fresh migration, Felix sees the LiveMigration
+        # before the destination WEP.  (At end-of-migration the order does not matter,
+        # and the loop is idempotent if no destination is in play.)  Use dict.fromkeys
+        # to dedupe while preserving order, so the new destination is written after any
         # cleanup of an old one.
-        for dest_host in dict.fromkeys([old_dest, new_dest]):
+        for dest_host in dict.fromkeys([old_migrating_to, new_migrating_to]):
             if dest_host:
                 self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
 
-        # Sync every host that owns -- or owned -- a WEP slot for this
-        # port.  The same dedupe-preserve-order trick keeps ``new_host``
-        # last so a stale slot at ``old_host`` (cold-migration) is cleared
-        # before the canonical WEP at the new host is written.  Truthy
-        # check (not ``is not None``) so an empty-string host -- typical
-        # for an unbound port -- doesn't fall through and incur a wasted
-        # DB re-read on a slot that cannot exist.
-        for host in dict.fromkeys([old_host, old_dest, new_dest, new_host]):
+        # Sync for every host that might own a WEP slot for this port.  The same
+        # dedupe-preserve-order trick keeps ``new_host`` last so a stale slot at
+        # ``old_host`` (cold-migration) is cleared before the canonical WEP at the new
+        # host is written.  Truthy check (not ``is not None``) so an empty-string host
+        # -- typical for an unbound port -- doesn't fall through and incur a wasted DB
+        # re-read on a slot that cannot exist.
+        for host in dict.fromkeys(
+            [old_host, old_migrating_to, new_migrating_to, new_host]
+        ):
             if host:
                 self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
@@ -1196,11 +1189,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Called after Neutron has committed a port deletion event to the
         database.
 
-        ``sync_wep`` and ``sync_lm`` re-read the port from the Neutron DB
-        and find it missing -- ``PortNotFound`` -- so they CAS-delete each
-        slot at the observed mod_revision (or no-op if the slot was never
-        created).  We just enumerate the slots that could plausibly have
-        existed for this port.
+        ``sync_wep`` and ``sync_lm`` re-read the port from the Neutron DB and find it
+        missing -- ``PortNotFound`` -- so they CAS-delete each slot at the observed
+        mod_revision (or no-op if the slot was never created).  We just enumerate the
+        slots that could plausibly have existed for this port.
         """
         TrackTask("DELETE_PORT_POSTCOMMIT")
         LOG.info("DELETE_PORT_POSTCOMMIT: %s", context)
@@ -1214,15 +1206,15 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         migrating_to = port.get("binding:profile", {}).get("migrating_to")
         host = port.get("binding:host_id")
 
-        # If a live migration was in progress, sync the LiveMigration and
-        # dest WEP at the migration target (both will be CAS-deleted, since
-        # the port no longer exists in the DB).
+        # If a live migration was in progress, sync the LiveMigration and dest WEP at
+        # the migration target (both will be CAS-deleted, since the port no longer
+        # exists in the DB).
         if migrating_to is not None:
             self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
             self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
 
-        # Sync the source WEP slot.  Skipped if the port had no host
-        # binding (an unbound port never had a WEP).
+        # Sync the source WEP slot.  Skipped if the port had no host binding (an unbound
+        # port never had a WEP).
         if host:
             self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
