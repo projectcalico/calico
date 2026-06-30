@@ -541,17 +541,24 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         return live_migration_spec(self.namespace, port, dest_port)
 
     def sync_wep(self, port, host, context):
-        """Sync the WorkloadEndpoint for ``(port_id, host)`` to etcd.
+        """Sync the WorkloadEndpoint for this port at ``host`` to etcd.
 
-        The slot is identified by ``(port["id"], host)``.  A given port can own up to
-        two WEP slots in etcd: one at its current ``binding:host_id`` (the "source" WEP,
-        in the bound steady state) and one at its ``binding:profile.migrating_to`` (the
-        "dest" WEP, during live migration).  Both share the same key shape
-        ``endpoint_name(port_at_host)`` and the same WorkloadEndpoint resource type;
-        they only differ in which host's binding the spec describes.  ``sync_wep`` is
-        therefore agnostic as to "source" vs "dest" -- the caller passes the host they
-        want synced, and the function decides whether that slot should hold a WEP based
-        on a re-read of the port from the Neutron DB.
+        The etcd key is ``endpoint_name(port_at_host)`` --
+        ``<host>-openstack-<device_id>-<port_id>`` -- so the slot is identified by
+        ``(port_id, host, device_id)``.  In every callsite ``device_id`` is stable
+        across the sync (Calico does not support Nova hot-swapping a port between VMs in
+        place; detach + re-attach goes via separate update events where
+        ``_port_is_endpoint_port`` filters out the detached state), so the caller only
+        has to think about the (port, host) pair.
+
+        A given port can own up to two WEP slots in etcd: one at its current
+        ``binding:host_id`` (the "source" WEP, in the bound steady state) and one at its
+        ``binding:profile.migrating_to`` (the "dest" WEP, during live migration).  Both
+        share the same key shape and the same WorkloadEndpoint resource type; they only
+        differ in which host's binding the spec describes.  ``sync_wep`` is therefore
+        agnostic as to "source" vs "dest" -- the caller passes the host they want
+        synced, and the function decides whether that slot should hold a WEP based on a
+        re-read of the port from the Neutron DB.
 
         Each CAS attempt:
           1. Read the slot's mod_revision (KeyNotFound -> 0).
@@ -572,8 +579,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         port_id = port["id"]
 
         # Overlay binding:host_id=host before computing the etcd name so the caller can
-        # pass any convenient port dict -- the slot is identified by (port_id, host),
-        # not by whichever host the caller's dict happens to carry.
+        # pass either ``port`` or ``original`` -- the slot is identified by (port_id,
+        # host, device_id) and the caller-provided dict's ``binding:host_id`` does not
+        # matter.  ``device_id`` does have to match the slot we are targeting, but every
+        # callsite passes a dict whose ``device_id`` is stable across the update (see
+        # docstring).
         name = endpoint_name({**port, "binding:host_id": host})
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
@@ -643,10 +653,13 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         return None
 
     def sync_lm(self, port, dest_host, context):
-        """Sync the LiveMigration resource for ``(port_id, dest_host)`` to etcd.
+        """Sync the LiveMigration resource for this port at ``dest_host`` to etcd.
 
-        The slot is identified by ``(port["id"], dest_host)`` and shares its key shape
-        (and resource name) with the dest-side WEP at the same host, though they are
+        Like ``sync_wep``, the etcd key is
+        ``<dest_host>-openstack-<device_id>-<port_id>`` so the slot is identified by
+        ``(port_id, dest_host, device_id)``; see ``sync_wep`` for why ``device_id`` is
+        stable across the sync at every callsite.  The slot shares its key shape (and
+        resource name) with the dest-side WEP at the same host, though the two are
         stored as different resource types.
 
         Each CAS attempt:
