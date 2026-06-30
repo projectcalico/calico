@@ -42,7 +42,7 @@ func newCreateCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			parsedArgs["--skip-exists"], _ = cmd.Flags().GetBool("skip-exists")
-			return createOrApplyOrReplace(parsedArgs, "create")
+			return createOrApplyOrValidate(parsedArgs, "create")
 		},
 	}
 	addCRUDFlags(cmd)
@@ -56,7 +56,7 @@ func newApplyCommand() *cobra.Command {
 		Short: "Apply a resource by file, directory or stdin",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
-			return createOrApplyOrReplace(parsedArgs, "apply")
+			return createOrApplyOrValidate(parsedArgs, "apply")
 		},
 	}
 	addCRUDFlags(cmd)
@@ -69,7 +69,8 @@ func newReplaceCommand() *cobra.Command {
 		Short: "Replace a resource by file, directory or stdin",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
-			return createOrApplyOrReplace(parsedArgs, "replace")
+			results := common.ExecuteConfigCommand(parsedArgs, common.ActionUpdate)
+			return reportReplaceResults(&results)
 		},
 	}
 	addCRUDFlags(cmd)
@@ -82,20 +83,34 @@ func newValidateCommand() *cobra.Command {
 		Short: "Validate a resource by file, directory or stdin without applying it",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
-			return createOrApplyOrReplace(parsedArgs, "validate")
+			return createOrApplyOrValidate(parsedArgs, "validate")
 		},
 	}
 	addCRUDFlags(cmd)
 	return cmd
 }
 
-// createOrApplyOrReplace executes create, apply, replace, or validate using
-// the bridge args map and handles result formatting.
-func createOrApplyOrReplace(args map[string]any, action string) error {
+// pastTense maps an action verb to its past-tense form for user-facing
+// messages. The original per-command code spelled these out (created,
+// applied, validated); the verbs don't share a regular "+ed" ending so we
+// can't derive them from the action.
+var pastTense = map[string]string{
+	"create":   "created",
+	"apply":    "applied",
+	"validate": "validated",
+}
+
+// createOrApplyOrValidate executes create, apply, or validate using the
+// bridge args map and handles result formatting. These actions collect
+// per-resource errors in results.ResErrs (see common.ExecuteConfigCommand);
+// replace is handled separately by reportReplaceResults because update
+// errors surface via results.Err instead.
+func createOrApplyOrValidate(args map[string]any, action string) error {
 	results := executeForAction(args, action)
 	if results == nil {
 		return fmt.Errorf("unknown action: %s", action)
 	}
+	past := pastTense[action]
 
 	if results.FileInvalid {
 		return fmt.Errorf("failed to execute command: %v", results.Err)
@@ -114,20 +129,60 @@ func createOrApplyOrReplace(args map[string]any, action string) error {
 		}
 	} else if len(results.ResErrs) == 0 {
 		if results.SingleKind != "" {
-			fmt.Printf("Successfully %sed %d '%s' resource(s)\n", action, results.NumHandled, results.SingleKind)
+			fmt.Printf("Successfully %s %d '%s' resource(s)\n", past, results.NumHandled, results.SingleKind)
 		} else {
-			fmt.Printf("Successfully %sed %d resource(s)\n", action, results.NumHandled)
+			fmt.Printf("Successfully %s %d resource(s)\n", past, results.NumHandled)
 		}
 	} else {
 		if results.NumHandled-len(results.ResErrs) > 0 {
 			fmt.Printf("Partial success: ")
 			if results.SingleKind != "" {
-				fmt.Printf("%sed the first %d out of %d '%s' resources:\n", action, results.NumHandled, results.NumResources, results.SingleKind)
+				fmt.Printf("%s the first %d out of %d '%s' resources:\n", past, results.NumHandled, results.NumResources, results.SingleKind)
 			} else {
-				fmt.Printf("%sed the first %d out of %d resources:\n", action, results.NumHandled, results.NumResources)
+				fmt.Printf("%s the first %d out of %d resources:\n", past, results.NumHandled, results.NumResources)
 			}
 		}
 		return fmt.Errorf("hit error: %v", results.ResErrs)
+	}
+
+	return nil
+}
+
+// reportReplaceResults formats the results of a replace (update). Unlike
+// create/apply, ExecuteConfigCommand reports update failures in results.Err
+// (it does not append to ResErrs and does not skip the failed resource), so
+// a stale resource-version conflict must be detected via results.Err or it
+// gets reported as success.
+func reportReplaceResults(results *common.CommandResults) error {
+	if results.FileInvalid {
+		return fmt.Errorf("failed to execute command: %v", results.Err)
+	} else if results.NumResources == 0 {
+		if results.Err != nil {
+			return results.Err
+		}
+		fmt.Println("No resources specified")
+	} else if results.NumHandled == 0 {
+		if results.NumResources == 1 {
+			return fmt.Errorf("failed to replace '%s' resource: %v", results.SingleKind, results.Err)
+		} else if results.SingleKind != "" {
+			return fmt.Errorf("failed to replace any '%s' resources: %v", results.SingleKind, results.Err)
+		} else {
+			return fmt.Errorf("failed to replace any resources: %v", results.Err)
+		}
+	} else if results.Err == nil {
+		if results.SingleKind != "" {
+			fmt.Printf("Successfully replaced %d '%s' resource(s)\n", results.NumHandled, results.SingleKind)
+		} else {
+			fmt.Printf("Successfully replaced %d resource(s)\n", results.NumHandled)
+		}
+	} else {
+		fmt.Printf("Partial success: ")
+		if results.SingleKind != "" {
+			fmt.Printf("replaced the first %d out of %d '%s' resources:\n", results.NumHandled, results.NumResources, results.SingleKind)
+		} else {
+			fmt.Printf("replaced the first %d out of %d resources:\n", results.NumHandled, results.NumResources)
+		}
+		return fmt.Errorf("hit error: %v", results.Err)
 	}
 
 	return nil
@@ -224,7 +279,8 @@ func newPatchCommand() *cobra.Command {
 }
 
 // executeForAction runs ExecuteConfigCommand for the named action, returning nil if the
-// action is unknown.
+// action is unknown. Replace is not handled here; it has its own result handling
+// in newReplaceCommand because update errors surface differently (see reportReplaceResults).
 func executeForAction(args map[string]any, action string) *common.CommandResults {
 	var r common.CommandResults
 	switch action {
@@ -232,8 +288,6 @@ func executeForAction(args map[string]any, action string) *common.CommandResults
 		r = common.ExecuteConfigCommand(args, common.ActionCreate)
 	case "apply":
 		r = common.ExecuteConfigCommand(args, common.ActionApply)
-	case "replace":
-		r = common.ExecuteConfigCommand(args, common.ActionUpdate)
 	case "validate":
 		r = common.ExecuteConfigCommand(args, common.ActionValidate)
 	default:

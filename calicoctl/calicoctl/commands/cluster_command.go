@@ -15,8 +15,6 @@
 package commands
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/cluster"
@@ -36,30 +34,13 @@ func newClusterDiagsCommand() *cobra.Command {
 		Use:   "diags",
 		Short: "Collect snapshot of diagnostic info and logs related to Calico at the cluster-level",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Build the args array for the existing docopt-based implementation.
-			synthArgs := []string{"cluster", "diags"}
-			if since, _ := cmd.Flags().GetString("since"); since != "" {
-				synthArgs = append(synthArgs, "--since="+since)
-			}
-			if maxLogs, _ := cmd.Flags().GetInt("max-logs"); maxLogs != 5 {
-				synthArgs = append(synthArgs, fmt.Sprintf("--max-logs=%d", maxLogs))
-			}
-			if maxP, _ := cmd.Flags().GetInt("max-parallelism"); maxP != 10 {
-				synthArgs = append(synthArgs, fmt.Sprintf("--max-parallelism=%d", maxP))
-			}
-			if nodes, _ := cmd.Flags().GetString("focus-nodes"); nodes != "" {
-				synthArgs = append(synthArgs, "--focus-nodes="+nodes)
-			}
-			if config, _ := cmd.Flags().GetString("config"); config != "" {
-				synthArgs = append(synthArgs, "--config="+config)
-			}
-			if skip, _ := cmd.Flags().GetBool("skip-temp-dir-cleanup"); skip {
-				synthArgs = append(synthArgs, "--skip-temp-dir-cleanup")
-			}
-			if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
-				synthArgs = append(synthArgs, "--allow-version-mismatch")
-			}
-			return cluster.Diags(synthArgs)
+			config, _ := cmd.Flags().GetString("config")
+			since, _ := cmd.Flags().GetString("since")
+			maxLogs, _ := cmd.Flags().GetInt("max-logs")
+			maxParallelism, _ := cmd.Flags().GetInt("max-parallelism")
+			focusNodes, _ := cmd.Flags().GetString("focus-nodes")
+			skipTempDirCleanup, _ := cmd.Flags().GetBool("skip-temp-dir-cleanup")
+			return cluster.Diags(config, since, maxLogs, maxParallelism, focusNodes, skipTempDirCleanup)
 		},
 	}
 	addConfigFlag(cmd)

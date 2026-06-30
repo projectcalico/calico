@@ -23,11 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	docopt "github.com/docopt/docopt-go"
 	goversion "github.com/mcuadros/go-version"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 // The minimum allowed linux kernel version is 2.6.24, which introduced network
@@ -56,47 +53,17 @@ var requiredModules = map[string]string{
 	"xt_mark":              "CONFIG_IP_NF_TARGET_MARK",
 	"xt_multiport":         "CONFIG_IP_NF_MATCH_MULTIPORT",
 	"xt_set":               "CONFIG_NETFILTER_XT_SET",
-	"xt_u32":               "CONFIG_NETFILTER_XT_MATCH_U32"}
+	"xt_u32":               "CONFIG_NETFILTER_XT_MATCH_U32",
+}
 
 // Variable to override bootfile location.
 var overrideBootFile = ""
 
-// Checksystem checks host system for compatible versions
-func Checksystem(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> node checksystem [--kernel-config=<kernel-config>] [--allow-version-mismatch]
-
-Options:
-  -h --help                             Show this screen.
-  -f --kernel-config=<kernel-config>    Override the Kernel config file location.
-                                        Expected format is plain text.
-                                        default search locations:
-                                          "/usr/src/linux/.config",
-                                          "/boot/config-kernelVersion,
-                                          "/usr/src/linux-kernelVersion/.config",
-                                          "/usr/src/linux-headers-kernelVersion/.config",
-                                          "/lib/modules/kernelVersion/build/.config"
-     --allow-version-mismatch           Allow client and cluster versions mismatch.
-
-Description:
-  Check the compatibility of this compute host to run a Calico node instance.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
-	if parsedArgs["--kernel-config"] != nil {
-		overrideBootFile = parsedArgs["--kernel-config"].(string)
+// Checksystem checks host system for compatible versions. A non-empty
+// kernelConfig overrides the kernel config file search location.
+func Checksystem(kernelConfig string) error {
+	if kernelConfig != "" {
+		overrideBootFile = kernelConfig
 	}
 	// Make sure the command is run with super user privileges
 	enforceRoot()
@@ -104,14 +71,12 @@ Description:
 	systemOk := true
 
 	fmt.Print("Checking kernel version...\n")
-	err = checkKernelVersion()
-	if err != nil {
+	if err := checkKernelVersion(); err != nil {
 		systemOk = false
 	}
 
 	fmt.Print("Checking kernel modules...\n")
-	err = checkKernelModules()
-	if err != nil {
+	if err := checkKernelModules(); err != nil {
 		systemOk = false
 	}
 
@@ -155,7 +120,6 @@ func checkKernelVersion() error {
 
 // checkKernelModules checks for all the required kernel modules in the system
 func checkKernelModules() error {
-
 	kernelVersion, err := exec.Command("uname", "-r").Output()
 	if err != nil {
 		fmt.Printf("Error executing command: %s\n", err)
@@ -244,7 +208,6 @@ func checkKernelModules() error {
 // it opens the file provided and checks if the module passed in
 // as an argument exists for the provided kernelVersion
 func checkModule(filename, module, kernelVersion string, pattern string) error {
-
 	regex, err := regexp.Compile(fmt.Sprintf(pattern, module))
 	if err != nil {
 		log.Errorf("Error: %v\n", err)
@@ -286,7 +249,8 @@ func findBootFile(kernelVersion string) string {
 		"/boot/config-" + kernelVersion,
 		"/usr/src/linux-" + kernelVersion + "/.config",
 		"/usr/src/linux-headers-" + kernelVersion + "/.config",
-		"/lib/modules/" + kernelVersion + "/build/.config"}
+		"/lib/modules/" + kernelVersion + "/build/.config",
+	}
 
 	for _, v := range possibilePaths {
 		_, err := os.Stat(v)

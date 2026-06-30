@@ -39,7 +39,7 @@ func newNodeStatusCommand() *cobra.Command {
 		Use:   "status",
 		Short: "View the current status of a Calico node",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Status([]string{"node", "status"})
+			return node.Status()
 		},
 	}
 }
@@ -49,7 +49,8 @@ func newNodeDiagsCommand() *cobra.Command {
 		Use:   "diags",
 		Short: "Gather a diagnostics bundle for a Calico node",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Diags([]string{"node", "diags"})
+			logDir, _ := cmd.Flags().GetString("log-dir")
+			return node.Diags(logDir)
 		},
 	}
 	cmd.Flags().String("log-dir", "/var/log/calico", "The directory containing Calico logs.")
@@ -61,7 +62,8 @@ func newNodeChecksystemCommand() *cobra.Command {
 		Use:   "checksystem",
 		Short: "Verify the compute host is able to run a Calico node instance",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Checksystem([]string{"node", "checksystem"})
+			kernelConfig, _ := cmd.Flags().GetString("kernel-config")
+			return node.Checksystem(kernelConfig)
 		},
 	}
 	cmd.Flags().StringP("kernel-config", "f", "", "Override the Kernel config file location.")
@@ -73,7 +75,22 @@ func newNodeRunCommand() *cobra.Command {
 		Use:   "run",
 		Short: "Run the Calico node container image",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Run([]string{"node", "run"})
+			c := node.RunConfig{}
+			c.IP, _ = cmd.Flags().GetString("ip")
+			c.IP6, _ = cmd.Flags().GetString("ip6")
+			c.AS, _ = cmd.Flags().GetString("as")
+			c.Name, _ = cmd.Flags().GetString("name")
+			c.IPAutodetectionMethod, _ = cmd.Flags().GetString("ip-autodetection-method")
+			c.IP6AutodetectionMethod, _ = cmd.Flags().GetString("ip6-autodetection-method")
+			c.LogDir, _ = cmd.Flags().GetString("log-dir")
+			c.NodeImage, _ = cmd.Flags().GetString("node-image")
+			c.Backend, _ = cmd.Flags().GetString("backend")
+			c.Config, _ = cmd.Flags().GetString("config")
+			c.FelixConfig, _ = cmd.Flags().GetString("felix-config")
+			c.DryRun, _ = cmd.Flags().GetBool("dryrun")
+			c.InitSystem, _ = cmd.Flags().GetBool("init-system")
+			c.NoDefaultIPPools, _ = cmd.Flags().GetBool("no-default-ippools")
+			return node.Run(c)
 		},
 	}
 	cmd.Flags().String("ip", "", "Set the local IPv4 routing address for this node.")
