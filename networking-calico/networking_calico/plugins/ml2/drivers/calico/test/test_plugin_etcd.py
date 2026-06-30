@@ -1540,14 +1540,18 @@ class TestPluginEtcd(TestPluginEtcdBase):
 
         # Exactly MAX_CAS_ATTEMPTS transactions attempted, then bail.
         self.assertEqual(self.clientv3.transaction.call_count, MAX_CAS_ATTEMPTS)
+
         # The injected failures past the retry budget were not consumed, confirming the
         # loop bailed rather than spinning further.
         self.assertEqual(remaining(), 3)
-        # Warning logged with the key so operators can correlate.
+
+        # Warning is logged with the subnet ID (part of the etcd key) so operators can
+        # correlate.
         warning.assert_called_once()
         self.assertIn(
             "subnet-id-cas-exhaust", " ".join(str(a) for a in warning.call_args.args)
         )
+
         # Nothing made it into etcd.
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
