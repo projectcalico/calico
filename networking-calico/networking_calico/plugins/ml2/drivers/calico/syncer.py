@@ -19,6 +19,12 @@ from oslo_log import log
 
 LOG = log.getLogger(__name__)
 
+# Retry budget for attempts to sync dynamic Neutron resource updates with etcd; for
+# example see the get-then-CAS-put loop in ``sync_subnet``.  Sized to tolerate moderate
+# per-key contention while bounding the worst case.  Drift beyond this is left for the
+# next resync (whether startup or on-demand) to repair.
+MAX_CAS_ATTEMPTS = 5
+
 
 class ResourceGone(Exception):
     pass
