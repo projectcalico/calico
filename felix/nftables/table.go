@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -242,6 +243,12 @@ type NftablesTable struct {
 	// flowtableDevices is the combined, sorted list of all devices for the flowtable.
 	// Updated when either overlayDevices or workloadInterfaces changes.
 	flowtableDevices []string
+
+	// flowtableEnabled is true when flowtable offload is enabled. The setters below are only
+	// called when the feature is on, so either of them firing turns this on. It lets us re-assert
+	// the flowtable on every resync — keeping it in lockstep with the always-present FORWARD rule
+	// even when the device list is empty.
+	flowtableEnabled bool
 
 	// flowtableDirty is true when flowtableDevices has changed and needs to be programmed.
 	flowtableDirty bool
@@ -507,6 +514,7 @@ func (n *NftablesTable) IPVersion() uint8 {
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
 // flowtable device list. Called during initialization from int_dataplane.go.
 func (t *NftablesTable) SetOverlayDevices(devices []string) {
+	t.flowtableEnabled = true
 	t.overlayDevices = devices
 	t.recalcFlowtableDevices()
 }
@@ -514,6 +522,7 @@ func (t *NftablesTable) SetOverlayDevices(devices []string) {
 // SetWorkloadInterfaces updates the set of active workload interfaces for the flowtable.
 // Called by the endpoint manager when workload endpoints change.
 func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
+	t.flowtableEnabled = true
 	t.workloadInterfaces = ifces
 	t.recalcFlowtableDevices()
 }
@@ -946,8 +955,10 @@ func (t *NftablesTable) InvalidateDataplaneCache(reason string) {
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 	t.reason = reason
-	// Also mark the flowtable as dirty so it gets re-programmed if needed.
-	if len(t.flowtableDevices) > 0 {
+	// Re-assert the flowtable on the next Apply whenever offload is enabled, so a full resync
+	// reprograms it even with an empty device set — the FORWARD "flow offload" rule references it
+	// unconditionally, so it must exist whether or not any devices are currently attached.
+	if t.flowtableEnabled {
 		t.flowtableDirty = true
 	}
 }
@@ -1079,20 +1090,19 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 	}
 
-	// Program the flowtable if it has changed. We use Add which acts as create-or-update.
-	// The flowtable must exist before any rules that reference it via "flow offload @calico".
+	// Program the flowtable if it has changed. We use Add, which acts as create-or-update.
+	// The setters that mark the flowtable dirty are only ever called when offload is enabled,
+	// so a dirty flowtable means the feature is on and the "flow offload @calico" rule will be
+	// present in the FORWARD chain. The flowtable object must exist for that rule to load, even
+	// when it currently has no devices — so we always create it here rather than deleting it on
+	// an empty device set (an empty flowtable is valid; it simply offloads nothing).
 	if t.flowtableDirty {
-		if len(t.flowtableDevices) > 0 {
-			prio := knftables.FilterIngressPriority
-			tx.Add(&knftables.Flowtable{
-				Name:     "calico",
-				Priority: &prio,
-				Devices:  t.flowtableDevices,
-			})
-		} else {
-			// No devices — delete the flowtable if it exists.
-			tx.Delete(&knftables.Flowtable{Name: "calico"})
-		}
+		prio := knftables.FilterIngressPriority
+		tx.Add(&knftables.Flowtable{
+			Name:     dataplanedefs.FlowtableName,
+			Priority: &prio,
+			Devices:  t.flowtableDevices,
+		})
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
