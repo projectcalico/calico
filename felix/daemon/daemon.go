@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var configParams *config.Config
 	var typhaDiscoverer *discovery.Discoverer
 	var numClientsCreated int
-	var k8sClientSet *kubernetes.Clientset
+	var k8sClientSet kubernetes.Interface
 	var kubernetesVersion string
 configRetry:
 	for {
@@ -275,6 +275,7 @@ configRetry:
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
+		configParams.Encapsulation.NoEncapEnabled = encapCalculator.NoEncapEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -1436,8 +1437,8 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				return fc.config.Encapsulation
 			}()
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 {
-				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
+				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}
 		}

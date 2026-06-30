@@ -77,6 +77,8 @@ type AttachPoint struct {
 	AttachType                    apiv3.BPFAttachOption
 	IngressPacketRateConfigured   bool
 	EgressPacketRateConfigured    bool
+	IngressConnLimitConfigured    bool
+	EgressConnLimitConfigured     bool
 	WorkloadSrcSpoofingConfigured bool
 	UDPGSOLinearize               bool
 	DSCP                          int8
@@ -592,6 +594,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 
 	if ap.EgressPacketRateConfigured {
 		globalData.Flags |= libbpf.GlobalsEgressPacketRateConfigured
+	}
+
+	if ap.IngressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+	}
+
+	if ap.EgressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsEgressConnLimitConfigured
 	}
 
 	switch ap.RPFEnforceOption {

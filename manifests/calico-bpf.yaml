@@ -105,7 +105,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -405,7 +404,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1305,7 +1303,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1554,7 +1551,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1621,7 +1617,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1964,7 +1959,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -2036,7 +2030,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -2887,7 +2880,9 @@ spec:
                     IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   description: |-
@@ -2954,12 +2949,14 @@ spec:
                     - Disabled
                   type: string
                 istioDSCPMark:
+                  anyOf:
+                    - type: integer
+                    - type: string
                   description: |-
                     IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
                     SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
                     with other Istio installation. [Default: 23]
                   pattern: ^.*
-                  type: integer
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
@@ -2979,6 +2976,26 @@ spec:
                     VM live migration completes.  This allows routes to converge across the cluster before
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                localSubnetL2Reachability:
+                  description: |-
+                    LocalSubnetL2Reachability controls whether Felix automatically responds to
+                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+                    selected LoadBalancer VIPs that fall within the same subnet as the host
+                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
+                localSubnetL2ReachabilityRefreshInterval:
+                  description: |-
+                    LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+                    (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+                    forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+                    to disable periodic re-announcement, leaving only the one-shot announce when an
+                    IP is added. [Default: 120s]
                   type: string
                 logActionRateLimit:
                   description: |-
@@ -3117,7 +3134,9 @@ spec:
                     NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 nftablesMode:
                   default: Auto
@@ -3190,7 +3209,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -3508,7 +3527,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4810,7 +4828,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4869,7 +4886,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4996,7 +5012,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5039,10 +5054,8 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
                     nullable: true
+                    type: integer
                   type: array
                 attributes:
                   description: |-
@@ -5060,6 +5073,13 @@ spec:
                         type: object
                       handle_id:
                         description: HandleID is the primary identifier for the allocation.
+                        type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
                         type: string
                       secondary:
                         additionalProperties:
@@ -5134,7 +5154,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5165,6 +5184,14 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                ipCooldownSeconds:
+                  description: |-
+                    IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  maximum: 1200
+                  minimum: 0
+                  type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
@@ -5212,7 +5239,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5271,7 +5297,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5531,7 +5556,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5588,7 +5612,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -6081,7 +6104,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -7334,7 +7356,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -7391,7 +7412,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -8703,7 +8723,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -9235,7 +9254,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -10499,7 +10517,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -12030,6 +12047,15 @@ rules:
       - get
       - list
       - watch
+  # KubeVirt VM/VMI informers for IPAM garbage collection of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -12261,6 +12287,13 @@ rules:
       - create
       - update
       - delete
+  # The CNI plugin reads KubeVirt resources for IPAM of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstances
+      - virtualmachines
+    verbs:
+      - get
 ---
 # Source: calico/templates/tier-getter.yaml
 # Implements the necessary permissions for the kube-controller-manager to interact with

@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.5
+    controller-gen.kubebuilder.io/version: v0.18.0
   name: datastoremigrations.migration.projectcalico.org
 spec:
   group: migration.projectcalico.org
@@ -68,8 +68,10 @@ spec:
           metadata:
             type: object
           spec:
+            description: Spec defines the desired migration behavior.
             properties:
               type:
+                description: Type specifies the migration to perform (e.g., APIServerToCRDs).
                 enum:
                 - APIServerToCRDs
                 type: string
@@ -77,13 +79,16 @@ spec:
             - type
             type: object
           status:
+            description: Status reports the observed state of the migration.
             properties:
               completedAt:
+                description: CompletedAt is the timestamp when the migration transitioned
+                  to Complete.
                 format: date-time
                 type: string
-              message:
-                type: string
               conditions:
+                description: Conditions report conflicts and errors encountered during
+                  migration.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -139,48 +144,84 @@ spec:
                   - type
                   type: object
                 type: array
+              message:
+                description: |-
+                  Message is a human-readable status message describing what the controller
+                  is currently doing or waiting on.
+                type: string
               phase:
+                description: Phase is the current phase of the migration state machine.
                 type: string
               progress:
+                description: Progress tracks per-type and aggregate migration counters.
                 properties:
                   completedTypes:
+                    description: CompletedTypes is the number of resource types that
+                      have been fully processed.
                     type: integer
                   conflicts:
+                    description: Conflicts is the number of resources that existed
+                      in v3 with different content.
                     type: integer
                   currentType:
+                    description: CurrentType is the resource kind currently being
+                      migrated, or empty if done.
                     type: string
                   migrated:
+                    description: Migrated is the number of resources successfully
+                      copied to v3.
                     type: integer
                   skipped:
+                    description: Skipped is the number of resources that already existed
+                      in v3 with matching content.
                     type: integer
                   total:
+                    description: Total is the total number of resources processed
+                      across all types.
                     type: integer
                   totalTypes:
+                    description: TotalTypes is the number of resource types to migrate.
                     type: integer
-                  typeProgress:
-                    type: string
                   typeDetails:
+                    description: TypeDetails contains per-resource-type migration
+                      results.
                     items:
-                      description: TypeMigrationProgress tracks the result for a single
-                        resource type.
+                      description: TypeMigrationProgress tracks the migration result
+                        for a single resource kind.
                       properties:
                         conflicts:
+                          description: Conflicts is the number of resources of this
+                            kind that existed in v3 with different content.
                           type: integer
                         kind:
+                          description: Kind is the Calico resource kind (e.g., "NetworkPolicy",
+                            "GlobalNetworkPolicy").
                           type: string
                         migrated:
+                          description: Migrated is the number of resources of this
+                            kind successfully copied to v3.
                           type: integer
                         skipped:
+                          description: Skipped is the number of resources of this
+                            kind that already existed in v3 with matching content.
                           type: integer
                       required:
                       - kind
                       type: object
                     type: array
+                  typeProgress:
+                    description: TypeProgress is a human-readable summary like "5
+                      / 21" for printer columns.
+                    type: string
                 type: object
               startedAt:
+                description: StartedAt is the timestamp when the migration transitioned
+                  to Migrating.
                 format: date-time
                 type: string
             type: object
+        required:
+        - spec
         type: object
     served: true
     storage: true

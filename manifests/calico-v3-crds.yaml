@@ -110,7 +110,6 @@ spec:
       - bgpconfig
       - bgpconfigs
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -412,7 +411,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -1315,7 +1313,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -1602,7 +1599,6 @@ spec:
       - affinity
       - affinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -1700,7 +1696,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -2058,7 +2053,6 @@ spec:
       - clusterinfo
       - clusterinfos
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -2146,7 +2140,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -2996,7 +2989,9 @@ spec:
                     IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   description: |-
@@ -3063,12 +3058,14 @@ spec:
                     - Disabled
                   type: string
                 istioDSCPMark:
+                  anyOf:
+                    - type: integer
+                    - type: string
                   description: |-
                     IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
                     SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
                     with other Istio installation. [Default: 23]
                   pattern: ^.*
-                  type: integer
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
@@ -3088,6 +3085,26 @@ spec:
                     VM live migration completes.  This allows routes to converge across the cluster before
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                localSubnetL2Reachability:
+                  description: |-
+                    LocalSubnetL2Reachability controls whether Felix automatically responds to
+                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+                    selected LoadBalancer VIPs that fall within the same subnet as the host
+                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
+                localSubnetL2ReachabilityRefreshInterval:
+                  description: |-
+                    LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+                    (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+                    forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+                    to disable periodic re-announcement, leaving only the one-shot announce when an
+                    IP is added. [Default: 120s]
                   type: string
                 logActionRateLimit:
                   description: |-
@@ -3226,7 +3243,9 @@ spec:
                     NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 nftablesMode:
                   default: Auto
@@ -3299,7 +3318,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -3623,7 +3642,6 @@ spec:
       - gnp
       - cgnp
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -4943,7 +4961,6 @@ spec:
     shortNames:
       - gns
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5010,7 +5027,6 @@ spec:
       - hep
       - heps
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5152,7 +5168,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5210,10 +5225,8 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
                     nullable: true
+                    type: integer
                   type: array
                   x-kubernetes-list-type: atomic
                 attributes:
@@ -5237,6 +5250,13 @@ spec:
                         description:
                           HandleID is the ID of the IPAM handle that owns
                           this allocation.
+                        type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
                         type: string
                       secondary:
                         additionalProperties:
@@ -5321,7 +5341,6 @@ spec:
       - ipamconfig
       - ipamconfigs
     singular: ipamconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5370,6 +5389,15 @@ spec:
                   default: true
                   description: Whether or not to auto allocate blocks to hosts.
                   type: boolean
+                ipCooldownSeconds:
+                  description: |-
+                    IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  format: int32
+                  maximum: 1200
+                  minimum: 0
+                  type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
@@ -5426,7 +5454,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5503,7 +5530,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -5791,7 +5817,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -5860,7 +5885,6 @@ spec:
       - kcc
       - kccs
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -6359,7 +6383,6 @@ spec:
       - cnp
       - caliconetworkpolicy
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -7625,7 +7648,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -7686,7 +7708,6 @@ spec:
     shortNames:
       - sgnp
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -9014,7 +9035,6 @@ spec:
     shortNames:
       - sknp
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -9553,7 +9573,6 @@ spec:
       - scnp
       - snp
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -10833,7 +10852,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -12381,6 +12399,15 @@ rules:
       - get
       - list
       - watch
+  # KubeVirt VM/VMI informers for IPAM garbage collection of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -12610,6 +12637,13 @@ rules:
       - create
       - update
       - delete
+  # The CNI plugin reads KubeVirt resources for IPAM of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstances
+      - virtualmachines
+    verbs:
+      - get
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -13224,7 +13258,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "policytypes.policy.projectcalico.org"
@@ -13286,7 +13320,7 @@ spec:
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
 # and sets the projectcalico.org/tier label to match.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicy
 metadata:
   name: "tierlabel.policy.projectcalico.org"
@@ -13329,7 +13363,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-policytypes-binding
@@ -13349,7 +13383,7 @@ spec:
 ---
 # Source: calico/templates/admission-policies.yaml
 # This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingAdmissionPolicyBinding
 metadata:
   name: set-tier-label-binding
@@ -13365,6 +13399,37 @@ spec:
           - globalnetworkpolicies
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
+---
+# Source: calico/templates/admission-policies.yaml
+---
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: calico/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
 ---
 # Source: calico/templates/calico-webhooks.yaml
 apiVersion: admissionregistration.k8s.io/v1

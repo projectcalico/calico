@@ -124,8 +124,18 @@
         commands:
           - cd ..
           - tar --use-compress-program="zstd -3" -cf /tmp/working-copy.tar.zstd $CALICO_DIR_NAME
-          - gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
-          - gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+          - |-
+            if [[ "${SEMAPHORE_GIT_BRANCH}" == "master" ]]; then
+              # master uses Semaphore's free cache (other branches use GCS). This
+              # block only runs on branch builds (its `when: "branch =~ '.*'"`),
+              # so PRs never store here — they only restore, in the prologue.
+              # Cache keys are not overwritten, so delete-then-store to refresh.
+              cache delete "working-copy-${SEMAPHORE_GIT_BRANCH}" || true
+              cache store "working-copy-${SEMAPHORE_GIT_BRANCH}" /tmp/working-copy.tar.zstd
+            else
+              gcs_branch_cache_dir="${GCS_CACHE_DIR}/${SEMAPHORE_GIT_BRANCH}"
+              gcloud storage cp /tmp/working-copy.tar.zstd "$gcs_branch_cache_dir/working-copy.tar.zstd"
+            fi
 
 - name: "Build: nftables RPMs"
   # Producer for the patched nftables + libnftnl RPMs that calico/node and the
@@ -136,8 +146,16 @@
   # arches) and uploads the image tarball to GCS for downstream consumers.
   # Publishing to Docker Hub happens in a separate post-build promotion
   # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
+  #
+  # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
+  # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
+  # block's CHANGE_IN must be a superset of the union of all three consumer
+  # triggers — otherwise the consumer fires, the producer skips, and the
+  # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
+  # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
+  # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
   run:
-    when: "true"
+    when: "${CHANGE_IN(node,istio,felix,non-go:/node/,non-go:/istio/,non-go:/felix/,non-go:/hack/rpms/nftables/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies: []
   task:
     agent:
@@ -165,11 +183,13 @@
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
 
 - name: "Pull: go-build image"
-  # Populate the GCS cache of calico/go-build so that every downstream job can
-  # docker-load it from GCS (faster, and avoids Docker Hub rate limits) rather
-  # than pulling cold from Docker Hub. The cache is keyed by GO_BUILD_VER so
-  # the tarball survives across workflows — the common case is a no-op
-  # `gcloud storage ls` on a cache hit.
+  # Populate the GCS cache of calico/go-build so it can serve as a fallback when
+  # a Docker Hub pull fails (which we still see occasionally even with an
+  # authenticated session). Jobs pull from Docker Hub first and only fall back to
+  # this GCS copy on failure (see the global prologue), so this is just an
+  # insurance upload — uploads are free and the common case is a no-op
+  # `gcloud storage ls` cache hit, keyed by GO_BUILD_VER so the tarball survives
+  # across workflows.
   run:
     when: "true"
   dependencies: []
@@ -193,12 +213,34 @@
               gcloud storage cp /tmp/go-build.tar.zst "$cache_path"
             fi
 - name: "Build: calico image"
-  # Always build and cache the calico image so that downstream CI blocks can
-  # load it from GCS instead of rebuilding per component. This block is the
-  # sole producer for the "calico" build-cache group — every Go component
-  # block on master restores the module + build cache populated here.
+  # Build and cache the calico image so that downstream CI blocks can load it
+  # from GCS instead of rebuilding per component. This block is the sole
+  # producer for the "calico" build-cache group — every Go component block on
+  # master restores the module + build cache populated here.
+  #
+  # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
+  # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
+  # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+  # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
+  # producer must run whenever they do — including on felix-test-only PRs.
+  #
+  # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
+  # test-file exclusion, but for every *secondary*/dependency package it adds a
+  # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
+  # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
+  # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
+  # while skipping this producer — leaving the artifacts unuploaded. Putting felix
+  # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
+  # cmd/calico stays as a secondary so the calico image still rebuilds on changes
+  # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
+  #
+  # The process/testing paths trigger this so the win-fv-felix block (which now
+  # installs the locally-built calico image) has it cached in GCS. The libcalico
+  # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
+  # superset of the win-fv-felix block's trigger (felix's full test closure plus
+  # its own CI block), so win-fv-felix never runs without this image in GCS.
   run:
-    when: "true"
+    when: "${CHANGE_IN(felix,cmd/calico,typha,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies: []
   task:
     env_vars:
@@ -253,8 +295,12 @@
   # stage assembly (copying binaries onto the base image) runs here, not the Go
   # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
   # can depend on the shared producer→GCS→consumer upload pattern.
+  # felix is primary (not node) so a felix-test-only PR still triggers this
+  # producer: the deps tool keeps /**/*_test.go coverage only for the primary
+  # arg. That matches the win-fv-felix consumer which installs this image. See
+  # the "Build: calico image" comment for the full rationale.
   run:
-    when: "${CHANGE_IN(node)}"
+    when: "${CHANGE_IN(felix,node,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
   dependencies:
     - "Build: nftables RPMs"
   task:

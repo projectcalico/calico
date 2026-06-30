@@ -43,18 +43,13 @@ protobuf proto/udsver.pb.go: proto/udsver.proto
 	$(MAKE) fix-changed
 
 UPSTREAM_REGISTRAR_PROJECT ?= kubernetes-csi/$(REGISTRAR_IMAGE)
-UPSTREAM_REGISTRAR_TAG     ?= f0fd46fc3fbdb6fe20fc2d2614631816b551a143 #https://github.com/kubernetes-csi/node-driver-registrar/commit/f0fd46fc3fbdb6fe20fc2d2614631816b551a143
+UPSTREAM_REGISTRAR_TAG     ?= 2d18e12bc5077c36cbd564be7eab9ea94c0c85fb #https://github.com/kubernetes-csi/node-driver-registrar/commit/2d18e12bc5077c36cbd564be7eab9ea94c0c85fb
 
 REGISTRAR_TIGERA_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && \
 	go build -tags $(TAGS) -buildvcs=false -v -o $(BINDIR)/csi-node-driver-registrar cmd/csi-node-driver-registrar/*.go"
 REGISTRAR_UPSTREAM_BUILD_CMD="cd /go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT) && make build BUILD_PLATFORMS=$(BUILD_PLATFORMS)"
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
-CGO_ENABLED=1
-GOEXPERIMENT=""
-else ifeq ($(ARCH), $(filter $(ARCH),arm64))
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 CGO_ENABLED=0
 REGISTRAR_BUILD_CMD=$(REGISTRAR_TIGERA_BUILD_CMD)
 else ifeq ($(ARCH), $(filter $(ARCH),ppc64le))
@@ -72,7 +67,7 @@ REGISTRAR_BUILD_CMD=$(REGISTRAR_UPSTREAM_BUILD_CMD)
 endif
 
 $(BINDIR)/node-driver-registrar-%: clone-registrar-upstream
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) \
 			-v $(REPO_ROOT)/pod2daemon/$(REGISTRAR_IMAGE):/go/src/github.com/$(UPSTREAM_REGISTRAR_PROJECT):rw \
 			$(CALICO_BUILD) \
 			/bin/bash -c $(REGISTRAR_BUILD_CMD)
@@ -90,6 +85,10 @@ endif
 	  git fetch --tags origin $(UPSTREAM_REGISTRAR_TAG) && \
 	  git checkout $(UPSTREAM_REGISTRAR_TAG)
 	rm -rf ./$(REGISTRAR_IMAGE)/vendor
+	# Reset go.mod/go.sum to the pinned commit and (re-)apply the CVE dependency
+	# patch. The reset keeps this idempotent across repeated incremental builds.
+	cd $(REGISTRAR_IMAGE) && git checkout -- go.mod go.sum
+	patch -d $(REGISTRAR_IMAGE) -p1 < node-driver-registrar-patches/0001-CVE-dependency-fixes.patch
 
 clean-registrar:
 	rm -rf ./$(REGISTRAR_IMAGE)

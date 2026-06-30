@@ -136,6 +136,7 @@ for FILE in $VALUES_FILES; do
 	${HELM} -n kube-system template \
 		../charts/calico \
 		--set version=$CALICO_VERSION \
+		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
 		-f ../charts/values/$FILE > $FILE
 done
 

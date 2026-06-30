@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"net"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/vishvananda/netlink"
@@ -22,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 )
@@ -41,9 +44,21 @@ var _ = Describe("NoEncap Manager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		la := netlink.NewLinkAttrs()
-		la.Name = "eth0"
 		opRecorder := logutils.NewSummarizer("test")
+
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		dataplaneV6 := mocknetlink.New()
+		_, err = dataplaneV6.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		eth0V6 := dataplaneV6.AddIface(2, "eth0", true, true)
+		Expect(dataplaneV6.AddrAdd(eth0V6, &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fc00:10:96::2")}})).To(Succeed())
+		dataplaneV6.ResetDeltas()
 
 		noencapMgr = newNoEncapManagerWithSims(
 			rt,
@@ -54,10 +69,7 @@ var _ = Describe("NoEncap Manager", func() {
 				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
-			&mockTunnelDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 4,
-			},
+			dataplane,
 		)
 		noencapMgrV6 = newNoEncapManagerWithSims(
 			rt,
@@ -68,10 +80,7 @@ var _ = Describe("NoEncap Manager", func() {
 				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
-			&mockTunnelDataplane{
-				links:     []netlink.Link{&mockLink{attrs: la}},
-				ipVersion: 6,
-			},
+			dataplaneV6,
 		)
 	})
 

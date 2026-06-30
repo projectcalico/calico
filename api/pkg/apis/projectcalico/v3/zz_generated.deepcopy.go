@@ -37,6 +37,10 @@ func (in *AllocationAttribute) DeepCopyInto(out *AllocationAttribute) {
 			(*out)[key] = val
 		}
 	}
+	if in.ReleasedAt != nil {
+		in, out := &in.ReleasedAt, &out.ReleasedAt
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 
@@ -1535,7 +1539,7 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.IptablesMarkMask != nil {
 		in, out := &in.IptablesMarkMask, &out.IptablesMarkMask
-		*out = new(uint32)
+		*out = new(int64)
 		**out = **in
 	}
 	if in.DisableConntrackInvalidCheck != nil {
@@ -1741,7 +1745,7 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	}
 	if in.NftablesMarkMask != nil {
 		in, out := &in.NftablesMarkMask, &out.NftablesMarkMask
-		*out = new(uint32)
+		*out = new(int64)
 		**out = **in
 	}
 	if in.BPFEnabled != nil {
@@ -2059,6 +2063,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.FloatingIPs != nil {
 		in, out := &in.FloatingIPs, &out.FloatingIPs
 		*out = new(FloatingIPType)
+		**out = **in
+	}
+	if in.LocalSubnetL2Reachability != nil {
+		in, out := &in.LocalSubnetL2Reachability, &out.LocalSubnetL2Reachability
+		*out = new(LocalSubnetL2ReachabilityMode)
+		**out = **in
+	}
+	if in.LocalSubnetL2ReachabilityRefreshInterval != nil {
+		in, out := &in.LocalSubnetL2ReachabilityRefreshInterval, &out.LocalSubnetL2ReachabilityRefreshInterval
+		*out = new(v1.Duration)
 		**out = **in
 	}
 	if in.WindowsManageFirewallRules != nil {

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func StartDataplaneDriver(
 	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
+	k8sClientSet kubernetes.Interface,
 	lc *calc.LookupsCache,
 	ipamClient ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
@@ -217,9 +217,11 @@ func StartDataplaneDriver(
 		}
 
 		dpConfig := intdataplane.Config{
-			Hostname:           felixHostname,
-			NodeZone:           felixNodeZone,
-			FloatingIPsEnabled: strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
+			Hostname:                                 felixHostname,
+			NodeZone:                                 felixNodeZone,
+			FloatingIPsEnabled:                       strings.EqualFold(configParams.FloatingIPs, string(apiv3.FloatingIPsEnabled)),
+			LocalSubnetL2Reachability:                configParams.LocalSubnetL2Reachability,
+			LocalSubnetL2ReachabilityRefreshInterval: configParams.LocalSubnetL2ReachabilityRefreshInterval,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 				ResyncInterval:    configParams.InterfaceRefreshInterval,
@@ -340,6 +342,7 @@ func StartDataplaneDriver(
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
 			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
+			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,

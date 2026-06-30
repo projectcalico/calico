@@ -131,15 +131,11 @@ func New(
 	if options == nil {
 		options = &Options{}
 	}
-	cbskn, ok := cbs.(CallbacksWithKeysKnown)
-	if !ok {
-		cbskn = simpleCallbacksAdapter{cbs}
-	}
 	sc := &SyncerClient{
 		logCxt: log.WithFields(log.Fields{
 			"type": options.SyncerType,
 		}),
-		callbacks:          cbskn,
+		callbacks:          cbs,
 		discoverer:         discoverer,
 		connAttemptTracker: discovery.NewConnAttemptTracker(discoverer),
 
@@ -172,29 +168,14 @@ type SyncerClient struct {
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
 
-	callbacks CallbacksWithKeysKnown
+	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
 }
 
-type CallbacksWithKeysKnown interface {
-	api.SyncerCallbacks
-	OnUpdatesKeysKnown(updates []api.Update, keys []string)
-}
-
 type RestartAwareCallbacks interface {
-	CallbacksWithKeysKnown
+	api.SyncerCallbacks
 	OnTyphaConnectionRestarted()
 }
-
-type simpleCallbacksAdapter struct {
-	api.SyncerCallbacks
-}
-
-func (c simpleCallbacksAdapter) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
-	c.OnUpdates(updates)
-}
-
-var _ CallbacksWithKeysKnown = simpleCallbacksAdapter{}
 
 func (s *SyncerClient) Start(cxt context.Context) error {
 	// Connect synchronously so that we can return an error early if we can't connect at all.
@@ -530,7 +511,6 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 			logCxt.Debug("Pong sent to Typha")
 		case syncproto.MsgKVs:
 			updates := make([]api.Update, 0, len(msg.KVs))
-			keys := make([]string, 0, len(msg.KVs))
 			if s.options.DebugDiscardKVUpdates {
 				// For simulating lots of clients in tests, just throw away the data.
 				continue
@@ -548,9 +528,8 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 					}).Debug("Decoded update from Typha")
 				}
 				updates = append(updates, update)
-				keys = append(keys, kv.Key)
 			}
-			s.callbacks.OnUpdatesKeysKnown(updates, keys)
+			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgDecoderRestart:
 			if s.options.DisableDecoderRestart {
 				log.Error("Server sent MsgDecoderRestart but we signalled no support.")

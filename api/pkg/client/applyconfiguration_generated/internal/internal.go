@@ -36,6 +36,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: handle_id
       type:
         scalar: string
+    - name: releasedAt
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: secondary
       type:
         map:
@@ -1176,6 +1179,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: liveMigrationRouteConvergenceTime
       type:
         namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
+    - name: localSubnetL2Reachability
+      type:
+        scalar: string
+    - name: localSubnetL2ReachabilityRefreshInterval
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Duration
     - name: logActionRateLimit
       type:
         scalar: string
@@ -1671,6 +1680,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
+    - name: ipCooldownSeconds
+      type:
+        scalar: numeric
     - name: kubeVirtVMAddressPersistence
       type:
         scalar: string

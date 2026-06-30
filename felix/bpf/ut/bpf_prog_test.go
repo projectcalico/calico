@@ -623,7 +623,7 @@ var (
 	policyJumpMap                                                                                                                                            []maps.Map
 	ringBufMap, ringBufDropsMap                                                                                                                              maps.Map
 	profilingMap, ipfragsMapTmp                                                                                                                              maps.Map
-	qosMap                                                                                                                                                   maps.Map
+	qosMap, qosConnMap                                                                                                                                       maps.Map
 	ctlbProgsMap                                                                                                                                             []maps.Map
 	progMap                                                                                                                                                  []maps.Map
 	allMaps                                                                                                                                                  []maps.Map
@@ -662,6 +662,7 @@ func initMapsOnce() {
 		ctlbProgsMap = nat.ProgramsMaps()
 		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
+		qosConnMap = qos.ConnMap()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
 		allowSourcesMap = allowsources.Map()
@@ -673,7 +674,7 @@ func initMapsOnce() {
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ipfragsFwdMap, ifstateMap, profilingMap,
-			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, qosConnMap, maglevMap, maglevMapV6,
 			allowSourcesMap, allowSourcesMapV6, ringBufMap, ringBufDropsMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -697,7 +698,7 @@ const rbSize = 1024 * 1024
 //
 // Prefer this helper over calling ringbuf.New directly — the ring buffer map
 // is pinned and shared across tests, so a naked reader can pick up stray
-// records (TYPE_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
+// records (EVENT_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
 func newTestRingBuf(t *testing.T) *ringbuf.RingBuffer {
 	rb, err := ringbuf.New(ringBufMap, rbSize)
 	Expect(err).NotTo(HaveOccurred())
@@ -914,6 +915,14 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 
 				if topts.egressQoSPacketRate {
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
+				}
+
+				if topts.ingressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+				}
+
+				if topts.egressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsEgressConnLimitConfigured
 				}
 
 				if topts.workloadSrcSpoofingConfigured {
@@ -1303,6 +1312,8 @@ type testOpts struct {
 	natOutExcludeHosts            bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
+	ingressQoSConnLimit           bool
+	egressQoSConnLimit            bool
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
@@ -1379,6 +1390,18 @@ func withIngressQoSPacketRate() testOption {
 func withEgressQoSPacketRate() testOption {
 	return func(o *testOpts) {
 		o.egressQoSPacketRate = true
+	}
+}
+
+func withEgressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.egressQoSConnLimit = true
+	}
+}
+
+func withIngressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.ingressQoSConnLimit = true
 	}
 }
 
@@ -2221,6 +2244,7 @@ func resetBPFMaps() {
 	resetMap(natMap)
 	resetMap(natBEMap)
 	resetMap(qosMap)
+	resetMap(qosConnMap)
 	resetMap(maglevMap)
 }
 

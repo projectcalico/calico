@@ -22,7 +22,11 @@ my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
 vm_name_prefix=$1
 artifacts_dir="$repo_dir/artifacts"
-zone=${ZONE:-europe-west3-c}
+# We bulk-create the VMs across all the zones in a region (based on available
+# capacity) rather than pinning a single zone, so a single zone running out of
+# capacity no longer blocks the job.  REGION selects the region; the zone each
+# VM actually lands in is discovered after creation (see below).
+region=${REGION:-europe-west3}
 : "${VM_MACHINE_TYPE:=n4-standard-4}"
 : "${IMAGE_FAMILY:=ubuntu-minimal-2404-lts-amd64}"
 : "${MAX_RUN_DURATION:=4h}"
@@ -74,12 +78,17 @@ else
 fi
 
 # Do a bulk create; this is faster and it saves API quota.
-echo "Creating test VMs in bulk..."
+#
+# We pass --region (not --zone) with --target-distribution-shape=any so that
+# GCP spreads the VMs across the zones of the region according to available
+# capacity.  This avoids a single zone filling up and failing the whole job.
+echo "Creating test VMs in bulk across region ${region}..."
 gcloud --quiet compute instances bulk create \
        --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
        --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
-       --zone=${zone} \
+       --region=${region} \
+       --target-distribution-shape=any \
        --machine-type=${VM_MACHINE_TYPE} \
        --image-family=${IMAGE_FAMILY} \
        --image-project=ubuntu-os-cloud \
@@ -90,6 +99,31 @@ gcloud --quiet compute instances bulk create \
        --labels="${labels}" \
        --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+
+# Since the VMs are spread across the region's zones, we can no longer assume a
+# single zone for the downstream describe/ssh/delete commands.  Build a
+# name->zone map by listing the instances we just created, filtered by our
+# workflow-unique name prefix.  bulk create is synchronous, so the instances
+# already exist by the time it returns.
+echo "Discovering which zone each VM landed in..."
+declare -A vm_zone
+while IFS=, read -r name vm_z; do
+  [ -n "$name" ] || continue
+  vm_zone["$name"]="$vm_z"
+  echo "  $name -> $vm_z"
+done < <(gcloud --quiet compute instances list \
+              --filter="name~'^${vm_name_prefix}'" \
+              --format='csv[no-heading](name,zone.basename())')
+
+# Fail fast if any expected VM is missing from the map; the rest of the script
+# relies on knowing every VM's zone.
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  if [ -z "${vm_zone[$vm_name]:-}" ]; then
+    echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
+    exit 1
+  fi
+done
 
 ###### Configure VMs, run tests and shut them down ######
 
@@ -150,6 +184,16 @@ format_batch_for_log() {
 
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
+  # Each VM may be in a different zone; look up the one it landed in.  Every
+  # downstream command in this iteration (vm-ip, on-test-vm, configure-test-vm,
+  # the delete, and the watchdog's serial/snapshot capture) uses $zone.  We also
+  # export ZONE: run_batch (sourced from batches.sh) shells out to
+  # 'gcloud get-serial-port-output --zone="${ZONE}"' to grab the serial console
+  # when a VM wedges, and it reads ZONE from the environment.  The backgrounded
+  # per-batch subshell below captures this value at fork time, so each batch
+  # sees its own VM's zone.
+  zone="${vm_zone[$vm_name]}"
+  export ZONE="$zone"
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
@@ -163,9 +207,15 @@ for batch in "${batches[@]}"; do
   (
     set +e
 
+    # Tell the watchdog (below) when this batch has fully finished, so it can
+    # distinguish "done, just waiting to be reaped" from "genuinely hung".
+    done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
+    rm -f "$done_marker"
+    trap 'touch "$done_marker"' EXIT
+
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
     echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
-    if "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
+    if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
       echo "$prefix Configuration of VM $vm_name SUCCEEDED."
     else
       echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "
@@ -189,24 +239,33 @@ for batch in "${batches[@]}"; do
       fi
     fi
 
+    # The SSH-based teardown steps below are wrapped in 'timeout': if the VM
+    # wedged (e.g. a kernel BPF/vmap teardown deadlock that leaves it
+    # SSH-unreachable), these would otherwise hang until the watchdog kills the
+    # whole batch.  Bounding them lets a batch whose tests already finished
+    # proceed straight to the (control-plane) VM delete.  gcloud delete does not
+    # need SSH, so it reclaims a wedged VM regardless.
     collect_log_file="$artifacts_dir/collect-artifacts-$batch_formatted.log"
-    if "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
+    if timeout 180 "${ssh_cmd[@]}" COMPONENT="${COMPONENT}" "${CALICO_DIR_NAME}/.semaphore/collect-artifacts" >& "$collect_log_file"; then
       echo "$prefix Remote artifact collection SUCCEEDED"
     else
-      echo "$prefix Remote artifact collection FAILED"
+      echo "$prefix Remote artifact collection FAILED (rc=$?)"
     fi
-    if scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
+    if timeout 180 scp "${SSH_OPTIONS[@]}" -r -C "ubuntu@${vm_ip}:${CALICO_DIR_NAME}/artifacts" "${repo_dir}/artifacts/${batch}" >> "$collect_log_file" 2>&1; then
       echo "$prefix Artifact retrieval SUCCEEDED"
     else
-      echo "$prefix Artifact retrieval FAILED"
+      echo "$prefix Artifact retrieval FAILED (rc=$?)"
     fi
 
     echo "$prefix Deleting test VM $vm_name"
-    if gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
+    if timeout 300 gcloud --quiet beta compute instances delete "$vm_name" --zone="${zone}" --no-graceful-shutdown; then
       echo "$prefix Deletion of test VM $vm_name SUCCEEDED"
     else
       echo "$prefix Deletion of test VM $vm_name FAILED, will retry at end of job. "
     fi
+
+    # Mark the batch fully complete so the watchdog skips snapshot/kill for it.
+    touch "$done_marker"
     exit $rc
   ) &
   pid=$!
@@ -215,17 +274,44 @@ for batch in "${batches[@]}"; do
   test_pid+=( "$pid" )
 
   # Start a per-batch watchdog that kills this batch before the Semaphore job
-  # timeout.  Each batch kills its own watchdog when it finishes (in the wait
-  # loop below), so there is no PID-reuse race.
+  # timeout.  The watchdog only acts if the batch is genuinely still running
+  # (checked via a marker file, see below), so a batch that finished early but
+  # hasn't been reaped yet by the sequential wait loop does not get a spurious
+  # timeout report.  Each batch also kills its own watchdog when it is reaped
+  # (in the wait loop below), so there is no PID-reuse race.
   if [ "$watchdog_seconds" -gt 0 ]; then
   (
     sleep "$watchdog_seconds"
+
+    # Distinguish a genuinely hung batch from one that has merely finished but
+    # not yet been reaped by the sequential loop below.  We use a marker file
+    # rather than 'kill -0 $pid' because a finished-but-unreaped batch is a
+    # zombie whose pid still exists, so kill -0 would wrongly report it alive
+    # and we would emit a spurious timeout report for a batch that passed.
+    batch_formatted="$(format_batch_for_log "$batch")"
+    done_marker="$artifacts_dir/.batch-${batch_formatted}.done"
+    if [ -f "$done_marker" ]; then
+      exit 0
+    fi
+
     echo
     echo "===== WATCHDOG: batch $batch approaching job timeout (${JOB_TIMEOUT_MINUTES}m) ====="
 
-    # Capture a VM-side snapshot before SIGTERM so we have evidence of what
-    # was hung (test process? docker? bpffs umount? leaked BPF objects?).
-    # Wrapped in 'timeout' so a hung VM/SSH cannot extend the kill.
+    # 1. Serial console via the GCP control plane.  This does not use the VM's
+    # network/SSH path, so it still works when the VM is wedged and SSH would
+    # return rc=255 -- exactly the case that matters most (kernel soft-lockup /
+    # OOM / oops).  The kernel logs to ttyS0 (console=ttyS0), so a hang shows up
+    # here even when the in-VM snapshot below cannot connect.
+    serial_log="$artifacts_dir/vm-serial-$batch_formatted.log"
+    echo "  Capturing VM serial console to $serial_log"
+    timeout 60 gcloud --quiet compute instances get-serial-port-output "$vm_name" \
+        --zone="$zone" --port=1 \
+        > "$serial_log" 2>&1 \
+        || echo "  Serial console capture failed/timed out (rc=$?)"
+
+    # 2. SSH-based in-VM snapshot (ps/bpftool/bpffs/dmesg/kernel stacks).  Useful
+    # when the VM is merely slow rather than wedged.  Wrapped in 'timeout' so a
+    # hung VM/SSH cannot extend the kill.
     snapshot_log="$artifacts_dir/vm-snapshot-$batch_formatted.log"
     echo "  Capturing pre-kill VM snapshot to $snapshot_log"
     timeout 60 env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/on-test-vm" \
@@ -233,12 +319,23 @@ for batch in "${batches[@]}"; do
         > "$snapshot_log" 2>&1 \
         || echo "  VM snapshot capture failed/timed out (rc=$?)"
 
+    # Push the diagnostics immediately.  A job killed at its timeout may never
+    # run publish-artifacts (or have it truncated mid-upload), and these files
+    # sort after test-*.log alphabetically, so they would be the first dropped.
+    # Pushing by basename from $artifacts_dir keeps the remote path tidy.
+    # The watchdog is always the first pusher of these files (publish-artifacts
+    # runs later in the epilogue), so no --force/overwrite is needed here.
+    for diag in "$serial_log" "$snapshot_log"; do
+      [ -s "$diag" ] || continue
+      ( cd "$artifacts_dir" && artifact push job "$(basename "$diag")" ) \
+          >/dev/null 2>&1 || true
+    done
+
     echo "  Killing hung batch $batch (pid $pid)"
     kill -TERM "-$pid" 2>/dev/null || true
 
     # Generate a JUnit XML report for the timed-out batch so it shows up
     # in Semaphore test results as a clear failure.
-    batch_formatted="$(format_batch_for_log "$batch")"
     if [ "$batch" = "ut" ]; then
       report_type="ut"
     else

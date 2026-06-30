@@ -118,7 +118,7 @@ func newVXLANManagerWithShims(
 	mtu int,
 	dpConfig Config,
 	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	nlHandle netlinkshim.Interface,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	m := &vxlanManager{

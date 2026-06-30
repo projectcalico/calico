@@ -31,8 +31,15 @@ import (
 )
 
 const (
-	chanPollTime  = "10ms"
-	chanPollIntvl = "100us"
+	// consistentlyDuration is how long Consistently checks watch a channel to
+	// confirm nothing arrives. Kept short so the negative checks don't dominate
+	// the test runtime.
+	consistentlyDuration = "10ms"
+	// eventuallyTimeout is the max wait for Eventually assertions. These depend
+	// on the FilterUpdates goroutine getting scheduled, so the timeout has to
+	// tolerate a loaded CI runner; 10ms was too tight and flaked.
+	eventuallyTimeout = "2s"
+	chanPollIntvl     = "100us"
 )
 
 func TestUpdateFilter_FilterUpdates_LinkCClosed(t *testing.T) {
@@ -41,8 +48,8 @@ func TestUpdateFilter_FilterUpdates_LinkCClosed(t *testing.T) {
 	defer cancel()
 
 	close(harness.LinkIn)
-	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.LinkOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
 }
 
 func TestUpdateFilter_FilterUpdates_RouteCClosed(t *testing.T) {
@@ -51,8 +58,8 @@ func TestUpdateFilter_FilterUpdates_RouteCClosed(t *testing.T) {
 	defer cancel()
 
 	close(harness.RouteIn)
-	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.LinkOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
 }
 
 func TestUpdateFilter_FilterUpdates_LinkUpdateDelay(t *testing.T) {
@@ -62,10 +69,10 @@ func TestUpdateFilter_FilterUpdates_LinkUpdateDelay(t *testing.T) {
 
 	linkUpd := linkUpdateWithIndex(2)
 	harness.LinkIn <- linkUpd
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 	harness.Time.IncrementTime(100 * time.Millisecond)
 
-	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(linkUpd)))
+	Eventually(harness.LinkOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(linkUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -76,7 +83,7 @@ func TestUpdateFilter_FilterUpdates_RouteUpdatePassThru(t *testing.T) {
 
 	routeUpd := routeUpdate("10.0.0.1/16", true, 2)
 	harness.RouteIn <- routeUpd
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeUpd)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -102,26 +109,26 @@ func TestUpdateFilter_FilterUpdates_RouteUpdateSquash(t *testing.T) {
 	harness.RouteIn <- routeAdd3
 
 	t.Log("Should get the unblocked ADD first.")
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd3)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeAdd3)))
 
 	// Now we know the other route updates have been processed, this link update should get queued.
 	linkUpd := linkUpdateWithIndex(2)
 	harness.LinkIn <- linkUpd
 	// Need to let the filter receive the above update before we can advance time.
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("DEL should be dropped, should get the ADD and the link update after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
-	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(linkUpd)))
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
+	Eventually(harness.LinkOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(linkUpd)))
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -143,14 +150,14 @@ func TestUpdateFilter_FilterUpdates_MultipleIPs(t *testing.T) {
 	harness.RouteIn <- routeAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd)))
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeAdd)))
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -162,11 +169,11 @@ func TestUpdateFilter_FilterUpdates_Broadcast(t *testing.T) {
 	broadRouteUpd := routeUpdate("10.0.0.255/16", true, 2)
 	harness.RouteIn <- broadRouteUpd
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 
 	routeUpd := routeUpdate("10.0.0.1/16", true, 2)
 	harness.RouteIn <- routeUpd
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeUpd)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeUpd)))
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -191,14 +198,14 @@ func TestUpdateFilter_FilterUpdates_MultipleIPsWithSquash(t *testing.T) {
 	harness.RouteIn <- addrAddTenThree
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenThree)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(addrAddTenThree)))
 
 	t.Log("Updates should come through after 100ms.")
 	harness.Time.IncrementTime(100 * time.Millisecond)
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenTwo)))
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(addrAddTenOne)))
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
-	Consistently(harness.LinkOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(addrAddTenTwo)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(addrAddTenOne)))
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.LinkOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -218,16 +225,16 @@ func TestUpdateFilter_FilterUpdates_RouteUpdateDelOnly(t *testing.T) {
 	harness.RouteIn <- routeAdd2
 
 	t.Log("Should get the second ADD first.")
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeAdd2)))
 
 	t.Log("Shouldn't get any output after 99ms.")
 	harness.Time.IncrementTime(99 * time.Millisecond)
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 
 	t.Log("Should get only the DEL after 100ms.")
 	harness.Time.IncrementTime(1 * time.Millisecond)
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(Receive(Equal(routeDel)))
-	Consistently(harness.RouteOut, chanPollTime, chanPollIntvl).ShouldNot(Receive())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(Receive(Equal(routeDel)))
+	Consistently(harness.RouteOut, consistentlyDuration, chanPollIntvl).ShouldNot(Receive())
 	Expect(harness.Time.HasTimers()).To(BeFalse(), "Should be no timers left at end of test")
 }
 
@@ -246,7 +253,7 @@ func TestUpdateFilter_FilterUpdates_LinkSenderNotBlockedAfterCancel(t *testing.T
 
 	// Cancel the context; FilterUpdates should exit and start draining.
 	cancel()
-	Eventually(harness.LinkOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.LinkOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
 
 	// Send many more items than the buffer can hold.  The drain goroutine
 	// must be actively consuming for these sends to succeed.
@@ -274,7 +281,7 @@ func TestUpdateFilter_FilterUpdates_RouteSenderNotBlockedAfterCancel(t *testing.
 
 	// Cancel the context; FilterUpdates should exit and start draining.
 	cancel()
-	Eventually(harness.RouteOut, chanPollTime, chanPollIntvl).Should(BeClosed())
+	Eventually(harness.RouteOut, eventuallyTimeout, chanPollIntvl).Should(BeClosed())
 
 	deadline := time.After(time.Second)
 	for range cap(harness.RouteIn) * 10 {
