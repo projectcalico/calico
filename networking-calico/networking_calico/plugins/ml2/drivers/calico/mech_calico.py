@@ -35,7 +35,6 @@ from eventlet.queue import PriorityQueue
 
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
-from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
 from neutron.plugins.ml2 import db as ml2_db
 from neutron.plugins.ml2.drivers import mech_agent
@@ -1017,31 +1016,31 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # No outer writer/reader context here -- see the comment in
         # update_network_postcommit above for rationale.
+        #
+        # We use the OVO ``QosPolicy`` only to discover which networks and
+        # ports are bound to this policy (``get_bound_networks`` /
+        # ``get_bound_ports``).  For the port data itself we go through
+        # ``self.db.get_ports``, which returns API-flat dicts with
+        # ``binding:host_id`` as a top-level key.  ``Port.get_objects(...)
+        # .to_dict()`` would return the OVO native shape (``bindings: [
+        # {host: ...}]``) which the downstream sync code -- and the rest
+        # of the driver -- does not understand.
         policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
-        # Find ports whose network use this QoS policy and that don't have a
+        # Ports whose network uses this QoS policy and that don't have a
         # port-specific QoS policy.
         networks_ids = policy.get_bound_networks()
-        ports_with_net_policy = (
-            ports_object.Port.get_objects(context, network_id=networks_ids)
-            if networks_ids
-            else []
-        )
-        ports = [
-            port.to_dict()
-            for port in ports_with_net_policy
-            if port.qos_policy_id is None
-        ]
+        ports = []
+        if networks_ids:
+            network_ports = self.db.get_ports(
+                context, filters={"network_id": networks_ids}
+            )
+            ports = [p for p in network_ports if not p["qos_policy_id"]]
 
-        # Add the ports that directly use this QoS policy.
+        # Ports that directly use this QoS policy.
         port_ids = policy.get_bound_ports()
         if port_ids:
-            ports.extend(
-                [
-                    p.to_dict()
-                    for p in ports_object.Port.get_objects(context, id=port_ids)
-                ]
-            )
+            ports.extend(self.db.get_ports(context, filters={"id": port_ids}))
 
         self.update_existing_ports(ports, context, "network QoS policy rules changing")
 
