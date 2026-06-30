@@ -230,6 +230,7 @@ for batch in "${batches[@]}"; do
     else
       mv "$log_file" "$failed_log_file"
       echo "$prefix Test batch $batch FAILED.  Log file will be uploaded as artifact $failed_log_file."
+      # Upload alongside the fv-artifacts in GCS (GCS_WORKFLOW_DIR), via gcloud.
       if [ -n "${GCS_WORKFLOW_DIR:-}" ] && [ -n "${COMPONENT:-}" ]; then
         failed_log_upload_dir="${GCS_WORKFLOW_DIR}/${COMPONENT}/failed-fv-logs"
         if [ -n "${JOB_TAG:-}" ]; then
