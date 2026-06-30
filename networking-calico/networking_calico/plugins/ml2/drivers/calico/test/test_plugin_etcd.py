@@ -38,6 +38,8 @@ from networking_calico.common import config as calico_config
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import subnets as subnets_mod
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.resync import scope as resync
 
@@ -256,6 +258,33 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                     if key not in self.etcd_data:
                         _log.error("etcd3 txn MUST_UPDATE failed")
                         return {"succeeded": False}
+            elif txc["target"] == "MOD":
+                # CAS against a specific mod_revision.  Reads via ``etcd3gw_client_get``
+                # always return ``mod_revision="10"``, so an honest CAS using the
+                # read-back value will compare against "10" and pass.  Anything else
+                # means the production code passed the wrong revision through.
+                #
+                # We also check that the key actually exists -- real etcd treats a MOD
+                # compare against a missing key as a comparison with mod_revision 0, so
+                # ``MOD == 10`` on an absent key would fail there.  The mock used to let
+                # it through; mirror real behaviour so a production mis-use of MOD
+                # against a key-that-might-not-exist is caught here.
+                key = _decode(txc["key"]).decode()
+                if key not in self.etcd_data:
+                    _log.error(
+                        "etcd3 txn CAS-against-mod_revision failed:"
+                        " key %r does not exist (effective mod_revision is 0)",
+                        key,
+                    )
+                    return {"succeeded": False}
+                expected = txc["mod_revision"]
+                if expected != "10":
+                    _log.error(
+                        "etcd3 txn CAS-against-mod_revision failed:"
+                        " expected %r, stored revision is '10'",
+                        expected,
+                    )
+                    return {"succeeded": False}
         if "request_put" in txn["success"][0]:
             put_request = txn["success"][0]["request_put"]
             succeeded = self.etcd3gw_client_put(
@@ -598,7 +627,10 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
-        # Delete lib.port1.
+        # Delete lib.port1.  Reflect the deletion in osdb_ports BEFORE the postcommit --
+        # matches Neutron's commit-then-postcommit ordering, which is what
+        # ``sync_wep``'s DB re-read assumes.
+        self.osdb_ports = [lib.port2]
         context = self.make_context()
         context._port = lib.port1
         context._plugin_context.session.query.side_effect = self.db_query
@@ -611,7 +643,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # with each other and being handled on different Neutron servers or on different
         # threads of the same server.  The key point is that the update shouldn't
         # accidentally recreate an etcd resource that has just been deleted.
-        self.osdb_ports = [lib.port2]
         self.driver.update_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -1390,15 +1421,140 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Delete subnet2.  No etcd effect because it was already deleted from
         # etcd above.
         context.current = subnet2
+        self.osdb_subnets = [subnet1]
         self.driver.delete_subnet_postcommit(context)
         self.assertEtcdDeletes(set())
 
         # Delete subnet1.
         context.current = subnet1
+        self.osdb_subnets = []
         self.driver.delete_subnet_postcommit(context)
         self.assertEtcdDeletes(
             set(["/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24"])
         )
+
+    # CAS retry coverage --------------------------------------------------
+    #
+    # The mock framework's ``etcd3gw_client_transaction`` validates that production
+    # passes the correct mod_revision in its CAS targets, but nothing in the
+    # steady-state tests exercises what happens when the CAS itself loses.  The tests
+    # below force CAS conflicts so the retry-then-succeed and retry-then-exhaust
+    # branches are actually run -- the whole point of the sync-shape work.
+
+    def _inject_cas_conflicts(self, n):
+        """Force the next ``n`` clientv3.transaction calls to report CAS-failed;
+        subsequent calls fall through to the normal mock.
+
+        Returns a no-arg getter for the number of conflicts still pending (useful for
+        asserting that the injected failures were actually consumed).
+
+        Defensive housekeeping: setUp re-creates ``self.clientv3`` from scratch on each
+        test, so the closure we install here would already be discarded with the old
+        mock at the next test's setUp.  Register an ``addCleanup`` anyway so the
+        side_effect is restored even if a future setUp refactor stops rebuilding the
+        mock -- the cost is one line and the failure mode would otherwise be a confusing
+        cross-test interaction.
+        """
+        real_txn = self.etcd3gw_client_transaction
+        remaining = [n]
+
+        def maybe_fail(txn):
+            if remaining[0] > 0:
+                remaining[0] -= 1
+                _log.info(
+                    "Test: injecting CAS conflict (remaining after: %d)",
+                    remaining[0],
+                )
+                return {"succeeded": False}
+            return real_txn(txn)
+
+        self.clientv3.transaction.side_effect = maybe_fail
+        self.addCleanup(setattr, self.clientv3.transaction, "side_effect", real_txn)
+        return lambda: remaining[0]
+
+    def test_subnet_cas_retry_after_conflict(self):
+        """First CAS attempt loses, retry re-reads and succeeds.
+
+        Without the retry loop the lost CAS would silently drop our update; the fact
+        that the subnet ends up in etcd here proves the retry path runs.
+        """
+        subnet = {
+            "network_id": "net-id-cas",
+            "enable_dhcp": True,
+            "id": "subnet-id-cas-retry",
+            "cidr": "10.99.0.0/24",
+            "gateway_ip": "10.99.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+
+        remaining = self._inject_cas_conflicts(1)
+
+        context = self.make_context()
+        context.current = subnet
+        self.driver.create_subnet_postcommit(context)
+
+        # The injected conflict was consumed.
+        self.assertEqual(remaining(), 0)
+        # Two transactions: the forced failure + the successful retry.
+        self.assertEqual(self.clientv3.transaction.call_count, 2)
+        # The subnet ended up in etcd despite the first failure.
+        self.assertEtcdWrites(
+            {
+                "/calico/dhcp/v2/no-region/subnet/subnet-id-cas-retry": {
+                    "network_id": "net-id-cas",
+                    "cidr": "10.99.0.0/24",
+                    "gateway_ip": "10.99.0.1",
+                    "host_routes": [],
+                }
+            }
+        )
+
+    def test_subnet_cas_exhaustion(self):
+        """All ``MAX_CAS_ATTEMPTS`` lose -- bail with WARNING, no write.
+
+        Persistent drift is the expected outcome (repaired by the next resync); the
+        contract is that we DO NOT keep retrying forever and DO emit a warning so an
+        operator can correlate.
+        """
+        subnet = {
+            "network_id": "net-id-cas",
+            "enable_dhcp": True,
+            "id": "subnet-id-cas-exhaust",
+            "cidr": "10.98.0.0/24",
+            "gateway_ip": "10.98.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+
+        # Many more conflicts than the retry budget, so we know the bail-out is taken
+        # explicitly rather than tripping over a boundary.
+        remaining = self._inject_cas_conflicts(MAX_CAS_ATTEMPTS + 3)
+
+        context = self.make_context()
+        context.current = subnet
+        with mock.patch.object(subnets_mod.LOG, "warning") as warning:
+            self.driver.create_subnet_postcommit(context)
+
+        # Exactly MAX_CAS_ATTEMPTS transactions attempted, then bail.
+        self.assertEqual(self.clientv3.transaction.call_count, MAX_CAS_ATTEMPTS)
+
+        # The injected failures past the retry budget were not consumed, confirming the
+        # loop bailed rather than spinning further.
+        self.assertEqual(remaining(), 3)
+
+        # Warning is logged with the subnet ID (part of the etcd key) so operators can
+        # correlate.
+        warning.assert_called_once()
+        self.assertIn(
+            "subnet-id-cas-exhaust", " ".join(str(a) for a in warning.call_args.args)
+        )
+
+        # Nothing made it into etcd.
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
 
     def test_check_segment_for_agent(self):
         """Test the mechanism driver's check_segment_for_agent entry point."""
@@ -2034,9 +2190,14 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self._pre_migrate()
 
-        # Destination WEP and LiveMigration should be written.
-        # Security group policy is also rewritten by write_endpoint.
+        # Destination WEP and LiveMigration should be written.  Security group policy is
+        # also rewritten alongside the WEP write.  The source WEP is also rewritten --
+        # update_port_postcommit syncs every (port, host) slot that might be affected by
+        # the update, and the source slot is in scope.  The rewrite is content-identical
+        # in normal cases (migrating_to isn't reflected in source-WEP
+        # spec/labels/annotations) but the test mock records it as a write.
         expected_writes = {
+            self._ep_key(self.SOURCE_HOST): self._ep_value(self.SOURCE_HOST),
             self._ep_key(self.DEST_HOST): self._ep_value(self.DEST_HOST),
             self._lm_key(self.DEST_HOST): self._lm_value(
                 self.SOURCE_HOST, self.DEST_HOST
@@ -2119,13 +2280,16 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.recent_writes = {}
         self.recent_deletes = set()
 
-        # Delete port while migration is in progress.
+        # Delete port while migration is in progress.  Reflect the deletion in
+        # osdb_ports BEFORE the postcommit -- matches Neutron's commit-then-postcommit
+        # ordering, which is what ``sync_wep`` and ``sync_lm``'s DB re-reads assume.
         context = self.make_context()
         context._port = copy.deepcopy(self.port)
         context._port["binding:profile"] = {
             "migrating_to": self.DEST_HOST,
         }
         context._plugin_context.session.query.side_effect = self.db_query
+        self.osdb_ports = [p for p in self.osdb_ports if p["id"] != self.port["id"]]
 
         self.driver.delete_port_postcommit(context)
 

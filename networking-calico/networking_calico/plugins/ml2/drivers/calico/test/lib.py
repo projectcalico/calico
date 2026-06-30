@@ -234,7 +234,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
-from networking_calico.plugins.calico.context import SGRUpdateContext
+from networking_calico.plugins.calico.context import SGUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -631,7 +631,7 @@ class Lib(object):
         try:
             return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
-            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
+            raise PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
@@ -701,10 +701,8 @@ class Lib(object):
             self.db.get_port.return_value = port
 
         if type == "rule":
-            # Call security_groups_rule_updated with the new or changed ID.
-            self.driver.security_groups_rule_updated(
-                SGRUpdateContext(mock.MagicMock(), [id])
-            )
+            # Call security_groups_updated with the new or changed ID.
+            self.driver.security_groups_updated(SGUpdateContext(mock.MagicMock(), [id]))
 
     def get_port_security_group_bindings(self, context, filters):
         if filters is None:
