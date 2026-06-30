@@ -113,7 +113,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Logf("Test pool CIDRs (%s): workload=%s LB=%s", family, workloadCIDR, lbCIDR)
 
 	suffix := strings.ToLower(string(family))
-	nsName := "proxy-neigh-" + suffix
+	nsName := utils.RandomSuffix("proxy-neigh-" + suffix)
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
