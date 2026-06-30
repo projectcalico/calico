@@ -682,7 +682,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.R
 		rules = append(rules,
 			generictables.Rule{
 				Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept).ConntrackState("ESTABLISHED"),
-				Action:  r.FlowOffload("calico"),
+				Action:  r.FlowOffload(dataplanedefs.FlowtableName),
 				Comment: []string{"Offload established Calico flows."},
 			},
 		)
