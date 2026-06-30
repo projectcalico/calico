@@ -772,8 +772,14 @@ var _ = Describe("VXLANManager", func() {
 	It("plumbs the VXLAN source-port range into the netlink device", func() {
 		// Re-create the manager with a configured port range. Avoid using
 		// the BeforeEach-provided manager since we want different config.
-		la := netlink.NewLinkAttrs()
-		la.Name = "eth0"
+		dataplane := mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
 		dpConfig := Config{
 			MaxIPSetSize:       5,
 			Hostname:           "node1",
@@ -794,11 +800,7 @@ var _ = Describe("VXLANManager", func() {
 			4444,
 			dpConfig,
 			logutils.NewSummarizer("test"),
-			&mockTunnelDataplane{
-				links:          []netlink.Link{&mockLink{attrs: la}},
-				tunnelLinkName: dataplanedefs.VXLANIfaceNameV4,
-				ipVersion:      4,
-			},
+			dataplane,
 		)
 
 		mgr.OnUpdate(&proto.VXLANTunnelEndpointUpdate{
