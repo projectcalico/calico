@@ -1061,9 +1061,28 @@ func (c *client) localSubnet(ipVersion int) (string, error) {
 }
 
 // generateIPIPTunnelRoutes generates static route entries for IPIP tunnel
-// endpoint resolution. In BIRD3 (upstream), IPIP encapsulation is achieved
-// through recursive nexthop resolution: BGP routes resolve their nexthops
-// through static /32 routes pointing at the tunnel device.
+// endpoint resolution. Upstream BIRD has no per-route device attribute (the
+// calico/bird fork's krt_tunnel does not exist in BIRD 3), so when BIRD is
+// responsible for programming cluster routes (BGPConfiguration.ProgramClusterRoutes
+// = Enabled) IPIP encapsulation is achieved through recursive nexthop
+// resolution: BGP routes resolve their nexthop through a static /32 route that
+// points the remote node IP at the tunnel device (tunl0).
+//
+// This is a per-NODE mechanism, whereas IPIP encap is a per-POOL property, so
+// the two line up exactly only for single-mode clusters:
+//   - IPIP Always only      -> tunnel to every remote node (all encapsulated).
+//   - IPIP CrossSubnet only  -> tunnel only to remote-subnet nodes; same-subnet
+//     traffic stays direct.
+//
+// Limitation (mixed Always + CrossSubnet): a remote node's single
+// "<ip>/32 via tunl0" route cannot distinguish the destination pool, so an
+// Always pool forces a tunnel to every node and a co-existing CrossSubnet
+// pool's same-subnet traffic is then encapsulated unnecessarily. That is a
+// performance regression, not a connectivity break, and it cannot be expressed
+// on upstream BIRD (no per-route device assignment). Clusters that need
+// per-pool-accurate cross-subnet behaviour should set ProgramClusterRoutes so
+// that Felix programs the routes instead - felix's ipip_mgr handles this
+// correctly per pool via RouteClassIPIPSameSubnet.
 func (c *client) generateIPIPTunnelRoutes(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
 	if ipVersion != 4 {
 		// IPIP is IPv4-only.
@@ -1115,7 +1134,11 @@ func (c *client) generateIPIPTunnelRoutes(pc *processorContext, config *types.Bi
 		if value == "" || value == config.NodeIP {
 			continue
 		}
-		// For CrossSubnet mode, only tunnel to nodes outside local subnet
+		// CrossSubnet-only: skip nodes in the local subnet, since same-subnet
+		// traffic stays direct. When an Always pool also exists we deliberately
+		// do NOT skip - Always requires a tunnel to every node - which is the
+		// documented mixed-mode limitation (same-subnet CrossSubnet traffic is
+		// then encapsulated). See the function doc comment.
 		if hasIPIPCrossSubnet && !hasIPIPAlways {
 			if localSubnetErr == nil && isIPInSubnet(value, localSubnet) {
 				continue
