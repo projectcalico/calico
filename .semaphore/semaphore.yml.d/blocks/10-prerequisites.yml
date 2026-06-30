@@ -314,7 +314,9 @@
           # Load the patched nftables RPMs producer image (built/cached by
           # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+          # - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
+
           - zstd -d --rm /tmp/nft-rpms.tar.zst
           - docker load -i /tmp/nft-rpms.tar
           - rm -f /tmp/nft-rpms.tar
