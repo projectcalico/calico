@@ -256,6 +256,20 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                     if key not in self.etcd_data:
                         _log.error("etcd3 txn MUST_UPDATE failed")
                         return {"succeeded": False}
+            elif txc["target"] == "MOD":
+                # CAS against a specific mod_revision.  Reads via
+                # ``etcd3gw_client_get`` always return ``mod_revision="10"``,
+                # so an honest CAS using the read-back value will compare
+                # against "10" and pass.  Anything else means the production
+                # code passed the wrong revision through.
+                expected = txc["mod_revision"]
+                if expected != "10":
+                    _log.error(
+                        "etcd3 txn CAS-against-mod_revision failed:"
+                        " expected %r, stored revision is '10'",
+                        expected,
+                    )
+                    return {"succeeded": False}
         if "request_put" in txn["success"][0]:
             put_request = txn["success"][0]["request_put"]
             succeeded = self.etcd3gw_client_put(
@@ -598,7 +612,10 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
-        # Delete lib.port1.
+        # Delete lib.port1.  Reflect the deletion in osdb_ports BEFORE the
+        # postcommit -- matches Neutron's commit-then-postcommit ordering,
+        # which is what ``sync_wep``'s DB re-read assumes.
+        self.osdb_ports = [lib.port2]
         context = self.make_context()
         context._port = lib.port1
         context._plugin_context.session.query.side_effect = self.db_query
@@ -611,7 +628,6 @@ class TestPluginEtcdBase(_TestEtcdBase):
         # with each other and being handled on different Neutron servers or on different
         # threads of the same server.  The key point is that the update shouldn't
         # accidentally recreate an etcd resource that has just been deleted.
-        self.osdb_ports = [lib.port2]
         self.driver.update_port_postcommit(context)
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
@@ -1390,11 +1406,13 @@ class TestPluginEtcd(TestPluginEtcdBase):
         # Delete subnet2.  No etcd effect because it was already deleted from
         # etcd above.
         context.current = subnet2
+        self.osdb_subnets = [subnet1]
         self.driver.delete_subnet_postcommit(context)
         self.assertEtcdDeletes(set())
 
         # Delete subnet1.
         context.current = subnet1
+        self.osdb_subnets = []
         self.driver.delete_subnet_postcommit(context)
         self.assertEtcdDeletes(
             set(["/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24"])
@@ -2035,8 +2053,14 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._pre_migrate()
 
         # Destination WEP and LiveMigration should be written.
-        # Security group policy is also rewritten by write_endpoint.
+        # Security group policy is also rewritten alongside the WEP write.
+        # The source WEP is also rewritten -- update_port_postcommit syncs
+        # every (port, host) slot that might be affected by the update, and
+        # the source slot is in scope.  The rewrite is content-identical
+        # in normal cases (migrating_to isn't reflected in source-WEP
+        # spec/labels/annotations) but the test mock records it as a write.
         expected_writes = {
+            self._ep_key(self.SOURCE_HOST): self._ep_value(self.SOURCE_HOST),
             self._ep_key(self.DEST_HOST): self._ep_value(self.DEST_HOST),
             self._lm_key(self.DEST_HOST): self._lm_value(
                 self.SOURCE_HOST, self.DEST_HOST
@@ -2119,13 +2143,17 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.recent_writes = {}
         self.recent_deletes = set()
 
-        # Delete port while migration is in progress.
+        # Delete port while migration is in progress.  Reflect the deletion
+        # in osdb_ports BEFORE the postcommit -- matches Neutron's
+        # commit-then-postcommit ordering, which is what ``sync_wep`` and
+        # ``sync_lm``'s DB re-reads assume.
         context = self.make_context()
         context._port = copy.deepcopy(self.port)
         context._port["binding:profile"] = {
             "migrating_to": self.DEST_HOST,
         }
         context._plugin_context.session.query.side_effect = self.db_query
+        self.osdb_ports = [p for p in self.osdb_ports if p["id"] != self.port["id"]]
 
         self.driver.delete_port_postcommit(context)
 
