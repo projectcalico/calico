@@ -631,7 +631,7 @@ class Lib(object):
         try:
             return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
-            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
+            raise PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
