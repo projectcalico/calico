@@ -54,9 +54,7 @@ const (
 func TestSpoof(t *testing.T) {
 	defer utils.CollectDiagsOnFailure(t)()
 
-	// nsName holds the access/scapy pod pair shared by both scenarios. The
-	// random suffix keeps it unique per test so concurrent or repeated runs
-	// against the same cluster do not collide.
+	// nsName holds the access/scapy pod pair shared by both scenarios.
 	nsName := utils.RandomSuffix("ipip-spoofing")
 
 	g := NewWithT(t)

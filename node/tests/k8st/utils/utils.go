@@ -61,16 +61,12 @@ var ipv6Map = map[string]string{
 	"kind-worker3":       "2001:20::3",
 }
 
-// randSuffixChars are the characters RandomSuffix draws from. Lowercase
-// alphanumerics keep the result a valid DNS-1123 label, the format Kubernetes
-// requires for namespace names.
-const randSuffixChars = "abcdefghijklmnopqrstuvwxyz0123456789"
-
 // RandomSuffix appends a short random suffix to name, separated by a hyphen.
 // Tests use it to derive a unique namespace name per run so that concurrent or
 // repeated runs against the same cluster do not collide. The result remains a
 // valid DNS-1123 label.
 func RandomSuffix(name string) string {
+	const randSuffixChars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	const n = 5
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
