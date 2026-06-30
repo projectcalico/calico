@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -73,10 +74,6 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 const (
 	externalNodeV4 = "kube-node-extra"
 	externalNodeV6 = "kube-node-extra-v6"
-
-	// anchorNamespace holds the idle pod that pins an IPAM block to the egress
-	// node so it has something to advertise to the external routers.
-	anchorNamespace = "bgp-filter-anchor"
 
 	peerNameV4 = "node-extra.peer"
 	peerNameV6 = "node-extra-v6.peer"
@@ -177,7 +174,11 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	// Mark the egress node so the node-selected BGPPeers attach to it.
 	labelNode(t, env.egressNode, "egress", "true")
 
-	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode)
+	// anchorNS pins an idle pod to the egress node so it owns an IPAM block to
+	// advertise. The random suffix keeps it unique per test so concurrent or
+	// repeated runs against the same cluster do not collide.
+	anchorNS := e2eutils.GenerateRandomName("bgp-filter-anchor")
+	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode, anchorNS)
 
 	// Establish BGPPeers from the egress node to each external router.
 	createBGPPeer(t, ctx, g, cli, peerNameV4, env.externalNodeIP)
@@ -191,15 +192,15 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 // that may host no pods (and thus no block, especially for IPv6). The pod uses
 // the default pools so its block CIDRs match clusterRouteRegexV4/V6; waiting for
 // both IPs claims a block in each family before any assertion runs.
-func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node string) {
+func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node, nsName string) {
 	t.Helper()
 
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: anchorNamespace}}
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: anchorNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: nsName},
 		Spec: corev1.PodSpec{
 			NodeName:   node,
 			Containers: []corev1.Container{{Name: "anchor", Image: utils.Agnhost, Args: []string{"pause"}}},

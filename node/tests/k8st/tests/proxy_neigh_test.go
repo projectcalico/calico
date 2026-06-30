@@ -50,6 +50,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -113,7 +114,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Logf("Test pool CIDRs (%s): workload=%s LB=%s", family, workloadCIDR, lbCIDR)
 
 	suffix := strings.ToLower(string(family))
-	nsName := "proxy-neigh-" + suffix
+	nsName := e2eutils.GenerateRandomName("proxy-neigh-" + suffix)
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
