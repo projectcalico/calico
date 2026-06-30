@@ -185,6 +185,22 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
         super().delete_security_group_rule(context, sgrid)
         self._notify_sg_rule_updated(context, [rule["security_group_id"]])
 
+    def delete_security_group(self, context, id):
+        # Neutron's ``delete_security_group`` drops the SG row directly and relies on
+        # the DB-level cascade to remove its rules, rather than iterating
+        # ``delete_security_group_rule`` per rule.  So the rule- level override above
+        # does NOT fire during an SG delete, and the driver would otherwise miss the
+        # signal.  Notify here, after ``super()`` has removed the SG from the DB:
+        # ``sync_sgs_to_etcd`` re-reads from the Neutron DB, sees no SG with this id,
+        # and takes its CAS-protected delete branch to drop the corresponding
+        # NetworkPolicy from etcd.  The ``_notify_sg_rule_updated`` name is now a slight
+        # misnomer -- "SG-relevant state changed, resync" would be more accurate -- but
+        # reusing it keeps the mech-driver entry point
+        # (``security_groups_rule_updated``) single, which the mech driver code already
+        # handles uniformly.
+        super().delete_security_group(context, id)
+        self._notify_sg_rule_updated(context, [id])
+
     def _notify_sg_rule_updated(self, context, sgids):
         self.mechanism_manager._call_on_drivers(
             "security_groups_rule_updated", SGRUpdateContext(context, sgids)
