@@ -1209,7 +1209,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # If a live migration was in progress, sync the LiveMigration and dest WEP at
         # the migration target (both will be CAS-deleted, since the port no longer
         # exists in the DB).
-        if migrating_to is not None:
+        if migrating_to:
             self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
             self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
 
