@@ -160,7 +160,7 @@ function wait_pod_ready() {
 echo "Set ipv6 address on each node"
 # Iterate over the actual node containers for this KIND_NAME rather than
 # hardcoding kind-* names, so the script works for clusters with a non-default
-# name or a different worker count (e.g. the MCM rig).
+# name or a different worker count.
 #
 # The suffix is derived from the node's name, NOT iteration order: kind names
 # workers "<name>-worker", "<name>-worker2", "<name>-worker3", ... so the bare
@@ -218,19 +218,16 @@ ${kubectl} wait --for=condition=Established --timeout=2m \
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
 #
-# The MCM rig bringup sets KIND_SKIP_TIGERASTATUS_WAIT=true for the managed
-# cluster - intrusion-detection, log-collector, and log-storage on a managed
-# cluster depend on linseed in the mgmt cluster, which is only reachable once
-# bootstrap-managed.sh establishes the tunnel. The bootstrap script handles
-# the final wait itself.
+# Callers that handle component readiness themselves can skip this wait by
+# setting KIND_SKIP_TIGERASTATUS_WAIT=true.
 if [ "${KIND_SKIP_TIGERASTATUS_WAIT:-false}" = "true" ]; then
   echo "KIND_SKIP_TIGERASTATUS_WAIT=true - skipping TigeraStatus wait"
   exit 0
 fi
-# The full Enterprise stack (Elasticsearch + Prometheus) can take well over 10m
-# to settle on a cold boot, especially in CI. Wait generously - this is a
-# ceiling, not a fixed sleep, so a healthy cluster still exits as soon as every
-# TigeraStatus is Available. Override with TIGERASTATUS_WAIT_TIMEOUT (seconds).
+# Components can take a while to settle on a cold boot, especially in CI. Wait
+# generously - this is a ceiling, not a fixed sleep, so a healthy cluster still
+# exits as soon as every TigeraStatus is Available. Override with
+# TIGERASTATUS_WAIT_TIMEOUT (seconds).
 ts_timeout=${TIGERASTATUS_WAIT_TIMEOUT:-1200}
 ts_interval=5
 ts_attempts=$(( ts_timeout / ts_interval ))
