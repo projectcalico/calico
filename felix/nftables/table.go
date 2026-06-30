@@ -651,14 +651,16 @@ func (t *NftablesTable) decrefChain(chainName string) {
 func (t *NftablesTable) loadDataplaneState() {
 	// List all of our table's objects in a single nft invocation, giving us the
 	// map and chain names without a separate List call for each type.
-	listCtx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	listCtx, listCancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer listCancel()
+	countNumListCalls.Inc()
 	allObjects, err := t.nft.ListAll(listCtx)
-	cancel()
 	if err != nil {
 		if !knftables.IsNotFound(err) {
 			// A transient list failure shouldn't be treated as an empty table:
 			// that would clear our in-memory view and trigger spurious
 			// reprogramming. Skip this resync and try again on the next one.
+			countNumListErrors.Inc()
 			t.logCxt.WithError(err).Warn("Failed to list nftables objects, skipping resync")
 			return
 		}
@@ -669,8 +671,8 @@ func (t *NftablesTable) loadDataplaneState() {
 
 	// Sync maps using the pre-fetched map names. Give the maps resync its own
 	// timeout so a slow one doesn't eat into the chain read below.
-	mapsCtx, cancel := context.WithTimeout(context.Background(), t.contextTimeout)
-	defer cancel()
+	mapsCtx, mapsCancel := context.WithTimeout(context.Background(), t.contextTimeout)
+	defer mapsCancel()
 	if err := t.LoadDataplaneState(mapsCtx, allObjects[objectTypeMap]); err != nil {
 		t.logCxt.WithError(err).Warn("Failed to load maps state")
 	}
@@ -847,6 +849,9 @@ func (t *NftablesTable) attemptToGetHashesFromDataplane(chainNames []string) (ha
 		chainNames, err = t.nft.List(ctx, objectTypeChain)
 		if err != nil {
 			if knftables.IsNotFound(err) {
+				// No chains means the table isn't programmed yet, so there are
+				// no hashes to read. Return an empty map rather than an error.
+				t.logCxt.Debug("No chains in dataplane, table not programmed yet.")
 				err = nil
 				return
 			}
@@ -953,13 +958,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				continue
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
-				cmd := t.newCmd("nft", "list", "table", string(t.family), t.name)
-				output, err2 := cmd.Output()
-				if err2 != nil {
-					t.logCxt.WithError(err2).Error("Failed to load nftables state")
-				} else {
-					t.logCxt.WithField("state", string(output)).Error("Current state of nftables")
-				}
+				t.dumpTableState()
 				t.logCxt.WithError(err).Panic("Failed to program nftables, giving up after retries")
 			}
 		}
@@ -1174,18 +1173,7 @@ func (t *NftablesTable) applyUpdates() error {
 		}
 
 		if err := t.runTransaction(tx); err != nil {
-			// Dump our table's state for debugging. We scope this to our
-			// own table rather than using "nft list ruleset" to avoid
-			// parsing objects from other tables that may contain udata
-			// written by a newer nft, which can crash older nft binaries.
-			cmd := t.newCmd("nft", "list", "table", string(t.family), t.name)
-			output, err2 := cmd.Output()
-			if err2 != nil {
-				t.logCxt.WithError(err2).Error("Failed to load nftables table state")
-			} else {
-				t.logCxt.WithField("tableState", string(output)).Error("Current table state after error")
-			}
-
+			t.dumpTableState()
 			t.logCxt.WithError(err).WithField("tx", tx.String()).Error("Failed to run nft transaction")
 			return fmt.Errorf("error performing nft transaction: %s", err)
 		}
@@ -1223,6 +1211,21 @@ func (t *NftablesTable) applyUpdates() error {
 		t.InvalidateDataplaneCache("post-write")
 	}
 	return nil
+}
+
+// dumpTableState logs our table's current contents for debugging after a
+// programming failure. We scope this to our own table rather than using
+// "nft list ruleset" to avoid parsing objects from other tables that may
+// contain udata written by a newer nft, which can crash older nft binaries.
+// See #11750.
+func (t *NftablesTable) dumpTableState() {
+	cmd := t.newCmd("nft", "list", "table", string(t.family), t.name)
+	output, err := cmd.Output()
+	if err != nil {
+		t.logCxt.WithError(err).Error("Failed to load nftables table state")
+		return
+	}
+	t.logCxt.WithField("tableState", string(output)).Error("Current nftables table state")
 }
 
 func (t *NftablesTable) runTransaction(tx *knftables.Transaction) error {
