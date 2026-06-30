@@ -1,0 +1,6 @@
+version: v2
+workflows:
+  - name: argoci
+    workflowFile: .argoci/ciworkflow.yaml
+    runWhen:
+      alwaysRunOnPR: true
