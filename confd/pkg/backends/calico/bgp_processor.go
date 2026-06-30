@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"os"
 	"slices"
 	"sort"
@@ -123,6 +124,13 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfRejectedFiltersForBGPExport": len(config.BGPExportFilterForDisabledIPPools),
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
+
+	// Generate IPIP tunnel routes for recursive nexthop resolution (BIRD3).
+	if err := c.generateIPIPTunnelRoutes(pc, config, ipVersion); err != nil {
+		logc.WithError(err).Warn("Failed to generate IPIP tunnel routes")
+		return nil, err
+	}
+	logc.Debugf("Generated %d IPIP tunnel routes", len(config.IPIPTunnelRoutes))
 
 	// Update cache with write lock.
 	c.configCacheMutex.Lock()
@@ -814,8 +822,12 @@ func (c *client) buildExportFilter(
 		}
 	}
 
-	// Call calico_export_to_bgp_peers
-	filterLines = append(filterLines, fmt.Sprintf("calico_export_to_bgp_peers(%v);", sameAS))
+	// Call calico_export_to_bgp_peers with AF suffix
+	afSuffix := "v4"
+	if ipVersion == 6 {
+		afSuffix = "v6"
+	}
+	filterLines = append(filterLines, fmt.Sprintf("calico_export_to_bgp_peers_%s(%v);", afSuffix, sameAS))
 	filterLines = append(filterLines, "reject;")
 
 	return strings.Join(filterLines, "\n    ")
@@ -922,11 +934,6 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		filterActionForKernel = "reject"
 	}
 
-	localSubnet, localSubnetErr := c.localSubnet(ipVersion)
-	if localSubnetErr != nil {
-		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
-	}
-
 	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
 	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
 		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
@@ -944,23 +951,24 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, programClusterRoutes, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, programClusterRoutes, false, "reject")
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, programClusterRoutes, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, programClusterRoutes, false, "accept")
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
-		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
-			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, programClusterRoutes, true, filterActionForKernel, localSubnet, ipVersion)
-			if len(statement) != 0 {
-				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
-			}
+		// Generate statements for the kernel programming filter. In BIRD3 the
+		// kernel filter is subnet-independent (IPIP tunnel routing is handled by
+		// recursive nexthop resolution, see generateIPIPTunnelRoutes), so we no
+		// longer gate this on the local host subnet lookup.
+		statement = c.processIPPool(&ippool, programClusterRoutes, true, filterActionForKernel)
+		if len(statement) != 0 {
+			config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 		}
 	}
 
@@ -974,13 +982,13 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:
 //   - ippool: IPPool resource.
+//   - programClusterRoutes: whether BIRD (rather than Felix) is responsible for
+//     programming cluster routes into the kernel.
 //   - forProgrammingKernel: Whether the generated statements are intended for programming routes to kernel or exporting to
-//     other BGP Peers. As an example, we need to set "krt_tunnel" for programming IPIP routes.
+//     other BGP Peers.
 //   - filterAction: specified action to filter generated statements. For exporting pools to BGP peers, we need to
 //     first reject disabled ippools, and then accept the rest at the end after all other filters. Allowed values are
 //     "accept", "reject", and "" (no filtering).
-//   - localSubnet: the subnet of local node, which is needed by IPv4 IPIP pool in cross subnet mode.
-//   - version: the statement ip family.
 //
 // As an example, For the following sample IPPool resource:
 //
@@ -997,52 +1005,50 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 //
 // this function generates the following statement for programming routes to kernel:
 //
-//	if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }
+//	if (net ~ 10.10.0.0/16) then { accept; }
 //
 // and the following statement for exporting to BGP peers:
 //
 //	if (net ~ 10.10.0.0/16) then { accept; }
+//
+// Note: in BIRD3 the kernel filter no longer sets krt_tunnel; IPIP routing is
+// implemented via recursive nexthop resolution through static tunnel routes
+// (see generateIPIPTunnelRoutes).
 func (c *client) processIPPool(
 	ippool *model.IPPool,
 	programClusterRoutes bool,
 	forProgrammingKernel bool,
 	filterAction string,
-	localSubnet string,
-	ipVersion int,
 ) string {
 	cidr := ippool.CIDR.String()
 
 	// IPPool's BGP export is disabled, and filter is for exporting to other peers.
 	if ippool.DisableBGPExport && !forProgrammingKernel {
-		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "BGP export is disabled.")
+		return emitFilterStatementForIPPools(cidr, "reject", filterAction, "BGP export is disabled.")
 	}
 
 	// VXLAN encapsulation.
 	if ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet {
 		if forProgrammingKernel {
 			// Programming VXLAN routes is always handled by Felix.
-			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "VXLAN routes are handled by Felix.")
+			return emitFilterStatementForIPPools(cidr, "reject", filterAction, "VXLAN routes are handled by Felix.")
 		}
-		return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+		return emitFilterStatementForIPPools(cidr, "accept", filterAction, "")
 	}
 
 	// IPIP encapsulation or No-Encap.
+	// In BIRD3, IPIP tunnel routing is handled via recursive nexthop resolution
+	// through static routes pointing at the tunnel device, not via krt_tunnel.
 	if programClusterRoutes {
-		var extraStatement string
-		if forProgrammingKernel && ipVersion == 4 {
-			// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
-			// our fork of BIRD.
-			extraStatement = extraStatementForKernelProgrammingIPIPNoEncap(ippool.IPIPMode, localSubnet)
-		}
-		return emitFilterStatementForIPPools(cidr, extraStatement, "accept", filterAction, "")
+		return emitFilterStatementForIPPools(cidr, "accept", filterAction, "")
 	}
 
 	// Felix is responsible for programming cluster routes, not BIRD.
 	if forProgrammingKernel {
-		return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "Cluster routes are handled by Felix.")
+		return emitFilterStatementForIPPools(cidr, "reject", filterAction, "Cluster routes are handled by Felix.")
 	}
 
-	return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+	return emitFilterStatementForIPPools(cidr, "accept", filterAction, "")
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {
@@ -1054,22 +1060,116 @@ func (c *client) localSubnet(ipVersion int) (string, error) {
 	return subnet, nil
 }
 
-func extraStatementForKernelProgrammingIPIPNoEncap(ipipMode encap.Mode, localSubnet string) string {
-	switch v3.EncapMode(ipipMode) {
-	case v3.Always:
-		return `krt_tunnel="tunl0";`
-	case v3.CrossSubnet:
-		format := `if (defined(bgp_next_hop)&&(bgp_next_hop ~ %s)) then krt_tunnel=""; else krt_tunnel="tunl0";`
-		return fmt.Sprintf(format, localSubnet)
-	case v3.Never:
-		// No encapsulation needed; no need to set krt_tunnel.
-		return ``
-	default:
-		return ``
+// generateIPIPTunnelRoutes generates static route entries for IPIP tunnel
+// endpoint resolution. Upstream BIRD has no per-route device attribute (the
+// calico/bird fork's krt_tunnel does not exist in BIRD 3), so when BIRD is
+// responsible for programming cluster routes (BGPConfiguration.ProgramClusterRoutes
+// = Enabled) IPIP encapsulation is achieved through recursive nexthop
+// resolution: BGP routes resolve their nexthop through a static /32 route that
+// points the remote node IP at the tunnel device (tunl0).
+//
+// This is a per-NODE mechanism, whereas IPIP encap is a per-POOL property, so
+// the two line up exactly only for single-mode clusters:
+//   - IPIP Always only      -> tunnel to every remote node (all encapsulated).
+//   - IPIP CrossSubnet only  -> tunnel only to remote-subnet nodes; same-subnet
+//     traffic stays direct.
+//
+// Limitation (mixed Always + CrossSubnet): a remote node's single
+// "<ip>/32 via tunl0" route cannot distinguish the destination pool, so an
+// Always pool forces a tunnel to every node and a co-existing CrossSubnet
+// pool's same-subnet traffic is then encapsulated unnecessarily. That is a
+// performance regression, not a connectivity break, and it cannot be expressed
+// on upstream BIRD (no per-route device assignment). Clusters that need
+// per-pool-accurate cross-subnet behaviour should set ProgramClusterRoutes so
+// that Felix programs the routes instead - felix's ipip_mgr handles this
+// correctly per pool via RouteClassIPIPSameSubnet.
+func (c *client) generateIPIPTunnelRoutes(pc *processorContext, config *types.BirdBGPConfig, ipVersion int) error {
+	if ipVersion != 4 {
+		// IPIP is IPv4-only.
+		return nil
 	}
+
+	poolKey := fmt.Sprintf("/calico/v1/ipam/v%d/pool", ipVersion)
+	kvPairs, err := c.GetValues([]string{poolKey})
+	if err != nil {
+		return nil
+	}
+
+	// Check if any pool uses IPIP
+	hasIPIPAlways := false
+	hasIPIPCrossSubnet := false
+	for _, value := range kvPairs {
+		var ippool model.IPPool
+		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
+			continue
+		}
+		switch v3.EncapMode(ippool.IPIPMode) {
+		case v3.Always:
+			hasIPIPAlways = true
+		case v3.CrossSubnet:
+			hasIPIPCrossSubnet = true
+		}
+	}
+
+	if !hasIPIPAlways && !hasIPIPCrossSubnet {
+		return nil
+	}
+
+	localSubnet, localSubnetErr := c.localSubnet(ipVersion)
+
+	// Collect all remote node IPs that need IPIP tunnel routes
+	remoteNodes := make(map[string]bool)
+	hostKey := "/calico/bgp/v1/host"
+	hostPairs, err := c.GetValues([]string{hostKey})
+	if err != nil {
+		return nil
+	}
+
+	// Extract unique remote node IPs from mesh peers
+	nodeIPSuffix := fmt.Sprintf("/ip_addr_v%d", ipVersion)
+	for key, value := range hostPairs {
+		if !strings.HasSuffix(key, nodeIPSuffix) {
+			continue
+		}
+		if value == "" || value == config.NodeIP {
+			continue
+		}
+		// CrossSubnet-only: skip nodes in the local subnet, since same-subnet
+		// traffic stays direct. When an Always pool also exists we deliberately
+		// do NOT skip - Always requires a tunnel to every node - which is the
+		// documented mixed-mode limitation (same-subnet CrossSubnet traffic is
+		// then encapsulated). See the function doc comment.
+		if hasIPIPCrossSubnet && !hasIPIPAlways {
+			if localSubnetErr == nil && isIPInSubnet(value, localSubnet) {
+				continue
+			}
+		}
+		remoteNodes[value] = true
+	}
+
+	// Generate static route entries
+	for ip := range remoteNodes {
+		config.IPIPTunnelRoutes = append(config.IPIPTunnelRoutes, fmt.Sprintf("%s/32 via \"tunl0\"", ip))
+	}
+
+	slices.Sort(config.IPIPTunnelRoutes)
+	return nil
 }
 
-func emitFilterStatementForIPPools(cidr, extraStatement, action, filterAction, comment string) (statement string) {
+// isIPInSubnet checks if an IP address falls within a given subnet (CIDR notation).
+func isIPInSubnet(ip, subnet string) bool {
+	_, network, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return false
+	}
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return false
+	}
+	return network.Contains(parsedIP)
+}
+
+func emitFilterStatementForIPPools(cidr, action, filterAction, comment string) (statement string) {
 	// Filter statements based on provided filterAction.
 	if len(filterAction) != 0 && filterAction != action {
 		return
@@ -1078,11 +1178,7 @@ func emitFilterStatementForIPPools(cidr, extraStatement, action, filterAction, c
 	if len(cidr) == 0 || len(action) == 0 {
 		return
 	}
-	if len(extraStatement) != 0 {
-		statement = fmt.Sprintf("  if (net ~ %s) then { %s %s; }", cidr, extraStatement, action)
-	} else {
-		statement = fmt.Sprintf("  if (net ~ %s) then { %s; }", cidr, action)
-	}
+	statement = fmt.Sprintf("  if (net ~ %s) then { %s; }", cidr, action)
 	if len(comment) != 0 {
 		statement = fmt.Sprintf("%s %s", statement, formatComment(comment))
 	}

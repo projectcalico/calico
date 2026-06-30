@@ -42,26 +42,58 @@ import (
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
-// bgpFilterBIRDConf is the per-peer BIRD config installed on the external
-// routers. "ip@local" is replaced with the router's own address by
-// StartExternalNodeWithBGP; the %s is the egress cluster node's address.
-const bgpFilterBIRDConf = `
+// bgpFilterBIRDConfV4 / bgpFilterBIRDConfV6 are the per-peer BIRD 3 configs
+// installed on the external routers (one per family; BIRD 3 puts import/export
+// and add-paths inside the address-family channel). "ip@local" is replaced with
+// the router's own address by StartExternalNodeWithBGP; the %s is the egress
+// cluster node's address.
+const bgpFilterBIRDConfV4 = `
 # Template for all BGP clients
 template bgp bgp_template {
   debug { states };
   description "Connection to BGP peer";
   local as 64512;
   multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export all;
   source address ip@local;  # The local address we use for the TCP connection
-  add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv4 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
+}
+
+# ------------- Node-to-node mesh -------------
+protocol bgp Mesh_with_node_1 from bgp_template {
+  neighbor %s as 64512;
+  passive on; # Mesh is unidirectional, peer will connect to us.
+}
+`
+
+const bgpFilterBIRDConfV6 = `
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description "Connection to BGP peer";
+  local as 64512;
+  multihop;
+  source address ip@local;  # The local address we use for the TCP connection
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+  ipv6 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
 }
 
 # ------------- Node-to-node mesh -------------
@@ -168,11 +200,11 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	// Create the external BGP routers, one per family, peered with the egress
 	// node. These are expensive (~30-60s each), so we build them once.
 	env.externalNodeIP = utils.StartExternalNodeWithBGP(t, externalNodeV4,
-		fmt.Sprintf(bgpFilterBIRDConf, env.egressNodeIP), "")
+		fmt.Sprintf(bgpFilterBIRDConfV4, env.egressNodeIP), "")
 	t.Cleanup(func() { _, _ = utils.Run(t, "docker rm -f "+externalNodeV4, utils.RunOptions{AllowFail: true}) })
 
 	env.externalNodeIP6 = utils.StartExternalNodeWithBGP(t, externalNodeV6,
-		"", fmt.Sprintf(bgpFilterBIRDConf, env.egressNodeIP6))
+		"", fmt.Sprintf(bgpFilterBIRDConfV6, env.egressNodeIP6))
 	t.Cleanup(func() { _, _ = utils.Run(t, "docker rm -f "+externalNodeV6, utils.RunOptions{AllowFail: true}) })
 
 	// Mark the egress node so the node-selected BGPPeers attach to it.
@@ -222,10 +254,10 @@ func testBGPFilterBasic(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 	ctx := context.Background()
 
 	if ipv4 {
-		env.addExternalStaticRoute(t, externalNodeV4, "bird", "birdcl", externalRouteV4, env.externalNodeIP)
+		env.addExternalStaticRoute(t, externalNodeV4, false, externalRouteV4, env.externalNodeIP)
 	}
 	if ipv6 {
-		env.addExternalStaticRoute(t, externalNodeV6, "bird6", "birdcl6", externalRouteV6, env.externalNodeIP6)
+		env.addExternalStaticRoute(t, externalNodeV6, true, externalRouteV6, env.externalNodeIP6)
 	}
 
 	// The egress node should learn the route the external router advertises.
@@ -297,10 +329,10 @@ func testBGPFilterOrdering(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 	ctx := context.Background()
 
 	if ipv4 {
-		env.addExternalStaticRoute(t, externalNodeV4, "bird", "birdcl", externalRouteV4, env.externalNodeIP)
+		env.addExternalStaticRoute(t, externalNodeV4, false, externalRouteV4, env.externalNodeIP)
 	}
 	if ipv6 {
-		env.addExternalStaticRoute(t, externalNodeV6, "bird6", "birdcl6", externalRouteV6, env.externalNodeIP6)
+		env.addExternalStaticRoute(t, externalNodeV6, true, externalRouteV6, env.externalNodeIP6)
 	}
 
 	// Filters whose multiple rules net out to accepting the route.
@@ -401,10 +433,10 @@ func testBGPFilterGlobalPeer(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 	ctx := context.Background()
 
 	if ipv4 {
-		env.addExternalStaticRoute(t, externalNodeV4, "bird", "birdcl", externalRouteV4, env.externalNodeIP)
+		env.addExternalStaticRoute(t, externalNodeV4, false, externalRouteV4, env.externalNodeIP)
 	}
 	if ipv6 {
-		env.addExternalStaticRoute(t, externalNodeV6, "bird6", "birdcl6", externalRouteV6, env.externalNodeIP6)
+		env.addExternalStaticRoute(t, externalNodeV6, true, externalRouteV6, env.externalNodeIP6)
 	}
 
 	// Make the peers global by clearing their node selectors.
@@ -518,17 +550,22 @@ func (e *bgpFilterEnv) updatePeer(t *testing.T, ctx context.Context, g *WithT, p
 
 // addExternalStaticRoute installs a static-route protocol on an external router
 // advertising route via the given next hop, reconfigures BIRD and registers a
-// cleanup that removes it again. birdDir is the BIRD config dir ("bird" or
-// "bird6") and birdCmd the matching client ("birdcl" or "birdcl6").
-func (e *bgpFilterEnv) addExternalStaticRoute(t *testing.T, container, birdDir, birdCmd, route, via string) {
+// cleanup that removes it again. BIRD 3 is a single daemon, so the route is
+// written to /etc/bird/static-route.conf and reloaded with birdcl; ipv6 selects
+// the address-family channel for the static protocol.
+func (e *bgpFilterEnv) addExternalStaticRoute(t *testing.T, container string, ipv6 bool, route, via string) {
 	t.Helper()
-	conf := fmt.Sprintf("protocol static static1 {\n    route %s via %s;\n    export all;\n}", route, via)
-	utils.MustRun(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/%s/static-route.conf'\n%s\nEOF\n",
-		container, birdDir, conf))
-	utils.MustRun(t, fmt.Sprintf("docker exec %s %s configure", container, birdCmd))
+	channel := "ipv4"
+	if ipv6 {
+		channel = "ipv6"
+	}
+	conf := fmt.Sprintf("protocol static static1 {\n    %s { export all; };\n    route %s via %s;\n}", channel, route, via)
+	utils.MustRun(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/bird/static-route.conf'\n%s\nEOF\n",
+		container, conf))
+	utils.MustRun(t, fmt.Sprintf("docker exec %s birdcl configure", container))
 	t.Cleanup(func() {
-		_, _ = utils.Run(t, fmt.Sprintf("docker exec %s sh -c 'rm /etc/%s/static-route.conf; %s configure'",
-			container, birdDir, birdCmd), utils.RunOptions{AllowFail: true})
+		_, _ = utils.Run(t, fmt.Sprintf("docker exec %s sh -c 'rm /etc/bird/static-route.conf; birdcl configure'",
+			container), utils.RunOptions{AllowFail: true})
 	})
 }
 
@@ -539,10 +576,8 @@ func (e *bgpFilterEnv) addExternalStaticRoute(t *testing.T, container, birdDir, 
 // external router address; global selects the Global_ vs Node_ protocol prefix.
 func (e *bgpFilterEnv) assertClusterRoute(t *testing.T, route, peerIP string, ipv6, global, present bool) {
 	t.Helper()
+	// BIRD 3 is a single daemon: one birdcl client serves both families.
 	birdCmd := "birdcl"
-	if ipv6 {
-		birdCmd = "birdcl6"
-	}
 	proto := birdProtoName(peerIP, global)
 	pattern := regexp.QuoteMeta(route) + ` *via ` + regexp.QuoteMeta(peerIP) + ` on .* \[` + proto
 	re := regexp.MustCompile(pattern)
@@ -564,15 +599,13 @@ func (e *bgpFilterEnv) assertClusterRoute(t *testing.T, route, peerIP string, ip
 // routeRegex via peerIPRegex is (or is not) present in the named protocol.
 func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex string, ipv6, present bool) {
 	t.Helper()
+	// BIRD 3 is a single daemon: one birdcl client serves both families.
 	birdCmd := "birdcl"
-	if ipv6 {
-		birdCmd = "birdcl6"
-	}
 	// IPv4 routes use the peer's global address as the next-hop, with no "from"
 	// field:
 	//   v4: <route> via <peerIP> on eth0 [<proto> <time>] ...
 	//
-	// IPv6 depends on how the peer is configured in bird6.cfg.template:
+	// IPv6 depends on how the peer is configured in bird_ipam.cfg.template:
 	//   - OSS pins "gateway recursive" on every peer, so the route is advertised
 	//     with the peer's global address as the next-hop (same shape as v4).
 	//   - Enterprise emits "direct" for a directly-connected peer (the external

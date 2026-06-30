@@ -268,10 +268,6 @@ func waitForReady(timeout time.Duration) error {
 	if _, err := os.Stat("/etc/service/enabled/bird/run"); err == nil {
 		checkBIRD = true
 	}
-	checkBIRD6 := false
-	if _, err := os.Stat("/etc/service/enabled/bird6/run"); err == nil {
-		checkBIRD6 = true
-	}
 
 	// Check Felix health if FELIX_HEALTHENABLED is set to true.
 	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
@@ -287,7 +283,7 @@ func waitForReady(timeout time.Duration) error {
 		case <-to:
 			return fmt.Errorf("timed out waiting for Calico to become ready")
 		default:
-			if err := health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
+			if err := health.RunOutput(checkBIRD, false, checkFelix, false, false, false, 5*time.Minute); err != nil {
 				// If we fail to check the health of the components, log the error and continue waiting.
 				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
 				time.Sleep(1 * time.Second)

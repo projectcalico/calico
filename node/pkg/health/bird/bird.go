@@ -32,18 +32,16 @@ var birdTimeOut = 2 * time.Second
 var birdExpectedHeadings = []string{"name", "proto", "table", "state", "since", "info"}
 
 func GRInProgress(ipv string) (bool, error) {
-	birdSuffix := ""
-	if ipv == "6" {
-		birdSuffix = "6"
-	}
+	// In BIRD3, a single daemon handles both IPv4 and IPv6.
+	// Always connect to the same socket regardless of IP family.
 
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
-	birdSocket := fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix)
+	birdSocket := "/var/run/calico/bird.ctl"
 	if !socketFileExists(birdSocket) {
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico file not exists, trying /var/run/bird")
-		birdSocket = fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix)
+		birdSocket = "/var/run/bird/bird.ctl"
 	}
 	c, err := net.Dial("unix", birdSocket)
 	if err != nil {
@@ -63,8 +61,8 @@ func GRInProgress(ipv string) (bool, error) {
 
 	// The following is sample output from BIRD
 	//
-	// 0001 BIRD v0.3.2+birdv1.6.3 ready.
-	// 1000-BIRD v0.3.2+birdv1.6.3
+	// 0001 BIRD 3.3.0 ready.
+	// 1000-BIRD 3.3.0
 	// 1011-Router ID is 172.18.0.4
 	// 	 Current server time is 2018-04-03 22:59:51
 	// 	 Last reboot on 2018-04-03 22:59:26
@@ -134,18 +132,16 @@ type bgpPeer struct {
 
 func GetPeers(ipv string) ([]bgpPeer, error) {
 	log.Debugf("Print BIRD peers for IPv%s", ipv)
-	birdSuffix := ""
-	if ipv == "6" {
-		birdSuffix = "6"
-	}
+	// In BIRD3, a single daemon handles both IPv4 and IPv6.
+	// Always connect to the same socket regardless of IP family.
 
 	// Try connecting to the BIRD socket in `/var/run/calico/` first to get the data
-	birdSocket := fmt.Sprintf("/var/run/calico/bird%s.ctl", birdSuffix)
+	birdSocket := "/var/run/calico/bird.ctl"
 	if !socketFileExists(birdSocket) {
 		// If that fails, try connecting to BIRD socket in `/var/run/bird` (which is the
 		// default socket location for BIRD install) for non-containerized installs
 		log.Debugln("Failed to connect to BIRD socket in /var/run/calico file not exists, trying /var/run/bird")
-		birdSocket = fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix)
+		birdSocket = "/var/run/bird/bird.ctl"
 	}
 	c, err := net.Dial("unix", birdSocket)
 	if err != nil {
@@ -179,13 +175,6 @@ func GetPeers(ipv string) ([]bgpPeer, error) {
 // We split this out from the main printBIRDPeers() function to allow us to
 // test this processing in isolation.
 func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
-	// Determine the separator to use for an IP address, based on the
-	// IP version.
-	ipSep := "."
-	if ipv == "6" {
-		ipSep = ":"
-	}
-
 	// The following is sample output from BIRD
 	//
 	// 	0001 BIRD 1.5.0 ready.
@@ -214,21 +203,24 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 		} else if strings.HasPrefix(str, "0001") {
 			// "0001" code means BIRD is ready.
 		} else if strings.HasPrefix(str, "2002") {
-			// "2002" code means start of headings
-			f := strings.Fields(str[5:])
+			// "2002" code means start of headings.
+			// BIRD 1.x emitted lowercase column names; BIRD 3.x capitalises
+			// them ("Name Proto Table State Since Info"). Compare
+			// case-insensitively so both are accepted.
+			f := strings.Fields(strings.ToLower(str[5:]))
 			if !reflect.DeepEqual(f, birdExpectedHeadings) {
 				return nil, errors.New("unknown BIRD table output format")
 			}
 		} else if strings.HasPrefix(str, "1002") {
 			// "1002" code means first row of data.
 			peer := bgpPeer{}
-			if peer.unmarshalBIRD(str[5:], ipSep) {
+			if peer.unmarshalBIRD(str[5:]) {
 				peers = append(peers, peer)
 			}
 		} else if strings.HasPrefix(str, " ") {
 			// Row starting with a " " is another row of data.
 			peer := bgpPeer{}
-			if peer.unmarshalBIRD(str[1:], ipSep) {
+			if peer.unmarshalBIRD(str[1:]) {
 				peers = append(peers, peer)
 			}
 		} else {
@@ -243,12 +235,23 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 		}
 	}
 
-	return peers, scanner.Err()
+	// In BIRD3 the single control socket returns peers for both address
+	// families. Filter to the requested family so callers retain per-AF
+	// semantics (GetPeers("4") -> only IPv4 peers, GetPeers("6") -> only IPv6).
+	wantV6 := ipv == "6"
+	filtered := peers[:0]
+	for _, p := range peers {
+		if strings.Contains(p.PeerIP, ":") == wantV6 {
+			filtered = append(filtered, p)
+		}
+	}
+
+	return filtered, scanner.Err()
 }
 
 // Unmarshal a peer from a line in the BIRD protocol output.  Returns true if
 // successful, false otherwise.
-func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
+func (b *bgpPeer) unmarshalBIRD(line string) bool {
 	// Split into fields.  We expect at least 6 columns:
 	// 	name, proto, table, state, since and info.
 	// The info column contains the BGP state plus possibly some additional
@@ -276,7 +279,17 @@ func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
 		return false
 	}
 	var ok bool
-	b.PeerIP = strings.ReplaceAll(sm[2], "_", ipSep)
+	// In BIRD3 a single daemon serves both address families, so a single
+	// "show protocols" response contains both IPv4 and IPv6 peers. Detect the
+	// family per-peer from the encoded name rather than relying on a single
+	// separator: IPv4 reconstructs to a valid dotted address, otherwise treat
+	// it as IPv6 (':' separated, with '__' representing '::').
+	if v4 := strings.ReplaceAll(sm[2], "_", "."); net.ParseIP(v4) != nil && net.ParseIP(v4).To4() != nil {
+		b.PeerIP = v4
+	} else {
+		// IPv6: '_' separates hextets and '__' encodes '::'.
+		b.PeerIP = strings.ReplaceAll(sm[2], "_", ":")
+	}
 	if b.PeerType, ok = bgpTypeMap[sm[1]]; !ok {
 		log.Debugf("Not a valid line: peer type '%s' is not recognized", sm[1])
 		return false

@@ -192,6 +192,47 @@ var _ = Describe("Test BIRD BGP routes Scanner", func() {
 		printRoutes(routes, GinkgoWriter)
 	})
 
+	It("should scan BIRD3 dual-family socket output, ignoring table headers and blank lines", func() {
+
+		// Real "show route" wire output captured from a live BIRD 3.3.0
+		// control socket. Unlike BIRD 1.x, the single socket serves both
+		// address families and prints "Table master4:"/"Table master6:"
+		// headers plus blank separator lines. These must not be parsed as
+		// (phantom) routes, and each family query must return only its own
+		// routes.
+		table := `0001 BIRD 3.3.0 ready.
+1007-Table master4:
+ 192.168.0.0/24       blackhole [static1 16:35:26.296] * (200)
+ 
+ Table master6:
+ 2001:db8:beef::/48   blackhole [static2 16:35:26.296] * (200)
+0000 
+`
+		v4Routes, err := readBIRDRoutes(getMockBirdConn(IPFamilyV4, table))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v4Routes).To(Equal([]route{
+			{
+				dest:        "192.168.0.0/24",
+				gateway:     "N/A",
+				iface:       "blackhole",
+				learnedFrom: "static1",
+				primary:     true,
+			},
+		}))
+
+		v6Routes, err := readBIRDRoutes(getMockBirdConn(IPFamilyV6, table))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v6Routes).To(Equal([]route{
+			{
+				dest:        "2001:db8:beef::/48",
+				gateway:     "N/A",
+				iface:       "blackhole",
+				learnedFrom: "static2",
+				primary:     true,
+			},
+		}))
+	})
+
 	DescribeTable("Convert to v3 object",
 		func(r *route, v3Route *v3.CalicoNodeRoute) {
 			apiRoute, err := r.toNodeStatusAPI()

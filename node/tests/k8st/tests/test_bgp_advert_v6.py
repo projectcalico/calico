@@ -30,16 +30,18 @@ template bgp bgp_template {
   description "Connection to BGP peer";
   local as 64512;
   multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export all;
   source address ip@local;  # The local address we use for the TCP connection
-  add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv6 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
 }
 
 # ------------- Node-to-node mesh -------------
@@ -73,16 +75,18 @@ template bgp bgp_template {
   description "Connection to BGP peer";
   local as 64512;
   multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export all;
   source address ip@local;  # The local address we use for the TCP connection
-  add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv6 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
 }
 
 protocol bgp Mesh_with_node_2 from bgp_template {

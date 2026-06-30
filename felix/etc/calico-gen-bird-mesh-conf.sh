@@ -47,11 +47,18 @@ peer_ips="$@"
 
 # Generate peer-independent BIRD config.
 mkdir -p $(dirname $BIRD_CONF)
+# Ensure the shared peers include directory exists so the glob include in the
+# main config is valid even when there are no peers yet (BIRD 3 single daemon).
+mkdir -p /etc/bird/conf.d
 sed -e "
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 " < $BIRD_CONF_TEMPLATE > $BIRD_CONF
 
-# Generate peering config.
+# Generate IPv4 peering config into the shared peers include directory. The file
+# is AFI-prefixed ("ipv4-") so the IPv4 and IPv6 generators write disjoint files
+# and never interfere.
+PEER_CONF=/etc/bird/conf.d/ipv4-calico-mesh.conf
+> $PEER_CONF
 for peer_ip in $peer_ips; do
     sed -e "
 s/@ID@/$peer_ip/;
@@ -59,7 +66,7 @@ s/@DESCRIPTION@/Connection to $peer_ip/;
 s/@MY_IP_ADDRESS@/$my_ip_address/;
 s/@PEER_IP_ADDRESS@/$peer_ip/;
 s/@AS_NUMBER@/$as_number/;
-" < $BIRD_CONF_PEER_TEMPLATE >> $BIRD_CONF
+" < $BIRD_CONF_PEER_TEMPLATE >> $PEER_CONF
 done
 
 echo BIRD configuration generated at $BIRD_CONF

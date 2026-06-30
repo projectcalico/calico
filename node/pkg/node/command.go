@@ -271,9 +271,9 @@ func newHealthCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&felixLive, "felix-live", false, "Run felix liveness checks")
 	cmd.Flags().BoolVar(&felixReady, "felix-ready", false, "Run felix readiness checks")
 	cmd.Flags().BoolVar(&birdReady, "bird-ready", false, "Run BIRD readiness checks")
-	cmd.Flags().BoolVar(&bird6Ready, "bird6-ready", false, "Run BIRD6 readiness checks")
+	cmd.Flags().BoolVar(&bird6Ready, "bird6-ready", false, "Run BIRD readiness checks for IPv6 (BIRD3 uses a single daemon; retained for compatibility)")
 	cmd.Flags().BoolVar(&birdLive, "bird-live", false, "Run BIRD liveness checks")
-	cmd.Flags().BoolVar(&bird6Live, "bird6-live", false, "Run BIRD6 liveness checks")
+	cmd.Flags().BoolVar(&bird6Live, "bird6-live", false, "Run BIRD liveness checks for IPv6 (BIRD3 uses a single daemon; retained for compatibility)")
 	cmd.Flags().DurationVar(&thresholdTime, "threshold-time", 30*time.Second, "Threshold time for bird readiness")
 
 	return cmd

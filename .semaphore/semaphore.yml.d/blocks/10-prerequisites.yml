@@ -182,6 +182,40 @@
         commands:
           - .semaphore/scripts/build-nft-rpms.sh "${ARCH}"
 
+- name: "Build: bird image"
+  # Producer for the upstream calico/bird image (built by bird/ from the
+  # official BIRD release tarball). calico/node copies bird/birdcl out of it
+  # (FROM ${BIRD_IMAGE}); the e2e / k8st / kubevirt suites run it as an external
+  # BGP test peer. On cache hit this is a pull + GCS upload of the existing
+  # tarball; on cache miss it builds (BIRD compiles in well under a minute).
+  run:
+    when: "${CHANGE_IN(node,confd,e2e,felix,non-go:/node/,non-go:/confd/,non-go:/bird/,non-go:/e2e/,non-go:/felix/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml)}"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    prologue:
+      commands:
+        - mkdir logs
+        - export BUILD_LOG="logs/build-bird-image-${ARCH}.log"
+    epilogue:
+      always:
+        commands:
+          - artifact push job logs --destination semaphore/logs || true
+    jobs:
+      - name: "Build/cache bird image"
+        matrix:
+          - env_var: ARCH
+            values:
+              - amd64
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - .semaphore/scripts/build-bird-image.sh "${ARCH}"
+
 - name: "Pull: go-build image"
   # Populate the GCS cache of calico/go-build so it can serve as a fallback when
   # a Docker Hub pull fails (which we still see occasionally even with an

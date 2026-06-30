@@ -145,6 +145,14 @@ func (r *route) unmarshalBIRD(line, ipSep, previousDest string) (string, bool) {
 		r.gateway = "N/A"
 		r.iface = "unreachable"
 		r.learnedFrom = m["from"]
+	} else {
+		// A route line always carries a next-hop keyword (via/dev/blackhole/
+		// unreachable). Lines without one are not routes: e.g. the
+		// "Table master4:"/"Table master6:" table headers and the blank
+		// separator lines that BIRD3 emits from its single (dual-family)
+		// control socket. Skip them without consuming previousDest so they
+		// don't get mis-parsed as phantom copies of the preceding route.
+		return previousDest, false
 	}
 
 	if len(r.dest) == 0 {
@@ -286,7 +294,21 @@ func scanBIRDRoutes(ipv IPFamily, conn net.Conn) ([]route, error) {
 		}
 	}
 
-	return routes, scanner.Err()
+	// In BIRD3 the single control socket returns routes for both address
+	// families. Filter to the requested family by destination prefix so
+	// per-AF status reporting (CalicoNodeStatus routes) remains correct.
+	wantV6 := ipv == IPFamilyV6
+	filtered := routes[:0]
+	for _, r := range routes {
+		if len(r.dest) == 0 {
+			continue
+		}
+		if strings.Contains(r.dest, ":") == wantV6 {
+			filtered = append(filtered, r)
+		}
+	}
+
+	return filtered, scanner.Err()
 }
 
 func getRoutes(ipv IPFamily) ([]route, error) {

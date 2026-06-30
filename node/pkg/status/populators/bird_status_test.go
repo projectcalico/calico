@@ -28,18 +28,18 @@ var _ = Describe("Test BIRD status Scanner", func() {
 
 	It("should be able to scan a BIRD status output", func() {
 
-		output := `0001 BIRD v0.3.3+birdv1.6.8 ready.
-1000-BIRD v0.3.3+birdv1.6.8
+		output := `0001 BIRD 3.3.0 ready.
+1000-BIRD 3.3.0
 1011-Router ID is 172.17.0.3
  Current server time is 2021-09-19 20:48:43
  Last reboot on 2021-09-19 20:10:56
  Last reconfiguration on 2021-09-19 20:10:56
-013 Daemon is up and running
+0013 Daemon is up and running
 `
 
 		expectedStatus := &birdStatus{
 			ready:            true,
-			version:          "v0.3.3+birdv1.6.8",
+			version:          "3.3.0",
 			routerID:         "172.17.0.3",
 			serverTime:       "2021-09-19 20:48:43",
 			lastBootTime:     "2021-09-19 20:10:56",
@@ -64,7 +64,7 @@ var _ = Describe("Test BIRD status Scanner", func() {
 			"status ready",
 			&birdStatus{
 				ready:            true,
-				version:          "v0.3.3+birdv1.6.8",
+				version:          "3.3.0",
 				routerID:         "172.17.0.3",
 				serverTime:       "2021-09-19 20:48:43",
 				lastBootTime:     "2021-09-19 20:48:56",
@@ -72,7 +72,7 @@ var _ = Describe("Test BIRD status Scanner", func() {
 			},
 			v3.BGPDaemonStatus{
 				State:                   v3.BGPDaemonStateReady,
-				Version:                 "v0.3.3+birdv1.6.8",
+				Version:                 "3.3.0",
 				RouterID:                "172.17.0.3",
 				LastBootTime:            "2021-09-19 20:48:56",
 				LastReconfigurationTime: "2021-09-19 20:48:56",
@@ -82,7 +82,7 @@ var _ = Describe("Test BIRD status Scanner", func() {
 			"status not ready",
 			&birdStatus{
 				ready:            false,
-				version:          "v0.3.3+birdv1.6.8",
+				version:          "3.3.0",
 				routerID:         "172.17.0.3",
 				serverTime:       "2021-09-19 20:48:43",
 				lastBootTime:     "2021-09-19 20:48:56",
@@ -90,7 +90,7 @@ var _ = Describe("Test BIRD status Scanner", func() {
 			},
 			v3.BGPDaemonStatus{
 				State:                   v3.BGPDaemonStateNotReady,
-				Version:                 "v0.3.3+birdv1.6.8",
+				Version:                 "3.3.0",
 				RouterID:                "172.17.0.3",
 				LastBootTime:            "2021-09-19 20:48:56",
 				LastReconfigurationTime: "2021-09-19 20:48:56",

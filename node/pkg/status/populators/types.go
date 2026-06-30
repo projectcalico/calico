@@ -36,18 +36,6 @@ func (c IPFamily) String() string {
 	return string(c)
 }
 
-func (c IPFamily) BirdSuffix() string {
-	switch c {
-	case IPFamilyV4:
-		return ""
-	case IPFamilyV6:
-		return "6"
-	default:
-		log.Fatal("Unknown IPFamily")
-	}
-	return ""
-}
-
 func (c IPFamily) Separator() string {
 	switch c {
 	case IPFamilyV4:

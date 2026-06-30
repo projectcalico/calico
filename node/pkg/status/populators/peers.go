@@ -91,7 +91,19 @@ func sessionNameToTypeAndPeerIP(ipSep, name string) (string, string, error) {
 		return "", "", fmt.Errorf("peer type '%s' is not recognized", sm[1])
 	}
 
-	ip := strings.ReplaceAll(sm[2], "_", ipSep)
+	// In BIRD3 a single daemon serves both address families, so a single
+	// "show protocols" response contains both IPv4 and IPv6 peers. Detect the
+	// family per-peer from the encoded name: if reconstructing with '.' yields
+	// a valid IPv4 address use that, otherwise treat it as IPv6 (':' separated).
+	// The caller-provided ipSep is used only as a fallback hint.
+	var ip string
+	if v4 := strings.ReplaceAll(sm[2], "_", "."); net.ParseIP(v4) != nil && net.ParseIP(v4).To4() != nil {
+		ip = v4
+	} else if ipSep == ":" {
+		ip = strings.ReplaceAll(sm[2], "_", ":")
+	} else {
+		ip = strings.ReplaceAll(sm[2], "_", ipSep)
+	}
 	return sm[1], ip, nil
 }
 
@@ -291,8 +303,11 @@ func scanBIRDPeers(ipv IPFamily, conn net.Conn) ([]*bgpPeer, error) {
 		} else if strings.HasPrefix(str, "0001") {
 			// "0001" code means BIRD is ready.
 		} else if strings.HasPrefix(str, "2002") {
-			// "2002" code means start of headings
-			f := strings.Fields(str[5:])
+			// "2002" code means start of headings.
+			// BIRD 1.x emitted lowercase column names; BIRD 3.x capitalises
+			// them ("Name Proto Table State Since Info"). Compare
+			// case-insensitively so both are accepted.
+			f := strings.Fields(strings.ToLower(str[5:]))
 			if !reflect.DeepEqual(f, birdExpectedHeadings) {
 				return nil, errors.New("unknown BIRD table output format")
 			}
@@ -321,7 +336,24 @@ func scanBIRDPeers(ipv IPFamily, conn net.Conn) ([]*bgpPeer, error) {
 		}
 	}
 
-	return peers, scanner.Err()
+	// In BIRD3 the single control socket returns peers for both address
+	// families. Filter to the requested family so per-AF status reporting
+	// (CalicoNodeStatus BGP peers) remains correct. The family is derived
+	// from the encoded session name (peerIP is only populated later in
+	// complete()).
+	wantV6 := ipv == IPFamilyV6
+	filtered := peers[:0]
+	for _, p := range peers {
+		_, ip, err := sessionNameToTypeAndPeerIP(ipSep, p.session)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(ip, ":") == wantV6 {
+			filtered = append(filtered, p)
+		}
+	}
+
+	return filtered, scanner.Err()
 }
 
 func getBGPPeers(ipv IPFamily) ([]*bgpPeer, error) {

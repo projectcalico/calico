@@ -78,10 +78,10 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
+	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers_v4(true)
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
-	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4(true)")
 	assert.Contains(t, result, "reject;")
 }
 
@@ -91,7 +91,7 @@ func TestBuildExportFilter_DifferentAS_StillLocalPref(t *testing.T) {
 	// Different AS = eBGP — still includes LOCAL_PREF conversion
 	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
-	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4(false)")
 }
 
 func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
@@ -99,7 +99,7 @@ func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
 
 	// Different AS with no filter should use default export filter
 	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
-	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4(false)")
 }
 
 func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
@@ -110,8 +110,8 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6, 1024)
 
 	// Both should have export filter
-	assert.Contains(t, resultV4, "calico_export_to_bgp_peers")
-	assert.Contains(t, resultV6, "calico_export_to_bgp_peers")
+	assert.Contains(t, resultV4, "calico_export_to_bgp_peers_v4")
+	assert.Contains(t, resultV6, "calico_export_to_bgp_peers_v6")
 }
 
 func TestBuildExportFilter_EmptyFilters(t *testing.T) {
@@ -119,7 +119,7 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 
 	// Test with empty filters array
 	result := c.buildExportFilter([]string{}, "65000", "64512", 4, 1024)
-	assert.Contains(t, result, "calico_export_to_bgp_peers")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4")
 }
 
 func TestRouterIDGeneration_Hash(t *testing.T) {
@@ -1959,7 +1959,7 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-export-filter_exportFilterV4'();")
 	// Should still have calico_export_to_bgp_peers
-	assert.Contains(t, result, "calico_export_to_bgp_peers(false);")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4(false);")
 	assert.Contains(t, result, "reject;")
 }
 
@@ -2009,7 +2009,7 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 	// Should NOT include the filter call since there are no export rules
 	assert.NotContains(t, result, "'bgp_import-only_exportFilterV4'();")
 	// Should still have calico_export_to_bgp_peers
-	assert.Contains(t, result, "calico_export_to_bgp_peers")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4")
 }
 
 func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
@@ -2259,7 +2259,7 @@ func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
 
 	// Verify export filter includes the BGP filter function call
 	assert.Contains(t, config.Peers[0].ExportFilter, "'bgp_test-filter_exportFilterV4'();")
-	assert.Contains(t, config.Peers[0].ExportFilter, "calico_export_to_bgp_peers")
+	assert.Contains(t, config.Peers[0].ExportFilter, "calico_export_to_bgp_peers_v4")
 }
 
 func TestProcessGlobalPeers_WithBGPFilter_IPv6(t *testing.T) {
@@ -2541,10 +2541,10 @@ func TestPopulateNodeConfig_PeerDebugMode(t *testing.T) {
 // TestConfigCache_ConcurrentReadWrite tests the race condition in the global
 // configCache map when multiple goroutines call GetBirdBGPConfig concurrently.
 //
-// This test simulates the real-world scenario where bird.cfg.template (IPv4)
-// and bird6.cfg.template (IPv6) are rendered simultaneously by different
-// goroutines in processor.go's monitorPrefix function. Each template calls
-// GetBirdBGPConfig with its respective IP version.
+// This test simulates the real-world scenario where the unified bird.cfg
+// (and bird_ipam.cfg / bird_aggr.cfg) templates render both IPv4 and IPv6
+// sections, calling GetBirdBGPConfig for both IP versions, potentially from
+// different goroutines in processor.go's monitorPrefix function.
 //
 // We now run confd UT with -race, so this test will fail if the configCache map
 // is accessed without proper synchronization.
@@ -2591,8 +2591,8 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			// Alternate between IPv4 and IPv6 to simulate bird.cfg.template
-			// and bird6.cfg.template rendering concurrently
+			// Alternate between IPv4 and IPv6 to simulate the unified
+			// templates rendering both address families concurrently
 			ipVersion := 4
 			if id%2 == 0 {
 				ipVersion = 6
@@ -2664,5 +2664,5 @@ func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
 	// iBGP with custom priority — LOCAL_PREF conversion should still appear
 	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
 	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
-	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
+	assert.Contains(t, result, "calico_export_to_bgp_peers_v4(true)")
 }

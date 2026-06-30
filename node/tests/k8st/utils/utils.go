@@ -43,7 +43,7 @@ import (
 
 // RouterImage is the BIRD image used to stand up external BGP routers in
 // tests. Overridable via $ROUTER_IMAGE to match utils.py.
-var RouterImage = envOr("ROUTER_IMAGE", "calico/bird:latest")
+var RouterImage = envOr("ROUTER_IMAGE", "calico/bird:3.3.0")
 
 // Agnhost is Kubernetes' swiss-army e2e image. Used via `netexec` for
 // multi-protocol servers (HTTP/UDP/SCTP on one pod) and via other
@@ -194,10 +194,6 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfi
 	// Set ECMP hash algorithm to L4 for proper load balancing between nodes.
 	MustRun(t, fmt.Sprintf("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1", name))
 
-	// Add "merge paths on" to the BIRD kernel protocols.
-	MustRun(t, fmt.Sprintf("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf", name))
-	MustRun(t, fmt.Sprintf("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird6.conf", name))
-
 	var birdyIP string
 	switch {
 	case birdPeerConfig != "":
@@ -213,8 +209,8 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfi
 		// multipath hash setting, and we don't test IPv6 ECMP in detail.
 		_, _ = Run(t, fmt.Sprintf("docker exec %s sysctl -w net.ipv6.fib_multipath_hash_policy=1", name), RunOptions{AllowFail: true})
 		MustRun(t, fmt.Sprintf("docker exec %s ip -6 a a %s/64 dev eth0", name, birdyIP))
-		installExternalPeerConfig(t, name, "/etc/bird6/peers.conf", strings.ReplaceAll(bird6PeerConfig, "ip@local", birdyIP))
-		MustRun(t, fmt.Sprintf("docker exec %s birdcl6 configure", name))
+		installExternalPeerConfig(t, name, "/etc/bird/peers.conf", strings.ReplaceAll(bird6PeerConfig, "ip@local", birdyIP))
+		MustRun(t, fmt.Sprintf("docker exec %s birdcl configure", name))
 	}
 	return birdyIP
 }
@@ -602,7 +598,6 @@ func printConfdTemplates(t testing.TB, nodes []string) {
 		}
 		for _, f := range []string{
 			"bird.cfg", "bird_aggr.cfg", "bird_ipam.cfg",
-			"bird6.cfg", "bird6_aggr.cfg", "bird6_ipam.cfg",
 		} {
 			_, _ = execInPod(t, pod, "cat /etc/calico/confd/config/"+f, allow)
 		}

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BIRD_IMAGE=calico/bird:latest
+ARG BIRD_IMAGE=calico/bird:3.3.0
 ARG BPFTOOL_IMAGE
 ARG UBI_IMAGE
 
@@ -138,10 +138,8 @@ RUN set -eux; \
     done
 
 # Copy our bird binaries in
-COPY --from=bird /bird /bin/bird
-COPY --from=bird /bird6 /bin/bird6
-COPY --from=bird /birdcl /bin/birdcl
-COPY --from=bird /birdcl6 /bin/birdcl6
+COPY --from=bird /usr/sbin/bird /bin/bird
+COPY --from=bird /usr/sbin/birdcl /bin/birdcl
 
 # Copy in the filesystem - this contains licenses, etc...
 COPY filesystem/etc/ /etc

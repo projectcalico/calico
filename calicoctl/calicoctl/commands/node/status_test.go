@@ -136,6 +136,55 @@ We never get here
 			_, err := scanBIRDPeers(table, conn{bytes.NewBufferString(table)})
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("should filter a single BIRD3 socket's mixed-family peers per requested family", func() {
+			// BIRD3 is a single daemon: one "show protocols" response contains
+			// both IPv4 and IPv6 peers.
+			table := `0001 BIRD 3.3.0 ready.
+2002-name     proto    table    state  since       info
+1002-kernel1  Kernel   master   up     2016-11-21
+ Mesh_172_17_8_102 BGP      master   up     2016-11-21  Established
+ Mesh_fd80_24e2_f998_72d7__2 BGP      master   up     2016-11-21  Established
+0000
+`
+			v4, err := scanBIRDPeers("4", conn{bytes.NewBufferString(table)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4).To(HaveLen(1))
+			Expect(v4[0].PeerIP).To(Equal("172.17.8.102"))
+
+			v6, err := scanBIRDPeers("6", conn{bytes.NewBufferString(table)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v6).To(HaveLen(1))
+			Expect(v6[0].PeerIP).To(Equal("fd80:24e2:f998:72d7::2"))
+		})
+
+		It("should parse real BIRD 3.3.0 'show protocols' wire output (capitalised headers)", func() {
+			// Captured verbatim from a live BIRD 3.3.0 control socket. Note the
+			// capitalised column headers ("Name Proto Table State ...") and the
+			// "---" table column, both of which differ from BIRD 1.x.
+			table := "0001 BIRD 3.3.0 ready.\n" +
+				"2002-Name       Proto      Table      State  Since         Info\n" +
+				"1002-device1    Device     ---        up     16:24:18.359  \n" +
+				" Mesh_10_0_0_2 BGP        ---        start  16:24:18.359  Passive       \n" +
+				" Node_10_0_0_3 BGP        ---        start  16:24:18.359  Passive       \n" +
+				" Global_10_0_0_4 BGP        ---        start  16:24:18.359  Passive       \n" +
+				" Mesh_2001_db8__2 BGP        ---        start  16:24:18.359  Passive       \n" +
+				" Node_2001_db8__3 BGP        ---        start  16:24:18.359  Passive       \n" +
+				"0000 \n"
+
+			v4, err := scanBIRDPeers("4", conn{bytes.NewBufferString(table)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v4).To(HaveLen(3))
+			Expect(v4[0].PeerIP).To(Equal("10.0.0.2"))
+			Expect(v4[0].PeerType).To(Equal("node-to-node mesh"))
+			Expect(v4[0].BGPState).To(Equal("Passive"))
+
+			v6, err := scanBIRDPeers("6", conn{bytes.NewBufferString(table)})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v6).To(HaveLen(2))
+			Expect(v6[0].PeerIP).To(Equal("2001:db8::2"))
+			Expect(v6[1].PeerIP).To(Equal("2001:db8::3"))
+		})
 	})
 }
 

@@ -35,16 +35,18 @@ template bgp bgp_template {
   description "Connection to BGP peer";
   local as 63000;
   multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export all;
   source address ip@local;  # The local address we use for the TCP connection
-  add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv4 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
 }
 
 # ------------- Node-to-node mesh -------------
@@ -76,16 +78,18 @@ template bgp bgp_template {
   description "Connection to BGP peer";
   local as 63000;
   multihop;
-  gateway recursive; # This should be the default, but just in case.
-  import all;        # Import all routes, since we don't know what the upstream
-                     # topology is and therefore have to trust the ToR/RR.
-  export all;
   source address ip@local;  # The local address we use for the TCP connection
-  add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
+  ipv4 {
+    import all;        # Import all routes, since we don't know what the upstream
+                       # topology is and therefore have to trust the ToR/RR.
+    export all;
+    gateway recursive; # This should be the default, but just in case.
+    add paths on;
+  };
 }
 
 # ------------- RR -------------
@@ -232,8 +236,9 @@ EOF
             (self.blue_pod_1_0,"10.123.3.0/26","ca11:c0:3::/96"),
         ]:
             p.wait_ready()
-            self.setup_workload_pod_v4(p, block_v4)
-            self.setup_workload_pod_v6(p, block_v6)
+            # BIRD3 is a single unified daemon: program both the IPv4 and IPv6
+            # workload BGP config into one /etc/bird.conf.
+            self.setup_workload_pod(p, block_v4, block_v6)
 
         # Define localWorkloadPeeringIP and turn off nodeToNodeMesh
         kubectl("""apply -f - << EOF
@@ -331,7 +336,7 @@ metadata:
 spec:
   containers:
   - name: bird
-    image: calico/bird:v0.3.3-211-g9111ec3c
+    image: calico/bird:3.3.0
     securityContext:
       privileged: true
   nodeName: %s
@@ -340,27 +345,19 @@ spec:
         self.add_cleanup(pod.delete)
         return pod
 
-    def setup_workload_pod_v4(self, pod, ipam_block):
-        # Copy bird
-        bird_peer_config = self.get_bird_config_workload("65401", pod.ip,pod.ip, ipam_block, "169.254.0.179", "64512")
+    def setup_workload_pod(self, pod, ipam_block_v4, ipam_block_v6):
+        # BIRD3 is a single unified daemon, so program both the IPv4 and IPv6
+        # workload BGP config into one /etc/bird.conf and reload once.
+        bird_peer_config = self.get_bird_config_workload(
+            "65401", pod.ip,
+            pod.ip, ipam_block_v4, "169.254.0.179",
+            pod.ipv6, ipam_block_v6, "fd12:3456:789a::1",
+            "64512")
         with open('peers.conf', 'w') as peerconfig:
             peerconfig.write(bird_peer_config)
 
         run("kubectl cp peers.conf %s/%s:/etc/bird.conf" % (pod.ns, pod.name))
         run("kubectl exec -t %s -n %s -- sh -c 'birdcl configure'" % (pod.name, pod.ns))
-
-        run("rm peers.conf")
-
-        # run("kubectl exec -t %s -n %s -- sh -c 'ip route add 10.244.0.64/24 via 192.168.0.8'" % (pod.name, pod.ns))
-
-    def setup_workload_pod_v6(self, pod, ipam_block):
-        # Copy bird
-        bird_peer_config = self.get_bird_config_workload("65401", pod.ip,pod.ipv6, ipam_block, "fd12:3456:789a::1", "64512")
-        with open('peers.conf', 'w') as peerconfig:
-            peerconfig.write(bird_peer_config)
-
-        run("kubectl cp peers.conf %s/%s:/etc/bird6.conf" % (pod.ns, pod.name))
-        run("kubectl exec -t %s -n %s -- sh -c 'birdcl6 configure'" % (pod.name, pod.ns))
 
         run("rm peers.conf")
 
@@ -370,34 +367,22 @@ spec:
         if self.topology == TopologyMode.RR:
           return bird_conf_tor_rr % self.ips[0]
 
-    def get_bird_config_workload(self, as_number_child, router_id, child_ip, child_block, local_workload_peer_ip,
+    def get_bird_config_workload(self, as_number_child, router_id,
+                                 child_ip_v4, child_block_v4, local_workload_peer_ip_v4,
+                                 child_ip_v6, child_block_v6, local_workload_peer_ip_v6,
                                  as_number_parent):
         return """
 router id %s;
 
-function calico_cidr_filter() {
+function calico_cidr_filter_v4() {
   if ( net ~ %s ) then {
     accept;
   }
 }
-
-# Configure synchronization between routing tables and kernel.
-protocol kernel {
-  learn;             # Learn all alien routes from the kernel
-  persist;           # Don't remove routes on bird shutdown
-  scan time 2;       # Scan kernel routing table every 2 seconds
-  import all;
-  export filter {
-    calico_cidr_filter();
-    reject;
-  };
-  graceful restart;  # Turn on graceful restart to reduce potential flaps in
-                     # routes when reloading BIRD configuration.  With a full
-                     # automatic mesh, there is no way to prevent BGP from
-                     # flapping since multiple nodes update their BGP
-                     # configuration at the same time, GR is not guaranteed to
-                     # work correctly in this scenario.
-  merge paths on;    # Allow export multipath routes (ECMP)
+function calico_cidr_filter_v6() {
+  if ( net ~ %s ) then {
+    accept;
+  }
 }
 
 # Watch interface up/down events.
@@ -406,53 +391,116 @@ protocol device {
   scan time 2;    # Scan interfaces every 2 seconds
 }
 
-# A static route to export to the parent cluster.
-protocol static {
-    route %s via %s;
+# Configure synchronization between routing tables and kernel (IPv4).
+protocol kernel {
+  ipv4 {
+    import all;
+    export filter {
+      calico_cidr_filter_v4();
+      reject;
+    };
+  };
+  learn; persist; scan time 2; graceful restart; merge paths on;
 }
 
-# Template for all BGP clients
-template bgp bgp_template {
+# Configure synchronization between routing tables and kernel (IPv6).
+protocol kernel {
+  ipv6 {
+    import all;
+    export filter {
+      calico_cidr_filter_v6();
+      reject;
+    };
+  };
+  learn; persist; scan time 2; graceful restart; merge paths on;
+}
+
+# Static routes to export to the parent cluster.
+protocol static {
+  ipv4;
+  route %s via %s;
+}
+protocol static {
+  ipv6;
+  route %s via %s;
+}
+
+# Template for IPv4 BGP clients
+template bgp bgp_template_v4 {
   debug { states };
   description "Connection to BGP peer";
   local as %s;
-  gateway recursive; # This should be the default, but just in case.
-  add paths on;
-  graceful restart;  # See comment in kernel section about graceful restart.
+  graceful restart;
   connect delay time 2;
   connect retry time 5;
   error wait time 5,30;
-  import filter {
-    calico_cidr_filter();
-    reject;
-  };
-  export filter {
-    calico_cidr_filter();
-    reject;
-  };
   ttl security off;
   multihop;
+  ipv4 {
+    gateway recursive;
+    add paths on;
+    import filter {
+      calico_cidr_filter_v4();
+      reject;
+    };
+    export filter {
+      calico_cidr_filter_v4();
+      reject;
+    };
+  };
 }
 
-protocol bgp from_workload_to_local_host from bgp_template {
+# Template for IPv6 BGP clients
+template bgp bgp_template_v6 {
+  debug { states };
+  description "Connection to BGP peer";
+  local as %s;
+  graceful restart;
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+  ttl security off;
+  multihop;
+  ipv6 {
+    gateway recursive;
+    add paths on;
+    import filter {
+      calico_cidr_filter_v6();
+      reject;
+    };
+    export filter {
+      calico_cidr_filter_v6();
+      reject;
+    };
+  };
+}
+
+protocol bgp from_workload_to_local_host_v4 from bgp_template_v4 {
   neighbor %s as %s;
 }
-""" % (router_id, child_block,  child_block, child_ip, as_number_child, local_workload_peer_ip, as_number_parent)
+protocol bgp from_workload_to_local_host_v6 from bgp_template_v6 {
+  neighbor %s as %s;
+}
+""" % (router_id,
+       child_block_v4, child_block_v6,
+       child_block_v4, child_ip_v4,
+       child_block_v6, child_ip_v6,
+       as_number_child,
+       as_number_child,
+       local_workload_peer_ip_v4, as_number_parent,
+       local_workload_peer_ip_v6, as_number_parent)
 
     # Given a pod, check if should have BGP connections with the host.
     def assert_bgp_established(self, pod):
+        # BIRD3 single daemon: both IPv4 and IPv6 sessions are visible via birdcl.
         output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
-        regexp = "from_workload_to_local_host.*Established"
-        self.assertRegex(output, regexp, "IPv4 BGP connection not established, pod " + pod.name)
-        output = run("kubectl exec -t %s -n %s -- birdcl6 show protocols" % (pod.name, pod.ns))
-        self.assertRegex(output, regexp, "IPv6 BGP connection not established, pod " + pod.name)
+        self.assertRegex(output, "from_workload_to_local_host_v4.*Established", "IPv4 BGP connection not established, pod " + pod.name)
+        self.assertRegex(output, "from_workload_to_local_host_v6.*Established", "IPv6 BGP connection not established, pod " + pod.name)
 
     def assert_bgp_not_established(self, pod):
         output = run("kubectl exec -t %s -n %s -- birdcl show protocols" % (pod.name, pod.ns))
-        regexp = "from_workload_to_local_host.*Established"
-        self.assertNotRegex(output, regexp, "IPv4 BGP connection unexpectedly established, pod " + pod.name)
-        output = run("kubectl exec -t %s -n %s -- birdcl6 show protocols" % (pod.name, pod.ns))
-        self.assertNotRegex(output, regexp, "IPv6 BGP connection unexpectedly established, pod " + pod.name)
+        self.assertNotRegex(output, "from_workload_to_local_host_v4.*Established", "IPv4 BGP connection unexpectedly established, pod " + pod.name)
+        self.assertNotRegex(output, "from_workload_to_local_host_v6.*Established", "IPv6 BGP connection unexpectedly established, pod " + pod.name)
 
     def _test_local_bgp_peers(self):
         """
@@ -479,7 +527,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         # 10.123.0.0/26      via 192.168.162.157 on calicef4c701383 [Local_Workload_192_168_162_157 15:11:46] * (100/0) [AS65401i]
         output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w1)
         self.assertRegex(output, r"10\.123\.0\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w1)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w1)
         self.assertRegex(output, r"ca11:c0::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
         # Worker 2 should have 2 routes of each version, one for each child.
@@ -487,7 +535,7 @@ protocol bgp from_workload_to_local_host from bgp_template {
         output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w2)
         self.assertRegex(output, r"10\.123\.1\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegex(output, r"10\.123\.3\.0/26.*via .* on cali.*Local_Workload_.*AS65401")
-        output = run("kubectl exec -t %s -n calico-system -- birdcl6 show route" % calico_node_w2)
+        output = run("kubectl exec -t %s -n calico-system -- birdcl show route" % calico_node_w2)
         self.assertRegex(output, r"ca11:c0:1::/96.*via .* on cali.*Local_Workload_.*AS65401")
         self.assertRegex(output, r"ca11:c0:3::/96.*via .* on cali.*Local_Workload_.*AS65401")
 
