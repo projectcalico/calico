@@ -33,13 +33,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
 const (
-	// spoofNamespace holds the access/scapy pod pair shared by both subtests.
-	spoofNamespace = "ipip-spoofing"
-
 	// spoofedNodeIP is the (arbitrary, in-pod-CIDR) address used as the outer
 	// destination of forged encapsulated packets. Matches the Python original.
 	spoofedNodeIP = "10.192.0.3"
@@ -57,6 +55,9 @@ const (
 func TestSpoof(t *testing.T) {
 	defer utils.CollectDiagsOnFailure(t)()
 
+	// nsName holds the access/scapy pod pair shared by both scenarios.
+	nsName := e2eutils.GenerateRandomName("ipip-spoofing")
+
 	g := NewWithT(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	t.Cleanup(cancel)
@@ -68,7 +69,7 @@ func TestSpoof(t *testing.T) {
 		"spoofing test needs a control-plane node and at least two workers")
 
 	// Namespace + pods, created once for both scenarios.
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: spoofNamespace}}
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
@@ -79,7 +80,7 @@ func TestSpoof(t *testing.T) {
 	// access listens for UDP on 5000 and appends what it receives to snoop.txt;
 	// the grep against that file is how we detect delivery.
 	access := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: spoofNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: nsName},
 		Spec: corev1.PodSpec{
 			NodeName: nodes[1],
 			Containers: []corev1.Container{{
@@ -94,7 +95,7 @@ func TestSpoof(t *testing.T) {
 
 	// scapy forges the (normal and spoofed) packets.
 	scapy := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "scapy", Namespace: spoofNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "scapy", Namespace: nsName},
 		Spec: corev1.PodSpec{
 			NodeName: nodes[2],
 			Containers: []corev1.Container{{
@@ -107,14 +108,14 @@ func TestSpoof(t *testing.T) {
 	g.Expect(cli.Create(ctx, scapy)).To(Succeed(), "creating scapy pod")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), scapy) })
 
-	utils.WaitForPodReady(t, spoofNamespace, "scapy", 2*time.Minute)
-	utils.WaitForPodReady(t, spoofNamespace, "access", 2*time.Minute)
+	utils.WaitForPodReady(t, nsName, "scapy", 2*time.Minute)
+	utils.WaitForPodReady(t, nsName, "access", 2*time.Minute)
 
 	// IPIP: a packet of the form IP(node)/IP(pod)/UDP is IPIP encapsulation.
 	t.Run("ipip", func(t *testing.T) {
 		defer utils.CollectDiagsOnFailure(t)()
-		runSpoofScenario(t, cli, ctx, "IPIP", "ipip", func(g *WithT, podIP, message string) {
-			sendScapy(t, fmt.Sprintf(
+		runSpoofScenario(t, cli, ctx, nsName, "IPIP", "ipip", func(g *WithT, podIP, message string) {
+			sendScapy(t, nsName, fmt.Sprintf(
 				"send(IP(dst='%s')/IP(dst='%s')/UDP(dport=5000, sport=5000)/Raw(load='%s'))",
 				spoofedNodeIP, podIP, message))
 		})
@@ -123,8 +124,8 @@ func TestSpoof(t *testing.T) {
 	// VXLAN: IP(node)/UDP(4789)/VXLAN/Ether()/IP(pod)/UDP is VXLAN encapsulation.
 	t.Run("vxlan", func(t *testing.T) {
 		defer utils.CollectDiagsOnFailure(t)()
-		runSpoofScenario(t, cli, ctx, "VXLAN", "vxlan", func(g *WithT, podIP, message string) {
-			sendScapy(t, fmt.Sprintf(
+		runSpoofScenario(t, cli, ctx, nsName, "VXLAN", "vxlan", func(g *WithT, podIP, message string) {
+			sendScapy(t, nsName, fmt.Sprintf(
 				"send(IP(dst='%s')/UDP(dport=4789)/VXLAN(vni=4096)/Ether()/IP(dst='%s')/UDP(dport=5000, sport=5000)/Raw(load='%s'))",
 				spoofedNodeIP, podIP, message))
 		})
@@ -135,14 +136,14 @@ func TestSpoof(t *testing.T) {
 // is delivered, then confirms a spoofed (encapsulated, forged-inner-source)
 // packet is not. sendSpoofed forges the encapsulated packet for the mode under
 // test (its shape is the only thing that differs between IPIP and VXLAN).
-func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, encap, prefix string, sendSpoofed func(g *WithT, podIP, message string)) {
+func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, nsName, encap, prefix string, sendSpoofed func(g *WithT, podIP, message string)) {
 	g := NewWithT(t)
 
 	setEncapsulation(t, g, cli, ctx, encap)
 
 	// The access pod's IP is the inner destination of every packet we forge.
 	remotePodIP := waitForPodIP(ctx, g, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: spoofNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: nsName},
 	}, corev1.IPv4Protocol)
 	t.Logf("access pod IP: %s", remotePodIP)
 
@@ -150,9 +151,9 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 	clearConntrack(t, ctx)
 	normalMsg := prefix + "-normal"
 	g.Eventually(func() error {
-		sendScapy(t, fmt.Sprintf(
+		sendScapy(t, nsName, fmt.Sprintf(
 			"send(IP(dst='%s')/UDP(dport=5000, sport=5000)/Raw(load='%s'))", remotePodIP, normalMsg))
-		return grepSnoop(t, normalMsg)
+		return grepSnoop(t, nsName, normalMsg)
 	}, "60s", "2s").Should(Succeed(), "normal %s packet was never delivered", encap)
 
 	// A spoofed (encapsulated) packet must NOT be delivered: we keep forging it
@@ -161,7 +162,7 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 	spoofedMsg := prefix + "-spoofed"
 	g.Eventually(func() error {
 		sendSpoofed(g, remotePodIP, spoofedMsg)
-		if err := grepSnoop(t, spoofedMsg); err == nil {
+		if err := grepSnoop(t, nsName, spoofedMsg); err == nil {
 			return fmt.Errorf("ERROR - succeeded in sending spoofed %s packet", encap)
 		}
 		return nil
@@ -171,17 +172,17 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 // sendScapy feeds a single scapy send() statement to the scapy pod on stdin.
 // scapy send failures are non-fatal (the Python original swallowed them): the
 // assertion is made by grepping the access pod, not by scapy's exit code.
-func sendScapy(t *testing.T, script string) {
+func sendScapy(t *testing.T, nsName, script string) {
 	t.Helper()
-	_, _ = utils.ExecInPodStdin(t, spoofNamespace, "scapy", script+"\n", []string{"scapy"},
+	_, _ = utils.ExecInPodStdin(t, nsName, "scapy", script+"\n", []string{"scapy"},
 		utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 }
 
 // grepSnoop greps the access pod's capture file for message. A non-nil error
 // means the message was not found (i.e. the packet was not delivered).
-func grepSnoop(t *testing.T, message string) error {
+func grepSnoop(t *testing.T, nsName, message string) error {
 	t.Helper()
-	_, err := utils.ExecInPod(t, spoofNamespace, "access", "grep "+message+" /root/snoop.txt",
+	_, err := utils.ExecInPod(t, nsName, "access", "grep "+message+" /root/snoop.txt",
 		utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	return err
 }
