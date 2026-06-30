@@ -404,7 +404,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr bin/helm
+release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release
