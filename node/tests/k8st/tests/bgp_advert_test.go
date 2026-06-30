@@ -254,13 +254,12 @@ func (e *bgpAdvertEnv) teardownTest(t *testing.T) {
 	})
 
 	// Remove node-2's route-reflector config, retrying to absorb transient
-	// update conflicts.
-	err := utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	// update conflicts. This is cleanup, so a failure is reported but not fatal
+	// (a fatal here would skip sibling cleanups) — use a non-failing Gomega.
+	g := NewGomega(func(message string, _ ...int) { t.Errorf("%s", message) })
+	g.Eventually(func() error {
 		return clearRRConfig(t, e.nodes[2])
-	})
-	if err != nil {
-		t.Errorf("failed to clear route-reflector config on %s: %v", e.nodes[2], err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "failed to clear route-reflector config on %s", e.nodes[2])
 }
 
 // ----------------------------------------------------------------------------
@@ -580,7 +579,8 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 
 	// Assert all are advertised to the other node. This should happen quickly
 	// enough that they're programmed by the time we've queried them all.
-	err := utils.RetryUntilSuccess(t, 20*time.Second, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		routes := utils.ExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if !strings.Contains(routes, cip) {
@@ -588,15 +588,12 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("not all service routes advertised: %v", err)
-	}
+	}, 20*time.Second, time.Second).Should(Succeed(), "not all service routes advertised")
 
 	// Scale to 0 replicas; all routes are removed.
 	utils.ScaleDeployment(t, localSvc, e.ns, 0)
 	utils.WaitForDeployment(t, localSvc, e.ns)
-	err = utils.RetryUntilSuccess(t, 60*time.Second, func() error {
+	g.Eventually(func() error {
 		routes := utils.ExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if strings.Contains(routes, cip) {
@@ -604,10 +601,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("service routes were not withdrawn: %v", err)
-	}
+	}, 60*time.Second, time.Second).Should(Succeed(), "service routes were not withdrawn")
 }
 
 func (e *bgpAdvertEnv) testBGPFilterIPAdvertisement(t *testing.T) {
@@ -674,9 +668,9 @@ func (e *bgpAdvertEnv) testRR(t *testing.T) {
 
 	// Make node-2 a route reflector, retrying to absorb update conflicts.
 	g := NewWithT(t)
-	g.Expect(utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g.Eventually(func() error {
 		return setRRConfig(t, e.nodes[2])
-	})).To(Succeed(), "setting route-reflector config on %s", e.nodes[2])
+	}, 90*time.Second, time.Second).Should(Succeed(), "setting route-reflector config on %s", e.nodes[2])
 
 	// Disable the mesh, advertise the cluster/external CIDRs, and peer the
 	// cluster nodes with the RR.
@@ -710,9 +704,9 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 	})
 
 	g := NewWithT(t)
-	g.Expect(utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g.Eventually(func() error {
 		return setRRConfig(t, e.nodes[2])
-	})).To(Succeed(), "setting route-reflector config on %s", e.nodes[2])
+	}, 90*time.Second, time.Second).Should(Succeed(), "setting route-reflector config on %s", e.nodes[2])
 
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{
 		NodeToNodeMeshEnabled:  new(false),
@@ -732,6 +726,7 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 // matching Service customised by mutate, then returns the created Service.
 func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Service)) *corev1.Service {
 	t.Helper()
+	g := NewWithT(t)
 	cs := utils.K8sClient(t)
 	ctx := context.Background()
 
@@ -758,9 +753,7 @@ func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Servic
 		},
 	}
 	_, err := cs.AppsV1().Deployments(e.ns).Create(ctx, dep, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("creating nginx-rr deployment: %v", err)
-	}
+	g.Expect(err).NotTo(HaveOccurred(), "creating nginx-rr deployment")
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: "nginx-rr", Namespace: e.ns, Labels: labels},
@@ -775,9 +768,7 @@ func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Servic
 	// returned object carries everything the caller asserts on — matching the
 	// Python, which reads spec.clusterIP / spec.loadBalancerIP directly.
 	created, err := cs.CoreV1().Services(e.ns).Create(ctx, svc, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("creating nginx-rr service: %v", err)
-	}
+	g.Expect(err).NotTo(HaveOccurred(), "creating nginx-rr service")
 	return created
 }
 
@@ -821,15 +812,15 @@ func (e *bgpAdvertEnv) setBGPConfig(t *testing.T, spec v3.BGPConfigurationSpec) 
 // one (it survives across the two test classes).
 func createBGPSecret(t *testing.T, cli ctrlclient.Client) {
 	t.Helper()
+	g := NewWithT(t)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: bgpSecretName, Namespace: bgpSecretNS},
 		Type:       corev1.SecretTypeOpaque,
 		StringData: map[string]string{bgpSecretKey: bgpSecretVal},
 	}
-	err := cli.Create(context.Background(), secret)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		t.Fatalf("creating BGP secret: %v", err)
-	}
+	// The Secret survives across the two test classes, so an existing one is fine.
+	g.Expect(ctrlclient.IgnoreAlreadyExists(cli.Create(context.Background(), secret))).
+		To(Succeed(), "creating BGP secret")
 }
 
 // upsertBGPPeer creates the peer, or replaces its spec if it already exists.
@@ -871,14 +862,15 @@ func setPeerFilters(t *testing.T, cli ctrlclient.Client, name string, filters []
 		}
 		peer.Spec.Filters = filters
 		return cli.Update(ctx, peer)
-	}, "20s", "2s").Should(Succeed(), "setting filters %v on BGPPeer %s", filters, name)
+	}, "20s", "1s").Should(Succeed(), "setting filters %v on BGPPeer %s", filters, name)
 }
 
 // labelNode sets a label on a node (overwriting any existing value).
 func labelNode(t *testing.T, node, key, value string) {
 	t.Helper()
+	g := NewWithT(t)
 	cs := utils.K8sClient(t)
-	err := utils.RetryUntilSuccess(t, 30*time.Second, func() error {
+	g.Eventually(func() error {
 		n, err := cs.CoreV1().Nodes().Get(context.Background(), node, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -889,16 +881,14 @@ func labelNode(t *testing.T, node, key, value string) {
 		n.Labels[key] = value
 		_, err = cs.CoreV1().Nodes().Update(context.Background(), n, metav1.UpdateOptions{})
 		return err
-	})
-	if err != nil {
-		t.Fatalf("labelling node %s %s=%s: %v", node, key, value, err)
-	}
+	}, 30*time.Second, time.Second).Should(Succeed(), "labelling node %s %s=%s", node, key, value)
 }
 
 // createExternalNodeIngressPolicy creates a NetworkPolicy in the test namespace
 // that only admits TCP/80 ingress from the external node's IP.
 func createExternalNodeIngressPolicy(t *testing.T, nsName, externalIP string) {
 	t.Helper()
+	g := NewWithT(t)
 	tcp := corev1.ProtocolTCP
 	port80 := intstr.FromInt32(80)
 	policy := &networkingv1.NetworkPolicy{
@@ -916,9 +906,7 @@ func createExternalNodeIngressPolicy(t *testing.T, nsName, externalIP string) {
 	}
 	_, err := utils.K8sClient(t).NetworkingV1().NetworkPolicies(nsName).Create(
 		context.Background(), policy, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("creating NetworkPolicy: %v", err)
-	}
+	g.Expect(err).NotTo(HaveOccurred(), "creating NetworkPolicy")
 }
 
 // setRRConfig labels the node as a route reflector and sets its cluster ID,
@@ -993,30 +981,26 @@ func mapField(m map[string]any, key string) map[string]any {
 // substr.
 func assertRouteContains(t *testing.T, substr string) {
 	t.Helper()
-	err := utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		if routes := utils.ExternalNodeRoutes(t); !strings.Contains(routes, substr) {
 			return fmt.Errorf("route table does not contain %q:\n%s", substr, routes)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("expected route %q: %v", substr, err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "expected route %q", substr)
 }
 
 // assertRouteNotContains retries until the external node's route table no longer
 // contains substr.
 func assertRouteNotContains(t *testing.T, substr string) {
 	t.Helper()
-	err := utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		if routes := utils.ExternalNodeRoutes(t); strings.Contains(routes, substr) {
 			return fmt.Errorf("route table still contains %q:\n%s", substr, routes)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("expected route %q to be withdrawn: %v", substr, err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "expected route %q to be withdrawn", substr)
 }
 
 // assertEcmpRoutes retries until the external node's route table contains the
@@ -1030,25 +1014,21 @@ func assertEcmpRoutes(t *testing.T, dst string, via []string) {
 	for _, ip := range sorted {
 		match += fmt.Sprintf("\n\tnexthop via %s dev eth0 weight 1 ", ip)
 	}
-	err := utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		if routes := utils.ExternalNodeRoutes(t); !strings.Contains(routes, match) {
 			return fmt.Errorf("ECMP route block not found:\n%s\nin:\n%s", match, routes)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("expected ECMP routes for %s via %v: %v", dst, sorted, err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "expected ECMP routes for %s via %v", dst, sorted)
 }
 
 // curlRetry retries a curl from the external node to host until it succeeds.
 func curlRetry(t *testing.T, host string) {
 	t.Helper()
-	err := utils.RetryUntilSuccess(t, 90*time.Second, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		_, err := utils.Curl(t, host)
 		return err
-	})
-	if err != nil {
-		t.Fatalf("could not curl %s from external node: %v", host, err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "could not curl %s from external node", host)
 }

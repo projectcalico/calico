@@ -535,17 +535,15 @@ func (e *bgpFilterEnv) assertClusterRoute(t *testing.T, route, peerIP string, ip
 	pattern := regexp.QuoteMeta(route) + ` *via ` + regexp.QuoteMeta(peerIP) + ` on .* \[` + proto
 	re := regexp.MustCompile(pattern)
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.ExecInCalicoNode(t, e.egressNode, birdCmd+" show route protocol "+proto,
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, route, present)
-	})
-	if err != nil {
-		t.Fatalf("cluster route check failed for %s on %s: %v", route, e.egressNode, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "cluster route check failed for %s on %s", route, e.egressNode)
 }
 
 // assertExternalRoute polls an external router's BIRD until a route matching
@@ -583,17 +581,15 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 
 	re := regexp.MustCompile(pattern)
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s show route protocol %s", container, birdCmd, proto),
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, routeRegex, present)
-	})
-	if err != nil {
-		t.Fatalf("external route check failed for %s on %s: %v", routeRegex, container, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "external route check failed for %s on %s", routeRegex, container)
 }
 
 // checkRoutePresence returns nil when re's match of out agrees with the
