@@ -100,10 +100,10 @@ class SubnetSyncer(ResourceSyncer):
 
         Uses CAS-against-mod_revision with retry so a concurrent dynamic write to the
         same subnet key cannot get overwritten by a later out-of-order write from
-        another worker.  See ``cas_write`` in ``syncer.py`` for the shared rationale;
-        this implementation is inlined because Subnet data is stored as JSON-as-string
-        (not as a Calico v3 resource) and so uses ``etcdv3`` directly rather than
-        ``datamodel_v3``.
+        another worker.  See ``sync_wep`` in endpoints.py for the same retry pattern
+        on a Calico v3 resource; this implementation is inlined because Subnet data
+        is stored as JSON-as-string (not as a Calico v3 resource) and so uses
+        ``etcdv3`` directly rather than ``datamodel_v3``.
         """
         LOG.info("Sync subnet %s %s to etcd", subnet["id"], subnet["cidr"])
         subnet_id = subnet["id"]

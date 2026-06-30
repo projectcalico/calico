@@ -175,8 +175,8 @@ class PolicySyncer(ResourceSyncer):
 
     def _cas_sync_sg(self, sgid, context):
         """CAS-protected sync for one SG's NetworkPolicy.  See ``sync_sgs_to_etcd`` for
-        the rationale and ``write_endpoint`` in endpoints.py for the same retry pattern
-        in long form.
+        the rationale and ``sync_wep`` in endpoints.py for the same retry pattern in
+        long form.
         """
         name = SG_NAME_PREFIX + sgid
         for attempt in range(MAX_CAS_ATTEMPTS):

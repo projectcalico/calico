@@ -1007,7 +1007,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Update %d port(s) for %s", len(ports), reason)
         for p in ports:
             if _port_is_endpoint_port(p):
-                self.endpoint_syncer.sync_wep(p, p["binding:host_id"], plugin_context)
+                host = p.get("binding:host_id")
+                if host:
+                    self.endpoint_syncer.sync_wep(p, host, plugin_context)
 
     def handle_qos_policy_update(self, context, policy_id):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
@@ -1156,15 +1158,18 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # preserving order, so the new destination is written after any
         # cleanup of an old one.
         for dest_host in dict.fromkeys([old_dest, new_dest]):
-            if dest_host is not None:
+            if dest_host:
                 self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
 
         # Sync every host that owns -- or owned -- a WEP slot for this
         # port.  The same dedupe-preserve-order trick keeps ``new_host``
         # last so a stale slot at ``old_host`` (cold-migration) is cleared
-        # before the canonical WEP at the new host is written.
+        # before the canonical WEP at the new host is written.  Truthy
+        # check (not ``is not None``) so an empty-string host -- typical
+        # for an unbound port -- doesn't fall through and incur a wasted
+        # DB re-read on a slot that cannot exist.
         for host in dict.fromkeys([old_host, old_dest, new_dest, new_host]):
-            if host is not None:
+            if host:
                 self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
     def update_floatingip(self, plugin_context):

@@ -188,7 +188,7 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
     def delete_security_group(self, context, id):
         # Neutron's ``delete_security_group`` drops the SG row directly and relies on
         # the DB-level cascade to remove its rules, rather than iterating
-        # ``delete_security_group_rule`` per rule.  So the rule- level override above
+        # ``delete_security_group_rule`` per rule.  So the rule-level override above
         # does NOT fire during an SG delete, and the driver would otherwise miss the
         # signal.  Notify here, after ``super()`` has removed the SG from the DB:
         # ``sync_sgs_to_etcd`` re-reads from the Neutron DB, sees no SG with this id,
