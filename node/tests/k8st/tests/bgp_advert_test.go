@@ -48,8 +48,6 @@ import (
 )
 
 const (
-	// bgpTestNS is the namespace each advertisement subtest deploys into.
-	bgpTestNS = "bgp-test"
 	// extPeerName is the BGPPeer from the cluster nodes to the external router.
 	extPeerName = "node-extra.peer"
 	// rrPeerName is the BGPPeer created by the route-reflector tests.
@@ -147,6 +145,11 @@ type bgpAdvertEnv struct {
 	nodes          []string
 	ips            []string
 	externalNodeIP string
+
+	// ns is the namespace the current subtest deploys into. startTest assigns
+	// it a fresh random name per subtest so concurrent or repeated runs against
+	// the same cluster do not collide.
+	ns string
 }
 
 // TestBGPAdvert exercises service-IP advertisement under the full node-to-node
@@ -232,12 +235,13 @@ func TestBGPAdvertRR(t *testing.T) {
 // run before it (matching the Python tearDown ordering, where add_cleanup
 // callbacks run before the namespace deletion and config restore).
 func (e *bgpAdvertEnv) startTest(t *testing.T) {
+	e.ns = utils.RandomSuffix("bgp-test")
 	t.Cleanup(func() { e.teardownTest(t) })
-	utils.CreateNamespace(t, bgpTestNS)
+	utils.CreateNamespace(t, e.ns)
 }
 
 func (e *bgpAdvertEnv) teardownTest(t *testing.T) {
-	utils.DeleteAndConfirm(t, bgpTestNS, "ns", "")
+	utils.DeleteAndConfirm(t, e.ns, "ns", "")
 
 	// Delete the RR-specific BGPPeer (created by some tests), ignoring absence.
 	deleteBGPPeer(e.cli, rrPeerName)
@@ -274,16 +278,16 @@ func (e *bgpAdvertEnv) testClusterIPAdvertisement(t *testing.T) {
 
 	// Create both a Local and a Cluster type NodePort service with one replica.
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.Deploy(t, utils.NginxImage, clusterSvc, bgpTestNS, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
-	utils.WaitUntilExists(t, clusterSvc, "svc", bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.Deploy(t, utils.NginxImage, clusterSvc, e.ns, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
+	utils.WaitUntilExists(t, clusterSvc, "svc", e.ns)
 
-	localSvcIP := utils.GetSvcClusterIP(t, localSvc, bgpTestNS)
-	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, bgpTestNS)
+	localSvcIP := utils.GetSvcClusterIP(t, localSvc, e.ns)
+	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, e.ns)
 
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
-	utils.WaitForDeployment(t, clusterSvc, bgpTestNS)
+	utils.WaitForDeployment(t, localSvc, e.ns)
+	utils.WaitForDeployment(t, clusterSvc, e.ns)
 
 	// Both services should be reachable from the external node.
 	curlRetry(t, localSvcIP)
@@ -294,14 +298,14 @@ func (e *bgpAdvertEnv) testClusterIPAdvertisement(t *testing.T) {
 	assertRouteNotContains(t, clusterSvcIP)
 
 	// Scale the local service to 4 replicas and assert ECMP routing.
-	utils.ScaleDeployment(t, localSvc, bgpTestNS, 4)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.ScaleDeployment(t, localSvc, e.ns, 4)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 	assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Delete both services; the clusterIP is no longer advertised.
-	utils.DeleteAndConfirm(t, localSvc, "svc", bgpTestNS)
-	utils.DeleteAndConfirm(t, clusterSvc, "svc", bgpTestNS)
+	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
+	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
 	assertRouteNotContains(t, localSvcIP)
 }
 
@@ -318,16 +322,16 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	assertRouteContains(t, clusterCIDR)
 
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.Deploy(t, utils.NginxImage, clusterSvc, bgpTestNS, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
-	utils.WaitUntilExists(t, clusterSvc, "svc", bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.Deploy(t, utils.NginxImage, clusterSvc, e.ns, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
+	utils.WaitUntilExists(t, clusterSvc, "svc", e.ns)
 
-	localSvcIP := utils.GetSvcClusterIP(t, localSvc, bgpTestNS)
-	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, bgpTestNS)
+	localSvcIP := utils.GetSvcClusterIP(t, localSvc, e.ns)
+	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, e.ns)
 
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
-	utils.WaitForDeployment(t, clusterSvc, bgpTestNS)
+	utils.WaitForDeployment(t, localSvc, e.ns)
+	utils.WaitForDeployment(t, clusterSvc, e.ns)
 
 	curlRetry(t, localSvcIP)
 	curlRetry(t, clusterSvcIP)
@@ -339,8 +343,8 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	curlRetry(t, clusterSvcIP)
 
 	// Scale local service to 4 replicas.
-	utils.ScaleDeployment(t, localSvc, bgpTestNS, 4)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.ScaleDeployment(t, localSvc, e.ns, 4)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 
 	// Local service is advertised only from nodes that can run pods; the
 	// cluster CIDR is advertised from all nodes.
@@ -363,19 +367,19 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	curlRetry(t, clusterSvcIP)
 
 	// Delete the local service; it is no longer advertised.
-	utils.DeleteAndConfirm(t, localSvc, "svc", bgpTestNS)
+	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
 	assertRouteNotContains(t, localSvcIP)
 
 	// Re-create the local service; advertised from the correct nodes only.
-	utils.CreateService(t, localSvc, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
-	localSvcIP = utils.GetSvcClusterIP(t, localSvc, bgpTestNS)
+	utils.CreateService(t, localSvc, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
+	localSvcIP = utils.GetSvcClusterIP(t, localSvc, e.ns)
 	assertEcmpRoutes(t, localSvcIP, []string{e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Add an external IP and assert it follows the same advertisement rules.
 	localSvcExternalIP := "175.200.1.1"
-	utils.AddSvcExternalIPs(t, localSvc, bgpTestNS, []string{localSvcExternalIP})
+	utils.AddSvcExternalIPs(t, localSvc, e.ns, []string{localSvcExternalIP})
 	assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[2], e.ips[3]})
 
 	// Re-enable the excluded node; it advertises service routes again.
@@ -386,8 +390,8 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	curlRetry(t, localSvcIP)
 
 	// Delete both services; the clusterIP is no longer advertised.
-	utils.DeleteAndConfirm(t, localSvc, "svc", bgpTestNS)
-	utils.DeleteAndConfirm(t, clusterSvc, "svc", bgpTestNS)
+	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
+	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
 	assertRouteNotContains(t, localSvcIP)
 }
 
@@ -404,33 +408,33 @@ func (e *bgpAdvertEnv) testExternalIPAdvertisement(t *testing.T) {
 	})
 
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.Deploy(t, utils.NginxImage, clusterSvc, bgpTestNS, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
-	utils.WaitUntilExists(t, clusterSvc, "svc", bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.Deploy(t, utils.NginxImage, clusterSvc, e.ns, 80, utils.DeployOptions{TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
+	utils.WaitUntilExists(t, clusterSvc, "svc", e.ns)
 
-	localSvcIP := utils.GetSvcClusterIP(t, localSvc, bgpTestNS)
-	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, bgpTestNS)
+	localSvcIP := utils.GetSvcClusterIP(t, localSvc, e.ns)
+	clusterSvcIP := utils.GetSvcClusterIP(t, clusterSvc, e.ns)
 
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
-	utils.WaitForDeployment(t, clusterSvc, bgpTestNS)
+	utils.WaitForDeployment(t, localSvc, e.ns)
+	utils.WaitForDeployment(t, clusterSvc, e.ns)
 
 	// clusterIPs are not advertised (no serviceClusterIPs configured).
 	assertRouteNotContains(t, localSvcIP)
 	assertRouteNotContains(t, clusterSvcIP)
 
 	// Network policy that only accepts traffic from the external node.
-	createExternalNodeIngressPolicy(t, e.externalNodeIP)
+	createExternalNodeIngressPolicy(t, e.ns, e.externalNodeIP)
 
-	localSvcHostIP := utils.GetSvcHostIP(t, localSvc, bgpTestNS)
-	clusterSvcHostIP := utils.GetSvcHostIP(t, clusterSvc, bgpTestNS)
+	localSvcHostIP := utils.GetSvcHostIP(t, localSvc, e.ns)
+	clusterSvcHostIP := utils.GetSvcHostIP(t, clusterSvc, e.ns)
 
 	// Select an IP from each external IP CIDR.
 	localSvcExternalIP := "175.200.1.1"
 	clusterSvcExternalIP := "200.255.255.1"
 
-	utils.AddSvcExternalIPs(t, localSvc, bgpTestNS, []string{localSvcExternalIP})
-	utils.AddSvcExternalIPs(t, clusterSvc, bgpTestNS, []string{clusterSvcExternalIP})
+	utils.AddSvcExternalIPs(t, localSvc, e.ns, []string{localSvcExternalIP})
+	utils.AddSvcExternalIPs(t, clusterSvc, e.ns, []string{clusterSvcExternalIP})
 
 	// The external IP of the local service is advertised but not the cluster one.
 	localSvcExternalIPsRoute := fmt.Sprintf("%s via %s", localSvcExternalIP, localSvcHostIP)
@@ -439,13 +443,13 @@ func (e *bgpAdvertEnv) testExternalIPAdvertisement(t *testing.T) {
 	assertRouteNotContains(t, clusterSvcExternalIPsRoute)
 
 	// Scale the local service to 4 replicas; expect ECMP routes for its ext IP.
-	utils.ScaleDeployment(t, localSvc, bgpTestNS, 4)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.ScaleDeployment(t, localSvc, e.ns, 4)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 	assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 
 	// Delete both services; the external IP is no longer advertised.
-	utils.DeleteAndConfirm(t, localSvc, "svc", bgpTestNS)
-	utils.DeleteAndConfirm(t, clusterSvc, "svc", bgpTestNS)
+	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
+	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
 	assertRouteNotContains(t, localSvcExternalIPsRoute)
 }
 
@@ -462,13 +466,13 @@ func (e *bgpAdvertEnv) testFullyQualifiedServiceIPs(t *testing.T) {
 	// externalTrafficPolicy=Cluster, triggering advertisement from all nodes.
 	svcName := "nginx-svc"
 	extIP := "90.15.0.1"
-	utils.Deploy(t, utils.NginxImage, svcName, bgpTestNS, 80, utils.DeployOptions{
+	utils.Deploy(t, utils.NginxImage, svcName, e.ns, 80, utils.DeployOptions{
 		TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster,
 		SvcType:       corev1.ServiceTypeClusterIP,
 		ExtIP:         extIP,
 	})
-	utils.WaitUntilExists(t, svcName, "svc", bgpTestNS)
-	utils.WaitForDeployment(t, svcName, bgpTestNS)
+	utils.WaitUntilExists(t, svcName, "svc", e.ns)
+	utils.WaitForDeployment(t, svcName, e.ns)
 
 	assertEcmpRoutes(t, extIP, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 }
@@ -483,25 +487,25 @@ func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
 
 	// Create a dummy service to occupy the first LB IP, so the IP we test with
 	// below isn't the zero address of the range.
-	utils.CreateService(t, "dummy-service", "dummy-service", bgpTestNS, 80, utils.DeployOptions{SvcType: corev1.ServiceTypeLoadBalancer})
+	utils.CreateService(t, "dummy-service", "dummy-service", e.ns, 80, utils.DeployOptions{SvcType: corev1.ServiceTypeLoadBalancer})
 
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
-	utils.Deploy(t, utils.NginxImage, clusterSvc, bgpTestNS, 80, utils.DeployOptions{
+	utils.Deploy(t, utils.NginxImage, clusterSvc, e.ns, 80, utils.DeployOptions{
 		TrafficPolicy: corev1.ServiceExternalTrafficPolicyCluster,
 		SvcType:       corev1.ServiceTypeLoadBalancer,
 	})
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{SvcType: corev1.ServiceTypeLoadBalancer})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
-	utils.WaitUntilExists(t, clusterSvc, "svc", bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{SvcType: corev1.ServiceTypeLoadBalancer})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
+	utils.WaitUntilExists(t, clusterSvc, "svc", e.ns)
 
-	localLBIP := utils.GetSvcLoadBalancerIP(t, localSvc, bgpTestNS)
-	clusterLBIP := utils.GetSvcLoadBalancerIP(t, clusterSvc, bgpTestNS)
+	localLBIP := utils.GetSvcLoadBalancerIP(t, localSvc, e.ns)
+	clusterLBIP := utils.GetSvcLoadBalancerIP(t, clusterSvc, e.ns)
 
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
-	utils.WaitForDeployment(t, clusterSvc, bgpTestNS)
+	utils.WaitForDeployment(t, localSvc, e.ns)
+	utils.WaitForDeployment(t, clusterSvc, e.ns)
 
-	localSvcHostIP := utils.GetSvcHostIP(t, localSvc, bgpTestNS)
-	clusterSvcHostIP := utils.GetSvcHostIP(t, clusterSvc, bgpTestNS)
+	localSvcHostIP := utils.GetSvcHostIP(t, localSvc, e.ns)
+	clusterSvcHostIP := utils.GetSvcHostIP(t, clusterSvc, e.ns)
 
 	// LB IP of the local service is advertised but not the cluster service's.
 	localSvcLBRoute := fmt.Sprintf("%s via %s", localLBIP, localSvcHostIP)
@@ -514,8 +518,8 @@ func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
 	assertEcmpRoutes(t, lbCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 
 	// Scale the local service to 4 replicas; expect ECMP for its LB IP.
-	utils.ScaleDeployment(t, localSvc, bgpTestNS, 4)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.ScaleDeployment(t, localSvc, e.ns, 4)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 	assertEcmpRoutes(t, localLBIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 
 	// Disable LoadBalancer advertisement; routes are withdrawn.
@@ -543,8 +547,8 @@ func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
 	curlRetry(t, clusterLBIP)
 
 	// Delete both services; the LB IP is no longer advertised.
-	utils.DeleteAndConfirm(t, localSvc, "svc", bgpTestNS)
-	utils.DeleteAndConfirm(t, clusterSvc, "svc", bgpTestNS)
+	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
+	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
 	assertRouteNotContains(t, localLBIP)
 }
 
@@ -559,18 +563,18 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 
 	// Create a local service and deployment.
 	localSvc := "nginx-local"
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.WaitForDeployment(t, localSvc, e.ns)
 
-	clusterIPs := []string{utils.GetSvcClusterIP(t, localSvc, bgpTestNS)}
+	clusterIPs := []string{utils.GetSvcClusterIP(t, localSvc, e.ns)}
 
 	// Create many more services selecting the same deployment.
 	const numSvc = 50
 	for i := range numSvc {
-		utils.CreateService(t, fmt.Sprintf("nginx-svc-%d", i), localSvc, bgpTestNS, 80, utils.DeployOptions{})
+		utils.CreateService(t, fmt.Sprintf("nginx-svc-%d", i), localSvc, e.ns, 80, utils.DeployOptions{})
 	}
 	for i := range numSvc {
-		clusterIPs = append(clusterIPs, utils.GetSvcClusterIP(t, fmt.Sprintf("nginx-svc-%d", i), bgpTestNS))
+		clusterIPs = append(clusterIPs, utils.GetSvcClusterIP(t, fmt.Sprintf("nginx-svc-%d", i), e.ns))
 	}
 
 	// Assert all are advertised to the other node. This should happen quickly
@@ -589,8 +593,8 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	}
 
 	// Scale to 0 replicas; all routes are removed.
-	utils.ScaleDeployment(t, localSvc, bgpTestNS, 0)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	utils.ScaleDeployment(t, localSvc, e.ns, 0)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 	err = utils.RetryUntilSuccess(t, 60*time.Second, func() error {
 		routes := utils.ExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
@@ -617,11 +621,11 @@ func (e *bgpAdvertEnv) testBGPFilterIPAdvertisement(t *testing.T) {
 
 	// Create a Local type NodePort service with a single replica.
 	localSvc := "nginx-local"
-	utils.Deploy(t, utils.NginxImage, localSvc, bgpTestNS, 80, utils.DeployOptions{})
-	utils.WaitUntilExists(t, localSvc, "svc", bgpTestNS)
+	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
+	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
 
-	localSvcIP := utils.GetSvcClusterIP(t, localSvc, bgpTestNS)
-	utils.WaitForDeployment(t, localSvc, bgpTestNS)
+	localSvcIP := utils.GetSvcClusterIP(t, localSvc, e.ns)
+	utils.WaitForDeployment(t, localSvc, e.ns)
 
 	curlRetry(t, localSvcIP)
 	assertRouteContains(t, localSvcIP)
@@ -732,7 +736,7 @@ func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Servic
 
 	labels := map[string]string{"app": "nginx", "run": "nginx-rr"}
 	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "nginx-rr", Namespace: bgpTestNS, Labels: map[string]string{"app": "nginx"}},
+		ObjectMeta: metav1.ObjectMeta{Name: "nginx-rr", Namespace: e.ns, Labels: map[string]string{"app": "nginx"}},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: new(int32(1)),
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
@@ -752,13 +756,13 @@ func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Servic
 			},
 		},
 	}
-	_, err := cs.AppsV1().Deployments(bgpTestNS).Create(ctx, dep, metav1.CreateOptions{})
+	_, err := cs.AppsV1().Deployments(e.ns).Create(ctx, dep, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("creating nginx-rr deployment: %v", err)
 	}
 
 	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "nginx-rr", Namespace: bgpTestNS, Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Name: "nginx-rr", Namespace: e.ns, Labels: labels},
 		Spec: corev1.ServiceSpec{
 			Ports:    []corev1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(80)}},
 			Selector: labels,
@@ -769,7 +773,7 @@ func (e *bgpAdvertEnv) createRRWorkload(t *testing.T, mutate func(*corev1.Servic
 	// back the spec we set (including loadBalancerIP / externalIPs), so the
 	// returned object carries everything the caller asserts on — matching the
 	// Python, which reads spec.clusterIP / spec.loadBalancerIP directly.
-	created, err := cs.CoreV1().Services(bgpTestNS).Create(ctx, svc, metav1.CreateOptions{})
+	created, err := cs.CoreV1().Services(e.ns).Create(ctx, svc, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("creating nginx-rr service: %v", err)
 	}
@@ -892,12 +896,12 @@ func labelNode(t *testing.T, node, key, value string) {
 
 // createExternalNodeIngressPolicy creates a NetworkPolicy in the test namespace
 // that only admits TCP/80 ingress from the external node's IP.
-func createExternalNodeIngressPolicy(t *testing.T, externalIP string) {
+func createExternalNodeIngressPolicy(t *testing.T, nsName, externalIP string) {
 	t.Helper()
 	tcp := corev1.ProtocolTCP
 	port80 := intstr.FromInt32(80)
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "allow-tcp-80-ex", Namespace: bgpTestNS},
+		ObjectMeta: metav1.ObjectMeta{Name: "allow-tcp-80-ex", Namespace: nsName},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
@@ -909,7 +913,7 @@ func createExternalNodeIngressPolicy(t *testing.T, externalIP string) {
 			}},
 		},
 	}
-	_, err := utils.K8sClient(t).NetworkingV1().NetworkPolicies(bgpTestNS).Create(
+	_, err := utils.K8sClient(t).NetworkingV1().NetworkPolicies(nsName).Create(
 		context.Background(), policy, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("creating NetworkPolicy: %v", err)
