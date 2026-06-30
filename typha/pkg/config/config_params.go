@@ -115,7 +115,7 @@ type Config struct {
 	PrometheusMetricsCAFile     string `config:"string;"`
 	PrometheusMetricsCertFile   string `config:"string;"`
 	PrometheusMetricsKeyFile    string `config:"string;"`
-	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);RequireAndVerifyClientCert"`
+	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
 
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 

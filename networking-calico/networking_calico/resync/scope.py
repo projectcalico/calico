@@ -236,7 +236,7 @@ class Scope:
         # added all their ports.
         remaining_subnet_ids = self.subnets - network_subnet_ids
         if remaining_subnet_ids:
-            with db_api.CONTEXT_WRITER.using(self.admin_context):
+            with db_api.CONTEXT_READER.using(self.admin_context):
                 # Iterate directly rather than calling .all() so this matches
                 # the bulk-prefetch pattern in WorkloadEndpointSyncer.  Real
                 # SQLAlchemy Query supports iteration; the test mocks return
