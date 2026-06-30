@@ -653,15 +653,12 @@ class TestPluginEtcdBase(_TestEtcdBase):
         self.assertEtcdWrites({})
         self.assertEtcdDeletes(set())
 
-        # Add lib.port1 back again.
+        # Add lib.port1 back again.  Only the WEP write happens; the SG NetworkPolicy
+        # still has its initial value, so the no-op-write optimisation in
+        # ``_cas_sync_sg`` skips that put.
         self.osdb_ports = [lib.port1, lib.port2]
         self.driver.create_port_postcommit(context)
-        self.assertEtcdWrites(
-            {
-                ep_deadbeef_key_v3: ep_deadbeef_value_v3,
-                self.sg_default_key_v3: self.sg_default_value_v3,
-            }
-        )
+        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
         self.assertEtcdDeletes(set())
 
         # Migrate port1 to a different host.
@@ -679,12 +676,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_deadbeef_value_v3["spec"]["node"] = ep_deadbeef_value_v3["spec"][
             "node"
         ].replace("felix-host-1", "new-host")
-        self.assertEtcdWrites(
-            {
-                ep_deadbeef_key_v3: ep_deadbeef_value_v3,
-                self.sg_default_key_v3: self.sg_default_value_v3,
-            }
-        )
+
+        # SG NetworkPolicy unchanged from previous write; no-op skip.
+        self.assertEtcdWrites({ep_deadbeef_key_v3: ep_deadbeef_value_v3})
 
         # Now resync again, moving self.osdb_ports to move port 1 back to the
         # old host felix-host-1.  The effect will be as though we've
@@ -752,10 +746,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
             },
         }
 
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            self.sg_default_key_v3: self.sg_default_value_v3,
-        }
+        # SG NetworkPolicy unchanged from previous write; no-op skip in
+        # ``_cas_sync_sg``.
+        expected_writes = {ep_hello_key_v3: ep_hello_value_v3}
         self.assertEtcdWrites(expected_writes)
         self.assertEtcdDeletes(set())
         self.osdb_ports = [lib.port1, lib.port2, context._port]
@@ -935,11 +928,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_hello_value_v3["metadata"]["labels"][
             "sg-name.projectcalico.org/openstack-My_first_SG"
         ] = "SG-1"
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged from previous write; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
 
         # Resync with all latest data - expect no etcd writes or deletes.
         _log.info("Resync with existing etcd data")
@@ -1067,11 +1058,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
         ep_hello_value_v3["metadata"]["annotations"][
             "openstack.projectcalico.org/network-id"
         ] = "calico-other-network-id"
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged since the previous resync; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Add a QoS policy.
@@ -1084,11 +1073,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
             "egressBandwidth": 10000000,
             "egressBurst": 4294967296,
         }
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Add configuration for QoS settings that are not represented on the
@@ -1110,11 +1097,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
             "ingressMaxConnections": 10,
             "egressMaxConnections": 20,
         }
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Change to a QoS policy that will set all possible settings.
@@ -1139,11 +1124,8 @@ class TestPluginEtcdBase(_TestEtcdBase):
             "ingressPacketBurst": 81,
             "egressPacketBurst": 91,
         }
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+        # SG-1 NetworkPolicy unchanged; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Reset for future tests.
@@ -1167,11 +1149,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
             "egressBandwidth": 10000000,
             "egressBurst": 4294967296,
         }
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Remove the QoS policy from the network again.
@@ -1181,11 +1161,9 @@ class TestPluginEtcdBase(_TestEtcdBase):
 
         # Expected changes
         del ep_hello_value_v3["spec"]["qosControls"]
-        expected_writes = {
-            ep_hello_key_v3: ep_hello_value_v3,
-            sg_1_key_v3: sg_1_value_v3,
-        }
-        self.assertEtcdWrites(expected_writes)
+
+        # SG-1 NetworkPolicy unchanged; no-op skip.
+        self.assertEtcdWrites({ep_hello_key_v3: ep_hello_value_v3})
         self.assertEtcdDeletes(set())
 
         # Reset the state for safety.
@@ -2190,19 +2168,16 @@ class TestLiveMigration(TestPluginEtcdBase):
 
         self._pre_migrate()
 
-        # Destination WEP and LiveMigration should be written.  Security group policy is
-        # also rewritten alongside the WEP write.  The source WEP is also rewritten --
-        # update_port_postcommit syncs every (port, host) slot that might be affected by
-        # the update, and the source slot is in scope.  The rewrite is content-identical
-        # in normal cases (migrating_to isn't reflected in source-WEP
-        # spec/labels/annotations) but the test mock records it as a write.
+        # Destination WEP and LiveMigration should be written.
+        # ``update_port_postcommit`` also touches the source-WEP slot and the SG
+        # NetworkPolicy referenced by the port, but the no-op-write optimisation in
+        # ``sync_wep`` / ``_cas_sync_sg`` short-circuits both because their desired
+        # content is identical to what etcd already holds.
         expected_writes = {
-            self._ep_key(self.SOURCE_HOST): self._ep_value(self.SOURCE_HOST),
             self._ep_key(self.DEST_HOST): self._ep_value(self.DEST_HOST),
             self._lm_key(self.DEST_HOST): self._lm_value(
                 self.SOURCE_HOST, self.DEST_HOST
             ),
-            self.sg_default_key_v3: self.sg_default_value_v3,
         }
         self.assertEtcdWrites(expected_writes)
         # Source WEP should NOT be deleted.

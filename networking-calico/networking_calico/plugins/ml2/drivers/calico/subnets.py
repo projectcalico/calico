@@ -115,9 +115,9 @@ class SubnetSyncer(ResourceSyncer):
         key = datamodel_v2.key_for_subnet(subnet_id, self.region_string)
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
-                _, mod_revision = etcdv3.get(key)
+                existing_value, mod_revision = etcdv3.get(key)
             except etcdv3.KeyNotFound:
-                mod_revision = 0
+                existing_value, mod_revision = None, 0
             try:
                 # Re-read the subnet from the Neutron DB so that we can be sure of
                 # writing subnet data (if necessary) that post-dates what we just read
@@ -145,6 +145,11 @@ class SubnetSyncer(ResourceSyncer):
                     subnet_id,
                 )
                 continue
+            if existing_value is not None and existing_value == write_data:
+                # etcd already holds the value we would write -- skip the put to avoid a
+                # needless revision bump and a Felix watch event on identical data.
+                LOG.debug("Subnet %s already correct in etcd; skipping put", subnet_id)
+                return
             if self.update_in_etcd(key, write_data, mod_revision=mod_revision):
                 return
             LOG.debug(

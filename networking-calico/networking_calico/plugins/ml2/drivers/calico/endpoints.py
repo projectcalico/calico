@@ -587,10 +587,15 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         name = endpoint_name({**port, "binding:host_id": host})
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
-                _, mod_revision = datamodel_v3.get_namespaced(
-                    "WorkloadEndpoint", self.namespace, name
+                existing, mod_revision = datamodel_v3.get_namespaced(
+                    "WorkloadEndpoint",
+                    self.namespace,
+                    name,
+                    with_labels_and_annotations=True,
                 )
+                existing_spec, existing_labels, existing_annotations = existing
             except etcdv3.KeyNotFound:
+                existing_spec = existing_labels = existing_annotations = None
                 mod_revision = 0
 
             try:
@@ -627,13 +632,29 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             # references it.  sync_sgs_to_etcd is CAS-protected per SG and idempotent
             # across retries.
             self.policy_syncer.sync_sgs_to_etcd(port_extra.security_groups, context)
+            new_spec = endpoint_spec(write_port, port_extra)
+            new_labels = endpoint_labels(write_port, self.namespace, port_extra)
+            new_annotations = endpoint_annotations(write_port)
+            if (
+                existing_spec is not None
+                and existing_spec == new_spec
+                and existing_labels == new_labels
+                and existing_annotations == new_annotations
+            ):
+                # etcd already holds the spec / labels / annotations we would write --
+                # skip the put to avoid a needless revision bump and a Felix watch event
+                # on identical data.
+                LOG.debug(
+                    "WorkloadEndpoint %s already correct in etcd; skipping put", name
+                )
+                return True
             if datamodel_v3.put(
                 "WorkloadEndpoint",
                 self.namespace,
                 name,
-                endpoint_spec(write_port, port_extra),
-                labels=endpoint_labels(write_port, self.namespace, port_extra),
-                annotations=endpoint_annotations(write_port),
+                new_spec,
+                labels=new_labels,
+                annotations=new_annotations,
                 mod_revision=mod_revision,
             ):
                 return True
@@ -683,11 +704,11 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         name = endpoint_name({**port, "binding:host_id": dest_host})
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
-                _, mod_revision = datamodel_v3.get_namespaced(
+                existing_spec, mod_revision = datamodel_v3.get_namespaced(
                     "LiveMigration", self.namespace, name
                 )
             except etcdv3.KeyNotFound:
-                mod_revision = 0
+                existing_spec, mod_revision = None, 0
 
             try:
                 db_port = self.db.get_port(context, port_id)
@@ -718,11 +739,19 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 continue
 
             dest_port = {**db_port, "binding:host_id": dest_host}
+            new_spec = live_migration_spec(self.namespace, db_port, dest_port)
+            if existing_spec is not None and existing_spec == new_spec:
+                # etcd already holds the spec we would write -- skip the put to avoid a
+                # needless revision bump and a Felix watch event on identical data.
+                LOG.debug(
+                    "LiveMigration %s already correct in etcd; skipping put", name
+                )
+                return True
             if datamodel_v3.put(
                 "LiveMigration",
                 self.namespace,
                 name,
-                live_migration_spec(self.namespace, db_port, dest_port),
+                new_spec,
                 mod_revision=mod_revision,
             ):
                 return True
