@@ -51,14 +51,14 @@ Primary motivations:
 Each mode owns its **own `flag.FlagSet`** parsed from `os.Args[1:]`, so modes
 have independent flag/arg surfaces. This is the "general multi-tool framework"
 shape (decided), kept minimal: a registry + interface now, only `client` and
-`server` implemented. Adding a mode later = one `RegisterMode` call in an
+`server` implemented. Adding a mode later = one `registerMode` call in an
 `init()`.
 
 ### Package layout (`e2e/images/rapidclient/`, name kept)
 
 ```
 main.go        # dispatch: read MODE (default "client"), look up mode, run
-mode.go        # Mode interface + registry (RegisterMode / lookup / list)
+mode.go        # Mode interface + registry (registerMode / lookupMode / modeNames)
 client.go      # client mode: today's rapidclient logic, registered via init()
 server.go      # server mode: HTTP /length//post// + UDP echo, registered via init()
 server_test.go # unit tests for server endpoints + UDP echo
@@ -196,8 +196,8 @@ type Mode interface {
     Run(args []string) error
 }
 
-func RegisterMode(m Mode)          // called from each mode's init()
-func lookup(name string) (Mode, bool)
+func registerMode(m Mode)          // called from each mode's init()
+func lookupMode(name string) (Mode, bool)
 func modeNames() []string          // for the unknown-mode error message
 ```
 
@@ -205,7 +205,7 @@ func modeNames() []string          // for the unknown-mode error message
 ```go
 mode := os.Getenv("MODE")
 if mode == "" { mode = "client" }   // back-compat default
-m, ok := lookup(mode)
+m, ok := lookupMode(mode)
 if !ok { fatalf("unknown MODE %q; known modes: %v", mode, modeNames()) }
 if err := m.Run(os.Args[1:]); err != nil { log.Fatal(err) }
 ```

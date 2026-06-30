@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -111,9 +112,14 @@ func handleLength(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	// Write the whole body in one call so net/http sets Content-Length and does
-	// not chunk-frame the response.
-	_, _ = w.Write(lengthBody(n))
+	// Set Content-Length explicitly and write the body in one call so the response
+	// is never chunk-framed, regardless of N. (net/http only auto-sets
+	// Content-Length when the whole body fits its internal buffer (~2KB) before the
+	// handler returns; larger bodies would otherwise fall back to chunked.) Keeping
+	// the framing deterministic matches the contract DESIGN.md describes.
+	body := lengthBody(n)
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	_, _ = w.Write(body)
 }
 
 // lengthBody returns n bytes drawn from lengthAlphabet (whitespace-free).
@@ -165,6 +171,11 @@ func serveUDP(pc net.PacketConn) {
 	for {
 		n, addr, err := pc.ReadFrom(buf)
 		if err != nil {
+			// A closed conn is terminal — returning avoids a hot spin loop
+			// (and lets the test's deferred Close stop this goroutine).
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Printf("udp read error: %v", err)
 			continue
 		}
