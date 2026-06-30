@@ -38,6 +38,8 @@ from networking_calico.common import config as calico_config
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
 from networking_calico.plugins.ml2.drivers.calico import policy
+from networking_calico.plugins.ml2.drivers.calico import subnets as subnets_mod
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico import status
 from networking_calico.resync import scope as resync
 
@@ -1417,6 +1419,120 @@ class TestPluginEtcd(TestPluginEtcdBase):
         self.assertEtcdDeletes(
             set(["/calico/dhcp/v2/no-region/subnet/subnet-id-10.65.0--24"])
         )
+
+    # CAS retry coverage --------------------------------------------------
+    #
+    # The mock framework's ``etcd3gw_client_transaction`` validates that
+    # production passes the correct mod_revision in its CAS targets, but
+    # nothing in the steady-state tests exercises what happens when the CAS
+    # itself loses.  The tests below force CAS conflicts so the retry-then-
+    # succeed and retry-then-exhaust branches are actually run -- the whole
+    # point of the sync-shape work.
+
+    def _inject_cas_conflicts(self, n):
+        """Force the next ``n`` clientv3.transaction calls to report
+        CAS-failed; subsequent calls fall through to the normal mock.
+
+        Returns a no-arg getter for the number of conflicts still
+        pending (useful for asserting that the injected failures were
+        actually consumed)."""
+        real_txn = self.etcd3gw_client_transaction
+        remaining = [n]
+
+        def maybe_fail(txn):
+            if remaining[0] > 0:
+                remaining[0] -= 1
+                _log.info(
+                    "Test: injecting CAS conflict (remaining after: %d)",
+                    remaining[0],
+                )
+                return {"succeeded": False}
+            return real_txn(txn)
+
+        self.clientv3.transaction.side_effect = maybe_fail
+        return lambda: remaining[0]
+
+    def test_subnet_cas_retry_after_conflict(self):
+        """First CAS attempt loses, retry re-reads and succeeds.
+
+        Without the retry loop the lost CAS would silently drop our
+        update; the fact that the subnet ends up in etcd here proves
+        the retry path runs.
+        """
+        subnet = {
+            "network_id": "net-id-cas",
+            "enable_dhcp": True,
+            "id": "subnet-id-cas-retry",
+            "cidr": "10.99.0.0/24",
+            "gateway_ip": "10.99.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+
+        remaining = self._inject_cas_conflicts(1)
+
+        context = self.make_context()
+        context.current = subnet
+        self.driver.create_subnet_postcommit(context)
+
+        # The injected conflict was consumed.
+        self.assertEqual(remaining(), 0)
+        # Two transactions: the forced failure + the successful retry.
+        self.assertEqual(self.clientv3.transaction.call_count, 2)
+        # The subnet ended up in etcd despite the first failure.
+        self.assertEtcdWrites(
+            {
+                "/calico/dhcp/v2/no-region/subnet/subnet-id-cas-retry": {
+                    "network_id": "net-id-cas",
+                    "cidr": "10.99.0.0/24",
+                    "gateway_ip": "10.99.0.1",
+                    "host_routes": [],
+                }
+            }
+        )
+
+    def test_subnet_cas_exhaustion(self):
+        """All ``MAX_CAS_ATTEMPTS`` lose -- bail with WARNING, no write.
+
+        Persistent drift is the expected outcome (repaired by the next
+        resync); the contract is that we DO NOT keep retrying forever
+        and DO emit a warning so an operator can correlate.
+        """
+        subnet = {
+            "network_id": "net-id-cas",
+            "enable_dhcp": True,
+            "id": "subnet-id-cas-exhaust",
+            "cidr": "10.98.0.0/24",
+            "gateway_ip": "10.98.0.1",
+            "host_routes": [],
+            "dns_nameservers": [],
+        }
+        self.osdb_subnets = [subnet]
+
+        # Many more conflicts than the retry budget, so we know the
+        # bail-out is taken explicitly rather than tripping over a
+        # boundary.
+        remaining = self._inject_cas_conflicts(MAX_CAS_ATTEMPTS + 3)
+
+        context = self.make_context()
+        context.current = subnet
+        with mock.patch.object(subnets_mod.LOG, "warning") as warning:
+            self.driver.create_subnet_postcommit(context)
+
+        # Exactly MAX_CAS_ATTEMPTS transactions attempted, then bail.
+        self.assertEqual(self.clientv3.transaction.call_count, MAX_CAS_ATTEMPTS)
+        # The injected failures past the retry budget were not consumed,
+        # confirming the loop bailed rather than spinning further.
+        self.assertEqual(remaining(), 3)
+        # Warning logged with the key so operators can correlate.
+        warning.assert_called_once()
+        self.assertIn(
+            "subnet-id-cas-exhaust", " ".join(str(a) for a in warning.call_args.args)
+        )
+        # Nothing made it into etcd.
+        self.assertEtcdWrites({})
+        self.assertEtcdDeletes(set())
 
     def test_check_segment_for_agent(self):
         """Test the mechanism driver's check_segment_for_agent entry point."""
