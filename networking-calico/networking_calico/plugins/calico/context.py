@@ -13,7 +13,7 @@
 #    under the License.
 
 
-class SGRUpdateContext(object):
+class SGUpdateContext(object):
     def __init__(self, context, sgids):
         self.plugin_context = context
         self.sgids = sgids

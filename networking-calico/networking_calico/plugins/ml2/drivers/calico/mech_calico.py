@@ -1226,16 +1226,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if host:
             self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
-    def security_groups_rule_updated(self, context):
-        """Called whenever security group rules or membership change.
-
-        When a security group rule is added, we need to do the following steps:
-
-        1. Reread the security rules from the Neutron DB.
-        2. Write the updated policy to etcd.
-        """
-        TrackTask("SECURITY_GROUPS_RULE_UPDATED")
-        LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
+    def security_groups_updated(self, context):
+        """Called whenever security group rules, membership or existence change."""
+        TrackTask("SECURITY_GROUPS_UPDATED")
+        LOG.info("SECURITY_GROUPS_UPDATED: %s", context)
 
         # No outer writer/reader context here -- see create_port_postcommit for
         # rationale.  ``sync_sgs_to_etcd`` calls ``self.db.get_security_group_rules``,
