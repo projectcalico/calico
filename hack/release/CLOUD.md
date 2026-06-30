@@ -1,18 +1,18 @@
 # Cloud Operator release tooling
 
-The `hack/release` tool is the OSS/enterprise operator release tool. Calico Cloud behavior lives in
-`cloud.go` and `internal/versions/cloud.go`, both guarded by the `cloud` build tag, so they are only
-compiled into the **cloud release tool** built with `-tags cloud`. The regular Calico / Calico
-Enterprise release tool (`hack/bin/release`) is completely unaffected.
+The `hack/release` tool is a single binary that serves both the OSS/enterprise and Calico Cloud
+release flows. Calico Cloud behavior lives in `cloud.go` and `internal/versions/cloud.go` and is
+activated **at runtime** when `VARIANT=cloud` (there is no separate `-tags cloud` build). Use the
+regular release targets with `VARIANT=cloud`:
 
-Build and run the cloud release tool via the dedicated Makefile targets, which compile with
-`-tags cloud` into `hack/bin/release-cloud`:
+- `make release VARIANT=cloud` — build a cloud release
+- `make release-publish VARIANT=cloud` — publish a cloud release
+- `make release-tag VARIANT=cloud RELEASE_TAG=cloud-vX.Y.Z-N` — build + publish a tagged cloud release
 
-- `make release-cloud` — build a cloud release (`hack/bin/release-cloud build`)
-- `make release-publish-cloud` — publish a cloud release (`hack/bin/release-cloud publish`)
-
-On startup, `cloud.go`'s `init()` wraps the OSS command handlers and registers additional flags,
-injecting cloud logic without forking the shared code.
+`VARIANT=cloud` also switches the built operator image to `gcr.io/tigera-tesla/operator-cloud`
+(amd64) and bakes cloud mode into the operator binary (`-X …/pkg/cloud.buildVariant=cloud`), so the
+shipped cloud image is immutably cloud (see `pkg/cloud.IsCloudBuild`). When `VARIANT` is unset,
+`cloud.go`'s `init()` returns immediately and the enterprise release flow is unchanged.
 
 ## Hashreleases
 
@@ -23,11 +23,11 @@ variables are exported to the tool.)
 ### Using hashrelease URL
 
 ```bash
-make release-cloud HASHRELEASE=true \
+make release VARIANT=cloud HASHRELEASE=true \
   HASHRELEASE_URL="https://<hashrelease-name>.docs.eng.tigera.net" \
   CLOUD_REGISTRY="gcr.io/unique-caldron-775/cnx/"
 
-make release-publish-cloud HASHRELEASE=true \
+make release-publish VARIANT=cloud HASHRELEASE=true \
   HASHRELEASE_URL="https://<hashrelease-name>.docs.eng.tigera.net" \
   CLOUD_REGISTRY="gcr.io/unique-caldron-775/cnx/"
 ```
@@ -35,19 +35,19 @@ make release-publish-cloud HASHRELEASE=true \
 ### Using local pinned components file
 
 ```bash
-make release-cloud HASHRELEASE=true \
+make release VARIANT=cloud HASHRELEASE=true \
   PINNED_COMPONENTS_FILE="/path/to/pinned_components.yml" \
   CLOUD_REGISTRY="gcr.io/unique-caldron-775/cnx/"
 
-make release-publish-cloud HASHRELEASE=true \
+make release-publish VARIANT=cloud HASHRELEASE=true \
   PINNED_COMPONENTS_FILE="/path/to/pinned_components.yml" \
   CLOUD_REGISTRY="gcr.io/unique-caldron-775/cnx/"
 ```
 
 ## Release
 
-The release process is the same as the OSS operator with specific cloud variables; use the
-`release-cloud` / `release-publish-cloud` targets so the `-tags cloud` binary is used.
+The release process is the same as the OSS operator, run with `VARIANT=cloud` (e.g.
+`make release-tag VARIANT=cloud RELEASE_TAG=cloud-vX.Y.Z-N`).
 
 ## How It Works
 
@@ -93,7 +93,7 @@ from the OSS release process may also be used as needed (see `flags.go`).
 
 ## Extension Pattern
 
-Cloud-specific behavior is implemented in `cloud.go` via an `init()` (active only under `-tags cloud`)
+Cloud-specific behavior is implemented in `cloud.go` via an `init()` (active only when `VARIANT=cloud`)
 that updates OSS flag defaults to cloud defaults and wraps the OSS command handlers:
 
 - **`cloudBuildBefore`**: runs before the OSS build `Before` handler — downloads pinned components,
@@ -109,8 +109,10 @@ that updates OSS flag defaults to cloud defaults and wraps the OSS command handl
 Cloud-specific flags (`--hashrelease-url`, `--pinned-components`, `--cloud-registry`) are appended
 to the relevant OSS commands in the same `init()` call.
 
-## CI Integration (follow-up)
+## CI Integration
 
-The cloud build/release CI pipelines (Semaphore `cloud-v*` triggers + GCR push, and the Argo
-hashrelease build / cluster-rollout workflows) are not yet wired into this repo — they are
-environment-specific and tracked as a follow-up in `docs/cloud-unfork-migration-plan.md` (Phase 4 CI).
+The cloud build/release runs via:
+- Semaphore: `.semaphore/push_images_cloud.yml` (GCR push on `master`/`staging`/`release-*`) and
+  `.semaphore/release_cloud.yml` (`cloud-v*` tags), promoted from `.semaphore/semaphore.yml`.
+- ArgoCI: `.argoci/templates/hashrelease/build-hashrelease.yaml` builds+publishes a cloud image from
+  an enterprise hashrelease and exposes `imageTag`/`newHashrelease`.

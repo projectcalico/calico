@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"github.com/tigera/api/pkg/lib/numorstring"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
@@ -57,6 +58,9 @@ const (
 	ClusterRoleName                                        = "tigera-linseed"
 	MultiTenantManagedClustersAccessClusterRoleBindingName = "tigera-linseed-managed-cluster-access"
 	ManagedClustersWatchRoleBindingName                    = "tigera-linseed-managed-cluster-watch"
+
+	// CloudPolicyName Name of the network policy that adds CC specific rules to Linseed.
+	CloudPolicyName = networkpolicy.CalicoComponentPolicyPrefix + "cloud-linseed-access"
 )
 
 func Linseed(c *Config) render.Component {
@@ -177,10 +181,10 @@ func (l *linseed) Objects() (toCreate, toDelete []client.Object) {
 	}
 
 	if l.cfg.Cloud {
-		// Add in Calico Cloud resources.
-		ccToCreate, ccToDelete := l.getCloudObjects()
-		toCreate = append(toCreate, ccToCreate...)
-		toDelete = append(toDelete, ccToDelete...)
+		toCreate = append(toCreate, l.cloudAccessNetworkPolicy())
+
+		// allow-tigera Tier was renamed to calico-system
+		toDelete = append(toDelete, networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("cloud-linseed-access", l.namespace))
 	}
 
 	return toCreate, toDelete
@@ -454,6 +458,26 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 		}
 		annotations[l.cfg.TokenKeyPair.HashAnnotationKey()] = l.cfg.TokenKeyPair.HashAnnotationValue()
 	}
+
+	// Calico Cloud additions to the Linseed env.
+	if l.cfg.Cloud {
+		// Replica count for the policy activity index, kept consistent with the other index replicas.
+		envVars = append(envVars, corev1.EnvVar{Name: "ELASTIC_POLICY_ACTIVITY_INDEX_REPLICAS", Value: strconv.Itoa(l.cfg.ESClusterConfig.Replicas())})
+
+		// Enable the prometheus metrics endpoint at :METRICS_PORT/metrics (default 9095). We use the
+		// same certificate for TLS on the metrics endpoint as we do for the main API.
+		envVars = append(envVars,
+			corev1.EnvVar{Name: "LINSEED_ENABLE_METRICS", Value: "true"},
+			corev1.EnvVar{Name: "LINSEED_METRICS_CERT", Value: l.cfg.KeyPair.VolumeMountCertificateFilePath()},
+			corev1.EnvVar{Name: "LINSEED_METRICS_KEY", Value: l.cfg.KeyPair.VolumeMountKeyFilePath()},
+		)
+
+		if l.cfg.Tenant != nil && l.cfg.ExternalElastic {
+			// Overwrite policy activity index name until we create the tenant CR on all environments.
+			envVars = append(envVars, corev1.EnvVar{Name: "ELASTIC_POLICY_ACTIVITY_BASE_INDEX_NAME", Value: "calico_policy_activity_standard"})
+		}
+	}
+
 	tolerations := l.cfg.Installation.ControlPlaneTolerations
 	if l.cfg.Installation.KubernetesProvider.IsGKE() {
 		tolerations = append(tolerations, rmeta.TolerateGKEARM64NoSchedule)
@@ -524,10 +548,6 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 			Template: *podTemplate,
 			Replicas: replicas,
 		},
-	}
-
-	if l.cfg.Cloud {
-		l.modifyDeploymentForCloud(&d)
 	}
 
 	if l.cfg.Tenant.MultiTenant() {
@@ -717,6 +737,50 @@ func (l *linseed) linseedCalicoSystemPolicy() *v3.NetworkPolicy {
 			Types:    []v3.PolicyType{v3.PolicyTypeIngress, v3.PolicyTypeEgress},
 			Ingress:  ingressRules,
 			Egress:   egressRules,
+		},
+	}
+}
+
+func (l *linseed) cloudAccessNetworkPolicy() *v3.NetworkPolicy {
+	// Calico Cloud NetworkPolicy: allow the CC monitoring stack to scrape Linseed metrics, and
+	// (when using external ES) allow egress to the external Elasticsearch.
+	var egressRules []v3.Rule
+	if l.cfg.ElasticClientSecret != nil {
+		// TODO: At the moment, we only support mTLS for Elasticsearch when using an external ES cluster.
+		// That allows us to use the presence of the secret as a proxy for whether we should append this egress rule.
+		// In the future, we should support mTLS for internal ES clusters as well and switch this to a better check.
+
+		// Allow egress traffic to the external Elasticsearch.
+		egressRules = append(egressRules, v3.Rule{
+			Action:   v3.Allow,
+			Protocol: &networkpolicy.TCPProtocol,
+			Destination: v3.EntityRule{
+				Ports:   []numorstring.Port{{MinPort: 443, MaxPort: 443}},
+				Domains: []string{l.cfg.ElasticHost},
+			},
+		})
+	}
+	return &v3.NetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: CloudPolicyName, Namespace: l.namespace},
+		Spec: v3.NetworkPolicySpec{
+			Order:    &networkpolicy.HighPrecedenceOrder,
+			Tier:     networkpolicy.CalicoTierName,
+			Selector: networkpolicy.KubernetesAppSelector(DeploymentName),
+			Types:    []v3.PolicyType{v3.PolicyTypeIngress, v3.PolicyTypeEgress},
+			Ingress: []v3.Rule{{
+				// Allow ingress traffic from the Calico Cloud monitoring stack to the Linseed metrics port.
+				Action:   v3.Allow,
+				Protocol: &networkpolicy.TCPProtocol,
+				Source: v3.EntityRule{
+					NamespaceSelector: "projectcalico.org/name == 'monitoring'",
+					Selector:          "app == 'prometheus'",
+				},
+				Destination: v3.EntityRule{
+					Ports: []numorstring.Port{{MinPort: 9095, MaxPort: 9095}},
+				},
+			}},
+			Egress: egressRules,
 		},
 	}
 }

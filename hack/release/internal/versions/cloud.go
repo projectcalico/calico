@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build cloud
-
-// This file is only compiled into the Calico Cloud release tool (built with `-tags cloud`); it has
-// no effect on the regular Calico / Calico Enterprise release tool.
+// These cloud-specific config keys are always compiled in; they are only consumed by the release
+// tool's cloud path (VARIANT=cloud), so they have no effect on the regular Calico / Calico
+// Enterprise release flow.
 
 package versions
 

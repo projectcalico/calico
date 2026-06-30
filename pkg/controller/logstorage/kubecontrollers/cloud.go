@@ -62,7 +62,7 @@ func (r *ESKubeControllersController) esGatewayAddCloudModificationsToConfig(c *
 	}
 
 	if cloudConfig.TenantId() != "" {
-		c.Cloud.TenantId = cloudConfig.TenantId()
+		c.Cloud.TenantID = cloudConfig.TenantId()
 	}
 
 	return true, nil
@@ -82,7 +82,7 @@ func (r *ESKubeControllersController) esKubeControllersAddCloudModificationsToCo
 		}
 
 		if cloudConfig.TenantId() != "" {
-			c.TenantId = cloudConfig.TenantId()
+			c.TenantID = cloudConfig.TenantId()
 		}
 	}
 

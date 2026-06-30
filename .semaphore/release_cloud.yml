@@ -1,0 +1,60 @@
+version: v1.0
+
+name: Operator Cloud Release
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+# Calico Cloud release pipeline. Coexists with the enterprise release.yml: it triggers on cloud-v*
+# tags and publishes the operator-cloud image to GCR via `make release-tag VARIANT=cloud` (one
+# release binary; cloud behavior activates at runtime on VARIANT=cloud). The enterprise v* flow is unchanged.
+global_job_config:
+  secrets:
+    - name: docker-hub
+    - name: oss-release-secrets
+    # Mount the github SSH secret for pulling private repositories.
+    - name: private-repo
+  prologue:
+    commands:
+      - echo $DOCKERHUB_PASSWORD | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+      # Correct permissions since they are too open by default:
+      - chmod 0600 ~/.keys/*
+      # Add the key to the ssh agent:
+      - ssh-add ~/.keys/*
+      # Check out our source code
+      - checkout
+      # Cloud is amd64 only, so only the amd64 caches are needed.
+      - "cache restore bin-amd64-${SEMAPHORE_GIT_SHA}"
+      - "cache restore go-pkg-cache-amd64-${SEMAPHORE_GIT_SHA}"
+      - "cache restore go-mod-cache-amd64-${SEMAPHORE_GIT_SHA}"
+
+blocks:
+  - name: Release Cloud
+    run:
+      when: "tag =~ '^cloud-v'"
+    task:
+      secrets:
+        - name: google-service-account-for-gcr
+      prologue:
+        commands:
+          - gcloud auth activate-service-account --key-file=/home/semaphore/secrets/secret.google-service-account-key.json
+          - docker login -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+          - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
+      jobs:
+        - name: Publish Cloud Release
+          commands:
+            - make release-tag VARIANT=cloud RELEASE_TAG=${SEMAPHORE_GIT_TAG_NAME}
+          env_vars:
+            - name: CONFIRM
+              value: "true"
+
+promotions:
+  - name: Clean Up
+    pipeline_file: clean_up.yml
+    auto_promote:
+      when: "result = 'passed'"

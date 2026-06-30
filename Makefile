@@ -178,15 +178,19 @@ PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(P
 
 # Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
 # image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only, instead of the enterprise quay
-# image. Enterprise/OSS builds (VARIANT unset) are completely unaffected. PUSH_MANIFEST_IMAGE_PREFIXES
-# and PUSH_NONMANIFEST_IMAGE_PREFIXES above use recursive `=`, so they pick up these overrides.
+# image, and bakes cloud mode into the binary via CLOUD_LDFLAGS (see the operator build below).
+# Enterprise/OSS builds (VARIANT unset) are completely unaffected. PUSH_MANIFEST_IMAGE_PREFIXES and
+# PUSH_NONMANIFEST_IMAGE_PREFIXES above use recursive `=`, so they pick up these overrides.
+# Note: this is the same tigera/operator repo — only the published image differs (operator-cloud).
+CLOUD_LDFLAGS=
 ifeq ($(VARIANT),cloud)
-REPO:=tigera/operator-cloud
 BUILD_IMAGE:=tigera-tesla/operator-cloud
 IMAGE_REGISTRY:=gcr.io
 PUSH_IMAGE_PREFIXES:=gcr.io/
 EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
 VALIDARCHES:=amd64
+# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see pkg/cloud.IsCloudBuild).
+CLOUD_LDFLAGS=-X $(PACKAGE_NAME)/pkg/cloud.buildVariant=cloud
 endif
 
 
@@ -292,7 +296,7 @@ $(BINDIR)/operator-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FI
 	mkdir -p $(BINDIR)
 	$(CONTAINERIZED) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/operator-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/operator-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
 	$(CONTAINERIZED) $(CALICO_BUILD) sh -c 'strings $(BINDIR)/operator-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endif
@@ -525,6 +529,10 @@ release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
 	$(MAKE) release VERSION=$(RELEASE_TAG)
 	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
 
+# Calico Cloud releases reuse release-tag with VARIANT=cloud, e.g.
+# `make release-tag VARIANT=cloud RELEASE_TAG=cloud-vX.Y.Z-N`. The release tool applies cloud
+# behavior (GCR/tesla image, cloud-v* format, no GitHub release) at runtime based on VARIANT.
+
 ## Generate release notes for the specified VERSION.
 release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
 	REPO=$(REPO) hack/bin/release notes
@@ -577,22 +585,10 @@ hack/bin/release: $(shell find ./hack/release -type f)
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o hack/bin/release ./hack/release'
 
-# Calico Cloud release tooling. The cloud release tool is the same tool compiled with `-tags cloud`,
-# which activates hack/release/cloud.go (GCR/tesla image defaults, cloud-vX.Y.Z version format,
-# hashrelease support). The regular `release`/`release-publish` targets above are unaffected.
-hack/bin/release-cloud: $(shell find ./hack/release -type f)
-	mkdir -p hack/bin
-	$(CONTAINERIZED) $(CALICO_BUILD) \
-	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -tags cloud -o hack/bin/release-cloud ./hack/release'
-
-## Build a Calico Cloud release from start to finish.
-release-cloud: clean hack/bin/release-cloud
-	hack/bin/release-cloud build
-
-## Publish a previously built Calico Cloud release.
-release-publish-cloud: hack/bin/release-cloud
-	hack/bin/release-cloud publish
+# Calico Cloud releases use the same release binary and targets with VARIANT=cloud, e.g.
+# `make release VARIANT=cloud` / `make release-tag VARIANT=cloud`. The release tool activates its
+# cloud behavior (GCR/tesla image, cloud-vX.Y.Z version format, hashrelease support) at runtime when
+# VARIANT=cloud; no separate binary or build tag is required.
 
 hack/release/ut:
 	mkdir -p report/release

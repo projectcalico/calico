@@ -134,7 +134,7 @@ var _ = Describe("ES Gateway rendering tests", func() {
 				Enabled:              true,
 				EsAdminUserSecret:    &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: render.ElasticsearchAdminUserSecret, Namespace: common.OperatorNamespace()}},
 				ExternalCertsSecret:  &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: logstorage.ExternalCertsSecret, Namespace: common.OperatorNamespace()}},
-				TenantId:             "tenantId",
+				TenantID:             "tenantId",
 				EnableMTLS:           true,
 				ExternalElastic:      true,
 				ExternalESDomain:     "externalEs.com",

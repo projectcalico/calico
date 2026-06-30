@@ -1,0 +1,185 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: build-hashrelease
+  namespace: argoci
+  labels:
+    type: cloud-hashrelease
+spec:
+  entrypoint: build-cloud-hashrelease
+  onExit: exit-handler
+  arguments:
+    parameters:
+      - name: hashReleaseURL
+        default: "https://hashrelease-name.docs.eng.tigera.net"
+        description: |
+          Qualified enterprise hashrelease URL produced from the #releases slack channel
+          (eg. https://2023-08-07-master-ducking.docs.eng.tigera.net)
+      - name: operatorBranch
+        default: ""
+        description: |
+          Operator cloud branch to build and push the hashrelease image (eg. master, release-v1.30).
+          Leave blank to parse the operator branch based on hashrelease version file.
+  workflowMetadata:
+    annotations:
+      workflows.argoproj.io/title: "Build HashRelease: {{workflow.parameters.hashReleaseURL}}"
+      workflows.argoproj.io/description: "OperatorBranch: {{workflow.parameters.operatorBranch}}"
+    labels:
+      calicocloud.io/repository: operator
+    labelsFrom:
+      calicocloud.io/hashrelease-url:
+        expression: replace(workflow.parameters.hashReleaseURL, 'https://', '') | replace('/', '') ?? ""
+      calicocloud.io/operator-branch:
+        expression: workflow.parameters.operatorBranch ?? ""
+  templates:
+    - name: build-cloud-hashrelease
+      dag:
+        tasks:
+          - name: build-hashrelease
+            template: build-hashrelease
+
+    - name: build-hashrelease
+      script:
+        image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.93
+        command: [bash]
+        workingDir: "/src"
+        env:
+          - name: USER
+            value: argoci
+          - name: DOCKER_HOST
+            value: tcp://127.0.0.1:2375
+          - name: CI_HOME
+            value: /src
+          - name: CI_GIT_URL
+            value: git@github.com:tigera/operator.git
+          - name: CI_GIT_DIR
+            value: operator
+          - name: CI_GIT_CLONED_BRANCH
+            value: "{{workflow.parameters.operatorBranch}}"
+          - name: HASHRELEASE
+            value: "true"
+          - name: HASHRELEASE_URL
+            value: "{{workflow.parameters.hashReleaseURL}}"
+          - name: CLOUD_REGISTRY
+            value: gcr.io/unique-caldron-775/cnx/
+          - name: DEBUG
+            value: "true"
+        volumeMounts:
+          - name: src
+            mountPath: /src
+          - name: go
+            mountPath: /go
+          - name: tmp
+            mountPath: /tmp
+          - name: banzai-secrets-vol
+            mountPath: /secrets
+        envFrom:
+          - secretRef:
+              name: marvin-github-ssh-private-key
+        source: |
+          source checkout
+          echo "[INFO] activating google service account..."
+          gcloud auth activate-service-account --key-file="/secrets/tesla-banzai-google-service-account.json"
+          echo "[INFO] activating docker login"
+          gcloud auth -q configure-docker gcr.io
+          until docker ps; do sleep 5; done # This line waits for the docker sidecar to be ready before continuing
+          make release release-publish VARIANT=cloud
+      sidecars:
+        - name: dind
+          image: docker:24.0.5-dind
+          command: [dockerd-entrypoint.sh]
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          securityContext:
+            privileged: true
+          mirrorVolumeMounts: true
+      volumes: # NOTE the creation of emptydir volumes here for sharing the files between script and sidecar
+        - name: src
+          emptyDir: {}
+        - name: go
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: banzai-secrets-vol
+          secret:
+            secretName: tesla-banzai-secrets
+            items:
+              - key: tesla-banzai-google-service-account.json
+                path: tesla-banzai-google-service-account.json
+      outputs:
+        parameters:
+        - name: imageTag
+          valueFrom:
+            path: /tmp/image-tag
+          globalName: imageTag
+        - name: newHashrelease
+          valueFrom:
+            path: /tmp/new-hashrelease
+          globalName: newHashrelease
+
+    - name: exit-handler
+      steps:
+        - - name: notify-releases-slack-channel
+            continueOn:
+              failed: true
+            inline:
+              script:
+                image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.93
+                imagePullPolicy: Always
+                command: [bash]
+                workingDir: "/src"
+                env:
+                  # Slack incoming webhook URL, sourced from a secret rather than hardcoded.
+                  - name: SLACK_WEBHOOK_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: cloud-hashrelease-slack-webhooks
+                        key: notifications-url
+                source: |
+                  workflow_url="https://argoci.dev.calicocloud.io/workflows/argoci/{{workflow.name}}"
+                  if [ "{{workflow.status}}" == "Succeeded" ]; then
+                    hashrelease_image_url="https://console.cloud.google.com/gcr/images/tigera-cc-dev/GLOBAL/operator-cloud:{{workflow.outputs.parameters.imageTag}}/details"
+                    if [ "{{workflow.outputs.parameters.newHashrelease}}" == "True" ]; then
+                      echo "[INFO] This is a new hashrelease -  {{workflow.outputs.parameters.imageTag}}"
+                      slackMessage=":large_green_square: Successfully built the *<${hashrelease_image_url}|{{workflow.outputs.parameters.imageTag}}>* operator-cloud hashrelease image for hashrelease {{workflow.parameters.hashReleaseURL}}!"
+                    else
+                      echo "[INFO] This is not a new hashrelease -  {{workflow.outputs.parameters.imageTag}}"
+                      slackMessage=":large_green_square: Equivalent cloud hashrelease has already been built previously for enterprise hashrelease {{workflow.parameters.hashReleaseURL}} at *<${hashrelease_image_url}|{{workflow.outputs.parameters.imageTag}}>*."
+                    fi
+                  else
+                    slackMessage="@cloud-hashrelease-maintainers :red_circle: There was an issue building an operator-cloud image for hashrelease {{workflow.parameters.hashReleaseURL}}."
+                    echo "[INFO] Skipped kicking off job to build hashrelease image because workflow status={{workflow.status}}"
+                    echo "[INFO] Workflow Failures:"
+                    echo {{workflow.failures}} | python -m json.tool
+                    errorMessages=`echo {{workflow.failures}} | jq -r '.[] | select(.message != "") | "\t\(.displayName) - \(.message)"'`
+                    slackMessage+="\n*There are errors in these steps:* \n ${errorMessages}"
+                  fi
+
+                  slackTextMessage=$(cat <<EOF
+                  {
+                    "blocks": [
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": "${slackMessage}"
+                        }
+                      },
+                      {
+                        "type": "section",
+                        "text": {
+                          "type": "mrkdwn",
+                          "text": "See the <${workflow_url}|ArgoCI Workflow Job :rocket:> for more details."
+                        }
+                      },
+                      {
+                        "type": "divider"
+                      }
+                    ]
+                  }
+                  EOF
+                  )
+
+                  # Post job status to #bleeding-edge-notifications slack channel
+                  curl -X POST -H 'Content-type: application/json' --data "${slackTextMessage}" "${SLACK_WEBHOOK_URL}"

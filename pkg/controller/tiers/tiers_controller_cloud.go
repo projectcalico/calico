@@ -23,8 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// cloudPatchTier removes the allow-tigera tier's app.kubernetes.io/instance label to fix Calico
-// Cloud CD sync. Only invoked for cloud installs.
+// cloudPatchTier removes the app.kubernetes.io/instance label from the calico-system tier to fix
+// Calico Cloud CD sync (the label is applied out-of-band by Argo CD and confuses its diffing).
+// Only invoked for cloud installs.
+// TODO(cloud): consider folding this into the tier render instead of a post-create patch.
 func (r *ReconcileTiers) cloudPatchTier(ctx context.Context) error {
 	tier := &v3.Tier{}
 	err := r.client.Get(ctx, client.ObjectKey{Name: networkpolicy.CalicoTierName}, tier)

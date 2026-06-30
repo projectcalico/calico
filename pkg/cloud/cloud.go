@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -34,13 +36,24 @@ var setupLog = ctrl.Log.WithName("cloud_setup")
 const (
 	configMapName = "cloud-operator-config"
 
-	// EnableCloudEnvVar is the environment variable that gates cloud mode. When set to a truthy
-	// value (parseable by strconv.ParseBool, e.g. "true"/"1") the operator runs as a Calico Cloud
-	// install and cloud-specific behavior is activated. When unset or false the operator behaves as
-	// a regular Calico/Calico Enterprise install. This is set on the operator Deployment by the
-	// cloud installer; the operator never infers cloud mode by sniffing for ConfigMaps.
+	// EnableCloudEnvVar can enable cloud mode for a non-cloud build. The shipped Calico Cloud
+	// operator image has cloud mode baked in at build time (see IsCloudBuild) and cannot be turned
+	// off; this env var is only a fallback for enabling cloud mode in a regular build, e.g. for
+	// local development or testing.
 	EnableCloudEnvVar = "CALICO_CLOUD"
 )
+
+// buildVariant is injected at build time via -ldflags "-X .../pkg/cloud.buildVariant=cloud" when
+// building the Calico Cloud operator image. It is empty for the regular Calico/Calico Enterprise
+// image. Baking it into the binary means cloud mode is immutable: it cannot be disabled by editing
+// the operator Deployment's environment.
+var buildVariant string
+
+// IsCloudBuild reports whether this binary was built as the Calico Cloud variant. When true, cloud
+// mode is baked in and cannot be disabled at runtime.
+func IsCloudBuild() bool {
+	return buildVariant == "cloud"
+}
 
 // Options holds the cloud-specific configuration parsed at operator startup. When Cloud is false the
 // operator is running as a regular (non-cloud) Calico Enterprise install and the remaining fields are
@@ -55,17 +68,22 @@ type Options struct {
 
 // Load determines whether the operator is running in cloud mode and, if so, parses the cloud options.
 //
-// Cloud mode is gated solely by the CALICO_CLOUD environment variable (see EnableCloudEnvVar). When
-// it is unset or false the operator is a regular Calico/Calico Enterprise install and Load returns
+// Cloud mode is enabled when this is a cloud build (IsCloudBuild, baked into the cloud image) or,
+// for a regular build, when the CALICO_CLOUD env var is truthy (dev/testing fallback). When neither
+// applies the operator is a regular Calico/Calico Enterprise install and Load returns
 // Options{Cloud: false} with no error, leaving enterprise behavior unchanged. Only once cloud mode
 // is enabled does Load read the cloud-operator-config ConfigMap (and env) for cloud config values.
 func Load(ctx context.Context, cs kubernetes.Interface) (Options, error) {
-	cloudEnabled, err := parseEnableCloud()
-	if err != nil {
-		return Options{}, err
+	cloudEnabled := IsCloudBuild()
+	if !cloudEnabled {
+		envEnabled, err := parseEnableCloud()
+		if err != nil {
+			return Options{}, err
+		}
+		cloudEnabled = envEnabled
 	}
 	if !cloudEnabled {
-		setupLog.Info("cloud mode not enabled; running in non-cloud mode", "envVar", EnableCloudEnvVar)
+		setupLog.Info("cloud mode not enabled; running in non-cloud mode")
 		return Options{Cloud: false}, nil
 	}
 

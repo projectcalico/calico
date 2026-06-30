@@ -181,6 +181,8 @@ var _ = Describe("External ES controller (Cloud))", func() {
 		mockStatus = &status.MockStatus{}
 		mockStatus.On("Run").Return()
 		mockStatus.On("OnCRFound").Return()
+		mockStatus.On("SetWarning", mock.Anything, mock.Anything).Return().Maybe()
+		mockStatus.On("ClearWarning", mock.Anything).Return().Maybe()
 	})
 
 	It("reconciles successfully", func() {

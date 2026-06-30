@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -13,6 +15,7 @@
 package cloud
 
 import (
+	"maps"
 	"os"
 	"time"
 
@@ -42,7 +45,7 @@ var watch = func(cs kubernetes.Interface, cmData map[string]string) error {
 	)
 	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(_, newObj interface{}) {
-			if !compareMap(cmData, newObj.(*v1.ConfigMap).Data) {
+			if !maps.Equal(cmData, newObj.(*v1.ConfigMap).Data) {
 				configWatchLog.Info("detected config change. rebooting")
 				os.Exit(0)
 			} else {
@@ -50,7 +53,7 @@ var watch = func(cs kubernetes.Interface, cmData map[string]string) error {
 			}
 		},
 		AddFunc: func(obj interface{}) {
-			if !compareMap(cmData, obj.(*v1.ConfigMap).Data) {
+			if !maps.Equal(cmData, obj.(*v1.ConfigMap).Data) {
 				configWatchLog.Info("detected config creation change. rebooting")
 				os.Exit(0)
 			} else {
@@ -67,16 +70,4 @@ var watch = func(cs kubernetes.Interface, cmData map[string]string) error {
 		time.Sleep(1 * time.Second)
 	}
 	return nil
-}
-
-func compareMap(m1, m2 map[string]string) bool {
-	if len(m1) != len(m2) {
-		return false
-	}
-	for k, v := range m1 {
-		if m2[k] != v {
-			return false
-		}
-	}
-	return true
 }

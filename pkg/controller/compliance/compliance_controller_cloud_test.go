@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package compliance_test
+package compliance
 
 import (
 	"context"
@@ -37,7 +37,6 @@ import (
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/compliance"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
@@ -51,7 +50,7 @@ var _ = Describe("Cloud Compliance controller tests", func() {
 	var c client.Client
 	var ctx context.Context
 	var cr *operatorv1.Compliance
-	var r *compliance.ReconcileCompliance
+	var r *ReconcileCompliance
 	var mockStatus *status.MockStatus
 	var scheme *runtime.Scheme
 	var installation *operatorv1.Installation
@@ -176,13 +175,20 @@ var _ = Describe("Cloud Compliance controller tests", func() {
 
 			// Create an object we can use throughout the test to do the compliance reconcile loops.
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
-			opts := options.ControllerOptions{
-				DetectedProvider: operatorv1.ProviderNone,
-				ClusterDomain:    dns.DefaultClusterDomain,
-				ShutdownContext:  context.TODO(),
-				Cloud:            true,
+			r = &ReconcileCompliance{
+				client:          c,
+				scheme:          scheme,
+				status:          mockStatus,
+				licenseAPIReady: licenseReadyFlag,
+				tierWatchReady:  tierReadyFlag,
+				opts: options.ControllerOptions{
+					DetectedProvider: operatorv1.ProviderNone,
+					ClusterDomain:    dns.DefaultClusterDomain,
+					ShutdownContext:  context.TODO(),
+					Cloud:            true,
+				},
 			}
-			r = compliance.NewReconcilerWithShims(c, scheme, mockStatus, opts, licenseReadyFlag, tierReadyFlag)
+			r.status.Run(r.opts.ShutdownContext)
 		})
 
 		It("should create a trusted bundle with external certificates", func() {

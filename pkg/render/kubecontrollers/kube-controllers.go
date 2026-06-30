@@ -116,9 +116,9 @@ type KubeControllersConfiguration struct {
 	WASMCACert                   *corev1.ConfigMap
 	TrustedBundle                certificatemanagement.TrustedBundleRO
 
-	// Calico Cloud additions. TenantId is only set by the cloud-gated controller path; when empty
+	// Calico Cloud additions. TenantID is only set by the cloud-gated controller path; when empty
 	// (regular Calico/Calico Enterprise) no cloud env is emitted.
-	TenantId string
+	TenantID string
 
 	// Cloud indicates kube-controllers is being rendered for a Calico Cloud install. When false the
 	// cloud-specific RBAC below is not granted and enterprise RBAC is unchanged.
@@ -985,8 +985,8 @@ func (c *kubeControllersComponent) controllersDeployment() *appsv1.Deployment {
 		{Name: "DISABLE_KUBE_CONTROLLERS_CONFIG_API", Value: strconv.FormatBool(c.cfg.Tenant.MultiTenant() && c.kubeControllerConfigName == "elasticsearch")},
 	}
 
-	if c.cfg.TenantId != "" {
-		env = append(env, corev1.EnvVar{Name: "TENANT_ID", Value: c.cfg.TenantId})
+	if c.cfg.TenantID != "" {
+		env = append(env, corev1.EnvVar{Name: "TENANT_ID", Value: c.cfg.TenantID})
 	}
 
 	env = append(env, c.cfg.K8sServiceEpPodNetwork.EnvVars()...)

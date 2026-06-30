@@ -103,7 +103,7 @@ func AddExternalES(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	if opts.Cloud {
-		// Calico Cloud addition.
+		// Watched so single-tenant external-ES clusters re-reconcile when the cloud config map changes.
 		if err := utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("log-storage-controller failed to watch the ConfigMap resource: %w", err)
 		}

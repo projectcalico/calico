@@ -166,28 +166,6 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, licenseA
 	return r
 }
 
-// NewReconcilerWithShims constructs a ReconcileCompliance with the provided dependencies. It is
-// intended for tests that need to inject a fake client, scheme, and status manager.
-func NewReconcilerWithShims(
-	cli client.Client,
-	scheme *runtime.Scheme,
-	status status.StatusManager,
-	opts options.ControllerOptions,
-	licenseAPIReady *utils.ReadyFlag,
-	tierWatchReady *utils.ReadyFlag,
-) *ReconcileCompliance {
-	r := &ReconcileCompliance{
-		client:          cli,
-		scheme:          scheme,
-		status:          status,
-		licenseAPIReady: licenseAPIReady,
-		tierWatchReady:  tierWatchReady,
-		opts:            opts,
-	}
-	r.status.Run(opts.ShutdownContext)
-	return r
-}
-
 // blank assignment to verify that ReconcileCompliance implements reconcile.Reconciler
 var _ reconcile.Reconciler = &ReconcileCompliance{}
 

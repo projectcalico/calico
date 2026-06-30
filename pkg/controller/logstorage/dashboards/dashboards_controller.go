@@ -274,16 +274,20 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 		}
 	} else {
+		// External ES & Kibana. Two ways to obtain the tenant's Kibana endpoint:
+		//   - multi-tenant (incl. enterprise) and non-cloud single-tenant: the Tenant CR must carry it.
+		//     This is the pre-existing enterprise behavior, preserved by the `!d.cloud` clause.
+		//   - Calico Cloud single-tenant: there is no Tenant CR, so it's derived from the cloud config map.
 		if d.multiTenant || !d.cloud {
-			// If we're using an external ES and Kibana, the Tenant resource must specify the Kibana endpoint.
+			// The Tenant resource must specify the Kibana endpoint.
 			if tenant == nil || tenant.Spec.Elastic == nil || tenant.Spec.Elastic.KibanaURL == "" {
 				reqLogger.Error(nil, "Kibana URL must be specified for this tenant")
 				d.status.SetDegraded(operatorv1.ResourceValidationError, "Kibana URL must be specified for this tenant", nil, reqLogger)
 				return reconcile.Result{}, nil
 			}
 		} else {
-			// This is a Calico Cloud single-tenant cluster connected to an external ES & Kibana. Read
-			// the tenant configuration from the CloudConfig ConfigMap.
+			// Calico Cloud single-tenant cluster connected to an external ES & Kibana. Read the tenant
+			// configuration from the CloudConfig ConfigMap.
 			cloudConfig, err := utils.GetCloudConfig(ctx, d.client)
 			if err != nil {
 				d.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, reqLogger)

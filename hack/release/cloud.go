@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build cloud
-
-// This file is only compiled into the Calico Cloud release tool, built with `-tags cloud`
-// (see `make build-release-cloud`). Its init() reassigns the shared release tool's package-level
-// hooks (isValidReleaseVersion, setupHashreleaseBuild, publishImages, command Before funcs) to add
-// Calico Cloud behavior. Because it is build-tagged, the regular Calico / Calico Enterprise release
-// tool is completely unaffected.
+// This file is part of the single release tool binary. Its Calico Cloud behavior is activated at
+// runtime only when VARIANT=cloud (see cloudVariantEnabled): init() then reassigns the shared release
+// tool's package-level hooks (isValidReleaseVersion, setupHashreleaseBuild, publishImages, command
+// Before funcs) and registers the cloud flags. When VARIANT is unset, init() returns immediately and
+// the regular Calico / Calico Enterprise release tool is completely unaffected. This replaces the
+// former `-tags cloud` build so one binary handles both (per PR review from @radTuti / @caseydavenport).
 
 package main
 
@@ -117,7 +116,19 @@ var (
 	}
 )
 
+// cloudVariantEnabled reports whether the release tool is running as the Calico Cloud variant. It is
+// driven by the VARIANT env var (set by `make ... VARIANT=cloud`), so a single release binary serves
+// both the enterprise and cloud release flows.
+func cloudVariantEnabled() bool {
+	return os.Getenv("VARIANT") == "cloud"
+}
+
 func init() {
+	// Cloud behavior is opt-in at runtime; leave the OSS/enterprise release tool untouched otherwise.
+	if !cloudVariantEnabled() {
+		return
+	}
+
 	// Override version validation for cloud releases.
 	isValidReleaseVersion = isCloudReleaseVersionFormat
 
