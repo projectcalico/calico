@@ -35,6 +35,7 @@ from networking_calico.common import config as calico_config
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_LABEL_PREFIX
 from networking_calico.plugins.ml2.drivers.calico.policy import SG_NAME_MAX_LENGTH
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -539,59 +540,211 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         dest_port = {**port, "binding:host_id": dest_host}
         return live_migration_spec(self.namespace, port, dest_port)
 
-    def write_endpoint(self, port, context, must_update=False, reread=True):
-        if reread:
-            # Reread the current port. This protects against concurrent writes
-            # breaking our state.
-            port = self.db.get_port(context, port["id"])
+    def sync_wep(self, port, host, context):
+        """Sync the WorkloadEndpoint for ``(port_id, host)`` to etcd.
 
-        # Fill out other information we need on the port.
-        port_extra = self.get_extra_port_information(context, port)
+        The slot is identified by ``(port["id"], host)``.  A given port can
+        own up to two WEP slots in etcd: one at its current ``binding:host_id``
+        (the "source" WEP, in the bound steady state) and one at its
+        ``binding:profile.migrating_to`` (the "dest" WEP, during live
+        migration).  Both share the same key shape ``endpoint_name(port_at_host)``
+        and the same WorkloadEndpoint resource type; they only differ in
+        which host's binding the spec describes.  ``sync_wep`` is therefore
+        agnostic as to "source" vs "dest" -- the caller passes the host they
+        want synced, and the function decides whether that slot should hold
+        a WEP based on a re-read of the port from the Neutron DB.
 
-        # Write the security policies for this port.
-        self.policy_syncer.write_sgs_to_etcd(port_extra.security_groups, context)
+        Each CAS attempt:
+          1. Read the slot's mod_revision (KeyNotFound -> 0).
+          2. Re-read the port from the Neutron DB.  PortNotFound -> the
+             slot's desired state is "absent".
+          3. Desired present iff the DB port is bound at ``host`` (source
+             role) OR migrating to ``host`` (dest role).
+          4a. Absent: CAS-delete at the observed mod_revision (a no-op if
+             mod_revision == 0; mandatory CAS otherwise, else a re-created
+             WEP could be clobbered).
+          4b. Present: compose spec/labels/annotations from the port
+             overlaid with ``binding:host_id=host``, re-sync the port's
+             SGs (CAS-protected itself, idempotent on retry), then CAS-put.
 
-        # Implementation note: we could arguably avoid holding the transaction
-        # for this length and instead release it here, then use atomic CAS. The
-        # problem there is that we potentially have to repeatedly respin and
-        # regain the transaction. Let's not do that for now, and performance
-        # test to see if it's a problem later.
-        mod_revision = etcdv3.MUST_UPDATE if must_update else None
-        datamodel_v3.put(
-            "WorkloadEndpoint",
-            self.namespace,
-            endpoint_name(port),
-            endpoint_spec(port, port_extra),
-            labels=endpoint_labels(port, self.namespace, port_extra),
-            annotations=endpoint_annotations(port),
-            mod_revision=mod_revision,
-        )
-
-    def delete_endpoint(self, port):
-        return datamodel_v3.delete(
-            "WorkloadEndpoint", self.namespace, endpoint_name(port)
-        )
-
-    def write_live_migration(self, source_port, dest_port):
-        """Write a LiveMigration resource for a migrating port.
-
-        The LiveMigration name is derived from the destination WEP name.
-        Returns the UID assigned by etcd (or the existing UID if already
-        present).
+        On CAS conflict, retry from step 1.  After ``MAX_CAS_ATTEMPTS`` log
+        a warning and return None; persistent drift is repaired by the
+        next resync.
         """
-        namespace = self.namespace
-        return datamodel_v3.put(
-            "LiveMigration",
-            namespace,
-            endpoint_name(dest_port),
-            live_migration_spec(namespace, source_port, dest_port),
-        )
+        port_id = port["id"]
+        # Overlay binding:host_id=host before computing the etcd name so the
+        # caller can pass any convenient port dict -- the slot is identified
+        # by (port_id, host), not by whichever host the caller's dict happens
+        # to carry.
+        name = endpoint_name({**port, "binding:host_id": host})
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = datamodel_v3.get_namespaced(
+                    "WorkloadEndpoint", self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
 
-    def delete_live_migration(self, name, mod_revision=None):
-        """Delete a LiveMigration resource by name."""
-        return datamodel_v3.delete(
-            "LiveMigration", self.namespace, name, mod_revision=mod_revision
+            try:
+                db_port = self.db.get_port(context, port_id)
+            except n_exc.PortNotFound:
+                db_port = None
+
+            if not self._wep_desired_present(db_port, host):
+                if mod_revision == 0:
+                    return True
+                if datamodel_v3.delete(
+                    "WorkloadEndpoint",
+                    self.namespace,
+                    name,
+                    mod_revision=mod_revision,
+                ):
+                    return True
+                LOG.debug(
+                    "WorkloadEndpoint delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    name,
+                )
+                continue
+
+            # Present-branch: compose with binding:host_id overlaid.  For the
+            # source-role case the overlay is a no-op (db_port["binding:host_id"]
+            # == host already); for the dest-role case it switches the host so
+            # endpoint_spec / labels / annotations see the dest binding.
+            write_port = {**db_port, "binding:host_id": host}
+            port_extra = self.get_extra_port_information(context, write_port)
+            # Sync the port's SGs first, so Felix sees the policy before the
+            # WEP that references it.  sync_sgs_to_etcd is CAS-protected per
+            # SG and idempotent across retries.
+            self.policy_syncer.sync_sgs_to_etcd(port_extra.security_groups, context)
+            if datamodel_v3.put(
+                "WorkloadEndpoint",
+                self.namespace,
+                name,
+                endpoint_spec(write_port, port_extra),
+                labels=endpoint_labels(write_port, self.namespace, port_extra),
+                annotations=endpoint_annotations(write_port),
+                mod_revision=mod_revision,
+            ):
+                return True
+            LOG.debug(
+                "WorkloadEndpoint CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                name,
+            )
+
+        LOG.warning(
+            "WorkloadEndpoint CAS exhausted %d retries for %s; relying on"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            name,
         )
+        return None
+
+    def sync_lm(self, port, dest_host, context):
+        """Sync the LiveMigration resource for ``(port_id, dest_host)`` to etcd.
+
+        The slot is identified by ``(port["id"], dest_host)`` and shares its
+        key shape (and resource name) with the dest-side WEP at the same host,
+        though they are stored as different resource types.
+
+        Each CAS attempt:
+          1. Read the slot's mod_revision (KeyNotFound -> 0).
+          2. Re-read the port from the Neutron DB.  PortNotFound -> absent.
+          3. Desired present iff the DB port's binding:profile.migrating_to
+             still equals ``dest_host``.
+          4a. Absent: CAS-delete (no-op at mod_revision == 0).
+          4b. Present: compose live_migration_spec from the re-read port
+             plus dest_host overlay, then CAS-put.
+
+        On CAS conflict, retry.  After ``MAX_CAS_ATTEMPTS`` log a warning
+        and return None.
+
+        Callers that need the LiveMigration UID for logging should call
+        ``datamodel_v3.get_uid("LiveMigration", namespace, name)`` separately
+        -- either before invoking ``sync_lm`` (for end-of-migration logs,
+        where the UID will be lost once the LM is deleted) or after (for
+        start-of-migration logs).
+        """
+        port_id = port["id"]
+        name = endpoint_name({**port, "binding:host_id": dest_host})
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = datamodel_v3.get_namespaced(
+                    "LiveMigration", self.namespace, name
+                )
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
+
+            try:
+                db_port = self.db.get_port(context, port_id)
+            except n_exc.PortNotFound:
+                db_port = None
+
+            desired_present = (
+                db_port is not None
+                and db_port.get("binding:profile", {}).get("migrating_to") == dest_host
+            )
+
+            if not desired_present:
+                if mod_revision == 0:
+                    return True
+                if datamodel_v3.delete(
+                    "LiveMigration",
+                    self.namespace,
+                    name,
+                    mod_revision=mod_revision,
+                ):
+                    return True
+                LOG.debug(
+                    "LiveMigration delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    name,
+                )
+                continue
+
+            dest_port = {**db_port, "binding:host_id": dest_host}
+            if datamodel_v3.put(
+                "LiveMigration",
+                self.namespace,
+                name,
+                live_migration_spec(self.namespace, db_port, dest_port),
+                mod_revision=mod_revision,
+            ):
+                return True
+            LOG.debug(
+                "LiveMigration CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                name,
+            )
+
+        LOG.warning(
+            "LiveMigration CAS exhausted %d retries for %s; relying on"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            name,
+        )
+        return None
+
+    @staticmethod
+    def _wep_desired_present(db_port, host):
+        """Decide whether a WEP slot at ``host`` should exist for ``db_port``."""
+        if db_port is None:
+            return False
+        # Source role: port is bound at this host.
+        if (
+            db_port.get("binding:vif_type") != "unbound"
+            and db_port["binding:host_id"] == host
+        ):
+            return True
+        # Dest role: port is migrating to this host.
+        if db_port.get("binding:profile", {}).get("migrating_to") == host:
+            return True
+        return False
 
     def add_port_interface_name(self, port, port_extra):
         port_extra.interface_name = "tap" + port["id"][:11]
