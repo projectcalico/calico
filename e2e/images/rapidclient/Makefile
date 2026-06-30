@@ -19,8 +19,9 @@ IMAGE = $(QUAY_REGISTRY)/rapidclient
 build: bin/rapidclient-$(ARCH)
 
 # Per-arch static binary. CGO is disabled so cross-compilation (via GOARCH) is
-# clean and the result runs on FROM scratch.
-bin/rapidclient-%: $(wildcard *.go)
+# clean and the result runs on FROM scratch. Exclude _test.go so editing a test
+# doesn't force a binary rebuild.
+bin/rapidclient-%: $(filter-out %_test.go,$(wildcard *.go))
 	mkdir -p bin
 	$(DOCKER_RUN) -e CGO_ENABLED=0 -e GOARCH=$* $(CALICO_BUILD) \
 		go build -o $@ -ldflags "-s -w" .
