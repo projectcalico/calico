@@ -263,6 +263,20 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
                 # always return ``mod_revision="10"``, so an honest CAS using the
                 # read-back value will compare against "10" and pass.  Anything else
                 # means the production code passed the wrong revision through.
+                #
+                # We also check that the key actually exists -- real etcd treats a MOD
+                # compare against a missing key as a comparison with mod_revision 0, so
+                # ``MOD == 10`` on an absent key would fail there.  The mock used to let
+                # it through; mirror real behaviour so a production mis-use of MOD
+                # against a key-that-might-not-exist is caught here.
+                key = _decode(txc["key"]).decode()
+                if key not in self.etcd_data:
+                    _log.error(
+                        "etcd3 txn CAS-against-mod_revision failed:"
+                        " key %r does not exist (effective mod_revision is 0)",
+                        key,
+                    )
+                    return {"succeeded": False}
                 expected = txc["mod_revision"]
                 if expected != "10":
                     _log.error(

@@ -105,7 +105,12 @@ class SubnetSyncer(ResourceSyncer):
         stored as JSON-as-string (not as a Calico v3 resource) and so uses ``etcdv3``
         directly rather than ``datamodel_v3``.
         """
-        LOG.info("Sync subnet %s %s to etcd", subnet["id"], subnet["cidr"])
+        # ``cidr`` is here only for log context; some delete-path callers (or future
+        # Neutron versions) may hand us a minimal subnet dict, so look it up defensively
+        # rather than risk a KeyError that would mask the actual CAS-delete work below.
+        LOG.info(
+            "Sync subnet %s %s to etcd", subnet["id"], subnet.get("cidr", "<unknown>")
+        )
         subnet_id = subnet["id"]
         key = datamodel_v2.key_for_subnet(subnet_id, self.region_string)
         for attempt in range(MAX_CAS_ATTEMPTS):
