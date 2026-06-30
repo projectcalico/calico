@@ -44,6 +44,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -235,7 +236,7 @@ func TestBGPAdvertRR(t *testing.T) {
 // run before it (matching the Python tearDown ordering, where add_cleanup
 // callbacks run before the namespace deletion and config restore).
 func (e *bgpAdvertEnv) startTest(t *testing.T) {
-	e.ns = utils.RandomSuffix("bgp-test")
+	e.ns = e2eutils.GenerateRandomName("bgp-test")
 	t.Cleanup(func() { e.teardownTest(t) })
 	utils.CreateNamespace(t, e.ns)
 }

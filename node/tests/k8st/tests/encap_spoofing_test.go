@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -55,7 +56,7 @@ func TestSpoof(t *testing.T) {
 	defer utils.CollectDiagsOnFailure(t)()
 
 	// nsName holds the access/scapy pod pair shared by both scenarios.
-	nsName := utils.RandomSuffix("ipip-spoofing")
+	nsName := e2eutils.GenerateRandomName("ipip-spoofing")
 
 	g := NewWithT(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

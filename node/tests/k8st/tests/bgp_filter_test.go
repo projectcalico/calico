@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -176,7 +177,7 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	// anchorNS pins an idle pod to the egress node so it owns an IPAM block to
 	// advertise. The random suffix keeps it unique per test so concurrent or
 	// repeated runs against the same cluster do not collide.
-	anchorNS := utils.RandomSuffix("bgp-filter-anchor")
+	anchorNS := e2eutils.GenerateRandomName("bgp-filter-anchor")
 	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode, anchorNS)
 
 	// Establish BGPPeers from the egress node to each external router.
