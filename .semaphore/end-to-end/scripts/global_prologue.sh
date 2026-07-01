@@ -173,14 +173,18 @@ hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${
 hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""
 if [[ "${HCP_ENABLED}" == "true" ]]; then eval $hcp_scripts; fi
 
+# Gate `cache store` behind `&&` (not `;`) so a failed `bz init` fails the prologue
+# here. `set -o pipefail` (above) makes the init pipeline reflect bz init's exit status,
+# but with an unconditional `cache store` after `;` the line still reports success, so a
+# failed init is masked and the job continues without an initialised profile.
 std="echo \"[INFO] Initializing Banzai profile...\""
 std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets 2>&1 | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
-std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+std="$std && cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
 
 hcp="unset CLUSTER_NAME; unset DIAGS_ARCHIVE_FILENAME; unset K8S_VERSION"
 hcp="$hcp; echo \"[INFO] starting hcp init...\""
 hcp="$hcp; hcp-init.sh 2>&1 | tee \"${BZ_LOGS_DIR}/initialize.log\""
-hcp="$hcp; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+hcp="$hcp && cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
 
 restore_hcp_hosting="echo \"[INFO] Restoring from ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} cache\""
 restore_hcp_hosting="$restore_hcp_hosting; cache restore ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} |& tee ${BZ_LOGS_DIR}/restore.log"
