@@ -6134,6 +6134,7 @@ blocks:
         '/crypto/pkg/tls/*.go',
         '/felix/config/*.go',
         '/felix/dataplane/ipsets/*.go',
+        '/felix/dataplane/linux/dataplanedefs/*.go',
         '/felix/deltatracker/*.go',
         '/felix/environment/*.go',
         '/felix/generictables/*.go',

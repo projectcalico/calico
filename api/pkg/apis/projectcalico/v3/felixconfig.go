@@ -70,6 +70,18 @@ const (
 	NFTablesModeAuto     NFTablesMode = "Auto"
 )
 
+// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled. When enabled,
+// established connections that have been accepted by Calico policy are offloaded to the kernel's
+// flowtable fast path, bypassing most of the networking stack for improved throughput.
+// +enum
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type NFTablesFlowTableOffload string
+
+const (
+	NFTablesFlowTableOffloadEnabled  NFTablesFlowTableOffload = "Enabled"
+	NFTablesFlowTableOffloadDisabled NFTablesFlowTableOffload = "Disabled"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -677,6 +689,20 @@ type FelixConfigurationSpec struct {
 	// NFTablesMode configures nftables support in Felix. [Default: Auto]
 	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
+
+	// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
+	// improved forwarding performance. When enabled, established connections accepted by
+	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+	// nftables mode is active. [Default: Disabled]
+	// +kubebuilder:default=Disabled
+	NFTablesFlowTableOffload *NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
+
+	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
+	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+	// is Enabled. [Default: ""]
+	NFTablesFlowTableDataIfacePattern string `json:"nftablesFlowTableDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *metav1.Duration `json:"nftablesRefreshInterval,omitempty" configv1timescale:"seconds"`

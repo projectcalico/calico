@@ -1239,6 +1239,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: nftablesFilterDenyAction
       type:
         scalar: string
+    - name: nftablesFlowTableDataIfacePattern
+      type:
+        scalar: string
+    - name: nftablesFlowTableOffload
+      type:
+        scalar: string
     - name: nftablesMangleAllowAction
       type:
         scalar: string
