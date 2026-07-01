@@ -58,27 +58,11 @@ is where that contract is written down. Build/test commands are in
 
 ## Layer roles
 
-Felix is split into a calc graph and a dataplane, and the dataplane
-is itself split into managers and drivers.
-
-- **Calc graph** ([`calc-graph.md`](./calc-graph.md)) filters and
-  massages cluster-wide datastore state into the desired state of
-  *this node's* dataplane, expressed in **Calico-internal terms**
-  (local WEPs, abstract policy rules, fully-resolved IP sets). It is
-  effectively a pure, incremental function of datastore state.
-
-- **Managers** (`dataplane/linux/*_mgr.go`) take that Calico-internal
-  desired state and **convert it into this dataplane's terms**
-  (iptables/nftables rules, IP set contents, routes — or, in the BPF
-  dataplane, BPF map entries; or, on Windows, HNS policy). This
-  conversion is the manager layer's defining job.
-
-- **Drivers** (`iptables/`, `nftables/`, `ipsets/`, `routetable/`,
-  `routerule/`, `vxlanfdb/`) own the job of **bringing the actual
-  kernel state into sync with the desired state** — reading back
-  what's there, computing a minimal delta, and applying it. Some
-  managers do this reconciliation themselves; others delegate it to
-  a driver and stay purely declarative.
+The calc graph → managers (convert) → drivers (reconcile) layering,
+and the dataplane's other jobs — reacting to interface changes,
+detecting drift, reporting programming status — are described in
+[`DESIGN.md` §1](../DESIGN.md#dataplane-managers-and-drivers). This
+section covers where the manager/driver boundary flexes.
 
 The split is not rigid. Some managers are **vertically integrated**
 (manager and reconciliation logic in one object); others are split
@@ -89,24 +73,6 @@ roles are tightly coupled. When you can, prefer the split: let a
 driver absorb the resync complexity behind a declarative
 "here is the desired state" API and keep the manager simple (see
 [Restart, resync and mark-and-sweep](#restart-resync-and-mark-and-sweep)).
-
-Beyond convert (a) and reconcile (b), the dataplane has three more
-jobs:
-
-- **(c) React to expected dataplane changes.** Some kernel state
-  changes outside Felix's control as a matter of course — interfaces
-  come and go. The interface monitor (`ifacemonitor/`) feeds these
-  events into the main loop so managers can react.
-- **(d) Best-effort detect unexpected drift.** Periodic resyncs
-  (the `force*Refresh` timers, below) re-run the start-of-day
-  reconciliation to repair drift Felix didn't cause and wasn't
-  told about.
-- **(e) Report status back out.** The dataplane reports endpoint
-  programming status: into the datastore (`WorkloadEndpointStatus`
-  etc. — mainly used by OpenStack), and via a file-based local
-  status reporter that signals the CNI plugin that a workload's veth
-  has been programmed correctly, so the CNI plugin can delay pod
-  start-up until the dataplane is actually ready for that workload.
 
 ### Review notes for this section
 
@@ -138,12 +104,12 @@ before any programming begins.)
 netlink call, `iptables-restore`, subprocess fork, or BPF map
 write). The rule is narrower than "don't touch the dataplane": it
 *may* push desired state into the in-memory `ipsets`/
-`generictables.Table` objects, which *queue* the change — the
-`Manager` interface doc-comment permits this, and
-`masqManager.OnUpdate` does exactly it (`AddMembers`/`UpdateChain`).
-The pattern: stash the message (or queue it) and **mark the affected
-resources dirty**; all reconciliation and kernel mutation happen
-later in `CompleteDeferredWork()`, walking the dirty set.
+`generictables.Table` objects, which *queue* the change (the
+`Manager` doc-comment permits this; `masqManager.OnUpdate` does
+exactly this via `AddMembers`/`UpdateChain`). The pattern: stash the
+message and **mark the affected resources dirty**; all reconciliation
+and kernel mutation happen later in `CompleteDeferredWork()`, walking
+the dirty set.
 
 Why the split:
 
@@ -189,16 +155,12 @@ order is:
    programming.
 3. **Programming pass** — call `CompleteDeferredWork()` on every
    manager.
-4. **XDP** — handled inline right after the programming pass (not a
-   queued resync): `ProcessPendingDiffState`, `applyXDPActions`
-   (with its own retry loop), `ProcessMemberUpdates`, `UpdateState`,
-   possibly `shutdownXDPCompletely`. This runs every `apply()`; only
-   the `QueueResync` is gated on `forceXDPRefresh`. Note this is
-   Felix's **legacy** XDP support — untracked-policy XDP layered on
-   top of iptables mode (`xdpState`). It is no longer being
-   enhanced; the modern XDP path (untracked policy and more) lives in
-   the proper BPF dataplane (see the `bpf-*` design family). Don't
-   confuse the two.
+4. **XDP** — applied inline right after the programming pass (not a
+   queued resync), every `apply()`; only its `QueueResync` is gated
+   on `forceXDPRefresh`. This is Felix's **legacy** XDP —
+   untracked-policy XDP layered on iptables mode (`xdpState`), no
+   longer enhanced — not the modern XDP path in the proper BPF
+   dataplane (see the `bpf-*` design family). Don't confuse the two.
 5. Handle any popped **refresh timers** by **queueing resyncs**:
    `forceRouteRefresh` resyncs the route tables, the routing rules,
    **and the VXLAN FDBs**; `forceIPSetsRefresh` resyncs the IP sets.
@@ -270,7 +232,8 @@ These are distinct mechanisms with overlapping effect:
   XDP): on a timer, queue a *full* resync on the drivers even when
   nothing is known to be wrong. This is the belt-and-braces defence
   against **drift Felix didn't cause and wasn't told about** — the
-  job (d) from Layer roles.
+  drift-detection job noted in
+  [`DESIGN.md` §1](../DESIGN.md#dataplane-managers-and-drivers).
 
 ### Review notes for this section
 
@@ -558,12 +521,10 @@ They follow the same doctrine as the rest of the dataplane —
 start-of-day resync, minimal-disruption deltas, mark-and-sweep of
 orphans — but with the **weakest identification story** (see the
 [identification table](#how-each-subsystem-identifies-ours)): routes
-are recognised by a heuristic blend of owned-table / owned-proto /
-points-down-a-cali-veth (the `OwnershipPolicy` interface —
-`MainTableOwnershipPolicy.RouteIsOurs`/`IfaceIsOurs` in
-`routetable/ownershippol/`), and ip rules only by the tables they
-jump to. That makes ownership classification and resync correctness
-the delicate part of any change here.
+by a heuristic blend of owned-table / owned-proto /
+points-down-a-cali-veth, ip rules only by the tables they jump to.
+That makes ownership classification and resync correctness the
+delicate part of any change here.
 
 > The deep netlink-level design of route resync (grace periods for
 > CNI races, conntrack cleanup on IP moves, etc.) is large enough to
@@ -665,20 +626,17 @@ read-back/reconcile/cleanup so the manager just declares desired
 state. (This is exactly why the manager/driver split pays off.)
 
 BPF map versioning (`felix/bpf/maps/maps.go`) shows the discipline
-that goes with this. **By default a map is simply rebuilt by Felix
-at upgrade time** — Felix re-derives its contents from desired
-state, exactly like every other resync, so it needs no special
-handling. The copy/migrate path is reserved for the small set of
-maps whose contents are **sourced by the BPF programs themselves**,
-not by Felix — in practice that's the **conntrack map**. For those,
+that goes with this. **By default a map is rebuilt from desired
+state at upgrade time**, exactly like every other resync — no
+special handling. The copy/migrate path is reserved for maps whose
+contents are **sourced by the BPF programs themselves**, not by
+Felix — in practice the **conntrack map**. For those,
 `PinnedMap.EnsureExists`/`Upgrade` repins the live map aside to
 `<path>_old`, builds the new-layout map in the normal pin path,
-copies entries across (`CopyDeltaFromOldMap` / `copyFromOldMap`),
-and drops `_old` — crash-safe because a restart mid-migration finds
-`_old` and rolls forward. That migration logic is complex and
-fiddly, so it is important **not** to apply it by default: only the
-maps that genuinely can't be rebuilt from desired state should get
-it; everything else is rebuilt.
+copies entries across (`CopyDeltaFromOldMap`/`copyFromOldMap`), and
+drops `_old` — crash-safe because a restart mid-migration finds
+`_old` and rolls forward. The migration logic is fiddly; apply it
+only to maps that genuinely can't be rebuilt.
 
 ### The failure modes, distilled
 
