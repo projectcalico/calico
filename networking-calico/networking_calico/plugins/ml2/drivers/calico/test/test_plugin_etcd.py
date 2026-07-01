@@ -2209,7 +2209,7 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertEtcdDeletes(set())
 
     def test_pre_live_migration_transient_vif_unbound(self):
-        """Regression test for the ms-mregion-carajammy ST hang.
+        """Source WEP must survive the transient ``vif_type=unbound`` at migration start.
 
         In a real deployment, setting ``binding:profile.migrating_to`` on a port
         triggers Neutron to rebind the port for the destination host.  During
