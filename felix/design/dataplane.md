@@ -18,47 +18,32 @@ limitations under the License.
 # Felix Linux dataplane — Design
 
 Felix's Linux dataplane is a **single codebase** (`InternalDataplane`
-in `dataplane/linux/`) that can be switched between **iptables,
-nftables and eBPF** modes — `BPFEnabled` and `NFTablesMode` select
-which managers and behaviours are wired into the *same* object. All
-three modes share the manager/driver model, the main event loop, the
+in `dataplane/linux/`) switched between **iptables, nftables and
+eBPF** modes — `BPFEnabled`/`NFTablesMode` select which managers and
+behaviours are wired into the *same* object. All three modes share
+the manager/driver model, the main event loop, the
 `OnUpdate`/`apply()` cycle, and the restart-and-resync doctrine.
 
-This doc owns that **shared architecture, for all three modes**,
-plus the parts specific to the **`*tables` (iptables/nftables)**
-backends:
+This doc owns that shared architecture (all three modes) plus the
+`*tables` (iptables/nftables)-specific parts — the `Table`
+abstraction, rule generation and dispatch chains, IP sets. eBPF mode
+reuses the shared architecture but adds its own managers (notably
+`bpfEndpointManager`), BPF maps and packet path, documented in the
+`bpf-*` family (start at [`bpf-overview.md`](./bpf-overview.md)); a
+BPF change typically needs *both* docs. Windows is a separate
+dataplane, covered here only as a contrast.
 
-- **Shared by every mode** (the bulk of this doc): the manager/driver
-  split, the `OnUpdate`/`apply()` event loop, the failure
-  philosophy, the restart/resync **mark-and-sweep** doctrine,
-  fail-closed behaviour, dual-stack, status reporting, and the
-  calc-graph→dataplane proto contract.
-- **`*tables`-specific** (clearly-scoped sections): the `Table`
-  abstraction, rule generation and dispatch chains, IP sets.
-
-The **eBPF mode reuses all the shared architecture above**, but has
-its own mode-specific managers (notably `bpfEndpointManager`), BPF
-maps, and packet path. Those are **not** repeated here — they are
-documented in the **`bpf-*` sub-design family** (start at
-[`bpf-overview.md`](./bpf-overview.md)). So a change to the BPF
-dataplane typically needs *both* this doc (for the loop/manager/
-resync architecture it plugs into) and the relevant `bpf-*` files
-(for the packet path). **Windows** is a genuinely separate dataplane,
-covered here only as a contrast; its full design is a future topic.
-
-If you are editing any of `felix/dataplane/linux/`, `felix/iptables/`,
-`felix/nftables/`, `felix/generictables/`, `felix/rules/`,
-`felix/ipsets/`, `felix/markbits/`, `felix/routetable/`,
-`felix/routerule/`, or `felix/vxlanfdb/`, read this file (and, for
-BPF-specific files, the `bpf-*` family too). The input boundary — the
+Read this file before editing `felix/dataplane/linux/`,
+`felix/iptables/`, `felix/nftables/`, `felix/generictables/`,
+`felix/rules/`, `felix/ipsets/`, `felix/markbits/`,
+`felix/routetable/`, `felix/routerule/`, or `felix/vxlanfdb/` (plus
+the `bpf-*` family for BPF-specific files). The input boundary — the
 protobuf messages the dataplane receives — is the other end of the
-contract documented in [`calc-graph.md`](./calc-graph.md); the
+contract in [`calc-graph.md`](./calc-graph.md); the
 [dataplane API section below](#the-dataplane-api-calc-graph--dataplane-contract)
-is the shared place that contract is written down.
-
-Operational guidance (build/test commands) is in
-[`felix/CLAUDE.md`](../CLAUDE.md). The whole-Felix architecture
-overview is in [`felix/DESIGN.md`](../DESIGN.md).
+is where that contract is written down. Build/test commands are in
+[`felix/CLAUDE.md`](../CLAUDE.md); the whole-Felix overview is in
+[`felix/DESIGN.md`](../DESIGN.md).
 
 ## Conventions
 
@@ -149,37 +134,28 @@ type Manager interface {
 `UpdateBatchResolver` lets a manager resolve cross-manager state
 before any programming begins.)
 
-**`OnUpdate` must be cheap and must not perform kernel I/O.** This
-is the hard rule, and it's narrower than "don't touch the
-dataplane": the `Manager` interface doc-comment explicitly permits
-`OnUpdate` to push desired state into the in-memory `ipsets` and
-`generictables.Table` objects, which *queue* the change (e.g.
-`masqManager.OnUpdate` calls `AddMembers`/`UpdateChain`). What it
-must not do is anything that hits the kernel — a netlink call, an
-`iptables-restore`, a subprocess fork, a BPF map write. The common,
-correct pattern is: stash the message (or push it onto those queues)
-and **mark the affected resources dirty**; the real reconciliation
-and all kernel mutation happen later, in `CompleteDeferredWork()`,
-walking the dirty set.
+**`OnUpdate` must be cheap and must not perform kernel I/O** (no
+netlink call, `iptables-restore`, subprocess fork, or BPF map
+write). The rule is narrower than "don't touch the dataplane": it
+*may* push desired state into the in-memory `ipsets`/
+`generictables.Table` objects, which *queue* the change — the
+`Manager` interface doc-comment permits this, and
+`masqManager.OnUpdate` does exactly it (`AddMembers`/`UpdateChain`).
+The pattern: stash the message (or queue it) and **mark the affected
+resources dirty**; all reconciliation and kernel mutation happen
+later in `CompleteDeferredWork()`, walking the dirty set.
 
-Three reasons the split exists:
+Why the split:
 
-1. **Batching is dramatically cheaper.** Many dataplane operations
-   cost the same whether they change one thing or many. Legacy
-   iptables does a read-kernel / modify-in-memory / write-kernel
-   cycle whose cost is proportional to the *whole* ruleset; an IP
-   set update forks a subprocess. Doing the heavy work once per
-   `apply()` over a coalesced batch, instead of once per message,
-   is the difference between keeping up and not. Under load Felix
-   throttles `apply()` so larger batches accumulate, raising
-   throughput.
-2. **It separates safe-anytime work from must-wait work.** Updating
-   in-memory indexes is safe before Felix is in sync (it's just
-   building up the desired-state picture). Touching the kernel is
-   not (see [resync](#restart-resync-and-mark-and-sweep)). The split
-   lines up with that boundary.
-3. **It gives every manager a natural batching seam** even when the
-   manager reconciles directly rather than via a driver.
+1. **Batching is far cheaper.** Many operations cost the same for one
+   change or many — legacy iptables ships the *whole* ruleset to
+   userspace and back per change; an IP-set update forks a
+   subprocess. Doing the heavy work once per `apply()` over a
+   coalesced batch (Felix throttles `apply()` under load so batches
+   grow) is the difference between keeping up and not.
+2. **It separates safe-anytime work from must-wait work.** In-memory
+   updates are safe before in-sync; touching the kernel is not (see
+   [resync](#restart-resync-and-mark-and-sweep)).
 
 ### Review notes for this section
 
@@ -309,20 +285,19 @@ These are distinct mechanisms with overlapping effect:
 
 ## Restart, resync and mark-and-sweep
 
-This is the doctrine that shapes every driver, and the single most
-important thing to get right when adding a feature that creates
-kernel state.
+This doctrine shapes every driver and is the part most often gotten
+wrong when adding a feature that creates kernel state.
 
 **Felix must be restartable at any moment** (upgrade, config change,
 crash) and, on restart, **resync with the dataplane and converge to
 the current desired state with minimal disruption** — including
 cleaning up resources created by a *previous* Felix instance whose
-datastore state may have been completely different. Crucially, the
-restarted Felix has **no memory** of what the old one did and will
-**not** receive a "resource X was deleted" event for state the old
-Felix created but the new datastore no longer wants.
+datastore state may have been completely different. The restarted
+Felix has **no memory** of what the old one did and gets **no**
+"resource X was deleted" event for state the old Felix created but
+the new datastore no longer wants.
 
-Two consequences fall out of this:
+Two consequences:
 
 1. **Cleanup is deferred until in-sync.** The dataplane does not
    touch the kernel until it receives the first datastore in-sync
@@ -427,11 +402,11 @@ consumer view, and documents the producer-side ordering machinery
 - **In-sync.** No kernel mutation before the first in-sync; see
   [Restart, resync and mark-and-sweep](#restart-resync-and-mark-and-sweep).
 - **The exceptions.** The "references before referents" rule has
-  sanctioned exceptions for genuinely-missing resources (fail-safe
-  deny-all profile; missing-L2-network-as-block signal). Those are
-  documented on the producer side in
+  sanctioned exceptions for genuinely-missing resources (e.g. the
+  fail-safe deny-all profile), documented on the producer side in
   [`calc-graph.md` → The missing-resource tension](./calc-graph.md#the-missing-resource-tension);
-  a dataplane that consumes such a signal owns the receiving half.
+  a dataplane that consumes a pass-through signal owns the receiving
+  half.
 
 ### Review notes for this section
 

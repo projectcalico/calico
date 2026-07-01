@@ -62,22 +62,19 @@ the design is a graph.
 
 ## Update rule
 
-A dataplane PR that **changes how it works** — a new manager or
-driver, or a change to the manager/driver split; a change to the
+The repo-wide doc-update rule and its exemptions
+([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
+For the Linux dataplane, "changes how it works" means: a new manager
+or driver, or a change to the manager/driver split; a change to the
 `apply()` ordering or the `OnUpdate`/`CompleteDeferredWork`
 contract; a new kind of kernel resource or a change to how Calico
 resources are identified for resync; a change to `*tables` Table
 reconciliation, dispatch-chain structure, mark-bit allocation,
 IP-set ordering, or route ownership classification; or a change to
-the `proto.*` dataplane API — must update the relevant section of
+the `proto.*` dataplane API. Update the relevant section of
 [`dataplane.md`](../../felix/design/dataplane.md) in the same PR
 (and `calc-graph.md` if the proto contract changes).
-
-**Exemption.** No doc update is needed if the PR is exclusively
-one of: (a) a bug fix that restores behaviour the doc already
-describes, (b) a mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) a dependency bump. If in
-doubt, update the doc.
 
 ## Amending the PR
 

@@ -17,564 +17,425 @@ limitations under the License.
 
 # Felix calculation graph — Design
 
-This is the design doc for Felix's **calculation graph** (the
-"brain"): the code under [`felix/calc/`](../calc/) plus the
-indexing packages it depends on, [`felix/labelindex/`](../labelindex/)
-and [`felix/dispatcher/`](../dispatcher/). It covers what the calc
-graph is for, the contract every calculation node must honour, the
-contract the graph relies on from upstream, the `EventSequencer`
-output stage, and how the whole thing is tested.
+Design doc for Felix's calculation graph: the code under
+[`felix/calc/`](../calc/) plus the indexing packages it depends on,
+[`felix/labelindex/`](../labelindex/) and
+[`felix/dispatcher/`](../dispatcher/). Read it before editing those
+packages or reviewing a PR that touches them.
 
-If you are editing any of those packages, or reviewing a PR that
-does, read this file. The output boundary — the protobuf messages
-the graph emits to the dataplane — is documented from the
-consumer's side in
-[`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract);
-that section and this one are the two ends of the same contract.
-
-Operational guidance (how to build and run the tests) is in
-[`felix/CLAUDE.md`](../CLAUDE.md). The architecture overview that
-places the calc graph in the wider Felix data flow is in
-[`felix/DESIGN.md`](../DESIGN.md).
+The output boundary — the protobuf messages the graph emits to the
+dataplane — is the other end of the contract documented in
+[`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract).
+Build/test commands are in [`felix/CLAUDE.md`](../CLAUDE.md); the
+whole-Felix overview is in [`felix/DESIGN.md`](../DESIGN.md).
 
 ## Conventions
 
-- "WEP" = workload endpoint, "HEP" = host endpoint. "Local" means
-  hosted on this node — the calc graph's whole job is to reduce
-  cluster-wide state to this node's local picture.
-- "Node" used unqualified in this doc means a **calculation node**
-  (a vertex in the graph), not a Kubernetes node. Where it means a
-  Kubernetes/host node the text says so.
-- A "KV" is a datastore key/value pair as delivered by the syncer:
-  a typed key plus a value that is either `nil` (gone / invalid) or
-  the current state of that resource.
-- File paths are repo-relative. Type, function, field and constant
-  names are cited; line numbers are deliberately omitted because
-  they rot.
+- "WEP"/"HEP" = workload/host endpoint. "Local" = hosted on this
+  node.
+- "Node" unqualified means a **calculation node** (a vertex in the
+  graph), not a Kubernetes node.
+- A "KV" is a datastore key/value pair from the syncer: a typed key
+  plus a value that is either `nil` (gone/invalid) or the resource's
+  current state.
+- Paths are repo-relative; type/function/field names are cited, line
+  numbers omitted.
 
 ## What the calc graph is for
 
-The calc graph is an **incremental, in-process event pipeline**. It
-consumes the eventually-consistent stream of datastore updates from
-the syncer and emits a stream of protobuf messages describing the
-desired state of *this node's* dataplane, in Calico-internal terms
-(local WEPs, resolved policy rules, fully-expanded IP sets, routes,
-VTEPs). It is, in effect, a pure function of datastore state —
-"given this set of resources in the datastore, here is what this
-node's dataplane should contain" — implemented incrementally so it
-can keep up with churn.
+The calc graph consumes the eventually-consistent stream of
+datastore updates from the syncer and emits protobuf messages
+describing the desired state of *this node's* dataplane in
+Calico-internal terms (local WEPs, resolved policy rules,
+fully-expanded IP sets, routes, VTEPs). Its output is a function of
+current datastore state, computed incrementally so it can keep up
+with churn.
 
-### The scale it was built for
+It was built for **100k endpoints, ~2k policies, ~1000
+endpoint-updates/second**, with the dataplane applying the result
+sub-second. That drives three properties:
 
-The original design target was **100k endpoints, ~2k policies, and
-churn of ~1000 endpoints/second**, with the dataplane applying the
-resulting updates **sub-second**. Those numbers are why the
-architecture looks the way it does:
+- **Incremental, minimal-delta output** so the dataplane applies the
+  smallest possible change set with low latency.
+- **Back-pressure.** If the graph or dataplane can't keep up,
+  upstream layers block; blocking lets them coalesce queued work
+  (see the `EventSequencer`) instead of growing an unbounded backlog.
+- **Local filtering.** Only ~100 local WEPs need policy computed, not
+  the 100k in the cluster, so the graph reduces cluster state to the
+  local subset early (the `localEndpointDispatcher`, below).
 
-- **Incremental, minimal-delta output.** The dataplane must update
-  incrementally with the smallest possible change set and low
-  latency. The calc graph therefore processes one datastore update
-  at a time and emits only what changed — it never recomputes the
-  world.
-- **Back-pressure all the way up.** If the calc graph can't keep
-  up, or the dataplane can't keep up, the upstream layers block.
-  Blocking lets the layers above **coalesce** queued work (and, in
-  the extreme, drop back to a resync) rather than building an
-  unbounded backlog. The `EventSequencer`'s coalescing (below) is
-  one half of this; the dataplane's batched `apply()` is the other.
-- **Local filtering.** Only ~100 local WEPs need their policy
-  computed on a given node, not the 100k in the cluster. The graph
-  filters cluster-wide state down to the locally-relevant subset as
-  early as possible (the `localEndpointDispatcher`, below).
+Centralising this keeps every dataplane simpler. The graph is the
+single place that handles:
 
-### The four problems it owns
+1. **Cross-resource inconsistency** from eventual consistency — a WEP
+   naming a not-yet-known profile, a rule selecting an unknown label.
+2. **Transient duplicate state** — e.g. two WEPs briefly sharing an
+   IP after add/delete reordering; the graph resolves the conflict so
+   no dataplane has to.
+3. **Local relevance filtering** (problem above).
+4. **Dataplane-friendly output ordering** — dependencies emitted
+   before their dependents and removed only once nothing needs them
+   (the `EventSequencer`'s job).
 
-Centralising this logic in one place keeps every dataplane
-implementation simpler. The calc graph is the single place that
-deals with:
+### Review notes
 
-1. **Out-of-order / cross-resource inconsistency.** The syncer API
-   is eventually consistent, so a resource can reference another
-   that the graph hasn't heard about yet (a WEP naming a profile
-   that doesn't exist; a rule selecting a not-yet-known label).
-2. **Transient duplicate state.** Add/delete reordering can
-   briefly present two WEPs with the same IP. The graph detects the
-   conflict and decides how to resolve it, so the dataplane never
-   has to.
-3. **Local relevance filtering.** Reducing cluster state to this
-   node's dataplane state (problem (c) above).
-4. **Dataplane-friendly output ordering.** Dependencies are always
-   emitted *before* the resources that depend on them, and are only
-   removed once nothing depends on them any more. This is the
-   `EventSequencer`'s job (below) and is the contract the dataplane
-   relies on.
+- Recomputing output wholesale from cached state (then dedup'ing
+  no-op changes downstream) is the simplest approach and is fine
+  wherever the recomputed set is small or low-churn — re-sorting one
+  endpoint's policy list, or recomputing Felix config from the
+  handful of config resources. Use it where it's the right
+  trade-off; reach for fine-grained incremental updates only when
+  full recomputation is too expensive.
+- The anti-pattern is per-update work that scales with the
+  *cluster-wide* resource count on a *high-churn* path (e.g. touching
+  all 100k endpoints when one changes). That needs justification or a
+  redesign.
 
-### Review notes for this section
+## The node contract
 
-- Wholesale recomputation from cached state (recompute the output
-  from scratch, then dedup no-op changes downstream) is the
-  *simplest* option and is perfectly fine wherever the recomputed
-  set is small or low-churn — re-sorting one local endpoint's policy
-  list, or recomputing Felix configuration from the handful of
-  config resources, are both legitimate. Use it wherever it's the
-  right trade-off; reach for fine-grained incremental updates only
-  when full recomputation would be too expensive.
-- The actual anti-pattern is per-update work whose cost scales with
-  the *cluster-wide* resource count on a *high-churn* path — e.g.
-  touching all 100k endpoints every time any one of them changes.
-  That is a scaling regression and needs an explicit justification
-  or a redesign.
+The graph is a DAG of nodes, but the edges are **direct function
+calls, not goroutines or channels**: an update propagates
+synchronously through `OnUpdate`/callback calls and the call returns
+once propagation is complete. There is no concurrency between nodes
+and therefore no locking. (New folks sometimes read "calc *graph*"
+and picture goroutines and channels — it isn't that.)
 
-## The node model and the node contract
+Every node must:
 
-Calculation nodes are **plain function objects wired into a call
-graph**, not goroutines. An update entering the graph propagates
-synchronously through the nodes via direct method calls
-(`OnUpdate`, registered callbacks) and the call returns when
-propagation is complete. There is no concurrency between nodes, so
-nodes need no locking. (Hidden internal parallelism inside a single
-node is *conceivable* if it earned its keep, but the bar is high
-and it must remain an invisible implementation detail behind the
-synchronous API.)
+**Handle add, update and delete for any resource it tracks,** and
+handle **referential inconsistency** — a WEP naming a missing
+profile, a rule selecting an unknown endpoint — by producing some
+well-defined output. This includes the consistent→inconsistent
+transition: if resource B disappears while A still references it, the
+node must reconcile to the "B is missing" output, not cling to B's
+last-known value.
 
-Every node must honour the following contract.
+**Depend only on current state, not on history** (no hysteresis).
+Don't buffer "the last good output" to paper over a transient
+inconsistency. History-dependent output makes testing explode (the
+result depends on the path, not just the destination) and defers the
+visible impact of a bug — a node hoarding stale state can look
+correct for weeks, then emit the wrong thing only after a restart
+drops the hoard, long after the logs that would explain it are gone.
+(Buffering purely for *work-avoidance* is fine — it changes when and
+how efficiently output is produced, not what it is; see no-op
+suppression.)
 
-### Handle add, update and delete — in any order
+**Suppress no-op churn where it matters** — where a downstream would
+otherwise do significant redundant work. The canonical case (since
+fixed): WEP↔policy match changes used to re-sort each endpoint's
+policy list; at start of day with 100 local WEPs × 200 policies that
+sorted 20,000 times instead of 100. Suppression on a leaf that does
+no downstream work isn't worth the complexity.
 
-The syncer can deliver KVs in any order and can coalesce them
-(below). A node must react correctly to a create, an update, or a
-delete for any resource it tracks, arriving at any time.
+**Balance index add/remove exactly.** Where a node keeps reference
+counts or membership indexes (the label indexes, below), every add
+must be matched by exactly one remove keyed *identically*. A keying
+mismatch leaks entries — a real, observed bug class at scale, not a
+theoretical one.
 
-### Handle inconsistency, and the consistent→inconsistent transition
+### Review notes
 
-A node must cope with referential inconsistency — a WEP that names a
-non-existent profile, a rule selecting an unknown endpoint — and
-produce *some* well-defined output for it.
-
-The subtle, load-bearing half of this: a node must handle the
-transition **from consistent to inconsistent** and end up in
-exactly the same state as if the inconsistency had been present
-from start of day. If resource B disappears while A still
-references it, the node must reconcile to the "B is missing"
-output — it must **not** cling to the last-known-good value of B.
-
-### Be memoryless
-
-This is the single most important node invariant. **A node's output
-must depend only on the current set of datastore resources, never
-on history.** Do not buffer "the last good output" to paper over a
-transient inconsistency.
-
-Buffering history is forbidden because:
-
-- It makes testing exponentially harder — output now depends on the
-  path taken, not just the destination, so the state space the
-  tests must cover explodes.
-- It defers the visible impact of a bug. A node that hoards stale
-  state can look correct for weeks and then emit the wrong thing
-  only after a Felix restart drops the hoarded state — by which
-  time all the logs and context that would explain it are gone.
-
-Buffering for **work-avoidance** is a different thing and is
-allowed (see no-op suppression below, and the `EventSequencer`):
-that kind of buffer changes *when* and *how efficiently* output is
-produced, never *what* the output is for a given datastore state.
-
-### Suppress no-op churn where it matters
-
-A node should suppress emitting a downstream update when nothing it
-cares about actually changed — but only where it matters, i.e.
-where the downstream would otherwise do significant redundant work.
-The canonical example (since fixed): WEP↔policy match changes used
-to re-trigger sorting the policy list for the affected endpoint. At
-start of day with 100 local WEPs and 200 policies each, the naive
-version sorted 200 × 100 = 20,000 times instead of once per WEP =
-100 times. Suppression here was worth it; suppression on a leaf
-that does no downstream work is not worth the complexity.
-
-### Edge-triggered indexing must pair add/remove with identical keys
-
-Where a node maintains reference counts or membership indexes (the
-label indexes are the prime example, below), the add and remove
-operations are **edge-triggered** and must be keyed **identically**.
-An add keyed one way and a remove keyed even slightly differently
-leaks the entry, and at scale that leak is a real, observed bug
-class — not a theoretical one.
-
-### Review notes for this section
-
-- **Reject added buffering of "good" output.** If a change makes a
-  node remember a previous output to survive an inconsistency, that
-  is the most common way these changes go wrong (see Common failure
-  modes). Push back unless the buffer is purely for work-avoidance
-  and the *content* of the output is still a pure function of
-  current state.
+- Reject added buffering of "good" output to survive an
+  inconsistency — the most common way these changes go wrong. Allow a
+  buffer only if it's purely for work-avoidance and the output
+  *content* is still a function of current state.
 - A new index or refcount needs its add/remove keying checked for
-  exact symmetry, and needs calc-graph FV coverage that exercises
-  the teardown direction, not just the build-up direction.
-- A node added as a goroutine, or that takes a lock, is almost
-  certainly wrong for this codebase — flag it and ask why the
-  synchronous model doesn't fit.
+  symmetry, with FV coverage of the teardown direction, not just
+  build-up.
+- A node that spawns a goroutine or takes a lock is almost certainly
+  wrong here — ask why the synchronous model doesn't fit.
 
 ## The upstream (syncer) contract
 
-The syncer delivers an **eventually-consistent sequence of KV
-events**. A node should reason about each event in isolation,
-against its own previous knowledge of that one resource — not about
-the sequence as a whole.
+The syncer delivers an eventually-consistent sequence of KV events.
+Reason about each event on its own, against your prior knowledge of
+*that one resource* — not about the sequence as a whole.
 
-- **`nil` value** means the resource does not exist: either it was
-  deleted, or it failed validation and must be treated as
-  non-existent. (Validation lives upstream in
-  `calc/validation_filter.go` — `ValidationFilter` nils out invalid
-  values rather than altering them — so by the time a non-nil value
-  reaches a node it has passed schema/semantic validation.)
-- **Non-nil value** means "this is the resource's current state;
-  update yourself to match." The node compares against whatever it
-  held before and reconciles.
-- **Coalescing.** The syncer may collapse a run of updates to the
-  same resource — `update → update → delete → update → update` can
-  arrive as just the final `update`. A node must never assume it
-  sees every intermediate state.
-- **Reversion is possible.** A datastore resync that lands on a
-  node with a stale cache can legitimately move a resource
-  *backwards* to an earlier version. "Compare current event against
-  my state and reconcile" handles this for free; "assume values
-  only move forward" does not.
+- **`nil` value** = the resource doesn't exist (deleted, or failed
+  validation and treated as absent). Validation is upstream in
+  `calc/validation_filter.go` (`ValidationFilter` nils out invalid
+  values rather than altering them), so a non-nil value has already
+  passed schema/semantic validation.
+- **Non-nil value** = the resource's current state; compare against
+  what you held and reconcile.
+
+The **only** real guarantee is eventual convergence to the latest
+value (supported datastores make writes durable, so connectivity
+permitting you will eventually see it). Everything else is fair
+game. For a resource that truly went `Created → A → B → C`, a node
+might observe any of:
+
+- `A → B → C`
+- `A → C` — `B` coalesced away
+- `C` — `A` and `B` coalesced away
+- `A → C → B → C` — reached `C`, then a resync hit a stale replica
+  (back to `B`), then caught up
+- `C → Deleted → A → B → C` — resync hit a replica so stale the
+  resource didn't exist there yet, giving a **spurious `Deleted`**
+
+So a node must not assume ordering, monotonic versions, that it sees
+every transition, or even that a `Deleted` is real and final —
+"compare the event against my state and reconcile" handles all of
+these; "assume values only move forward" does not.
 
 ### The update-type side channel
 
-Each event carries an update type — `Update.UpdateType`, of type
-`api.UpdateType` (`UpdateTypeKVNew` / `UpdateTypeKVUpdated` /
-`UpdateTypeKVDeleted` / `UpdateTypeKVUnknown` in
-`libcalico-go/lib/backend/api`). It is a **side channel** describing
-what *kind* of upstream event produced this delivery (with defined
-rules for recomputing it when events coalesce). Its original purpose
-was to allow stats to be kept without retaining every object —
-increment a counter on a create, decrement on a delete, ignore
-updates (see `calc/stats_collector.go`). Treat it as advisory
-metadata about the delivery, **not** as the source of truth for
-whether the resource exists: that is the value being nil or non-nil.
-A node whose *correctness* depends on the update type is usually
-relying on it wrongly.
+Each event also carries `Update.UpdateType` (`api.UpdateType`:
+`UpdateTypeKVNew`/`KVUpdated`/`KVDeleted`/`KVUnknown` in
+`libcalico-go/lib/backend/api`) — a side channel describing what kind
+of upstream event produced this delivery, recomputed when events
+coalesce. Its original purpose was stats without retaining objects
+(increment on create, decrement on delete; see
+`calc/stats_collector.go`). Treat it as advisory: whether the
+resource exists is the value being nil or non-nil, not the update
+type.
 
-### Review notes for this section
+### Review notes
 
-- A node that branches on the update type to decide whether a
-  resource exists (rather than on nil/non-nil) is suspect. Stats
-  and similar bookkeeping are the legitimate uses.
-- A node that assumes monotonic resource versions, or that it will
-  observe every intermediate update, is wrong — coalescing and
-  reversion both break those assumptions.
+- A node that decides *existence* from the update type rather than
+  nil/non-nil is suspect; stats-style bookkeeping is the legitimate
+  use.
+- A node that assumes monotonic versions or that it sees every
+  intermediate update is wrong — coalescing and reversion break both.
 
 ## Wiring and inter-node ordering
 
-The graph is assembled in `calc/calc_graph.go` (`NewCalculationGraph`).
-Updates enter through the `AllUpdDispatcher` (`dispatcher.Dispatcher`),
-which fans each KV out by resource type to the nodes registered for
-it. A second dispatcher, the `localEndpointDispatcher`, carries the
-**locally-filtered** endpoint stream — an `endpointHostnameFilter`
-(in the `calc` package) is registered first on it and forwards only
-endpoints hosted on this node, which is where the cluster→local
-reduction (problem (c)) happens. (The dispatcher itself is
-hostname-agnostic; the filter does the reduction.)
+The graph is assembled in `calc/calc_graph.go`
+(`NewCalculationGraph`). Updates enter via the `AllUpdDispatcher`
+(`dispatcher.Dispatcher`), which fans each KV out by resource type.
+A second dispatcher, the `localEndpointDispatcher`, carries the
+locally-filtered endpoint stream: an `endpointHostnameFilter` (in the
+`calc` package) registered first on it forwards only endpoints on
+this node — that's where the cluster→local reduction happens (the
+dispatcher itself is hostname-agnostic).
 
 Most wiring order is irrelevant because nodes are independent. The
-order that *does* matter follows one pattern: **a node that consumes
-"A matches B" events generally wants to have already heard about A
-and B individually before it hears that they match.** Otherwise it
-has to buffer the match until A and B turn up.
+pattern that matters: **a node consuming "A matches B" events usually
+wants to hear about A and B individually first**, or it has to buffer
+the match until they arrive. The one load-bearing case is handler
+registration order *on the same dispatcher* (`dispatcher.Register`
+appends, and `OnUpdate` iterates in registration order):
 
-The one concrete load-bearing ordering in `NewCalculationGraph` is
-about **handler registration order on the same dispatcher**, not
-about the order the dispatchers are created (`dispatcher.Register`
-appends per key-type and `OnUpdate` then iterates handlers in
-registration order):
+- `LiveMigrationCalculator` (`live_migration_calculator.go`)
+  registers its `OnUpdate` on the `localEndpointDispatcher` **before**
+  `ActiveRulesCalculator` does. This ensures the LMC sees WEP updates
+  first, so its `wepData` is populated when the ARC fires computed
+  selector-match callbacks. (The code comments this constraint.)
 
-- The `LiveMigrationCalculator` (`calc/live_migration_calculator.go`)
-  has its `OnUpdate` registered on the `localEndpointDispatcher`
-  **before** the `ActiveRulesCalculator` registers with that same
-  dispatcher, so the ARC sees migration-adjusted endpoint state.
-  This is the only such constraint the code calls out in a comment.
+If you must consume a "matches" event before the endpoints it
+references, you can rely on hearing about the endpoints **in the same
+calc-graph loop**, so the buffer stays small. Note the symmetric
+teardown: having heard A and B before "A matches B", on deletion you
+hear A and B removed *first*, then "A no longer matches B".
 
-If you genuinely must consume a "matches" event before the
-endpoints it references, you may rely on hearing about the
-endpoints **in the same calc-graph loop** as the match event, so
-the buffer you need is small and short-lived. And remember the
-symmetric teardown: if you heard A and B before "A matches B", then
-on deletion you will hear A and B removed *first*, then "A no longer
-matches B".
+A rendered overview of the node graph is kept by hand in
+[`felix/docs/calc.dot`](../docs/calc.dot) (rendered via the
+`felix/Makefile`); update it when you add or rewire a node.
 
 ### The principal nodes
+
+Descriptions track each node's godoc — see the source for detail.
 
 | Node (file) | Role |
 |---|---|
 | `ValidationFilter` (`validation_filter.go`) | Nils out invalid resources (treat-as-missing) before they reach the graph |
 | `AllUpdDispatcher` / `localEndpointDispatcher` (`dispatcher` pkg) + `endpointHostnameFilter` (`calc` pkg) | Type-based fan-out; the filter does the local-endpoint reduction |
-| `LiveMigrationCalculator` (`live_migration_calculator.go`) | Adjusts endpoint state for KubeVirt-style live migration |
-| `ActiveRulesCalculator` (`active_rules_calculator.go`) | Tracks which policies/profiles are active given local endpoint labels |
-| `RuleScanner` (`rule_scanner.go`) | Extracts selector/named-port references from active rules; drives the label index |
-| `PolicyResolver` / `PolicySorter` (`policy_resolver.go`, `policy_sorter.go`) | Computes the ordered per-endpoint policy list (tiers, order) |
-| `L3RouteResolver` (`l3_route_resolver.go`) | Computes a generalized route map of Calico-known IP space from IP pools, WEPs, host IPs. Generalized in the sense that some entries are just "we know this useful information about this CIDR" rather than actual IP routes. |
-| `VXLANResolver` (`vxlan_resolver.go`) | Computes VTEP entries |
-| `EncapsulationResolver` (`encapsulation_resolver.go`) | Derives encap mode from IP-pool config |
-| `IstioCalculator` (`istio_calculator.go`) | Marks WEPs in the Istio ambient mesh |
+| `LiveMigrationCalculator` (`live_migration_calculator.go`) | Correlates local WEPs with LiveMigration resources to set the `live_migration_role` field on emitted `proto.WorkloadEndpoint`s (OpenStack and KubeVirt live migration) |
+| `ActiveRulesCalculator` (`active_rules_calculator.go`) | Given local endpoints, emits which policies/profiles are active (matching on each policy's own selector; rule selectors are handled by the `RuleScanner`) |
+| `RuleScanner` (`rule_scanner.go`) | Scans active rules for selectors/tags, tracks which are active, and converts `model.Rule` to `ParsedRule` (selectors/tags → IP sets). Endpoint matching itself is done downstream by a `labelindex.InheritIndex` |
+| `PolicyResolver` / `PolicySorter` (`policy_resolver.go`, `policy_sorter.go`) | Marries active policies with local endpoints (told which match by the ARC) to emit the complete, ordered per-endpoint policy set (tiers, order) |
+| `L3RouteResolver` (`l3_route_resolver.go`) | Indexes IPAM blocks, IP pools and node metadata into longest-prefix-match routes over Calico-known IP space (CIDR + pool type/metadata + is-host + owning host for workloads); consumed by the BPF and VXLAN dataplanes |
+| `VXLANResolver` (`vxlan_resolver.go`) | Resolves node IP/config into a VTEP per host (`proto.VXLANTunnelEndpointUpdate`/`Remove`); the dataplane only programs VXLAN routes once the VTEP is ready |
+| `EncapsulationResolver` (`encapsulation_resolver.go`) | Derives encap mode from IP-pool config (restarts Felix if it changed) |
+| `IstioCalculator` (`istio_calculator.go`) | Marks local WEPs that are in the Istio ambient mesh so downstream can apply mesh networking |
 | `EventSequencer` (`event_sequencer.go`) | Output stage: buffers, coalesces, flushes in dependency order |
 
-### Review notes for this section
+### Review notes
 
-- A PR that adds a consumer of "A matches B"-style events should
-  state where it sits relative to the producers of A and B, and
-  confirm it handles the teardown order (A/B removed before the
-  un-match). If it buffers, the buffer must rely only on
-  same-loop delivery, not on cross-loop retention.
-- A PR that reorders node registration must justify it against the
-  "matches after members" pattern; most reorderings are inert, but
-  the one that isn't — `LiveMigrationCalculator`'s `OnUpdate`
-  registered on `localEndpointDispatcher` before the ARC's — is
-  silently load-bearing.
+- A PR adding a consumer of "A matches B" events should state where it
+  sits relative to the producers of A and B, and handle the teardown
+  order. Any buffer must rely only on same-loop delivery.
+- A PR reordering node registration must justify it against the
+  matches-after-members pattern; most reorderings are inert, but the
+  `LiveMigrationCalculator`-before-ARC one is silently load-bearing.
 
 ## Label indexes and refcounting
 
-[`felix/labelindex/`](../labelindex/) holds the graph's most
-intricate machinery: `InheritIndex` (label inheritance from
-profiles/namespaces down to endpoints) and
-`SelectorAndNamedPortIndex` (which selectors match which endpoints,
-expanded to IP-set membership). These are where reference-counting
-bugs and leaks tend to live.
+[`felix/labelindex/`](../labelindex/) is the graph's most intricate
+code: `InheritIndex` (label inheritance from profiles/namespaces down
+to endpoints) and `SelectorAndNamedPortIndex` (which selectors match
+which endpoints, expanded to IP-set membership). Reference-counting
+bugs live here. Two things make it hard:
 
-Two things make them hard, and both are deliberate:
-
-- **Edge-triggered, identically-keyed add/remove** (see the node
-  contract). Every membership add must be balanced by exactly one
-  remove using the same key. A keying mismatch leaks.
-- **Rare-but-common-at-scale corner cases.** The classic is **two
-  WEPs transiently sharing one IP** due to add/delete reordering. At
-  100k endpoints with churn, "rare per endpoint" becomes "happening
-  somewhere all the time," so these paths must be correct, not
-  merely improbable-and-ignored. The index code carries deliberately
-  adversarial tests aimed at these cases: the shared-IP / overlapping
-  membership cases live in `labelindex/named_port_index_test.go`
-  ("two endpoints overlapping IPs") and the FV base states, while
+- **Balanced, identically-keyed add/remove** (see the node contract):
+  one remove per add, same key, or it leaks.
+- **Corner cases that are rare per-endpoint but common at scale** —
+  the classic being two WEPs transiently sharing one IP. At 100k
+  endpoints with churn these happen constantly, so they must be
+  correct, not ignored. The adversarial tests target exactly these:
+  shared-IP/overlapping membership in
+  `labelindex/named_port_index_test.go` and the FV base states;
   `labelindex/dedup_overlap_repro_test.go` covers the related
-  CIDR-containment dedup sub-case.
+  CIDR-containment dedup case.
 
-These packages are **part of the calc graph** for the purposes of
-the testing rule below, even though they live in their own
-directory: changes to them belong in the calc-graph FV suite.
+These packages are part of the calc graph for the testing rule
+below, despite living in their own directory.
 
-### Review notes for this section
+### Review notes
 
-- Any change to membership bookkeeping must preserve exact
-  add/remove key symmetry. Audit both directions.
-- Any change must keep the shared-IP / overlapping-membership
-  corner cases working, and must extend the adversarial index tests
-  rather than only adding happy-path coverage.
+- Preserve exact add/remove key symmetry; audit both directions.
+- Keep the shared-IP/overlapping-membership cases working, and extend
+  the adversarial index tests rather than only adding happy-path
+  coverage.
 
 ## The EventSequencer (output stage)
 
-`EventSequencer` (`calc/event_sequencer.go`) is the graph's output
-boundary. It buffers updates in `pending*` maps/sets and emits them
-only when `Flush()` is called, coalescing repeated changes to the
-same object in between.
+`EventSequencer` (`calc/event_sequencer.go`) is the output boundary.
+It buffers updates in `pending*` maps/sets and emits them on
+`Flush()`, coalescing repeated changes to the same object in between.
 
-### Coalescing is back-pressure, not an optimisation
+### Coalescing is back-pressure
 
-Coalescing is half of the system's back-pressure mechanism. When
-the dataplane stalls for a second or more on a big update while the
-datastore is churning hard, buffering-with-coalescing in the
-sequencer **bounds memory** (you hold at most one pending entry per
-resource, so the bound is ~the number of resources in the cluster)
-and **bounds the size of the update** eventually handed to the
-dataplane. The worst case degrades gracefully: the dataplane enters
-a catch-up loop where each pass takes N seconds and absorbs the
-previous N seconds of churn, rather than growing an unbounded queue.
+Coalescing is half the back-pressure mechanism. When the dataplane
+stalls on a big update while the datastore churns, coalescing
+**bounds memory** (at most one pending entry per resource, so ~the
+cluster's resource count) and **bounds the update size** handed to
+the dataplane. Worst case degrades gracefully: the dataplane runs a
+catch-up loop, each pass absorbing the previous pass's churn, rather
+than growing an unbounded queue.
 
 ### Flush order is the dependency contract
 
-`Flush()` emits in a strict, commented order so that the dataplane
-**never sees a reference before its referent, and never loses a
-referent while something still references it.** The shape is:
+`Flush()` emits in a strict, commented order so the dataplane never
+sees a reference before its referent, nor loses a referent while
+something still references it:
 
-1. Ready flag, then config, first (a config change may restart Felix).
+1. Ready flag, then config (a config change may restart Felix).
 2. Additions in dependency order: **IP sets → policies → profiles →
-   endpoints**. A referent is always in place before the thing that
-   refers to it.
-3. Removals in the **reverse** order: endpoints → profiles →
-   policies → IP sets. Nothing is removed while a live consumer
-   still points at it.
-4. VXLAN ordered so a route never exists without its VTEP: **VTEP
-   adds before route adds; route removes before VTEP removes**
-   (route removes also precede route adds, to minimise peak
-   occupancy).
-5. Rarer cluster-wide updates (hosts, IP pools, wireguard, encap,
-   BGP config, services) where ordering is looser.
+   endpoints**.
+3. Removals in **reverse**: endpoints → profiles → policies → IP
+   sets.
+4. VXLAN so a route never exists without its VTEP: VTEP adds before
+   route adds; route removes before VTEP removes (route removes also
+   precede route adds, to minimise peak occupancy).
+5. Rarer cluster-wide updates (hosts, IP pools, wireguard, encap, BGP
+   config, services), looser ordering.
 
-This ordering is **the contract the dataplane assumes** (see
-[`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)).
-The dataplane is entitled to assume references arrive before
-referents — policies before endpoints, IP sets before policies,
-profiles before referencing endpoints.
+This is **the contract the dataplane assumes** (see
+[`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)):
+references arrive before referents — IP sets before policies,
+policies/profiles before referencing endpoints.
 
-### Adding a new message type: where does it slot?
-
-The decision procedure for a new output message:
-
-1. Identify its dependencies (what must already be in the dataplane
-   before this message is safe to apply) and its dependents (what
-   must still be present when this message is removed).
-2. Place its **add** after its dependencies' adds; place its
-   **remove** before its dependencies' removes (i.e. mirror it).
-3. If it has no dependency relationship, it can join the loosely-
-   ordered tail.
+To slot in a new message type: identify its dependencies (must be in
+the dataplane before it) and dependents (must still be present when
+it's removed); place its add after its dependencies' adds and its
+remove before theirs; if it has no dependencies, join the loose tail.
 
 ### The missing-resource tension
 
-Strict ordering collides with referential inconsistency: what does
-the graph emit when a referent is genuinely missing (not just late)?
-There are three sanctioned strategies; which one fits depends on the
-trade-off between how much work it is to handle the case in the
-dataplane versus buffering it in the graph, and on what actually
-makes sense for the particular resource type:
+When a referent is genuinely missing (not just late), there are
+three sanctioned strategies. Which fits depends on the cost of
+handling it in the dataplane versus buffering in the graph, and on
+what makes sense for the resource type:
 
-- **(a) Synthesize a safe stand-in.** Good when a safe default
-  exists. Felix does this for profile rules: a missing profile is
-  resolved to a fail-safe **deny-all** rule set (the `DummyDropRules`
-  in `calc/active_rules_calculator.go`), so policy still resolves and
-  fails closed. (A stand-in doesn't always make sense — for some
-  resource types there is no meaningful dummy value.)
-- **(b) Buffer the dependent until the dependency arrives.** Often
-  the **wrong** choice. You must **not** buffer endpoints or
-  policies — they are security-critical, most dependency chains
-  start at endpoints, and delaying them risks leaving endpoints with
-  stale policy/configuration, which could be a security hole.
-  Reserve buffering for non-security-critical leaves.
-- **(c) Make an explicit exception and handle it in the dataplane.**
-  Pass the inconsistency through to the dataplane as a signal rather
-  than resolving it in the graph, letting the dataplane fail closed
-  on its own terms. The right choice when the dataplane has to do
-  something for this case anyway — e.g. a WEP gains a new
-  security-critical field, so a missing dependency means *that
-  endpoint* must fail closed, and neither buffering nor a dummy
-  resource fits.
+- **(a) Synthesize a safe stand-in.** Felix does this for profile
+  rules: a missing profile resolves to a fail-safe deny-all rule set
+  (`DummyDropRules` in `calc/active_rules_calculator.go`). Some
+  resource types have no meaningful stand-in.
+- **(b) Buffer the dependent until the dependency arrives.** Usually
+  wrong. Never buffer endpoints or policies: they're
+  security-critical, most dependency chains start at endpoints, and
+  delaying them risks leaving endpoints with stale
+  policy/configuration — a security hole. Reserve buffering for
+  non-security-critical leaves.
+- **(c) Pass the inconsistency through to the dataplane** as a signal
+  and let it fail closed on its own terms. The right choice when the
+  dataplane must act anyway — e.g. a WEP gains a security-critical
+  field, so a missing dependency means *that endpoint* must fail
+  closed and neither buffering nor a dummy fits.
 
-The hard invariant under all three: a missing dependency must never
-silently leave a security-critical resource (an endpoint or policy)
-open — it has to **fail closed**, via whichever of (a)/(c) suits the
-resource. Which mechanism, and how much of the work lands in the
-graph versus the dataplane, is the judgement call; failing closed is
-not.
+The invariant across all three: a missing dependency must never
+silently leave an endpoint or policy *open* — it must fail closed,
+via whichever of (a)/(c) suits. The mechanism is a judgement call;
+failing closed is not.
 
-### Review notes for this section
+### Review notes
 
-- A new emitted message type must document, in the PR, its place in
-  the flush order and why (dependencies before it, dependents after
-  it). A message added to the wrong phase produces
-  reference-before-referent bugs that only bite under specific
-  orderings — exactly what FV expansion is designed to catch, so it
-  needs FV coverage.
-- A change that handles a missing referent by buffering an endpoint
-  or a policy is almost always wrong. Prefer (a) a fail-closed
-  stand-in (`DummyDropRules`-style) or (c) a pass-through signal.
-- A change that removes or weakens a coalescing path needs to argue
-  it doesn't break the memory/size bound the back-pressure design
-  relies on.
+- A new message type must document its place in the flush order (and
+  why) and carry FV coverage — wrong-phase bugs only bite under
+  specific orderings, which FV expansion is built to catch.
+- Handling a missing referent by buffering an endpoint or policy is
+  almost always wrong; prefer (a) or (c).
+- Removing or weakening a coalescing path must argue it doesn't break
+  the memory/size bound back-pressure relies on.
 
 ## In-sync semantics
 
 The graph forwards the datastore's `InSync` signal downstream. Its
-significance is almost entirely a **dataplane** concern — the
-dataplane defers all kernel mutation, and especially the cleanup of
-stale state left by a previous Felix, until the first post-`InSync`
-apply. The full rationale lives in
-[`dataplane.md` → Restart, resync and mark-and-sweep](./dataplane.md#restart-resync-and-mark-and-sweep).
-
-The calc-graph-side rule is simply: **do not fabricate or withhold
-the in-sync signal.** Emitting derived state and marking in-sync
-before the datastore truly is in sync would let the dataplane sweep
-away state it just hasn't been told about yet.
+significance is a dataplane concern: the dataplane defers all kernel
+mutation — especially cleanup of stale state from a previous Felix —
+until the first post-`InSync` apply (see
+[`dataplane.md` → Restart, resync and mark-and-sweep](./dataplane.md#restart-resync-and-mark-and-sweep)).
+The calc-graph rule: **don't fabricate or withhold `InSync`.**
+Signalling in-sync early would let the dataplane sweep state it just
+hasn't been told about yet.
 
 ## Testing: the calc-graph FV framework
 
-Calc-graph changes — **including** changes to `labelindex` and the
-other helper packages — must come with tests in the **calc-graph FV
-suite** (`calc/calc_graph_fv_test.go`, with states defined in
-`calc/states_for_test.go`). Despite the "FV" name these are 100%
-pure unit tests; "FV" refers to the fact that they exercise the
-*whole assembled graph* end to end (datastore KVs in, dataplane
-messages out) rather than one node in isolation.
+Calc-graph changes — including changes to `labelindex` and the other
+helper packages — must come with tests in the calc-graph FV suite
+(`calc/calc_graph_fv_test.go`; states in `calc/states_for_test.go`).
+These are pure unit tests; "FV" reflects that they drive the *whole
+assembled graph* end to end (datastore KVs in, dataplane messages
+out) rather than one node in isolation. Prefer them to per-node unit
+tests: the harness expands each test for free, and an
+input-state→output-state suite survives refactoring.
 
-This is strongly preferred over per-node unit tests because the
-harness **expands every test you write for free**, and because an
-input-state→output-state suite is extremely robust to later
-refactoring — it only cares about what goes in and what comes out,
-not how the graph is wired internally.
+From a sequence of datastore states, `testExpanders()` generates five
+companion runs (unless `DISABLE_TEST_EXPANSION=true`):
 
-For a test expressed as a sequence of datastore states, the harness
-(`testExpanders()` in `calc/calc_graph_fv_test.go`) generates a
-family of companion runs — five expanders beyond the identity run,
-all applied unless `DISABLE_TEST_EXPANSION=true`:
+- **`reverseKVOrder`** — reverse KV order within each state (output
+  mustn't depend on intra-state delivery order).
+- **`reverseStateOrder`** — reverse the states (tests build-up and
+  teardown).
+- **`insertEmpties`** — empty state between each pair (create, tear
+  down, recreate).
+- **`splitStates`** — each state standalone from empty
+  (self-consistency in isolation).
+- **`squashStates`** — collapse the whole sequence (incl. deletions)
+  into one state via `KVDeltas` (same end state in one step as
+  incrementally).
 
-- **(a) `reverseKVOrder`** — reverse the KV order within each state;
-  checks the output doesn't depend on intra-state delivery order.
-- **(b) `reverseStateOrder`** — reverse the order of the states;
-  checks the build-up and teardown directions both work.
-- **(c) `insertEmpties`** — insert an empty state between each pair
-  of states; forces everything to be created, fully torn down, then
-  recreated, over and over.
-- **(d) `splitStates`** — run each state standalone (from empty),
-  checking each state is self-consistent in isolation.
-- **(e) `squashStates`** — collapse the whole sequence (including
-  deletions) into a single state via `KVDeltas`, checking the graph
-  reaches the same end state in one step as it does incrementally.
+**Blind spot:** a symmetric sequence like `[{A}, {A,B}, {A}]` is its
+own reverse, so it only ever tests "A before B" — never the
+`{A,B} → {B}` transition (A deleted while B still references it). Add
+an explicit asymmetric sequence when the teardown-with-live-referrer
+case matters (it usually does for indexes/refcounts).
 
-### Blind spots to cover with targeted states
+### Review notes
 
-The expansions are powerful but not total. Watch for:
-
-- **Symmetric sequences test only one direction.** A sequence like
-  `[{A}, {A,B}, {A}]` is its own reverse, so it only ever exercises
-  "A created before B" — never "B before A", and never the
-  `{A,B} → {B}` transition (A deleted *while B still references it*).
-  If the teardown-with-live-referrer case matters (it usually does
-  for indexes and refcounts), add an explicit asymmetric state
-  sequence for it.
-
-### Review notes for this section
-
-- A calc-graph (or labelindex) change without a calc-graph FV state
-  is the exception, not the norm, and needs explicit justification.
-  A pile of per-node unit tests is **not** a substitute — funnel
-  the coverage through the FV framework so it gets the free
-  expansions and survives refactoring.
-- Check the new states aren't accidentally symmetric (the
-  `[{A},{A,B},{A}]` trap). If they are, the teardown-with-live-
-  referrer path is untested — add an asymmetric sequence.
+- A calc-graph (or labelindex) change without an FV state is the
+  exception and needs justification; per-node unit tests aren't a
+  substitute — funnel coverage through the FV framework.
+- Check new states aren't accidentally symmetric (the
+  `[{A},{A,B},{A}]` trap); if so, add an asymmetric sequence.
 
 ## Common failure modes
 
-The recurring ways calc-graph changes (from humans and AIs alike)
-go wrong:
-
-1. **Buffering "good" output across an inconsistency.** Adding
-   memory of the last-known-good value so the output "stays nice"
-   when the datastore goes inconsistent. This violates the
-   memoryless invariant. The graph must always *sequence* output
-   nicely, but the *content* must be a pure function of current
-   state. If a resource is broken, emit something (a fail-closed
-   stand-in or a pass-through signal) — never withhold a
-   security-critical update.
-2. **Buffering security-critical resources.** Even where buffering a
-   dependent is tempting, endpoints and policies must never be held
-   back. Fail closed instead.
-3. **Recomputing too much per update.** Work proportional to
-   cluster-wide resource counts instead of local counts — a scaling
-   regression. (The historical 20,000-sorts bug.)
-4. **Leaky / asymmetric refcounting.** Add and remove keyed
-   differently in an index, leaking entries at scale.
-5. **Skipping the FV suite.** Heavy per-node unit tests, no
-   calc-graph FV state — so the orderings and teardown paths the
-   expansions would have caught go untested.
+1. **Buffering "good" output across an inconsistency** — violates
+   depend-only-on-current-state. Sequence output nicely, but its
+   content must be a function of current state; if a resource is
+   broken, emit a fail-closed stand-in or pass-through signal rather
+   than withholding a security-critical update.
+2. **Buffering security-critical resources** (endpoints, policies) —
+   fail closed instead.
+3. **Recomputing work that scales with cluster-wide counts on a
+   high-churn path** (the historical 20,000-sorts bug).
+4. **Leaky/asymmetric refcounting** — add and remove keyed
+   differently.
+5. **Skipping the FV suite** — so the orderings and teardown paths
+   the expanders would catch go untested.
 
 ## Keep this document in sync with the code
 
@@ -582,13 +443,13 @@ The repo-wide doc-update rule
 ([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
 mirrored in
 [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the calc graph, "changes how it works" means: a new
-calculation node or a change to how nodes are wired; a new emitted
-message type or a change to the `EventSequencer` flush order; a
-change to a label index or other refcounting structure; a change to
-how the graph treats inconsistency, in-sync, or the upstream
-contract. Update the relevant section of this file in the same PR,
-and update
+applies. For the calc graph, "changes how it works" means: a new node
+or rewiring; a new emitted message type or a change to the
+`EventSequencer` flush order; a change to a label index or other
+refcounting structure; or a change to how the graph treats
+inconsistency, in-sync, or the upstream contract. Update the relevant
+section here, update the node graph in
+[`felix/docs/calc.dot`](../docs/calc.dot) when nodes change, and
+update
 [`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)
-as well if the output contract changes. This file is the source of
-truth for the calc graph's invariants.
+if the output contract changes.
