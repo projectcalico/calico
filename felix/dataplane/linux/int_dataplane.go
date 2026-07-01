@@ -1152,6 +1152,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var filterMaps nftables.MapsDataplane
 	var ifceHandlerV4 nftables.InterfaceHandler
+	var flowtableHandlers []nftables.InterfaceHandler
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
@@ -1171,6 +1172,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
 			}
 			nftablesV4RootTable.SetOverlayDevices(overlayDevicesV4)
+			flowtableHandlers = append(flowtableHandlers, nftablesV4RootTable)
 		}
 	}
 
@@ -1435,6 +1437,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
 				}
 				nftablesV6RootTable.SetOverlayDevices(overlayDevicesV6)
+				flowtableHandlers = append(flowtableHandlers, nftablesV6RootTable)
 			}
 		}
 
@@ -1521,6 +1524,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.natTables...)
 		dp.allTables = append(dp.allTables, dp.filterTables...)
 		dp.allTables = append(dp.allTables, dp.rawTables...)
+	}
+
+	if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" && config.NFTablesFlowTableDataIfacePattern != nil && len(flowtableHandlers) > 0 {
+		dp.RegisterManager(newFlowtableManager(flowtableHandlers, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	// Include cleanup tables in allTables so that they are cleaned up.
