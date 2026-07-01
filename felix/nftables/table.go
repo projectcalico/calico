@@ -172,6 +172,10 @@ var (
 		Name: "felix_nft_rules",
 		Help: "Number of active nftables rules in the Calico table.",
 	}, []string{"ip_version"})
+	gaugeNumFlowtableDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_nft_flowtable_devices",
+		Help: "Number of devices attached to the Calico nftables flowtable.",
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -181,6 +185,7 @@ func init() {
 	prometheus.MustRegister(countNumListErrors)
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
+	prometheus.MustRegister(gaugeNumFlowtableDevices)
 }
 
 // NftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -276,8 +281,9 @@ type NftablesTable struct {
 	logCxt               *logrus.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	gaugeNumChains prometheus.Gauge
-	gaugeNumRules  prometheus.Gauge
+	gaugeNumChains           prometheus.Gauge
+	gaugeNumRules            prometheus.Gauge
+	gaugeNumFlowtableDevices prometheus.Gauge
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdshim.CmdFactory
@@ -476,9 +482,10 @@ func newTable(
 		timeSleep: sleep,
 		timeNow:   now,
 
-		gaugeNumChains: gaugeNumChains.WithLabelValues(gaugeLabel),
-		gaugeNumRules:  gaugeNumRules.WithLabelValues(gaugeLabel),
-		opReporter:     options.OpRecorder,
+		gaugeNumChains:           gaugeNumChains.WithLabelValues(gaugeLabel),
+		gaugeNumRules:            gaugeNumRules.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableDevices: gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
+		opReporter:               options.OpRecorder,
 
 		disabled: options.Disabled,
 
@@ -521,6 +528,12 @@ func (t *NftablesTable) SetOverlayDevices(devices []string) {
 func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
 	t.workloadInterfaces = ifces
 	t.enableFlowtable()
+}
+
+// GaugeNumFlowtableDevices exposes the felix_nft_flowtable_devices gauge for this table, for
+// use by tests outside this package.
+func (t *NftablesTable) GaugeNumFlowtableDevices() prometheus.Gauge {
+	return t.gaugeNumFlowtableDevices
 }
 
 // enableFlowtable turns on offload and recalculates the device list. The first enable marks
@@ -1101,6 +1114,7 @@ func (t *NftablesTable) applyUpdates() error {
 			Priority: &prio,
 			Devices:  t.flowtableDevices,
 		})
+		t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.

@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/knftables"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -1209,6 +1210,13 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 
 		// Devices are combined and sorted, so the workload interface sorts ahead of the tunnel.
 		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+	})
+
+	It("should report the flowtable device count as a metric", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
 	})
 
 	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
