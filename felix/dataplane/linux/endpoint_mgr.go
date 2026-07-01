@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -917,10 +917,14 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
 
 			if m.ifceHandler != nil {
-				// Update the flowtable handler with the current set of workload interfaces.
+				// Only hand the flowtable interfaces that are currently up. A veth that
+				// has been deleted (pod teardown) must not end up in the flowtable, or the
+				// nft transaction is rejected and takes down the whole table.
 				wlIfces := make([]string, 0, len(fromMappings))
 				for i := range fromMappings {
-					wlIfces = append(wlIfces, i)
+					if m.activeUpIfaces.Contains(i) {
+						wlIfces = append(wlIfces, i)
+					}
 				}
 				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
 			}

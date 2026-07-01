@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
 package intdataplane
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -4061,6 +4064,106 @@ func removePolChainNamePrefix(target string) string {
 	log.WithField("chainName", target).Panic("Not a policy chain name.")
 	panic("Not a policy chain name")
 }
+
+// fakeMapsDataplane is a no-op nftables.MapsDataplane, just enough to get the endpoint
+// manager past its "have we got a maps backend" nil check so the flowtable handler runs.
+type fakeMapsDataplane struct{}
+
+func (f *fakeMapsDataplane) AddOrReplaceMap(meta nftables.MapMetadata, members map[string][]string) {}
+func (f *fakeMapsDataplane) RemoveMap(id string)                                                    {}
+func (f *fakeMapsDataplane) MapUpdates() *nftables.MapUpdates                                       { return nil }
+func (f *fakeMapsDataplane) FinishMapUpdates(updates *nftables.MapUpdates)                          {}
+func (f *fakeMapsDataplane) LoadDataplaneState(ctx context.Context, mapNames []string) error {
+	return nil
+}
+
+// fakeFlowtableHandler records the workload interface lists handed to the flowtable.
+type fakeFlowtableHandler struct {
+	lastIfaces []string
+	callCount  int
+}
+
+func (f *fakeFlowtableHandler) SetWorkloadInterfaces(ifces []string) {
+	f.callCount++
+	f.lastIfaces = append([]string(nil), ifces...)
+	sort.Strings(f.lastIfaces)
+}
+
+var _ = Describe("EndpointManager flowtable", func() {
+	var (
+		epMgr     *endpointManager
+		ftHandler *fakeFlowtableHandler
+	)
+
+	BeforeEach(func() {
+		ftHandler = &fakeFlowtableHandler{}
+		renderer := rules.NewRenderer(rules.Config{
+			IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:            0x8,
+			MarkPass:              0x10,
+			MarkScratch0:          0x20,
+			MarkScratch1:          0x40,
+			MarkDrop:              0x80,
+			MarkEndpoint:          0xff00,
+			MarkNonCaliEndpoint:   0x0100,
+			WorkloadIfacePrefixes: []string{"cali", "tap"},
+		}, false)
+		mockProcSys := &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
+		nlDataplane := mocknetlink.New()
+		linkAddrsMgr := linkaddrs.New(
+			4,
+			[]string{"cali"},
+			&environment.FakeFeatureDetector{
+				Features: environment.Features{},
+			},
+			10*time.Second,
+			linkaddrs.WithNetlinkHandleShim(nlDataplane.NewMockNetlink),
+		)
+
+		epMgr = newEndpointManagerWithShims(
+			&endpointManagerConfig{
+				wlInterfacePrefixes: []string{"cali"},
+				bpfAttachType:       v3.BPFAttachOptionTCX,
+			},
+			newMockTable("raw"),
+			newMockTable("mangle"),
+			newMockTable("filter"),
+			renderer,
+			&mockRouteTable{index: 0, currentRoutes: map[string][]routetable.Target{}},
+			4,
+			rules.NewEndpointMarkMapper(0xff00, 0x0100),
+			(&statusReportRecorder{currentState: map[any]string{}, extraInfo: map[any]any{}}).endpointStatusUpdateCallback,
+			mockProcSys.write,
+			mockProcSys.stat,
+			"1",
+			&fakeMapsDataplane{}, // filterMaps
+			ftHandler,            // ifceHandler
+			&testHEPListener{},
+			common.NewCallbacks(),
+			linkAddrsMgr,
+			nil, // arpTable
+			nil, // arpMaps
+		)
+	})
+
+	It("should only pass up interfaces to the flowtable", func() {
+		// Two workload endpoints, but only cali11111-aa is up.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
+		})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl2", EndpointId: "ep2"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali22222-bb", Mac: "01:02:03:04:05:07"},
+		})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+
+		Expect(ftHandler.lastIfaces).To(ConsistOf("cali11111-aa"))
+	})
+})
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4, false))
 
