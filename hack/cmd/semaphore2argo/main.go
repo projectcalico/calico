@@ -18,15 +18,21 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
+	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 func main() {
 	in := flag.String("in", "", "path to a Semaphore end-to-end pipeline YAML (required)")
+	branch := flag.String("branch", "master", "target branch the cron checks out (master|release-vX.Y); RELEASE_STREAM derives from it")
+	schedule := flag.String("schedule", "", "cron schedule expression, e.g. \"0 3 * * 2\" (required)")
+	name := flag.String("name", "", "cron metadata.name (default: e2e-<pipeline>-<stream>)")
+	out := flag.String("out", "", "output path for the generated CronWorkflow (default: stdout)")
 	flag.Parse()
 
-	if *in == "" {
-		fmt.Fprintln(os.Stderr, "error: --in is required")
+	if *in == "" || *schedule == "" {
+		fmt.Fprintln(os.Stderr, "error: --in and --schedule are required")
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -37,20 +43,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The CronWorkflow emitter is implemented in a follow-up commit. For now,
-	// report the resolved job list so the parse/expand core can be exercised
-	// (and eyeballed against the pipeline) on its own.
-	jobs := Expand(p)
-	fmt.Printf("pipeline %q: %d resolved job(s)\n", p.Name, len(jobs))
-	for _, j := range jobs {
-		keys := make([]string, 0, len(j.Env))
-		for k := range j.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		fmt.Printf("  - [%s] %s\n", j.Block, j.Job)
-		for _, k := range keys {
-			fmt.Printf("      %s=%s\n", k, j.Env[k])
-		}
+	cronName := *name
+	if cronName == "" {
+		base := strings.TrimSuffix(filepath.Base(*in), filepath.Ext(*in))
+		cronName = fmt.Sprintf("e2e-%s-%s", base, streamFromBranch(*branch))
 	}
+
+	yaml, todos := Emit(p, EmitOptions{Name: cronName, Branch: *branch, Schedule: *schedule})
+
+	if *out == "" {
+		fmt.Print(yaml)
+	} else if err := os.WriteFile(*out, []byte(yaml), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "error: writing %q: %v\n", *out, err)
+		os.Exit(1)
+	}
+
+	// Surface CONVERTER-TODOs (also embedded as comments in the output) and
+	// exit non-zero so the skill / CI knows a human must review this pipeline.
+	if len(todos) > 0 {
+		fmt.Fprintf(os.Stderr, "\n%d CONVERTER-TODO(s) — review required:\n", len(todos))
+		for _, t := range todos {
+			fmt.Fprintf(os.Stderr, "  - %s\n", t)
+		}
+		os.Exit(3)
+	}
+}
+
+var releaseBranchRe = regexp.MustCompile(`^release-(v[0-9]+\.[0-9]+)$`)
+
+// streamFromBranch derives RELEASE_STREAM from a branch name, matching
+// global_prologue.sh: release-vX.Y → vX.Y, otherwise master.
+func streamFromBranch(branch string) string {
+	if m := releaseBranchRe.FindStringSubmatch(branch); m != nil {
+		return m[1]
+	}
+	return "master"
 }
