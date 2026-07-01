@@ -1,6 +1,6 @@
 # Semaphore → ArgoCI e2e pipeline migration
 
-Status: DRAFT v3 (scope = all active streams; dual-mode; Semaphore retirement)
+Status: DRAFT v3 (scope = all active streams; dual-mode; off-Semaphore by end-July 2026)
 Owner: Lance
 Reference pipeline: `.semaphore/end-to-end/pipelines/nftables.yml`
 Target convention: `tigera/banzai-service` `.argoci/` (CronWorkflow house style)
@@ -12,9 +12,9 @@ Target convention: `tigera/banzai-service` `.argoci/` (CronWorkflow house style)
 Migrate **all** OSS Calico *scheduled* e2e pipelines from Semaphore CI to
 ArgoCI (Argo Workflows on `argoci.dev.calicocloud.io`), across **all active
 branches** (`master`, `release-v3.32`, `release-v3.31`), **starting with
-`nftables.yml`** as the proving case. This is **time-critical: Semaphore is
-being retired soon**, so the deliverable is a **repeatable Go converter +
-skill** that converts every pipeline × branch the same way.
+`nftables.yml`** as the proving case. This is driven by an **internal goal to
+move OSS e2e off Semaphore by the end of July 2026**, so the deliverable is a
+**repeatable Go converter + skill** that converts every pipeline × branch the same way.
 
 All workflow definitions and supporting scripts live **in
 `projectcalico/calico` under a new `.argoci/` directory** — mirroring
@@ -288,13 +288,13 @@ arm (via `bz`); the runner pod stays amd64.
 - **Standing janitor CronWorkflow** (real safety net for killed pods whose
   epilogue never ran): reaps aged clusters by name/label/age. Authored once.
 
-### Cron registration (decided, PENDING ArgoCI-owner confirmation — URGENT)
+### Cron registration (decided, PENDING ArgoCI-owner confirmation — critical path)
 
 Intent: editing `.argoci/` triggers a resync. Plan: calico's `ciworkflow.yaml`
 (gated by `config.yaml` `changes.in: .argoci/cron/.*`) lints and **applies/
 updates** the `CronWorkflow`s (`argo cron create/update`). PENDING: confirm
 whether the platform already auto-applies crons from an onboarded repo. This
-is on the Semaphore-cutover critical path.
+is on the critical path for the end-July 2026 off-Semaphore target.
 
 ### Foundational artifacts (authored on `master` in `projectcalico/calico/.argoci/`, then cherry-picked to active release branches)
 
@@ -452,15 +452,17 @@ reusable.
 - **Degenerate inputs** — empty block → no task; single-value axis → one
   item; cyclic deps → converter errors.
 
-## Open questions (external / to confirm) — several now URGENT
+## Open questions (external / to confirm) — several are on the critical path
 
-1. **[URGENT] Cron registration.** Platform auto-applies crons from an
+These gate hitting the end-July 2026 off-Semaphore target and need ArgoCI-owner
+answers.
+
+1. **[critical-path] Cron registration.** Platform auto-applies crons from an
    onboarded repo, or must `ciworkflow.yaml` do `argo cron create/update`?
-   On the cutover critical path.
-2. **[URGENT] Onboarding `projectcalico/calico`.** Not yet onboarded; on the
+2. **[critical-path] Onboarding `projectcalico/calico`.** Not yet onboarded; on the
    critical path. Low secret-exposure risk for scheduled crons on `master`
    (trusted code). Where is the onboarding allowlist / who approves?
-3. **[URGENT] Per-branch onboarding + cron sync.** Per-branch checkout means
+3. **[critical-path] Per-branch onboarding + cron sync.** Per-branch checkout means
    each active branch (master, v3.32, v3.31) must be onboarded and have its
    crons synced. Confirm ArgoCI supports per-branch onboarding of one repo and
    how the sync selects branch. Working assumption: each branch's
@@ -518,7 +520,9 @@ reusable.
 7. **Cherry-pick the `.argoci/` scaffold to `release-v3.32` and
    `release-v3.31`**; generate nftables@{v3.32,v3.31}; parity-check; dry-run.
 8. Convert the remaining pipelines × active branches via the skill; parity-
-   check each; cut over per pipeline; retire Semaphore.
+   check each; cut over per pipeline; stop the OSS e2e runs on Semaphore
+   (target: end of July 2026). Semaphore the platform stays; we just move OSS
+   e2e off it.
 9. **[parallel, non-blocking]** Incrementally adopt `E2E_TEST_CONFIG` on
    master (author `e2e/config/*.yaml` per variant with the `e2e-tests` skill);
    converter picks it up automatically (see "Migration path" above).
