@@ -31,7 +31,6 @@ types or callbacks that flow along each edge; they are illustrative, not
 exhaustive.
 
 ```mermaid
-%%{init: {'flowchart': {'curve': 'step', 'rankSpacing': 90, 'nodeSpacing': 55}}}%%
 flowchart TB
   Syncer["Syncer<br/>(datastore watch)"]
 
@@ -59,7 +58,7 @@ flowchart TB
     RS["RuleScanner"]
     IPSetIdx["SelectorAndNamedPortIndex<br/>(IP set member index)"]
     SvcIdx["ServiceIndex<br/>(service-based IP sets)"]
-    PolRes["PolicyResolver / PolicySorter"]
+    PolRes["PolicyResolver"]
     BGP["ActiveBGPPeerCalculator"]
     HostPass["DataplanePassthru"]
     Config["ConfigBatcher"]
@@ -69,78 +68,77 @@ flowchart TB
     VXLAN["VXLANResolver"]
     Istio["IstioCalculator"]
 
-    Seq["EventSequencer<br/>buffer, coalesce,<br/>flush in dependency order"]
+    Seq["EventSequencer:&nbsp;buffer,&nbsp;coalesce,&nbsp;flush&nbsp;in&nbsp;dependency&nbsp;order"]
+    Stats["StatsCollector<br/>metrics / usage reporting"]
   end
-
-  Cache["LookupsCache<br/>ep / svc / pol / ns caches<br/>(flow-log reporting)"]
-  Stats["StatsCollector<br/>metrics / usage reporting"]
 
   %% dispatch fan-out
   Async --> Dispatcher
-  Dispatcher -->|WEP/HEP| LocalDisp
-  Dispatcher -->|WEP/HEP| RemoteDisp
+  Dispatcher ==>|WEP/HEP| LocalDisp
+  Dispatcher ==>|WEP/HEP| RemoteDisp
 
   %% live migration
-  LocalDisp -->|local WEP| LMC
   Dispatcher -->|LiveMigration| LMC
+  LocalDisp -->|local WEP| LMC
   LMC -->|WEP + LM role| ARC
   LMC -->|endpoint computed data| PolRes
 
   %% active rules + rule scanning
-  Dispatcher -->|"policies, profiles, tiers"| ARC
   LocalDisp -->|local WEP/HEP| ARC
+  Dispatcher -->|"policies, profiles, tiers"| ARC
   ARC -->|active policies/profiles| RS
-  ARC -->|policy-endpoint matches| PolRes
+  ARC ----->|policy-endpoint matches| PolRes
   RS -->|"OnPolicy/ProfileActive/Inactive"| Seq
   RS -->|OnIPSetAdded/Removed| Seq
   RS -->|selector / named-port sets| IPSetIdx
   RS -->|service-based sets| SvcIdx
 
   %% IP set membership
-  Dispatcher -->|"all endpoints, netsets, profiles"| IPSetIdx
-  Dispatcher -->|"endpoint slices, services"| SvcIdx
-  IPSetIdx -->|OnIPSetMemberAdded/Removed| Seq
-  SvcIdx -->|OnIPSetMemberAdded/Removed| Seq
+  Dispatcher ==>|"all endpoints, netsets, profiles"| IPSetIdx
+  Dispatcher ==>|"endpoint slices, services"| SvcIdx
+  IPSetIdx ==>|OnIPSetMemberAdded/Removed| Seq
+  SvcIdx ===>|OnIPSetMemberAdded/Removed| Seq
 
   %% policy resolution
-  Dispatcher -->|"all policies, tiers"| PolRes
+  Dispatcher ==>|"all policies, tiers"| PolRes
   LocalDisp -->|local endpoints| PolRes
   LocalDisp -->|local WEP/HEP| BGP
   Dispatcher -->|"BGP config, peers"| BGP
   BGP -->|endpoint BGP peer data| PolRes
-  PolRes -->|OnEndpointTierUpdate| Seq
 
   %% passthru + resolvers
   Dispatcher -->|"host metadata, IP pools, wireguard,<br/>BGP config, services"| HostPass
-  HostPass --> Seq
-  Dispatcher -->|"host IPs, config,<br/>pools, IPAM blocks"| L3
+  Dispatcher ==>|"host IPs, config,<br/>pools, IPAM blocks"| L3
   LocalDisp --> L3
-  L3 -->|routes| Seq
   Dispatcher -->|"node IPs, config"| VXLAN
-  VXLAN -->|"VTEPs, routes"| Seq
   Dispatcher -->|config KVs| Config
-  Config -->|OnConfigUpdate| Seq
   Dispatcher -->|profiles| Profile
-  Profile -->|"service accounts, namespaces"| Seq
   Dispatcher -->|IP pools| Encap
-  Encap -->|"OnEncapUpdate<br/>(restarts Felix if changed)"| Seq
+
+  %% Seq inputs
+  HostPass --> Seq
+  L3 ==>|routes| Seq
+  VXLAN ==>|"VTEPs, routes"| Seq
+  Config ---->|OnConfigUpdate| Seq
+  Profile --->|"service accounts, namespaces"| Seq
+  Encap ---->|"OnEncapUpdate<br/>(restarts Felix if changed)"| Seq
+  PolRes -->|OnEndpointTierUpdate| Seq
 
   %% istio (ambient mesh)
-  ARC -.->|computed selector match| Istio
-  Istio -.-> IPSetIdx
-  Istio -.-> PolRes
+  ARC -->|computed selector match| Istio
+  Istio ---> IPSetIdx
+  Istio --> PolRes
 
   %% side consumers (not part of dataplane output)
-  RemoteDisp -.->|remote endpoints| Cache
-  Dispatcher -.->|"endpoints, services, netsets"| Cache
-  ARC -.->|active policy/profile| Cache
-  PolRes -.->|local endpoint tiers| Cache
-  Dispatcher -.-> Stats
+  PolRes ---->|local endpoint tiers| Cache
+  RemoteDisp -->|remote endpoints| Cache["LookupsCache<br/>ep / svc / pol / ns caches<br/>(flow-log reporting)"]
+  Dispatcher -->|"endpoints, services, netsets"| Cache
+  ARC -->|active policy/profile| Cache
+  Dispatcher --> Stats
 
   %% output boundary
   Seq -->|"via channel:<br/>proto.*Update"| DPConn["DataplaneConnection<br/>marshal to protobuf"]
   DPConn -->|protobuf| DP["Dataplane driver<br/>(iptables / nftables / eBPF)"]
-
   classDef optional stroke-dasharray:5 4;
   classDef output fill:#e6f4ea,stroke:#137333;
   classDef entry fill:#e8f0fe,stroke:#1a73e8;
