@@ -360,9 +360,20 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 
 func watchOptionsToK8sListOptions(wo api.WatchOptions) metav1.ListOptions {
 	return metav1.ListOptions{
-		ResourceVersion:     wo.Revision,
-		Watch:               true,
-		AllowWatchBookmarks: wo.AllowWatchBookmarks,
+		ResourceVersion:      wo.Revision,
+		Watch:                true,
+		AllowWatchBookmarks:  wo.AllowWatchBookmarks,
+		SendInitialEvents:    wo.SendInitialEvents,
+		ResourceVersionMatch: watchResourceVersionMatchToK8s(wo.ResourceVersionMatch),
+	}
+}
+
+func watchResourceVersionMatchToK8s(match api.ResourceVersionMatch) metav1.ResourceVersionMatch {
+	switch match {
+	case api.ResourceVersionMatchNotOlderThan:
+		return metav1.ResourceVersionMatchNotOlderThan
+	default:
+		return metav1.ResourceVersionMatch(match)
 	}
 }
 

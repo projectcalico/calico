@@ -126,6 +126,42 @@ type Client interface {
 	Close() error
 }
 
+// ListAndWatchClient is optionally implemented by backend clients that provide
+// backend-specific list-and-watch behavior.
+type ListAndWatchClient interface {
+	// ListAndWatch provides a unified interface for listing and watching resources.
+	// It runs a continuous loop that performs list-then-watch cycles, generally
+	// retrying transient backend failures internally and signaling connection
+	// failures through EventHandler.OnError. The method handles backend-specific
+	// logic including:
+	//
+	// Common behavior (via GenericListWatcher):
+	//   - Retry throttling with configurable minimum intervals
+	//   - Revision tracking to resume watches from the last known position
+	//   - Error counting with automatic full resync after repeated failures
+	//   - Connection timeout detection for signaling errors to the handler
+	//
+	// Kubernetes backend:
+	//   - WatchList mode support with automatic fallback to traditional List+Watch
+	//   - CRD installation detection (returns in-sync state if API not installed)
+	//   - Bookmark handling for WatchList sync completion detection
+	//   - Handles resource version expiration and too-large-version errors
+	//
+	// etcd backend:
+	//   - Traditional List+Watch mode
+	//   - Simpler error handling without bookmark or CRD concerns
+	//
+	// The handler receives events through the EventHandler interface:
+	//   - OnResyncStarted(): Called before each resync cycle begins
+	//   - OnAdd/OnUpdate/OnDelete: For resource changes during list and watch
+	//   - OnSync(): Called when initial list completes and watcher is in sync
+	//   - OnError(err): Called when connection timeout or critical error occurs
+	//
+	// The method blocks until the context is cancelled or until the implementation
+	// cannot start or continue the list-and-watch loop.
+	ListAndWatch(ctx context.Context, list model.ListInterface, handler EventHandler, opts ...ListWatcherOption) error
+}
+
 // BackendAccessor is implemented by types that provide access to the underlying
 // backend Client. This avoids the need for ad-hoc local "accessor" interfaces
 // throughout the codebase.
@@ -143,9 +179,44 @@ type StatusClient interface {
 	UpdateStatus(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 }
 
+// ResourceVersionMatch controls how a watch request interprets its resource version.
+type ResourceVersionMatch string
+
+const (
+	// ResourceVersionMatchNotOlderThan requests data at least as new as the supplied resource version.
+	ResourceVersionMatchNotOlderThan ResourceVersionMatch = "NotOlderThan"
+)
+
 type WatchOptions struct {
-	Revision            string
-	AllowWatchBookmarks bool
+	Revision             string
+	AllowWatchBookmarks  bool
+	SendInitialEvents    *bool
+	ResourceVersionMatch ResourceVersionMatch
+}
+
+// EventHandler defines the interface for processing list-watch events.
+// Implementations should handle add, update, delete, sync, and error events.
+type EventHandler interface {
+	// OnResyncStarted is called when a resync operation is about to begin.
+	// This allows the handler to prepare for the resync by clearing caches
+	// or updating internal state (e.g., resync epoch tracking).
+	OnResyncStarted()
+
+	// OnAdd is called when a new resource is added.
+	OnAdd(kvp *model.KVPair)
+
+	// OnUpdate is called when an existing resource is modified.
+	OnUpdate(kvp *model.KVPair)
+
+	// OnDelete is called when a resource is deleted.
+	OnDelete(kvp *model.KVPair)
+
+	// OnSync is called when the initial list is complete and the watcher is in sync.
+	OnSync()
+
+	// OnError is called when a critical error occurs that the handler should be aware of.
+	// This includes connection timeouts and other errors that affect data consistency.
+	OnError(err error)
 }
 
 type Syncer interface {
