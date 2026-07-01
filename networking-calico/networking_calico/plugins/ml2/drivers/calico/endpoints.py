@@ -746,14 +746,23 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         """Decide whether a WEP slot at ``host`` should exist for ``db_port``."""
         if db_port is None:
             return False
-        # Source role: port is bound at this host.
-        if (
-            db_port.get("binding:vif_type") != "unbound"
-            and db_port["binding:host_id"] == host
+        migrating_to = db_port.get("binding:profile", {}).get("migrating_to")
+
+        # Source role: port is bound at this host.  Consider it bound if either
+        # ``vif_type != "unbound"``, or the port is undergoing live migration -- setting
+        # ``binding:profile.migrating_to`` triggers Neutron to rebind the port for the
+        # destination, and during that rebind ``vif_type`` flips transiently to
+        # "unbound" while ``binding:host_id`` stays at the source.  The VM is still
+        # running at the source throughout this window, so the source WEP must stay in
+        # place.  Without the ``or migrating_to`` clause we'd delete the source WEP
+        # mid-migration and drop traffic to the VM until Nova's actual cutover
+        # completes.
+        if db_port["binding:host_id"] == host and (
+            db_port.get("binding:vif_type") != "unbound" or migrating_to
         ):
             return True
         # Dest role: port is migrating to this host.
-        if db_port.get("binding:profile", {}).get("migrating_to") == host:
+        if migrating_to == host:
             return True
         return False
 
