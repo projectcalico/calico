@@ -204,9 +204,10 @@ calc-graph loop**, so the buffer stays small. Note the symmetric
 teardown: having heard A and B before "A matches B", on deletion you
 hear A and B removed *first*, then "A no longer matches B".
 
-A rendered overview of the node graph is kept by hand in
-[`felix/docs/calc.dot`](../docs/calc.dot) (rendered via the
-`felix/Makefile`); update it when you add or rewire a node.
+A rendered overview of the node graph is kept by hand as a Mermaid
+diagram in
+[`felix/docs/calc-graph-diagram.md`](../docs/calc-graph-diagram.md)
+(GitHub renders it inline); update it when you add or rewire a node.
 
 ### The principal nodes
 
@@ -434,7 +435,7 @@ or rewiring; a new emitted message type or a change to the
 refcounting structure; or a change to how the graph treats
 inconsistency, in-sync, or the upstream contract. Update the relevant
 section here, update the node graph in
-[`felix/docs/calc.dot`](../docs/calc.dot) when nodes change, and
-update
+[`felix/docs/calc-graph-diagram.md`](../docs/calc-graph-diagram.md) when
+nodes change, and update
 [`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)
 if the output contract changes.
