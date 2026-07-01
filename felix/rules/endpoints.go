@@ -25,7 +25,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -540,9 +539,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if chainType != chainTypeUntracked {
 		// Tracked chain: install conntrack rules, which implement our stateful connections.
 		// This allows return traffic associated with a previously-permitted request.
-		offload := r.nft && r.NFTablesFlowTableOffload == "Enabled" &&
-			(endpointPrefix == WorkloadFromEndpointPfx || endpointPrefix == WorkloadToEndpointPfx)
-		rules = r.appendConntrackRules(rules, allowAction, offload)
+		rules = r.appendConntrackRules(rules, allowAction)
 	}
 
 	// Add QoS controls for number of connections if applicable
@@ -783,7 +780,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	}
 }
 
-func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action, offload bool) []generictables.Rule {
+func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action) []generictables.Rule {
 	// Allow return packets for established connections.
 	if allowAction != (r.Allow()) {
 		// If we've been asked to return instead of accept the packet immediately,
@@ -792,19 +789,6 @@ func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, a
 			generictables.Rule{
 				Match:  r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
 				Action: r.SetMark(r.MarkAccept),
-			},
-		)
-	}
-	if offload {
-		// flow add has to sit here rather than in filter-FORWARD: established workload traffic
-		// is accepted in this per-workload chain and never returns to the forward append rules,
-		// so a flow-add there never runs. flow add is non-terminal, so the packet falls through
-		// to the accept below.
-		rules = append(rules,
-			generictables.Rule{
-				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
-				Action:  r.FlowOffload(dataplanedefs.FlowtableName),
-				Comment: []string{"Offload established Calico flows."},
 			},
 		)
 	}

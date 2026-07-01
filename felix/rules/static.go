@@ -609,6 +609,20 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
 	rules := []generictables.Rule{}
 
+	if r.nft && r.NFTablesFlowTableOffload == "Enabled" {
+		// Offload established flows here, ahead of the dispatch jumps below. Two things pin the
+		// spot: the per-workload dispatch chains terminally accept established traffic (so a rule
+		// after them never runs), and the kernel only allows flow offload in chains reached from
+		// the forward hook, which rules out those shared per-workload chains.
+		rules = append(rules,
+			generictables.Rule{
+				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
+				Action:  r.FlowOffload(dataplanedefs.FlowtableName),
+				Comment: []string{"Offload established Calico flows."},
+			},
+		)
+	}
+
 	// Rules for filter forward chains dispatches the packet to our dispatch chains if it is going
 	// to/from an interface that we're responsible for.  Note: the dispatch chains represent "allow"
 	// by returning to this chain for further processing; this is required to handle traffic that

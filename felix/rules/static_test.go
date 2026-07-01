@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 )
@@ -2027,6 +2028,75 @@ var _ = Describe("Static", func() {
 		})
 	})
 })
+
+var _ = Describe("Flowtable offload", func() {
+	config := Config{
+		IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:          0x8,
+		MarkPass:            0x10,
+		MarkScratch0:        0x20,
+		MarkScratch1:        0x40,
+		MarkDrop:            0x80,
+		MarkEndpoint:        0xff00,
+		MarkNonCaliEndpoint: 0x0100,
+		FilterDenyAction:    "DROP",
+		VXLANPort:           4789,
+		VXLANVNI:            4096,
+
+		WorkloadIfacePrefixes: []string{"cali"},
+
+		NFTablesFlowTableOffload: "Enabled",
+	}
+	renderer := NewRenderer(config, true).(*DefaultRuleRenderer)
+
+	offloadRule := generictables.Rule{
+		Match:   nftables.Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action:  nftables.FlowOffloadAction{FlowTable: dataplanedefs.FlowtableName},
+		Comment: []string{"Offload established Calico flows."},
+	}
+
+	It("should offload established flows at the top of the forward chain, ahead of the workload dispatch jump", func() {
+		chains := renderer.StaticFilterForwardChains()
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).To(ContainElement(offloadRule))
+
+		offloadIdx := indexOfRuleWithAction(chain.Rules, offloadRule.Action)
+		dispatchIdx := indexOfJumpTo(chain.Rules, ChainFromWorkloadDispatch)
+		Expect(dispatchIdx).To(BeNumerically(">=", 0), "expected a jump to the workload dispatch chain")
+		Expect(offloadIdx).To(BeNumerically("<", dispatchIdx), "offload rule must precede the workload dispatch jump")
+	})
+
+	It("should not offload flows when flow table offload is disabled", func() {
+		disabledConfig := config
+		disabledConfig.NFTablesFlowTableOffload = ""
+		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
+
+		chains := disabledRenderer.StaticFilterForwardChains()
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).NotTo(ContainElement(offloadRule))
+	})
+})
+
+func indexOfRuleWithAction(rules []generictables.Rule, action generictables.Action) int {
+	for i, r := range rules {
+		if r.Action == action {
+			return i
+		}
+	}
+	return -1
+}
+
+func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
+	for i, r := range rules {
+		if jump, ok := r.Action.(*nftables.JumpAction); ok && jump.Target == chainName {
+			return i
+		}
+	}
+	return -1
+}
 
 func findChain(chains []*generictables.Chain, name string) *generictables.Chain {
 	for _, chain := range chains {
