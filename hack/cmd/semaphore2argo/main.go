@@ -32,6 +32,7 @@ func main() {
 	branch := flag.String("branch", "master", "target branch the cron checks out (master|release-vX.Y); RELEASE_STREAM derives from it")
 	schedule := flag.String("schedule", "", "cron schedule expression, e.g. \"0 3 * * 2\" (required)")
 	name := flag.String("name", "", "cron metadata.name (default: e2e-<pipeline>-<stream>)")
+	namespace := flag.String("namespace", "argoci-oss-e2es", "target Argo namespace")
 	out := flag.String("out", "", "output path for the generated CronWorkflow (default: stdout)")
 	flag.Parse()
 
@@ -53,7 +54,7 @@ func main() {
 		cronName = fmt.Sprintf("e2e-%s-%s", base, streamFromBranch(*branch))
 	}
 
-	yaml, todos := convert.Emit(p, convert.EmitOptions{Name: cronName, Branch: *branch, Schedule: *schedule})
+	yaml, todos := convert.Emit(p, convert.EmitOptions{Name: cronName, Namespace: *namespace, Branch: *branch, Schedule: *schedule})
 
 	if *out == "" {
 		fmt.Print(yaml)

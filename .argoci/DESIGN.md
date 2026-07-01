@@ -67,8 +67,13 @@ and runs *that branch's* `.argoci/` tooling + e2e tree; `RELEASE_STREAM`
 derives from the branch. Consequence: the scaffold is authored on `master` and
 cherry-picked to the release branches. The shared `e2e-test` /
 `e2e-sweep-destroy` `WorkflowTemplate`s carry no branch-specific logic (they run
-the checked-out branch's scripts by path), so they are applied to `argoci`
-once and every branch's crons `templateRef` them.
+the checked-out branch's scripts by path), so they are applied to the
+namespace once and every branch's crons `templateRef` them.
+
+**Namespace (decided): `argoci-oss-e2es`.** OSS Calico e2e runs in its own
+namespace, not the shared `argoci` where the private CC/tesla workloads live —
+Calico is a public repo, so its workflows and ServiceAccount must not sit
+alongside the private CC secret set. Only the OSS secrets live there.
 
 **§Selection — dual-mode.** `E2E_TEST_CONFIG` (structured `e2e/config/*.yaml`:
 `extends`/`include`/`exclude.labels`/`exclude.namePatterns`) is the new,
@@ -107,12 +112,15 @@ passes through, `onExit` runs. Along the way:
 
 ## Ops dependencies (standard ArgoCI onboarding — action, not review)
 
-- Onboard `projectcalico/calico` to ArgoCI across active branches.
+- Create the dedicated **`argoci-oss-e2es`** namespace and ensure the Argo
+  controller watches it.
+- Onboard `projectcalico/calico` to ArgoCI across active branches, targeting
+  that namespace.
 - Confirm cron-registration: does the platform auto-apply crons from an
   onboarded repo's `.argoci/cron/`, or must our `ciworkflow.yaml` do it? (This
   decides whether `ciworkflow.yaml` + the janitor cron are needed.)
 - Ensure `banzai-secrets` + `marvin-github-ssh-private-key` and Argo executor
-  RBAC (`workflowtaskresults`) exist for the workflow SA in `argoci`.
+  RBAC (`workflowtaskresults`) exist for the workflow SA in `argoci-oss-e2es`.
 
 ## Work breakdown
 

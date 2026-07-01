@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
   name: e2e-nftables-master
-  namespace: argoci
+  namespace: argoci-oss-e2es
   labels:
     repo: calico
     branch: master

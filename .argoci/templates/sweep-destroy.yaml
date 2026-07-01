@@ -7,7 +7,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: e2e-sweep-destroy
-  namespace: argoci
+  namespace: argoci-oss-e2es
 spec:
   templates:
     - name: sweep-destroy

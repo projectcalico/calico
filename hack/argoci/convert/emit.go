@@ -32,11 +32,16 @@ import (
 // client). Pinned here; revisit when the image is versioned for calico.
 const baseImage = "gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.104"
 
+// defaultNamespace is the dedicated namespace for OSS Calico e2e workflows,
+// isolated from the shared/private `argoci` namespace (see .argoci/DESIGN.md).
+const defaultNamespace = "argoci-oss-e2es"
+
 // EmitOptions parameterise a single generated CronWorkflow.
 type EmitOptions struct {
-	Name     string // cron metadata.name
-	Branch   string // git branch the cron checks out (RELEASE_STREAM derives from it)
-	Schedule string // cron schedule expression
+	Name      string // cron metadata.name
+	Namespace string // target namespace (defaults to defaultNamespace)
+	Branch    string // git branch the cron checks out (RELEASE_STREAM derives from it)
+	Schedule  string // cron schedule expression
 }
 
 // kv is an ordered key/value pair (used for withItems, where axis order is
@@ -61,6 +66,9 @@ type taskView struct {
 // list of CONVERTER-TODO reasons across all tasks (empty when the conversion
 // is fully mechanical).
 func Emit(p *Pipeline, opts EmitOptions) (string, []string) {
+	if opts.Namespace == "" {
+		opts.Namespace = defaultNamespace
+	}
 	tasks := buildTasks(p)
 
 	var todos []string

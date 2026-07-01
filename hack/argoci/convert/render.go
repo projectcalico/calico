@@ -30,7 +30,7 @@ func render(opts EmitOptions, tasks []taskView) string {
 	fmt.Fprintf(&b, "kind: CronWorkflow\n")
 	fmt.Fprintf(&b, "metadata:\n")
 	fmt.Fprintf(&b, "  name: %s\n", opts.Name)
-	fmt.Fprintf(&b, "  namespace: argoci\n")
+	fmt.Fprintf(&b, "  namespace: %s\n", opts.Namespace)
 	fmt.Fprintf(&b, "  labels:\n")
 	fmt.Fprintf(&b, "    repo: calico\n")
 	fmt.Fprintf(&b, "    branch: %s\n", opts.Branch)

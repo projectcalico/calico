@@ -3,15 +3,16 @@
 # the checked-out branch's .argoci/scripts, so a single cluster-applied copy
 # serves master and all release branches. See .argoci/DESIGN.md.
 #
-# The container image, envFrom secrets and nodeSelector/tolerations come from
-# the referencing workflow's templateDefaults; this template only defines the
-# per-job contract: the test-vars blob, resource requests, and the
+# Because templateDefaults does NOT cross templateRef boundaries, this template
+# pins its own image, command and envFrom secrets. It defines the per-job
+# contract: the test-vars blob, resource requests, and the
 # prologue -> body_standard -> epilogue lifecycle with a dind sidecar.
+# (nodeSelector/tolerations still come from the referencing workflow spec.)
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
   name: e2e-test
-  namespace: argoci
+  namespace: argoci-oss-e2es
 spec:
   templates:
     - name: e2e-test
