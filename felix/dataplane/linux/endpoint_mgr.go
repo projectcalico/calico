@@ -503,6 +503,13 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 		} else {
 			m.activeUpIfaces.Discard(ifaceName)
 		}
+		// A workload interface appearing or disappearing changes the flowtable device
+		// list even when no endpoint update accompanies it (e.g. a veth removed on pod
+		// teardown, before the WorkloadEndpoint-removed event arrives). Force the
+		// dispatch/flowtable recompute so the dead device drops out promptly.
+		if m.ifceHandler != nil && m.wlIfacesRegexp.MatchString(ifaceName) {
+			m.needToCheckDispatchChains = true
+		}
 		// If this interface is linked to any already-existing endpoints, mark the endpoint
 		// status for recalculation.  If the matching endpoint changes when we do
 		// resolveHostEndpoints() then that will mark old and new matching endpoints for

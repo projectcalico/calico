@@ -4163,6 +4163,27 @@ var _ = Describe("EndpointManager flowtable", func() {
 
 		Expect(ftHandler.lastIfaces).To(ConsistOf("cali11111-aa"))
 	})
+
+	It("should recompute the flowtable when a workload interface goes down, without an endpoint change", func() {
+		// One up workload endpoint.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
+		})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+		Expect(ftHandler.lastIfaces).To(ConsistOf("cali11111-aa"))
+		callsBefore := ftHandler.callCount
+
+		// Interface goes away. No WorkloadEndpoint update yet.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateNotPresent})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+
+		Expect(ftHandler.callCount).To(BeNumerically(">", callsBefore))
+		Expect(ftHandler.lastIfaces).To(BeEmpty())
+	})
 })
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4, false))
