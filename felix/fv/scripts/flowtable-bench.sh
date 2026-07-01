@@ -96,6 +96,17 @@ run_iperf3 /tmp/bench-on.json
 
 OFF_BPS="$(jq '.end.sum_received.bits_per_second' /tmp/bench-off.json)"
 ON_BPS="$(jq '.end.sum_received.bits_per_second' /tmp/bench-on.json)"
+
+if [[ ! "${OFF_BPS}" =~ ^[0-9.eE+-]+$ ]] || [[ "${OFF_BPS}" == "null" ]]; then
+  echo "error: could not read a numeric bits_per_second from /tmp/bench-off.json (got '${OFF_BPS}') - check the offload-OFF iperf3 output" >&2
+  exit 1
+fi
+
+if [[ ! "${ON_BPS}" =~ ^[0-9.eE+-]+$ ]] || [[ "${ON_BPS}" == "null" ]]; then
+  echo "error: could not read a numeric bits_per_second from /tmp/bench-on.json (got '${ON_BPS}') - check the offload-ON iperf3 output" >&2
+  exit 1
+fi
+
 DELTA_BPS="$(jq -n --argjson off "${OFF_BPS}" --argjson on "${ON_BPS}" '$on - $off')"
 
 echo "=== results ==="
