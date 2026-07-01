@@ -45,7 +45,9 @@ export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
 # RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the
 # workflow (from the cron's `branch` parameter).
-export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${BRANCH:-master}"; [[ "${_b}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
+# Branch comes from the ArgoCI handler (CI_GIT_CLONED_BRANCH); fall back to
+# BRANCH then master. release-vX.Y -> vX.Y, else master.
+export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${CI_GIT_CLONED_BRANCH:-${BRANCH:-master}}"; [[ "${_b}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
 
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
