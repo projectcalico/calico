@@ -41,8 +41,9 @@ All workflow definitions and supporting scripts live **in
 
 - **`bz`** — the "banzai" CLI that provisions/installs/destroys test clusters
   (`bz provision|install|destroy|tests`). **Pre-installed in the ArgoCI base
-  image**; not installed in the prologue. `PROVISIONER=local-kind|gcp-kubeadm|
-  aws-eks|aws-talos|…` selects the backend; provider specifics live in `bz`.
+  image**; not installed in the prologue. `PROVISIONER` selects the backend
+  (`local-kind`, `gcp-kubeadm`, `aws-eks`, `aws-talos`, …); provider specifics
+  live in `bz`.
 - **`checkout`** — an ArgoCI-platform shell function (from the base image,
   not a repo file). `source checkout` clones the target repo into `/src`,
   setting `CI_HOME=/src`, `CI_GIT_DIR=<repo dir>`. Every template begins with
@@ -61,8 +62,9 @@ All workflow definitions and supporting scripts live **in
   the Go converter and hand-tunes irregular cases. Uses the repo's
   `e2e-tests` skill for config-file authoring.
 - **Secrets** (`envFrom.secretRef`, must exist in `argoci` ns):
-  `banzai-secrets` (GITHUB_ACCESS_TOKEN, cloud creds), `marvin-github-ssh-
-  private-key`. Materialized to files in the prologue via `createLocalSecret`.
+  `banzai-secrets` (GITHUB_ACCESS_TOKEN, cloud creds) and
+  `marvin-github-ssh-private-key`, materialized to files in the prologue via
+  `createLocalSecret`.
 - **Test selection is dual-mode** (see below): `E2E_TEST_CONFIG` structured
   config files (*currently* `master` new-style + KubeVirt blocks; release
   branches can adopt later) *or* `K8S_E2E_FLAGS` focus/skip regex (*currently*
@@ -91,8 +93,11 @@ All workflow definitions and supporting scripts live **in
 
 ### Central insight
 
-The **lifecycle is constant** across pipelines and streams. Only the
-**block/job/matrix/env tree** and the **selection mechanism** differ. So:
+The **lifecycle is constant**: the structure of every e2e job is identical
+across all release streams and every pipeline file (prologue → provision →
+install → configure → migrate → test → epilogue). Only the
+**block/job/matrix/env tree** (which jobs run, with which env) and the
+**test-selection mechanism** differ. So:
 
 1. **Foundational, authored once by hand**: shared lifecycle in `.argoci/`.
 2. **Per-(pipeline × branch), automated** by the Go converter: read
@@ -100,6 +105,10 @@ The **lifecycle is constant** across pipelines and streams. Only the
    `.argoci/cron/e2e-<name>-<stream>.yaml`.
 
 ### Runtime/branch strategy (DECIDED: per-branch checkout)
+
+(These are the **scheduled** e2e suites — CronWorkflows on a timer, the ArgoCI
+equivalent of today's scheduled Semaphore builds — not PR-triggered CI. "Per
+branch" means we run the suite against each active *release stream*.)
 
 **Each cron checks out its own target branch** (`branch: master` |
 `release-v3.32` | `release-v3.31`), runs *that branch's* `.argoci/` tooling
@@ -344,31 +353,13 @@ Selection = E2E_TEST_CONFIG(path) | K8S_E2E_FLAGS(string)   # from merged env
 
 ### Generated CronWorkflow skeleton
 
-```yaml
-apiVersion: argoproj.io/v1alpha1
-kind: CronWorkflow
-metadata: {name: e2e-nftables-v3.31, namespace: argoci, labels: {repo: calico, branch: release-v3.31}}
-spec:
-  schedules: ["0 3 * * 2"]; timezone: UTC; concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3; successfulJobsHistoryLimit: 3
-  workflowMetadata: {generateName: e2e-nftables-v3.31-, labels: {repo: calico, type: Nightly, branch: release-v3.31, dashboard: calico-oss}}
-  workflowSpec:
-    entrypoint: pipeline; onExit: exit-handler
-    # branch = the target stream's branch; checkout + RELEASE_STREAM derive from it.
-    arguments: {parameters: [{name: reponame, value: calico}, {name: repoURL, value: git@github.com:projectcalico/calico.git}, {name: branch, value: release-v3.31}]}
-    nodeSelector: {role: argoci}; tolerations: [{key: argoci, operator: Exists}]
-    templateDefaults:
-      script: {image: <base>, command: [bash], workingDir: /src}
-      podSpecPatch: |
-        containers: [{name: main, envFrom: [{secretRef: {name: banzai-secrets}}, {secretRef: {name: marvin-github-ssh-private-key}}]}]
-    templates:
-      - name: pipeline
-        dag: {tasks: [ <one task per job; templateRef e2e-test; withItems if matrix; depends if block deps> ]}
-      - name: exit-handler
-        steps: [[ {name: sweep-destroy, continueOn: {failed: true}, template: <sweep>} ]]
-    metrics: {prometheus: [ workflow_details gauge ]}
-# e2e-test lives in .argoci/templates/e2e-test.yaml, referenced via templateRef.
-```
+The concrete generated shape is the committed
+`.argoci/cron/e2e-nftables-master.yaml` — read that rather than a skeleton
+here. In outline: `kind: CronWorkflow` in namespace `argoci`; a `pipeline` DAG
+with one task per job (each `templateRef`s `e2e-test`, with `withItems` for a
+matrix); an `exit-handler` that `templateRef`s `e2e-sweep-destroy`;
+workflow-level `nodeSelector`/`tolerations`; and a Prometheus metric. Image
+and secrets live in the shared templates, not here (see below).
 
 ## Test strategy: job-parity harness (the "identical jobs" proof)
 
@@ -378,8 +369,9 @@ the Semaphore pipelines. We prove it by enumerating both sides into a common
 canonical form and diffing — the converter's CI acceptance gate *and* the
 pre-cutover audit before any Semaphore pipeline is switched off.
 
-**Prior art, already in-repo:** `.semaphore/end-to-end/report/
-generate_e2e_report.py` (mirrored from `tigera/banzai-calico/report`) already
+**Prior art, already in-repo:**
+`.semaphore/end-to-end/report/generate_e2e_report.py` (mirrored from
+`tigera/banzai-calico/report`) already
 enumerates Semaphore jobs. It merges `default_env_vars` (the
 `global_prologue.sh` defaults) ⊕ `global_job_config.env_vars` ⊕ block
 `env_vars` ⊕ job `env_vars` ⊕ `cartesian(matrix)` and writes one CSV row per
