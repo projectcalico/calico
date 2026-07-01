@@ -31,6 +31,7 @@ types or callbacks that flow along each edge; they are illustrative, not
 exhaustive.
 
 ```mermaid
+%%{init: {'flowchart': {'curve': 'step', 'rankSpacing': 90, 'nodeSpacing': 55}}}%%
 flowchart TB
   Syncer["Syncer<br/>(datastore watch)"]
 
