@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Command semaphore2argo converts a Calico Semaphore end-to-end pipeline
+// Package convert converts a Calico Semaphore end-to-end pipeline
 // (.semaphore/end-to-end/pipelines/*.yml) into an Argo CronWorkflow for
-// ArgoCI. See .argoci/DESIGN.md for the full design.
+// ArgoCI. See .argoci/DESIGN.md for the full design. It is used by the
+// semaphore2argo command and by the job-parity tooling.
 //
 // This file defines the subset of the Semaphore pipeline schema that the
 // converter reads. Only the fields that affect which jobs run and with what
 // environment are modelled; presentation-only fields (commands, epilogue,
 // execution_time_limit, promotions, after_pipeline) are ignored.
-package main
+package convert
 
 import (
 	"fmt"

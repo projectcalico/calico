@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package convert
 
 // This file turns a parsed Pipeline into an Argo CronWorkflow (see
 // .argoci/DESIGN.md). Each Semaphore job becomes one DAG task that

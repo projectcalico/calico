@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Command semaphore2argo converts a Calico Semaphore end-to-end pipeline into
+// an Argo CronWorkflow for ArgoCI. See .argoci/DESIGN.md.
 package main
 
 import (
@@ -21,6 +23,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/projectcalico/calico/hack/argoci/convert"
 )
 
 func main() {
@@ -37,7 +41,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	p, err := LoadPipeline(*in)
+	p, err := convert.LoadPipeline(*in)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -49,7 +53,7 @@ func main() {
 		cronName = fmt.Sprintf("e2e-%s-%s", base, streamFromBranch(*branch))
 	}
 
-	yaml, todos := Emit(p, EmitOptions{Name: cronName, Branch: *branch, Schedule: *schedule})
+	yaml, todos := convert.Emit(p, convert.EmitOptions{Name: cronName, Branch: *branch, Schedule: *schedule})
 
 	if *out == "" {
 		fmt.Print(yaml)

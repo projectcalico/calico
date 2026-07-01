@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package convert
 
 // This file expands a parsed Pipeline into the flat list of test jobs that
 // Semaphore would actually run. Each ResolvedJob carries its fully-merged
