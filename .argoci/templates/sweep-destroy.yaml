@@ -1,0 +1,29 @@
+# e2e-sweep-destroy - onExit safety-net teardown, referenced by every
+# generated e2e CronWorkflow's exit-handler. The per-job epilogue already runs
+# `bz destroy` on normal completion; this best-effort sweep covers pods that
+# were cancelled or hit activeDeadlineSeconds before their epilogue ran. The
+# durable reaper is the standing janitor CronWorkflow (see .argoci/DESIGN.md).
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: e2e-sweep-destroy
+  namespace: argoci
+spec:
+  templates:
+    - name: sweep-destroy
+      script:
+        image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.104
+        imagePullPolicy: Always
+        command: [bash]
+        workingDir: /src
+        envFrom:
+          - secretRef:
+              name: banzai-secrets
+              optional: true
+          - secretRef:
+              name: marvin-github-ssh-private-key
+              optional: true
+        source: |
+          source checkout
+          echo "[INFO] onExit sweep: best-effort teardown of leftover clusters"
+          bz destroy 2>/dev/null || true
