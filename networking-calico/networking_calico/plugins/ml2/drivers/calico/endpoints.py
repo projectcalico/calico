@@ -755,7 +755,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # The VM is still running at the source throughout this window, so the
         # source WEP must stay in place.  Without the ``or migrating_to`` clause
         # we'd delete the source WEP mid-migration and drop traffic to the VM
-        # until Nova's actual cutover completes (see the CORE-13xxx post-mortem).
+        # until Nova's actual cutover completes.
         if db_port["binding:host_id"] == host and (
             db_port.get("binding:vif_type") != "unbound" or migrating_to
         ):
