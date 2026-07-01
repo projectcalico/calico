@@ -1161,6 +1161,23 @@ network stack is used.
 | `FelixConfiguration` schema | Port range: either an integer in [0,65535] or a string, representing a range, in format <code>n:m</code> |
 | Default value (YAML) | `0` |
 
+### `NFTablesFlowTableDataIfacePattern` (config file) / `nftablesFlowTableDataIfacePattern` (YAML)
+
+A regular expression that controls which host
+interfaces are added to the nftables flowtable, so that traffic forwarded between those
+interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+is Enabled.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_NFTablesFlowTableDataIfacePattern` |
+| Encoding (env var/config file) | Regular expression |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `nftablesFlowTableDataIfacePattern` (YAML) `NFTablesFlowTableDataIfacePattern` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `NFTablesFlowTableOffload` (config file) / `nftablesFlowTableOffload` (YAML)
 
 Controls whether nftables flowtable offload is enabled for

@@ -390,6 +390,7 @@ func StartDataplaneDriver(
 			BPFCTLBLogFilter:                   configParams.BPFCTLBLogFilter,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			NFTablesFlowTableDataIfacePattern:  configParams.NFTablesFlowTableDataIfacePattern,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,

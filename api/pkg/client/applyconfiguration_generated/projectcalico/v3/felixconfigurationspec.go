@@ -365,6 +365,12 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
 	// nftables mode is active. [Default: Disabled]
 	NFTablesFlowTableOffload *projectcalicov3.NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
+	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
+	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+	// is Enabled. [Default: ""]
+	NFTablesFlowTableDataIfacePattern *string `json:"nftablesFlowTableDataIfacePattern,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`
 	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -1541,6 +1547,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesMode(value projec
 // If called multiple times, the NFTablesFlowTableOffload field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableOffload(value projectcalicov3.NFTablesFlowTableOffload) *FelixConfigurationSpecApplyConfiguration {
 	b.NFTablesFlowTableOffload = &value
+	return b
+}
+
+// WithNFTablesFlowTableDataIfacePattern sets the NFTablesFlowTableDataIfacePattern field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NFTablesFlowTableDataIfacePattern field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableDataIfacePattern(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NFTablesFlowTableDataIfacePattern = &value
 	return b
 }
 

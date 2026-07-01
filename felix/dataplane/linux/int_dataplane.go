@@ -226,6 +226,7 @@ type Config struct {
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool

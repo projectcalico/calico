@@ -14,6 +14,7 @@ API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcal
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6ElevatedRoutePriority
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6NormalRoutePriority
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,IPv6Support
+API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,NFTablesFlowTableDataIfacePattern
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,NFTablesFlowTableOffload
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,NFTablesMode
 API rule violation: names_match,github.com/projectcalico/api/pkg/apis/projectcalico/v3,FelixConfigurationSpec,WireguardPersistentKeepAlive
