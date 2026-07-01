@@ -45,6 +45,10 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		// Enable flowtable offload at Felix startup rather than via a mid-test config
 		// update, which would trigger a reprogram that races the connectivity checks.
 		opts.ExtraEnvVars["FELIX_NFTABLESFLOWTABLEOFFLOAD"] = "Enabled"
+		// Match a dedicated dummy interface (created in the external-device spec) so the
+		// external-offload path is exercised without touching the felix container's real
+		// connectivity. No dummy interface exists in the other specs, so this is a no-op there.
+		opts.ExtraEnvVars["FELIX_NFTABLESFLOWTABLEDATAIFACEPATTERN"] = "^flowtabledummy$"
 		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 
 		// Allow all traffic in the absence of any policy; without this the etcd datastore
@@ -105,5 +109,35 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		// Remaining workload still reachable from the host, proving the table is healthy.
 		cc.ExpectSome(tc.Felixes[0], w[0].Port(8055))
 		cc.CheckConnectivity()
+	})
+
+	It("offloads an established flow (conntrack shows OFFLOAD)", func() {
+		// Open a persistent connection so the flow stays established while we inspect conntrack.
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		// Software flow offload flips the conntrack entry to the OFFLOAD state once the flow
+		// is established and packets have flowed both ways.
+		Eventually(func() string {
+			out, _ := tc.Felixes[0].ExecOutput("conntrack", "-L")
+			return out
+		}, "30s", "1s").Should(ContainSubstring("[OFFLOAD]"))
+	})
+
+	It("adds a matching host interface to the flowtable device set", func() {
+		// Create a dummy interface whose name matches FELIX_NFTABLESFLOWTABLEDATAIFACEPATTERN.
+		// The ifacemonitor should see it come up, the flowtable manager should match it, and it
+		// should land in the flowtable's device list alongside the workload veths.
+		_, err := tc.Felixes[0].ExecOutput("ip", "link", "add", "flowtabledummy", "type", "dummy")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = tc.Felixes[0].ExecOutput("ip", "link", "set", "flowtabledummy", "up")
+		Expect(err).NotTo(HaveOccurred())
+
+		Eventually(func() string {
+			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
+			return out
+		}, "20s", "1s").Should(ContainSubstring("flowtabledummy"))
 	})
 })
