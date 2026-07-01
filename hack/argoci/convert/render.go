@@ -120,6 +120,11 @@ func renderTask(b *strings.Builder, t taskView) {
 	fmt.Fprintf(b, "                  - name: test-vars\n")
 	fmt.Fprintf(b, "                    value: |\n")
 	for _, line := range t.VarLines {
-		fmt.Fprintf(b, "                      %s\n", line)
+		// A single env value may itself contain newlines (e.g. an embedded
+		// kind config or JSON blob). Indent EVERY physical line, otherwise a
+		// continuation at column 0 terminates the YAML literal block.
+		for _, phys := range strings.Split(line, "\n") {
+			fmt.Fprintf(b, "                      %s\n", phys)
+		}
 	}
 }

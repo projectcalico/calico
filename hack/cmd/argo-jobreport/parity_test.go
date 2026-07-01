@@ -73,3 +73,47 @@ func TestParityNftables(t *testing.T) {
 		}
 	}
 }
+
+// TestMultilineEnvValueRoundTrip guards the benchmarking/iptables case: an env
+// value containing newlines (JSON blob, embedded kind config) must emit as
+// valid YAML and round-trip through the enumerator unchanged.
+func TestMultilineEnvValueRoundTrip(t *testing.T) {
+	p := &convert.Pipeline{
+		Name: "synthetic",
+		GlobalJobConfig: convert.GlobalJobConfig{
+			EnvVars: []convert.EnvVar{{Name: "K8S_E2E_FLAGS", Value: "--ginkgo.focus=x"}},
+		},
+		Blocks: []convert.Block{{
+			Name: "blk",
+			Task: convert.Task{Jobs: []convert.Job{{
+				Name: "job",
+				EnvVars: []convert.EnvVar{
+					{Name: "MULTI", Value: "line1\nline2\nline3"},
+					{Name: "JSONISH", Value: `[{"a":1},{"b":2}]` + "\n"},
+					{Name: "PROVISIONER", Value: "gcp-kubeadm"},
+				},
+			}}},
+		}},
+	}
+	out, todos := convert.Emit(p, convert.EmitOptions{Name: "e2e-synthetic", Branch: "master", Schedule: "0 0 * * 0"})
+	if len(todos) != 0 {
+		t.Fatalf("unexpected TODOs: %v", todos)
+	}
+	tmp := filepath.Join(t.TempDir(), "cron.yaml")
+	if err := os.WriteFile(tmp, []byte(out), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := EnumerateCron(tmp) // fails here if the emitted YAML is invalid
+	if err != nil {
+		t.Fatalf("EnumerateCron (invalid YAML from multi-line value?): %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("jobs = %d, want 1", len(jobs))
+	}
+	if got := jobs[0]["MULTI"]; got != "line1\nline2\nline3" {
+		t.Errorf("MULTI round-trip = %q", got)
+	}
+	if got := jobs[0]["JSONISH"]; got != `[{"a":1},{"b":2}]`+"\n" {
+		t.Errorf("JSONISH round-trip = %q", got)
+	}
+}
