@@ -308,4 +308,5 @@ spec:
             - key: status
               value: "{{workflow.status}}"
           gauge:
+            realtime: false
             value: "{{workflow.creationTimestamp.s}}"

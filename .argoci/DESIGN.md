@@ -471,6 +471,20 @@ reusable.
 4. **Resource values** — validate the profile table against argoci nodes.
 5. **Secrets** — confirm `banzai-secrets` / `marvin-github-ssh-private-key`
    (and cloud creds) are present/readable in `argoci` ns for calico.
+6. **Executor RBAC** — the ServiceAccount the workflows run as (in `argoci`)
+   needs Argo executor permissions (`create`/`patch` on
+   `workflowtaskresults.argoproj.io`); confirmed necessary via a local
+   kind+Argo run. Presumably already configured on ArgoCI — confirm.
+
+> **Validated locally:** the generated `e2e-nftables-master.yaml` lints clean
+> and runs end-to-end on a local kind + Argo Workflows cluster (Argo v4.0.6)
+> with stub `e2e-test`/`e2e-sweep-destroy` templates: all 9 tasks fan out to
+> 10 pods via `withItems`, `{{item.X}}` matrix substitution resolves, the
+> `test-vars` blob sources cleanly with `K8S_E2E_FLAGS` regex/backslashes
+> intact, `E2E_TEST_CONFIG` passes through on the KubeVirt job, and the
+> `onExit` sweep runs. This exercised the Argo mechanics; the `bz`/e2e body
+> still needs a real ArgoCI dry-run. It also caught that Argo v4 requires
+> `metrics.gauge.realtime`.
 
 ## Work breakdown (post-design)
 

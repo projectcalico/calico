@@ -95,7 +95,7 @@ func render(opts EmitOptions, secrets []string, tasks []taskView) string {
 	fmt.Fprintf(&b, "            - key: repo\n              value: calico\n")
 	fmt.Fprintf(&b, "            - key: type\n              value: cron\n")
 	fmt.Fprintf(&b, "            - key: status\n              value: \"{{workflow.status}}\"\n")
-	fmt.Fprintf(&b, "          gauge:\n            value: \"{{workflow.creationTimestamp.s}}\"\n")
+	fmt.Fprintf(&b, "          gauge:\n            realtime: false\n            value: \"{{workflow.creationTimestamp.s}}\"\n")
 
 	return b.String()
 }
