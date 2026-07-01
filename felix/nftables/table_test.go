@@ -1219,6 +1219,16 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
 	})
 
+	It("should attach external devices to the flowtable alongside overlay and workload devices", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		table.SetExternalDevices([]string{"eth0"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(3)))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, eth0, vxlan.calico }"))
+	})
+
 	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
 	// FORWARD rule would reference a flowtable that the resync failed to recreate.
 	It("should re-assert the flowtable on a resync with no devices", func() {

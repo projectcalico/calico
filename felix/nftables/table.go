@@ -54,6 +54,10 @@ type InterfaceHandler interface {
 	// SetWorkloadInterfaces updates the set of active workload interfaces. These are combined
 	// with any overlay device names to form the flowtable device list.
 	SetWorkloadInterfaces(ifces []string)
+
+	// SetExternalDevices updates the set of host/external interfaces to include in the
+	// flowtable, so traffic forwarded between them and local workloads is offloaded.
+	SetExternalDevices(ifces []string)
 }
 
 var (
@@ -244,6 +248,10 @@ type NftablesTable struct {
 	// workloadInterfaces contains the names of active workload interfaces, updated by the
 	// endpoint manager via SetWorkloadInterfaces.
 	workloadInterfaces []string
+
+	// externalDevices contains host/external interface names (matched against the configured
+	// data-interface pattern) to include in the flowtable device list.
+	externalDevices []string
 
 	// flowtableDevices is the combined, sorted list of all devices for the flowtable.
 	// Updated when either overlayDevices or workloadInterfaces changes.
@@ -530,6 +538,13 @@ func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
 	t.enableFlowtable()
 }
 
+// SetExternalDevices updates the set of host/external interfaces for the flowtable. Called by
+// the flowtable manager as matching interfaces come up and go down.
+func (t *NftablesTable) SetExternalDevices(ifces []string) {
+	t.externalDevices = ifces
+	t.enableFlowtable()
+}
+
 // GaugeNumFlowtableDevices exposes the felix_nft_flowtable_devices gauge for this table, for
 // use by tests outside this package.
 func (t *NftablesTable) GaugeNumFlowtableDevices() prometheus.Gauge {
@@ -550,9 +565,10 @@ func (t *NftablesTable) enableFlowtable() {
 // recalcFlowtableDevices combines overlay and workload interfaces into a sorted device list.
 // If the list changed, it marks the flowtable as dirty for the next Apply().
 func (t *NftablesTable) recalcFlowtableDevices() {
-	combined := make([]string, 0, len(t.overlayDevices)+len(t.workloadInterfaces))
+	combined := make([]string, 0, len(t.overlayDevices)+len(t.workloadInterfaces)+len(t.externalDevices))
 	combined = append(combined, t.overlayDevices...)
 	combined = append(combined, t.workloadInterfaces...)
+	combined = append(combined, t.externalDevices...)
 	sort.Strings(combined)
 	if !slices.Equal(t.flowtableDevices, combined) {
 		t.flowtableDevices = combined
