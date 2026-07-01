@@ -2209,18 +2209,18 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertEtcdDeletes(set())
 
     def test_pre_live_migration_transient_vif_unbound(self):
-        """Source WEP must survive the transient ``vif_type=unbound`` at migration start.
+        """Source WEP must survive the transient ``vif_type=unbound`` at migration
+        start.
 
         In a real deployment, setting ``binding:profile.migrating_to`` on a port
-        triggers Neutron to rebind the port for the destination host.  During
-        that rebind ``binding:vif_type`` transiently flips from ``tap`` to
-        ``unbound`` while ``binding:host_id`` stays at the source.  If the
-        driver's ``_wep_desired_present`` treats ``vif_type == "unbound"`` as
-        "port not bound at this host" without considering the concurrent
-        ``migrating_to`` state, ``update_port_postcommit`` would delete the
-        source-host WEP even though the VM is still running there -- Felix at
-        the source would then tear down its programming and traffic would drop
-        until Nova's actual cutover completed.
+        triggers Neutron to rebind the port for the destination host.  During that
+        rebind ``binding:vif_type`` transiently flips from ``tap`` to ``unbound`` while
+        ``binding:host_id`` stays at the source.  If the driver's
+        ``_wep_desired_present`` treats ``vif_type == "unbound"`` as "port not bound at
+        this host" without considering the concurrent ``migrating_to`` state,
+        ``update_port_postcommit`` would delete the source-host WEP even though the VM
+        is still running there -- Felix at the source would then tear down its
+        programming and traffic would drop until Nova's actual cutover completed.
 
         This case did not fire in ``test_pre_live_migration`` above because
         ``_pre_migrate`` only sets ``migrating_to`` without touching
@@ -2229,14 +2229,17 @@ class TestLiveMigration(TestPluginEtcdBase):
         self._do_initial_resync()
 
         context = self._make_port_context()
+
         # Pre-migration state: fully bound at the source.
         context.original = copy.deepcopy(self.port)
+
         # Post-migration-start state as Neutron actually produces it: host_id
         # stays at the source, vif_type flips to "unbound" during the rebind,
         # migrating_to points at the destination.
         context._port = copy.deepcopy(self.port)
         context._port["binding:profile"] = {"migrating_to": self.DEST_HOST}
         context._port["binding:vif_type"] = "unbound"
+
         # The DB re-read inside sync_wep must return the same shape.
         self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.DEST_HOST}
         self.osdb_ports[0]["binding:vif_type"] = "unbound"
