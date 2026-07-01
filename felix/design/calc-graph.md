@@ -51,7 +51,7 @@ fully-expanded IP sets, routes, VTEPs). Its output is a function of
 current datastore state, computed incrementally so it can keep up
 with churn.
 
-It was built for **100k endpoints, ~2k policies, ~1000
+It was built for **100k+ endpoints, ~2k+ policies, ~1000+
 endpoint-updates/second**, with the dataplane applying the result
 sub-second. That drives three properties:
 
@@ -81,24 +81,16 @@ single place that handles:
 
 - Recomputing output wholesale from cached state (then dedup'ing
   no-op changes downstream) is the simplest approach and is fine
-  wherever the recomputed set is small or low-churn — re-sorting one
-  endpoint's policy list, or recomputing Felix config from the
-  handful of config resources. Use it where it's the right
-  trade-off; reach for fine-grained incremental updates only when
-  full recomputation is too expensive.
-- The anti-pattern is per-update work that scales with the
-  *cluster-wide* resource count on a *high-churn* path (e.g. touching
-  all 100k endpoints when one changes). That needs justification or a
-  redesign.
+  wherever the recomputed set is small or low-churn.
+- At start of day, all data must be processed, check for O(n x m)
+  operations that could blow up in large clusters. Common solution
+  is to defer work until the in-sync message.
 
 ## The node contract
 
-The graph is a DAG of nodes, but the edges are **direct function
-calls, not goroutines or channels**: an update propagates
-synchronously through `OnUpdate`/callback calls and the call returns
-once propagation is complete. There is no concurrency between nodes
-and therefore no locking. (New folks sometimes read "calc *graph*"
-and picture goroutines and channels — it isn't that.)
+The graph is a DAG of nodes; edges are direct function
+calls: an update propagates synchronously through `OnUpdate`/callback
+calls (no locks/goroutines needed).
 
 Every node must:
 
@@ -107,39 +99,29 @@ handle **referential inconsistency** — a WEP naming a missing
 profile, a rule selecting an unknown endpoint — by producing some
 well-defined output. This includes the consistent→inconsistent
 transition: if resource B disappears while A still references it, the
-node must reconcile to the "B is missing" output, not cling to B's
-last-known value.
+node must reconcile to the "B is missing" output.
 
 **Depend only on current state, not on history** (no hysteresis).
-Don't buffer "the last good output" to paper over a transient
-inconsistency. History-dependent output makes testing explode (the
-result depends on the path, not just the destination) and defers the
-visible impact of a bug — a node hoarding stale state can look
-correct for weeks, then emit the wrong thing only after a restart
-drops the hoard, long after the logs that would explain it are gone.
-(Buffering purely for *work-avoidance* is fine — it changes when and
-how efficiently output is produced, not what it is; see no-op
-suppression.)
+Don't buffer "the last good output". History-dependent output makes
+testing explode and it can defer the impact of a bug until the
+next Felix restart (by which point diagnostics are lost).
 
-**Suppress no-op churn where it matters** — where a downstream would
-otherwise do significant redundant work. The canonical case (since
-fixed): WEP↔policy match changes used to re-sort each endpoint's
+**Suppress no-op churn only where it matters** — where a downstream would
+otherwise do significant redundant work. Now-fixed example:
+WEP↔policy match changes used to re-sort each endpoint's
 policy list; at start of day with 100 local WEPs × 200 policies that
-sorted 20,000 times instead of 100. Suppression on a leaf that does
-no downstream work isn't worth the complexity.
+sorted 20,000 times instead of 100.
 
 **Balance index add/remove exactly.** Where a node keeps reference
 counts or membership indexes (the label indexes, below), every add
 must be matched by exactly one remove keyed *identically*. A keying
-mismatch leaks entries — a real, observed bug class at scale, not a
-theoretical one.
+mismatch leaks entries.
 
 ### Review notes
 
 - Reject added buffering of "good" output to survive an
-  inconsistency — the most common way these changes go wrong. Allow a
-  buffer only if it's purely for work-avoidance and the output
-  *content* is still a function of current state.
+  inconsistency. Allow a buffer only if it's purely for work-avoidance
+  and the output *content* is still a function of current state.
 - A new index or refcount needs its add/remove keying checked for
   symmetry, with FV coverage of the teardown direction, not just
   build-up.
@@ -152,7 +134,7 @@ The syncer delivers an eventually-consistent sequence of KV events.
 Reason about each event on its own, against your prior knowledge of
 *that one resource* — not about the sequence as a whole.
 
-- **`nil` value** = the resource doesn't exist (deleted, or failed
+- **`nil` value** = treat as "doesn't exist" (deleted, or failed
   validation and treated as absent). Validation is upstream in
   `calc/validation_filter.go` (`ValidationFilter` nils out invalid
   values rather than altering them), so a non-nil value has already
@@ -183,13 +165,11 @@ these; "assume values only move forward" does not.
 
 Each event also carries `Update.UpdateType` (`api.UpdateType`:
 `UpdateTypeKVNew`/`KVUpdated`/`KVDeleted`/`KVUnknown` in
-`libcalico-go/lib/backend/api`) — a side channel describing what kind
-of upstream event produced this delivery, recomputed when events
-coalesce. Its original purpose was stats without retaining objects
-(increment on create, decrement on delete; see
-`calc/stats_collector.go`). Treat it as advisory: whether the
-resource exists is the value being nil or non-nil, not the update
-type.
+`libcalico-go/lib/backend/api`). Original purpose was stats
+without retaining objects (see `calc/stats_collector.go`).
+Treat it as advisory, and note that
+`UpdateTypeKVNew/Updated` can carry `nil` due to failed
+validation.
 
 ### Review notes
 
@@ -205,17 +185,12 @@ The graph is assembled in `calc/calc_graph.go`
 (`NewCalculationGraph`). Updates enter via the `AllUpdDispatcher`
 (`dispatcher.Dispatcher`), which fans each KV out by resource type.
 A second dispatcher, the `localEndpointDispatcher`, carries the
-locally-filtered endpoint stream: an `endpointHostnameFilter` (in the
-`calc` package) registered first on it forwards only endpoints on
-this node — that's where the cluster→local reduction happens (the
-dispatcher itself is hostname-agnostic).
+locally-filtered endpoint stream.
 
-Most wiring order is irrelevant because nodes are independent. The
-pattern that matters: **a node consuming "A matches B" events usually
-wants to hear about A and B individually first**, or it has to buffer
-the match until they arrive. The one load-bearing case is handler
-registration order *on the same dispatcher* (`dispatcher.Register`
-appends, and `OnUpdate` iterates in registration order):
+Registration order can matter: **a node consuming "A matches B"
+events usually wants to hear about A and B individually first**,
+or it has to buffer the match until they arrive. Dispatchers
+iterate in registration order.  Example:
 
 - `LiveMigrationCalculator` (`live_migration_calculator.go`)
   registers its `OnUpdate` on the `localEndpointDispatcher` **before**
@@ -262,21 +237,30 @@ Descriptions track each node's godoc — see the source for detail.
 
 ## Label indexes and refcounting
 
-[`felix/labelindex/`](../labelindex/) is the graph's most intricate
-code: `InheritIndex` (label inheritance from profiles/namespaces down
-to endpoints) and `SelectorAndNamedPortIndex` (which selectors match
-which endpoints, expanded to IP-set membership). Reference-counting
-bugs live here. Two things make it hard:
+The label indexes in `felix/labelindex/` match endpoint (and network 
+set) labels against selectors and produce various outputs.
 
-- **Balanced, identically-keyed add/remove** (see the node contract):
-  one remove per add, same key, or it leaks.
-- **Corner cases that are rare per-endpoint but common at scale** —
-  the classic being two WEPs transiently sharing one IP. At 100k
-  endpoints with churn these happen constantly, so they must be
-  correct, not ignored. The adversarial tests target exactly these:
-  shared-IP/overlapping membership in
-  `labelindex/named_port_index_test.go` and the FV base states;
-  `labelindex/dedup_overlap_repro_test.go` covers the related
+Complexities:
+
+- Labels can be inherited from an endpoint's profiles (internal resource
+  representing Kubernetes namespaces/service accounts).
+- Endpoints and profile labels are mutable. A profile change may
+  affect many endpoints.
+- The `SelectorAndNamedPortIndex` calculates generalised "IP" set
+  memberships, including IP-and-port sets and CIDR sets.  Multiple
+  endpoints may contribute the same IP set member, but the output
+  set should be deduplicated (member is added when any endpoint
+  contributes it, removed only when no endpoints do).
+- `NetworkSets` are treated as endpoints in this context.
+- The indexes are one of Felix's largest RAM costs, so there is
+  heavy pressure to share a common `SelectorAndNamedPortIndex`
+  rather than create one per use case.
+- As big RAM and CPU consumers, they have been optimised heavily.
+- Corner cases that are rare per-endpoint but common at scale (e.g.
+  two WEPs transiently sharing an IP) must be correct, not ignored,
+  and are covered by adversarial tests: shared-IP / overlapping
+  membership in `labelindex/named_port_index_test.go` and the FV base
+  states, and `labelindex/dedup_overlap_repro_test.go` for the
   CIDR-containment dedup case.
 
 These packages are part of the calc graph for the testing rule
@@ -288,6 +272,11 @@ below, despite living in their own directory.
 - Keep the shared-IP/overlapping-membership cases working, and extend
   the adversarial index tests rather than only adding happy-path
   coverage.
+- Reject creation of additional all-endpoint indexes.  Prefer refactoring
+  to share existing indexes.
+- Consider occupancy: avoid adding fields to per-endpoint structs,
+  every field costs many MB at scale. Custom datastructures can
+  be justified with benchmarks.
 
 ## The EventSequencer (output stage)
 
@@ -343,22 +332,19 @@ what makes sense for the resource type:
   rules: a missing profile resolves to a fail-safe deny-all rule set
   (`DummyDropRules` in `calc/active_rules_calculator.go`). Some
   resource types have no meaningful stand-in.
-- **(b) Buffer the dependent until the dependency arrives.** Usually
-  wrong. Never buffer endpoints or policies: they're
-  security-critical, most dependency chains start at endpoints, and
-  delaying them risks leaving endpoints with stale
-  policy/configuration — a security hole. Reserve buffering for
-  non-security-critical leaves.
-- **(c) Pass the inconsistency through to the dataplane** as a signal
+- **(b) Pass the inconsistency through to the dataplane** as a signal
   and let it fail closed on its own terms. The right choice when the
   dataplane must act anyway — e.g. a WEP gains a security-critical
   field, so a missing dependency means *that endpoint* must fail
-  closed and neither buffering nor a dummy fits.
+  closed.
+- **(c) Buffer the dependent until the dependency arrives.**
+  Requires sending a remove of any already-sent copy of the dependent
+  in order to maintain the calc-graph's "no hysteresis" invariant.
+  Never buffer endpoints/policies/profiles; these are security-critical
+  and part of the core feature set.
 
 The invariant across all three: a missing dependency must never
-silently leave an endpoint or policy *open* — it must fail closed,
-via whichever of (a)/(c) suits. The mechanism is a judgement call;
-failing closed is not.
+silently leave an endpoint or policy *open* — it must fail closed.
 
 ### Review notes
 
@@ -366,20 +352,18 @@ failing closed is not.
   why) and carry FV coverage — wrong-phase bugs only bite under
   specific orderings, which FV expansion is built to catch.
 - Handling a missing referent by buffering an endpoint or policy is
-  almost always wrong; prefer (a) or (c).
+  almost always wrong; prefer (a) or (b).
 - Removing or weakening a coalescing path must argue it doesn't break
   the memory/size bound back-pressure relies on.
 
 ## In-sync semantics
 
-The graph forwards the datastore's `InSync` signal downstream. Its
-significance is a dataplane concern: the dataplane defers all kernel
-mutation — especially cleanup of stale state from a previous Felix —
-until the first post-`InSync` apply (see
+The graph forwards the datastore's `InSync` signal downstream. The
+dataplane defers all kernel mutation — especially cleanup of stale
+state from a previous Felix — until the first post-`InSync` apply (see
 [`dataplane.md` → Restart, resync and mark-and-sweep](./dataplane.md#restart-resync-and-mark-and-sweep)).
-The calc-graph rule: **don't fabricate or withhold `InSync`.**
-Signalling in-sync early would let the dataplane sweep state it just
-hasn't been told about yet.
+**Don't fabricate or withhold `InSync`.** Signalling in-sync early
+would let the dataplane sweep state it just hasn't been told about yet.
 
 ## Testing: the calc-graph FV framework
 
@@ -389,8 +373,9 @@ helper packages — must come with tests in the calc-graph FV suite
 These are pure unit tests; "FV" reflects that they drive the *whole
 assembled graph* end to end (datastore KVs in, dataplane messages
 out) rather than one node in isolation. Prefer them to per-node unit
-tests: the harness expands each test for free, and an
-input-state→output-state suite survives refactoring.
+tests: the harness expands each test for free (giving coverage of
+calc graph's invariants), and input-state→output-state methodology
+survives refactoring.
 
 From a sequence of datastore states, `testExpanders()` generates five
 companion runs (unless `DISABLE_TEST_EXPANSION=true`):
