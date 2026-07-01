@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -674,19 +674,6 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
 	var rules []generictables.Rule
-
-	if r.nft && r.NFTablesFlowTableOffload == "Enabled" {
-		// Offload established connections that were accepted by Calico policy to the
-		// flowtable for hardware/software fast-path forwarding. Placed before the final
-		// accept so only Calico-managed traffic is offloaded.
-		rules = append(rules,
-			generictables.Rule{
-				Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept).ConntrackState("ESTABLISHED"),
-				Action:  r.FlowOffload(dataplanedefs.FlowtableName),
-				Comment: []string{"Offload established Calico flows."},
-			},
-		)
-	}
 
 	rules = append(rules,
 		generictables.Rule{

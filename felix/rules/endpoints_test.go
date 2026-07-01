@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package rules_test
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -24,9 +25,11 @@ import (
 	"github.com/onsi/gomega/format"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
@@ -41,6 +44,67 @@ var (
 	_ = Describe("Endpoints", endpointRulesTests(false, "DROP"))
 	_ = Describe("Endpoints with flowlogs", endpointRulesTests(true, "DROP"))
 )
+
+var _ = Describe("Flowtable offload", func() {
+	config := Config{
+		IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:          0x8,
+		MarkPass:            0x10,
+		MarkScratch0:        0x20,
+		MarkScratch1:        0x40,
+		MarkDrop:            0x80,
+		MarkEndpoint:        0xff00,
+		MarkNonCaliEndpoint: 0x0100,
+		FilterDenyAction:    "DROP",
+		VXLANPort:           4789,
+		VXLANVNI:            4096,
+
+		NFTablesFlowTableOffload: "Enabled",
+	}
+	renderer := NewRenderer(config, true)
+	epMarkMapper := NewEndpointMarkMapper(config.MarkEndpoint, config.MarkNonCaliEndpoint)
+
+	offloadRule := generictables.Rule{
+		Match:   nftables.Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action:  nftables.FlowOffloadAction{FlowTable: dataplanedefs.FlowtableName},
+		Comment: []string{"Offload established Calico flows."},
+	}
+
+	It("should offload established flows in the to-workload chain, immediately before the established-accept", func() {
+		chains := renderer.WorkloadEndpointToIptablesChains("cali1234", epMarkMapper, true, nil, nil, nil)
+		chain := findChain(chains, "cali-tw-cali1234")
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).To(ContainElement(offloadRule))
+		idx := indexOfRule(chain.Rules, offloadRule)
+		Expect(chain.Rules[idx+1].Action).To(Equal(nftables.AcceptAction{}))
+	})
+
+	It("should offload established flows in the from-workload chain, immediately before the established-accept", func() {
+		chains := renderer.WorkloadEndpointToIptablesChains("cali1234", epMarkMapper, true, nil, nil, nil)
+		chain := findChain(chains, "cali-fw-cali1234")
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).To(ContainElement(offloadRule))
+		idx := indexOfRule(chain.Rules, offloadRule)
+		Expect(chain.Rules[idx+1].Action).To(Equal(nftables.AcceptAction{}))
+	})
+
+	It("should not offload flows in host endpoint chains", func() {
+		chains := renderer.HostEndpointToFilterChains("eth0", nil, nil, epMarkMapper, nil)
+		for _, chain := range chains {
+			Expect(chain.Rules).NotTo(ContainElement(offloadRule))
+		}
+	})
+})
+
+func indexOfRule(rules []generictables.Rule, rule generictables.Rule) int {
+	for i, r := range rules {
+		if reflect.DeepEqual(r, rule) {
+			return i
+		}
+	}
+	return -1
+}
 
 var (
 	// Expected ID suffixes for policies used in tests.
