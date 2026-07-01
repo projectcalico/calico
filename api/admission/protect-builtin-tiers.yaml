@@ -1,4 +1,3 @@
----
 # ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
 # (default, kube-admin, kube-baseline). These tiers are required for correct
 # operation and should never be deleted.
