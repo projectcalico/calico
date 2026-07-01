@@ -476,15 +476,27 @@ reusable.
    `workflowtaskresults.argoproj.io`); confirmed necessary via a local
    kind+Argo run. Presumably already configured on ArgoCI — confirm.
 
-> **Validated locally:** the generated `e2e-nftables-master.yaml` lints clean
-> and runs end-to-end on a local kind + Argo Workflows cluster (Argo v4.0.6)
-> with stub `e2e-test`/`e2e-sweep-destroy` templates: all 9 tasks fan out to
-> 10 pods via `withItems`, `{{item.X}}` matrix substitution resolves, the
-> `test-vars` blob sources cleanly with `K8S_E2E_FLAGS` regex/backslashes
-> intact, `E2E_TEST_CONFIG` passes through on the KubeVirt job, and the
-> `onExit` sweep runs. This exercised the Argo mechanics; the `bz`/e2e body
-> still needs a real ArgoCI dry-run. It also caught that Argo v4 requires
-> `metrics.gauge.realtime`.
+> **Validated on a local kind + Argo Workflows cluster pinned to ArgoCI's
+> version (v3.7.4).** The generated `e2e-nftables-master.yaml` lints clean and
+> runs end-to-end using the **real** `e2e-test`/`e2e-sweep-destroy` templates
+> and the **real** `global_prologue.sh`/`global_epilogue.sh`, with
+> `body_standard.sh` and `bz`/`checkout`/`createLocalSecret`/`gsutil` stubbed
+> (cloud can't run on kind): all 9 tasks fan out to 10 pods via `withItems`,
+> `{{item.X}}` matrix substitution resolves, the `test-vars` blob sources with
+> `K8S_E2E_FLAGS` regex/backslashes intact, `E2E_TEST_CONFIG` passes through on
+> KubeVirt, the prologue derives `RELEASE_STREAM`/`CLUSTER_NAME`, the epilogue
+> tears down, and the `onExit` sweep runs. The `bz`/e2e body itself still needs
+> a real ArgoCI dry-run.
+>
+> **Findings folded back into this design from the local runs:**
+> - Argo v4 requires `metrics.gauge.realtime` (added `realtime: false`; valid
+>   on v3.7.4 too — forward-compatible).
+> - **`templateDefaults` does NOT cross `templateRef` boundaries** — a shared
+>   `WorkflowTemplate`'s `script` needs its own `image`/`command`/`envFrom`. So
+>   `e2e-test`/`e2e-sweep-destroy` are self-contained (pin the base image +
+>   secrets), and the generated cron carries only workflow-level
+>   `nodeSelector`/`tolerations` + the DAG (no `templateDefaults` container
+>   config). See Open question 6 (executor RBAC) for the SA requirement.
 
 ## Work breakdown (post-design)
 

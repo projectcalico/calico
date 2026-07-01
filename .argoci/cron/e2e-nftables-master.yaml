@@ -37,20 +37,6 @@ spec:
     tolerations:
       - key: argoci
         operator: Exists
-    templateDefaults:
-      script:
-        image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.104
-        imagePullPolicy: Always
-        command: [bash]
-        workingDir: /src
-      podSpecPatch: |
-        containers:
-          - name: main
-            envFrom:
-              - secretRef:
-                  name: marvin-github-ssh-private-key
-              - secretRef:
-                  name: banzai-secrets
     templates:
       - name: pipeline
         dag:

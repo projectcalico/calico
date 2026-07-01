@@ -23,7 +23,7 @@ import (
 // yaml.Marshal) so we get exact control over the test-vars literal block and
 // CONVERTER-TODO comments. Output validity is asserted by round-trip
 // unmarshalling in the tests.
-func render(opts EmitOptions, secrets []string, tasks []taskView) string {
+func render(opts EmitOptions, tasks []taskView) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "apiVersion: argoproj.io/v1alpha1\n")
@@ -59,19 +59,10 @@ func render(opts EmitOptions, secrets []string, tasks []taskView) string {
 	fmt.Fprintf(&b, "        - name: branch\n          value: %s\n", opts.Branch)
 	fmt.Fprintf(&b, "    nodeSelector:\n      role: argoci\n")
 	fmt.Fprintf(&b, "    tolerations:\n      - key: argoci\n        operator: Exists\n")
-	fmt.Fprintf(&b, "    templateDefaults:\n")
-	fmt.Fprintf(&b, "      script:\n")
-	fmt.Fprintf(&b, "        image: %s\n", baseImage)
-	fmt.Fprintf(&b, "        imagePullPolicy: Always\n")
-	fmt.Fprintf(&b, "        command: [bash]\n")
-	fmt.Fprintf(&b, "        workingDir: /src\n")
-	fmt.Fprintf(&b, "      podSpecPatch: |\n")
-	fmt.Fprintf(&b, "        containers:\n")
-	fmt.Fprintf(&b, "          - name: main\n")
-	fmt.Fprintf(&b, "            envFrom:\n")
-	for _, s := range secrets {
-		fmt.Fprintf(&b, "              - secretRef:\n                  name: %s\n", s)
-	}
+	// The container image, command and envFrom secrets live in the shared
+	// e2e-test / e2e-sweep-destroy WorkflowTemplates (templateDefaults does NOT
+	// cross templateRef boundaries), so the cron carries none of that — only
+	// the workflow-level scheduling above and the DAG below.
 	fmt.Fprintf(&b, "    templates:\n")
 	fmt.Fprintf(&b, "      - name: pipeline\n")
 	fmt.Fprintf(&b, "        dag:\n")

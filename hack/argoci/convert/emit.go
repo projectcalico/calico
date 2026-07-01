@@ -70,12 +70,7 @@ func Emit(p *Pipeline, opts EmitOptions) (string, []string) {
 		}
 	}
 
-	secrets := make([]string, 0, len(p.GlobalJobConfig.Secrets))
-	for _, s := range p.GlobalJobConfig.Secrets {
-		secrets = append(secrets, s.Name)
-	}
-
-	return render(opts, secrets, tasks), todos
+	return render(opts, tasks), todos
 }
 
 // buildTasks walks the pipeline and produces the DAG tasks, including unique
