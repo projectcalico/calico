@@ -33,6 +33,14 @@ files in [`.github/instructions/`](../../.github/instructions/) do
 this matching automatically; humans should consult
 `felix/DESIGN.md`'s table.
 
+The BPF dataplane is one mode of Felix's single Linux dataplane
+codebase, not a separate program: it reuses the shared manager/driver
+framework, the `InternalDataplane` main loop, the `OnUpdate`/`apply()`
+cycle, and the restart/resync mark-and-sweep doctrine. Those are
+documented in [`dataplane.md`](./dataplane.md); this BPF family covers
+only what is BPF-specific — the packet path, the BPF maps, and the
+mode's own managers. A BPF dataplane PR therefore usually needs both.
+
 ## Conventions used in BPF design docs
 
 - `*tables` means "the legacy netfilter dataplane, iptables or
