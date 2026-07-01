@@ -244,8 +244,11 @@ Semaphore `matrix` (cartesian across axes) → compute the product, emit one
 - **No inference.** Every value comes from the env-merge layers. The
   converter never invents `DATAPLANE`, `PROVISIONER`, selection, etc.
 - **Selection mode** = presence of `E2E_TEST_CONFIG` (Mode 1) vs
-  `K8S_E2E_FLAGS` (Mode 2) in the merged env. If both appear, `E2E_TEST_CONFIG`
-  wins and a `# CONVERTER-TODO: both set` marker is emitted.
+  `K8S_E2E_FLAGS` (Mode 2) in the merged env. Both may legitimately be present
+  (e.g. the KubeVirt blocks inherit the global `K8S_E2E_FLAGS` and add a
+  block-level `E2E_TEST_CONFIG`); the converter passes both through verbatim
+  and the runtime picks `E2E_TEST_CONFIG` — this is normal, not a TODO. Only
+  when **neither** is set does the converter emit a `# CONVERTER-TODO` marker.
 - **Resource profile** keys off the merged `PROVISIONER`: `local-kind` →
   large, else small.
 - **Unknown agent type** → small profile + `# CONVERTER-TODO` + non-zero exit.
