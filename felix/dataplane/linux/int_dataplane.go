@@ -1155,7 +1155,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
 		if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" {
-			ifceHandlerV4 = nftablesV4RootTable.(nftables.InterfaceHandler)
+			ifceHandlerV4 = nftablesV4RootTable
 
 			// Tell the nftables table about overlay/tunnel devices so they can be
 			// included in the flowtable for connection offload.
@@ -1424,7 +1424,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 
 			if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" {
-				ifceHandlerV6 = nftablesV6RootTable.(nftables.InterfaceHandler)
+				ifceHandlerV6 = nftablesV6RootTable
 
 				var overlayDevicesV6 []string
 				if config.RulesConfig.VXLANEnabledV6 {
