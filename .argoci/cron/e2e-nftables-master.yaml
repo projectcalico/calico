@@ -1,0 +1,312 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: e2e-nftables-master
+  namespace: argoci
+  labels:
+    repo: calico
+    branch: master
+spec:
+  schedules:
+    - "0 3 * * 2"
+  timezone: UTC
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  workflowMetadata:
+    generateName: e2e-nftables-master-
+    labels:
+      repo: calico
+      type: Nightly
+      branch: master
+      dashboard: calico-oss
+  workflowSpec:
+    entrypoint: pipeline
+    onExit: exit-handler
+    # RELEASE_STREAM is derived from `branch` by global_prologue.sh; not passed here.
+    arguments:
+      parameters:
+        - name: reponame
+          value: calico
+        - name: repoURL
+          value: git@github.com:projectcalico/calico.git
+        - name: branch
+          value: master
+    nodeSelector:
+      role: argoci
+    tolerations:
+      - key: argoci
+        operator: Exists
+    templateDefaults:
+      script:
+        image: gcr.io/tigera-cc-dev/ci-base/ubuntu-cloud-providers:v0.104
+        imagePullPolicy: Always
+        command: [bash]
+        workingDir: /src
+      podSpecPatch: |
+        containers:
+          - name: main
+            envFrom:
+              - secretRef:
+                  name: marvin-github-ssh-private-key
+              - secretRef:
+                  name: banzai-secrets
+    templates:
+      - name: pipeline
+        dag:
+          tasks:
+            - name: nftables-mode-arm64-wg
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              withItems:
+                - { K8S_VERSION: "stable", CLUSTER_IMAGE: "ubuntu-2204-lts-arm64" }
+                - { K8S_VERSION: "stable", CLUSTER_IMAGE: "rocky-linux-9-arm64" }
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export ENABLE_WIREGUARD='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export GOOGLE_MACHINE_TYPE='t2a-standard-2'
+                      export GOOGLE_REGION='us-central1'
+                      export GOOGLE_ZONE='us-central1-a'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='gcp-kubeadm'
+                      export STERN_CHECK='DISABLED'
+                      export USE_PRIVATE_REGISTRY='true'
+                      export K8S_VERSION='{{item.K8S_VERSION}}'
+                      export CLUSTER_IMAGE='{{item.CLUSTER_IMAGE}}'
+            - name: nftables-talos-nftables-talos
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              withItems:
+                - { K8S_VERSION: "stable" }
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export ENCAPSULATION_TYPE='VXLAN'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='aws-talos'
+                      export USE_PRIVATE_REGISTRY='true'
+                      export K8S_VERSION='{{item.K8S_VERSION}}'
+            - name: nftables-talos-native-v3-crds-gcp
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export CLUSTER_ROUTING_MODE='Felix'
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='gcp-kubeadm'
+                      export USE_API_SERVER='false'
+                      export USE_PRIVATE_REGISTRY='true'
+            - name: nftables-talos-native-v3-crds-aws
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable-3'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='aws-kubeadm'
+                      export USE_API_SERVER='false'
+                      export USE_PRIVATE_REGISTRY='true'
+            - name: nftables-mode-eks-eks-w-aws-cni
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              withItems:
+                - { CNI_PLUGIN: "AmazonVPC" }
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable-1'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='aws-eks'
+                      export USE_PRIVATE_REGISTRY='true'
+                      export CNI_PLUGIN='{{item.CNI_PLUGIN}}'
+            - name: nftables-mode-eks-eks-w-calico-cni
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              withItems:
+                - { CNI_PLUGIN: "Calico" }
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='helmerator'
+                      export IPAM_TEST_POOL_SUBNET='10.0.0.0/29'
+                      export IPV4_POD_CIDR='172.16.0.0/16'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)'
+                      export K8S_VERSION='stable-1'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='aws-eks'
+                      export USE_PRIVATE_REGISTRY='true'
+                      export CNI_PLUGIN='{{item.CNI_PLUGIN}}'
+            - name: nftables-mode-kind-nftables-mode-vxlan-dual-stack
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "3500m"
+                  - name: mem-requests
+                    value: "12Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export ENABLE_DUAL_STACK='true'
+                      export ENCAPSULATION_TYPE='VXLAN'
+                      export ENCAPSULATION_TYPE_V6='VXLAN'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export IPV4_POD_CIDR='192.168.0.0/16'
+                      export IPV6_POD_CIDR='fd00:10:244::/64'
+                      export IP_FAMILY='dual'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable-3'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='local-kind'
+                      export USE_PRIVATE_REGISTRY='true'
+            - name: nftables-mode-kind-nftables-mode-ipv6-only
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "3500m"
+                  - name: mem-requests
+                    value: "12Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export ENABLE_AUTOHEP='true'
+                      export ENABLE_DUAL_STACK='true'
+                      export ENCAPSULATION_TYPE_V6='None'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export IPV6_POD_CIDR='fd00:10:244::/64'
+                      export IP_FAMILY='ipv6'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable-3'
+                      export KUBE_PROXY_MODE='nftables'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='local-kind'
+                      export USE_PRIVATE_REGISTRY='true'
+            - name: kubevirt-e2e-tests
+              templateRef:
+                name: e2e-test
+                template: e2e-test
+              arguments:
+                parameters:
+                  - name: cpu-requests
+                    value: "1000m"
+                  - name: mem-requests
+                    value: "2Gi"
+                  - name: test-vars
+                    value: |
+                      export DATAPLANE='CalicoNftables'
+                      export E2E_TEST_CONFIG='e2e/config/gcp-kubevirt.yaml'
+                      export ENABLE_AUTOHEP='true'
+                      export FUNCTIONAL_AREA='nftables.yml'
+                      export INSTALLER='operator'
+                      export K8S_E2E_FLAGS='--ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)'
+                      export K8S_VERSION='stable-1.35'
+                      export KUBE_PROXY_MODE='nftables'
+                      export NUM_KUBEVIRT_VMS='2'
+                      export PRIVATE_REGISTRY='quay.io/'
+                      export PROVISIONER='gcp-kubeadm'
+                      export USE_PRIVATE_REGISTRY='true'
+      - name: exit-handler
+        steps:
+          - - name: sweep-destroy
+              continueOn:
+                failed: true
+              templateRef:
+                name: e2e-sweep-destroy
+                template: sweep-destroy
+    metrics:
+      prometheus:
+        - name: workflow_details
+          help: "Start time and status of workflow"
+          labels:
+            - key: repo
+              value: calico
+            - key: type
+              value: cron
+            - key: status
+              value: "{{workflow.status}}"
+          gauge:
+            realtime: false
+            value: "{{workflow.creationTimestamp.s}}"
