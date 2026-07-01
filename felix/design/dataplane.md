@@ -275,7 +275,9 @@ Two consequences:
    sweep — keep what's still wanted, delete the orphans — a driver
    must be able to look at the live kernel state and decide "this
    one is mine and unwanted" **without** the original datastore
-   state and **without** a delete edge-trigger.
+   state and **without** a delete edge-trigger — including state
+   written by an *earlier Felix version*, whose naming or format may
+   have changed across the upgrade.
 
 Therefore: **any feature that creates a new kind of kernel resource
 must, up front, design how a freshly-restarted Felix will recognise
@@ -289,7 +291,7 @@ why the identification mechanism differs per driver:
 
 | Subsystem | How Felix recognises its own state |
 |---|---|
-| iptables (`iptables/`) | A **hash of the rule we wrote, embedded in a rule comment**. Needed because `iptables-save` output does **not** round-trip — the kernel re-canonicalises some constructs and the tools reformat others (the one concrete documented case is TCP-flag matches, per `iptables/actions.go`; MARK/CONNMARK are rendered to round-trip). The comment lets Felix (i) identify Calico rules even outside Calico-owned chains, and (ii) detect drift: read-back hash ≠ desired hash ⇒ reprogram. (Does not defend against malicious tampering that preserves the comment — out of threat model.) |
+| iptables (`iptables/`) | A **rule comment with our prefix and a hash of the input rule**. Needed because `iptables-save` output does **not** round-trip — the kernel re-canonicalises some constructs and the tools reformat others (the one concrete documented case is TCP-flag matches, per `iptables/actions.go`; MARK/CONNMARK are rendered to round-trip). The comment lets Felix (i) identify Calico rules even outside Calico-owned chains, and (ii) detect drift: read-back hash ≠ desired hash ⇒ reprogram. (Does not defend against malicious tampering that preserves the comment — out of threat model.) |
 | nftables (`nftables/`) | Inherited the iptables hash/prefix approach for porting ease, but doesn't strictly need it: **if it's in our table, it's ours.** A future simplification. |
 | ip rules (`routerule/`) | No marking support. Identified by **the tables they jump to being Felix-owned**. Imperfect — a config change can confuse it. |
 | routes (`routetable/`) | Heuristic, because the first implementation didn't uniformly use the route `proto` field (it should have): **in a Felix-owned table ⇒ ours; carries our proto ⇒ ours; points down a `cali`-owned veth ⇒ ours**; etc. The classifier is the `OwnershipPolicy` interface — `MainTableOwnershipPolicy.RouteIsOurs`/`IfaceIsOurs` in `routetable/ownershippol/`. (Not to be confused with `RouteClass`, which is a same-CIDR conflict tie-breaker among *desired* routes, not an ownership test.) |
