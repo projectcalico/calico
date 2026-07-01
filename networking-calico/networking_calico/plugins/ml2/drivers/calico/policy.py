@@ -180,11 +180,11 @@ class PolicySyncer(ResourceSyncer):
         name = SG_NAME_PREFIX + sgid
         for attempt in range(MAX_CAS_ATTEMPTS):
             try:
-                _, mod_revision = datamodel_v3.get_namespaced(
+                existing_spec, mod_revision = datamodel_v3.get_namespaced(
                     self.resource_kind, self.namespace, name
                 )
             except etcdv3.KeyNotFound:
-                mod_revision = 0
+                existing_spec, mod_revision = None, 0
             sgs = self.db.get_security_groups(context, filters={"id": [sgid]})
 
             if not sgs:
@@ -213,11 +213,19 @@ class PolicySyncer(ResourceSyncer):
             rules = self.db.get_security_group_rules(
                 context, filters={"security_group_id": [sgid]}
             )
+            new_spec = policy_spec(sgid, rules)
+            if existing_spec is not None and existing_spec == new_spec:
+                # etcd already holds the spec we would write -- skip the put to avoid a
+                # needless revision bump and a Felix watch event on identical data.
+                LOG.debug(
+                    "NetworkPolicy %s already correct in etcd; skipping put", name
+                )
+                return
             if datamodel_v3.put(
                 self.resource_kind,
                 self.namespace,
                 name,
-                policy_spec(sgid, rules),
+                new_spec,
                 mod_revision=mod_revision,
             ):
                 return
