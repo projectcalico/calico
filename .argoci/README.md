@@ -15,3 +15,6 @@ migrated off Semaphore's scheduled e2e builds.
   schedule). `cc-argoci-handler` expands each into a full CronWorkflow (checkout,
   secret loading, node placement, dind, exit handler, notifications, labels,
   metrics), picked up automatically on merge to the default branch.
+
+These crons and scripts are maintained **by hand** going forward: edit the
+YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
