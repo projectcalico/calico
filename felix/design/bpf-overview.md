@@ -85,6 +85,25 @@ support XDP; they carry untracked policy and can fast-drop hostile
 traffic before it reaches TC. Connect-time load-balancer programs
 ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached to cgroup hooks rather than interfaces.
 
+**Enslaved L2 devices (bond/bridge ports).** A physical NIC that is
+enslaved to a Linux bond or bridge is an L2-only port: the host's L3
+(IP, routes) lives on the bond/bridge master or one of its VLAN
+sub-interfaces, not on the port. Felix never attaches the L3
+host-endpoint (TC) program to such a port — at most XDP, redirected
+from the L3 device's host endpoint. To get host-endpoint policy (and
+BPF RPF) on these nodes the L3-bearing device (the master, or the
+bridge VLAN sub-interface that carries the IP) must itself match
+`BPFDataIfacePattern`. Attaching the program to the port instead would
+break BPF reverse-path enforcement under `BPFEnforceRPF=Strict`: the
+check is keyed on the port's ingress ifindex while the return route
+resolves via the L3 device, so strict RPF would drop otherwise-valid
+inbound traffic. Bond slaves are detected via the netlink slave kind;
+bridge ports via their kernel `Protinfo` (the netlink library does not
+synthesise a slave object for them). The decision lives in
+`bpf_ep_mgr.go` (`getIfaceTypeFromLink`, `applyProgramsToDirtyDataInterfaces`),
+and the `ifstate` map flags such ports `bond`-/`bridgeslave` for
+introspection.
+
 ### Where BPF sits relative to netfilter
 
 On host-ingress (a packet arriving on an interface) the TC ingress
