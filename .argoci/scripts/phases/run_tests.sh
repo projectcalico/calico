@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # run_tests.sh - acquire an e2e binary and run it, or defer to bz tests.
 #
-# Three modes, selected automatically:
-#   1. RUN_LOCAL_TESTS is set  → build the e2e binary from local source
-#      (per-PR CI / GCP e2e block).
-#   2. TEST_TYPE == k8s-e2e    → download the pre-built binary from the
-#      hashrelease (scheduled CI).
-#   3. Otherwise               → fall back to `bz tests` for non-e2e test
-#      types (benchmarks, certification, etc.).
+# Selection (automatic):
+#   - E2E_TEST_CONFIG set → structured label-based selection via `make e2e-run`.
+#     The e2e binary is acquired first: built from local source when
+#     RUN_LOCAL_TESTS is set (per-PR CI / GCP e2e block), otherwise downloaded
+#     from the hashrelease (scheduled CI).
+#   - Else → `bz tests`, which honours K8S_E2E_FLAGS (regex --ginkgo.focus/skip,
+#     read from the environment) for regex-selected e2e jobs, and also runs the
+#     non-e2e test types (benchmarks, certification, etc.).
+#
+# `make e2e-run` has no --ginkgo.focus, so K8S_E2E_FLAGS is inert there; regex
+# selection must go through `bz tests` (matches the Semaphore flannel-migration
+# body, which runs `K8S_E2E_FLAGS=... bz tests`).
 #
 # Required env:
 #   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
@@ -29,7 +34,7 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
   popd || exit
-elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
+elif [[ "${TEST_TYPE}" == "k8s-e2e" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
   HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
@@ -42,7 +47,7 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
 fi
 
-if [[ -n "${E2E_BINARY:-}" ]]; then
+if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   echo "[INFO] starting e2e tests..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
@@ -106,7 +111,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # Propagate the original test exit code.
   exit ${e2e_rc}
 else
-  # Non-e2e test types (benchmarks, certification, etc.) -- defer to bz.
-  echo "[INFO] starting bz testing..."
+  # Regex-selected e2e (K8S_E2E_FLAGS) or non-e2e test types -- defer to bz,
+  # which reads K8S_E2E_FLAGS from the environment.
+  echo "[INFO] starting bz testing (K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   bz tests ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
 fi
