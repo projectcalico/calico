@@ -9,6 +9,9 @@ set -o pipefail
 
 echo "[INFO] starting global_epilogue"
 
+# bz diags/destroy must run from the profile dir (== BZ_HOME).
+cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
+
 CI_EXIT_CODE=${CI_EXIT_CODE:-0}
 ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
 

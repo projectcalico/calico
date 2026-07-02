@@ -22,6 +22,16 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+
+# GCP auth for provisioning + docker registry auth (ported from Semaphore prologue
+# lines 122-123 / 166; our first port dropped these, assuming ArgoCI provided them).
+export GOOGLE_APPLICATION_CREDENTIALS="${GOOGLE_APPLICATION_CREDENTIALS:-${HOME}/secrets/banzai-google-service-account.json}"
+if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
+  gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" || echo "[WARN] gcloud auth activate-service-account failed"
+else
+  echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
+fi
+export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
 
@@ -53,15 +63,48 @@ export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
 
 # bz working directories and artifact bucket.
-export BZ_HOME=${BZ_HOME:-${HOME}/bz}
+# 'bz init profile -n NAME' creates the profile at <cwd>/NAME, and bz provision/
+# install/destroy must run from that dir. Init from $HOME (in a subshell so the
+# parent stays at repo root for the relative body_standard.sh call); BZ_HOME=$HOME/NAME.
+export BZ_PROFILE_NAME="${BZ_PROFILE_NAME:-${ARGO_WORKFLOW_NAME:-local}-${RANDOM_TOKEN1}}"
+export BZ_HOME="${BZ_HOME:-${HOME}/${BZ_PROFILE_NAME}}"
+export USE_HASH_RELEASE="${USE_HASH_RELEASE:-true}"
+export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-${BZ_HOME}/.local}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-${HOME}/.bz/logs}
 export REPORT_DIR=${REPORT_DIR:-${BZ_LOCAL_DIR}/report/${TEST_TYPE}}
 export GS_BUCKET=${GS_BUCKET:-argoci-artifacts}
-mkdir -p "${BZ_HOME}" "${BZ_LOCAL_DIR}" "${BZ_LOGS_DIR}" "${REPORT_DIR}"
+mkdir -p "${BZ_LOGS_DIR}"   # BZ_HOME + .local are created by "bz init profile"
+
+# --- Install the banzai (bz) CLI: the ArgoCI runner image does not ship it ---
+# (Semaphore installed bz the same way; our earlier port wrongly assumed the
+#  base image provided it.) BZ_REPO + GITHUB_ACCESS_TOKEN come from banzai-secrets.
+export BZ_GLOBAL_BIN="${BZ_GLOBAL_BIN:-${HOME}/.local/bin}"
+mkdir -p "${BZ_GLOBAL_BIN}"
+export PATH="${BZ_GLOBAL_BIN}:${PATH}"
+if ! command -v bz >/dev/null 2>&1; then
+  echo "[INFO] bz not on PATH; BZ_REPO=${BZ_REPO:-<UNSET>} GITHUB_ACCESS_TOKEN=$( [ -n "${GITHUB_ACCESS_TOKEN:-}" ] && echo SET || echo EMPTY ) jq=$(command -v jq || echo none) wget=$(command -v wget || echo none)"
+  : "${BZ_REPO:?BZ_REPO not set (expected from banzai-secrets)}"
+  : "${GITHUB_ACCESS_TOKEN:?GITHUB_ACCESS_TOKEN not set (expected from banzai-secrets)}"
+  [[ -n "${BZ_VERSION:-}" ]] && BZ_RELEASE="tags/${BZ_VERSION}" || BZ_RELEASE="latest"
+  BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
+  echo "[INFO] bz asset id=${BZ_ASSET_ID}"
+  wget -q --auth-no-challenge --header='Accept:application/octet-stream' "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz"
+  chmod +x "${BZ_GLOBAL_BIN}/bz"
+fi
+echo "[INFO] bz resolved at $(command -v bz || echo '<none>')"
 
 echo "[INFO] initialising bz profile..."
-bz init profile -n "${ARGO_WORKFLOW_NAME:-local}-${RANDOM_TOKEN1}" --skip-prompt --secretsPath "${HOME}/secrets" \
+( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true
+mkdir -p "${BZ_LOCAL_DIR}" "${REPORT_DIR}" "${BZ_LOCAL_DIR}/config"
+# bz provision prereq wants the docker auth at <profile>/.local/config/docker_auth.json
+# (the DOCKER_AUTH_FILE env alone does not redirect the prereq check).
+if [[ -f "${HOME}/.docker/config.json" ]]; then
+  cp "${HOME}/.docker/config.json" "${BZ_LOCAL_DIR}/config/docker_auth.json"
+  echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
+else
+  echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+fi
 
 echo "[INFO] exiting prologue (PROVISIONER=${PROVISIONER} RELEASE_STREAM=${RELEASE_STREAM} CLUSTER_NAME=${CLUSTER_NAME})"

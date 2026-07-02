@@ -25,7 +25,7 @@ done
 if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   # Per-PR CI: build the e2e binary from the local source tree.
   echo "[INFO] building e2e binary from local source..."
-  pushd "${HOME}/calico" || exit
+  pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
   make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
   popd || exit
@@ -35,16 +35,16 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
-  mkdir -p "${HOME}/calico/e2e/bin/k8s"
-  curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o "${HOME}/calico/e2e/bin/k8s/e2e.test"
-  chmod +x "${HOME}/calico/e2e/bin/k8s/e2e.test"
-  echo "[INFO] downloaded e2e binary to ${HOME}/calico/e2e/bin/k8s/e2e.test"
+  mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
+  curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  chmod +x "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  echo "[INFO] downloaded e2e binary to ${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
 fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
   echo "[INFO] starting e2e tests..."
-  pushd "${HOME}/calico" || exit
+  pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
   # Pick a runtime image. The local-build path already pulled
   # calico/go-build to compile the binary, so reusing it for the run

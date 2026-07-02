@@ -7,9 +7,12 @@
 # and are dropped here). Each phase is self-contained; see phases/*.sh.
 set -eo pipefail
 
-PHASES="$(dirname "$0")/phases"
+PHASES="$(cd "$(dirname "$0")" && pwd)/phases"
 
 echo "[INFO] starting job (PROVISIONER=${PROVISIONER} DATAPLANE=${DATAPLANE} RELEASE_STREAM=${RELEASE_STREAM})"
+
+# bz commands must run from the profile dir (== BZ_HOME); PHASES is absolute above.
+cd "${BZ_HOME}"
 
 source "${PHASES}/provision.sh"
 source "${PHASES}/install.sh"
