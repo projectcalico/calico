@@ -108,9 +108,33 @@ func (w *Workload) Stop() {
 		return
 	}
 
-	cleanupCmds := []string{
-		fmt.Sprintf("kill -9 %s", w.pid),
+	// Flush the neighbour state that references the devices we are about to
+	// delete before deleting them.  This avoids a kernel use-after-free panic
+	// on device teardown (see felix/fv/infrastructure/felix.go Felix.Stop for
+	// the full explanation): if an unresolved-neighbour timer fires after the
+	// queued packet's device has been freed, the kernel panics in interrupt
+	// context (arp_error_report -> ipv4_link_failure -> __icmp_send ->
+	// netdev_master_upper_dev_get_rcu on a freed netdevice).  Flushing drops the
+	// queued packets and cancels the timers.
+	var cleanupCmds []string
+	if w.NamespaceID() != "" {
+		cleanupCmds = append(cleanupCmds,
+			fmt.Sprintf("ip netns exec %s ip neigh flush all", w.NamespaceID()),
+			fmt.Sprintf("ip netns exec %s ip -6 neigh flush all", w.NamespaceID()),
+		)
 	}
+	if w.IP != "" {
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip neigh flush to %s", w.IP))
+	}
+	if w.IP6 != "" {
+		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip -6 neigh flush to %s", w.IP6))
+	}
+
+	// Then tear the workload down in order.  These used to run concurrently
+	// (joined with " & "), but deleting an in-use device and its namespace at
+	// the same time as killing the process that uses them is exactly the race
+	// that triggers the kernel panic above, so run them sequentially instead.
+	cleanupCmds = append(cleanupCmds, fmt.Sprintf("kill -9 %s", w.pid))
 	if w.InterfaceName != "" {
 		// Only try to delete the veth if we created one.
 		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip link del %s", w.InterfaceName))
@@ -118,9 +142,8 @@ func (w *Workload) Stop() {
 	if w.NamespaceID() != "" {
 		cleanupCmds = append(cleanupCmds, fmt.Sprintf("ip netns del %s", w.NamespaceID()))
 	}
-	cleanupCmds = append(cleanupCmds, "wait")
 
-	_ = w.C.ExecMayFail("sh", "-c", strings.Join(cleanupCmds, " & "))
+	_ = w.C.ExecMayFail("sh", "-c", strings.Join(cleanupCmds, "; "))
 	// Killing the process inside the container should cause our long-running
 	// docker exec command to exit.  Do the Wait on a background goroutine,
 	// so we can time it out, just in case.
