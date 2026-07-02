@@ -494,13 +494,13 @@ blocks:
               fi
   - name: "Build: calico image"
     # Build and cache the calico image so that downstream CI blocks can load it
-    # from GCS instead of rebuilding per component. This block is the sole
+    # from S3 instead of rebuilding per component. This block is the sole
     # producer for the "calico" build-cache group — every Go component block on
     # master restores the module + build cache populated here.
     #
     # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
     # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
-    # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
+    # trigger on CHANGE_IN(felix,...) and then do an untolerated s3-cmd cp of
     # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
     # producer must run whenever they do — including on felix-test-only PRs.
     #
@@ -515,10 +515,10 @@ blocks:
     # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
     #
     # The process/testing paths trigger this so the win-fv-felix block (which now
-    # installs the locally-built calico image) has it cached in GCS. The libcalico
+    # installs the locally-built calico image) has it cached in S3. The libcalico
     # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
     # superset of the win-fv-felix block's trigger (felix's full test closure plus
-    # its own CI block), so win-fv-felix never runs without this image in GCS.
+    # its own CI block), so win-fv-felix never runs without this image in S3.
     run:
       when: "true"
     dependencies: []
@@ -543,13 +543,13 @@ blocks:
             - make -C cmd/calico build-cgo build-race
             - docker save calico/calico:latest-amd64 -o /tmp/calico-image.tar
             - zstd -3 --rm /tmp/calico-image.tar
-            - gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/calico-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/calico-image.tar.zst "${S3_WORKFLOW_DIR}/calico-image.tar.zst"
             # Upload the cgo + race binaries so Felix FV can consume them
             # directly instead of rebuilding. Felix Build downloads these into
             # cmd/calico/bin/ so the working-copy tarball carries them through
             # to the test VMs.
-            - gcloud storage cp cmd/calico/bin/calico-cgo-amd64 "${GCS_WORKFLOW_DIR}/calico-cgo-amd64"
-            - gcloud storage cp cmd/calico/bin/calico-race-amd64 "${GCS_WORKFLOW_DIR}/calico-race-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-cgo-amd64 "${S3_WORKFLOW_DIR}/calico-cgo-amd64"
+            - .semaphore/s3-cmd cp cmd/calico/bin/calico-race-amd64 "${S3_WORKFLOW_DIR}/calico-race-amd64"
             # Upload the libbpf clone + compiled static lib. `make -C
             # cmd/calico build-cgo` above transitively built it via the Felix
             # CGO dependency chain; the test-or-build below keeps this a
@@ -566,7 +566,7 @@ blocks:
             - test -d felix/bpf-gpl/libbpf || (echo "ERROR libbpf clone missing at felix/bpf-gpl/libbpf" >&2; exit 1)
             - test -f "felix/bpf-gpl/.libbpf-${LIBBPF_VERSION}" || (echo "ERROR libbpf version marker felix/bpf-gpl/.libbpf-${LIBBPF_VERSION} missing" >&2; exit 1)
             - tar --use-compress-program="zstd -3" -cf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl libbpf ".libbpf-${LIBBPF_VERSION}"
-            - gcloud storage cp /tmp/libbpf-amd64.tar.zst "${GCS_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/libbpf-amd64.tar.zst "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst"
   - name: "Build: node image"
     # Builds the node image on top of the combined calico binary. calico/node is
     # still the canonical DaemonSet image for OSS users, so it continues to ship
@@ -574,7 +574,7 @@ blocks:
     # "calico" build cache populated by "Build: calico image" — only the Docker
     # stage assembly (copying binaries onto the base image) runs here, not the Go
     # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
-    # can depend on the shared producer→GCS→consumer upload pattern.
+    # can depend on the shared producer→S3→consumer upload pattern.
     # felix is primary (not node) so a felix-test-only PR still triggers this
     # producer: the deps tool keeps /**/*_test.go coverage only for the primary
     # arg. That matches the win-fv-felix consumer which installs this image. See
@@ -602,7 +602,7 @@ blocks:
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
-            - gcloud storage cp /tmp/node-image.tar.zst "${GCS_WORKFLOW_DIR}/node-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/node-image.tar.zst "${S3_WORKFLOW_DIR}/node-image.tar.zst"
   - name: "Build: whisker image"
     # Whisker is a TypeScript/React frontend that won't consolidate into the
     # calico binary — it ships as its own image indefinitely. No Go build cache
@@ -619,7 +619,7 @@ blocks:
             - make -C whisker image
             - docker save calico/whisker:latest-amd64 -o /tmp/whisker-image.tar
             - zstd -3 --rm /tmp/whisker-image.tar
-            - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
+            - .semaphore/s3-cmd cp /tmp/whisker-image.tar.zst "${S3_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: Prerequisites
     skip:
       # Always skip, this is a dummy job used to group prerequisite checks.
@@ -1136,10 +1136,8 @@ blocks:
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
           - .semaphore/load-cached-images
           - mkdir -p cmd/calico/bin
-          # - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          # - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64 
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
+          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
           - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
           - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
           - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
