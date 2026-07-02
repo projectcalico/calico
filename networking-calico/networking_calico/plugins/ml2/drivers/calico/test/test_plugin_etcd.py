@@ -1575,6 +1575,33 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def test_get_vif_details_derives_tap_mac_from_port_mac(self):
+        """CI-1936: tap MAC must match what the VM's ARP cache expects.
+
+        We reproduce older libvirt's implicit derivation (first octet -> 0xfe) so that
+        the tap MAC seen after a live migration to a libvirt >= 9.5.0 destination
+        matches the one the source's libvirt set.
+        """
+        context = mock.MagicMock()
+        context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
+        # port_filter (and any other keys the base class populated) still
+        # flow through.
+        self.assertTrue(details["port_filter"])
+
+    def test_get_vif_details_falls_back_when_port_mac_missing(self):
+        context = mock.MagicMock()
+        context.current = {}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
+    def test_get_vif_details_falls_back_on_malformed_port_mac(self):
+        context = mock.MagicMock()
+        context.current = {"mac_address": "not-a-mac"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
     def test_neutron_rule_to_etcd_rule_icmp(self):
         # No type/code specified
         self.assertNeutronToEtcd(
@@ -2207,6 +2234,50 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertEtcdWrites(expected_writes)
         # Source WEP should NOT be deleted.
         self.assertEtcdDeletes(set())
+
+    def test_pre_live_migration_transient_vif_unbound(self):
+        """Source WEP must survive the transient ``vif_type=unbound`` at migration
+        start.
+
+        In a real deployment, setting ``binding:profile.migrating_to`` on a port
+        triggers Neutron to rebind the port for the destination host.  During that
+        rebind ``binding:vif_type`` transiently flips from ``tap`` to ``unbound`` while
+        ``binding:host_id`` stays at the source.  If the driver's
+        ``_wep_desired_present`` treats ``vif_type == "unbound"`` as "port not bound at
+        this host" without considering the concurrent ``migrating_to`` state,
+        ``update_port_postcommit`` would delete the source-host WEP even though the VM
+        is still running there -- Felix at the source would then tear down its
+        programming and traffic would drop until Nova's actual cutover completed.
+
+        This case did not fire in ``test_pre_live_migration`` above because
+        ``_pre_migrate`` only sets ``migrating_to`` without touching
+        ``binding:vif_type``.
+        """
+        self._do_initial_resync()
+
+        context = self._make_port_context()
+
+        # Pre-migration state: fully bound at the source.
+        context.original = copy.deepcopy(self.port)
+
+        # Post-migration-start state as Neutron actually produces it: host_id
+        # stays at the source, vif_type flips to "unbound" during the rebind,
+        # migrating_to points at the destination.
+        context._port = copy.deepcopy(self.port)
+        context._port["binding:profile"] = {"migrating_to": self.DEST_HOST}
+        context._port["binding:vif_type"] = "unbound"
+
+        # The DB re-read inside sync_wep must return the same shape.
+        self.osdb_ports[0]["binding:profile"] = {"migrating_to": self.DEST_HOST}
+        self.osdb_ports[0]["binding:vif_type"] = "unbound"
+
+        self.driver.update_port_postcommit(context)
+
+        # The source WEP must NOT be deleted.  The dest WEP and LiveMigration
+        # get written as usual.
+        self.assertEtcdDeletes(set())
+        self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+        self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
 
     def test_live_migration_succeeded(self):
         """After migration succeeds, source WEP deleted, dest WEP kept."""
