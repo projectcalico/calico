@@ -627,7 +627,9 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
-	// Make sure the IP address is configured.
+	// Reconcile the tunnel device address. When addr is empty (BPF mode without an overlay device
+	// IP) this removes any previously-assigned address so a stale IP doesn't linger and influence
+	// source-IP selection.
 	if err := m.ensureAddressOnLink(addr, link); err != nil {
 		return fmt.Errorf("failed to ensure address of interface: %s", err)
 	}
@@ -652,8 +654,11 @@ func (m *routeManager) configureTunnelDevice(
 	return nil
 }
 
-// ensureAddressOnLink ensures that the provided IP address is configured on the provided Link. If there are other
-// addresses, this function will remove them, ensuring that the desired IP address is the _only_ address on the Link.
+// ensureAddressOnLink reconciles the Calico-managed address on the tunnel device so that the desired
+// address (ipStr) is the _only_ such address on the Link: any other address of the relevant family is
+// removed. The kernel-managed IPv6 link-local address is always left in place. If ipStr is empty no
+// address is desired, so all Calico-managed addresses are removed; this is used in BPF mode where the
+// dataplane handles encap/decap itself and does not need an IP on the overlay device.
 func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) error {
 	suffix := "/32"
 	family := netlink.FAMILY_V4
@@ -661,21 +666,30 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		suffix = "/128"
 		family = netlink.FAMILY_V6
 	}
-	_, net, err := net.ParseCIDR(ipStr + suffix)
-	if err != nil {
-		return err
+
+	var desired *netlink.Addr
+	if ipStr != "" {
+		_, ipNet, err := net.ParseCIDR(ipStr + suffix)
+		if err != nil {
+			return err
+		}
+		desired = &netlink.Addr{IPNet: ipNet}
 	}
-	addr := netlink.Addr{IPNet: net}
+
 	existingAddrs, err := m.nlHandle.AddrList(link, family)
 	if err != nil {
 		return err
 	}
 
-	// Remove any addresses which we don't want.
+	// Remove any addresses which we don't want, but never strip the kernel-managed IPv6 link-local
+	// address.
 	addrPresent := false
 	for _, existing := range existingAddrs {
-		if reflect.DeepEqual(existing.IPNet, addr.IPNet) {
+		if desired != nil && reflect.DeepEqual(existing.IPNet, desired.IPNet) {
 			addrPresent = true
+			continue
+		}
+		if existing.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		m.logCtx.WithFields(logrus.Fields{
@@ -688,9 +702,9 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 	}
 
 	// Actually add the desired address to the interface if needed.
-	if !addrPresent {
-		m.logCtx.WithFields(logrus.Fields{"address": addr}).Info("Assigning address to tunnel device")
-		if err := m.nlHandle.AddrAdd(link, &addr); err != nil {
+	if desired != nil && !addrPresent {
+		m.logCtx.WithFields(logrus.Fields{"address": *desired}).Info("Assigning address to tunnel device")
+		if err := m.nlHandle.AddrAdd(link, desired); err != nil {
 			return fmt.Errorf("failed to add IP address")
 		}
 	}
