@@ -28,3 +28,8 @@ source by its parity harness. To change a pipeline, edit the Semaphore source
 semaphore2argo --in .semaphore/end-to-end/pipelines/<name>.yml \
   --branch <branch> --schedule "<cron>" --out .argoci/cron/e2e-<name>-<stream>.yaml
 ```
+
+> **Note:** `semaphore2argo` ships in the Tigera-internal `semaphore-to-argoci`
+> skill (tigera-de-tools plugin), not on an OSS contributor's PATH — regeneration
+> is a Tigera-internal step. External contributors should edit the Semaphore
+> source (or the scripts here) and ask a Tigera maintainer to regenerate.

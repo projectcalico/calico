@@ -47,6 +47,10 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
 fi
 
+# E2E_BINARY is a set/unset sentinel (its value is not used here -- make
+# e2e-run locates the binary itself). Take the structured path only when a
+# k8s-e2e binary was acquired above AND E2E_TEST_CONFIG selects specs; regex
+# (K8S_E2E_FLAGS) and non-e2e jobs fall through to bz tests below.
 if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   echo "[INFO] starting e2e tests..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
