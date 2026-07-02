@@ -144,6 +144,7 @@ const (
 	IfaceTypeL3
 	IfaceTypeBond
 	IfaceTypeBondSlave
+	IfaceTypeBridgeSlave
 	IfaceTypeNetkit
 	IfaceTypeUnknown
 )
@@ -1187,6 +1188,8 @@ func (m *bpfEndpointManager) getIfTypeFlags(name string, ifaceType IfaceType) ui
 			flags |= ifstate.FlgBond
 		case IfaceTypeBondSlave:
 			flags |= ifstate.FlgBondSlave
+		case IfaceTypeBridgeSlave:
+			flags |= ifstate.FlgBridgeSlave
 		case IfaceTypeL3:
 			flags |= ifstate.FlgL3
 		case IfaceTypeWireguard:
@@ -2371,9 +2374,30 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				logrus.WithField("iface", iface).Debug(
 					"Host Iface not found in tree")
 			} else {
+				ifaceType := m.getIfaceTypeFromLink(link)
 				isRoot := isRootIface(hostIf)
 				isLeaf := isLeafIface(hostIf)
-				if isRoot {
+				switch {
+				case ifaceType == IfaceTypeBridgeSlave:
+					// A device enslaved to a Linux bridge is an L2-only bridge
+					// port: the host's L3 (IP, routes) lives on the bridge or one
+					// of its VLAN sub-interfaces, not on the port. Never attach
+					// the L3 (TC/HEP) program to the port - the reverse-path
+					// check would be keyed on the port's ifindex while the return
+					// route resolves via the L3 device, breaking RPF. The L3
+					// device must match the bpfDataIfacePattern and is attached
+					// independently as its own data interface. This mirrors
+					// bonded-interface handling: attach XDP only, redirecting to
+					// the L3 device's host endpoint (a no-op if it carries no
+					// untracked policy). Unlike a bond, this is unconditional -
+					// the port is L2-only regardless of whether the L3 device is
+					// in the pattern.
+					masterName = getRootInterface(hostIf).name
+					logrus.WithField("iface", iface).Debug(
+						"Bridge port: attaching xdp only")
+					xdpMode = XDPModeOnly
+					attachTc = false
+				case isRoot:
 					// Root interface and not a leaf. Attach only Tc.
 					// set xdp mode to None and remove any previously attached
 					// xdp programs.
@@ -2381,7 +2405,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 						xdpMode = XDPModeNone
 					}
 					// Root and leaf. Single interface tree. Attach both Tc and XDP.
-				} else if isLeaf {
+				case isLeaf:
 					masterIfa := getRootInterface(hostIf)
 					if err != nil {
 						logrus.Warnf("Failed to get master interface details for '%s'. Continuing to attach program", iface)
@@ -2396,7 +2420,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 							attachTc = false
 						}
 					}
-				} else {
+				default:
 					xdpMode = XDPModeNone
 					attachTc = false
 				}
@@ -3509,7 +3533,7 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 	ifaceType := m.nameToIface[ifaceName].info.ifaceType
 	m.ifacesLock.Unlock()
 	switch ifaceType {
-	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeNetkit:
+	case IfaceTypeData, IfaceTypeVXLAN, IfaceTypeBond, IfaceTypeBondSlave, IfaceTypeBridgeSlave, IfaceTypeNetkit:
 		if ifaceName == "vxlan.calico" || ifaceName == "vxlan-v6.calico" {
 			return tcdefs.EpTypeVXLAN
 		}
@@ -5160,6 +5184,15 @@ func (m *bpfEndpointManager) getIfaceTypeFromLink(link netlink.Link) IfaceType {
 	attrs := link.Attrs()
 	if attrs.Slave != nil && attrs.Slave.SlaveType() == "bond" {
 		return IfaceTypeBondSlave
+	}
+
+	// A device enslaved to a Linux bridge is an L2-only bridge port: the host's
+	// L3 (IP, routes) lives on the bridge or one of its VLAN sub-interfaces, not
+	// on the port. The netlink library does not synthesise an attrs.Slave for
+	// bridge ports (only bond/vrf), but the kernel does set Protinfo
+	// (IFLA_PROTINFO) on bridge ports, so use that as the signal.
+	if attrs.MasterIndex != 0 && attrs.Protinfo != nil {
+		return IfaceTypeBridgeSlave
 	}
 
 	switch link.Type() {

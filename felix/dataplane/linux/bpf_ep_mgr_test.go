@@ -265,6 +265,23 @@ func (m *mockDataplane) createBondSlaves(name string, index, masterIndex int) er
 	return m.netlinkShim.LinkAdd(&slv)
 }
 
+// createBridgeSlaves adds a NIC enslaved to a Linux bridge. The netlink library
+// does not synthesise an attrs.Slave for bridge ports (only bond/vrf), but the
+// kernel sets Protinfo (IFLA_PROTINFO) on them, which is how the dataplane
+// classifies the port as IfaceTypeBridgeSlave.
+func (m *mockDataplane) createBridgeSlaves(name string, index, masterIndex int) error {
+	attr := netlink.NewLinkAttrs()
+	attr.Name = name
+	attr.Index = index
+	attr.Protinfo = &netlink.Protinfo{}
+	attr.MasterIndex = masterIndex
+	slv := netlink.GenericLink{
+		LinkAttrs: attr,
+		LinkType:  "device",
+	}
+	return m.netlinkShim.LinkAdd(&slv)
+}
+
 func (m *mockDataplane) getRules(key string) *polprog.Rules {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -858,6 +875,85 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("eth20:ingress")).To(BeTrue())
 			Expect(dp.programAttached("eth20:egress")).To(BeTrue())
 			Expect(dp.programAttached("eth20:xdp")).To(BeFalse())
+		})
+
+		It("should attach the L3 program to the bridge sub-interface, not the bridge ports", func() {
+			dataIfacePattern = "^eth|^br0"
+			newBpfEpMgr(false)
+			genUntracked("default", "untracked1")()
+			newHEP := googleproto.Clone(hostEp).(*proto.HostEndpoint)
+			newHEP.UntrackedTiers = []*proto.TierInfo{{
+				Name:            "default",
+				IngressPolicies: []*proto.PolicyID{{Name: "untracked1", Kind: v3.KindGlobalNetworkPolicy}},
+			}}
+			// Bridge master with two enslaved NICs (the bridge ports).
+			err := dp.createIface("br0", 10, "bridge")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBridgeSlaves("eth10", 20, 10)
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBridgeSlaves("eth20", 30, 10)
+			Expect(err).NotTo(HaveOccurred())
+			// The host L3 lives on a VLAN sub-interface of the bridge.
+			err = dp.createVlanIface("br0.100", 11, 10)
+			Expect(err).NotTo(HaveOccurred())
+
+			genHEPUpdate("br0.100", newHEP)()
+			genIfaceUpdate("br0.100", ifacemonitor.StateUp, 11)()
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			genIfaceUpdate("eth20", ifacemonitor.StateUp, 30)()
+
+			// The L3 device (sub-interface) carries the host-endpoint program.
+			Expect(dp.programAttached("br0.100:ingress")).To(BeTrue())
+			Expect(dp.programAttached("br0.100:egress")).To(BeTrue())
+			Expect(dp.programAttached("br0.100:xdp")).To(BeFalse())
+
+			// The bridge ports are L2-only: no TC program. XDP from the
+			// untracked host endpoint is redirected to the ports, mirroring
+			// bonded-interface handling.
+			Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:xdp")).To(BeTrue())
+			Expect(dp.programAttached("eth20:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:egress")).To(BeFalse())
+			Expect(dp.programAttached("eth20:xdp")).To(BeTrue())
+			checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgBridgeSlave)
+			checkIfState(30, "eth20", ifstate.FlgIPv4Ready|ifstate.FlgBridgeSlave)
+
+			// The bridge itself (a middle node in the tree) carries nothing.
+			Expect(dp.programAttached("br0:ingress")).To(BeFalse())
+			Expect(dp.programAttached("br0:egress")).To(BeFalse())
+			Expect(dp.programAttached("br0:xdp")).To(BeFalse())
+
+			// When the NIC leaves the bridge it becomes an ordinary data
+			// interface again and regains its host-endpoint program.
+			err = dp.deleteIface("eth10")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createIface("eth10", 20, "dummy")
+			Expect(err).NotTo(HaveOccurred())
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+			Expect(dp.programAttached("eth10:ingress")).To(BeTrue())
+			Expect(dp.programAttached("eth10:egress")).To(BeTrue())
+			checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgHEP)
+		})
+
+		It("should keep a bridge port L2-only even when the L3 device is not in the data iface pattern", func() {
+			// Only the physical NICs match the pattern; the bridge and its
+			// sub-interface do not. Unlike a bond slave (which would fall back
+			// to attaching its own TC program and warn), a bridge port is
+			// unconditionally L2-only.
+			dataIfacePattern = "^eth"
+			newBpfEpMgr(false)
+			err := dp.createIface("br0", 10, "bridge")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createBridgeSlaves("eth10", 20, 10)
+			Expect(err).NotTo(HaveOccurred())
+			genIfaceUpdate("br0", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("eth10", ifacemonitor.StateUp, 20)()
+
+			Expect(dp.programAttached("eth10:ingress")).To(BeFalse())
+			Expect(dp.programAttached("eth10:egress")).To(BeFalse())
+			checkIfState(20, "eth10", ifstate.FlgIPv4Ready|ifstate.FlgBridgeSlave)
 		})
 
 		It("should add host ifaces to iface tree", func() {
