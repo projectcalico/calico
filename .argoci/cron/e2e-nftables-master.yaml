@@ -4,7 +4,7 @@ version: condensed
 generateName: e2e-nftables-master-
 schedule: 0 3 * * 2
 globalPrologue: |
-    cd "${CI_HOME}/${CI_GIT_DIR}"   # checkout lands here; make relative .argoci/scripts paths resolve
+    cd "${CI_HOME}/${CI_GIT_DIR}"
     export DATAPLANE="${DATAPLANE:-CalicoNftables}"
     export ENABLE_AUTOHEP="${ENABLE_AUTOHEP:-true}"
     export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-nftables.yml}"
