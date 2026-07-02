@@ -104,10 +104,25 @@ generate:
 	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
+	$(MAKE) gen-chart-readme
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
 	cd ./manifests && ./generate.sh
+
+# gen-chart-readme regenerates the configuration reference embedded in the
+# tigera-operator chart README. It documents chart-level keys (parsed from
+# values.yaml comments) plus the operator CRDs backing the helm sections.
+# Subtrees listed in the tool's --truncate flag collapse to placeholders;
+# see hack/cmd/gen-chart-readme for the policy.
+gen-chart-readme:
+	$(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/gen-chart-readme \
+		--values ./charts/tigera-operator/values.yaml \
+		--crd installation=./charts/crd.projectcalico.org.v1/templates/operator.tigera.io_installations.yaml \
+		--crd apiServer=./charts/crd.projectcalico.org.v1/templates/operator.tigera.io_apiservers.yaml \
+		--crd goldmane=./charts/crd.projectcalico.org.v1/templates/operator.tigera.io_goldmanes.yaml \
+		--crd whisker=./charts/crd.projectcalico.org.v1/templates/operator.tigera.io_whiskers.yaml \
+		--splice-into ./charts/tigera-operator/README.md"
 
 # Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
 get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERATOR_BRANCH
