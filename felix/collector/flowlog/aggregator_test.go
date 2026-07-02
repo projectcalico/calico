@@ -810,4 +810,37 @@ var _ = Describe("Flow log aggregator tests", func() {
 			Expect(flowLog.BytesOut).Should(Equal(33))
 		})
 	})
+
+	Context("Flow log aggregator source/destination IP collection", func() {
+		It("preserves distinct source and destination IPs even when the aggregated tuple is zeroed", func() {
+			// FlowPrefixName (the default aggregation level) zeroes the FlowMeta tuple so that
+			// connections from many source IPs collapse into a single flow log. The IP sets must
+			// still be collected from the underlying connection tuples and surfaced on the FlowLog.
+			ca := NewAggregator()
+
+			// First connection: src 10.0.0.1 -> dst 20.0.0.1 (tuple1).
+			Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMeta)).NotTo(HaveOccurred())
+
+			// Second connection: same endpoints/key, but a different source IP and port.
+			muCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
+			tupleCopy := tuple1
+			tupleCopy.L4Src = 44123
+			tupleCopy.Src = utils.IpStrTo16Byte("10.0.0.3")
+			muCopy.Tuple = tupleCopy
+			Expect(ca.FeedUpdate(&muCopy)).NotTo(HaveOccurred())
+
+			messages := ca.GetAndCalibrate()
+			// Both updates aggregate into a single flow log at FlowPrefixName level.
+			Expect(len(messages)).Should(Equal(1))
+			flowLog := messages[0]
+
+			// The aggregated tuple is zeroed (IPs are not part of the aggregation key)...
+			Expect(flowLog.Tuple.Src).Should(Equal(EmptyIP))
+			Expect(flowLog.Tuple.Dst).Should(Equal(EmptyIP))
+
+			// ...but the distinct source / destination IPs are preserved as bounded, sorted sets.
+			Expect(flowLog.SourceIPs).Should(Equal([]string{"10.0.0.1", "10.0.0.3"}))
+			Expect(flowLog.DestIPs).Should(Equal([]string{"20.0.0.1"}))
+		})
+	})
 })
