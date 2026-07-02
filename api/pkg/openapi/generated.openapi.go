@@ -3694,7 +3694,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesMode configures nftables support in Felix. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Description: "NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the nftables dataplane if kube-proxy is detected to be running in nftables mode. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},

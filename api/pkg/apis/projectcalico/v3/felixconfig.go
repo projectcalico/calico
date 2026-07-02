@@ -674,7 +674,9 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
