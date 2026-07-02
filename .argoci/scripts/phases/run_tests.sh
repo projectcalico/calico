@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# run_tests.sh - acquire an e2e binary and run it, or defer to bz tests.
+#
+# Selection (automatic):
+#   - E2E_TEST_CONFIG set → structured label-based selection via `make e2e-run`.
+#     The e2e binary is acquired first: built from local source when
+#     RUN_LOCAL_TESTS is set (per-PR CI / GCP e2e block), otherwise downloaded
+#     from the hashrelease (scheduled CI).
+#   - Else → `bz tests`, which honours K8S_E2E_FLAGS (regex --ginkgo.focus/skip,
+#     read from the environment) for regex-selected e2e jobs, and also runs the
+#     non-e2e test types (benchmarks, certification, etc.).
+#
+# `make e2e-run` has no --ginkgo.focus, so K8S_E2E_FLAGS is inert there; regex
+# selection must go through `bz tests` (matches the Semaphore flannel-migration
+# body, which runs `K8S_E2E_FLAGS=... bz tests`).
+#
+# Required env:
+#   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
+# Required for local builds:
+#   E2E_TEST_CONFIG
+# Required for hashrelease downloads:
+#   RELEASE_STREAM
+#
+# Sourced from body_*.sh. Exits with the test exit code.
+
+for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE; do
+  if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
+done
+
+if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+  # Per-PR CI: build the e2e binary from the local source tree.
+  echo "[INFO] building e2e binary from local source..."
+  pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
+  make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+  popd || exit
+elif [[ "${TEST_TYPE}" == "k8s-e2e" && -n "${E2E_TEST_CONFIG:-}" ]]; then
+  # Scheduled CI: download the pre-built e2e binary from the hashrelease.
+  echo "[INFO] downloading e2e binary from hashrelease..."
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
+  echo "[INFO] hashrelease URL: ${HASHREL_URL}"
+  ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
+  mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
+  curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  chmod +x "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  echo "[INFO] downloaded e2e binary to ${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
+fi
+
+if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
+  echo "[INFO] starting e2e tests..."
+  pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
+
+  # Pick a runtime image. The local-build path already pulled
+  # calico/go-build to compile the binary, so reusing it for the run
+  # step is free. The hashrelease path didn't compile anything, so
+  # there's no reason to drag in the build toolchain -- use the
+  # official golang image (debian-bookworm base, glibc-compatible
+  # with the binary, ~800MB vs ~2GB).
+  # The e2e binary is CGO-linked against libbpf and dynamically depends on
+  # libelf and libz at runtime; the test scripts also call uuidgen. The
+  # calico/go-build image already has these; the upstream golang:bookworm
+  # image does not, so install them on the fly when using that path.
+  PRE_RUN=":"
+  if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
+    GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
+    RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
+  else
+    GO_VERSION=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_VERSION)' print)
+    RUN_IMAGE="golang:${GO_VERSION}-bookworm"
+    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
+  fi
+
+  # The upstream k8s e2e framework shells out to `kubectl` for any
+  # exec-into-pod step (RunHostCmd, etc.), so kubectl must be on PATH inside
+  # the runner. Fetch a K8S_VERSION-pinned binary via the repo's `make
+  # kubectl` target; it lands in hack/test/kind/ which is bind-mounted into
+  # the container, and we prepend that to PATH inside the bash -c below.
+  make kubectl
+
+  # Capture the exit code so the JUnit copy below runs even when tests fail
+  # (set -e would otherwise bail out before the cp).
+  e2e_rc=0
+  docker run --rm --init --net=host \
+    -e LOCAL_USER_ID="$(id -u)" \
+    -e GOCACHE=/go-cache \
+    -e GOPATH=/go \
+    -e KUBECONFIG=/kubeconfig \
+    -e PRODUCT=${PRODUCT:-calico} \
+    ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+    -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
+    -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+    -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
+    -w /go/src/github.com/projectcalico/calico \
+    "${RUN_IMAGE}" \
+    bash -c "${PRE_RUN} && \
+      export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:\$PATH && \
+      git config --global --add safe.directory '*' && \
+      make e2e-run \
+        KUBECONFIG=/kubeconfig \
+        E2E_TEST_CONFIG='${E2E_TEST_CONFIG}' \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml" \
+    |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+
+  # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
+  mkdir -p "${REPORT_DIR}"
+  cp report/junit.xml "${REPORT_DIR}/junit.xml" 2>/dev/null || true
+  popd || exit
+
+  # Propagate the original test exit code.
+  exit ${e2e_rc}
+else
+  # Regex-selected e2e (K8S_E2E_FLAGS) or non-e2e test types -- defer to bz,
+  # which reads K8S_E2E_FLAGS from the environment.
+  echo "[INFO] starting bz testing (K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
+  bz tests ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+fi
