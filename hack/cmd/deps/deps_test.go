@@ -24,6 +24,15 @@ func depsFrom(incl, excl []string) *Deps {
 	return &Deps{Inclusions: set.From(incl...), Exclusions: set.From(excl...)}
 }
 
+func mustParseGraph(t *testing.T, blocks []templateData) *blockGraph {
+	t.Helper()
+	g, err := parseBlockGraph(blocks)
+	if err != nil {
+		t.Fatalf("parseBlockGraph: %v", err)
+	}
+	return g
+}
+
 func TestMergeDepsSuperset(t *testing.T) {
 	a := depsFrom([]string{"/a", "/b"}, []string{"/x", "/y"})
 	b := depsFrom([]string{"/b", "/c"}, []string{"/y", "/z"})
@@ -112,10 +121,7 @@ func macroBlocks() []templateData {
 }
 
 func TestParseBlockGraph(t *testing.T) {
-	g, err := parseBlockGraph(macroBlocks())
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, macroBlocks())
 	prod := g.byName["Producer"]
 	if prod == nil || !prod.isMacro || prod.macroArg != "non-go:/own/" {
 		t.Fatalf("producer not parsed as macro block: %+v", prod)
@@ -163,10 +169,7 @@ func TestParseBlockGraphDuplicateName(t *testing.T) {
 }
 
 func TestCalculateDependentMacroDeps(t *testing.T) {
-	g, err := parseBlockGraph(macroBlocks())
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, macroBlocks())
 	deps := map[string]*Deps{
 		"d1": depsFrom([]string{"/d1/**"}, []string{"/**/*.md", "/d1/**/*_test.go"}),
 		"d2": depsFrom([]string{"/d2/**"}, []string{"/**/*.md", "/d2/**/*_test.go"}),
@@ -221,10 +224,7 @@ func TestCalculateDependentMacroDepsNoDependents(t *testing.T) {
   dependencies: []
 `,
 	}}
-	g, err := parseBlockGraph(blocks)
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, blocks)
 	macroDeps, err := calculateDependentMacroDeps(g, nil)
 	if err != nil {
 		t.Fatalf("calculateDependentMacroDeps: %v", err)
@@ -251,10 +251,7 @@ func TestCalculateDependentMacroDepsSharedArg(t *testing.T) {
   dependencies: []
 `,
 	}}
-	g, err := parseBlockGraph(blocks)
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, blocks)
 	macroDeps, err := calculateDependentMacroDeps(g, nil)
 	if err != nil {
 		t.Fatalf("expected shared arg to be allowed, got error: %v", err)
@@ -280,10 +277,7 @@ func TestCalculateDependentMacroDepsConstOrDependentAccepted(t *testing.T) {
     - "Producer"
 `,
 	}}
-	g, err := parseBlockGraph(blocks)
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, blocks)
 	deps := map[string]*Deps{"d1": depsFrom([]string{"/d1/**"}, []string{"/**/*.md"})}
 	macroDeps, err := calculateDependentMacroDeps(g, deps)
 	if err != nil {
@@ -310,10 +304,7 @@ func TestCalculateDependentMacroDepsNonConstConditionRejected(t *testing.T) {
     - "Producer"
 `,
 	}}
-	g, err := parseBlockGraph(blocks)
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, blocks)
 	deps := map[string]*Deps{"d1": depsFrom([]string{"/d1/**"}, nil)}
 	if _, err := calculateDependentMacroDeps(g, deps); err == nil {
 		t.Error("expected error: dependent's when has a non-constant condition")
@@ -341,10 +332,7 @@ func TestCalculateDependentMacroDepsChain(t *testing.T) {
     - "P2"
 `,
 	}}
-	g, err := parseBlockGraph(blocks)
-	if err != nil {
-		t.Fatalf("parseBlockGraph: %v", err)
-	}
+	g := mustParseGraph(t, blocks)
 	deps := map[string]*Deps{"c": depsFrom([]string{"/c/**"}, []string{"/**/*.md"})}
 	macroDeps, err := calculateDependentMacroDeps(g, deps)
 	if err != nil {

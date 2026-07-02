@@ -260,6 +260,9 @@ func dropSubsumedInclusions(inclusions set.Set[string]) set.Set[string] {
 			prefixes = append(prefixes, dir+"/")
 		}
 	}
+	if len(prefixes) == 0 {
+		return inclusions // Nothing can subsume anything.
+	}
 
 	out := set.New[string]()
 	for incl := range inclusions.All() {
@@ -309,10 +312,9 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	inclusions.Add("/" + primaryPkg + "/**")
 	inclusions.AddAll(defaultInclusions)
 	inclusions.AddAll(nonGoDeps[primaryPkg])
+	// dirs under the primary package are covered by the "/<pkg>/**" glob above;
+	// formatChangeIn's dropSubsumedInclusions drops the redundant per-dir globs.
 	for _, dir := range localDirs {
-		if strings.HasPrefix(dir+"/", "/"+primaryPkg) {
-			continue // covered by the whole-package inclusion.
-		}
 		inclusions.Add(dir + "/*.go")
 	}
 
@@ -322,32 +324,43 @@ func calculateSemDeps(pkgList string) (deps *Deps, err error) {
 	// Some jobs depend on secondary packages.  For example, the node tests
 	// also run typha, api server, etc.  Add inclusions for those.
 	for _, otherPkg := range otherPkgs {
-		const nonGoPrefix = "non-go:"
-		if after, ok := strings.CutPrefix(otherPkg, nonGoPrefix); ok {
-			inclusions.Add(after)
-			continue
-		}
-
-		// For secondary dependencies, we only list dependencies of "main"
-		// packages.  This prevents us from picking up test-only dependencies.
-		// For example, kube-controllers FV has utility packages that depend on
-		// felix's FV infra packages.  If we didn't filter down to "main", we'd
-		// pick those up unintentionally.
-		otherPkgDirs, err := loadLocalDirs(otherPkg, true)
+		otherPkgDirs, err := addSecondaryPkgInclusions(inclusions, otherPkg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", otherPkg, err)
+			return nil, err
 		}
-		for _, dir := range otherPkgDirs {
-			inclusions.Add(dir + "/*.go")
-		}
-		inclusions.Add(otherPkg + "/Makefile")
-		inclusions.Add(otherPkg + "/deps.txt")
-		inclusions.Add(otherPkg + "/**/*Dockerfile*")
-		inclusions.AddAll(nonGoDeps[otherPkg])
 		exclusions.AddAll(calculateTestExclusionGlobs(primaryPkg, otherPkgDirs))
 	}
 
 	return &Deps{inclusions, exclusions}, nil
+}
+
+// addSecondaryPkgInclusions adds the build-input inclusions for one secondary
+// package spec: either a "non-go:<path>" literal, or a Go package whose main
+// package's dirs, Makefile, deps.txt, Dockerfiles and nonGoDeps are inputs.  It
+// returns the package's local dirs (nil for a non-go: spec) so the caller can
+// derive test-exclusion globs.
+//
+// We only list dependencies of "main" packages (loadLocalDirs mainDepsOnly).
+// This prevents us from picking up test-only dependencies: for example,
+// kube-controllers FV has utility packages that depend on felix's FV infra
+// packages; without the filter we'd pick those up unintentionally.
+func addSecondaryPkgInclusions(inclusions set.Set[string], pkg string) ([]string, error) {
+	if after, ok := strings.CutPrefix(pkg, "non-go:"); ok {
+		inclusions.Add(after)
+		return nil, nil
+	}
+	dirs, err := loadLocalDirs(pkg, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load local dirs for secondary package %s: %w", pkg, err)
+	}
+	for _, dir := range dirs {
+		inclusions.Add(dir + "/*.go")
+	}
+	inclusions.Add(pkg + "/Makefile")
+	inclusions.Add(pkg + "/deps.txt")
+	inclusions.Add(pkg + "/**/*Dockerfile*")
+	inclusions.AddAll(nonGoDeps[pkg])
+	return dirs, nil
 }
 
 // blockInfo is the slice of a Semaphore block that we need to resolve
@@ -556,21 +569,9 @@ func calculateMacroOwnDeps(spec string) (*Deps, error) {
 		if part == "" {
 			continue
 		}
-		if after, ok := strings.CutPrefix(part, "non-go:"); ok {
-			inclusions.Add(after)
-			continue
+		if _, err := addSecondaryPkgInclusions(inclusions, part); err != nil {
+			return nil, err
 		}
-		dirs, err := loadLocalDirs(part, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load local dirs for %s: %w", part, err)
-		}
-		for _, dir := range dirs {
-			inclusions.Add(dir + "/*.go")
-		}
-		inclusions.Add(part + "/Makefile")
-		inclusions.Add(part + "/deps.txt")
-		inclusions.Add(part + "/**/*Dockerfile*")
-		inclusions.AddAll(nonGoDeps[part])
 	}
 	return &Deps{inclusions, exclusions}, nil
 }
@@ -584,17 +585,12 @@ func calculateMacroOwnDeps(spec string) (*Deps, error) {
 // inclusion still matches) — harmless for a cache-cheap producer.
 func mergeDepsSuperset(parts []*Deps) *Deps {
 	inclusions := set.New[string]()
-	var exclusions set.Set[string]
-	for i, p := range parts {
-		inclusions.AddAll(p.Inclusions.Slice())
-		if i == 0 {
-			exclusions = p.Exclusions.Copy()
-		} else {
-			exclusions = intersectSets(exclusions, p.Exclusions)
-		}
+	for _, p := range parts {
+		inclusions.AddSet(p.Inclusions)
 	}
-	if exclusions == nil {
-		exclusions = set.New[string]()
+	exclusions := parts[0].Exclusions.Copy()
+	for _, p := range parts[1:] {
+		exclusions = intersectSets(exclusions, p.Exclusions)
 	}
 	return &Deps{Inclusions: inclusions, Exclusions: exclusions}
 }
@@ -1033,6 +1029,12 @@ func buildSemaphoreYAML(file string, templates []templateData, globalExtraDeps [
 			if deps == nil {
 				// Generating a daily/weekly file.
 				return "true"
+			}
+			if macroIdx >= len(fileMacroBlocks) {
+				// The regex found more macro occurrences than parseBlockGraph
+				// mapped to blocks in this file (e.g. a macro outside a block's
+				// run.when).  Fail clearly rather than index out of range.
+				logrus.Fatalf("CHANGE_IN_WITH_DEPENDENTS in %s does not correspond to a parsed block; the macro is only supported in a block's run.when", t.originalPath)
 			}
 			b := fileMacroBlocks[macroIdx]
 			macroIdx++
