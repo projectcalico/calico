@@ -235,7 +235,7 @@ func calculateChangeIn(pkg string, pretty bool) (string, error) {
 }
 
 func formatChangeIn(inclusions set.Set[string], exclusions set.Set[string], pretty bool, defaultBranchStanza string) string {
-	incl := formatSemList(inclusions)
+	incl := formatSemList(dropSubsumedInclusions(inclusions))
 	excl := formatSemList(exclusions)
 	if pretty {
 		incl = "\n" + strings.ReplaceAll(incl, ",", ",\n  ") + "\n"
@@ -243,6 +243,46 @@ func formatChangeIn(inclusions set.Set[string], exclusions set.Set[string], pret
 	}
 	out := fmt.Sprintf("change_in(%s, {pipeline_file: 'ignore', exclude: %s%s})", incl, excl, defaultBranchStanza)
 	return out
+}
+
+// dropSubsumedInclusions removes inclusion globs already covered by a broader
+// whole-directory glob ("<dir>/**") in the same set.  Merging several
+// dependents' triggers (see mergeDepsSuperset) tends to union a whole-tree glob
+// like "/felix/**" with narrower per-subdir globs like "/felix/fv/*.go"
+// contributed by a dependent that only reaches part of that tree; the narrower
+// entries are redundant and just add noise to the generated change_in() list.
+func dropSubsumedInclusions(inclusions set.Set[string]) set.Set[string] {
+	// A "<dir>/**" glob (with a wildcard-free prefix) subsumes anything under
+	// "<dir>/".
+	var prefixes []string
+	for incl := range inclusions.All() {
+		if dir, ok := strings.CutSuffix(incl, "/**"); ok && !strings.Contains(dir, "*") {
+			prefixes = append(prefixes, dir+"/")
+		}
+	}
+
+	out := set.New[string]()
+	for incl := range inclusions.All() {
+		if !isSubsumed(incl, prefixes) {
+			out.Add(incl)
+		}
+	}
+	return out
+}
+
+// isSubsumed reports whether incl falls under a broader glob prefix other than
+// its own.  Skipping incl's own prefix ("<dir>/**") keeps the broad glob itself,
+// while a nested "<dir>/sub/**" is still dropped by the outer "<dir>/" prefix.
+func isSubsumed(incl string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if incl == prefix+"**" {
+			continue // The subsuming glob itself.
+		}
+		if strings.HasPrefix(incl, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 type Deps struct {

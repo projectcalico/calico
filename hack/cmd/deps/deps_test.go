@@ -56,6 +56,32 @@ func TestMergeDepsSuperset(t *testing.T) {
 	}
 }
 
+func TestDropSubsumedInclusions(t *testing.T) {
+	in := set.From(
+		"/felix/**",           // whole-tree glob — subsumes everything under /felix/.
+		"/felix/fv/*.go",      // subsumed.
+		"/felix/bpf/nat/*.go", // subsumed (nested).
+		"/felix/bpf-gpl",      // subsumed (non-go dep dir).
+		"/felixfoo/*.go",      // NOT subsumed: /felix/ is not a prefix of /felixfoo/.
+		"/typha/**",           // another whole-tree glob — kept.
+		"/typha/pkg/*.go",     // subsumed by /typha/**.
+		"/metadata.mk",        // unrelated — kept.
+		"/**/*.md",            // wildcard prefix, not a subsumer and not subsumed.
+	)
+
+	got := dropSubsumedInclusions(in).Slice()
+
+	want := set.From("/felix/**", "/felixfoo/*.go", "/typha/**", "/metadata.mk", "/**/*.md")
+	if len(got) != want.Len() {
+		t.Fatalf("got %v, want %v", got, want.Slice())
+	}
+	for _, g := range got {
+		if !want.Contains(g) {
+			t.Errorf("unexpected surviving inclusion %q", g)
+		}
+	}
+}
+
 func macroBlocks() []templateData {
 	return []templateData{
 		{
