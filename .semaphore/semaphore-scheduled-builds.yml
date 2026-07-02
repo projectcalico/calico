@@ -64,7 +64,6 @@ global_job_config:
       # this prologue can run before the working copy (and the .semaphore/s3-cmd
       # wrapper) has been checked out.
       - |-
-        umask 077
         cat >"$HOME/.s3cfg" <<S3CFG
         [default]
         access_key = ${CALICO_S3_ACCESS_KEY}
@@ -72,6 +71,7 @@ global_job_config:
         ${CALICO_S3_HOST:+host_base = ${CALICO_S3_HOST}}
         ${CALICO_S3_HOST:+host_bucket = ${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}}
         S3CFG
+      - chmod 600 "$HOME/.s3cfg"
       # Try to restore the working copy from the cache, if available. Then,
       # for PRs, also try to restore the build cache.  (We skip this on branch
       # builds to ensure branches build cleanly.)
