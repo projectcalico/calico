@@ -162,6 +162,16 @@ Felix runs against one dataplane at a time (selected by
 - **Windows** (HNS/HCN) — separate dataplane in
   `dataplane/windows/`.
 
+`NFTablesMode=Auto` resolves by following the detected kube-proxy
+mode: an nftables-mode kube-proxy selects the nftables dataplane.
+That signal is about coexistence — Felix must use the same
+netfilter generation as kube-proxy — not host capability, so it
+must not be replaced by a capability probe on cluster hosts. See
+`useNftables()` in `dataplane/linux/int_dataplane.go`. The
+per-host escape hatch is `NFTablesMode=Disabled`/`Enabled` set
+locally (env var or config file), which overrides any
+datastore-inherited value.
+
 The `iptables` and `nftables` backends share a common rule-
 generation layer in `felix/rules/` and a common table-abstraction
 interface in `felix/generictables/`. Backend-neutral rule
