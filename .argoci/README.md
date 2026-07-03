@@ -18,3 +18,26 @@ migrated off Semaphore's scheduled e2e builds.
 
 These crons and scripts are maintained **by hand** going forward: edit the
 YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
+
+## Cron naming (branchless)
+
+Cron filenames and their `generateName` carry **no branch** — `e2e-nftables.yaml`,
+`generateName: e2e-nftables-`. The same file lives unchanged on `master` and on
+every release branch; `cc-argoci-handler` appends the **deploy branch** to the
+CronWorkflow's `metadata.name` when it expands the file. So one file becomes:
+
+| Branch the file is on | Deployed CronWorkflow name |
+|---|---|
+| `master` | `e2e-nftables-master` |
+| `release-v3.33` | `e2e-nftables-release-v3-33` (branch sanitised: `.` → `-`) |
+
+This is required because all crons share the single `argoci` namespace and are
+applied upsert-by-name: without the branch qualifier, `master` and a release
+branch's copy of the same file would collide. Deriving the branch at deploy time
+(rather than baking it into the filename) means a file carried onto a release
+branch by a cut is correct with no rename.
+
+**The live object's name is therefore not visible in the file.** When looking for
+a suite's cron in the `argoci` namespace, remember the handler appended the branch
+(and sanitised any `.`/`/`). Keep `generateName` branchless — a baked-in branch
+would double up (`…-master-master`) or, worse, collide across branches.
