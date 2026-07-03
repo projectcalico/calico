@@ -1,7 +1,7 @@
 # Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
 # Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
 version: condensed
-generateName: e2e-patch-verification-master-
+generateName: e2e-patch-verification-
 schedule: 10 21 * * 3
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
