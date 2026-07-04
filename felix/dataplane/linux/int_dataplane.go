@@ -1281,6 +1281,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.RegisterManager(dp.wireguardManager) // IPv4
 
 	dp.RegisterManager(newServiceLoopManager(filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(newLBNoEndpointsManager(filterTableV4, ruleRenderer, 4))
 
 	if config.IPv6Enabled {
 		// Build out both iptables and nftables implementations for IPv6.
@@ -1447,6 +1448,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6, config.FloatingIPsEnabled))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 		dp.RegisterManager(newServiceLoopManager(filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newLBNoEndpointsManager(filterTableV6, ruleRenderer, 6))
 
 		if config.RulesConfig.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
 			dp.RegisterManager(newHostsIPSetManager(ipSetsV6, 6, config))

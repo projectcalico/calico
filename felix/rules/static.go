@@ -660,6 +660,14 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 	// Jump to chain for blocking service CIDR loops.
 	rules = append(rules,
 		generictables.Rule{
+			// A LoadBalancer VIP with no local backend may be configured to stay
+			// routable.  Only
+			// packets already accepted by Calico policy may bypass kube-proxy's
+			// later no-endpoints reject rule.
+			Match:  r.NewMatch().MarkSingleBitSet(r.MarkAccept),
+			Action: r.Jump(ChainLBNoEndpoints),
+		},
+		generictables.Rule{
 			Action: r.Jump(ChainCIDRBlock),
 		},
 	)

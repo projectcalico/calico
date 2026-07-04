@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	. "github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 )
 
@@ -237,6 +238,29 @@ var _ = Describe("NAT", func() {
 			Name:  "cali-nat-outgoing",
 			Rules: nil,
 		}))
+	})
+
+	It("should render only Forward no-endpoints LoadBalancer VIP ports", func() {
+		chains := renderer.LBNoEndpointServicesToIptablesChains([]*proto.ServiceUpdate{
+			{
+				Name: "ntp", Namespace: "default", NoEndpointsAction: "Forward",
+				ClusterIps: []string{"10.96.0.1"}, ExternalIps: []string{"192.0.2.1"},
+				LoadbalancerIngressIps: []string{"1.2.3.4", "2001:db8::1"},
+				Ports: []*proto.ServicePort{{Protocol: "UDP", Port: 123}},
+			},
+			{
+				Name: "ordinary", Namespace: "default",
+				LoadbalancerIngressIps: []string{"5.6.7.8"},
+				Ports:                   []*proto.ServicePort{{Protocol: "TCP", Port: 80}},
+			},
+		}, 4)
+		Expect(chains).To(Equal([]*generictables.Chain{{
+			Name: ChainLBNoEndpoints,
+			Rules: []generictables.Rule{{
+				Match:  Match().Protocol("udp").DestNet("1.2.3.4").DestPorts(123),
+				Action: AcceptAction{},
+			}},
+		}}))
 	})
 })
 

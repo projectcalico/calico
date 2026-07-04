@@ -76,6 +76,7 @@ const (
 	ChainFIPSnat = ChainNamePrefix + "fip-snat"
 
 	ChainCIDRBlock = ChainNamePrefix + "cidr-block"
+	ChainLBNoEndpoints = ChainNamePrefix + "lb-no-endpoints"
 
 	PolicyInboundPfx   PolicyChainNamePrefix  = ChainNamePrefix + "pi-"
 	PolicyOutboundPfx  PolicyChainNamePrefix  = ChainNamePrefix + "po-"
@@ -342,6 +343,7 @@ type RuleRenderer interface {
 	DNATsToIptablesChains(dnats map[string]string) []*generictables.Chain
 	SNATsToIptablesChains(snats map[string]string) []*generictables.Chain
 	BlockedCIDRsToIptablesChains(cidrs []string, ipVersion uint8) []*generictables.Chain
+	LBNoEndpointServicesToIptablesChains(services []*proto.ServiceUpdate, ipVersion uint8) []*generictables.Chain
 
 	WireguardIncomingMarkChain() *generictables.Chain
 

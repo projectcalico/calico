@@ -7,12 +7,11 @@
 package proto
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -6021,6 +6020,7 @@ type ServiceUpdate struct {
 	ExternalIps            []string               `protobuf:"bytes,6,rep,name=external_ips,json=externalIps,proto3" json:"external_ips,omitempty"`
 	Ports                  []*ServicePort         `protobuf:"bytes,7,rep,name=ports,proto3" json:"ports,omitempty"`
 	LoadbalancerIngressIps []string               `protobuf:"bytes,8,rep,name=loadbalancer_ingress_ips,json=loadbalancerIngressIps,proto3" json:"loadbalancer_ingress_ips,omitempty"`
+	NoEndpointsAction      string                 `protobuf:"bytes,9,opt,name=no_endpoints_action,json=noEndpointsAction,proto3" json:"no_endpoints_action,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -6109,6 +6109,13 @@ func (x *ServiceUpdate) GetLoadbalancerIngressIps() []string {
 		return x.LoadbalancerIngressIps
 	}
 	return nil
+}
+
+func (x *ServiceUpdate) GetNoEndpointsAction() string {
+	if x != nil {
+		return x.NoEndpointsAction
+	}
+	return ""
 }
 
 type ServiceRemove struct {
@@ -6692,7 +6699,7 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\vServicePort\x12\x1a\n" +
 	"\bProtocol\x18\x01 \x01(\tR\bProtocol\x12\x12\n" +
 	"\x04Port\x18\x02 \x01(\x05R\x04Port\x12\x1a\n" +
-	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xa6\x02\n" +
+	"\bNodePort\x18\x03 \x01(\x05R\bNodePort\"\xd6\x02\n" +
 	"\rServiceUpdate\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n" +
@@ -6702,7 +6709,8 @@ const file_felixbackend_proto_rawDesc = "" +
 	"\x0floadbalancer_ip\x18\x05 \x01(\tR\x0eloadbalancerIp\x12!\n" +
 	"\fexternal_ips\x18\x06 \x03(\tR\vexternalIps\x12(\n" +
 	"\x05ports\x18\a \x03(\v2\x12.felix.ServicePortR\x05ports\x128\n" +
-	"\x18loadbalancer_ingress_ips\x18\b \x03(\tR\x16loadbalancerIngressIps\"A\n" +
+	"\x18loadbalancer_ingress_ips\x18\b \x03(\tR\x16loadbalancerIngressIps\x12.\n" +
+	"\x13no_endpoints_action\x18\t \x01(\tR\x11noEndpointsAction\"A\n" +
 	"\rServiceRemove\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace*(\n" +
