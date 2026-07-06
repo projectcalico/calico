@@ -90,7 +90,7 @@ func WithWatchRetryTimeout(t time.Duration) Option {
 
 // New creates a new multiple Watcher-backed api.Syncer.
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
-	return NewMultiClient(map[string]api.Client{"": client}, resourceTypes, callbacks)
+	return NewMultiClient(map[string]api.Client{"": client}, resourceTypes, callbacks, options...)
 }
 
 // NewMultiClient creates a new multiple Watcher-backed api.Syncer with multiple backing clients.
