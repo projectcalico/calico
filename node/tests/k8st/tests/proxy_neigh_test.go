@@ -50,6 +50,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -113,7 +114,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Logf("Test pool CIDRs (%s): workload=%s LB=%s", family, workloadCIDR, lbCIDR)
 
 	suffix := strings.ToLower(string(family))
-	nsName := "proxy-neigh-" + suffix
+	nsName := e2eutils.GenerateRandomName("proxy-neigh-" + suffix)
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
@@ -229,7 +230,7 @@ func probe(g *WithT, peer *extL2Peer, ip string) {
 	g.Eventually(func() error {
 		_, err := peer.Curl(httpURL(ip))
 		return err
-	}, "60s", "2s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
+	}, "60s", "1s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
 }
 
 func httpURL(ip string) string {
@@ -298,7 +299,7 @@ func setLocalSubnetL2Reachability(ctx context.Context, g *WithT, cli ctrlclient.
 			}
 			cur.Spec.LocalSubnetL2Reachability = original
 			return cli.Update(rctx, cur)
-		}, "20s", "2s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
+		}, "20s", "1s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
 	}
 }
 
@@ -322,7 +323,7 @@ func waitForPodIP(ctx context.Context, g *WithT, cli ctrlclient.Client, pod *cor
 			}
 		}
 		return fmt.Errorf("pod %s has no %s IP yet", pod.Name, family)
-	}, "120s", "2s").Should(Succeed(), "server pod never got a %s IP", family)
+	}, "120s", "1s").Should(Succeed(), "server pod never got a %s IP", family)
 	return ip
 }
 
@@ -341,7 +342,7 @@ func waitForLBVIP(ctx context.Context, g *WithT, cli ctrlclient.Client, svc *cor
 		}
 		vip = ingress[0].IP
 		return nil
-	}, "120s", "2s").Should(Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
+	}, "120s", "1s").Should(Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
 	return vip
 }
 

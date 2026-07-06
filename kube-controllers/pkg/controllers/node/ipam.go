@@ -179,6 +179,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
+		coldBlocks:                  make(map[string]metav1.Time),
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 		consolidationWindow:         1 * time.Second,
@@ -242,6 +243,12 @@ type IPAMController struct {
 	blockReleaseTracker *blockReleaseTracker
 
 	emptyBlocks map[string]string
+
+	// coldBlocks tracks blocks that have at least one IP in cooldown, mapping the
+	// block CIDR to the earliest ReleasedAt among its cooldown IPs. The cold-IP GC
+	// backstop only needs to visit these blocks, and only once their cooldown has
+	// elapsed, rather than walking every block on every sync.
+	coldBlocks map[string]metav1.Time
 
 	// poolManager associates IPPools with their blocks.
 	poolManager *poolManager
@@ -544,6 +551,7 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// Update allocations contributed from this block.
 	numAllocationsInBlock := 0
 	currentAllocations := map[string]bool{}
+	var earliestReleasedAt *metav1.Time
 	for ord, idx := range b.Allocations {
 		if idx == nil {
 			// Not allocated.
@@ -551,6 +559,12 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 		numAllocationsInBlock++
 		attr := b.Attributes[*idx]
+
+		// Track the oldest cooldown IP in the block so the GC backstop knows when
+		// this block becomes a candidate for deallocation.
+		if attr.ReleasedAt != nil && (earliestReleasedAt == nil || attr.ReleasedAt.Before(earliestReleasedAt)) {
+			earliestReleasedAt = attr.ReleasedAt
+		}
 
 		// If there is no handle, then skip this IP. We need the handle
 		// in order to release the IP below.
@@ -607,6 +621,14 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 	}
 
+	// Track whether this block has IPs in cooldown so the GC backstop can skip
+	// blocks that don't.
+	if earliestReleasedAt != nil {
+		c.coldBlocks[blockCIDR] = *earliestReleasedAt
+	} else {
+		delete(c.coldBlocks, blockCIDR)
+	}
+
 	c.poolManager.onBlockUpdated(blockCIDR)
 
 	// Finally, update the raw storage.
@@ -616,17 +638,22 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	blockCIDR := key.CIDR.String()
 	log.WithField("block", blockCIDR).Info("Received block delete")
+	c.forgetBlock(blockCIDR)
+}
 
-	// Remove allocations that were contributed by this block.
-	allocations := c.allocationsByBlock[blockCIDR]
-	for _, alloc := range allocations {
+// forgetBlock removes all cached state for a block. Every path that stops tracking a
+// block - a block delete from the datastore, or an affinity release of an empty block
+// in releaseUnusedBlocks - must funnel through here so the cache maps can't drift out
+// of sync.
+func (c *IPAMController) forgetBlock(blockCIDR string) {
+	// Release any allocations the block contributed.
+	for _, alloc := range c.allocationsByBlock[blockCIDR] {
 		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
-	// Remove from raw block storage.
+	// Drop the block from its node, removing the node entry if it has no blocks left.
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
-		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
 		if len(c.blocksByNode[n]) == 0 {
 			delete(c.blocksByNode, n)
@@ -635,6 +662,7 @@ func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
+	delete(c.coldBlocks, blockCIDR)
 
 	c.blockReleaseTracker.onBlockDeleted(blockCIDR)
 	c.poolManager.onBlockDeleted(blockCIDR)
@@ -794,20 +822,11 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 			continue
 		}
 
-		// Update internal state. We released affinity on an empty block, and so
-		// it will have been deleted. It's important that we update blocksByNode here
-		// in case there are other empty blocks allocated to the node so that we don't
+		// Update internal state. We released affinity on an empty block, and so it will
+		// have been deleted. Forgetting the block updates blocksByNode, which matters in
+		// case there are other empty blocks affine to the node, so that we don't
 		// accidentally release all of the node's blocks.
-		delete(c.emptyBlocks, blockCIDR)
-		delete(c.blocksByNode[node], blockCIDR)
-		if len(c.blocksByNode[node]) == 0 {
-			delete(c.blocksByNode, node)
-		}
-		delete(c.nodesByBlock, blockCIDR)
-		delete(c.allBlocks, blockCIDR)
-
-		c.blockReleaseTracker.onBlockDeleted(blockCIDR)
-		c.poolManager.onBlockDeleted(blockCIDR)
+		c.forgetBlock(blockCIDR)
 	}
 	return nil
 }
@@ -1321,10 +1340,13 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	return nil
 }
 
-// garbageCollectColdIPs runs GC on every known IPAM block, writing back any block
-// that was modified (i.e. had IPs whose ReleasedAt grace period had elapsed).
+// garbageCollectColdIPs deallocates IPs whose cooldown has elapsed, writing back any
+// block that was modified. It is a backstop for blocks that see no further allocation
+// activity, since read-time GC only persists on write paths. Only blocks with IPs in
+// cooldown are visited, and only once their oldest cooldown IP has finished cooling
+// down, so the common case where nothing is cooling down does no work.
 func (c *IPAMController) garbageCollectColdIPs() error {
-	if len(c.allBlocks) == 0 {
+	if len(c.coldBlocks) == 0 {
 		return nil
 	}
 	defer logIfSlow(time.Now(), "Block GC complete")
@@ -1336,7 +1358,21 @@ func (c *IPAMController) garbageCollectColdIPs() error {
 	if err != nil {
 		return err
 	}
-	for _, kvp := range c.allBlocks {
+
+	cooldown := time.Duration(ipamConfig.IPCooldownSeconds) * time.Second
+	now := time.Now()
+	for cidr, earliestReleasedAt := range c.coldBlocks {
+		if earliestReleasedAt.Add(cooldown).After(now) {
+			// The oldest cooldown IP in this block hasn't finished cooling down yet.
+			log.WithField("block", cidr).Debug("Block has IPs in cooldown but none are ready to deallocate yet")
+			continue
+		}
+		kvp, ok := c.allBlocks[cidr]
+		if !ok {
+			// coldBlocks should always be a subset of allBlocks; see assertConsistentState.
+			log.WithField("block", cidr).Warn("Block tracked as having cooldown IPs is missing from the block cache")
+			continue
+		}
 		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, ipamConfig, &kvp); err != nil {
 			return err
 		}

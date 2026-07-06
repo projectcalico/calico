@@ -140,6 +140,14 @@ stack (or lets them continue through it) when it cannot:
   applies to service traffic; host-originated traffic whose endpoint
   is in the host namespace (host-networked peer, host-local socket)
   obviously cannot skip the host stack and does not use this path.
+- **Tunnel-port traffic at a host endpoint.** UDP arriving on a host
+  interface on the VXLAN or WireGuard port is fast-allowed when it is
+  to/from a known Calico host, so that host-endpoint policy cannot
+  accidentally break the cluster's own overlay/encryption mesh. These
+  are well-known ports (WireGuard defaults to 51820) that a user may
+  also run their own VXLAN/WireGuard on, so a packet that is _not_
+  to/from a known Calico host is not assumed to be Calico's: BPF lets
+  it fall through to host-endpoint policy rather than dropping it.
 
 When BPF _can_ answer the question — FIB hit, known local pod, existing
 BPF conntrack entry, matched NAT frontend with an acceptable backend —

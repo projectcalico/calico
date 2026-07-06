@@ -90,7 +90,7 @@ func TestNodeMeshStatus(t *testing.T) {
 				st.BGP.NumberEstablishedV4, st.BGP.NumberEstablishedV6)
 		}
 		return nil
-	}, "60s", "2s").Should(Succeed(), "CalicoNodeStatus %s never reported a fully-established mesh", statusName)
+	}, "60s", "1s").Should(Succeed(), "CalicoNodeStatus %s never reported a fully-established mesh", statusName)
 
 	// Agent (BIRD) status: both daemons Ready, router ID equal to the node IP.
 	g.Expect(st.Agent.BIRDV4.RouterID).To(Equal(testNodeIP), "birdV4 router ID")

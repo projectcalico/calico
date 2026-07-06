@@ -36,9 +36,9 @@ import (
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -74,10 +74,6 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 const (
 	externalNodeV4 = "kube-node-extra"
 	externalNodeV6 = "kube-node-extra-v6"
-
-	// anchorNamespace holds the idle pod that pins an IPAM block to the egress
-	// node so it has something to advertise to the external routers.
-	anchorNamespace = "bgp-filter-anchor"
 
 	peerNameV4 = "node-extra.peer"
 	peerNameV6 = "node-extra-v6.peer"
@@ -176,9 +172,13 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	t.Cleanup(func() { _, _ = utils.Run(t, "docker rm -f "+externalNodeV6, utils.RunOptions{AllowFail: true}) })
 
 	// Mark the egress node so the node-selected BGPPeers attach to it.
-	labelNode(t, ctx, env.egressNode, "egress", "true")
+	labelNode(t, env.egressNode, "egress", "true")
 
-	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode)
+	// anchorNS pins an idle pod to the egress node so it owns an IPAM block to
+	// advertise. The random suffix keeps it unique per test so concurrent or
+	// repeated runs against the same cluster do not collide.
+	anchorNS := e2eutils.GenerateRandomName("bgp-filter-anchor")
+	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode, anchorNS)
 
 	// Establish BGPPeers from the egress node to each external router.
 	createBGPPeer(t, ctx, g, cli, peerNameV4, env.externalNodeIP)
@@ -192,15 +192,15 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 // that may host no pods (and thus no block, especially for IPv6). The pod uses
 // the default pools so its block CIDRs match clusterRouteRegexV4/V6; waiting for
 // both IPs claims a block in each family before any assertion runs.
-func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node string) {
+func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node, nsName string) {
 	t.Helper()
 
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: anchorNamespace}}
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: anchorNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: nsName},
 		Spec: corev1.PodSpec{
 			NodeName:   node,
 			Containers: []corev1.Container{{Name: "anchor", Image: utils.Agnhost, Args: []string{"pause"}}},
@@ -448,18 +448,6 @@ func testBGPFilterGlobalPeer(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 
 // --- Fixture + resource helpers ---
 
-// labelNode applies a single label to a node via a strategic-merge patch (the
-// client-go equivalent of `kubectl label node ... --overwrite`).
-func labelNode(t *testing.T, ctx context.Context, nodeName, key, value string) {
-	t.Helper()
-	cs := utils.K8sClient(t)
-	patch := fmt.Appendf(nil, `{"metadata":{"labels":{%q:%q}}}`, key, value)
-	_, err := cs.CoreV1().Nodes().Patch(ctx, nodeName, types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("labelling node %s with %s=%s: %v", nodeName, key, value, err)
-	}
-}
-
 // createBGPPeer creates a node-selected BGPPeer to the given external router
 // address and registers a cleanup that removes it.
 func createBGPPeer(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, name, peerIP string) {
@@ -547,17 +535,15 @@ func (e *bgpFilterEnv) assertClusterRoute(t *testing.T, route, peerIP string, ip
 	pattern := regexp.QuoteMeta(route) + ` *via ` + regexp.QuoteMeta(peerIP) + ` on .* \[` + proto
 	re := regexp.MustCompile(pattern)
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.ExecInCalicoNode(t, e.egressNode, birdCmd+" show route protocol "+proto,
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, route, present)
-	})
-	if err != nil {
-		t.Fatalf("cluster route check failed for %s on %s: %v", route, e.egressNode, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "cluster route check failed for %s on %s", route, e.egressNode)
 }
 
 // assertExternalRoute polls an external router's BIRD until a route matching
@@ -595,17 +581,15 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 
 	re := regexp.MustCompile(pattern)
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s show route protocol %s", container, birdCmd, proto),
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, routeRegex, present)
-	})
-	if err != nil {
-		t.Fatalf("external route check failed for %s on %s: %v", routeRegex, container, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "external route check failed for %s on %s", routeRegex, container)
 }
 
 // checkRoutePresence returns nil when re's match of out agrees with the
