@@ -206,6 +206,18 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 
 #define skb_mark_equals(skb, mask, val) (((skb)->mark & (mask)) == (val))
 
+// skb_log implements the policy Log action. Its bpf_trace_vprintk/bpf_log calls
+// are gated only at runtime (CALI_ST_LOG_PACKET), not by CALI_LOG_LEVEL, so they
+// are compiled into every main program including the no_log builds, and are not
+// removed by CALI_NO_TRACE_PRINTK (which only strips the preamble's CALI_LOG).
+// Under kernel lockdown=confidentiality this means loading any main program
+// still makes the kernel log "could not enable bpf_trace_printk events" — an
+// expected one-off burst each time Felix loads the main program set (startup /
+// reload / reboot). It does not recur per interface attach: the main programs
+// are shared via jump maps, so only the (trace-printk-free) preamble reloads.
+// We accept this rather than build trace-free variants of every main program,
+// which would roughly double the compiled program matrix; the Log action cannot
+// work under confidentiality lockdown anyway, since ftrace is disabled.
 static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 {
 	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
