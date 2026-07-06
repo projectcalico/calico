@@ -5,6 +5,7 @@ generateName: e2e-bpf-
 schedule: 10 21 * * 2
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export DATAPLANE="${DATAPLANE:-CalicoBPF}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
   export INSTALLER="${INSTALLER:-operator}"

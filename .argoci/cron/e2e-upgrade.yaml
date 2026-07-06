@@ -5,6 +5,7 @@ generateName: e2e-upgrade-
 schedule: 10 21 * * 3
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export CALICOCTL_INSTALL_TYPE="${CALICOCTL_INSTALL_TYPE:-container}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-upgrade.yml}"
   export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)}"
