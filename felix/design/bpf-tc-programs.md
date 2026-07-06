@@ -134,6 +134,21 @@ trace-printk-free preamble variants (`*_notrace.o`,
 `AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
 nodes.
 
+The main programs need the same treatment but must not be duplicated
+into `_notrace` variants (that would double the compiled program
+matrix). Their only unconditional trace-printk reference is `skb_log`
+(the policy `Log` action, gated at runtime rather than by
+`BPFLogLevel`, so it survives into the `no_log` builds). Instead of a
+separate object, each program carries a small `struct cali_rodata_flags`
+in its own frozen `.rodata.cali_flags` section (kept apart from the main
+globals so it does not perturb their layout). When Felix detects
+confidentiality lockdown it sets `no_trace_printk` in that section
+before load (`bpf.SetNoTracePrintk` → `Map.SetRodataFlags`); because the
+section is read-only and frozen, the verifier folds the flag to a
+constant and dead-code-eliminates the guarded `skb_log` body, so the
+loaded program references no trace helper and its load is silent. The
+struct is the general vehicle for future load-time feature flags.
+
 ### Two-tier jump maps
 
 Packet-processing programs are organised into two jump maps per
