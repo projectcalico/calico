@@ -109,7 +109,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 			fmt.Sprintf("curl --silent --show-error --max-time 5 http://%s/clientip", serverIP+":80"),
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		return err
-	}, "120s", "5s").Should(Succeed(),
+	}, "120s", "1s").Should(Succeed(),
 		"client pod could not reach server pod %s across the IPIP tunnel", serverIP)
 
 	// The client node's route to the server's block must be programmed by the
