@@ -30,7 +30,16 @@
 } while (0)
 
 #ifndef CALI_LOG
+#ifdef CALI_NO_TRACE_PRINTK
+// Programs built with CALI_NO_TRACE_PRINTK must not reference the
+// bpf_trace_printk helper at all: on a kernel with lockdown=confidentiality
+// ftrace is disabled at boot, so loading any program that references the
+// helper makes the kernel emit "could not enable bpf_trace_printk events" on
+// every load. Compile the default log macro out entirely for those builds.
+#define CALI_LOG(fmt, ...) do {} while (0)
+#else
 #define CALI_LOG bpf_log
+#endif
 #endif
 
 #define CALI_INFO_NO_FLAG(fmt, ...)  CALI_LOG_IF(CALI_LOG_LEVEL_INFO, fmt, ## __VA_ARGS__)
