@@ -121,6 +121,26 @@ connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bp
 
 Because the preamble is cheap to reload, Felix can swap it per
 interface without re-verifying the large program chain it fronts.
+Reloading is deliberate: the preamble carries per-interface
+configuration (jump-map indices, host IP, flags) in `.rodata`, some of
+which changes without a Felix restart, so it is re-loaded on every
+attach rather than diffed. Each such load re-runs the verifier.
+
+The preamble's drop/error paths call `bpf_trace_printk` unconditionally
+(they are not gated by `BPFLogLevel`). On a kernel running with
+`lockdown=confidentiality` ftrace is disabled at boot, so the verifier's
+attempt to enable the `bpf_trace_printk` trace event fails and the
+kernel logs `could not enable bpf_trace_printk events` on **every**
+preamble load — a constant spew given how often the preamble reloads.
+To avoid this, `felix/bpf-gpl/` also builds trace-printk-free preamble
+variants (`*_notrace.o`, compiled with `-DCALI_NO_TRACE_PRINTK`); Felix
+detects confidentiality lockdown at startup
+(`bpf.KernelLockdownConfidentiality`, reading
+`/sys/kernel/security/lockdown`) and loads the `_notrace` variants on
+those nodes (`AttachPoint.NoTracePrintk`). On such nodes `BPFLogLevel:
+Debug` is also forced to off, since the debug programs carry the helper
+and BPF debug logging (and the policy `Log` action) cannot work while
+ftrace is disabled.
 
 ### Two-tier jump maps
 
