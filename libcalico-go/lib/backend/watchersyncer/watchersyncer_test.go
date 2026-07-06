@@ -869,6 +869,97 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		})
 		rs.ExpectParseError("zzzzz", "xxxxx")
 	})
+
+	It("should forward New()'s Option arguments so WithWatchRetryTimeout takes effect", func() {
+		// Regression coverage: New() delegates to NewMultiClient, and the options
+		// variadic must be forwarded — otherwise a caller of New() who passes
+		// WithWatchRetryTimeout silently gets the default (10-minute) timeout and
+		// the syncer never signals SyncFailed on sustained connectivity loss.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 500*time.Millisecond, 500*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester(
+			[]watchersyncer.ResourceType{r1},
+			watchersyncer.WithWatchRetryTimeout(50*time.Millisecond),
+		)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		// Age lastSuccessfulConnTime past the (short) retry timeout so the next
+		// List failure hits the sustained-disconnect branch rather than being
+		// absorbed as a transient hiccup.
+		time.Sleep(100 * time.Millisecond)
+		rs.clientListResponse(r1, genError)
+
+		// With options forwarded, watchRetryTimeout is 50ms and SyncFailed fires
+		// on the first List failure (time.Since already > 50ms). Without
+		// forwarding, watchRetryTimeout stays at the 10-minute default and this
+		// ExpectConnErrors would time out.
+		rs.ExpectConnErrors([]error{genError})
+	})
+
+	It("should dispatch each resource to the client named by its ClientID", func() {
+		// Two backend clients, each responsible for a distinct resource type via
+		// ClientID. Reaching InSync proves NewMultiClient wired each resource's
+		// watcherCache to the correct client: if either client had received a
+		// resource it wasn't set up for, fakeClient.List / fakeClient.Watch would
+		// have panicked.
+		rc1 := r1
+		rc1.ClientID = "clientA"
+		rc2 := r2
+		rc2.ClientID = "clientB"
+
+		fcA := newFakeClientFor(rc1)
+		fcB := newFakeClientFor(rc2)
+		st := testutils.NewSyncerTester()
+		ws := watchersyncer.NewMultiClient(
+			map[string]api.Client{"clientA": fcA, "clientB": fcB},
+			[]watchersyncer.ResourceType{rc1, rc2},
+			st,
+		)
+		ws.Start()
+
+		st.ExpectStatusUpdate(api.WaitForDatastore)
+		sendListResponseTo(fcA, rc1, emptyList)
+		st.ExpectStatusUpdate(api.ResyncInProgress)
+		sendListResponseTo(fcB, rc2, emptyList)
+		st.ExpectStatusUpdate(api.InSync)
+
+		// Unblock the two Watch calls so subsequent tests aren't racing with
+		// leftover goroutines from this one. fakeClient.Watch has no context
+		// select, so a bare ws.Stop() would hang here.
+		sendWatchResponseTo(fcA, rc1, notSupported)
+		sendWatchResponseTo(fcB, rc2, notSupported)
+	})
+
+	It("should skip resources whose ClientID has no matching client", func() {
+		// rMissing's ClientID is not in the client map. NewMultiClient must skip
+		// it entirely: no watcherCache should be created, and InSync depends only
+		// on rMatch completing its List. If a phantom cache for rMissing were
+		// created (e.g. against the wrong client), InSync would never fire
+		// because that cache would sit forever waiting on a List response.
+		rMatch := r1
+		rMatch.ClientID = "clientA"
+		rMissing := r2
+		rMissing.ClientID = "clientB" // no matching client below
+
+		fc := newFakeClientFor(rMatch)
+		st := testutils.NewSyncerTester()
+		ws := watchersyncer.NewMultiClient(
+			map[string]api.Client{"clientA": fc},
+			[]watchersyncer.ResourceType{rMatch, rMissing},
+			st,
+		)
+		ws.Start()
+
+		st.ExpectStatusUpdate(api.WaitForDatastore)
+		sendListResponseTo(fc, rMatch, emptyList)
+		st.ExpectStatusUpdate(api.ResyncInProgress)
+		st.ExpectStatusUpdate(api.InSync)
+
+		// Unblock the Watch call so subsequent tests aren't racing with a
+		// leftover goroutine from this one.
+		sendWatchResponseTo(fc, rMatch, notSupported)
+	})
 })
 
 var (
@@ -1012,28 +1103,16 @@ func modifiedEvent(key model.Key) api.WatchEvent {
 
 // Create a new watcherSyncerTester - this creates and starts a WatcherSyncer with
 // client and sync consumer interfaces implemented and controlled by the test.
-func newStartedWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
-	rst := newWatcherSyncerTester(l)
+func newStartedWatcherSyncerTester(l []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
+	rst := newWatcherSyncerTester(l, opts...)
 	rst.watcherSyncer.Start()
 	return rst
 }
 
-func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
+func newWatcherSyncerTester(l []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
 	// Create the required watchers.  This hs methods that we use to drive
 	// responses.
-	lws := map[string]*listWatchSource{}
-	for _, r := range l {
-		// We create a watcher for each resource type.  We'll store these off the
-		// default enumeration path for that resource.
-		name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
-		lws[name] = &listWatchSource{
-			name:            name,
-			watchCallError:  make(chan error, 50),
-			listCallResults: make(chan any, 200),
-			stopEvents:      make(chan struct{}, 200),
-			results:         make(chan api.WatchEvent, 200),
-		}
-	}
+	lws := newListWatchSources(l)
 
 	fc := &fakeClient{
 		lws: lws,
@@ -1044,10 +1123,58 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 	rst := &watcherSyncerTester{
 		SyncerTester:  st,
 		fc:            fc,
-		watcherSyncer: watchersyncer.New(fc, l, st),
+		watcherSyncer: watchersyncer.New(fc, l, st, opts...),
 		lws:           lws,
 	}
 	return rst
+}
+
+// newListWatchSources builds a map of listWatchSource, one per resource type, keyed
+// by the default enumeration path for that resource. Shared by the single-client
+// tester setup and by the multi-client fakeClient helpers below.
+func newListWatchSources(l []watchersyncer.ResourceType) map[string]*listWatchSource {
+	lws := map[string]*listWatchSource{}
+	for _, r := range l {
+		name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+		lws[name] = &listWatchSource{
+			name:            name,
+			watchCallError:  make(chan error, 50),
+			listCallResults: make(chan any, 200),
+			stopEvents:      make(chan struct{}, 200),
+			results:         make(chan api.WatchEvent, 200),
+		}
+	}
+	return lws
+}
+
+// newFakeClientFor returns a fakeClient prepared to serve the given resource types
+// and only those. Used by multi-client tests where each ResourceType is answered by
+// a specific fakeClient identified by ClientID; if the syncer accidentally routes a
+// request to the wrong client, the fakeClient's List/Watch will panic and the test
+// will fail.
+func newFakeClientFor(resources ...watchersyncer.ResourceType) *fakeClient {
+	return &fakeClient{lws: newListWatchSources(resources)}
+}
+
+// sendListResponseTo queues a List response on the given fakeClient for the given
+// resource type. Used by multi-client tests where clientListResponse (a
+// watcherSyncerTester method wired to a single client) is not applicable.
+func sendListResponseTo(fc *fakeClient, r watchersyncer.ResourceType, response any) {
+	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+	switch response.(type) {
+	case error, *model.KVPairList:
+		fc.lws[name].listCallResults <- response
+	default:
+		panic("Error in test, wrong type specified")
+	}
+}
+
+// sendWatchResponseTo queues a Watch response on the given fakeClient. Used to
+// unblock the syncer's Watch call after finishResync so the test can exit
+// cleanly (fakeClient.Watch blocks on watchCallError with no context select).
+func sendWatchResponseTo(fc *fakeClient, r watchersyncer.ResourceType, err error) {
+	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+	fc.lws[name].watchCallError <- err
 }
 
 // watcherSyncerTester is used to create, start and validate a watcherSyncer.  It
