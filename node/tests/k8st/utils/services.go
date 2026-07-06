@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -171,7 +173,7 @@ func CreateService(t testing.TB, name, app, ns string, port int32, opts DeployOp
 func WaitForDeployment(t testing.TB, name, ns string) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, 2*time.Minute, func() error {
+	NewWithT(t).Eventually(func() error {
 		d, err := cs.AppsV1().Deployments(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -191,17 +193,14 @@ func WaitForDeployment(t testing.TB, name, ns string) {
 				ns, name, d.Status.UpdatedReplicas, d.Status.Replicas, d.Status.AvailableReplicas, desired)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("deployment %s/%s did not roll out: %v", ns, name, err)
-	}
+	}, 2*time.Minute, time.Second).Should(Succeed(), "deployment %s/%s did not roll out", ns, name)
 }
 
 // ScaleDeployment sets the deployment's replica count.
 func ScaleDeployment(t testing.TB, name, ns string, replicas int32) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, 30*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		d, err := cs.AppsV1().Deployments(ns).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -209,10 +208,7 @@ func ScaleDeployment(t testing.TB, name, ns string, replicas int32) {
 		d.Spec.Replicas = new(replicas)
 		_, err = cs.AppsV1().Deployments(ns).Update(context.Background(), d, metav1.UpdateOptions{})
 		return err
-	})
-	if err != nil {
-		t.Fatalf("scaling deployment %s/%s to %d: %v", ns, name, replicas, err)
-	}
+	}, 30*time.Second, time.Second).Should(Succeed(), "scaling deployment %s/%s to %d", ns, name, replicas)
 }
 
 // WaitUntilExists blocks until the named resource exists, fatally failing on
@@ -220,7 +216,7 @@ func ScaleDeployment(t testing.TB, name, ns string, replicas int32) {
 func WaitUntilExists(t testing.TB, name, resourceType, ns string) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, 90*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		switch resourceType {
 		case "svc":
 			_, err := cs.CoreV1().Services(ns).Get(context.Background(), name, metav1.GetOptions{})
@@ -229,10 +225,7 @@ func WaitUntilExists(t testing.TB, name, resourceType, ns string) {
 			t.Fatalf("WaitUntilExists: unsupported resource type %q", resourceType)
 			return nil
 		}
-	})
-	if err != nil {
-		t.Fatalf("%s %s/%s never appeared: %v", resourceType, ns, name, err)
-	}
+	}, 90*time.Second, time.Second).Should(Succeed(), "%s %s/%s never appeared", resourceType, ns, name)
 }
 
 // DeleteAndConfirm deletes the named resource and blocks until it is gone from
@@ -272,9 +265,8 @@ func DeleteAndConfirm(t testing.TB, name, resourceType, ns string) {
 		}
 		return fmt.Errorf("%s %s/%s still exists", resourceType, ns, name)
 	}
-	if err := RetryUntilSuccess(t, 120*time.Second, gone); err != nil {
-		t.Fatalf("%s %s/%s was not deleted: %v", resourceType, ns, name, err)
-	}
+	NewWithT(t).Eventually(gone, 120*time.Second, time.Second).
+		Should(Succeed(), "%s %s/%s was not deleted", resourceType, ns, name)
 }
 
 func GetSvcClusterIP(t testing.TB, svc, ns string) string {
@@ -291,7 +283,7 @@ func GetSvcLoadBalancerIP(t testing.TB, svc, ns string) string {
 	t.Helper()
 	cs := K8sClient(t)
 	var lbIP string
-	err := RetryUntilSuccess(t, 10*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		s, err := cs.CoreV1().Services(ns).Get(context.Background(), svc, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -301,10 +293,7 @@ func GetSvcLoadBalancerIP(t testing.TB, svc, ns string) string {
 		}
 		lbIP = s.Status.LoadBalancer.Ingress[0].IP
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("waiting for LoadBalancer IP on %s/%s: %v", ns, svc, err)
-	}
+	}, 10*time.Second, time.Second).Should(Succeed(), "waiting for LoadBalancer IP on %s/%s", ns, svc)
 	return lbIP
 }
 
@@ -328,7 +317,7 @@ func GetSvcHostIP(t testing.TB, app, ns string) string {
 func AddSvcExternalIPs(t testing.TB, svc, ns string, ips []string) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, 30*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		s, err := cs.CoreV1().Services(ns).Get(context.Background(), svc, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -336,8 +325,5 @@ func AddSvcExternalIPs(t testing.TB, svc, ns string, ips []string) {
 		s.Spec.ExternalIPs = ips
 		_, err = cs.CoreV1().Services(ns).Update(context.Background(), s, metav1.UpdateOptions{})
 		return err
-	})
-	if err != nil {
-		t.Fatalf("adding external IPs %v to %s/%s: %v", ips, ns, svc, err)
-	}
+	}, 30*time.Second, time.Second).Should(Succeed(), "adding external IPs %v to %s/%s", ips, ns, svc)
 }

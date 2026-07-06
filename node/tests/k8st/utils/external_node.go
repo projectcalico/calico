@@ -19,6 +19,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 )
 
 // ----------------------------------------------------------------------------
@@ -48,12 +51,10 @@ func StartExternalNodeWithBGP(t testing.TB, name, birdPeerConfig, bird6PeerConfi
 	MustRun(t, fmt.Sprintf("docker run -d --privileged --net=kind --name %s %s", name, RouterImage))
 
 	// The image may still be downloading; retry until the container responds.
-	if err := RetryUntilSuccess(t, time.Minute, func() error {
+	NewWithT(t).Eventually(func() error {
 		_, err := Run(t, fmt.Sprintf("docker exec %s df -h", name), RunOptions{AllowFail: true, SuppressErrLog: true})
 		return err
-	}); err != nil {
-		t.Fatalf("external node %s did not come up: %v", name, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "external node %s did not come up", name)
 
 	// Install curl and iproute2.
 	MustRun(t, fmt.Sprintf("docker exec %s apk add --no-cache curl iproute2", name))
