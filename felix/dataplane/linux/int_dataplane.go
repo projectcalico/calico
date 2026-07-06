@@ -990,7 +990,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// so downgrade it to the no-log build on such nodes (mirrors the
 		// endpoint manager forcing BPFLogLevel off).
 		kernelLockdownConfidentiality := bpf.KernelLockdownConfidentiality()
-		if kernelLockdownConfidentiality && config.BPFConntrackLogLevel == "debug" {
+		if kernelLockdownConfidentiality && strings.EqualFold(config.BPFConntrackLogLevel, "debug") {
 			log.Warn("Kernel lockdown=confidentiality detected: forcing BPF conntrack cleanup " +
 				"log level to off (ftrace is disabled, debug logging cannot work).")
 		}
@@ -3128,7 +3128,7 @@ func startBPFDataplaneComponents(
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
 	// The debug cleanup program references bpf_trace_printk; skip it under
 	// lockdown=confidentiality where that would spam the kernel log on load.
-	if config.BPFConntrackLogLevel == "debug" && !kernelLockdownConfidentiality {
+	if strings.EqualFold(config.BPFConntrackLogLevel, "debug") && !kernelLockdownConfidentiality {
 		ctLogLevel = bpfconntrack.BPFLogLevelDebug
 	}
 

@@ -556,7 +556,7 @@ func NewBPFEndpointManager(
 	// trace-printk-free preamble variants, and drop debug logging (which cannot
 	// work anyway) so the debug programs — which carry the helper — are not
 	// loaded either.
-	bpfLogLevel := config.BPFLogLevel
+	bpfLogLevel := strings.ToLower(config.BPFLogLevel)
 	bpfNoTracePrintk := bpf.KernelLockdownConfidentiality()
 	if bpfNoTracePrintk && bpfLogLevel == "debug" {
 		logrus.Warn("Kernel lockdown=confidentiality detected: BPF debug logging and the " +
