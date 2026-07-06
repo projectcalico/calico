@@ -208,6 +208,17 @@ static CALI_BPF_INLINE void skb_set_mark(struct __sk_buff *skb, __u32 mark)
 
 static CALI_BPF_INLINE void skb_log(struct cali_tc_ctx *ctx, bool accepted)
 {
+	/* skb_log's bpf_trace_vprintk/bpf_log calls are the only unconditional
+	 * reference to the trace-printk helpers in the main programs (they are gated
+	 * at runtime by CALI_ST_LOG_PACKET, not by CALI_LOG_LEVEL, so they survive
+	 * into the no_log builds). When Felix sets no_trace_printk (kernel
+	 * lockdown=confidentiality), this constant read folds and the verifier
+	 * dead-code-eliminates the rest of the function, so the loaded program
+	 * carries no trace-printk reference and its load does not spam the kernel
+	 * log. The policy Log action cannot work under that lockdown level anyway. */
+	if (PROG_FLAGS.no_trace_printk) {
+		return;
+	}
 	if (ctx->state->flags & CALI_ST_LOG_PACKET) {
 		if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_trace_vprintk)) {
 #if CALI_F_XDP
