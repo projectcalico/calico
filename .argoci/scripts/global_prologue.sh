@@ -94,6 +94,17 @@ if ! command -v bz >/dev/null 2>&1; then
 fi
 echo "[INFO] bz resolved at $(command -v bz || echo '<none>')"
 
+# --- Ensure pyyaml for bz's provisioner python scripts. bz's destroy path runs
+# provisioners/scripts/cleanup.py, which `import yaml`; the ArgoCI runner image's
+# system python lacks it, so `bz destroy` fails ("No module named 'yaml'") and
+# leaks the cluster (observed on local-kind). Install it if missing. ---
+if ! python3 -c 'import yaml' 2>/dev/null; then
+  echo "[INFO] installing pyyaml for bz provisioner scripts..."
+  python3 -m pip install --quiet pyyaml 2>/dev/null \
+    || python3 -m pip install --quiet --break-system-packages pyyaml 2>/dev/null \
+    || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
+fi
+
 echo "[INFO] initialising bz profile..."
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true

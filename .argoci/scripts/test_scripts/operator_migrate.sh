@@ -55,15 +55,15 @@ KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl wait --timeout=10m --for condition
 
 # Do a sanity check
 echo "Bring up test nginx pod and confirm podIPs"
-KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl run nginx --image nginx
+KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl run nginx --image nginx -n default
 echo "Waiting for nginx pod to exist"
 for i in $(seq 10); do
-  if KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl get pod nginx; then
+  if KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl get pod nginx -n default; then
     break
   fi
   echo "attempt $i, nginx pod does not exist, sleeping"
   sleep 5
 done
-KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl wait --timeout=5m --for condition=Ready pod nginx
-KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl get po nginx -oyaml | grep 'cni.projectcalico.org/podIPs'
-KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl delete pod nginx
+KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl wait --timeout=5m --for condition=Ready pod nginx -n default
+KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl get po nginx -n default -oyaml | grep 'cni.projectcalico.org/podIPs'
+KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig kubectl delete pod nginx -n default
