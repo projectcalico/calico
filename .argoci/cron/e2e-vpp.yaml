@@ -5,6 +5,7 @@ generateName: e2e-vpp-
 schedule: 0 16 * * 1,3,5
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export BGP_STATUS="${BGP_STATUS:-Enabled}"
   export CNI_PLUGIN="${CNI_PLUGIN:-Calico}"
   export DATAPLANE="${DATAPLANE:-CalicoVPP}"
