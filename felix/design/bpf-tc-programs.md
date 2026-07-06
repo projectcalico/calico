@@ -120,7 +120,34 @@ XDP has an equivalent preamble in `xdp_preamble.c`. The cgroup
 connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached directly — they have no preamble.
 
 Because the preamble is cheap to reload, Felix can swap it per
-interface without re-verifying the large program chain it fronts.
+interface without re-verifying the large program chain it fronts — and
+must, since it bakes per-interface config (jump-map indices, host IP,
+flags) into `.rodata`, some of which changes without a restart. So the
+preamble is re-loaded, and re-verified, on every attach.
+
+The preamble calls `bpf_trace_printk` on its drop/error paths
+regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
+ftrace is disabled, so every load makes the kernel log `could not
+enable bpf_trace_printk events`. Felix detects this at startup
+(`bpf.KernelLockdownConfidentiality`) and instead loads
+trace-printk-free preamble variants (`*_notrace.o`,
+`AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
+nodes.
+
+The main programs need the same treatment but must not be duplicated
+into `_notrace` variants (that would double the compiled program
+matrix). Their only unconditional trace-printk reference is `skb_log`
+(the policy `Log` action, gated at runtime rather than by
+`BPFLogLevel`, so it survives into the `no_log` builds). Instead of a
+separate object, each program carries a small `struct cali_rodata_flags`
+in its own frozen `.rodata.cali_flags` section (kept apart from the main
+globals so it does not perturb their layout). When Felix detects
+confidentiality lockdown it sets `no_trace_printk` in that section
+before load (`bpf.SetNoTracePrintk` → `Map.SetRodataFlags`); because the
+section is read-only and frozen, the verifier folds the flag to a
+constant and dead-code-eliminates the guarded `skb_log` body, so the
+loaded program references no trace helper and its load is silent. The
+struct is the general vehicle for future load-time feature flags.
 
 ### Two-tier jump maps
 
