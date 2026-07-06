@@ -124,7 +124,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, "xdp_preamble.o")
+	preambleName := "xdp_preamble.o"
+	if ap.NoTracePrintk {
+		preambleName = "xdp_preamble_notrace.o"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, preambleName)
 	ap.Log().Infof("Continue with attaching BPF program %s", binaryToLoad)
 	obj, err := bpf.LoadObject(binaryToLoad, ap.Configuration())
 	if err != nil {
