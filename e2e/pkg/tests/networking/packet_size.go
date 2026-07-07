@@ -90,12 +90,24 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 }
 
 // withPacketSizeServer is a conncheck server pod customizer that replaces the
-// default image with the PacketSizeServer. See images.PacketSizeServer for the
-// endpoints the server exposes.
+// default image with the multi-mode rapidclient image run as the packet-size
+// server. See images.RapidClientImage for the endpoints the server exposes and
+// the side-load/pull-policy contract.
 func withPacketSizeServer(pod *v1.Pod) {
+	image, preloaded := images.RapidClientImage()
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = images.PacketSizeServer
+		pod.Spec.Containers[i].Image = image
 		pod.Spec.Containers[i].Args = nil
+		// When the image was side-loaded into the nodes' containerd (PR CI on
+		// gcp-kubeadm), it is not in any registry — pin to the loaded copy and
+		// fail loudly if it is somehow absent rather than pulling a stale one.
+		if preloaded {
+			pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
+		}
+		// The rapidclient image is multi-mode; MODE=server selects the HTTP/UDP
+		// dataplane server.
+		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+			v1.EnvVar{Name: "MODE", Value: "server"})
 		if pod.Spec.Containers[i].ReadinessProbe != nil && pod.Spec.Containers[i].ReadinessProbe.HTTPGet != nil {
 			pod.Spec.Containers[i].ReadinessProbe.HTTPGet.Path = "/length/1"
 		}
