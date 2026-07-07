@@ -205,7 +205,12 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 					huh.NewOption("No comparison nodes", cmpNone),
 				).
 				Value(&comparisonChoice),
-		).WithHideFunc(func() bool { return method != byNode }),
+		).WithHideFunc(func() bool {
+			// Skip the whole comparison step when every node is already a
+			// problem node: there are no healthy nodes left to contrast against,
+			// so both the suggestion and the manual picker would be empty.
+			return method != byNode || len(problemNodeSel) >= len(nodes)
+		}),
 
 		// 3b. Manual comparison-node picker. Problem nodes are shown greyed out
 		// and locked (they're already collected in full); the rest are pickable.
