@@ -46,7 +46,12 @@ func TestWriteBundleInfo(t *testing.T) {
 		Description:     "Pod ns/widget-runner: source, sends TCP to backend",
 		AnsweredAt:      "2026-06-18T10:35:00Z",
 	}
-	writeBundleInfo(dir, opts, true)
+	timedOut := []common.TimedOutCommand{{
+		Info:    "Collect nftables for node nodeA",
+		Command: "kubectl exec -n calico-system -t calico-node-abcde -c calico-node -- nft -n -a list ruleset",
+		File:    "/nodes/nodeA/nft-ruleset.txt",
+	}}
+	writeBundleInfo(dir, opts, true, outcomeTimedOut, timedOut)
 
 	data, err := os.ReadFile(filepath.Join(dir, "bundle-info.yaml"))
 	Expect(err).NotTo(HaveOccurred())
@@ -55,6 +60,8 @@ func TestWriteBundleInfo(t *testing.T) {
 	Expect(yaml.Unmarshal(data, &info)).To(Succeed())
 	Expect(info.BPFDataplane).To(BeTrue())
 	Expect(info.CollectedAt).NotTo(BeEmpty())
+	Expect(info.CollectionOutcome).To(Equal(outcomeTimedOut))
+	Expect(info.TimedOutCommands).To(Equal(timedOut))
 	Expect(info.Options.MaxLogs).To(Equal(5))
 	Expect(info.Targeting.ProblemNodes).To(Equal([]string{"nodeA", "nodeB"}))
 	Expect(info.Targeting.ComparisonNodes).To(Equal([]string{"nodeC"}))
@@ -118,6 +125,13 @@ func TestDiags(t *testing.T) {
 			// Save having to specify Cluster and Diags in all of the cases below.
 			expectedOpts.Cluster = true
 			expectedOpts.Diags = true
+			// Timeout flags default via docopt; only the overriding case sets them.
+			if expectedOpts.CommandTimeout == "" {
+				expectedOpts.CommandTimeout = "5m"
+			}
+			if expectedOpts.OverallTimeout == "" {
+				expectedOpts.OverallTimeout = "10m"
+			}
 		}
 		Expect(opts).To(Equal(expectedOpts))
 	}
@@ -195,6 +209,17 @@ func TestDiags(t *testing.T) {
 			MaxLogs:              5,
 			MaxParallelism:       10,
 			FocusNodes:           "infra1,control2",
+			AllowVersionMismatch: false,
+		})
+	test("cluster diags --command-timeout=30s --overall-timeout=20m",
+		nil,
+		"",
+		&diagOpts{
+			Config:               "/etc/calico/calicoctl.cfg",
+			MaxLogs:              5,
+			MaxParallelism:       10,
+			CommandTimeout:       "30s",
+			OverallTimeout:       "20m",
 			AllowVersionMismatch: false,
 		})
 }

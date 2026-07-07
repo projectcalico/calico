@@ -49,6 +49,12 @@ func newClusterDiagsCommand() *cobra.Command {
 			if maxP, _ := cmd.Flags().GetInt("max-parallelism"); maxP != 10 {
 				synthArgs = append(synthArgs, fmt.Sprintf("--max-parallelism=%d", maxP))
 			}
+			if t, _ := cmd.Flags().GetString("command-timeout"); t != "5m" {
+				synthArgs = append(synthArgs, "--command-timeout="+t)
+			}
+			if t, _ := cmd.Flags().GetString("overall-timeout"); t != "10m" {
+				synthArgs = append(synthArgs, "--overall-timeout="+t)
+			}
 			if nodes, _ := cmd.Flags().GetString("focus-nodes"); nodes != "" {
 				synthArgs = append(synthArgs, "--focus-nodes="+nodes)
 			}
@@ -76,6 +82,8 @@ func newClusterDiagsCommand() *cobra.Command {
 	addConfigFlag(cmd)
 	cmd.Flags().Int("max-logs", 5, "Only collect up to this number of logs, for each kind of Calico component.")
 	cmd.Flags().Int("max-parallelism", 10, "Maximum number of parallel threads to use for collecting logs.")
+	cmd.Flags().String("command-timeout", "5m", "Kill an individual collection command if it produces no output for this long (e.g. 30s, 5m).")
+	cmd.Flags().String("overall-timeout", "10m", "Abort the whole collection after this long, writing a bundle of whatever was collected so far.")
 	cmd.Flags().String("focus-nodes", "", "Comma-separated list of nodes from which to try first to collect logs.")
 	cmd.Flags().String("problem-nodes", "", "Comma-separated list of nodes where the problem is occurring; collected in full.")
 	cmd.Flags().String("problem-pods", "", "Comma-separated list of pods (namespace/pod) having trouble; their nodes are collected in full.")
