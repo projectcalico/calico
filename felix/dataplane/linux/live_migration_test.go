@@ -579,8 +579,15 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 // get past it.  detectGARP's only other park point - waiting for a packet -
 // shows as "chan receive", so these two states are unambiguous.
 func garpSenderBlocked() bool {
+	// Grow the buffer until the full goroutine dump fits: runtime.Stack
+	// truncates (n == len(buf)) when the buffer is too small, which could
+	// hide the detectGARP goroutine and time out the Eventually below.
 	buf := make([]byte, 1<<20)
 	n := runtime.Stack(buf, true)
+	for n == len(buf) {
+		buf = make([]byte, 2*len(buf))
+		n = runtime.Stack(buf, true)
+	}
 	for _, gr := range strings.Split(string(buf[:n]), "\n\n") {
 		if !strings.Contains(gr, "detectGARP") {
 			continue
