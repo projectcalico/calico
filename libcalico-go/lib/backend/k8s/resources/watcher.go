@@ -168,13 +168,15 @@ func (crw *k8sWatcherConverter) convertEvent(kevent kwatch.Event) []*api.WatchEv
 
 		return crw.buildEventsFromKVPs(kvps, kevent.Type)
 	case kwatch.Bookmark:
-		// For bookmarks we send an empty KVPair with the current resource
-		// version only.
+		// For bookmarks we send a KVPair with the current resource version.
+		// Keep the k8s resource as Value so WatchList can detect the final
+		// initial-events bookmark annotation.
 		k8sRes := kevent.Object.(Resource)
 		revision := k8sRes.GetObjectMeta().GetResourceVersion()
 		return []*api.WatchEvent{{
 			Type: api.WatchBookmark,
 			New: &model.KVPair{
+				Value:    k8sRes,
 				Revision: revision,
 			},
 		}}
