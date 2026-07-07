@@ -111,6 +111,22 @@ Status: 200 OK
 Response: {"output":"backend-pod-5\n"}
 ```
 
+## How the e2e tests get this image
+
+The tests reference the image via `images.RapidClientImage()`
+(`e2e/pkg/utils/images/images.go`), which is env-driven:
+
+- **PR CI on gcp-kubeadm:** PR builds have no registry push credential, so
+  `.semaphore/end-to-end/scripts/phases/load_images.sh` builds this image from the
+  PR source and imports it straight into each node's containerd (and the external
+  node's docker), then exports `RAPIDCLIENT_TAG` (e.g. `pr-13105`). The tests pin
+  that tag with `ImagePullPolicy: Never`.
+- **Everything else** (other providers, scheduled runs, local dev): `RAPIDCLIENT_TAG`
+  is unset and the tests use the published `quay.io/tigeradev/rapidclient:latest`.
+  If you change this image and want a non-gcp-kubeadm run to use your build, publish
+  it (post-merge `push-images/e2e-test.yml` promotion) or set `RAPIDCLIENT_TAG`
+  yourself to a tag the cluster can pull.
+
 ## Integration with Tests
 
 This tool can replace curl commands in tests for better reliability:
