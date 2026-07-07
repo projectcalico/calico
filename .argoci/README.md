@@ -19,6 +19,16 @@ migrated off Semaphore's scheduled e2e builds.
 These crons and scripts are maintained **by hand** going forward: edit the
 YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
 
+## Layout is flat (no `end-to-end/` subdir)
+
+Unlike `.semaphore/end-to-end/`, e2e lives at the top of `.argoci/`. ArgoCI's
+handler separates workflows by **file role**, not directory: scheduled e2e is
+`cron/*.yaml`; per-PR/build CI — when the rest of repo CI moves to ArgoCI — is
+`ciworkflow.yaml` + `config.yaml`, which coexist here without a subdir. The
+handler also reads crons from a fixed `.argoci/cron/` path, so nesting would
+require a handler change for no gain. Scope ownership with path-specific
+`CODEOWNERS` entries (e.g. `.argoci/cron/`) rather than directories.
+
 ## Cron naming (branchless)
 
 Cron filenames and their `generateName` carry **no branch** —
