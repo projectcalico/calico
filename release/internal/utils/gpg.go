@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -28,10 +29,65 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 	logrus.Debugf("Getting ascii-armored public key for GPG key %s", gpgKeyID)
 
 	cmdArgs := []string{"--armor", "--export", gpgKeyID}
-	logrus.Debugf("running gpg with args %s", strings.Join(cmdArgs, " "))
+	logrus.Debugf("Running gpg with args %s", strings.Join(cmdArgs, " "))
 	gpgOut, err := command.Run("gpg", cmdArgs)
 	if err != nil {
 		return "", fmt.Errorf("exporting gpg key: %w", err)
 	}
 	return string(gpgOut), nil
+}
+
+// SignRPMFiles takes a GPG key ID, which must have already been
+// imported into the RPM database, and uses it to sign a list of
+// RPM files. We use --rpmv4 here to ensure that, even on newer
+// RPM versions, we're using backwards-compatible RPM signatures.
+func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
+	logrus.Infof("Signing RPM files with GPG key %s", gpgKeyID)
+	cmdArgs := []string{
+		"-D", fmt.Sprintf("%%_openpgp_sign_id %s", gpgKeyID),
+		"--resign",
+		"--rpmv4",
+	}
+	cmdArgs = append(cmdArgs, rpmFiles...)
+	logrus.Debugf("Running rpmsign with args %s", strings.Join(cmdArgs, " "))
+	_, err := command.Run("rpmsign", cmdArgs)
+	if err != nil {
+		return fmt.Errorf("unable to sign RPM files: %w", err)
+	}
+	return nil
+}
+
+// CheckRPMSig takes an RPM filename/path and runs rpmkeys --checksig
+// on it to ensure that the signature and package digest are correct
+func CheckRPMSig(rpmFile string) error {
+	logrus.Debugf("Checking file %s for RPM signature", rpmFile)
+	cmdArgs := []string{
+		"--checksig",
+		rpmFile,
+	}
+	rpmOut, err := command.Run("rpmkeys", cmdArgs)
+	if err != nil {
+		return fmt.Errorf("unable to check RPM signature: %w", err)
+	}
+	rpmOutFields := strings.Fields(rpmOut)
+	if len(rpmOutFields) == 0 {
+		return fmt.Errorf("rpmkeys --checksig returned no output")
+	}
+	if strings.Contains(rpmOut, "NOT OK") {
+		logrus.Errorf("RPM signature/digest check failed: %s", rpmOut)
+		return fmt.Errorf("RPM signature/digest check failed: %s", rpmOut)
+	}
+	return nil
+}
+
+// CheckRPMSigs takes a list of RPM file names/paths and runs
+func CheckRPMSigs(rpmFiles []string) error {
+	logrus.Infof("Checking files for RPM signatures")
+	var errs []error
+	for _, rpmFile := range rpmFiles {
+		if err := CheckRPMSig(rpmFile); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
