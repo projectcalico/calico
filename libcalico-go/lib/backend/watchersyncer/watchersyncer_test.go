@@ -943,6 +943,79 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// leftover goroutine from this one.
 		rs.clientWatchResponse(rMatch, notSupported)
 	})
+
+	It("should refresh lastSuccessfulConnTime on WatchBookmark events (watch-event refresh regression test)", func() {
+		// Bookmark is the primary steady-state watch event: it arrives
+		// periodically from the API server even when the underlying resources
+		// are idle, so a syncer's watchRetryTimeout should be reset by
+		// bookmarks alone. If the `case api.WatchBookmark:` handler stops
+		// updating lastSuccessfulConnTime, a syncer receiving steady bookmarks
+		// still fires SyncFailed as soon as watchRetryTimeout elapses from its
+		// initial List — a false disconnect while the connection is healthy.
+		//
+		// The test drives an initial InSync, waits until we are close to the
+		// watchRetryTimeout window, sends a WatchBookmark, then forces the
+		// syncer through a full retry cycle culminating in a failing List.
+		// With the refresh line present, the failing List sees a fresh
+		// lastSuccessfulConnTime and does NOT signal a disconnect. Without it,
+		// the List sees time.Since > watchRetryTimeout and fires SyncFailed —
+		// ExpectConnErrors then fails.
+		//
+		// This test does not exercise the sibling refresh points under
+		// WatchAdded/Modified, WatchDeleted, or WatchError-ResourceExpired.
+		// The full-removal regression that motivated this test (all four
+		// lines stripped together) is caught by this test alone.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 50*time.Millisecond, 100*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester(
+			[]watchersyncer.ResourceType{r1},
+			watchersyncer.WithWatchRetryTimeout(500*time.Millisecond),
+		)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "rev-init"})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		// Wait until we are close to the watchRetryTimeout threshold. From this
+		// point on, a failing List would immediately fire SyncFailed unless a
+		// watch event has refreshed lastSuccessfulConnTime in the meantime.
+		time.Sleep(400 * time.Millisecond)
+
+		// Send a bookmark — this is the refresh event under test. In the
+		// current implementation, the WatchBookmark handler in
+		// loopReadingFromWatcher sets lastSuccessfulConnTime = time.Now().
+		rs.sendEvent(r1, api.WatchEvent{Type: api.WatchBookmark, New: &model.KVPair{Revision: "rev-bookmark"}})
+
+		// Give the syncer a moment to process the bookmark, then force it out
+		// of loopReadingFromWatcher via a generic WatchError (which does NOT
+		// refresh the timer). The syncer then drives through MaxErrorsPerRevision
+		// Watch failures, which flips performFullResync=true, and finally the
+		// syncer calls List, which the test fails.
+		time.Sleep(50 * time.Millisecond)
+		rs.sendEvent(r1, api.WatchEvent{Type: api.WatchError, Error: genError})
+		for range watchersyncer.MaxErrorsPerRevision {
+			rs.clientWatchResponse(r1, genError)
+		}
+		rs.clientListResponse(r1, genError)
+
+		// Wait long enough for the syncer to work through the Watch retries and
+		// reach the List call where the time.Since(lastSuccessfulConnTime) check
+		// happens. Approximately MaxErrorsPerRevision * MinResyncInterval, plus a
+		// buffer. Without waiting, ExpectConnErrors's short Consistently window
+		// completes before the syncer has had a chance to signal SyncFailed
+		// (yielding false-negative test passes).
+		time.Sleep(300 * time.Millisecond)
+
+		// If bookmark refresh works, time.Since(lastSuccessfulConnTime) is only
+		// a few hundred ms at this point — under the 500ms watchRetryTimeout —
+		// so no SyncFailed is signalled. If the refresh line were missing,
+		// time.Since would be ~1s and SyncFailed would fire. ExpectConnErrors
+		// uses reflect.DeepEqual (via gomega.Equal); pass nil rather than an
+		// empty slice so that comparison against the unmodified slice matches.
+		rs.ExpectConnErrors(nil)
+	})
 })
 
 var (
