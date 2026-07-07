@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 	"net"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -567,6 +569,29 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 	})
 }
 
+// garpSenderBlocked reports whether some goroutine is currently parked in
+// detectGARP's report-detection send.  Lets the regression test below wait
+// deterministically for the sender to be blocked reporting on garpC before
+// the Target-exit update is processed.  The goroutine state is "select" for
+// the select-based send (which stopGARPDetection can abort) and "chan send"
+// for a plain send (the pre-fix code); we match both so the test observes the
+// blocked sender either way and then proves whether the Target-exit path can
+// get past it.  detectGARP's only other park point - waiting for a packet -
+// shows as "chan receive", so these two states are unambiguous.
+func garpSenderBlocked() bool {
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	for _, gr := range strings.Split(string(buf[:n]), "\n\n") {
+		if !strings.Contains(gr, "detectGARP") {
+			continue
+		}
+		if strings.Contains(gr, "[select]") || strings.Contains(gr, "[chan send]") {
+			return true
+		}
+	}
+	return false
+}
+
 // TestGARPRaceWithTargetExit is a regression test for a dataplane main-loop
 // deadlock.  Scenario: the FSM is in Target with GARP detection running, and a
 // GARP/RARP is detected on the workload interface just before the main loop
@@ -627,13 +652,13 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 			expectUpdate(g, m, liveMigrationStateTarget)
 
-			// Wait until the packet has been consumed from the handle; from
-			// that point detectGARP is committed to sending on garpC even if
-			// the handle is subsequently closed.  Then yield briefly so that
-			// detectGARP very likely reaches the send itself, exercising the
-			// exact blocked-send interleaving from the field report.
-			g.Eventually(fakeHandle.AllDelivered, time.Second, time.Millisecond).Should(BeTrue())
-			time.Sleep(20 * time.Millisecond)
+			// Wait until detectGARP is parked in the garpC send.  This pins
+			// the test to the exact interleaving from the field report - the
+			// sender already blocked when the Target-exit update is processed
+			// - which would also catch a broken variant of the fix that
+			// checks the stop channel before a plain send instead of
+			// selecting over both.
+			g.Eventually(garpSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
 
 			// Process the Target-exiting update as the main loop would, with
 			// nothing reading garpC.  Run it in a goroutine purely so that a
@@ -843,14 +868,6 @@ func (f *fakeGARPHandle) IsClosed() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.closed
-}
-
-// AllDelivered reports whether every queued packet has been consumed via
-// ReadPacketData.
-func (f *fakeGARPHandle) AllDelivered() bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.idx == len(f.packets)
 }
 
 // --- Section 7: Migration UID tracking ---
