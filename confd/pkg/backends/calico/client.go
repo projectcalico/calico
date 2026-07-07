@@ -409,9 +409,9 @@ func (c *client) SetPrefixes(keys []string) error {
 }
 
 // OnStatusUpdated is called from the BGP syncer to indicate that the sync status is updated.
-// This client handles InSync and WaitForDatastore statuses. When we receive InSync, we unblock GetValues calls.
-// When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
-// GetValues calls.
+// When we receive InSync, we unblock GetValues calls.
+// When we receive WaitForDatastore or ResyncInProgress, we reset the client's syncer status which blocks
+// GetValues calls until the syncer is back in sync.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	select {
 	case c.syncerC <- status:
@@ -424,7 +424,7 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 	switch status {
 	case api.InSync:
 		c.OnSyncChange(SourceSyncer, true)
-	case api.WaitForDatastore:
+	case api.WaitForDatastore, api.ResyncInProgress:
 		c.OnSyncChange(SourceSyncer, false)
 	}
 }
