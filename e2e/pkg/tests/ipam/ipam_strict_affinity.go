@@ -158,6 +158,15 @@ var _ = describe.CalicoDescribe(
 									TopologyKey:       "kubernetes.io/hostname",
 									WhenUnsatisfiable: corev1.DoNotSchedule,
 									LabelSelector:     &metav1.LabelSelector{MatchLabels: labels},
+									// Honor node taints so nodes the pod can't tolerate (e.g. a
+									// tainted control-plane) are excluded from the skew calculation.
+									// With the default Ignore policy, a tainted control-plane counts
+									// as a topology domain with zero pods; MaxSkew:1 then caps every
+									// schedulable worker at one pod, so on an N-worker cluster the
+									// (N+1)th replica is permanently unschedulable (stuck Pending,
+									// never gets an IP). Honor scopes the spread to the schedulable
+									// workers, matching the test's intent. Requires k8s >= 1.26.
+									NodeTaintsPolicy: ptr.To(corev1.NodeInclusionPolicyHonor),
 								}},
 								TerminationGracePeriodSeconds: ptr.To(int64(1)),
 							},

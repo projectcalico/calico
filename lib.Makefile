@@ -1661,6 +1661,9 @@ endif
 	touch $@
 
 kind-cluster-destroy kind-down: $(KIND) $(KUBECTL)
+	# Tear down the e2e external node (if any) alongside the cluster. Idempotent
+	# and a no-op when no external node was created (e.g. non-BPF jobs).
+	-$(KIND_DIR)/external-node.sh down
 	# We need to drain the cluster gracefully when shutting down to avoid a netdev unregister error from the kernel.
 	# This requires we execute CNI del on pods with pod networking.
 	-$(KIND) delete cluster --name $(KIND_NAME)
