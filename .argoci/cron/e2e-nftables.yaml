@@ -1,0 +1,190 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-nftables-
+schedule: 10 21 * * 1
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export DATAPLANE="${DATAPLANE:-CalicoNftables}"
+  export ENABLE_AUTOHEP="${ENABLE_AUTOHEP:-true}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-nftables.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)}"
+  export K8S_VERSION="${K8S_VERSION:-stable-3}"
+  export KUBE_PROXY_MODE="${KUBE_PROXY_MODE:-nftables}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: nftables-mode-arm64-wg
+    services:
+      - docker
+    env:
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: GOOGLE_MACHINE_TYPE
+        value: t2a-standard-2
+      - name: GOOGLE_REGION
+        value: us-central1
+      - name: GOOGLE_ZONE
+        value: us-central1-a
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: STERN_CHECK
+        value: DISABLED
+    matrix:
+      - name: stable-ubuntu-2204-lts-arm64
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: CLUSTER_IMAGE
+            value: ubuntu-2204-lts-arm64
+      - name: stable-rocky-linux-9-arm64
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: CLUSTER_IMAGE
+            value: rocky-linux-9-arm64
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-talos-nftables-talos
+    services:
+      - docker
+    env:
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: PROVISIONER
+        value: aws-talos
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-talos-native-v3-crds-gcp
+    services:
+      - docker
+    env:
+      - name: CLUSTER_ROUTING_MODE
+        value: Felix
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-talos-native-v3-crds-aws
+    services:
+      - docker
+    env:
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-mode-eks-eks-w-aws-cni
+    services:
+      - docker
+    env:
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: amazonvpc
+        env:
+          - name: CNI_PLUGIN
+            value: AmazonVPC
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-mode-eks-eks-w-calico-cni
+    services:
+      - docker
+    env:
+      - name: INSTALLER
+        value: helmerator
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: calico
+        env:
+          - name: CNI_PLUGIN
+            value: Calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-mode-kind-nftables-mode-vxlan-dual-stack
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_DUAL_STACK
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: ENCAPSULATION_TYPE_V6
+        value: VXLAN
+      - name: IPV4_POD_CIDR
+        value: 192.168.0.0/16
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: IP_FAMILY
+        value: dual
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: local-kind
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: nftables-mode-kind-nftables-mode-ipv6-only
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_DUAL_STACK
+        value: "true"
+      - name: ENCAPSULATION_TYPE_V6
+        value: None
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: IP_FAMILY
+        value: ipv6
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: local-kind
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: kubevirt-e2e-tests
+    services:
+      - docker
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp-kubevirt.yaml
+      - name: K8S_VERSION
+        value: stable-1.35
+      - name: NUM_KUBEVIRT_VMS
+        value: "2"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
