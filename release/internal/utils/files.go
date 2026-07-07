@@ -189,7 +189,9 @@ func MatchExtensions(exts ...string) IncludeFunc {
 // copying the file contents if the link cannot be created (e.g. src and dst
 // are on different filesystems, or the filesystem does not support hard
 // links). Any pre-existing file at dst is removed first so os.Link does not
-// fail with an "already exists" error.
+// fail with an "already exists" error. Once the file is copied, we also
+// copy the file mode (e.g. executable bits, read/write perms) from the
+// original file.
 func LinkOrCopyFile(src, dst string) error {
 	logrus.WithFields(logrus.Fields{
 		"src": src,
@@ -201,7 +203,14 @@ func LinkOrCopyFile(src, dst string) error {
 	if err := os.Link(src, dst); err == nil {
 		return nil
 	}
-	return CopyFile(src, dst)
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := CopyFile(src, dst); err != nil {
+		return err
+	}
+	return os.Chmod(dst, info.Mode())
 }
 
 func pathInfo(path string) (os.FileInfo, error) {
