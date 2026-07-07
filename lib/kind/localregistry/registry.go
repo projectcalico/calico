@@ -41,11 +41,13 @@ package localregistry
 import (
 	"context"
 	"fmt"
+	stdlog "log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -134,7 +136,15 @@ func Start(ctx context.Context, cfg Config) (*Registry, error) {
 	// manifests (tiny; rebuilt on demand — the expensive layer blobs are the
 	// thing that must persist, and they do).
 	blobs := ggcrregistry.NewDiskBlobHandler(cfg.CacheDir)
-	internalHandler := ggcrregistry.New(ggcrregistry.WithBlobHandler(blobs))
+	// Route the registry's HTTP access log through our logger at Debug level.
+	// Otherwise go-containerregistry writes it straight to os.Stderr, bypassing
+	// lib/std/log and spamming the caller's output regardless of how they've
+	// configured logging.
+	accessLog := stdlog.New(logWriter{log: f.log.With("stream", "registry-access")}, "", 0)
+	internalHandler := ggcrregistry.New(
+		ggcrregistry.WithBlobHandler(blobs),
+		ggcrregistry.Logger(accessLog),
+	)
 	iln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("listen (internal): %w", err)
@@ -320,4 +330,14 @@ func (f *Registry) pullOpts(ctx context.Context) []crane.Option {
 func (f *Registry) pushOpts(ctx context.Context) []crane.Option {
 	// The internal store is plaintext http on loopback, so push is insecure.
 	return []crane.Option{crane.WithContext(ctx), crane.Insecure}
+}
+
+// logWriter adapts an io.Writer onto lib/std/log so the go-containerregistry
+// access log (a stdlib *log.Logger) flows through our logger at Debug level
+// instead of straight to stderr. Each Write is one already-formatted log line.
+type logWriter struct{ log log.Logger }
+
+func (w logWriter) Write(p []byte) (int, error) {
+	w.log.Debug(strings.TrimRight(string(p), "\n"))
+	return len(p), nil
 }
