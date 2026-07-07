@@ -56,19 +56,27 @@ else
   if [[ ${#_node_ips[@]} -eq 0 ]]; then
     echo "[ERROR] load_images: no worker node IPs parsed from ${_tf_out}"; exit 1
   fi
+
+  # Serialize the image once and reuse the tarball for every node (docker save is
+  # the expensive part; re-running it per node would re-export the whole image).
+  _tar="$(mktemp -t rapidclient.XXXXXX.tar)"
+  docker save "${_img}" -o "${_tar}"
+
   echo "[INFO] load_images: importing into containerd on ${#_node_ips[@]} worker node(s): ${_node_ips[*]}"
   for _ip in "${_node_ips[@]}"; do
     echo "[INFO]   -> ${_ip} (containerd)"
-    docker save "${_img}" | ssh "${_ssh_opts[@]}" "ubuntu@${_ip}" -- 'sudo ctr -n k8s.io images import -'
+    ssh "${_ssh_opts[@]}" "ubuntu@${_ip}" -- 'sudo ctr -n k8s.io images import -' < "${_tar}"
   done
 
   # --- external node: load into docker (maglev uses `docker run`) ------------
   if [[ -n "${EXT_IP:-}" && -n "${EXT_KEY:-}" ]]; then
     echo "[INFO] load_images: loading into external node docker (${EXT_IP})"
-    docker save "${_img}" | ssh -i "${EXT_KEY}" \
+    ssh -i "${EXT_KEY}" \
       -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
-      "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'sudo docker load'
+      "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'sudo docker load' < "${_tar}"
   fi
+
+  rm -f "${_tar}"
 
   # Pin the tests to the loaded image and forward the tag into the e2e container
   # (run_tests.sh passes ${K8S_E2E_DOCKER_EXTRA_FLAGS} to its `docker run`).

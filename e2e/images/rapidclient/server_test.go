@@ -159,3 +159,50 @@ func TestDispatch(t *testing.T) {
 		t.Error("unknown mode unexpectedly resolved")
 	}
 }
+
+// TestResolveServerPort covers PORT env parsing: empty falls back to the
+// default, valid ports pass through, and out-of-range / non-numeric values are
+// rejected. This is the logic serverMode.Run relies on but never exercises in
+// its own tests (it binds real sockets), so guard it directly.
+func TestResolveServerPort(t *testing.T) {
+	valid := []struct {
+		in   string
+		want int
+	}{
+		{"", defaultServerPort},
+		{"1", 1},
+		{"5000", 5000},
+		{"65535", 65535},
+	}
+	for _, tc := range valid {
+		got, err := resolveServerPort(tc.in)
+		if err != nil {
+			t.Errorf("resolveServerPort(%q) unexpected error: %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("resolveServerPort(%q) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+	for _, in := range []string{"0", "-1", "65536", "70000", "abc", "5000x"} {
+		if _, err := resolveServerPort(in); err == nil {
+			t.Errorf("resolveServerPort(%q) = nil error, want error", in)
+		}
+	}
+}
+
+// TestResolveMode locks in the MODE dispatch contract the PR rests on: an empty
+// MODE must resolve to the client mode (backward compatibility for callers that
+// set no MODE, e.g. the maglev test), "server" selects the server mode, and an
+// unknown value is reported as unresolved.
+func TestResolveMode(t *testing.T) {
+	if m, name, ok := resolveMode(""); !ok || name != defaultMode || m.Name() != defaultMode {
+		t.Errorf("resolveMode(\"\") = (%v, %q, %v), want the %q mode", m, name, ok, defaultMode)
+	}
+	if m, name, ok := resolveMode("server"); !ok || name != "server" || m.Name() != "server" {
+		t.Errorf("resolveMode(\"server\") = (%v, %q, %v), want the server mode", m, name, ok)
+	}
+	if _, name, ok := resolveMode("bogus"); ok {
+		t.Errorf("resolveMode(%q) resolved unexpectedly", name)
+	}
+}

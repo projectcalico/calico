@@ -29,13 +29,20 @@ import (
 // (client) behaviour for existing callers such as the maglev e2e test.
 const defaultMode = "client"
 
-func main() {
-	modeName := os.Getenv("MODE")
-	if modeName == "" {
-		modeName = defaultMode
+// resolveMode maps a MODE env value to a registered mode. An empty value selects
+// defaultMode, preserving the original client behaviour for callers that set no
+// MODE. ok is false for a non-empty but unregistered mode.
+func resolveMode(env string) (mode Mode, name string, ok bool) {
+	name = env
+	if name == "" {
+		name = defaultMode
 	}
+	m, ok := lookupMode(name)
+	return m, name, ok
+}
 
-	mode, ok := lookupMode(modeName)
+func main() {
+	mode, modeName, ok := resolveMode(os.Getenv("MODE"))
 	if !ok {
 		log.Fatalf("unknown MODE %q; known modes: %v", modeName, modeNames())
 	}
