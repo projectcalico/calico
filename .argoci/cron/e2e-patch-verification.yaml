@@ -79,7 +79,7 @@ steps:
       - name: PROVISIONER
         value: aws-kubeadm
     commands: |
-      .argoci/scripts/body_standard.sh
+      .argoci/scripts/body_flannel-migration.sh
   - name: manifests-canal
     services:
       - docker
@@ -133,7 +133,7 @@ steps:
       - name: PROVISIONER
         value: gcp-kubeadm
     commands: |
-      .argoci/scripts/body_standard.sh
+      .argoci/scripts/body_flannel-migration.sh
   - name: manifests-calico-etcd
     services:
       - docker

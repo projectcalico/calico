@@ -809,7 +809,7 @@ steps:
           - name: DOWNLEVEL_MANIFEST
             value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
     commands: |
-      .argoci/scripts/body_standard.sh
+      .argoci/scripts/body_flannel-migration.sh
   - name: kubevirt-e2e-tests
     services:
       - docker
