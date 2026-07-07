@@ -1,414 +1,323 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
-// Package localregistry runs a Docker registry container on the host
-// and exposes it to a kind cluster as a containerd mirror. This is
-// the image-loading strategy for lib/kind.
+// Package localregistry is a single-process registry facade for a kind cluster.
 //
-// The local registry:
+// It replaces the "run one registry:2 container per upstream" model. Every
+// constraint that model imposed — one container per upstream, credentials
+// frozen into a container's env, a proxy that can't be pushed to — is a
+// property of the registry:2 image, not of the problem. This package owns
+// the registry code, so those constraints don't apply.
 //
-//   - Uses Docker's standard pull pipeline (containerd → registry over
-//     HTTP), matching production behaviour rather than mutating
-//     imagePullPolicy to Never.
-//   - Layer-caches across runs: an image whose base layers haven't
-//     changed only re-transfers the changed bits on push and pull.
-//   - Persists across container removal. Blobs are stored on a docker
-//     named volume (default "kind-registry-data") mounted at
-//     /var/lib/registry. The container can be deleted and recreated
-//     and the cached image content survives. To wipe entirely the
-//     operator runs `docker volume rm kind-registry-data` after Stop.
-//   - Survives kind cluster teardowns. The registry container can be
-//     left running (Persist=true) to avoid the recreate cost between
-//     test runs.
-//   - Can serve images to multiple concurrent kind clusters in
-//     parallel — useful when running tests across versions.
+// One HTTP server serves every upstream. The trick that makes that possible
+// is containerd's mirror behaviour: when a node pulls gcr.io/foo/bar and its
+// hosts.toml points gcr.io at this facade, containerd sends
 //
-// The cost: containerd has to be told about the registry at cluster-
-// creation time via containerdConfigPatches, and the registry
-// container has to be connected to the kind docker network. Both are
-// handled by this package; the caller wires them together.
+//	GET /v2/foo/bar/manifests/<ref>?ns=gcr.io
 //
-// Usage:
+// The registry host is stripped from the path but preserved in the ns query
+// parameter. The facade routes on ns, so the same endpoint transparently
+// backs gcr.io, quay.io, docker.io, ... at once. (See the containerd docs on
+// registry hosts, and Spegel, which relies on the same ns parameter.)
 //
-//	reg, err := localregistry.Setup(ctx, localregistry.Config{})
-//	if err != nil { t.Fatal(err) }
-//	t.Cleanup(func() { reg.Stop() })
+// Two request outcomes:
 //
-//	cl, err := kind.Up(ctx, kind.Config{
-//	    ContainerdConfigPatches: reg.ContainerdConfigPatches(),
-//	})
-//	if err != nil { t.Fatal(err) }
+//   - Overridden ref (see Override): the facade serves the locally-built
+//     image and never contacts the upstream. This wins even under
+//     imagePullPolicy: Always, because containerd resolves the manifest
+//     through the facade and the facade answers before anyone reaches
+//     upstream. That is the "force: use what I gave you" operation.
+//   - Everything else: lazy pull-through. On the first request for a ref the
+//     facade pulls it from the real upstream (named by ns) using the host's
+//     live docker keychain — so a rotated gcloud/registry token is picked up
+//     on the next miss, no container recreate — caches it, and serves it.
+//     Layer blobs are cached on disk (Config.CacheDir) and reused across
+//     runs and across upstreams.
 //
-//	// Attach the registry to kind's docker network now that it exists.
-//	if err := reg.Attach(ctx, "kind"); err != nil { t.Fatal(err) }
-//
-//	// Pre-populate the registry with images the cluster will pull.
-//	for _, img := range []string{"calico/node:v3.30.1", "calico/cni:v3.30.1"} {
-//	    if _, err := reg.Push(ctx, img); err != nil { t.Fatal(err) }
-//	}
-//
-// Pod specs and manifests then reference images as `localhost:<port>/<image>`.
-// For images whose paths don't match (e.g. third-party operator manifests
-// that embed quay.io URLs), the caller either rewrites the manifest or
-// configures additional containerd mirrors.
+// The facade runs in-process in the test/tool binary; there is no registry
+// container at all. kind nodes reach it over the kind docker network's
+// gateway address (see ConfigureNodes).
 package localregistry
 
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"strings"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"sync"
+	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
-	"sigs.k8s.io/kind/pkg/cluster/nodes"
-	"sigs.k8s.io/kind/pkg/cluster/nodeutils"
+	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 
 	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // Defaults applied to a zero-value Config.
 const (
-	DefaultPort        = 5001 // host port. 5001 not 5000 to avoid macOS AirPlay.
-	DefaultName        = "kind-registry"
-	DefaultImage       = "registry:2"
+	// DefaultPort is the host port the facade listens on. 5001, not 5000,
+	// to dodge macOS AirPlay — harmless on Linux, consistent everywhere.
+	DefaultPort = 5001
+	// DefaultKindNetwork is the docker network kind creates for a cluster.
 	DefaultKindNetwork = "kind"
-	DefaultVolumeName  = "kind-registry-data" // docker named volume mounted at /var/lib/registry.
-	registryInsidePort = 5000                 // the registry process listens on 5000 inside the container.
-	registryDataPath   = "/var/lib/registry"  // where registry:2 stores blobs inside the container.
 )
 
-// Config configures Setup. Zero values pick sensible defaults; set what
-// you need to override.
+// Config configures the facade. Zero values pick sensible defaults.
 type Config struct {
-	// Port is the host port to publish the registry on (127.0.0.1:Port).
-	// Default DefaultPort (5001).
+	// Port is the host port the facade listens on. Default DefaultPort.
 	Port int
-	// Name is the docker container name. Reusing an existing container
-	// with the same name is an explicit feature — set deliberately for
-	// cross-run persistence. Default DefaultName ("kind-registry").
-	Name string
-	// Image is the registry image to run. Default DefaultImage
-	// ("registry:2"). Pinning to a digest is recommended in CI.
-	Image string
-	// KindNetwork is the docker network kind creates for the cluster.
-	// Default DefaultKindNetwork ("kind").
+	// CacheDir is where pulled layer blobs are cached on disk. Blobs are
+	// content-addressed, so the cache is reused across runs and shared
+	// across upstreams. Default: a "kind-mirror" dir under os.TempDir().
+	CacheDir string
+	// KindNetwork is the docker network whose gateway the kind nodes use to
+	// reach the facade. Default DefaultKindNetwork ("kind").
 	KindNetwork string
-	// VolumeName is the docker named volume mounted at the registry's
-	// storage path (/var/lib/registry). The volume outlives container
-	// removal — pushed images survive `docker rm` of the container
-	// and reappear on the next `docker run` against the same volume.
-	// Default DefaultVolumeName ("kind-registry-data"). To wipe the
-	// cache, the operator runs `docker volume rm <VolumeName>` after
-	// Stop.
-	VolumeName string
-	// ProxyRemoteURL, when set, runs the registry in pull-through
-	// proxy mode against the given upstream. Images not present in
-	// the local cache are fetched from the upstream on first request
-	// and stored on the volume; subsequent requests hit the cache.
-	// Use this to avoid pre-pushing every image the cluster will
-	// pull — point the proxy at the registry your manifests reference
-	// (e.g. "https://quay.io") and pair with a matching upstream
-	// mirror entry passed to ContainerdConfigPatches.
-	//
-	// Limitation: registry:2 supports exactly one upstream per
-	// container. To proxy multiple upstream registries, run more
-	// than one localregistry instance.
-	ProxyRemoteURL string
-	// ProxyUsername / ProxyPassword are the upstream credentials the
-	// pull-through proxy uses when fetching from ProxyRemoteURL (passed as
-	// REGISTRY_PROXY_USERNAME / REGISTRY_PROXY_PASSWORD). Needed for private
-	// upstreams (e.g. gcr.io with "oauth2accesstoken" + a gcloud token);
-	// leave empty for anonymous upstreams (quay.io, docker.io, k8s). Only
-	// used when ProxyRemoteURL is set.
-	ProxyUsername string
-	ProxyPassword string
-	// Persist, when true, leaves the registry container running on
-	// Stop(). The volume persists either way (see VolumeName); Persist
-	// just controls whether the container itself stays up between
-	// runs. Recommended for local dev. In CI you typically want
-	// Persist=false (container is recreated per job) plus the default
-	// volume (so layer cache carries across jobs that share the
-	// machine).
-	Persist bool
+	// InsecureUpstream makes pull-through talk plaintext HTTP to upstreams.
+	// For tests and local dev against an http registry only; real upstreams
+	// are https and this must stay false.
+	InsecureUpstream bool
 }
 
-// Handle is the lifecycle handle returned by Setup. Stop is idempotent
-// and safe to call from deferred cleanup even if Setup failed partway.
-type Handle struct {
+// Registry is the running registry. Create it with Start; shut it down with
+// Stop.
+type Registry struct {
 	cfg Config
 	log log.Logger
+
+	// internal is the actual blob/manifest store (a go-containerregistry
+	// registry). It listens on loopback only and is never exposed to nodes;
+	// the facade populates it and reverse-proxies node requests to it.
+	internal     *http.Server
+	internalURL  *url.URL
+	internalHost string
+	proxy        *httputil.ReverseProxy
+
+	// public is the node-facing listener.
+	public     *http.Server
+	publicAddr string // actual bound address (host:port), useful when Port is 0
+
+	keychain authn.Keychain
+
+	mu     sync.Mutex
+	cached map[string]bool // key(ns, repo, ref) -> present in the internal store
 }
 
-// Setup ensures a registry container is running. If one with the same
-// name already exists, Setup reuses it (starting it if stopped). The
-// registry is NOT yet attached to the kind network — call Attach after
-// kind.Up returns.
-func Setup(ctx context.Context, cfg Config) (*Handle, error) {
-	if cfg.Port == 0 {
-		cfg.Port = DefaultPort
-	}
-	if cfg.Name == "" {
-		cfg.Name = DefaultName
-	}
-	if cfg.Image == "" {
-		cfg.Image = DefaultImage
+// Start brings up the facade: an internal store on loopback and the public
+// node-facing listener. The caller owns shutdown via Stop (typically
+// t.Cleanup). On error Start cleans up after itself and returns a nil Registry.
+func Start(ctx context.Context, cfg Config) (*Registry, error) {
+	// Port 0 means "let the OS pick a free port" (see Config.Port). Callers
+	// that need a port stable across facade restarts pass one explicitly;
+	// DefaultPort is the conventional choice.
+	if cfg.CacheDir == "" {
+		cfg.CacheDir = fmt.Sprintf("%s/kind-mirror", os.TempDir())
 	}
 	if cfg.KindNetwork == "" {
 		cfg.KindNetwork = DefaultKindNetwork
 	}
-	if cfg.VolumeName == "" {
-		cfg.VolumeName = DefaultVolumeName
+	if err := os.MkdirAll(cfg.CacheDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create cache dir %s: %w", cfg.CacheDir, err)
 	}
 
-	h := &Handle{cfg: cfg, log: log.With("component", "local-registry")}
+	f := &Registry{
+		cfg:      cfg,
+		log:      log.With("component", "kind-mirror"),
+		keychain: authn.DefaultKeychain,
+		cached:   map[string]bool{},
+	}
 
-	exists, running, err := h.status(ctx)
+	// Internal store: disk-backed blobs (persist across runs), in-memory
+	// manifests (tiny; rebuilt on demand — the expensive layer blobs are the
+	// thing that must persist, and they do).
+	blobs := ggcrregistry.NewDiskBlobHandler(cfg.CacheDir)
+	internalHandler := ggcrregistry.New(ggcrregistry.WithBlobHandler(blobs))
+	iln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listen (internal): %w", err)
 	}
-	switch {
-	case !exists:
-		h.log.Info("creating registry container",
-			"name", cfg.Name,
-			"port", cfg.Port,
-			"image", cfg.Image,
-		)
-		if err := h.create(ctx); err != nil {
-			return nil, err
-		}
-	case !running:
-		h.log.Info("starting existing container", "name", cfg.Name)
-		if err := h.start(ctx); err != nil {
-			return nil, err
-		}
-	default:
-		h.log.Info("reusing already-running container", "name", cfg.Name)
-	}
+	f.internalHost = iln.Addr().String()
+	f.internalURL = &url.URL{Scheme: "http", Host: f.internalHost}
+	f.proxy = httputil.NewSingleHostReverseProxy(f.internalURL)
+	f.internal = &http.Server{Handler: internalHandler, ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = f.internal.Serve(iln) }()
 
-	return h, nil
-}
+	// Public listener: bind all interfaces so kind nodes can reach it via
+	// the docker network gateway.
+	pln, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", cfg.Port))
+	if err != nil {
+		_ = f.internal.Close()
+		return nil, fmt.Errorf("listen (public :%d): %w", cfg.Port, err)
+	}
+	f.publicAddr = pln.Addr().String()
+	f.public = &http.Server{Handler: f, ReadHeaderTimeout: 10 * time.Second}
+	go func() { _ = f.public.Serve(pln) }()
 
-// Attach connects the registry container to a docker network. Must be
-// called AFTER kind.Up creates the network (typically "kind"). Idempotent
-// — repeated calls against an already-attached registry are silently
-// ignored. A missing network is also silently ignored so callers can
-// invoke Attach speculatively before they know the cluster is up.
-func (h *Handle) Attach(ctx context.Context, network string) error {
-	if h == nil {
-		return nil
-	}
-	out, err := dockerOut(ctx, "network", "connect", network, h.cfg.Name)
-	if err == nil {
-		h.log.Info("attached to docker network", "name", h.cfg.Name, "network", network)
-		return nil
-	}
-	msg := strings.TrimSpace(out)
-	lower := strings.ToLower(msg)
-	switch {
-	case strings.Contains(lower, "already exists"), strings.Contains(lower, "endpoint with name"):
-		return nil
-	case strings.Contains(lower, "not found"), strings.Contains(lower, "no such network"):
-		h.log.Info("docker network not present yet — skipping attach", "network", network)
-		return nil
-	}
-	return fmt.Errorf("docker network connect %s %s: %s: %w", network, h.cfg.Name, msg, err)
-}
-
-// ContainerdConfigPatches returns the containerd config_path setup kind
-// needs to enable per-host registry configuration. After kind.Up returns,
-// call ConfigureNodes to drop the hosts.toml files into that directory —
-// without those files no pulls actually route through this registry.
-//
-// Background: containerd 2.x (used by kindest/node images built by kind
-// v0.27 and later) dropped support for the legacy
-// [plugins."io.containerd.grpc.v1.cri".registry.mirrors.X] stanza inside
-// /etc/containerd/config.toml. The replacement is the config_path +
-// hosts.toml split documented at
-// https://github.com/containerd/containerd/blob/main/docs/hosts.md.
-// Older kindest/node images (built by kind v0.26 and earlier, e.g.
-// kindest/node:v1.30.x) still honor the legacy stanza, but this format
-// works for both, so it's the safe default.
-func (h *Handle) ContainerdConfigPatches() []string {
-	if h == nil {
-		return nil
-	}
-	return []string{
-		`[plugins."io.containerd.grpc.v1.cri".registry]
-  config_path = "/etc/containerd/certs.d"`,
-	}
-}
-
-// ConfigureNodes writes a hosts.toml into each kind node redirecting
-// pulls for localhost:<Port> (and any upstreamMirrors supplied) to this
-// registry. Must be called AFTER kind.Up created the nodes AND Attach
-// connected the registry to the kind docker network — otherwise the
-// nodes can't reach the registry by host name and the writes are
-// pointless. Safe to re-run.
-//
-// upstreamMirrors are extra registry hosts whose pulls should also go
-// through this local registry. Pair with localregistry.Config.ProxyRemoteURL
-// to make the registry transparently proxy a single upstream. registry:2
-// only supports one proxy upstream per container, so multi-upstream
-// mirroring requires multiple localregistry instances.
-func (h *Handle) ConfigureNodes(ctx context.Context, kindNodes []nodes.Node, upstreamMirrors ...string) error {
-	if h == nil {
-		return nil
-	}
-	endpoint := fmt.Sprintf("http://%s:%d", h.cfg.Name, registryInsidePort)
-	hostsTOML := fmt.Sprintf("[host.%q]\n", endpoint)
-
-	targets := make([]string, 0, 1+len(upstreamMirrors))
-	targets = append(targets, fmt.Sprintf("localhost:%d", h.cfg.Port))
-	targets = append(targets, upstreamMirrors...)
-
-	for _, n := range kindNodes {
-		for _, t := range targets {
-			dir := "/etc/containerd/certs.d/" + t
-			if err := n.Command("mkdir", "-p", dir).Run(); err != nil {
-				return fmt.Errorf("mkdir %s on %s: %w", dir, n, err)
-			}
-			if err := nodeutils.WriteFile(n, dir+"/hosts.toml", hostsTOML); err != nil {
-				return fmt.Errorf("write hosts.toml in %s on %s: %w", dir, n, err)
-			}
-		}
-	}
-	h.log.Info("Wrote containerd hosts.toml on kind nodes.",
-		"nodes", len(kindNodes),
-		"targets", targets,
+	f.log.Info("registry facade started",
+		"port", cfg.Port,
+		"cacheDir", cfg.CacheDir,
+		"internal", f.internalHost,
 	)
-	return nil
+	return f, nil
 }
 
-// Push pulls sourceRef from its upstream registry (using the local
-// docker keychain for auth), then pushes it to this local registry
-// under a normalised path. Returns the new ref that pods/manifests
-// should use.
-//
-// Example: Push("quay.io/tigera/operator:v1.32.0") returns
-// "localhost:5001/tigera/operator:v1.32.0".
-func (h *Handle) Push(ctx context.Context, sourceRef string) (string, error) {
-	if h == nil {
-		return "", fmt.Errorf("nil registry handle")
+// Addr is the address the public (node-facing) listener bound to. With
+// Config.Port left 0 the port is chosen by the OS; this reports the real one.
+func (f *Registry) Addr() string { return f.publicAddr }
+
+// Cached returns the (ns, repo, ref) keys the facade has served — pulled
+// through from an upstream or pinned via Override. Useful in tests to assert
+// a client's pull actually routed through the facade.
+func (f *Registry) Cached() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := make([]string, 0, len(f.cached))
+	for k := range f.cached {
+		keys = append(keys, k)
 	}
-	target := h.LocalRef(sourceRef)
-	h.log.Info("push image", "source", sourceRef, "target", target)
-	img, err := crane.Pull(sourceRef, crane.WithContext(ctx))
-	if err != nil {
-		return "", fmt.Errorf("pull %s: %w", sourceRef, err)
-	}
-	if err := crane.Push(img, target, crane.WithContext(ctx), crane.Insecure); err != nil {
-		return "", fmt.Errorf("push %s: %w", target, err)
-	}
-	return target, nil
+	return keys
 }
 
-// LocalRef rewrites an arbitrary image reference into the path this
-// registry serves it under. Does not push.
-func (h *Handle) LocalRef(sourceRef string) string {
-	if h == nil {
-		return sourceRef
+// ServeHTTP implements the facade. It rewrites the ns-scoped request path to
+// a namespaced repo in the internal store, lazily populates that repo from
+// the upstream on a manifest miss, then reverse-proxies to the internal
+// store which does the real OCI protocol work.
+func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ns := r.URL.Query().Get("ns")
+	repo, kind, ref, ok := parseRepoRequest(r.URL.Path)
+
+	// Not a per-image request (e.g. the /v2/ version ping) or no namespace:
+	// pass straight through to the internal store unchanged.
+	if !ok || ns == "" {
+		f.serveInternal(w, r, r.URL.Path)
+		return
 	}
-	return fmt.Sprintf("localhost:%d/%s", h.cfg.Port, stripUpstreamPrefix(sourceRef))
+
+	// On a manifest read, make sure the (namespaced) repo is populated —
+	// either from a prior Override or by pulling from the upstream now.
+	if kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if err := f.ensure(r.Context(), ns, repo, ref); err != nil {
+			f.log.Warn("pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+	}
+
+	// Blobs pulled for that manifest are already present under the same
+	// namespaced repo, so blob requests just proxy through.
+	f.serveInternal(w, r, fmt.Sprintf("/v2/%s/%s/%s/%s", safeNS(ns), repo, kind, ref))
 }
 
-// Port returns the host port the registry is published on. Useful for
-// callers that want to construct refs themselves without going through
-// LocalRef.
-func (h *Handle) Port() int { return h.cfg.Port }
+// serveInternal reverse-proxies the request to the internal store under the
+// given (already-rewritten) path, dropping only the ns query parameter the
+// internal store doesn't understand. Other query parameters are preserved —
+// a push's blob-upload PUT carries ?digest=..., and stripping the whole query
+// would break it.
+func (f *Registry) serveInternal(w http.ResponseWriter, r *http.Request, path string) {
+	q := r.URL.Query()
+	q.Del("ns")
+	r.URL.Path = path
+	r.URL.RawQuery = q.Encode()
+	f.proxy.ServeHTTP(w, r)
+}
 
-// Stop tears down the registry container unless Config.Persist was set,
-// in which case the container is left running for the next test run.
-// Idempotent.
-func (h *Handle) Stop() error {
-	if h == nil {
+// ensure guarantees the (ns, repo, ref) manifest and its blobs are present
+// in the internal store. Overridden refs are already present and marked, so
+// this is a no-op for them — that is what makes an override beat upstream.
+// Otherwise it pulls from the real upstream (named by ns) with the host's
+// live keychain and pushes into the internal store; disk-cached blobs are
+// not re-fetched.
+func (f *Registry) ensure(ctx context.Context, ns, repo, ref string) error {
+	k := key(ns, repo, ref)
+	f.mu.Lock()
+	present := f.cached[k]
+	f.mu.Unlock()
+	if present {
 		return nil
 	}
-	if h.cfg.Persist {
-		h.log.Info("leaving registry running (Persist=true)", "name", h.cfg.Name)
+
+	// The in-memory map is only a fast path. The authoritative "do I already
+	// have this?" is the internal store itself — which also covers manifests
+	// put there out-of-band: a shell override pushed with `docker push`/crane,
+	// or content from a previous process. If it's there, serve it and do NOT
+	// pull through, so an override is never clobbered by the upstream (this is
+	// what makes a pushed override stick, even under imagePullPolicy: Always).
+	if f.existsInternal(ctx, ns, repo, ref) {
+		f.mu.Lock()
+		f.cached[k] = true
+		f.mu.Unlock()
 		return nil
 	}
-	h.log.Info("removing registry container", "name", h.cfg.Name)
-	if out, err := dockerOut(context.Background(), "rm", "-f", h.cfg.Name); err != nil {
-		return fmt.Errorf("docker rm %s: %s: %w", h.cfg.Name, strings.TrimSpace(out), err)
-	}
-	return nil
-}
 
-// status reports whether the named container exists and whether it's
-// currently running. A missing container is not an error — that's the
-// "needs to be created" case.
-func (h *Handle) status(ctx context.Context) (exists, running bool, err error) {
-	out, err := dockerOut(ctx, "inspect", "-f", "{{.State.Running}}", h.cfg.Name)
-	if err == nil {
-		return true, strings.TrimSpace(out) == "true", nil
-	}
-	// Different docker versions case this differently:
-	// "No such object: …" / "no such object: …" / "No such container: …"
-	if strings.Contains(strings.ToLower(out), "no such") {
-		return false, false, nil
-	}
-	return false, false, fmt.Errorf("docker inspect %s: %s: %w", h.cfg.Name, strings.TrimSpace(out), err)
-}
+	upstream := joinRef("", ns, repo, ref)
+	internal := joinRef(f.internalHost, safeNS(ns), repo, ref)
+	f.log.Info("pull-through", "upstream", upstream, "internal", internal)
 
-// create runs the registry container fresh. Publishes only on
-// 127.0.0.1 — no external exposure. Mounts the named volume so
-// blobs survive container removal. When ProxyRemoteURL is set,
-// passes the upstream URL through as the proxy target.
-func (h *Handle) create(ctx context.Context) error {
-	args := []string{"run", "-d", "--restart=always",
-		"-p", fmt.Sprintf("127.0.0.1:%d:%d", h.cfg.Port, registryInsidePort),
-		"-v", fmt.Sprintf("%s:%s", h.cfg.VolumeName, registryDataPath),
-		"--name", h.cfg.Name,
-	}
-	if h.cfg.ProxyRemoteURL != "" {
-		args = append(args, "-e", "REGISTRY_PROXY_REMOTEURL="+h.cfg.ProxyRemoteURL)
-		if h.cfg.ProxyUsername != "" {
-			args = append(args, "-e", "REGISTRY_PROXY_USERNAME="+h.cfg.ProxyUsername)
-		}
-		if h.cfg.ProxyPassword != "" {
-			args = append(args, "-e", "REGISTRY_PROXY_PASSWORD="+h.cfg.ProxyPassword)
-		}
-	}
-	args = append(args, h.cfg.Image)
-	out, err := dockerOut(ctx, args...)
+	img, err := crane.Pull(upstream, f.pullOpts(ctx)...)
 	if err != nil {
-		return fmt.Errorf("docker run %s: %s: %w", h.cfg.Name, strings.TrimSpace(out), err)
+		return fmt.Errorf("pull %s: %w", upstream, err)
 	}
+	if err := crane.Push(img, internal, f.pushOpts(ctx)...); err != nil {
+		return fmt.Errorf("cache %s: %w", internal, err)
+	}
+
+	f.mu.Lock()
+	f.cached[k] = true
+	f.mu.Unlock()
 	return nil
 }
 
-func (h *Handle) start(ctx context.Context) error {
-	if out, err := dockerOut(ctx, "start", h.cfg.Name); err != nil {
-		return fmt.Errorf("docker start %s: %s: %w", h.cfg.Name, strings.TrimSpace(out), err)
+// existsInternal reports whether a manifest is already present in the internal
+// store, via a HEAD to its loopback endpoint. A non-200 (typically 404) or any
+// error means "not present" — the caller then pulls through.
+func (f *Registry) existsInternal(ctx context.Context, ns, repo, ref string) bool {
+	manifestURL := fmt.Sprintf("%s/v2/%s/%s/manifests/%s", f.internalURL.String(), safeNS(ns), repo, ref)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
+	if err != nil {
+		return false
 	}
-	return nil
+	// Accept every manifest type so content negotiation never 406s a present
+	// manifest into looking absent.
+	req.Header.Set("Accept", "*/*")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
-// dockerOut runs `docker <args...>` and returns combined output (stdout
-// + stderr) so we can match error messages to known idempotent cases.
-func dockerOut(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
-	return string(out), err
-}
-
-// stripUpstreamPrefix normalises an image reference by removing the
-// upstream registry host and the `library/` namespace docker.io
-// applies to single-name images. The result is the path the local
-// registry should serve the image at.
-//
-//	docker.io/library/redis:7   → redis:7
-//	docker.io/calico/node:v3    → calico/node:v3
-//	quay.io/tigera/operator:v1  → tigera/operator:v1
-//	gcr.io/google/foo:bar       → google/foo:bar
-func stripUpstreamPrefix(ref string) string {
-	// Identify if the first segment looks like a registry host
-	// (contains a "." or a ":"). If so, drop it.
-	if i := strings.IndexByte(ref, '/'); i > 0 {
-		first := ref[:i]
-		if strings.ContainsAny(first, ".:") {
-			ref = ref[i+1:]
+// Stop shuts the facade down. Idempotent.
+func (f *Registry) Stop() error {
+	if f == nil {
+		return nil
+	}
+	var firstErr error
+	if f.public != nil {
+		if err := f.public.Close(); err != nil {
+			firstErr = err
 		}
 	}
-	// docker.io's single-name images live under library/
-	ref = strings.TrimPrefix(ref, "library/")
-	return ref
+	if f.internal != nil {
+		if err := f.internal.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (f *Registry) pullOpts(ctx context.Context) []crane.Option {
+	opts := []crane.Option{crane.WithContext(ctx), crane.WithAuthFromKeychain(f.keychain)}
+	if f.cfg.InsecureUpstream {
+		opts = append(opts, crane.Insecure)
+	}
+	return opts
+}
+
+func (f *Registry) pushOpts(ctx context.Context) []crane.Option {
+	// The internal store is plaintext http on loopback, so push is insecure.
+	return []crane.Option{crane.WithContext(ctx), crane.Insecure}
 }
