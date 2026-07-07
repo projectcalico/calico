@@ -56,6 +56,20 @@ type serverMode struct{}
 
 func (serverMode) Name() string { return "server" }
 
+// resolveServerPort maps the PORT env value to a listen port. An empty value
+// selects defaultServerPort; a non-empty value must parse as a valid TCP/UDP
+// port (1-65535), otherwise an error is returned.
+func resolveServerPort(env string) (int, error) {
+	if env == "" {
+		return defaultServerPort, nil
+	}
+	p, err := strconv.Atoi(env)
+	if err != nil || p < 1 || p > 65535 {
+		return 0, fmt.Errorf("invalid PORT %q", env)
+	}
+	return p, nil
+}
+
 func (serverMode) Run(args []string) error {
 	// Server config comes from the PORT env var only. Stray args are tolerated
 	// (ignored) for parity with the old runme.sh wrapper; the --port CLI override
@@ -63,13 +77,9 @@ func (serverMode) Run(args []string) error {
 	fs := flag.NewFlagSet("server", flag.ContinueOnError)
 	_ = fs.Parse(args)
 
-	port := defaultServerPort
-	if v := os.Getenv("PORT"); v != "" {
-		p, err := strconv.Atoi(v)
-		if err != nil || p < 1 || p > 65535 {
-			return fmt.Errorf("invalid PORT %q", v)
-		}
-		port = p
+	port, err := resolveServerPort(os.Getenv("PORT"))
+	if err != nil {
+		return err
 	}
 	addr := ":" + strconv.Itoa(port)
 
