@@ -567,6 +567,106 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 	})
 }
 
+// TestGARPRaceWithTargetExit is a regression test for a dataplane main-loop
+// deadlock.  Scenario: the FSM is in Target with GARP detection running, and a
+// GARP/RARP is detected on the workload interface just before the main loop
+// processes an update that ends the Target state (e.g. the migration-complete
+// update flipping the role TARGET -> NO_ROLE, which can arrive within the same
+// scheduling window as the cutover RARP).  detectGARP is then blocked sending
+// on the unbuffered garpC - whose only reader is the main loop - while the
+// main loop is inside stopGARPDetection() waiting for detectGARP to exit.
+// Neither can proceed, wedging the dataplane loop permanently.
+//
+// The test simulates the main loop by calling OnUpdate directly, with nothing
+// reading garpC (just as the real main loop cannot read garpC while it is
+// inside OnUpdate).  Without the garpStopC abort mechanism, OnUpdate would
+// block forever and the test would fail by timeout.
+func TestGARPRaceWithTargetExit(t *testing.T) {
+	tests := []struct {
+		name       string
+		exitInput  func(m *liveMigrationMonitor)
+		wantStates []liveMigrationState
+	}{
+		{
+			name: "migration completes (NO_ROLE)",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateTimeWait},
+		},
+		{
+			name: "re-migration (SOURCE)",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateBase},
+		},
+		{
+			name: "workload removed",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepRemove(wepID1))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateBase},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			m := newTestMonitor(testConvergenceTime)
+
+			garpBytes := buildGARPPacketBytes(t)
+			fakeHandle := newFakeGARPHandle(garpBytes)
+			m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
+				return fakeHandle, nil
+			}
+
+			// Drive to Target; GARP detection starts and the fake handle
+			// delivers a GARP immediately, so detectGARP commits to the
+			// (blocking) garpC send.
+			m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+			expectUpdate(g, m, liveMigrationStateTarget)
+
+			// Wait until the packet has been consumed from the handle; from
+			// that point detectGARP is committed to sending on garpC even if
+			// the handle is subsequently closed.  Then yield briefly so that
+			// detectGARP very likely reaches the send itself, exercising the
+			// exact blocked-send interleaving from the field report.
+			g.Eventually(fakeHandle.AllDelivered, time.Second, time.Millisecond).Should(BeTrue())
+			time.Sleep(20 * time.Millisecond)
+
+			// Process the Target-exiting update as the main loop would, with
+			// nothing reading garpC.  Run it in a goroutine purely so that a
+			// regression fails the test by timeout instead of hanging the
+			// whole test binary.
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				tt.exitInput(m)
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("deadlock: OnUpdate blocked in stopGARPDetection while detectGARP blocked sending on garpC")
+			}
+
+			updates := drainUpdates(m)
+			g.Expect(updates).To(HaveLen(len(tt.wantStates)))
+			for i, want := range tt.wantStates {
+				g.Expect(updates[i].State).To(Equal(want))
+			}
+
+			// The aborted detection must not deliver a stale GARP.
+			select {
+			case <-m.garpC:
+				t.Fatal("unexpected GARP delivery after GARP detection was stopped")
+			case <-time.After(100 * time.Millisecond):
+				// Expected: no delivery.
+			}
+		})
+	}
+}
+
 // --- Section 6: GARP/RARP packet matching ---
 
 func TestIsGARPOrRARP(t *testing.T) {
@@ -743,6 +843,14 @@ func (f *fakeGARPHandle) IsClosed() bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.closed
+}
+
+// AllDelivered reports whether every queued packet has been consumed via
+// ReadPacketData.
+func (f *fakeGARPHandle) AllDelivered() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.idx == len(f.packets)
 }
 
 // --- Section 7: Migration UID tracking ---
