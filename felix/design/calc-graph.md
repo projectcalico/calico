@@ -68,11 +68,13 @@ Centralising this keeps every dataplane simpler. The graph is the
 single place that handles:
 
 1. **Cross-resource inconsistency** from eventual consistency — a WEP
-   naming a not-yet-known profile, a rule selecting an unknown label.
+   naming a not-yet-known profile, a rule selecting a label that
+   doesn't yet match any endpoints, or whose matches can change later.
 2. **Transient duplicate state** — e.g. two WEPs briefly sharing an
    IP after add/delete reordering; the graph resolves the conflict so
    no dataplane has to.
-3. **Local relevance filtering** (problem above).
+3. **Local relevance filtering** — reducing cluster-wide state to the
+   endpoints local to this node.
 4. **Dataplane-friendly output ordering** — dependencies emitted
    before their dependents and removed only once nothing needs them
    (the `EventSequencer`'s job).
@@ -157,24 +159,25 @@ might observe any of:
   resource didn't exist there yet, giving a **spurious `Deleted`**
 
 So a node must not assume ordering, monotonic versions, that it sees
-every transition, or even that a `Deleted` is real and final —
-"compare the event against my state and reconcile" handles all of
-these; "assume values only move forward" does not.
+every transition, or that a `Deleted` is final — the same resource can
+be deleted and later re-created (the spurious-`Deleted` sequence
+above). Comparing each event against current state and reconciling
+handles all of these; assuming values only move forward does not.
 
 ### The update-type side channel
 
 Each event also carries `Update.UpdateType` (`api.UpdateType`:
 `UpdateTypeKVNew`/`KVUpdated`/`KVDeleted`/`KVUnknown` in
-`libcalico-go/lib/backend/api`). Original purpose was stats
-without retaining objects (see `calc/stats_collector.go`).
-Treat it as advisory, and note that
-`UpdateTypeKVNew/Updated` can carry `nil` due to failed
-validation.
+`libcalico-go/lib/backend/api`). Its original purpose was stats
+without retaining objects (see `calc/stats_collector.go`). **Don't
+drive correctness from it** — decide existence from nil/non-nil, not
+the update type; `UpdateTypeKVNew/Updated` can even carry `nil` (failed
+validation), so the type may disagree with the value.
 
 ### Review notes
 
 - A node that decides *existence* from the update type rather than
-  nil/non-nil is suspect; stats-style bookkeeping is the legitimate
+  nil/non-nil is suspect; stats-style bookkeeping is the only legitimate
   use.
 - A node that assumes monotonic versions or that it sees every
   intermediate update is wrong — coalescing and reversion break both.
@@ -234,7 +237,7 @@ Descriptions track each node's godoc — see the source for detail.
   order. Any buffer must rely only on same-loop delivery.
 - A PR reordering node registration must justify it against the
   matches-after-members pattern; most reorderings are inert, but the
-  `LiveMigrationCalculator`-before-ARC one is silently load-bearing.
+  `LiveMigrationCalculator`-before-ARC one is load-bearing.
 
 ## Label indexes and refcounting
 
@@ -287,13 +290,15 @@ It buffers updates in `pending*` maps/sets and emits them on
 
 ### Coalescing is back-pressure
 
-Coalescing is half the back-pressure mechanism. When the dataplane
-stalls on a big update while the datastore churns, coalescing
-**bounds memory** (at most one pending entry per resource, so ~the
-cluster's resource count) and **bounds the update size** handed to
-the dataplane. Worst case degrades gracefully: the dataplane runs a
-catch-up loop, each pass absorbing the previous pass's churn, rather
-than growing an unbounded queue.
+Coalescing is half the back-pressure mechanism. The `EventSequencer`
+holds at most one pending update per object — its `pending*` maps are
+keyed by datastore key — so repeated changes to the same object
+between flushes collapse into one. When the dataplane stalls on a big
+update while the datastore churns, this **bounds buffered memory** to
+roughly the cluster's object count and **bounds the number of messages**
+in the next flush, instead of letting a per-change queue grow
+unbounded. Worst case degrades gracefully: the dataplane runs a
+catch-up loop, each pass absorbing the previous pass's churn.
 
 ### Flush order is the dependency contract
 
@@ -341,11 +346,12 @@ what makes sense for the resource type:
 - **(c) Buffer the dependent until the dependency arrives.**
   Requires sending a remove of any already-sent copy of the dependent
   in order to maintain the calc-graph's "no hysteresis" invariant.
-  Never buffer endpoints/policies/profiles; these are security-critical
-  and part of the core feature set.
 
-The invariant across all three: a missing dependency must never
-silently leave an endpoint or policy *open* — it must fail closed.
+Two rules span all three choices. **Never buffer
+endpoints/policies/profiles** — they are security-critical and part of
+the core feature set, so (c) is off the table for them. And a missing
+dependency must never leave an endpoint or policy *open* — it must fail
+closed.
 
 ### Review notes
 
@@ -354,7 +360,9 @@ silently leave an endpoint or policy *open* — it must fail closed.
   specific orderings, which FV expansion is built to catch.
 - Handling a missing referent by buffering an endpoint or policy is
   almost always wrong; prefer (a) or (b).
-- Removing or weakening a coalescing path must argue it doesn't break
+- Removing or weakening a coalescing path (e.g. dropping the
+  `EventSequencer`'s per-object dedup, or forwarding every intermediate
+  update instead of only the net change) must argue it doesn't break
   the memory/size bound back-pressure relies on.
 
 ## In-sync semantics
@@ -404,8 +412,6 @@ case matters (it usually does for indexes/refcounts).
 - A calc-graph (or labelindex) change without an FV state is the
   exception and needs justification; per-node unit tests aren't a
   substitute — funnel coverage through the FV framework.
-- Check new states aren't accidentally symmetric (the
-  `[{A},{A,B},{A}]` trap); if so, add an asymmetric sequence.
 
 ## Common failure modes
 
@@ -415,11 +421,11 @@ case matters (it usually does for indexes/refcounts).
    broken, emit a fail-closed stand-in or pass-through signal rather
    than withholding a security-critical update.
 2. **Buffering security-critical resources** (endpoints, policies) —
-   fail closed instead.
+   leaves them stale or open when they should fail closed.
 3. **Recomputing work that scales with cluster-wide counts on a
    high-churn path** (the historical 20,000-sorts bug).
-4. **Leaky/asymmetric refcounting** — add and remove keyed
-   differently.
+4. **Leaky/asymmetric refcounting** — an add keyed differently from
+   its remove, so entries are never released and leak.
 5. **Skipping the FV suite** — so the orderings and teardown paths
    the expanders would catch go untested.
 

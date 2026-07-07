@@ -102,7 +102,7 @@ before any programming begins.)
 
 **`OnUpdate` must be cheap and must not perform kernel I/O** (no
 netlink call, `iptables-restore`, subprocess fork, or BPF map
-write). The rule is narrower than "don't touch the dataplane": it
+write). It
 *may* push desired state into the in-memory `ipsets`/
 `generictables.Table` objects, which *queue* the change (the
 `Manager` doc-comment permits this; `masqManager.OnUpdate` does
@@ -225,7 +225,7 @@ These are distinct mechanisms with overlapping effect:
 - **Error-triggered resync**: a failed `apply()` leaves work dirty
   and re-runs soon. The re-run is paced by the leaky-bucket
   `applyThrottle` (with a ~10s `retryTicker` as a backstop), not by
-  exponential backoff; true exponential backoff exists only *inside*
+  exponential backoff; exponential backoff is only used *inside*
   the iptables `Table.Apply()` loop. This recovers from transient
   failures.
 - **Periodic refresh** (`forceRouteRefresh`, `forceIPSetsRefresh`,
@@ -299,7 +299,7 @@ why the identification mechanism differs per driver:
 
 ### Review notes for this section
 
-- **The headline review question for any PR that creates new
+- **A key review question for any PR that creates new
   dataplane state:** "How does a freshly-restarted Felix, with no
   memory and possibly a totally different datastore, recognise this
   as ours to sweep — with no delete event and no prior state?" If
@@ -325,14 +325,14 @@ behind**. The motivating race:
   back to Felix — so for a moment the interface exists but Felix has
   no policy for it.
 
-If the dataplane defaulted to "allow unknown interfaces" that pod
-would have open connectivity until Felix caught up. Instead it
-**fails closed**: the iptables/nftables dispatch chains (the
+Therefore the iptables/nftables dispatch chains (the
 [dispatch trie/map](#rules-generation-dispatch-chains-and-mark-bits))
-**drop any `cali*` interface that isn't explicitly allow-listed**.
-An interface Felix hasn't programmed policy for gets no traffic, and
-this holds even if Felix is stopped entirely — the rules stay in the
-kernel.
+**fail closed**: they **drop traffic to/from any `cali*` interface
+that isn't explicitly allow-listed**. This is a Felix responsibility,
+not the CNI plugin's: the CNI plugin relies on Felix having *already*
+programmed that catch-all drop rule, so a freshly-plugged veth carries
+no traffic until Felix programs its policy — and the rule stays in the
+kernel even if Felix is stopped entirely.
 
 The general doctrine, which applies to any dataplane change: **think
 about what happens if Felix crashes or stops at this exact point.**
@@ -442,7 +442,12 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
 - **Dispatch chains avoid O(n-endpoints) per-packet cost.**
   Evaluating an iptables rule costs on the order of a microsecond
   (rough estimate; no in-repo benchmark), so a flat chain of 100+
-  per-endpoint dispatch rules is a real per-packet tax. Felix builds
+  per-endpoint dispatch rules is a real per-packet tax. This really is
+  per-*packet*, not per-connection: the conntrack accept lives in the
+  per-endpoint chain, downstream of dispatch, so even established flows
+  traverse the dispatch chains (an earlier short-circuit further up the
+  path was moved into the per-endpoint chain because it broke setups
+  with non-Calico rules). Felix builds
   a **shallow (typically single-level) tree of dispatch chains**,
   binning endpoints by the next character after the common
   interface-name prefix (`sortAndDivideEndpointNamesToPrefixTree` /
@@ -469,7 +474,9 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   to avoid. Keep new per-endpoint matching inside the tree.
 - A PR that claims a new mark bit must allocate it through
   `MarkBitsManager` against the configured range, and must not
-  assume a specific bit is free.
+  assume a specific bit is free. The Enterprise build allocates
+  further bits from the same range, so a bit that looks free here may
+  collide there — check downstream before adding one.
 
 ## IP sets
 
@@ -477,9 +484,9 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
 desired membership. Three behaviours look odd until you know the
 kernel constraints behind them:
 
-- **Temp-set-and-swap.** Atomically changing the size/metadata of an
-  **in-use** IP set is only possible by building a temporary set and
-  swapping it in. That's why updates that change set parameters go
+- **Temp-set-and-swap.** Atomically changing the capacity or metadata
+  of an **in-use** IP set is only possible by building a temporary set
+  and swapping it in. That's why updates that change set parameters go
   via a temp set.
 - **Deletions are deferred until after `*tables` updates.** You
   cannot delete an in-use IP set, so a set being removed must first
@@ -492,8 +499,8 @@ kernel constraints behind them:
   thousands of sets doesn't stall the whole dataplane on cleanup.
 
 **The cross-layer invariant: never reference an IP set before it is
-programmed.** This is enforced jointly across two layers, and a
-change to *either* alone breaks it silently:
+programmed.** This is enforced jointly by the calc graph and the
+dataplane, and a change to *either* alone breaks it:
 
 - the **calc graph** always emits an IP set before any policy that
   references it (the `EventSequencer` flush order), and
@@ -590,9 +597,9 @@ The recurring ways dataplane changes go wrong, and the recipe that
 avoids most of them.
 
 **Start simple: dirty-flag + start-of-day resync.** For a
-low-traffic manager, don't reach for edge-triggered cleverness.
-Code the start-of-day resync first, driven by a single `dirty`
-bool:
+low-traffic manager, don't try to handle each individual update
+incrementally. Code the start-of-day resync first, driven by a single
+`dirty` bool:
 
 1. Initialise `dirty = true` so the resync runs on the first
    in-sync `apply()`.
@@ -642,10 +649,10 @@ only to maps that genuinely can't be rebuilt.
 
 ### The failure modes, distilled
 
-1. **Edge-triggered instead of resync-first.** The biggest blind
-   spot. A manager that only handles deltas and never reconciles
-   from scratch will leak or diverge across restart. Write the
-   start-of-day resync first.
+1. **Delta-only, no from-scratch resync.** The biggest blind
+   spot. A manager that only handles individual updates and never
+   reconciles from scratch will leak or diverge across restart. Write
+   the start-of-day resync first.
 2. **Kernel work in `OnUpdate`.** Breaks batching and the
    safe-before-in-sync boundary. Defer to `CompleteDeferredWork`.
 3. **Disruptive resync.** Flapping already-correct resources on

@@ -38,7 +38,7 @@ Before writing code (Copilot coding agent) or reviewing a PR
 Follow links — the design references siblings, code, and external
 resources.
 
-## Update rule
+## Doc update rule
 
 The repo-wide doc-update rule and its exemptions
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
@@ -51,19 +51,6 @@ inconsistency, in-sync, or the upstream contract. Update the
 relevant section of
 [`calc-graph.md`](../../felix/design/calc-graph.md) in the same PR
 (and `dataplane.md` if the output contract changes), and update the
-hand-maintained node graph in `felix/docs/calc.dot` when you add or
-rewire a node.
-
-## Amending the PR
-
-The Copilot automated code-review step is read-only with respect
-to the PR branch — it cannot push the doc amendment itself. When
-the review flags a missing update per the rule above, its comment
-should include a ready-to-paste `@copilot` prompt naming the
-section and the new behaviour or invariant, for example:
-
-> `@copilot update felix/design/calc-graph.md "The EventSequencer (output stage)" to cover the new emitted message proto.FooUpdate — its place in the flush order, what it depends on, and what depends on it.`
-
-The reviewer (or author) drops that into a new PR comment; the
-Copilot coding agent picks it up and pushes a commit with the
-amendment to the PR branch.
+hand-maintained node diagram in
+[`felix/docs/calc-graph-diagram.md`](../../felix/docs/calc-graph-diagram.md)
+when you add or rewire a node.

@@ -33,11 +33,11 @@ Before writing code (Copilot coding agent) or reviewing a PR
 1. Read the relevant section(s) of
    [`dataplane.md`](../../felix/design/dataplane.md) and apply the
    review notes embedded there.
-2. **The headline question for any change that creates kernel
-   state:** how does a freshly-restarted Felix (no memory, possibly
-   a different datastore, no delete event) recognise this resource
-   as Calico's, to sweep the orphans? See "Restart, resync and
-   mark-and-sweep".
+2. Beyond programming the correct corresponding kernel state, a key
+   question for any change that creates kernel state: how does a
+   freshly-restarted Felix (no memory, possibly a different datastore,
+   no delete event) recognise this resource as Calico's, to sweep the
+   orphans? See "Restart, resync and mark-and-sweep".
 3. Other recurring checks: no kernel work in `OnUpdate` (defer to
    `CompleteDeferredWork`); preserve the IP-set ordering invariant
    (create before `*tables`, delete after) across **both** the calc
@@ -60,7 +60,7 @@ and from the producer side in
 [`calc-graph.md`](../../felix/design/calc-graph.md). Follow links —
 the design is a graph.
 
-## Update rule
+## Doc update rule
 
 The repo-wide doc-update rule and its exemptions
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
@@ -75,17 +75,3 @@ IP-set ordering, or route ownership classification; or a change to
 the `proto.*` dataplane API. Update the relevant section of
 [`dataplane.md`](../../felix/design/dataplane.md) in the same PR
 (and `calc-graph.md` if the proto contract changes).
-
-## Amending the PR
-
-The Copilot automated code-review step is read-only with respect
-to the PR branch — it cannot push the doc amendment itself. When
-the review flags a missing update per the rule above, its comment
-should include a ready-to-paste `@copilot` prompt naming the
-section and the new behaviour or invariant, for example:
-
-> `@copilot update felix/design/dataplane.md "How each subsystem identifies \"ours\"" to cover how the new fooManager recognises its kernel resources on restart, and what it sweeps.`
-
-The reviewer (or author) drops that into a new PR comment; the
-Copilot coding agent picks it up and pushes a commit with the
-amendment to the PR branch.
