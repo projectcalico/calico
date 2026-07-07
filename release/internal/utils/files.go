@@ -85,6 +85,9 @@ func LinkOrCopyDir(srcDir, dstDir string, include IncludeFunc) error {
 		if d.IsDir() {
 			return nil
 		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		relPath, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return fmt.Errorf("failed to determine relative path for %s: %w", path, err)
