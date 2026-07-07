@@ -67,7 +67,7 @@ else
     echo "[INFO] load_images: loading into external node docker (${EXT_IP})"
     docker save "${_img}" | ssh -i "${EXT_KEY}" \
       -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
-      "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'docker load'
+      "${EXT_USER:-ubuntu}@${EXT_IP}" -- 'sudo docker load'
   fi
 
   # Pin the tests to the loaded image and forward the tag into the e2e container
