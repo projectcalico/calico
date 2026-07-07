@@ -125,12 +125,12 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 	for (i = 0; i < 8; i++) {
 		struct ipv6_opt_hdr opt;
 
-		CALI_DEBUG("loading extension at offset %d", ipoff + len);
 		if (bpf_load_bytes(ctx, ipoff + len, &opt, sizeof(opt))) {
 			CALI_DEBUG("Too short");
 			goto deny;
 		}
 
+		CALI_DEBUG("loading extension at offset %d", ipoff + len);
 		CALI_DEBUG("ext nexthdr %d hdrlen %d", opt.nexthdr, opt.hdrlen);
 
 		switch(hdr) {
