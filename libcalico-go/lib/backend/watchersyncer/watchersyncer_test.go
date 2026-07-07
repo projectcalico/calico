@@ -1000,13 +1000,16 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		}
 		rs.clientListResponse(r1, genError)
 
-		// Wait long enough for the syncer to work through the Watch retries and
-		// reach the List call where the time.Since(lastSuccessfulConnTime) check
-		// happens. Approximately MaxErrorsPerRevision * MinResyncInterval, plus a
-		// buffer. Without waiting, ExpectConnErrors's short Consistently window
-		// completes before the syncer has had a chance to signal SyncFailed
-		// (yielding false-negative test passes).
-		time.Sleep(300 * time.Millisecond)
+		// Wait on a deterministic signal that the failing List has landed: the
+		// bookmark handler set currentWatchRevision = "rev-bookmark", so the
+		// re-List uses that revision, and the fake records it in
+		// getLatestListRevision immediately before returning the queued error.
+		// Once that's observed, the syncer's time.Since check has fired (or is
+		// about to fire) and ExpectConnErrors's Consistently window will catch
+		// any resulting SyncFailed. A fixed sleep here would risk
+		// false-negative passes on slower runners that hadn't reached the
+		// failing List within the sleep window.
+		Eventually(rs.fc.getLatestListRevision, 3*time.Second, 10*time.Millisecond).Should(Equal("rev-bookmark"))
 
 		// If bookmark refresh works, time.Since(lastSuccessfulConnTime) is only
 		// a few hundred ms at this point — under the 500ms watchRetryTimeout —
