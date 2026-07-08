@@ -257,6 +257,10 @@ for architecture in `CLAUDE.md`.
   lists per-topic sub-designs under [`felix/design/`](../felix/design/)
   with an "applies to" glob each. A PR touching multiple globs
   must load every matching sub-design.
+- Cross-component subsystems live under `design/<topic>/` at the
+  repo root (e.g. [`design/ipam/`](../design/ipam/),
+  [`design/syncer/`](../design/syncer/)), with discoverability
+  pointer stubs in consumer subdirectories.
 - [`.github/instructions/*.instructions.md`](instructions/) are
   thin path-scoped pointers to `DESIGN.md` files plus meta-rules
   (the update rule, the `@copilot` invocation pattern). They do
