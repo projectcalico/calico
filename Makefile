@@ -267,6 +267,28 @@ e2e-test:
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
+## Create a kind cluster with the BPF dataplane plus an external node, and run
+## the sig-calico BPF e2e tests (including the ExternalNode specs).
+## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support
+## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
+## control-plane nodeSelector still matches.
+e2e-test-bpf:
+	$(MAKE) -C e2e build
+	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
+	$(KIND_DIR)/external-node.sh up
+	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
+	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
+	# not trip over unrelated agent keys.
+	EXT_USER=ubuntu \
+	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
+	EXT_KEY=$(KIND_DIR)/external-node-key \
+	SSH_AUTH_SOCK= \
+	$(MAKE) e2e-run \
+		KIND_NAME=kind \
+		KUBECONFIG=$(KIND_KUBECONFIG) \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
