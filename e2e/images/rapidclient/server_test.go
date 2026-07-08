@@ -206,3 +206,12 @@ func TestResolveMode(t *testing.T) {
 		t.Errorf("resolveMode(%q) resolved unexpectedly", name)
 	}
 }
+
+// TestClientModeRequiresURL locks in the Mode.Run error contract for client
+// mode: a missing required -url returns an error (which main maps to a non-zero
+// exit) rather than calling os.Exit — so the mode is composable and testable.
+func TestClientModeRequiresURL(t *testing.T) {
+	if err := (clientMode{}).Run([]string{}); err == nil {
+		t.Error("clientMode.Run with no -url = nil error, want error")
+	}
+}
