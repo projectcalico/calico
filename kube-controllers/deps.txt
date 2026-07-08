@@ -196,6 +196,7 @@ local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
