@@ -73,8 +73,11 @@ func resolveServerPort(env string) (int, error) {
 func (serverMode) Run(args []string) error {
 	// Server config comes from the PORT env var only. Stray args are tolerated
 	// (ignored) for parity with the old runme.sh wrapper; the --port CLI override
-	// it accepted is intentionally not replicated.
+	// it accepted is intentionally not replicated. Discard the FlagSet's output
+	// so an unknown arg (e.g. the old --port) is ignored quietly rather than
+	// printing a "flag provided but not defined" error + usage to stderr.
 	fs := flag.NewFlagSet("server", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	_ = fs.Parse(args)
 
 	port, err := resolveServerPort(os.Getenv("PORT"))

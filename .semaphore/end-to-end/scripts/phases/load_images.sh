@@ -80,6 +80,7 @@ else
   fi
 
   rm -f "${_tar}"
+  trap - EXIT  # cleanup done on the happy path; don't leak the trap into run_tests.sh
 
   # Pin the tests to the loaded image and forward the tag into the e2e container
   # (run_tests.sh passes ${K8S_E2E_DOCKER_EXTRA_FLAGS} to its `docker run`).
