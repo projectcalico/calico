@@ -604,8 +604,8 @@ func garpSenderBlocked() bool {
 	return senderParkedIn("detectGARP")
 }
 
-// timerSenderBlocked reports whether some elevated-routing-timer callback is currently parked
-// sending its pop on timerC.
+// timerSenderBlocked reports whether some elevated-routing-timer goroutine is currently parked
+// in its select - either waiting for the timer to fire or sending its pop on timerC.
 func timerSenderBlocked() bool {
 	return senderParkedIn("startElevatedRoutingTimer")
 }
@@ -729,17 +729,45 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 	m := newTestMonitor(10 * time.Millisecond)
 
 	// Episode 1: drive to TimeWait via the missed-GARP path; the timer fires
-	// and its pop parks on timerC.
+	// and its pop parks on timerC.  The timer goroutine parks in a select both
+	// before and after the timer fires, so also wait out several convergence
+	// times to make it overwhelmingly likely the fired-pop-parked-in-send
+	// interleaving from the field scenario is the one we exercise; the exit
+	// path below must reap the goroutine in either interleaving regardless.
+	start := time.Now()
 	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
 	drainUpdates(m)
 	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
 	drainUpdates(m)
-	g.Eventually(timerSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
+	g.Eventually(func() bool {
+		return time.Since(start) > 50*time.Millisecond && timerSenderBlocked()
+	}, time.Second, time.Millisecond).Should(BeTrue())
+
+	// Hold a reference to the episode-1 FSM: the TimeWait exit below discards it
+	// from the monitor's map, but we need it to verify its goroutine is reaped.
+	fsm1 := m.fsms[wepID1]
+	g.Expect(fsm1).NotTo(BeNil())
 
 	// Exit TimeWait while the pop is parked, as the main loop would when processing a
 	// re-migration batch.  This must abort the parked pop.
 	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
 	drainUpdates(m)
+
+	// stopElevatedRoutingTimer waits for the timer goroutine to exit before returning, so by
+	// the time the exit update has been processed the goroutine must already be gone -
+	// synchronously, not eventually.  Verify via the FSM's own WaitGroup (a global stack scan
+	// would be polluted by TimeWait timer goroutines leaked by other tests in this package).
+	reaped := make(chan struct{})
+	go func() {
+		fsm1.timerWG.Wait()
+		close(reaped)
+	}()
+	select {
+	case <-reaped:
+	case <-time.After(time.Second):
+		t.Fatal("timer goroutine still running after the TimeWait-exiting update returned")
+	}
+	g.Expect(fsm1.timerStopC).To(BeNil(), "stopElevatedRoutingTimer should have cleared timerStopC")
 
 	// Episode 2: re-enter TimeWait with a convergence time long enough that its own timer
 	// cannot fire during the test, so any pop delivered below can only be the stale one from
@@ -762,6 +790,10 @@ func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
 		// Expected: no delivery.
 	}
 	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+
+	// Reap episode 2's timer goroutine rather than leak it into the rest of the
+	// test binary.
+	m.OnUpdate(wepRemove(wepID1))
 }
 
 // --- Section 6: GARP/RARP packet matching ---
