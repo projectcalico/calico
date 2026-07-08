@@ -111,6 +111,15 @@ if ! python3 -c 'import yaml' 2>/dev/null; then
     || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
 fi
 
+# HCP jobs use a multi-cluster profile tree under BZ_PROFILES_PATH (not the
+# single BZ_HOME profile) and the vendored .argoci/scripts/hcp/hcp-*.sh, which
+# read these env vars. Point them at ArgoCI locations.
+if [[ "${HCP_ENABLED}" == "true" ]]; then
+  export BZ_PROFILES_PATH="${BZ_PROFILES_PATH:-${HOME}/bzprofiles}"
+  export BZ_SECRETS_PATH="${BZ_SECRETS_PATH:-${HOME}/secrets}"
+  export PATH="${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/hcp:${PATH}"
+fi
+
 echo "[INFO] initialising bz profile..."
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true

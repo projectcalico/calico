@@ -3,13 +3,21 @@
 #
 # Dispatches to the phase scripts in phases/. Ported from
 # .semaphore/end-to-end/scripts/body_standard.sh, trimmed to the OSS path
-# (the Semaphore version's HCP/MCM/hosting branches are Calico-Enterprise-only
-# and are dropped here). Each phase is self-contained; see phases/*.sh.
+# (the Semaphore version's MCM/hosting branches are Calico-Enterprise-only and
+# are dropped). HCP is handled via phases/hcp.sh (see below). Each phase is
+# self-contained; see phases/*.sh.
 set -eo pipefail
 
 PHASES="$(cd "$(dirname "$0")" && pwd)/phases"
 
 echo "[INFO] starting job (PROVISIONER=${PROVISIONER} DATAPLANE=${DATAPLANE} RELEASE_STREAM=${RELEASE_STREAM})"
+
+# HCP jobs use their own multi-cluster flow (bzprofiles tree, not BZ_HOME) and
+# exit from hcp.sh per stage; they never reach the standard phases below.
+if [[ "${HCP_ENABLED}" == "true" ]]; then
+  source "${PHASES}/hcp.sh"
+  exit 0
+fi
 
 # bz commands must run from the profile dir (== BZ_HOME); PHASES is absolute above.
 cd "${BZ_HOME}"

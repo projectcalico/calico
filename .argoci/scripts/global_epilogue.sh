@@ -15,17 +15,21 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 CI_EXIT_CODE=${CI_EXIT_CODE:-0}
 ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
 
-# Capture diags on failure (or always for cert runs).
-if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
+# Capture diags on failure (or always for cert runs). Skipped for HCP: it owns
+# per-cluster diags (hcp-diags.sh) and destroy (hcp-destroy.sh) across its stages,
+# and a single-BZ_HOME bz diags/destroy here would act on the wrong thing (and a
+# per-step destroy would kill the hosting cluster the next stage needs).
+if [[ "${HCP_ENABLED}" != "true" && ( "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ) ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true
 fi
 
-# Publish JUnit + logs.
-if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-  gsutil cp "${REPORT_DIR}/junit.xml" "${ARTIFACT_DEST}/junit.xml" || true
-fi
+# Publish JUnit (glob covers the standard junit.xml and HCP's per-cluster
+# junit_<cluster>_1.xml) + logs.
+for _j in "${REPORT_DIR}"/*.xml; do
+  [[ -f "${_j}" ]] && gsutil cp "${_j}" "${ARTIFACT_DEST}/$(basename "${_j}")" || true
+done
 gsutil -m cp -r "${BZ_LOGS_DIR}/." "${ARTIFACT_DEST}/logs/" || true
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
@@ -37,8 +41,12 @@ if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
-# Tear the cluster down.
-echo "[INFO] destroying cluster ${CLUSTER_NAME}"
-bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+# Tear the cluster down (skipped for HCP — hcp-destroy.sh runs in the
+# destroy-hosting stage; a per-step destroy here would kill the hosting cluster
+# the hosted stage still needs).
+if [[ "${HCP_ENABLED}" != "true" ]]; then
+  echo "[INFO] destroying cluster ${CLUSTER_NAME}"
+  bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+fi
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"
