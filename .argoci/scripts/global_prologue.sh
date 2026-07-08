@@ -124,4 +124,31 @@ else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
 fi
 
+# HCP cross-stage handoff (see .argoci/design/hcp.md). The hosting cluster's
+# state is passed between stages via one GCS object (Semaphore used cache +
+# artifact, which ArgoCI lacks). setup-hosting pushes it in the epilogue.
+if [[ -n "${HCP_STAGE:-}" ]]; then
+  HCP_BLOB="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-bzhome.tgz"
+  case "${HCP_STAGE}" in
+    hosted)
+      # Join the existing hosting cluster: pull just its kubeconfig.
+      mkdir -p "${BZ_LOCAL_DIR}/hosting"
+      if gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_LOCAL_DIR}/hosting" ./.local/kubeconfig; then
+        export OPENSHIFT_HOSTING_KUBECONFIG="${BZ_LOCAL_DIR}/hosting/.local/kubeconfig"
+        echo "[INFO] hcp: hosting kubeconfig at ${OPENSHIFT_HOSTING_KUBECONFIG}"
+      else
+        echo "[ERROR] hcp: hosting state not found at ${HCP_BLOB}"; exit 1
+      fi
+      ;;
+    destroy-hosting)
+      # Restore the hosting BZ_HOME so bz destroy has its terraform state.
+      if gsutil -q stat "${HCP_BLOB}"; then
+        gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_HOME}"
+      else
+        echo "[INFO] hcp: no hosting state to destroy"
+      fi
+      ;;
+  esac
+fi
+
 echo "[INFO] exiting prologue (PROVISIONER=${PROVISIONER} RELEASE_STREAM=${RELEASE_STREAM} CLUSTER_NAME=${CLUSTER_NAME})"
