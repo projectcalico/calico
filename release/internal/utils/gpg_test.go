@@ -194,6 +194,23 @@ func TestGetGPGPubKey(t *testing.T) {
 	})
 }
 
+// TestSignRPMFilesNoFiles verifies SignRPMFiles is a no-op for an empty or nil
+// file list: it must return nil without shelling out to rpmsign (which would
+// otherwise fail with a usage error). This needs no signing tooling, so it runs
+// unconditionally, unlike the tests built on newSigningEnv.
+func TestSignRPMFilesNoFiles(t *testing.T) {
+	for name, files := range map[string][]string{
+		"nil slice":   nil,
+		"empty slice": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := SignRPMFiles("SOMEKEYID", files); err != nil {
+				t.Errorf("SignRPMFiles(%s): expected no-op nil, got: %v", name, err)
+			}
+		})
+	}
+}
+
 func TestSignRPMFiles(t *testing.T) {
 	env := newSigningEnv(t)
 
@@ -215,6 +232,20 @@ func TestSignRPMFiles(t *testing.T) {
 			t.Fatal("SignRPMFiles: expected an error for a missing file, got nil")
 		}
 	})
+
+	t.Run("skips non-regular entries and signs the rest", func(t *testing.T) {
+		// A directory mixed into the list is filtered out; the real RPM is
+		// still signed and verifies.
+		rpm := env.buildTestRPM(t, "mixedsign")
+		aDir := t.TempDir()
+
+		if err := SignRPMFiles(env.keyID, []string{aDir, rpm}); err != nil {
+			t.Fatalf("SignRPMFiles: unexpected error: %v", err)
+		}
+		if err := CheckRPMSig(rpm); err != nil {
+			t.Errorf("CheckRPMSig after signing: unexpected error: %v", err)
+		}
+	})
 }
 
 func TestCheckRPMSig(t *testing.T) {
@@ -231,15 +262,62 @@ func TestCheckRPMSig(t *testing.T) {
 	})
 
 	t.Run("errors on a non-existent file", func(t *testing.T) {
+		// CheckRPMSig lstat's the file before shelling out to rpmkeys, so a
+		// missing file fails the existence check rather than the signature check.
 		missing := filepath.Join(t.TempDir(), "nope.rpm")
 		err := CheckRPMSig(missing)
 		if err == nil {
 			t.Fatal("CheckRPMSig: expected an error for a missing file, got nil")
 		}
+		if !strings.Contains(err.Error(), "could not validate rpm file exists") {
+			t.Errorf("CheckRPMSig: unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("errors on an existing file that is not an RPM", func(t *testing.T) {
+		// An existing but non-RPM file passes the lstat check and reaches
+		// rpmkeys, which fails and surfaces the signature-check error.
+		notRPM := filepath.Join(t.TempDir(), "plain.rpm")
+		if err := os.WriteFile(notRPM, []byte("not an rpm"), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		err := CheckRPMSig(notRPM)
+		if err == nil {
+			t.Fatal("CheckRPMSig: expected an error for a non-RPM file, got nil")
+		}
 		if !strings.Contains(err.Error(), "unable to check RPM signature") {
 			t.Errorf("CheckRPMSig: unexpected error message: %v", err)
 		}
 	})
+}
+
+// TestCheckRPMSigOutput exercises the parsing of `rpmkeys --checksig` output in
+// isolation, without shelling out. This lets us cover the NOKEY case (a
+// signature that could not be verified because the key is missing), which some
+// rpm versions surface in the output text rather than via a non-zero exit code.
+func TestCheckRPMSigOutput(t *testing.T) {
+	cases := map[string]struct {
+		out     string
+		wantErr bool
+	}{
+		"good signature":      {out: "pkg.rpm: digests signatures OK", wantErr: false},
+		"unsigned digests ok": {out: "pkg.rpm: digests OK", wantErr: false},
+		"not ok":              {out: "pkg.rpm: digests SIGNATURES NOT OK", wantErr: true},
+		"nokey verbose":       {out: "pkg.rpm:\n    Header V4 RSA/SHA256 Signature, key ID abcd1234: NOKEY", wantErr: true},
+		"empty output":        {out: "", wantErr: true},
+		"whitespace only":     {out: "   \n\t ", wantErr: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := checkRPMSigOutput(tc.out)
+			if tc.wantErr && err == nil {
+				t.Errorf("checkRPMSigOutput(%q): expected an error, got nil", tc.out)
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("checkRPMSigOutput(%q): unexpected error: %v", tc.out, err)
+			}
+		})
+	}
 }
 
 func TestCheckRPMSigs(t *testing.T) {
@@ -273,7 +351,7 @@ func TestCheckRPMSigs(t *testing.T) {
 		if err == nil {
 			t.Fatal("CheckRPMSigs: expected an error, got nil")
 		}
-		if n := strings.Count(err.Error(), "unable to check RPM signature"); n != 1 {
+		if n := strings.Count(err.Error(), "could not validate rpm file exists"); n != 1 {
 			t.Errorf("expected exactly 1 signature failure, got %d in: %v", n, err)
 		}
 	})
@@ -288,7 +366,7 @@ func TestCheckRPMSigs(t *testing.T) {
 			t.Fatal("CheckRPMSigs: expected an error, got nil")
 		}
 		// errors.Join surfaces every underlying failure.
-		if n := strings.Count(err.Error(), "unable to check RPM signature"); n != 2 {
+		if n := strings.Count(err.Error(), "could not validate rpm file exists"); n != 2 {
 			t.Errorf("expected 2 aggregated failures, got %d in: %v", n, err)
 		}
 	})

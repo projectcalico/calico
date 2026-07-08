@@ -17,6 +17,7 @@ package utils
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -42,39 +43,63 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 // RPM files. We use --rpmv4 here to ensure that, even on newer
 // RPM versions, we're using backwards-compatible RPM signatures.
 func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
+	if len(rpmFiles) == 0 {
+		logrus.Warn("called with zero filenames, exiting")
+		return nil
+	}
+	filteredRpmFiles, err := FilterRegularFiles(rpmFiles)
+	if err != nil {
+		logrus.Error("Sanitizing RPM files list failed")
+		return fmt.Errorf("unable to sanitize RPM file list: %w", err)
+	}
 	logrus.Infof("Signing RPM files with GPG key %s", gpgKeyID)
 	cmdArgs := []string{
 		"-D", fmt.Sprintf("%%_openpgp_sign_id %s", gpgKeyID),
 		"--resign",
 		"--rpmv4",
 	}
-	cmdArgs = append(cmdArgs, rpmFiles...)
+	cmdArgs = append(cmdArgs, filteredRpmFiles...)
 	logrus.Debugf("Running rpmsign with args %s", strings.Join(cmdArgs, " "))
-	_, err := command.Run("rpmsign", cmdArgs)
-	if err != nil {
+	if _, err := command.Run("rpmsign", cmdArgs); err != nil {
 		return fmt.Errorf("unable to sign RPM files: %w", err)
 	}
 	return nil
 }
 
 // CheckRPMSig takes an RPM filename/path and runs rpmkeys --checksig
-// on it to ensure that the signature and package digest are correct
+// on it to ensure that the signature and package digest are correct.
+// Also run lstat on the file to ensure it exists before we shell out.
 func CheckRPMSig(rpmFile string) error {
 	logrus.Debugf("Checking file %s for RPM signature", rpmFile)
 	cmdArgs := []string{
 		"--checksig",
 		rpmFile,
 	}
+	if _, err := os.Lstat(rpmFile); err != nil {
+		return fmt.Errorf("could not validate rpm file exists: %w", err)
+	}
 	rpmOut, err := command.Run("rpmkeys", cmdArgs)
 	if err != nil {
 		return fmt.Errorf("unable to check RPM signature: %w", err)
 	}
-	rpmOutFields := strings.Fields(rpmOut)
-	if len(rpmOutFields) == 0 {
+	if err := checkRPMSigOutput(rpmOut); err != nil {
+		logrus.WithError(err).Error("RPM signature/digest check failed")
+		return err
+	}
+	return nil
+}
+
+// checkRPMSigOutput inspects the output of `rpmkeys --checksig` and returns an
+// error unless it confirms the signature and digests verified successfully.
+// rpmkeys reports "NOT OK" when a check fails outright, and "NOKEY" when a
+// signature could not be verified because the signing key is absent from the
+// keyring. In the NOKEY case the signature was not actually verified, so — like
+// an outright failure — it must be treated as an error rather than a pass.
+func checkRPMSigOutput(rpmOut string) error {
+	if len(strings.Fields(rpmOut)) == 0 {
 		return fmt.Errorf("rpmkeys --checksig returned no output")
 	}
-	if strings.Contains(rpmOut, "NOT OK") {
-		logrus.Errorf("RPM signature/digest check failed: %s", rpmOut)
+	if strings.Contains(rpmOut, "NOT OK") || strings.Contains(rpmOut, "NOKEY") {
 		return fmt.Errorf("RPM signature/digest check failed: %s", rpmOut)
 	}
 	return nil

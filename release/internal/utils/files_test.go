@@ -215,6 +215,66 @@ func TestCheckBinary(t *testing.T) {
 	})
 }
 
+func TestFilterRegularFiles(t *testing.T) {
+	t.Run("keeps regular files and drops non-regular ones", func(t *testing.T) {
+		dir := t.TempDir()
+		fileA := filepath.Join(dir, "a.txt")
+		fileB := filepath.Join(dir, "b.txt")
+		subDir := filepath.Join(dir, "subdir")
+		link := filepath.Join(dir, "link.txt")
+		for _, f := range []string{fileA, fileB} {
+			if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+				t.Fatalf("write %s: %v", f, err)
+			}
+		}
+		if err := os.Mkdir(subDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		if err := os.Symlink(fileA, link); err != nil {
+			t.Fatalf("symlink: %v", err)
+		}
+
+		got, err := FilterRegularFiles([]string{fileA, subDir, link, fileB})
+		if err != nil {
+			t.Fatalf("FilterRegularFiles: unexpected error: %v", err)
+		}
+		want := []string{fileA, fileB}
+		sort.Strings(got)
+		sort.Strings(want)
+		if len(got) != len(want) {
+			t.Fatalf("filtered = %v, want %v", got, want)
+		}
+		for i := range got {
+			if got[i] != want[i] {
+				t.Errorf("filtered = %v, want %v", got, want)
+				break
+			}
+		}
+	})
+
+	t.Run("empty input yields empty output", func(t *testing.T) {
+		got, err := FilterRegularFiles(nil)
+		if err != nil {
+			t.Fatalf("FilterRegularFiles(nil): unexpected error: %v", err)
+		}
+		if len(got) != 0 {
+			t.Errorf("expected empty result, got %v", got)
+		}
+	})
+
+	t.Run("errors when a path cannot be lstat'd", func(t *testing.T) {
+		dir := t.TempDir()
+		good := filepath.Join(dir, "good.txt")
+		if err := os.WriteFile(good, []byte("x"), 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		missing := filepath.Join(dir, "missing.txt")
+		if _, err := FilterRegularFiles([]string{good, missing}); err == nil {
+			t.Error("expected an error for a missing path, got nil")
+		}
+	})
+}
+
 func TestLinkOrCopyFile(t *testing.T) {
 	t.Run("hard links a file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -284,6 +344,35 @@ func TestLinkOrCopyFile(t *testing.T) {
 			t.Error("expected an error for a missing source, got nil")
 		}
 	})
+
+	t.Run("preserves the source file mode", func(t *testing.T) {
+		// Whether LinkOrCopyFile hard-links (dst shares the inode, hence the
+		// mode) or falls back to copying (which chmods dst to match src), the
+		// destination must end up with the source's mode — notably executable
+		// bits, which the plain CopyFile fallback would otherwise drop.
+		dir := t.TempDir()
+		src := filepath.Join(dir, "script.sh")
+		dst := filepath.Join(dir, "copy.sh")
+		if err := os.WriteFile(src, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatalf("failed to write src: %v", err)
+		}
+
+		if err := LinkOrCopyFile(src, dst); err != nil {
+			t.Fatalf("LinkOrCopyFile failed: %v", err)
+		}
+
+		srcInfo, err := os.Stat(src)
+		if err != nil {
+			t.Fatalf("failed to stat src: %v", err)
+		}
+		dstInfo, err := os.Stat(dst)
+		if err != nil {
+			t.Fatalf("failed to stat dst: %v", err)
+		}
+		if dstInfo.Mode() != srcInfo.Mode() {
+			t.Errorf("dst mode = %v, want %v", dstInfo.Mode(), srcInfo.Mode())
+		}
+	})
 }
 
 func TestLinkOrCopyDir(t *testing.T) {
@@ -336,6 +425,27 @@ func TestLinkOrCopyDir(t *testing.T) {
 		}
 	})
 
+	t.Run("skips non-regular entries", func(t *testing.T) {
+		// A symlink (even one pointing at a regular file) is not a regular file
+		// and must be skipped rather than copied.
+		srcDir := t.TempDir()
+		dstDir := t.TempDir()
+		writeTree(t, srcDir, map[string]string{"real.txt": "real"})
+		if err := os.Symlink(filepath.Join(srcDir, "real.txt"), filepath.Join(srcDir, "link.txt")); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		if err := LinkOrCopyDir(srcDir, dstDir, includeAll); err != nil {
+			t.Fatalf("LinkOrCopyDir failed: %v", err)
+		}
+
+		// Only the regular file is copied; the symlink is skipped.
+		assertTree(t, dstDir, map[string]string{"real.txt": "real"})
+		if _, err := os.Lstat(filepath.Join(dstDir, "link.txt")); !os.IsNotExist(err) {
+			t.Errorf("expected symlink to be skipped, lstat err = %v", err)
+		}
+	})
+
 	t.Run("errors when source does not exist", func(t *testing.T) {
 		dstDir := t.TempDir()
 		if err := LinkOrCopyDir(filepath.Join(t.TempDir(), "missing"), dstDir, includeAll); err == nil {
@@ -376,6 +486,27 @@ func TestFindRecursiveFiles(t *testing.T) {
 				t.Errorf("found files = %v, want %v", got, want)
 				break
 			}
+		}
+	})
+
+	t.Run("skips non-regular entries", func(t *testing.T) {
+		// A symlink is not a regular file and must not appear in the results,
+		// matching the doc comment's "regular file" contract.
+		srcDir := t.TempDir()
+		writeTree(t, srcDir, map[string]string{"real.txt": "real"})
+		if err := os.Symlink(filepath.Join(srcDir, "real.txt"), filepath.Join(srcDir, "link.txt")); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		includeAll := func(_, _, _ string) bool { return true }
+		got, err := FindRecursiveFiles(srcDir, includeAll)
+		if err != nil {
+			t.Fatalf("FindRecursiveFiles failed: %v", err)
+		}
+
+		want := []string{filepath.Join(srcDir, "real.txt")}
+		if len(got) != len(want) || (len(got) == 1 && got[0] != want[0]) {
+			t.Errorf("found files = %v, want %v", got, want)
 		}
 	})
 

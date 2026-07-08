@@ -121,6 +121,9 @@ func FindRecursiveFiles(srcDir string, include IncludeFunc) ([]string, error) {
 		if d.IsDir() {
 			return nil
 		}
+		if !d.Type().IsRegular() {
+			return nil
+		}
 		relPath, err := filepath.Rel(srcDir, path)
 		if err != nil {
 			return fmt.Errorf("failed to determine relative path for %s: %w", path, err)
@@ -275,4 +278,25 @@ func CheckBinary(binaryName, neededFor string) error {
 		return fmt.Errorf("%s not found in PATH (needed for %s)", binaryName, neededFor)
 	}
 	return nil
+}
+
+// FilterRegularFiles accepts a list of file paths and returns a list
+// of regular files (i.e. not dirs or symlinks) which existed and were
+// accessible (i.e. the lstat() call succeeded).
+func FilterRegularFiles(filePathList []string) ([]string, error) {
+	var filteredFilesList []string
+	for _, filePath := range filePathList {
+		fileStat, err := os.Lstat(filePath)
+		if err != nil {
+			logrus.WithError(err).Warn("failed to lstat file")
+			return []string{}, fmt.Errorf("unable to lstat %s: %w", filePath, err)
+		}
+
+		if fileStat.Mode().Type().IsRegular() {
+			filteredFilesList = append(filteredFilesList, filePath)
+			continue
+		}
+		logrus.Debugf("removing file path %s as it is not a regular file", filePath)
+	}
+	return filteredFilesList, nil
 }
