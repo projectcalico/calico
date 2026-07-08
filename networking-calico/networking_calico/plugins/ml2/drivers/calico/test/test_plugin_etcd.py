@@ -1576,7 +1576,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
         )
 
     def test_get_vif_details_derives_tap_mac_from_port_mac(self):
-        """CI-1936: tap MAC must match what the VM's ARP cache expects.
+        """tap MAC must match what the VM's ARP cache expects.
 
         We reproduce older libvirt's implicit derivation (first octet -> 0xfe) so that
         the tap MAC seen after a live migration to a libvirt >= 9.5.0 destination

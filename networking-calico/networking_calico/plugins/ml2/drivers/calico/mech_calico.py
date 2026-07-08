@@ -366,7 +366,7 @@ class TrackTask(oslo_context.context.RequestContext):
 
 # Fallback tap-side MAC used when we can't parse the port's own MAC.  In normal
 # operation ``get_vif_details`` overrides this per-port with a value derived from the
-# port MAC -- see CI-1936 and ``_tap_mac_for_port_mac``.
+# port MAC -- see ``_tap_mac_for_port_mac``.
 DEFAULT_TAP_MAC = "00:61:fe:ed:ca:fe"
 
 
@@ -387,7 +387,7 @@ def _tap_mac_for_port_mac(port_mac):
     at whatever Nova put in ``VIF_DETAILS_TAP_MAC_ADDRESS`` -- historically the static
     value in ``DEFAULT_TAP_MAC``.  Across a live migration between a pre-9.5.0 source
     and a post-9.5.0 destination that flips the on-wire tap MAC and the VM's ARP cache
-    goes stale until it re-ARPs, causing tens of seconds of packet loss.  See CI-1936.
+    goes stale until it re-ARPs, causing tens of seconds of packet loss.
 
     Returns ``None`` on any parse failure so the caller can fall back to
     ``DEFAULT_TAP_MAC``.
@@ -988,8 +988,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # Nova reads ``vif_details['mac_address']`` at ``plug_tap`` time and sets that
         # on the host-side tap interface.  Derive the value from the port's own MAC so
         # it matches what older libvirt used to set implicitly; see
-        # ``_tap_mac_for_port_mac`` and CI-1936 for the background.  Fall back to the
-        # base-class value (which is ``DEFAULT_TAP_MAC``) if we can't parse a port MAC.
+        # ``_tap_mac_for_port_mac`` for the background.  Fall back to the base-class
+        # value (which is ``DEFAULT_TAP_MAC``) if we can't parse a port MAC.
         details = dict(
             super(CalicoMechanismDriver, self).get_vif_details(context, agent, segment)
         )
