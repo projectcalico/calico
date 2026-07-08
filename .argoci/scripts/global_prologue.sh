@@ -44,12 +44,13 @@ RANDOM_TOKEN1=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 5 || true)
 echo "[INFO] exporting default env vars..."
 export PRODUCT=${PRODUCT:-calico}
 export PROVISIONER=${PROVISIONER:-gcp-kubeadm}
-export INSTALLER=${INSTALLER:-operator}
+export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-CalicoIptables}
 export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
-export GOOGLE_REGION=${GOOGLE_REGION:-us-central1}
-export GOOGLE_ZONE=${GOOGLE_ZONE:-us-central1-a}
+export GOOGLE_REGIONS=("us-central1" "us-west1")
+export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
+export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
@@ -58,6 +59,11 @@ export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 # Branch comes from the ArgoCI handler (CI_GIT_CLONED_BRANCH); fall back to
 # BRANCH then master. release-vX.Y -> vX.Y, else master.
 export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${CI_GIT_CLONED_BRANCH:-${BRANCH:-master}}"; [[ "${_b}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
+
+export K8S_VERSION=${K8S_VERSION:-stable-3}
+export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensource-image=calico/ctl:release-${RELEASE_STREAM} "}
+export HELM_PATCH=${HELM_PATCH:-"0"}
+export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
@@ -116,6 +122,33 @@ if [[ -f "${HOME}/.docker/config.json" ]]; then
   echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
 else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+fi
+
+# HCP cross-stage handoff (see .argoci/design/hcp.md). The hosting cluster's
+# state is passed between stages via one GCS object (Semaphore used cache +
+# artifact, which ArgoCI lacks). setup-hosting pushes it in the epilogue.
+if [[ -n "${HCP_STAGE:-}" ]]; then
+  HCP_BLOB="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-bzhome.tgz"
+  case "${HCP_STAGE}" in
+    hosted)
+      # Join the existing hosting cluster: pull just its kubeconfig.
+      mkdir -p "${BZ_LOCAL_DIR}/hosting"
+      if gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_LOCAL_DIR}/hosting" ./.local/kubeconfig; then
+        export OPENSHIFT_HOSTING_KUBECONFIG="${BZ_LOCAL_DIR}/hosting/.local/kubeconfig"
+        echo "[INFO] hcp: hosting kubeconfig at ${OPENSHIFT_HOSTING_KUBECONFIG}"
+      else
+        echo "[ERROR] hcp: hosting state not found at ${HCP_BLOB}"; exit 1
+      fi
+      ;;
+    destroy-hosting)
+      # Restore the hosting BZ_HOME so bz destroy has its terraform state.
+      if gsutil -q stat "${HCP_BLOB}"; then
+        gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_HOME}"
+      else
+        echo "[INFO] hcp: no hosting state to destroy"
+      fi
+      ;;
+  esac
 fi
 
 echo "[INFO] exiting prologue (PROVISIONER=${PROVISIONER} RELEASE_STREAM=${RELEASE_STREAM} CLUSTER_NAME=${CLUSTER_NAME})"
