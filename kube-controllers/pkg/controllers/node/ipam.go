@@ -690,9 +690,9 @@ func (c *IPAMController) updateMetrics() {
 		return
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping metrics sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping metrics sync.")
 		return
 	}
 
@@ -1205,9 +1205,9 @@ func (c *IPAMController) syncIPAM() error {
 		return nil
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping IPAM sync.")
 		return nil
 	}
 

@@ -278,17 +278,28 @@ var _ = Describe("EncapsulationResolver", func() {
 	})
 
 	Describe("OnStatusUpdate", func() {
-		It("should not touch inSync to true when receiving other status updates", func() {
+		It("should not flip initialSyncCompleted to true when receiving non-InSync status updates", func() {
 			encapsulationResolver.OnStatusUpdate(api.WaitForDatastore)
-			Expect(encapsulationResolver.inSync).To(BeFalse())
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeFalse())
 
 			encapsulationResolver.OnStatusUpdate(api.ResyncInProgress)
-			Expect(encapsulationResolver.inSync).To(BeFalse())
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeFalse())
 		})
 
-		It("should update inSync to true when receiving InSync status update", func() {
+		It("should flip initialSyncCompleted to true on the first InSync edge", func() {
 			encapsulationResolver.OnStatusUpdate(api.InSync)
-			Expect(encapsulationResolver.inSync).To(BeTrue())
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeTrue())
+		})
+
+		It("should keep initialSyncCompleted true after a status regression", func() {
+			encapsulationResolver.OnStatusUpdate(api.InSync)
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeTrue())
+
+			encapsulationResolver.OnStatusUpdate(api.ResyncInProgress)
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeTrue())
+
+			encapsulationResolver.OnStatusUpdate(api.WaitForDatastore)
+			Expect(encapsulationResolver.initialSyncCompleted).To(BeTrue())
 		})
 	})
 
