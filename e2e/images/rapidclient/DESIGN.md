@@ -30,9 +30,12 @@ Primary motivations:
   a like-for-like server replacement; the suite must pass unchanged on amd64 and
   newly pass on arm64.
 - Changing the client (maglev) invocation. The `docker run … -url … -port …`
-  call in `maglev.go` must keep working verbatim.
-- Pinning image tags to digests / changing the tagging scheme. Noted as a future
-  hardening (see Open questions), not in scope here.
+  call in `maglev.go` keeps working verbatim (only its image ref changes, via
+  `RapidClientImage()`).
+- Pinning image tags to immutable **digests**. This PR does select a per-PR tag
+  for CI (`RAPIDCLIENT_TAG`; see the side-load section) so the test runs against
+  the PR-built image, but digest-pinning the published image is separate future
+  hardening, not in scope here.
 - Deleting anything in `tigera/k8s-e2e`. We stop *referencing* the flask image;
   retiring it there is a separate follow-up.
 
@@ -72,16 +75,27 @@ and the `change_in('/e2e/images/rapidclient/*.go')` trigger all stay as-is.
 
 ### `images.go` change
 
+Both the client (maglev) and the server (packet-size) use the **same** image, so
+the two former constants (`RapidClient`, `PacketSizeServer`) are replaced by one
+env-aware helper. It composes the ref from `RAPIDCLIENT_TAG` and reports whether
+the image was side-loaded onto the nodes (see the side-load section below):
+
 ```go
-// RapidClient (client mode, default) — unchanged ref.
-RapidClient      = "quay.io/tigeradev/rapidclient"
-// PacketSizeServer now points at the SAME image; server mode is selected by
-// the MODE=server env the packet_size pod customizer sets.
-PacketSizeServer = "quay.io/tigeradev/rapidclient"
+const rapidClientRepo = "quay.io/tigeradev/rapidclient"
+
+// RapidClientImage returns the image ref and whether it was side-loaded.
+func RapidClientImage() (ref string, preloaded bool) {
+    if tag := os.Getenv("RAPIDCLIENT_TAG"); tag != "" {
+        return rapidClientRepo + ":" + tag, true   // PR CI: pinned, imported onto nodes
+    }
+    return rapidClientRepo + ":latest", false       // other providers / local: published image
+}
 ```
 
-The `// Source: tigera/k8s-e2e/images/flask.` comment is replaced with a pointer
-to `e2e/images/rapidclient/server.go`.
+The consumers are `packet_size.go` (server pod) and `maglev.go` (client on the
+external node). The doc comment carries the client/server mode contract and a
+pointer to `e2e/images/rapidclient/server.go` (replacing the old
+`// Source: tigera/k8s-e2e/images/flask.`).
 
 ### `packet_size.go` change
 
@@ -90,9 +104,15 @@ readiness path to `/length/1`. Add the mode env:
 
 ```go
 func withPacketSizeServer(pod *v1.Pod) {
+    image, preloaded := images.RapidClientImage()
     for i := range pod.Spec.Containers {
-        pod.Spec.Containers[i].Image = images.PacketSizeServer
+        pod.Spec.Containers[i].Image = image
         pod.Spec.Containers[i].Args  = nil
+        if preloaded {
+            // Side-loaded onto the node (PR CI) — pin to the loaded copy and fail
+            // loudly if it's absent rather than pulling a stale published image.
+            pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
+        }
         pod.Spec.Containers[i].Env   = append(pod.Spec.Containers[i].Env,
             v1.EnvVar{Name: "MODE", Value: "server"})
         if rp := pod.Spec.Containers[i].ReadinessProbe; rp != nil && rp.HTTPGet != nil {
@@ -104,6 +124,42 @@ func withPacketSizeServer(pod *v1.Pod) {
 
 `PORT` is left unset → server defaults to 5000 (matches `packetServerPort` and
 the container port already in the base conncheck server pod).
+
+### PR-image side-load (`RAPIDCLIENT_TAG` + `load_images.sh`)
+
+**Problem.** The packet-size test must run against the `rapidclient` image built
+*from the PR under test* — but calico deliberately withholds registry push
+credentials from PR builds (fork PRs are untrusted;
+`.semaphore/…/blocks/10-prerequisites.yml`). So the PR-built image can't be
+pushed to quay, and a floating `:latest` reference would silently run the
+*pre-existing* published image (old single-mode client) — the server pod exits 1
+and every spec times out. This is the exact failure this section prevents.
+
+**Mechanism (no registry push).** On the local-binary **gcp-kubeadm** PR path,
+build the image locally and import it straight into the nodes' runtimes:
+
+- New phase `.semaphore/end-to-end/scripts/phases/load_images.sh`, sourced from
+  `body_standard.sh` after `configure.sh`, before `run_tests.sh`. It:
+  1. builds `quay.io/tigeradev/rapidclient:$TAG` from PR source (`TAG` =
+     `pr-$SEMAPHORE_GIT_PR_NUMBER`, or `e2e-<sha>` off-PR) — no push;
+  2. `docker save`s it once, then `ssh 'sudo ctr -n k8s.io images import'` onto
+     every worker node's containerd and `ssh 'sudo docker load'` onto the
+     external node (maglev runs the image via `docker run`);
+  3. exports `RAPIDCLIENT_TAG=$TAG` and forwards it into the e2e container via
+     `K8S_E2E_DOCKER_EXTRA_FLAGS` (`--env RAPIDCLIENT_TAG`), which `run_tests.sh`
+     already passes to its `docker run` → read by `RapidClientImage()`.
+- `RapidClientImage()` returns `preloaded=true` when `RAPIDCLIENT_TAG` is set, and
+  `withPacketSizeServer` then sets `ImagePullPolicy: Never` — a missing/failed
+  load fails loudly instead of masking with a stale registry pull.
+
+**Scope & fallback.** Node enumeration relies on the gcp-kubeadm CRC terraform
+outputs (`terraform_output.json`) + `master_ssh_key`, which don't exist on other
+providers. So the phase no-ops unless `RUN_LOCAL_TESTS` *and*
+`PROVISIONER=gcp-kubeadm`; every other run (other providers, scheduled hashrelease
+runs, local dev) leaves `RAPIDCLIENT_TAG` unset and uses the published `:latest`
+with default pull policy — unchanged behaviour. The phase fails loudly
+(`set -eo pipefail`, inherited) on any build/import error rather than letting a
+later `ErrImageNeverPull` surface mid-test.
 
 ### Multi-arch build (the actual bug fix)
 
@@ -216,17 +272,20 @@ Flags (unchanged): `-url` (required), `-port` (default 12345), `-timeout`
 (30s), `-v`. Single GET from a fixed source port with `SO_REUSEADDR` and
 keep-alives disabled; prints the response body. Identical to today's `main.go`.
 
-The only consumer is `maglev.go:594`, which runs it on an **external node**:
+The only consumer is `maglev.go:596`, which runs it on an **external node**:
 
 ```go
+rapidClient, _ := images.RapidClientImage()
 cmd := fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
-    images.RapidClient, ep, m.maglevConfig.SourcePort)
+    rapidClient, ep, m.maglevConfig.SourcePort)
 ```
 
-`MODE` is unset here → defaults to `client` → flags parse exactly as today. **No
-change to `maglev.go`.** (Note: the `/shell?cmd=hostname` URL is an endpoint on
-the *maglev backend* being load-balanced, not on our `server` mode — client mode
-is a generic HTTP GET tool and is agnostic to it.)
+`MODE` is unset here → defaults to `client` → flags parse exactly as today. The
+**invocation is unchanged**; the only edit is the image ref, now via
+`RapidClientImage()` (so the external node's side-loaded `RAPIDCLIENT_TAG` copy is
+used on PR CI, else the published `:latest`). (Note: the `/shell?cmd=hostname` URL
+is an endpoint on the *maglev backend* being load-balanced, not on our `server`
+mode — client mode is a generic HTTP GET tool and is agnostic to it.)
 
 ### `server` mode (`server.go`) — ported contract
 
@@ -372,11 +431,11 @@ Readiness: `/length/1` must 200 with a 1-byte body.
 
 1. Land the multi-mode binary + multi-arch Makefile; CI publishes
    `quay.io/tigeradev/rapidclient` as a manifest list.
-2. Repoint `images.PacketSizeServer` and add `MODE=server` in the customizer in
-   the **same PR** (so the suite switches to the in-repo server atomically).
+2. Switch the customizer to `RapidClientImage()` + `MODE=server` and add the
+   `load_images.sh` side-load, in the **same PR** (so the suite runs the PR-built
+   server atomically, without a registry push).
 3. Verify packet_size on an arm64 azr-aks run goes green; confirm amd64 unaffected.
-4. Follow-up (separate): drop the flask image from `tigera/k8s-e2e`; consider
-   pinning the image tag.
+4. Follow-up (separate): drop the flask image from `tigera/k8s-e2e`.
 
 ## Explicitly out of scope (matching the disposable-test-server scope)
 
@@ -389,11 +448,12 @@ sufficient). If a future need arises it's a deliberate extension, not a gap here
 
 ## Follow-ups (deliberately not in this change)
 
-1. **Tag pinning.** `images.go` consumes a floating tag (`:latest`/branch). The
-   arm64 rot was masked partly by a floating, unpinned, external tag. Pinning the
-   e2e utility image to an immutable tag/digest with a documented bump process is
-   worthwhile hardening, but **deferred** — multi-arch publishing alone fixes the
-   reported bug. Tracked as a separate change.
+1. **Digest-pin the published image.** PR CI now runs against a per-PR tag
+   side-loaded onto the nodes (`RAPIDCLIENT_TAG`), but non-gcp-kubeadm and
+   scheduled runs still consume the floating published `:latest`. Pinning that
+   published image to an immutable digest with a documented bump process is
+   worthwhile hardening, but **deferred** — the side-load + multi-arch publish fix
+   the reported bug. Tracked as a separate change.
 2. **Retire the flask image.** Once this lands and packet_size is green on arm64,
    drop `images/flask` from `tigera/k8s-e2e` (it will be unreferenced).
 
