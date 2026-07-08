@@ -272,7 +272,7 @@ Flags (unchanged): `-url` (required), `-port` (default 12345), `-timeout`
 (30s), `-v`. Single GET from a fixed source port with `SO_REUSEADDR` and
 keep-alives disabled; prints the response body. Identical to today's `main.go`.
 
-The only consumer is `maglev.go:596`, which runs it on an **external node**:
+The only consumer is `maglev.go:594`, which runs it on an **external node**:
 
 ```go
 rapidClient, _ := images.RapidClientImage()
@@ -374,15 +374,15 @@ changes.
 
 ### Test assertions this server must satisfy (from `packet_size.go`)
 
-- **GET** (`packetTestViaConncheck`, line 284): `len(strings.TrimSpace(out)) == length`.
+- **GET** (`packetTestViaConncheck`, ~line 295): `len(strings.TrimSpace(out)) == length`.
   ⇒ The N-byte body **must contain no leading/trailing whitespace**, or TrimSpace
   shortens it and the check fails. (This is exactly why the flask lorem corpus is
   one whitespace-free run-on string.) The Go generator emits N bytes drawn from a
   whitespace-free charset (e.g. repeating `a–z0–9`).
-- **POST** (line 301): `strconv.Atoi(strings.TrimSpace(out)) == length`, where the
+- **POST** (~line 313): `strconv.Atoi(strings.TrimSpace(out)) == length`, where the
   client posts `strings.Repeat("X", length)`. ⇒ return the byte count of the
   received body. Use bytes actually read (robust) — equals Content-Length here.
-- **UDP** (line 323): `strings.TrimSpace(out) == payload`, payload =
+- **UDP** (~line 334): `strings.TrimSpace(out) == payload`, payload =
   `generateUDPPayload(length)` (digits `0–9`, no whitespace). ⇒ pure echo.
 
 Readiness: `/length/1` must 200 with a 1-byte body.
