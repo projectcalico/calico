@@ -120,7 +120,19 @@ XDP has an equivalent preamble in `xdp_preamble.c`. The cgroup
 connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached directly — they have no preamble.
 
 Because the preamble is cheap to reload, Felix can swap it per
-interface without re-verifying the large program chain it fronts.
+interface without re-verifying the large program chain it fronts — and
+must, since it bakes per-interface config (jump-map indices, host IP,
+flags) into `.rodata`, some of which changes without a restart. So the
+preamble is re-loaded, and re-verified, on every attach.
+
+The preamble calls `bpf_trace_printk` on its drop/error paths
+regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
+ftrace is disabled, so every load makes the kernel log `could not
+enable bpf_trace_printk events`. Felix detects this at startup
+(`bpf.KernelLockdownConfidentiality`) and instead loads
+trace-printk-free preamble variants (`*_notrace.o`,
+`AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
+nodes.
 
 ### Two-tier jump maps
 
