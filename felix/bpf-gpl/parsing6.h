@@ -130,8 +130,8 @@ static CALI_BPF_INLINE void tc_state_fill_from_iphdr_v6_offset(struct cali_tc_ct
 			goto deny;
 		}
 
-		CALI_DEBUG("loading extension at offset %d", ipoff + len);
-		CALI_DEBUG("ext nexthdr %d hdrlen %d", opt.nexthdr, opt.hdrlen);
+		// We used to log out the offsets and lengths here, but that causes a
+		// combinatorial explosion in the verifier.
 
 		switch(hdr) {
 		case NEXTHDR_FRAGMENT:
