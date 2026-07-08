@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 	"net"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -565,6 +567,136 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 		g.Expect(updates).To(HaveLen(1))
 		g.Expect(updates[0].State).To(Equal(liveMigrationStateLive))
 	})
+}
+
+// garpSenderBlocked reports whether some goroutine is currently parked in
+// detectGARP's report-detection send.  Lets the regression test below wait
+// deterministically for the sender to be blocked reporting on garpC before
+// the Target-exit update is processed.  The goroutine state is "select" for
+// the select-based send (which stopGARPDetection can abort) and "chan send"
+// for a plain send (the pre-fix code); we match both so the test observes the
+// blocked sender either way and then proves whether the Target-exit path can
+// get past it.  detectGARP's only other park point - waiting for a packet -
+// shows as "chan receive", so these two states are unambiguous.
+func garpSenderBlocked() bool {
+	// Grow the buffer until the full goroutine dump fits: runtime.Stack
+	// truncates (n == len(buf)) when the buffer is too small, which could
+	// hide the detectGARP goroutine and time out the Eventually below.
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	for n == len(buf) {
+		buf = make([]byte, 2*len(buf))
+		n = runtime.Stack(buf, true)
+	}
+	for _, gr := range strings.Split(string(buf[:n]), "\n\n") {
+		if !strings.Contains(gr, "detectGARP") {
+			continue
+		}
+		if strings.Contains(gr, "[select]") || strings.Contains(gr, "[chan send]") {
+			return true
+		}
+	}
+	return false
+}
+
+// TestGARPRaceWithTargetExit is a regression test for a dataplane main-loop
+// deadlock.  Scenario: the FSM is in Target with GARP detection running, and a
+// GARP/RARP is detected on the workload interface just before the main loop
+// processes an update that ends the Target state (e.g. the migration-complete
+// update flipping the role TARGET -> NO_ROLE, which can arrive within the same
+// scheduling window as the cutover RARP).  detectGARP is then blocked sending
+// on the unbuffered garpC - whose only reader is the main loop - while the
+// main loop is inside stopGARPDetection() waiting for detectGARP to exit.
+// Neither can proceed, wedging the dataplane loop permanently.
+//
+// The test simulates the main loop by calling OnUpdate directly, with nothing
+// reading garpC (just as the real main loop cannot read garpC while it is
+// inside OnUpdate).  Without the garpStopC abort mechanism, OnUpdate would
+// block forever and the test would fail by timeout.
+func TestGARPRaceWithTargetExit(t *testing.T) {
+	tests := []struct {
+		name       string
+		exitInput  func(m *liveMigrationMonitor)
+		wantStates []liveMigrationState
+	}{
+		{
+			name: "migration completes (NO_ROLE)",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateTimeWait},
+		},
+		{
+			name: "re-migration (SOURCE)",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateBase},
+		},
+		{
+			name: "workload removed",
+			exitInput: func(m *liveMigrationMonitor) {
+				m.OnUpdate(wepRemove(wepID1))
+			},
+			wantStates: []liveMigrationState{liveMigrationStateBase},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			m := newTestMonitor(testConvergenceTime)
+
+			garpBytes := buildGARPPacketBytes(t)
+			fakeHandle := newFakeGARPHandle(garpBytes)
+			m.newGARPHandle = func(ifaceName string) (garpHandle, error) {
+				return fakeHandle, nil
+			}
+
+			// Drive to Target; GARP detection starts and the fake handle
+			// delivers a GARP immediately, so detectGARP commits to the
+			// (blocking) garpC send.
+			m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+			expectUpdate(g, m, liveMigrationStateTarget)
+
+			// Wait until detectGARP is parked in the garpC send.  This pins
+			// the test to the exact interleaving from the field report - the
+			// sender already blocked when the Target-exit update is processed
+			// - which would also catch a broken variant of the fix that
+			// checks the stop channel before a plain send instead of
+			// selecting over both.
+			g.Eventually(garpSenderBlocked, time.Second, time.Millisecond).Should(BeTrue())
+
+			// Process the Target-exiting update as the main loop would, with
+			// nothing reading garpC.  Run it in a goroutine purely so that a
+			// regression fails the test by timeout instead of hanging the
+			// whole test binary.
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				tt.exitInput(m)
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("deadlock: OnUpdate blocked in stopGARPDetection while detectGARP blocked sending on garpC")
+			}
+
+			updates := drainUpdates(m)
+			g.Expect(updates).To(HaveLen(len(tt.wantStates)))
+			for i, want := range tt.wantStates {
+				g.Expect(updates[i].State).To(Equal(want))
+			}
+
+			// The aborted detection must not deliver a stale GARP.
+			select {
+			case <-m.garpC:
+				t.Fatal("unexpected GARP delivery after GARP detection was stopped")
+			case <-time.After(100 * time.Millisecond):
+				// Expected: no delivery.
+			}
+		})
+	}
 }
 
 // --- Section 6: GARP/RARP packet matching ---
