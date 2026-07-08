@@ -23,7 +23,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"syscall"
 	"time"
 )
@@ -39,9 +38,11 @@ type clientMode struct{}
 func (clientMode) Name() string { return "client" }
 
 func (clientMode) Run(args []string) error {
-	// ExitOnError mirrors the original behaviour: a bad flag prints usage to
-	// stderr and exits non-zero.
-	fs := flag.NewFlagSet("client", flag.ExitOnError)
+	// ContinueOnError so a parse error or missing required flag is returned to
+	// main (which maps it to a non-zero exit) rather than calling os.Exit here.
+	// This honours the Mode.Run contract, matches server mode, and keeps the
+	// mode unit-testable.
+	fs := flag.NewFlagSet("client", flag.ContinueOnError)
 	var (
 		targetURL  = fs.String("url", "", "Target URL to send request to (required)")
 		sourcePort = fs.Int("port", 12345, "Source port to use for connection")
@@ -53,9 +54,7 @@ func (clientMode) Run(args []string) error {
 	}
 
 	if *targetURL == "" {
-		fmt.Fprintf(os.Stderr, "Error: -url is required\n")
-		fs.Usage()
-		os.Exit(1)
+		return fmt.Errorf("-url is required")
 	}
 
 	if *verbose {
