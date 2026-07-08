@@ -242,6 +242,7 @@ type liveMigrationFSM struct {
 	currentState liveMigrationState
 	migrationUID string
 	timer        *time.Timer
+	timerStopC   chan struct{}
 	pcapHandle   garpHandle
 	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
@@ -384,8 +385,20 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
+	// timerC is unbuffered and its only reader is the dataplane main loop, so if the timer
+	// fires while the main loop is busy, this callback parks in the send.  stopC lets
+	// stopElevatedRoutingTimer() abort such a parked send: without that, an already-fired timer
+	// could deliver its pop late, after the FSM has left TimeWait - and if a re-migration has
+	// put the FSM back into TimeWait by then, OnTimerPop would misattribute the stale pop to
+	// the new episode and cut its TimeWait short, reverting the workload's route to normal
+	// priority before routing has converged.
+	stopC := make(chan struct{})
+	f.timerStopC = stopC
 	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		f.monitor.timerC <- id
+		select {
+		case f.monitor.timerC <- id:
+		case <-stopC:
+		}
 	})
 }
 
@@ -393,7 +406,9 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 	if f.timer != nil {
 		f.logCtx.Debug("Stopping elevated routing timer")
 		f.timer.Stop()
+		close(f.timerStopC)
 		f.timer = nil
+		f.timerStopC = nil
 	}
 }
 
@@ -403,10 +418,11 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputGARPDetected)
 }
 
-// OnTimerPop is called by the main loop when a timer fires for a workload.
-// The timer may fire just before stopElevatedRoutingTimer() is called, so we
-// guard against stale deliveries by checking the FSM still exists and is in
-// TimeWait before driving it.
+// OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
+// prevented at source: a fired timer's send parks on the unbuffered timerC until the main loop
+// reads it, and stopElevatedRoutingTimer() aborts any parked send via timerStopC, so a pop that
+// does get through was sent by a timer that had not been stopped.  The state check here is kept as
+// cheap defence in depth.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
 	if !exists || fsm.currentState != liveMigrationStateTimeWait {
