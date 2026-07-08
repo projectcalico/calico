@@ -17,6 +17,7 @@ package bpf
 import (
 	"os"
 	"strings"
+	"sync"
 )
 
 const lockdownPath = "/sys/kernel/security/lockdown"
@@ -32,9 +33,22 @@ const lockdownPath = "/sys/kernel/security/lockdown"
 // It returns false when lockdown is off, at a lower level, or the state cannot
 // be determined (securityfs not mounted, file absent) — i.e. it never turns on
 // the workaround speculatively.
+//
+// The state is read once and memoized: what matters is the lockdown level at
+// boot (that is when ftrace is enabled or disabled), and a single read
+// guarantees every caller makes the same decision even if the level is raised
+// at runtime.
 func KernelLockdownConfidentiality() bool {
-	return kernelLockdownConfidentiality(lockdownPath)
+	lockdownOnce.Do(func() {
+		lockdownConfidentiality = kernelLockdownConfidentiality(lockdownPath)
+	})
+	return lockdownConfidentiality
 }
+
+var (
+	lockdownOnce            sync.Once
+	lockdownConfidentiality bool
+)
 
 func kernelLockdownConfidentiality(path string) bool {
 	data, err := os.ReadFile(path)
