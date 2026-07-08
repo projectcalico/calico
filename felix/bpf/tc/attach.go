@@ -154,7 +154,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tc_preamble_%s.o", ap.Hook))
+	preambleName := fmt.Sprintf("tc_preamble_%s", ap.Hook)
+	if ap.NoTracePrintk {
+		preambleName += "_notrace"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, preambleName+".o")
 	if ap.AttachType == apiv3.BPFAttachOptionTCX {
 		err := ap.attachTCXProgram(binaryToLoad)
 		if err != nil {
