@@ -72,6 +72,14 @@ export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER
 # 'bz init profile -n NAME' creates the profile at <cwd>/NAME, and bz provision/
 # install/destroy must run from that dir. Init from $HOME (in a subshell so the
 # parent stays at repo root for the relative body_standard.sh call); BZ_HOME=$HOME/NAME.
+# HCP hosting stages (setup-hosting/destroy-hosting) must land on the SAME BZ_HOME
+# path across steps: the hosting BZ_HOME is handed off whole (see design/hcp.md),
+# and a restored Python venv hardcodes absolute paths, so a per-step random name
+# would leave bz destroy calling a venv pip that no longer exists. Pin it
+# deterministically from the run + hosting cluster (both stages share these).
+if [[ "${HCP_STAGE:-}" == *-hosting ]]; then
+  export BZ_PROFILE_NAME="${BZ_PROFILE_NAME:-${ARGO_WORKFLOW_NAME}-hosting-${HOSTING_CLUSTER}}"
+fi
 export BZ_PROFILE_NAME="${BZ_PROFILE_NAME:-${ARGO_WORKFLOW_NAME:-local}-${RANDOM_TOKEN1}}"
 export BZ_HOME="${BZ_HOME:-${HOME}/${BZ_PROFILE_NAME}}"
 export USE_HASH_RELEASE="${USE_HASH_RELEASE:-true}"
@@ -124,26 +132,32 @@ else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
 fi
 
-# HCP cross-stage handoff (see .argoci/design/hcp.md). The hosting cluster's
-# state is passed between stages via one GCS object (Semaphore used cache +
-# artifact, which ArgoCI lacks). setup-hosting pushes it in the epilogue.
+# HCP cross-stage handoff (see .argoci/design/hcp.md). Semaphore passes the
+# hosting cluster between stages via cache (whole BZ_HOME) + artifact (just the
+# kubeconfig); ArgoCI has neither, so both go to GCS. setup-hosting pushes them
+# in the epilogue.
 if [[ -n "${HCP_STAGE:-}" ]]; then
   HCP_BLOB="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-bzhome.tgz"
+  HCP_KUBECONFIG="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-kubeconfig"
   case "${HCP_STAGE}" in
     hosted)
       # Join the existing hosting cluster: pull just its kubeconfig.
-      mkdir -p "${BZ_LOCAL_DIR}/hosting"
-      if gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_LOCAL_DIR}/hosting" ./.local/kubeconfig; then
-        export OPENSHIFT_HOSTING_KUBECONFIG="${BZ_LOCAL_DIR}/hosting/.local/kubeconfig"
+      if gsutil cp "${HCP_KUBECONFIG}" "${BZ_LOCAL_DIR}/hosting-kubeconfig"; then
+        export OPENSHIFT_HOSTING_KUBECONFIG="${BZ_LOCAL_DIR}/hosting-kubeconfig"
         echo "[INFO] hcp: hosting kubeconfig at ${OPENSHIFT_HOSTING_KUBECONFIG}"
       else
-        echo "[ERROR] hcp: hosting state not found at ${HCP_BLOB}"; exit 1
+        echo "[ERROR] hcp: hosting kubeconfig not found at ${HCP_KUBECONFIG}"; exit 1
       fi
       ;;
     destroy-hosting)
-      # Restore the hosting BZ_HOME so bz destroy has its terraform state.
+      # Restore the hosting BZ_HOME so bz destroy has its terraform state. BZ_HOME
+      # is pinned to the same path setup-hosting used (see above), so the restored
+      # venv's hardcoded absolute paths resolve. The pip install mirrors Semaphore
+      # global_prologue.sh:195 (refresh destroy-time deps); non-fatal.
       if gsutil -q stat "${HCP_BLOB}"; then
         gsutil cp "${HCP_BLOB}" - | tar xzf - -C "${BZ_HOME}"
+        python3 -m pip install -r "${BZ_HOME}/scripts/requirements.txt" || \
+          echo "[WARN] hcp: destroy-deps pip install failed (continuing)"
       else
         echo "[INFO] hcp: no hosting state to destroy"
       fi
