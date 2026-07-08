@@ -130,20 +130,20 @@ func (r reconciler) run(ctx context.Context) error {
 // reconciler watches IPPool and Node configuration and triggers a reconciliation of the Tunnel IP addresses whenever
 // it spots a configuration change that may impact IP selection.
 type reconciler struct {
-	nodename       string
-	cfg            *apiconfig.CalicoAPIConfig
-	client         client.Interface
-	ch             chan struct{}
-	data           map[string]any
-	felixEnvConfig *felixconfig.Config
-	inSync         bool
+	nodename             string
+	cfg                  *apiconfig.CalicoAPIConfig
+	client               client.Interface
+	ch                   chan struct{}
+	data                 map[string]any
+	felixEnvConfig       *felixconfig.Config
+	initialSyncCompleted bool
 }
 
 // OnStatusUpdated handles the syncer status callback method.
 func (r *reconciler) OnStatusUpdated(status bapi.SyncStatus) {
-	if status == bapi.InSync {
-		// We are in-sync, trigger an initial scan/update of the IP addresses.
-		r.inSync = true
+	if status == bapi.InSync && !r.initialSyncCompleted {
+		// First sync — trigger an initial scan/update of the IP addresses.
+		r.initialSyncCompleted = true
 		r.ch <- struct{}{}
 	}
 }
@@ -209,7 +209,7 @@ func (r *reconciler) OnUpdates(updates []bapi.Update) {
 		}
 	}
 
-	if updated && r.inSync {
+	if updated && r.initialSyncCompleted {
 		// We have updated data. Trigger a reconciliation, but don't block if there is already an update pending.
 		select {
 		case r.ch <- struct{}{}:

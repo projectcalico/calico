@@ -227,11 +227,12 @@ type CalicoResourceLister interface {
 
 // calicoResourceLister implements the CalicoResourceLister interface returning Tiers.
 type calicoResourceLister struct {
-	client api.Client
-	syncer api.Syncer
-	lock   sync.Mutex
-	sync   chan struct{}
-	tiers  map[string]*v3.Tier
+	client               api.Client
+	syncer               api.Syncer
+	lock                 sync.Mutex
+	sync                 chan struct{}
+	initialSyncCompleted bool
+	tiers                map[string]*v3.Tier
 }
 
 func (t *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
@@ -264,7 +265,8 @@ func (t *calicoResourceLister) WaitForCacheSync(stopCh <-chan struct{}) {
 }
 
 func (t *calicoResourceLister) OnStatusUpdated(status api.SyncStatus) {
-	if status == api.InSync {
+	if status == api.InSync && !t.initialSyncCompleted {
+		t.initialSyncCompleted = true
 		close(t.sync)
 	}
 }
