@@ -588,12 +588,17 @@ func (m *MaglevTests) sendRequestsAndGatherStats(extNode *externalnode.Client, u
 	uniqueBackends := make(map[string]int)
 	totalRequests := m.maglevConfig.NumberOfRequests
 
+	// The external node runs this image via plain `docker run`; on gcp-kubeadm PR
+	// CI it was side-loaded into the external node's docker (RAPIDCLIENT_TAG),
+	// otherwise docker pulls the published :latest.
+	rapidClient, _ := images.RapidClientImage()
+
 	for i := range totalRequests {
 		// Use external node to run rapidclient with netexec endpoint to get hostname
 		// Use configured source port for consistent testing
 		ep := net.JoinHostPort(clusterIP, fmt.Sprint(m.maglevConfig.ServicePort))
 		cmd := fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
-			images.RapidClient, ep, m.maglevConfig.SourcePort)
+			rapidClient, ep, m.maglevConfig.SourcePort)
 		output, err := extNode.Exec("sh", "-c", cmd)
 		Expect(err).NotTo(HaveOccurred(), "Request %d (%s) to %s failed", i+1, ipVersion, ep)
 
