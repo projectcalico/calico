@@ -43,6 +43,12 @@ type ResourceType struct {
 	// SendDeletesOnConnFail will send deletes for all resources (and therefore do a full resync) if
 	// the connection fails at any point.
 	SendDeletesOnConnFail bool
+
+	// Client identifier. If using a single client syncer, this should be blank. Otherwise this refers
+	// to the named client in the supplied map of clients. If a client is not in the supplied map, then
+	// the corresponding watcher will not be created (i.e. there will be no updates from that resource
+	// type).
+	ClientID string
 }
 
 // Error indicating a problem with a watcher communicating with the backend.
@@ -82,12 +88,15 @@ func WithWatchRetryTimeout(t time.Duration) Option {
 	}
 }
 
-var _ = WithWatchRetryTimeout
-
 // New creates a new multiple Watcher-backed api.Syncer.
 func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
+	return NewMultiClient(map[string]api.Client{"": client}, resourceTypes, callbacks, options...)
+}
+
+// NewMultiClient creates a new multiple Watcher-backed api.Syncer with multiple backing clients.
+func NewMultiClient(clients map[string]api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
-		watcherCaches:     make([]*watcherCache, len(resourceTypes)),
+		watcherCaches:     make([]*watcherCache, 0, len(resourceTypes)),
 		results:           make(chan any, 2000),
 		callbacks:         callbacks,
 		watchRetryTimeout: DefaultWatchRetryTimeout,
@@ -95,8 +104,15 @@ func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCa
 	for _, o := range options {
 		o(rs)
 	}
-	for i, r := range resourceTypes {
-		rs.watcherCaches[i] = newWatcherCache(client, r, rs.results, rs.watchRetryTimeout)
+	for _, r := range resourceTypes {
+		if client, ok := clients[r.ClientID]; ok {
+			rs.watcherCaches = append(rs.watcherCaches, newWatcherCache(client, r, rs.results, rs.watchRetryTimeout))
+		} else {
+			log.WithFields(log.Fields{
+				"ClientID":      r.ClientID,
+				"ListInterface": r.ListInterface,
+			}).Debug("Skipping syncer resource because no client has been specified that matches the associated clientID")
+		}
 	}
 	return rs
 }
