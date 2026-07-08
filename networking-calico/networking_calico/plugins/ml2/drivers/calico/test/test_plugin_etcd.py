@@ -1575,6 +1575,33 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def test_get_vif_details_derives_tap_mac_from_port_mac(self):
+        """tap MAC must match what the VM's ARP cache expects.
+
+        We reproduce older libvirt's implicit derivation (first octet -> 0xfe) so that
+        the tap MAC seen after a live migration to a libvirt >= 9.5.0 destination
+        matches the one the source's libvirt set.
+        """
+        context = mock.MagicMock()
+        context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
+        # port_filter (and any other keys the base class populated) still
+        # flow through.
+        self.assertTrue(details["port_filter"])
+
+    def test_get_vif_details_falls_back_when_port_mac_missing(self):
+        context = mock.MagicMock()
+        context.current = {}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
+    def test_get_vif_details_falls_back_on_malformed_port_mac(self):
+        context = mock.MagicMock()
+        context.current = {"mac_address": "not-a-mac"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
     def test_neutron_rule_to_etcd_rule_icmp(self):
         # No type/code specified
         self.assertNeutronToEtcd(
