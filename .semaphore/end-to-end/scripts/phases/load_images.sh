@@ -59,7 +59,10 @@ else
 
   # Serialize the image once and reuse the tarball for every node (docker save is
   # the expensive part; re-running it per node would re-export the whole image).
+  # The EXIT trap frees the tarball even if a save/ssh/load aborts the job under
+  # `set -eo pipefail` (this phase is sourced and nothing else sets an EXIT trap).
   _tar="$(mktemp -t rapidclient.XXXXXX.tar)"
+  trap 'rm -f "${_tar}"' EXIT
   docker save "${_img}" -o "${_tar}"
 
   echo "[INFO] load_images: importing into containerd on ${#_node_ips[@]} worker node(s): ${_node_ips[*]}"
