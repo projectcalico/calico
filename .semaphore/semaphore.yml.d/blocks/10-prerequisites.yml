@@ -148,14 +148,19 @@
   # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
   #
   # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
-  # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml). This
-  # block's CHANGE_IN must be a superset of the union of all three consumer
-  # triggers — otherwise the consumer fires, the producer skips, and the
-  # consumer hard-fails on `gcloud storage cp: URL matched no objects`. The
-  # felix / process/testing / libcalico-stacktrace / 20-felix.yml triggers
-  # mirror "Build: node image" so a win-fv-only PR also rebuilds the RPMs.
+  # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml) — every block
+  # that lists this one in its `dependencies:`. If a consumer fires but this
+  # producer is skipped, the consumer hard-fails on
+  # `gcloud storage cp: URL matched no objects` (Semaphore treats a skipped
+  # dependency as passed). To prevent that, this block's trigger must be a
+  # superset of the union of all consumer triggers. That superset is derived
+  # automatically by the CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
+  # below (this block's own intrinsic trigger — the RPM build inputs) with the
+  # resolved trigger of every block that depends on it. DO NOT hand-maintain a
+  # list of consumer paths here; just keep the producer in the consumers'
+  # `dependencies:` and the trigger follows automatically.
   run:
-    when: "${CHANGE_IN(node,istio,felix,non-go:/node/,non-go:/istio/,non-go:/felix/,non-go:/hack/rpms/nftables/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(non-go:/hack/rpms/nftables/)}"
   dependencies: []
   task:
     agent:
@@ -218,29 +223,20 @@
   # producer for the "calico" build-cache group — every Go component block on
   # master restores the module + build cache populated here.
   #
-  # felix MUST be the primary (first) CHANGE_IN arg so this producer is a strict
-  # superset of its consumers. The Felix Build/UT/FV and Windows FV blocks all
-  # trigger on CHANGE_IN(felix,...) and then do an untolerated gcloud cp of
-  # calico-cgo/calico-race/libbpf (or load the cached calico image), so this
-  # producer must run whenever they do — including on felix-test-only PRs.
-  #
-  # The deps tool (hack/cmd/deps) emits `/<primary>/**` for the FIRST arg with no
-  # test-file exclusion, but for every *secondary*/dependency package it adds a
-  # `/<pkg>/**/*_test.go` EXCLUSION. With cmd/calico primary, felix is only a
-  # dependency in cmd/calico's closure, so `/felix/**/*_test.go` was excluded and
-  # a PR touching only felix tests (e.g. felix/fv/*_test.go) ran the Felix blocks
-  # while skipping this producer — leaving the artifacts unuploaded. Putting felix
-  # first yields `/felix/**` with felix tests INCLUDED, matching the consumers.
-  # cmd/calico stays as a secondary so the calico image still rebuilds on changes
-  # to cmd/calico and any subcommand's Go closure (goldmane, guardian, typha, …).
-  #
-  # The process/testing paths trigger this so the win-fv-felix block (which now
-  # installs the locally-built calico image) has it cached in GCS. The libcalico
-  # ipam/stacktrace paths and the 20-felix.yml self-trigger keep this block a
-  # superset of the win-fv-felix block's trigger (felix's full test closure plus
-  # its own CI block), so win-fv-felix never runs without this image in GCS.
+  # This producer must run whenever any of its consumers run: the Felix
+  # Build/UT/FV and Windows FV blocks (and others) trigger and then do an
+  # untolerated gcloud cp of calico-cgo/calico-race/libbpf (or load the cached
+  # calico image), so a skipped producer leaves the artifacts unuploaded and the
+  # consumer hard-fails (Semaphore treats a skipped dependency as passed). The
+  # CHANGE_IN_WITH_DEPENDENTS() macro guarantees the superset automatically: it
+  # merges the arg below (this block's intrinsic inputs — the combined `calico`
+  # binary's full Go closure via cmd/calico, plus its Dockerfile) with the
+  # resolved trigger of every block that lists this one in its `dependencies:`.
+  # So a felix-test-only PR (which fires the Felix blocks) now also runs this
+  # producer, with no hand-maintained superset to keep in sync — just keep the
+  # consumers' `dependencies:` correct.
   run:
-    when: "${CHANGE_IN(felix,cmd/calico,typha,non-go:/.semaphore/vms/,non-go:/docker/calico/,non-go:/libcalico-go/lib/ipam/,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(cmd/calico,non-go:/docker/calico/)}"
   dependencies: []
   task:
     env_vars:
@@ -295,12 +291,16 @@
   # stage assembly (copying binaries onto the base image) runs here, not the Go
   # compile. Kept in prerequisites (rather than 20-node.yml) so consumer blocks
   # can depend on the shared producer→GCS→consumer upload pattern.
-  # felix is primary (not node) so a felix-test-only PR still triggers this
-  # producer: the deps tool keeps /**/*_test.go coverage only for the primary
-  # arg. That matches the win-fv-felix consumer which installs this image. See
-  # the "Build: calico image" comment for the full rationale.
+  # Like "Build: calico image", this producer must run whenever any consumer
+  # that downloads its GCS artifact runs (E2E KinD, Windows FV, KubeVirt). The
+  # CHANGE_IN_WITH_DEPENDENTS() macro derives that superset automatically from
+  # the consumers' `dependencies:`, so the felix / process/testing / stacktrace /
+  # 20-felix.yml consumer-mirror paths are no longer hand-maintained here. The
+  # arg below is this block's intrinsic trigger: the node component (its Go
+  # closure, Dockerfiles, BPF programs and confd templates via nonGoDeps) plus
+  # the whole /node/ tree.
   run:
-    when: "${CHANGE_IN(felix,node,non-go:/libcalico-go/lib/testutils/stacktrace/,non-go:/.semaphore/semaphore.yml.d/blocks/20-felix.yml,non-go:/process/testing/aso,non-go:/process/testing/util,non-go:/process/testing/winfv-felix)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(node,non-go:/node/)}"
   dependencies:
     - "Build: nftables RPMs"
   task:
