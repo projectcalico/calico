@@ -420,7 +420,7 @@ var _ = describe.CalicoDescribe(
 				// policy with its own XDP program regardless of GenericXDPEnabled. So skip the
 				// toggle under BPF - it is a no-op there, and flipping GenericXDPEnabled
 				// restarts Felix, which would race with the connectivity assertion below.
-				if !utils.DetectDataplane(cli, f.ClientSet).IsBPF() {
+				if utils.DetectCalicoDataplane(cli) != utils.DataplaneBPF {
 					felixConfig := v3.NewFelixConfiguration()
 					err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
 					Expect(err).NotTo(HaveOccurred())

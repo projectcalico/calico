@@ -52,23 +52,32 @@ up() {
 	log "starting $NAME ($IMAGE) on network $NETWORK"
 	docker run -d --privileged --name "$NAME" --network "$NETWORK" "$IMAGE" >/dev/null
 
-	# Wait for the in-container dockerd (dind) to come up.
+	# Wait for the in-container dockerd (dind) to come up, and fail clearly if it
+	# never does (otherwise `sudo docker` on the node fails later with an obscure
+	# error mid-test).
 	for _ in $(seq 1 30); do
 		docker exec "$NAME" docker info >/dev/null 2>&1 && break
 		sleep 1
 	done
+	if ! docker exec "$NAME" docker info >/dev/null 2>&1; then
+		log "ERROR: dockerd did not become ready in $NAME"
+		return 1
+	fi
 
 	docker exec "$NAME" apk add --no-cache openssh sudo iproute2 curl bash >/dev/null
-	# Create the ubuntu user for the framework to SSH in as. NOTE: alpine's
-	# `adduser -D` leaves the account locked (! in /etc/shadow), which silently
-	# blocks public-key auth, so unlock it with a password.
+	# Create the ubuntu user for the framework to SSH in as, and harden sshd to
+	# key-only auth. NOTE: alpine's `adduser -D` leaves the account locked (! in
+	# /etc/shadow), which silently blocks public-key auth; unlock it with a random
+	# password. Password auth is disabled below regardless, so the password is
+	# never a usable remote credential.
 	docker exec "$NAME" sh -c '
 		set -e
 		adduser -D -s /bin/sh ubuntu 2>/dev/null || true
-		echo "ubuntu:ubuntu" | chpasswd
+		echo "ubuntu:$(head -c 18 /dev/urandom | base64)" | chpasswd
 		echo "ubuntu ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/ubuntu
 		install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
 		ssh-keygen -A >/dev/null
+		printf "PasswordAuthentication no\nPermitRootLogin no\nPubkeyAuthentication yes\n" >> /etc/ssh/sshd_config
 	'
 	docker exec -i "$NAME" sh -c \
 		'cat > /home/ubuntu/.ssh/authorized_keys \
@@ -97,7 +106,9 @@ up() {
 
 down() {
 	docker rm -f "$NAME" >/dev/null 2>&1 || true
-	rm -f "$IP_FILE"
+	# Remove the generated IP file and keypair (regenerated on the next `up`) so
+	# key material isn't left on disk / picked up as a CI artifact.
+	rm -f "$IP_FILE" "$KEY" "${KEY}.pub"
 	log "down: removed $NAME"
 }
 

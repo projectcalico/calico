@@ -286,7 +286,7 @@ e2e-test-bpf:
 	SSH_AUTH_SOCK= \
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
-		KUBECONFIG=$(KIND_DIR)/kind-kubeconfig.yaml \
+		KUBECONFIG=$(KIND_KUBECONFIG) \
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
