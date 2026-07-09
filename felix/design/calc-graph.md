@@ -132,10 +132,17 @@ mismatch leaks entries.
 
 ## The upstream (syncer) contract
 
-The syncer delivers an eventually-consistent sequence of KV events.
-Reason about each event on its own, against your prior knowledge of
-*that one resource* — not about the sequence as a whole.
+The graph's input is a Syncer API stream (delivered directly or
+via Typha — the graph can't tell). The full contract — the
+consumer algorithm, the eventual-consistency guarantee, and the
+enumeration of legal event sequences (coalescing, resync
+reversion, spurious `Deleted`) — is documented in
+[`design/syncer/DESIGN.md`](../../design/syncer/DESIGN.md); read
+it before writing a node. What it means *for a calc-graph node*:
 
+- Reason about each event on its own, against your prior
+  knowledge of *that one resource* — not about the sequence as a
+  whole.
 - **`nil` value** = treat as "doesn't exist" (deleted, or failed
   validation and treated as absent). Validation is upstream in
   `calc/validation_filter.go` (`ValidationFilter` nils out invalid
@@ -143,36 +150,20 @@ Reason about each event on its own, against your prior knowledge of
   passed schema/semantic validation.
 - **Non-nil value** = the resource's current state; compare against
   what you held and reconcile.
-
-The **only** real guarantee is eventual convergence to the latest
-value (supported datastores make writes durable, so connectivity
-permitting you will eventually see it). Everything else is fair
-game. For a resource that truly went `Created → A → B → C`, a node
-might observe any of:
-
-- `A → B → C`
-- `A → C` — `B` coalesced away
-- `C` — `A` and `B` coalesced away
-- `A → C → B → C` — reached `C`, then a resync hit a stale replica
-  (back to `B`), then caught up
-- `C → Deleted → A → B → C` — resync hit a replica so stale the
-  resource didn't exist there yet, giving a **spurious `Deleted`**
-
-So a node must not assume ordering, monotonic versions, that it sees
-every transition, or that a `Deleted` is final — the same resource can
-be deleted and later re-created (the spurious-`Deleted` sequence
-above). Comparing each event against current state and reconciling
-handles all of these; assuming values only move forward does not.
+- A node must not assume ordering, monotonic versions, that it
+  sees every transition, or that a `Deleted` is final — the same
+  resource can be deleted and later re-created. Comparing each
+  event against current state and reconciling handles all of the
+  legal sequences; assuming values only move forward does not.
 
 ### The update-type side channel
 
-Each event also carries `Update.UpdateType` (`api.UpdateType`:
-`UpdateTypeKVNew`/`KVUpdated`/`KVDeleted`/`KVUnknown` in
-`libcalico-go/lib/backend/api`). Its original purpose was stats
-without retaining objects (see `calc/stats_collector.go`). **Don't
-drive correctness from it** — decide existence from nil/non-nil, not
-the update type; `UpdateTypeKVNew/Updated` can even carry `nil` (failed
-validation), so the type may disagree with the value.
+Each event also carries `Update.UpdateType` (see the shared doc
+for its semantics). In Felix its legitimate use is stats without
+retaining objects (see `calc/stats_collector.go`). **Don't drive
+correctness from it** — decide existence from nil/non-nil, not
+the update type; `UpdateTypeKVNew/Updated` can even carry `nil`
+(failed validation), so the type may disagree with the value.
 
 ### Review notes
 
