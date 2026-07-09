@@ -32,9 +32,8 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/lib/logrusr"
+		"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 const (
@@ -267,7 +266,7 @@ type Table struct {
 	lockProbeInterval time.Duration
 
 	logCxt               *log.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *logrusr.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
@@ -286,7 +285,7 @@ type Table struct {
 	lookPath func(file string) (string, error)
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	reason       string
 }
 
@@ -312,7 +311,7 @@ type TableOptions struct {
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder logrusr.OpRecorder
 }
 
 func NewTable(
@@ -409,9 +408,9 @@ func NewTable(
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
 		logCxt:                 log.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(30*time.Second),
+			logrusr.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
