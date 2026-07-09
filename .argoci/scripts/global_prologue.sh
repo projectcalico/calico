@@ -77,6 +77,11 @@ RANDOM_TOKEN1=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 5 || true)
 
 echo "[INFO] exporting default env vars..."
 export PRODUCT=${PRODUCT:-calico}
+# bz tags aws-eks / aws-openshift clusters with `createdBy: ${USER}`; the ArgoCI
+# runner leaves USER unset, so the tag renders empty and CloudFormation rejects
+# it (tag value must be non-empty). Attribution only — cloud-custodian reaps on
+# cluster name (bz-${PRODUCT}-*), not createdBy, so this doesn't affect cleanup.
+export USER="${USER:-argoci}"
 export PROVISIONER=${PROVISIONER:-gcp-kubeadm}
 export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-CalicoIptables}
@@ -145,15 +150,19 @@ if ! python3 -c 'import yaml' 2>/dev/null; then
     || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
 fi
 
-# --- Ensure python3-venv for bz's provisioner venv. bz init/provision runs
-# `python3 -m venv` (python3.10 on the ArgoCI runner image), but that image ships
-# only python3.7/3.8-venv, so venv creation fails ("No such file: .local/venv/
-# include"; "apt install python3.10-venv"). Stopgap until the runner image adds it
-# (cc-utils/argoci-images); safe to remove once that lands. ---
-if ! python3 -c 'import ensurepip' 2>/dev/null; then
+# --- Ensure python3.10-venv for bz's provisioner venv. bz builds the venv with
+# python3.10, but the runner image ships only python3.7/3.8-venv, so venv creation
+# fails ("No such file: .local/venv/include"; "apt install python3.10-venv").
+# Guard on python3.10 specifically — the default `python3` is 3.7 and *has*
+# ensurepip, so guarding on it would skip this and let bz hit the gap later (and
+# race apt → dpkg lock). Install up front so bz's venv-create finds it present.
+# Stopgap until the runner image adds it (cc-utils/argoci-images); remove once that
+# lands. (Separate, image-level: a py3.7 venv missing certifi cacert also breaks
+# some gcp-kubeadm pip steps — tracked for the image fix, not band-aided here.) ---
+if command -v python3.10 >/dev/null 2>&1 && ! python3.10 -c 'import ensurepip' 2>/dev/null; then
   echo "[INFO] installing python3.10-venv (runner image lacks it)..."
+  sudo apt-get update -qq 2>/dev/null || true
   sudo apt-get install -y python3.10-venv 2>/dev/null \
-    || { sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y python3.10-venv 2>/dev/null; } \
     || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
 fi
 
