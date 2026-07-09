@@ -16,7 +16,7 @@ CI_EXIT_CODE=${CI_EXIT_CODE:-0}
 ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
 
 # Capture diags on failure (or always for cert runs).
-if [[ "${CI_EXIT_CODE}" != "0" ]]; then
+if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true
