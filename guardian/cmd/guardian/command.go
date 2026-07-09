@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/calico/guardian/pkg/config"
 	"github.com/projectcalico/calico/guardian/pkg/daemon"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
@@ -47,7 +47,7 @@ func NewCommand() *cobra.Command {
 
 			// Log config with VoltronURL userinfo redacted.
 			sanitized := cfg.Config
-			sanitized.VoltronURL = logutils.RedactURL(sanitized.VoltronURL)
+			sanitized.VoltronURL = logrusr.RedactURL(sanitized.VoltronURL)
 			logrus.Infof("Starting Calico Guardian %s", sanitized.String())
 			daemon.Run(shutdownContext(), cfg.Config, cfg.Targets())
 		},

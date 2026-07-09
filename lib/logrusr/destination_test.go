@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils_test
+package logrusr_test
 
 import (
 	"bytes"
@@ -33,7 +33,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	. "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	. "github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -62,15 +62,25 @@ var _ = Describe("Logutils", func() {
 
 	It("Should add correct file when invoked via log.Info", func() {
 		log.Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
 	})
 	It("Should add correct file when invoked via Logger.Info", func() {
 		log.StandardLogger().Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
 	})
 	It("Should add correct file when invoked via log.WithField(...).Info", func() {
 		log.WithField("foo", "bar").Info("Test log")
-		Expect(buf.String()).To(ContainSubstring("logutils_test.go"))
+		Expect(buf.String()).To(ContainSubstring("destination_test.go"))
+	})
+	It("Should report user file (not ratelimited.go) via RateLimitedLogger.Info", func() {
+		// The stack walker in GetFileInfo skips both logrus and
+		// lib/logrusr frames, so a wrapper like RateLimitedLogger
+		// resolves to the file that actually called it.
+		rl := NewRateLimitedLogger(OptInterval(time.Hour))
+		rl.Info("Test log")
+		out := buf.String()
+		Expect(out).To(ContainSubstring("destination_test.go"))
+		Expect(out).NotTo(ContainSubstring("ratelimited.go"))
 	})
 	It("requires logrus.AllLevels to be consistent/in order", func() {
 		// Formatter.init() pre-computes various strings on this assumption.
@@ -89,9 +99,10 @@ var _ = DescribeTable("Formatter",
 		Expect(string(out)).To(Equal(expectedLog))
 		Expect(FormatForSyslog(&entry)).To(Equal(expectedSyslog))
 	},
-	Entry("Empty", log.Entry{},
-		"0001-01-01 00:00:00.000 [PANIC][<PID>] <nil> <nil>: \n",
-		"PANIC <nil> <nil>: \n"),
+	Entry("Empty",
+		log.Entry{Caller: &runtime.Frame{}},
+		"0001-01-01 00:00:00.000 [PANIC][<PID>] . <nil>: \n",
+		"PANIC . <nil>: \n"),
 	Entry("Basic",
 		log.Entry{
 			Level: log.InfoLevel,

@@ -79,8 +79,8 @@ google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
 gopkg.in/yaml.v3 v3.0.1
 
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
+local:lib/logrusr
+local:lib/std/log
 local:release/cmd
 local:release/internal/ci
 local:release/internal/command

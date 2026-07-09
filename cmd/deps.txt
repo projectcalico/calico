@@ -118,7 +118,7 @@ github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/natefinch/atomic v1.0.1
 github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
-github.com/onsi/gomega v1.42.0
+github.com/onsi/gomega v1.42.1
 github.com/opencontainers/go-digest v1.0.0
 github.com/openshift/custom-resource-status v1.1.2
 github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -318,7 +318,6 @@ local:confd/pkg/backends
 local:confd/pkg/backends/calico
 local:confd/pkg/backends/types
 local:confd/pkg/config
-local:confd/pkg/log
 local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
@@ -403,7 +402,7 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
+local:felix/logging
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -516,8 +515,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/multireadbuf
 local:libcalico-go/lib/names
@@ -571,7 +568,7 @@ local:typha/pkg/daemon
 local:typha/pkg/discovery
 local:typha/pkg/jitter
 local:typha/pkg/k8s
-local:typha/pkg/logutils
+local:typha/pkg/logging
 local:typha/pkg/promutils
 local:typha/pkg/snapcache
 local:typha/pkg/syncclient

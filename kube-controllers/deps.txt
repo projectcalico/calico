@@ -68,8 +68,8 @@ github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 github.com/onsi/ginkgo v1.16.5
-github.com/onsi/ginkgo/v2 v2.31.0
-github.com/onsi/gomega v1.42.0
+github.com/onsi/ginkgo/v2 v2.32.0
+github.com/onsi/gomega v1.42.1
 github.com/openshift/custom-resource-status v1.1.2
 github.com/patrickmn/go-cache v2.1.0+incompatible
 github.com/peterbourgon/diskv v2.0.1+incompatible
@@ -195,6 +195,7 @@ local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
+local:lib/logrusr
 local:lib/std/chanutil
 local:lib/std/log
 local:lib/std/time
@@ -219,8 +220,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
@@ -236,4 +235,4 @@ local:libcalico-go/lib/winutils
 local:pkg/buildinfo
 local:pkg/cmdwrapper
 local:typha/pkg/config
-local:typha/pkg/logutils
+local:typha/pkg/logging
