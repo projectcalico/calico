@@ -31,6 +31,21 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
 else
   echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
 fi
+# Azure auth for azr-* provisioners (ported from Semaphore prologue L146-150).
+# Creds come from banzai-secrets via envFrom (AZ_SP_ID/AZ_SP_PASSWORD/AZ_TENANT_ID/
+# AZ_SUBSCRIPTION_ID); bz's azure path needs an active `az` session, so log in the
+# service principal. Gated on azr-* so non-azure jobs skip the network call.
+if [[ "${PROVISIONER:-}" == azr-* ]]; then
+  if command -v az >/dev/null 2>&1 && [[ -n "${AZ_SP_ID:-}" ]]; then
+    az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" >/dev/null \
+      && az account set --subscription "${AZ_SUBSCRIPTION_ID}" \
+      && echo "[INFO] az login OK (subscription ${AZ_SUBSCRIPTION_ID})" \
+      || echo "[WARN] az login failed; azr-* provisioning will fail"
+  else
+    echo "[WARN] azr-* provisioner but az CLI or AZ_SP_ID missing; azure auth skipped"
+  fi
+fi
+
 export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
