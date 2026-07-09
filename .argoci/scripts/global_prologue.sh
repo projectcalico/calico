@@ -111,6 +111,18 @@ if ! python3 -c 'import yaml' 2>/dev/null; then
     || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
 fi
 
+# --- Ensure python3-venv for bz's provisioner venv. bz init/provision runs
+# `python3 -m venv` (python3.10 on the ArgoCI runner image), but that image ships
+# only python3.7/3.8-venv, so venv creation fails ("No such file: .local/venv/
+# include"; "apt install python3.10-venv"). Stopgap until the runner image adds it
+# (cc-utils/argoci-images); safe to remove once that lands. ---
+if ! python3 -c 'import ensurepip' 2>/dev/null; then
+  echo "[INFO] installing python3.10-venv (runner image lacks it)..."
+  sudo apt-get install -y python3.10-venv 2>/dev/null \
+    || { sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y python3.10-venv 2>/dev/null; } \
+    || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
+fi
+
 echo "[INFO] initialising bz profile..."
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true
