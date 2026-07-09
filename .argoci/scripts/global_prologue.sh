@@ -79,6 +79,30 @@ fi
 # TODO: remove once ArgoCI onboarding is signed off.
 echo "[DEBUG] env var names present:"; compgen -e | sort | sed 's/^/[DEBUG]   /'
 
+# TEMP OTEL export probe (migration bring-up): bz exports OTLP traces to
+# banzai-otel with IAP but swallows export-time errors (no otel.SetErrorHandler),
+# and our runs' spans aren't landing in Lens. Reproduce bz's export to see
+# egress-blocked vs IAP-rejected. Non-fatal. TODO: remove once OTEL export is sorted.
+OTEL_EP="https://banzai-otel.dev-tools.tigera.net"
+otel_code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "${OTEL_EP}/" 2>/dev/null || echo TIMEOUT)
+echo "[OTEL-PROBE] bare GET ${OTEL_EP}/ -> ${otel_code}  (302=reachable/IAP; TIMEOUT/000=egress blocked)"
+if [[ "${otel_code}" != TIMEOUT && "${otel_code}" != 000 ]]; then
+  OTEL_IAP_SA="banzai-otel-iap-user@tigera-dev-tools.iam.gserviceaccount.com"
+  _now=$(date +%s)
+  printf '{"iss":"%s","sub":"%s","aud":"%s/*","iat":%s,"exp":%s}' \
+    "${OTEL_IAP_SA}" "${OTEL_IAP_SA}" "${OTEL_EP}" "${_now}" "$((_now+300))" > /tmp/otel-claim.json
+  if gcloud iam service-accounts sign-jwt /tmp/otel-claim.json /tmp/otel-signed.jwt \
+       --iam-account="${OTEL_IAP_SA}" --impersonate-service-account="${OTEL_IAP_SA}" >/tmp/otel-sj.out 2>&1; then
+    _pc=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 -X POST \
+      -H "Authorization: Bearer $(cat /tmp/otel-signed.jwt)" -H 'Content-Type: application/json' \
+      -d '{"resourceSpans":[]}' "${OTEL_EP}/v1/traces" 2>/dev/null || echo TIMEOUT)
+    echo "[OTEL-PROBE] IAP token minted OK; POST /v1/traces -> ${_pc}  (2xx=accepted; 401/403=token rejected)"
+  else
+    echo "[OTEL-PROBE] sign-jwt FAILED (IAM/impersonation): $(tail -1 /tmp/otel-sj.out)"
+  fi
+  rm -f /tmp/otel-claim.json /tmp/otel-signed.jwt /tmp/otel-sj.out
+fi
+
 # `bz init` installs the gobz binary via `gh`, which needs GH_TOKEN (not the
 # GITHUB_ACCESS_TOKEN name banzai-secrets provides) — alias it so go-backed
 # provisioners are available.
