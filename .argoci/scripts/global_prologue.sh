@@ -35,6 +35,40 @@ export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
 
+# AWS auth for aws-* provisioners (EKS, aws-openshift, aws-talos). banzai-secrets
+# ships the AWS creds as the `credentials` key — its value is a full
+# ~/.aws/credentials ini blob ([default]\naws_access_key_id=...). It arrives via
+# envFrom as $credentials, but the AWS SDK reads the FILE, so materialise it.
+# Fall back to standard AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env if present.
+mkdir -p "${HOME}/.aws"
+if [[ -n "${credentials:-}" ]]; then
+  printf '%s\n' "${credentials}" > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from banzai-secrets 'credentials' key"
+elif [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  {
+    echo "[default]"
+    echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}"
+    echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}"
+    [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "aws_session_token=${AWS_SESSION_TOKEN}"
+  } > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env"
+else
+  echo "[WARN] no AWS creds in banzai-secrets ('credentials' or AWS_ACCESS_KEY_ID); aws-* provisioners will fail"
+fi
+
+# DEBUG (migration bring-up): list env var NAMES only. Uses `compgen -e` (exported
+# names, no values) — NOT `env`, whose multi-line values (e.g. the GCP SA JSON)
+# would leak secret material into the logs. Confirms which secret keys are present.
+# TODO: remove once ArgoCI onboarding is signed off.
+echo "[DEBUG] env var names present:"; compgen -e | sort | sed 's/^/[DEBUG]   /'
+
+# `bz init` installs the gobz binary via `gh`, which needs GH_TOKEN (not the
+# GITHUB_ACCESS_TOKEN name banzai-secrets provides) — alias it so go-backed
+# provisioners are available.
+export GH_TOKEN="${GH_TOKEN:-${GITHUB_ACCESS_TOKEN:-}}"
+
 git config --global user.name "${GITHUB_USER_NAME:-marvin-tigera}"
 git config --global user.email "${GITHUB_USER_EMAIL:-marvin@tigera.io}"
 
@@ -44,12 +78,13 @@ RANDOM_TOKEN1=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 5 || true)
 echo "[INFO] exporting default env vars..."
 export PRODUCT=${PRODUCT:-calico}
 export PROVISIONER=${PROVISIONER:-gcp-kubeadm}
-export INSTALLER=${INSTALLER:-operator}
+export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-CalicoIptables}
 export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
-export GOOGLE_REGION=${GOOGLE_REGION:-us-central1}
-export GOOGLE_ZONE=${GOOGLE_ZONE:-us-central1-a}
+export GOOGLE_REGIONS=("us-central1" "us-west1")
+export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
+export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
@@ -58,6 +93,11 @@ export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 # Branch comes from the ArgoCI handler (CI_GIT_CLONED_BRANCH); fall back to
 # BRANCH then master. release-vX.Y -> vX.Y, else master.
 export RELEASE_STREAM=${RELEASE_STREAM:-$( _b="${CI_GIT_CLONED_BRANCH:-${BRANCH:-master}}"; [[ "${_b}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
+
+export K8S_VERSION=${K8S_VERSION:-stable-3}
+export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensource-image=calico/ctl:release-${RELEASE_STREAM} "}
+export HELM_PATCH=${HELM_PATCH:-"0"}
+export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
 
 export CLUSTER_NAME=${CLUSTER_NAME:-bz-${PRODUCT}-${RANDOM_TOKEN1}}
 export DIAGS_ARCHIVE_FILENAME=${DIAGS_ARCHIVE_FILENAME:-${PROVISIONER}-${CLUSTER_NAME}-diags.tgz}
@@ -103,6 +143,18 @@ if ! python3 -c 'import yaml' 2>/dev/null; then
   python3 -m pip install --quiet pyyaml 2>/dev/null \
     || python3 -m pip install --quiet --break-system-packages pyyaml 2>/dev/null \
     || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
+fi
+
+# --- Ensure python3-venv for bz's provisioner venv. bz init/provision runs
+# `python3 -m venv` (python3.10 on the ArgoCI runner image), but that image ships
+# only python3.7/3.8-venv, so venv creation fails ("No such file: .local/venv/
+# include"; "apt install python3.10-venv"). Stopgap until the runner image adds it
+# (cc-utils/argoci-images); safe to remove once that lands. ---
+if ! python3 -c 'import ensurepip' 2>/dev/null; then
+  echo "[INFO] installing python3.10-venv (runner image lacks it)..."
+  sudo apt-get install -y python3.10-venv 2>/dev/null \
+    || { sudo apt-get update -qq 2>/dev/null && sudo apt-get install -y python3.10-venv 2>/dev/null; } \
+    || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
 fi
 
 echo "[INFO] initialising bz profile..."
