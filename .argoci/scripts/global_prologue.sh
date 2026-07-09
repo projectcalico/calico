@@ -35,6 +35,29 @@ export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
 
+# AWS auth for aws-* provisioners (EKS, aws-openshift, aws-talos). banzai-secrets
+# is loaded via envFrom, so AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY arrive as env
+# when present in the bundle; also write ~/.aws/credentials so tools that don't
+# inherit the shell env still find them. No-op (with a warning) if absent.
+if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  mkdir -p "${HOME}/.aws"
+  {
+    echo "[default]"
+    echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}"
+    echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}"
+    [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "aws_session_token=${AWS_SESSION_TOKEN}"
+  } > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from banzai-secrets env"
+else
+  echo "[WARN] AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not in env; aws-* provisioners will fail (add them to banzai-secrets)"
+fi
+
+# DEBUG (migration bring-up): list env var NAMES only — never values, since
+# banzai-secrets is env-injected. Confirms which secret keys are present.
+# TODO: remove once ArgoCI onboarding is signed off.
+echo "[DEBUG] env var names present:"; env | cut -d= -f1 | sort | sed 's/^/[DEBUG]   /'
+
 git config --global user.name "${GITHUB_USER_NAME:-marvin-tigera}"
 git config --global user.email "${GITHUB_USER_EMAIL:-marvin@tigera.io}"
 
