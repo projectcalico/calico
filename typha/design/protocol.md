@@ -62,7 +62,10 @@ sequenceDiagram
 
 There is no goodbye message: either side disconnects by closing
 the connection, and the client treats any disconnection the same
-way (reconnect and resync — see [`client.md`](./client.md)).
+way (reconnect and resync — see [`client.md`](./client.md)). One
+could be added — to carry the disconnection reason into the peer's
+logs, or a "try this server next" hint for load-aware rebalancing
+— it just hasn't been needed.
 
 The handshake also selects the stream contents: `MsgClientHello`
 names a `SyncerType` (`felix`, `bgp`, `tunnel-ip-allocation`,
@@ -81,17 +84,13 @@ update type, TTL). The rationale, from the package comment:
 1. it avoids any subtle incompatibility between our datamodel
    and gob;
 2. it removes the need to register all our datatypes with the
-   gob en/decoder;
+   gob encoder/decoder;
 3. it re-uses known-good serialization code with known semantics
    around data-model upgrade (the JSON marshaller's treatment of
    added/removed fields);
 4. it allows each KV pair to be serialized **once** and sent to
    all listening clients — not easy in raw gob, because a gob
    connection is stateful.
-
-Point 4 is the load-bearing one: the cache stores
-`SerializedUpdate`s, so per-client work is fan-out, not
-serialization (see [`server.md`](./server.md)).
 
 Two subtleties of `SerializedUpdate`:
 
@@ -106,9 +105,10 @@ Two subtleties of `SerializedUpdate`:
   on. In hindsight its habit of sending type information inline,
   per connection, defeats optimisations we later wanted (splicing
   pre-encoded streams — see below); protobuf wrappers or
-  NDJSON/CBOR would be cleaner. We keep gob for compatibility;
-  the decoder-restart mechanism is the escape hatch to a future
-  protocol.
+  NDJSON/CBOR would be cleaner, and would let the whole
+  serialized update be cached, not just the KV inside it. We keep
+  gob for compatibility; the decoder-restart mechanism is the
+  escape hatch to a future protocol.
 
 ## Feature negotiation and decoder restart
 

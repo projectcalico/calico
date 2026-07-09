@@ -14,9 +14,10 @@ Typha is a fan-out proxy for the
 [Syncer API](../design/syncer/DESIGN.md). It watches the
 datastore once — running one syncer per supported type — caches
 the resulting key/value state, and streams it to many clients
-(Felix, confd, `node` helpers) over TCP. Each client gets exactly
-what it would have received from an in-process syncer; the
-callbacks are identical, so client code doesn't know Typha is
+(Felix, confd, `node` helpers) over TCP. Each client gets a
+stream equivalent to an in-process syncer's — Typha may reorder
+and coalesce, but the Syncer API is eventually consistent, so the
+callbacks are identical and client code doesn't know Typha is
 there.
 
 This document has two parts:
@@ -33,13 +34,12 @@ This document has two parts:
 
 With etcd as the datastore, every component watching the
 datastore directly worked at high scale. With the Kubernetes API
-server as the datastore it did not: Calico's Node resource is
-backed by the built-in Kubernetes Node resource, which every
-kubelet updates every few seconds. Watching Calico Nodes
-therefore means watching Kubernetes Nodes, so every watcher
-receives every kubelet heartbeat — O(n²) events in the number of
-nodes, and 99.9% of them irrelevant to Calico. The API server
-struggled beyond ~50–100 nodes.
+server it did not: Calico's Node resource is backed by the
+built-in Kubernetes Node resource, which every kubelet updates
+every few seconds, so every watcher receives every kubelet
+heartbeat — O(n²) events in the number of nodes, 99.9% of them
+irrelevant to Calico. The API server struggled beyond ~50–100
+nodes.
 
 Typha fixes this by:
 
@@ -52,12 +52,11 @@ Typha fixes this by:
 
 Keeping the Syncer API and its invariants unchanged is what made
 Typha cheap to introduce — and it remains a design constraint:
-Typha's output must be a valid Syncer stream. Note the
-deliberately limited scope: Typha only proxies the Syncer API.
-Clients still contact the API server directly for everything else
+Typha's output must be a valid Syncer stream. The scope is
+deliberately narrow: Typha only proxies the Syncer API; clients
+still contact the API server directly for everything else
 (writes, and reading the config needed to find Typha in the first
-place). Cutting all client access to the API server was never a
-goal.
+place).
 
 ```mermaid
 flowchart LR
@@ -99,13 +98,13 @@ The two design centrepieces:
   B-tree of the datastore state. After each batch of updates the
   cache publishes a "Breadcrumb" — an O(1) snapshot of the tree
   plus the deltas since the previous crumb — onto a linked list.
-  A new client serializes the snapshot from the current crumb,
-  then follows the list, sending only deltas; the cache's writer
-  never blocks on slow clients.
+  A new client sends the current crumb's snapshot, then follows
+  the list, sending only deltas; the cache's writer never blocks
+  on slow clients.
 - **Shared serialization**: KVs are serialized once, in the
-  cache, not once per client. When many clients connect at once,
-  the whole compressed snapshot byte-stream is also generated
-  once and shared (`pkg/syncserver/snap_precalc.go`).
+  cache, not per client. When many clients connect at once, the
+  whole compressed snapshot byte-stream is also generated once
+  and shared (`pkg/syncserver/snap_precalc.go`).
 
 Key orientation files: `pkg/daemon/daemon.go`,
 `pkg/snapcache/cache.go`, `pkg/syncserver/sync_server.go`,
