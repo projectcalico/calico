@@ -133,8 +133,14 @@ sees is still a valid syncer stream:
   type, keeping downstream stats eventually consistent.
 - No-op updates (same value, different revision) are dropped;
   this is where the kubelet-heartbeat firehose dies.
-- Deletions are forwarded even for keys the cache never had, so
-  the update-type bookkeeping downstream stays balanced.
+- Deletions are forwarded even when the tree doesn't hold the
+  key. Update types are computed upstream (the `watchersyncer`'s
+  per-key cache) against the **raw** view; the tree holds the
+  **validated** view, from which `ValidationFilter`'s nil-ing of
+  an invalid value silently drops the key. A real deletion can
+  therefore arrive for a tree-absent key, and downstream
+  `New`/`Deleted` refcounts (Felix's stats collector) only stay
+  balanced if it is passed through.
 - `InSync` is only attached to the **last** crumb of a batch —
   a mid-batch crumb doesn't yet reflect everything the syncer
   told us, and claiming in-sync early would trigger premature
