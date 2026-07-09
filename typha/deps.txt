@@ -11,7 +11,6 @@ github.com/clipperhouse/uax29/v2 v2.6.0
 github.com/coreos/go-semver v0.3.1
 github.com/coreos/go-systemd/v22 v22.7.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.13.0
 github.com/fxamacker/cbor/v2 v2.9.0
@@ -106,29 +105,3 @@ sigs.k8s.io/network-policy-api v0.2.0
 sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.4.0
 sigs.k8s.io/yaml v1.6.0
-
-local:api/pkg/apis/projectcalico/v3
-local:api/pkg/lib/numorstring
-local:crypto/pkg/tls
-local:lib/std/uniquelabels
-local:lib/std/uniquestr
-local:libcalico-go/lib/apiconfig
-local:libcalico-go/lib/apis/internalapi
-local:libcalico-go/lib/backend/api
-local:libcalico-go/lib/backend/encap
-local:libcalico-go/lib/backend/model
-local:libcalico-go/lib/errors
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
-local:libcalico-go/lib/namespace
-local:libcalico-go/lib/net
-local:libcalico-go/lib/readlogger
-local:libcalico-go/lib/winutils
-local:pkg/buildinfo
-local:typha/cmd/typha-client
-local:typha/pkg/config
-local:typha/pkg/discovery
-local:typha/pkg/logutils
-local:typha/pkg/syncclient
-local:typha/pkg/syncproto
-local:typha/pkg/tlsutils

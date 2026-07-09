@@ -140,6 +140,59 @@ with, for example:
 docker run --privileged --net=host -e TYPHA_LOGSEVERITYSCREEN=INFO calico/typha
 ```
 
+## Diagnostics: dumping a Typha's snapshot
+
+Because each Typha has its own datastore connection, separate Typha instances
+can drift out of sync with one another.  To capture what a particular Typha is
+serving, use the `client dump` subcommand of the combined `calico` binary
+(which ships in the Typha image):
+
+```bash
+# Inside a Typha pod (connects to Typha's local unix socket; no TLS needed):
+calico component typha client dump                 # all syncer types, NDJSON
+calico component typha client dump --type=felix    # one syncer type
+calico component typha client dump --format=gzip-base64   # compact, kubectl-exec-safe
+```
+
+The dump connects to the Typha as a sync client once per syncer type and
+streams the resulting snapshot to stdout.  Each syncer type's keys are framed
+with `begin`/`end` marker lines.  `--format=gzip-base64` gzips the
+newline-delimited JSON and base64-encodes it, wrapped into short lines so it
+survives `kubectl exec`; decode it with `base64 -d | gunzip`.
+
+The dump is bounded: if no updates arrive for `--idle-timeout` (default 10s)
+and a syncer type has not yet reached in-sync, that syncer type is stopped and
+its `end` marker records a `timed-out` status, so a stuck or never-in-sync
+Typha can't hang the dump.  The timer resets on every batch of updates, so a
+large but healthy snapshot that keeps streaming will not time out.  Pass
+`--idle-timeout=0` to wait indefinitely.
+
+`calicoctl cluster diags` runs this command in every Typha pod automatically and
+stores the decoded snapshot in the bundle so out-of-sync Typhas can be compared.
+
+### The local unix socket
+
+To make in-pod diagnostics work regardless of how Felix-Typha mutual TLS is
+configured, Typha additionally listens for the sync protocol — without TLS — on
+a unix domain socket at `/var/run/calico/typha.sock` (in addition to the main
+TLS TCP listener used by Felix).  The dump command dials this socket by default;
+pass `--server <host:port>` (with the usual TLS flags) to connect to a Typha
+over TCP instead.
+
+This is safe because the socket is a *filesystem* socket: although Typha runs
+with `hostNetwork`, its mount namespace is not shared with the host, so the
+socket is private to the pod.  (A Linux *abstract* socket would be wrong here —
+it lives in the network namespace, which `hostNetwork` shares with the host.)
+The socket file is created `0600`.  Typha runs as a non-root uid with all
+capabilities dropped and cannot create a directory under the root-owned
+filesystem, so the `calico` image pre-creates the socket directory owned by
+that uid.  It creates the real directory at `/run/calico` and ships `/var/run`
+as a symlink to `/run`, so `/var/run/calico` resolves to the writable
+`/run/calico` regardless of the base image (the minimal `calico/base` ships no
+`/var/run` at all, while UBI-based images ship `/var/run` as a symlink to
+`/run`).  If the socket cannot be set up, Typha logs a warning and continues
+serving Felix normally.
+
 ## License
 
 Calico binaries are licensed under the [Apache v2.0 license](LICENSE), with the exception of some [GPL licensed eBPF programs](https://github.com/projectcalico/felix/tree/master/bpf-gpl).

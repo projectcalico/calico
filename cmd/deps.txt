@@ -574,6 +574,7 @@ local:typha/pkg/k8s
 local:typha/pkg/logutils
 local:typha/pkg/promutils
 local:typha/pkg/snapcache
+local:typha/pkg/snapshotdump
 local:typha/pkg/syncclient
 local:typha/pkg/syncclientutils
 local:typha/pkg/syncproto
