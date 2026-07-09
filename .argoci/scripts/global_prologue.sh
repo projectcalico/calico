@@ -36,11 +36,16 @@ chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
 
 # AWS auth for aws-* provisioners (EKS, aws-openshift, aws-talos). banzai-secrets
-# is loaded via envFrom, so AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY arrive as env
-# when present in the bundle; also write ~/.aws/credentials so tools that don't
-# inherit the shell env still find them. No-op (with a warning) if absent.
-if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
-  mkdir -p "${HOME}/.aws"
+# ships the AWS creds as the `credentials` key — its value is a full
+# ~/.aws/credentials ini blob ([default]\naws_access_key_id=...). It arrives via
+# envFrom as $credentials, but the AWS SDK reads the FILE, so materialise it.
+# Fall back to standard AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env if present.
+mkdir -p "${HOME}/.aws"
+if [[ -n "${credentials:-}" ]]; then
+  printf '%s\n' "${credentials}" > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from banzai-secrets 'credentials' key"
+elif [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
   {
     echo "[default]"
     echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}"
@@ -48,9 +53,9 @@ if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
     [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "aws_session_token=${AWS_SESSION_TOKEN}"
   } > "${HOME}/.aws/credentials"
   chmod 0600 "${HOME}/.aws/credentials"
-  echo "[INFO] wrote ~/.aws/credentials from banzai-secrets env"
+  echo "[INFO] wrote ~/.aws/credentials from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env"
 else
-  echo "[WARN] AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not in env; aws-* provisioners will fail (add them to banzai-secrets)"
+  echo "[WARN] no AWS creds in banzai-secrets ('credentials' or AWS_ACCESS_KEY_ID); aws-* provisioners will fail"
 fi
 
 # DEBUG (migration bring-up): list env var NAMES only. Uses `compgen -e` (exported
