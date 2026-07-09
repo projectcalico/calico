@@ -451,15 +451,29 @@ configRetry:
 	var dpDriverCmd *exec.Cmd
 
 	failureReportChan := make(chan string)
+	// These callbacks run on dataplane goroutines and report a shutdown
+	// reason to the shutdown monitor.  The send is on the unbuffered
+	// failureReportChan; time it out with a panic backstop so a stuck send
+	// can't hang the goroutine forever with the backstop unreachable.
 	configChangedRestartCallback := func() {
-		failureReportChan <- reasonConfigChanged
-		time.Sleep(gracefulShutdownTimeout)
+		timeout := time.After(gracefulShutdownTimeout)
+		select {
+		case failureReportChan <- reasonConfigChanged:
+		case <-timeout:
+			log.Panic("Graceful shutdown failed: timed out reporting config change")
+		}
+		<-timeout
 		log.Panic("Graceful shutdown took too long")
 	}
 	fatalErrorCallback := func(err error) {
 		log.WithError(err).Error("Shutting down due to fatal error")
-		failureReportChan <- reasonFatalError
-		time.Sleep(gracefulShutdownTimeout)
+		timeout := time.After(gracefulShutdownTimeout)
+		select {
+		case failureReportChan <- reasonFatalError:
+		case <-timeout:
+			log.Panic("Graceful shutdown failed: timed out reporting fatal error")
+		}
+		<-timeout
 		log.Panic("Graceful shutdown took too long")
 	}
 
@@ -697,9 +711,6 @@ configRetry:
 	// calculation graph.
 	validator := calc.NewValidationFilter(asyncCalcGraph, configParams)
 
-	go syncerToValidator.SendToSinkForever(validator)
-	asyncCalcGraph.Start()
-	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- *sync.WaitGroup
 	if configParams.EndpointReportingEnabled {
 		delay := configParams.EndpointReportingDelaySecs
@@ -744,8 +755,28 @@ configRetry:
 	}
 
 	// Send the opening message to the dataplane driver, giving it its
-	// config.
+	// config.  Do this before starting the calculation graph so that the
+	// dataplane driver is guaranteed to receive its config before the
+	// stream of updates from the calculation graph.
+	//
+	// Starting the calc graph first used to allow a rare start-of-day
+	// deadlock: the graph's first flushed event is always a ConfigUpdate,
+	// and if it carried a restart-triggering change it could park the
+	// connector in shutDownProcess() — reporting on failureReportChan —
+	// before monitorAndManageShutdown(), the only reader of that channel,
+	// had started.  This opening ConfigUpdate can't itself trigger a
+	// restart: handleConfigUpdate diffs it against the very config object
+	// it was generated from.
 	dpConnector.ToDataplane <- configParams.ToConfigUpdate()
+
+	// Now the dataplane driver has its config, start the calculation graph.
+	// Every consumer of its output channels is already running (the
+	// connector pump, the policy-sync processor, the collector's
+	// DataplaneInfoReader); the syncer has meanwhile been accumulating
+	// updates in the syncerToValidator dedupe buffer.
+	go syncerToValidator.SendToSinkForever(validator)
+	asyncCalcGraph.Start()
+	log.Infof("Started the processing graph")
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.")
@@ -1189,6 +1220,11 @@ type DataplaneConnector struct {
 	datastore         bapi.Client
 	datastorev3       client.Interface
 
+	// shutdownReportTimeout bounds how long shutDownProcess waits to hand
+	// its failure reason to the shutdown monitor before panicking as a
+	// backstop.  Overridable in tests.
+	shutdownReportTimeout time.Duration
+
 	firstStatusReportSent bool
 
 	wireguardStatUpdateFromDataplane chan *proto.WireguardStatusUpdate
@@ -1215,6 +1251,7 @@ func newConnector(configParams *config.Config,
 		statusUpdatesFromDataplaneConsumers: nil,
 		failureReportChan:                   failureReportChan,
 		dataplane:                           dataplane,
+		shutdownReportTimeout:               gracefulShutdownTimeout,
 		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
@@ -1471,12 +1508,26 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 	}
 }
 
+// shutDownProcess reports the given reason to the shutdown monitor
+// (monitorAndManageShutdown) and then blocks, expecting the monitor to tear
+// the process down.  It never returns; callers rely on that.
+//
+// Both steps have a panic backstop.  Reporting the reason is a blocking send
+// on the unbuffered failureReportChan, so we time it out: if the monitor
+// isn't reading (e.g. it hasn't started yet at start-of-day), we panic rather
+// than deadlock.  Once the reason is delivered we wait out the remainder of
+// the same timer and panic if the managed shutdown hasn't finished.
 func (fc *DataplaneConnector) shutDownProcess(reason string) {
-	// Send a failure report to the managed shutdown thread then give it
-	// a few seconds to do the shutdown.
-	fc.failureReportChan <- reason
-	time.Sleep(5 * time.Second)
-	// The graceful shutdown failed, terminate the process.
+	timeout := time.After(fc.shutdownReportTimeout)
+	select {
+	case fc.failureReportChan <- reason:
+	case <-timeout:
+		log.Panic("Managed shutdown failed: timed out reporting shutdown reason. Panicking.")
+	}
+	// time.After fires only once; the send won the select above, so this
+	// receives the eventual tick, giving the monitor the full timeout to
+	// tear us down.
+	<-timeout
 	log.Panic("Managed shutdown failed. Panicking.")
 }
 
