@@ -711,25 +711,13 @@ configRetry:
 	}
 
 	// Send the opening message to the dataplane driver, giving it its
-	// config.  Do this before starting the calculation graph so that the
-	// dataplane driver is guaranteed to receive its config before the
-	// stream of updates from the calculation graph.
-	//
-	// Starting the calc graph first used to allow a rare start-of-day
-	// deadlock: the graph's first flushed event is always a ConfigUpdate,
-	// and if it carried a restart-triggering change it could park the
-	// connector in shutDownProcess() — reporting on failureReportChan —
-	// before monitorAndManageShutdown(), the only reader of that channel,
-	// had started.  This opening ConfigUpdate can't itself trigger a
-	// restart: handleConfigUpdate diffs it against the very config object
-	// it was generated from.
+	// config.  Do this before starting the calculation graph so that we
+	// don't race with it to send the first message.  We used to start calc
+	// graph first but that could result in blocking or even deadlocking
+	// here.
 	dpConnector.ToDataplane <- configParams.ToConfigUpdate()
 
 	// Now the dataplane driver has its config, start the calculation graph.
-	// Every consumer of its output channels is already running (the
-	// connector pump, the policy-sync processor, the collector's
-	// DataplaneInfoReader); the syncer has meanwhile been accumulating
-	// updates in the syncerToValidator dedupe buffer.
 	go syncerToValidator.SendToSinkForever(validator)
 	asyncCalcGraph.Start()
 	log.Infof("Started the processing graph")
@@ -1499,13 +1487,14 @@ func (fc *DataplaneConnector) shutDownProcess(reason string) {
 	select {
 	case fc.failureReportChan <- reason:
 	case <-timeout:
-		log.Panic("Managed shutdown failed: timed out reporting shutdown reason. Panicking.")
+		log.WithField("reason", reason).Panic(
+			"Managed shutdown failed: timed out reporting shutdown reason. Panicking.")
 	}
 	// time.After fires only once; the send won the select above, so this
 	// receives the eventual tick, giving the monitor the full timeout to
 	// tear us down.
 	<-timeout
-	log.Panic("Managed shutdown failed. Panicking.")
+	log.WithField("reason", reason).Panic("Managed shutdown failed. Panicking.")
 }
 
 // Start creates goroutines for:
