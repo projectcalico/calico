@@ -399,9 +399,10 @@ func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	// waiting on timerWG: while the main loop is blocked in that Wait() it cannot be receiving
 	// from timerC, so the send case cannot fire and the goroutine must take the stop case.
 	if f.timerStopC != nil {
-		// Shouldn't happen: the FSM never enters TimeWait twice without leaving it in between.
-		// But an overwritten stop channel would leave the previous goroutine unstoppable and
-		// wedge a later Wait(), so stop the old one properly rather than leak it.
+		// Shouldn't happen: the FSM never enters TimeWait twice without leaving it in
+		// between.  But an overwritten stop channel would leave the previous goroutine
+		// unstoppable and wedge a later Wait(), so stop the old one properly rather than
+		// leak it.
 		f.logCtx.Warn("Elevated routing timer already running; stopping it before restart")
 		f.stopElevatedRoutingTimer()
 	}
