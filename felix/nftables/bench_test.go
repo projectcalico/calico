@@ -30,9 +30,10 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // These benchmarks isolate the nftables programming path - render plus the nft
@@ -191,7 +192,7 @@ func newRealTable(b *testing.B) (*nftables.NftablesTable, *ipsets.IPVersionConfi
 	if _, err := exec.LookPath("nft"); err != nil {
 		b.Skip("nft binary not found; skipping nftables dataplane benchmark.")
 	}
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	logrus.SetLevel(logrus.WarnLevel)
 
 	// Start clean and tidy up after ourselves - we program a real table in the
@@ -207,7 +208,7 @@ func newRealTable(b *testing.B) (*nftables.NftablesTable, *ipsets.IPVersionConfi
 		rules.RuleHashPrefix,
 		environment.NewFeatureDetector(nil),
 		nftables.TableOptions{
-			OpRecorder: logutils.NewSummarizer("bench"),
+			OpRecorder: logrusr.NewSummarizer("bench"),
 		},
 		false,
 	)
