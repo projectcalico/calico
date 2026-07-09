@@ -64,6 +64,11 @@ fi
 # TODO: remove once ArgoCI onboarding is signed off.
 echo "[DEBUG] env var names present:"; compgen -e | sort | sed 's/^/[DEBUG]   /'
 
+# `bz init` installs the gobz binary via `gh`, which needs GH_TOKEN (not the
+# GITHUB_ACCESS_TOKEN name banzai-secrets provides) — alias it so go-backed
+# provisioners are available.
+export GH_TOKEN="${GH_TOKEN:-${GITHUB_ACCESS_TOKEN:-}}"
+
 git config --global user.name "${GITHUB_USER_NAME:-marvin-tigera}"
 git config --global user.email "${GITHUB_USER_EMAIL:-marvin@tigera.io}"
 
