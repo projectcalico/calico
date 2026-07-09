@@ -23,7 +23,7 @@ github.com/beorn7/perks v1.0.1
 github.com/bits-and-blooms/bitset v1.24.5
 github.com/blang/semver/v4 v4.0.0
 github.com/cespare/xxhash/v2 v2.3.0
-github.com/clipperhouse/uax29/v2 v2.6.0
+github.com/clipperhouse/uax29/v2 v2.7.0
 github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
 github.com/containernetworking/cni v1.3.0
 github.com/containernetworking/plugins v1.9.1
@@ -76,7 +76,7 @@ github.com/leodido/go-urn v1.4.0
 github.com/libp2p/go-reuseport v0.4.0
 github.com/lithammer/dedent v1.1.0
 github.com/mailru/easyjson v0.9.1
-github.com/mattn/go-runewidth v0.0.19
+github.com/mattn/go-runewidth v0.0.20
 github.com/mdlayher/arp v0.0.0-20260528070854-93566ba168e9
 github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
