@@ -211,6 +211,16 @@ func TestSignRPMFilesNoFiles(t *testing.T) {
 	}
 }
 
+// TestSignRPMFilesAllFiltered verifies that when every provided path is
+// non-regular (here, a directory) SignRPMFiles reports an error rather than
+// invoking rpmsign with no packages. It short-circuits before shelling out, so
+// it needs no signing tooling.
+func TestSignRPMFilesAllFiltered(t *testing.T) {
+	if err := SignRPMFiles("SOMEKEYID", []string{t.TempDir()}); err == nil {
+		t.Error("SignRPMFiles: expected an error when no regular files remain, got nil")
+	}
+}
+
 func TestSignRPMFiles(t *testing.T) {
 	env := newSigningEnv(t)
 
@@ -300,12 +310,12 @@ func TestCheckRPMSigOutput(t *testing.T) {
 		out     string
 		wantErr bool
 	}{
-		"good signature":      {out: "pkg.rpm: digests signatures OK", wantErr: false},
-		"unsigned digests ok": {out: "pkg.rpm: digests OK", wantErr: false},
-		"not ok":              {out: "pkg.rpm: digests SIGNATURES NOT OK", wantErr: true},
-		"nokey verbose":       {out: "pkg.rpm:\n    Header V4 RSA/SHA256 Signature, key ID abcd1234: NOKEY", wantErr: true},
-		"empty output":        {out: "", wantErr: true},
-		"whitespace only":     {out: "   \n\t ", wantErr: true},
+		"good signature":        {out: "pkg.rpm: digests signatures OK", wantErr: false},
+		"unsigned digests only": {out: "pkg.rpm: digests OK", wantErr: true},
+		"not ok":                {out: "pkg.rpm: digests SIGNATURES NOT OK", wantErr: true},
+		"nokey verbose":         {out: "pkg.rpm:\n    Header V4 RSA/SHA256 Signature, key ID abcd1234: NOKEY", wantErr: true},
+		"empty output":          {out: "", wantErr: true},
+		"whitespace only":       {out: "   \n\t ", wantErr: true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
