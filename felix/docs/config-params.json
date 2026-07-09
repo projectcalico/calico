@@ -2156,8 +2156,8 @@
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
           "AllowedConfigSources": "All",
-          "Description": "Configures nftables support in Felix.",
-          "DescriptionHTML": "<p>Configures nftables support in Felix.</p>",
+          "Description": "Configures nftables support in Felix. In Auto mode, Felix uses the\nnftables dataplane if kube-proxy is detected to be running in nftables mode.",
+          "DescriptionHTML": "<p>Configures nftables support in Felix. In Auto mode, Felix uses the\nnftables dataplane if kube-proxy is detected to be running in nftables mode.</p>",
           "UserEditable": true,
           "GoType": "*v3.NFTablesMode"
         },

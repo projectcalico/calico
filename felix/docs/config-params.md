@@ -1163,7 +1163,8 @@ network stack is used.
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
-Configures nftables support in Felix.
+Configures nftables support in Felix. In Auto mode, Felix uses the
+nftables dataplane if kube-proxy is detected to be running in nftables mode.
 
 | Detail |   |
 | --- | --- |
