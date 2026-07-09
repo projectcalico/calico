@@ -41,7 +41,9 @@ Datastore syncer
 ```
 
 1. **Datastore syncer** receives updates from the Calico datastore
-   (Kubernetes CRDs or etcd).
+   (Kubernetes CRDs or etcd) — directly, or fanned out via
+   [Typha](../typha/DESIGN.md). The API contract is
+   [`design/syncer/DESIGN.md`](../design/syncer/DESIGN.md).
 2. **`CalcGraph`** processes them through a graph of calculation
    nodes — policy resolution, route resolution, IP set indexing,
    service-endpoint synthesis, VTEP calculation, encapsulation mode.
