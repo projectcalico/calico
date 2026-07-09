@@ -45,6 +45,9 @@
           - make check-go-mod
           - make verify-go-mods
           - make gen-deps-files
+          # semaphore.yml is generated from the live Go import graph (same tool
+          # as deps.txt), so regenerate it here too.
+          - make gen-semaphore-yaml
           - make go-vet
           - >-
             if [ -n "$SEMAPHORE_GIT_PR_NUMBER" ]; then
