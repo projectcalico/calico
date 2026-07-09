@@ -53,10 +53,11 @@ else
   echo "[WARN] AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY not in env; aws-* provisioners will fail (add them to banzai-secrets)"
 fi
 
-# DEBUG (migration bring-up): list env var NAMES only — never values, since
-# banzai-secrets is env-injected. Confirms which secret keys are present.
+# DEBUG (migration bring-up): list env var NAMES only. Uses `compgen -e` (exported
+# names, no values) — NOT `env`, whose multi-line values (e.g. the GCP SA JSON)
+# would leak secret material into the logs. Confirms which secret keys are present.
 # TODO: remove once ArgoCI onboarding is signed off.
-echo "[DEBUG] env var names present:"; env | cut -d= -f1 | sort | sed 's/^/[DEBUG]   /'
+echo "[DEBUG] env var names present:"; compgen -e | sort | sed 's/^/[DEBUG]   /'
 
 git config --global user.name "${GITHUB_USER_NAME:-marvin-tigera}"
 git config --global user.email "${GITHUB_USER_EMAIL:-marvin@tigera.io}"
