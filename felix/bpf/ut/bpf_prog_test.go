@@ -83,6 +83,7 @@ func init() {
 const (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
+	testWGPort        = uint16(5666)
 	testMaglevLUTSize = uint32(31)
 )
 
@@ -623,7 +624,7 @@ var (
 	policyJumpMap                                                                                                                                            []maps.Map
 	ringBufMap, ringBufDropsMap                                                                                                                              maps.Map
 	profilingMap, ipfragsMapTmp                                                                                                                              maps.Map
-	qosMap                                                                                                                                                   maps.Map
+	qosMap, qosConnMap                                                                                                                                       maps.Map
 	ctlbProgsMap                                                                                                                                             []maps.Map
 	progMap                                                                                                                                                  []maps.Map
 	allMaps                                                                                                                                                  []maps.Map
@@ -662,6 +663,7 @@ func initMapsOnce() {
 		ctlbProgsMap = nat.ProgramsMaps()
 		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
+		qosConnMap = qos.ConnMap()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
 		allowSourcesMap = allowsources.Map()
@@ -673,7 +675,7 @@ func initMapsOnce() {
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ipfragsFwdMap, ifstateMap, profilingMap,
-			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, qosConnMap, maglevMap, maglevMapV6,
 			allowSourcesMap, allowSourcesMapV6, ringBufMap, ringBufDropsMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -898,6 +900,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
 					IPFragTimeout: topts.ipfragTimeout,
+					WgPort:        topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -1313,6 +1316,7 @@ type testOpts struct {
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	wgPort                        uint16
 }
 
 type testOption func(opts *testOpts)
@@ -1431,6 +1435,12 @@ func withIstioDSCP(value uint8) testOption {
 func withIPFragTimeout(timeout uint32) testOption {
 	return func(o *testOpts) {
 		o.ipfragTimeout = timeout
+	}
+}
+
+func withWgPort(port uint16) testOption {
+	return func(o *testOpts) {
+		o.wgPort = port
 	}
 }
 
@@ -2230,6 +2240,7 @@ func resetBPFMaps() {
 	resetMap(natMap)
 	resetMap(natBEMap)
 	resetMap(qosMap)
+	resetMap(qosConnMap)
 	resetMap(maglevMap)
 }
 

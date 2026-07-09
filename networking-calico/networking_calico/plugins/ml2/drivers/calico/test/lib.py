@@ -203,17 +203,26 @@ class PortNotFound(Exception):
 m_neutron_lib.exceptions.PortNotFound = PortNotFound
 
 
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
+# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
+# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
+# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
+# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
+# same in tests as they do in production.
 class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
-        pass
+        self.vif_details = dict(vif_details)
+
+    def get_vif_details(self, context, agent, segment):
+        return self.vif_details
 
 
 # Define another stub class that mocks out leader election: assume we're always
 # the leader. This is a fake elector: it never votes (get it!?).
 class GrandDukeOfSalzburg(object):
     def __init__(self, *args, **kwargs):
+        pass
+
+    def start(self):
         pass
 
     def master(self):
@@ -231,7 +240,7 @@ m_neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase = Driver
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 from networking_calico import etcdv3
-from networking_calico.plugins.calico.context import SGRUpdateContext
+from networking_calico.plugins.calico.context import SGUpdateContext
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico import endpoints
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -597,12 +606,12 @@ class Lib(object):
         the one UT process, which means:
 
         - Do the same startup preparations - DB connection etc. - that the API worker
-          process would do.  These are all coded in ``_post_fork_init()``.  This allows
-          tests to later call driver entrypoints like ``update_port_postcommit()``,
-          similarly as production Neutron would.
+          process would do.  These are all coded in ``_post_fork_init()``.
+          This allows tests to later call driver entrypoints like
+          ``update_port_postcommit()``, similarly as production Neutron would.
 
         - Spawn the threads for "other work" (as above) as the RPC worker process would
-          do.  This is achieved by calling ``_post_fork_init()`` with ``voting=True``.
+          do.  This is achieved by calling ``_post_fork_init()``.
 
         - Do the startup resync that the Calico resync process would do.  This is coded
           in ``_do_startup_resync()``.
@@ -612,7 +621,7 @@ class Lib(object):
         """
         cm = FixedUUID(uuid_str) if uuid_str else contextlib.nullcontext()
         with cm:
-            self.driver._post_fork_init(voting=True)
+            self.driver._post_fork_init()
             if mech_calico.cfg.CONF.calico.startup_resync == "always":
                 self.driver._do_startup_resync()
 
@@ -628,7 +637,7 @@ class Lib(object):
         try:
             return self.get_ports(context, filters={"id": [port_id]})[0]
         except IndexError:
-            raise mech_calico.n_exc.PortNotFound(port_id=port_id)
+            raise PortNotFound(port_id=port_id)
 
     def get_ports(self, context, filters=None):
         if filters is None:
@@ -698,10 +707,8 @@ class Lib(object):
             self.db.get_port.return_value = port
 
         if type == "rule":
-            # Call security_groups_rule_updated with the new or changed ID.
-            self.driver.security_groups_rule_updated(
-                SGRUpdateContext(mock.MagicMock(), [id])
-            )
+            # Call security_groups_updated with the new or changed ID.
+            self.driver.security_groups_updated(SGUpdateContext(mock.MagicMock(), [id]))
 
     def get_port_security_group_bindings(self, context, filters):
         if filters is None:

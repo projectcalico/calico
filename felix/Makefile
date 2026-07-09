@@ -115,9 +115,6 @@ clean-generated:
 ###############################################################################
 BUILD_TARGETS:=bin/calico-felix
 
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
-# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
-CGO_ENABLED=1
 # Normalize userspace types to ensure consistency across architectures.
 ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
@@ -134,12 +131,6 @@ CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 FV_RACE_DETECTOR_ENABLED?=true
 BUILD_TARGETS+=build-bpf
-else
-CGO_ENABLED=0
-CGO_LDFLAGS=""
-# Race detection requires CGO enabled.
-FV_RACE_DETECTOR_ENABLED?=false
-endif
 
 ifeq ($(ARCH),amd64)
 BUILD_TARGETS+=bin/calico-felix.exe
@@ -169,16 +160,11 @@ $(LIBBPF_A): $(LIBBPF_FILE_CREATED) $(shell find bpf-gpl/libbpf -type f -not -pa
 	# rejects libbpf's non-PIC references to glibc symbols like stderr.
 	$(DOCKER_RUN) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") $(CALICO_BUILD) sh -c "make -j$$(nproc) -C bpf-gpl/libbpf/src BUILD_STATIC_ONLY=1 OBJDIR=$(ARCH) EXTRA_CFLAGS=-fPIC"
 
-DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=1 $(if $(CROSS_CC),-e CC="$(CROSS_CC)") -e CGO_LDFLAGS=$(CGO_LDFLAGS) -e CGO_CFLAGS=$(CGO_CFLAGS) $(CALICO_BUILD)
 
-LIBBPF_DEP=$(if $(filter 1,$(CGO_ENABLED)),$(LIBBPF_A))
-bin/calico-felix-$(ARCH): $(LIBBPF_DEP) $(SRC_FILES)
+bin/calico-felix-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le ))
 	$(call build_cgo_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-else
-	$(call build_binary, $(PACKAGE_NAME)/cmd/calico-felix, $@)
-endif
 
 bin/calico-felix-race-$(ARCH):  $(LIBBPF_A) $(SRC_FILES) ../go.mod
 	@echo Building felix with race detector enabled for $(ARCH) on $(BUILDARCH)
@@ -199,7 +185,9 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 # We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 BPF_GPL_O_FILES+=bpf-gpl/bin/tc_preamble_ingress.o bpf-gpl/bin/tc_preamble_egress.o \
-		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/policy_default_ingress.o  bpf-gpl/bin/policy_default_egress.o \
+		 bpf-gpl/bin/tc_preamble_ingress_notrace.o bpf-gpl/bin/tc_preamble_egress_notrace.o \
+		 bpf-gpl/bin/xdp_preamble.o bpf-gpl/bin/xdp_preamble_notrace.o \
+		 bpf-gpl/bin/policy_default_ingress.o  bpf-gpl/bin/policy_default_egress.o \
 		 bpf-gpl/bin/tcx_test.o
 BPF_GPL_MAP_STUB_O_FILES:=$(addprefix bpf-gpl/bin/,common_map_stub.o ipv4_map_stub.o ipv6_map_stub.o xdp_map_stub.o common_map_stub_ing.o)
 BPF_GPL_O_FILES+=$(BPF_GPL_MAP_STUB_O_FILES)
@@ -223,7 +211,7 @@ $(PROD_BPF_PROGS) &: $(BPF_APACHE_O_FILES) $(BPF_GPL_O_FILES)
 	cp $(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES) bin/bpf
 
 $(BPF_APACHE_O_FILES) &: $(shell find bpf-apache -name '*.[ch]') bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache all
+	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-apache ARCH=$(ARCH) all
 	touch -c $@
 
 $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]') bpf-gpl/Makefile
@@ -588,6 +576,14 @@ ut-watch: $(SRC_FILES) $(LIBBPF_A) $(BPF_APACHE_O_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_GO_BUILD) ginkgo watch -r -skip-package $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
+# bin/nft.test is the compiled felix/nftables test binary. The "Felix: nftables
+# dataplane benchmark" CI job runs it on the host (as root, against a real nft)
+# to publish the dataplane-programming benchmarks to Lens. Built statically (no
+# CGO) so it runs outside the go-build container.
+.PHONY: bin/nft.test
+bin/nft.test: $(shell find nftables -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go test ./nftables -c -o $@"
+
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test ./bpf/ -c -o $@
@@ -675,10 +671,6 @@ cover-report: combined.coverprofile
 bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
 	$(call build_windows_binary, "$(PACKAGE_NAME)/cmd/calico-felix", $@)
-
-## Generate a diagram of Felix's internal calculation graph.
-docs/calc.pdf: docs/calc.dot
-	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
 CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
 

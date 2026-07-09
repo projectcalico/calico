@@ -16,9 +16,14 @@ CFLAGS +=  \
 	-fno-stack-protector \
 	-Wno-address-of-packed-member \
 	-O2 \
-	-target bpf \
 	-emit-llvm \
 	-g
+
+BPF_TARGET := bpf
+ifeq ($(ARCH),s390x)
+BPF_TARGET := bpfeb
+endif
+CFLAGS += -target $(BPF_TARGET)
 
 # Build against libbpf and its recent copy of the kernel headers.
 # We link against the user API version of the headers because they contain
@@ -48,6 +53,8 @@ CFLAGS +=  \
 HOST_ARCH := $(shell uname -m)
 ifeq ($(HOST_ARCH),x86_64)
 CFLAGS += -D__x86_64__
+else ifeq ($(HOST_ARCH),s390x)
+CFLAGS += -D__s390x__
 endif
 
 # Set target-arch defines for BPF compilation.  ARCH is passed from
@@ -58,6 +65,8 @@ else ifeq ($(ARCH),arm64)
 CFLAGS += -D__TARGET_ARCH_arm64
 else ifeq ($(ARCH),ppc64le)
 CFLAGS += -D__TARGET_ARCH_powerpc -D__SANE_USERSPACE_TYPES__
+else ifeq ($(ARCH),s390x)
+CFLAGS += -D__TARGET_ARCH_s390
 endif
 CC := clang
 LD := llc
@@ -117,8 +126,14 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble_ingress.o
 OBJS+=bin/tc_preamble_egress.o
+# Trace-printk-free preamble variants, loaded on nodes running with kernel
+# lockdown=confidentiality (where ftrace is disabled and any program
+# referencing bpf_trace_printk spams the kernel log on every load).
+OBJS+=bin/tc_preamble_ingress_notrace.o
+OBJS+=bin/tc_preamble_egress_notrace.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
+OBJS+=bin/xdp_preamble_notrace.o
 OBJS+=bin/policy_default_ingress.o
 OBJS+=bin/policy_default_egress.o
 OBJS+=$(MAP_OBJS)
@@ -168,11 +183,19 @@ tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
 tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
+tc_preamble_ingress_notrace.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_ingress_notrace.ll: CFLAGS += -DCALI_NO_TRACE_PRINTK
+tc_preamble_egress_notrace.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_egress_notrace.ll: CFLAGS += -DCALI_NO_TRACE_PRINTK
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
+xdp_preamble_notrace.ll: xdp_preamble.c xdp_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -DCALI_NO_TRACE_PRINTK -c $< -o $@
 
 policy_default_ingress.ll: policy_default.c policy_default.d
 	$(COMPILE)
@@ -241,14 +264,20 @@ conntrack_cleanup_v6.d: conntrack_cleanup.c
 #     llvm/llvm-project#174894, not yet merged as of LLVM 22).
 #   - Restructuring bpf_exit() to avoid inline asm "exit" + __builtin_unreachable().
 #   - Requiring kernel 6.16+ and accepting the __bpf_trap kfunc calls.
-LINK=$(LD) -march=bpf -filetype=obj -bpf-disable-trap-unreachable -o $@ $<
+LINK=$(LD) -march=$(BPF_TARGET) -filetype=obj -bpf-disable-trap-unreachable -o $@ $<
 bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
 	$(LINK)
 bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
 	$(LINK)
+bin/tc_preamble_ingress_notrace.o: tc_preamble_ingress_notrace.ll | bin
+	$(LINK)
+bin/tc_preamble_egress_notrace.o: tc_preamble_egress_notrace.ll | bin
+	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
+	$(LINK)
+bin/xdp_preamble_notrace.o: xdp_preamble_notrace.ll | bin
 	$(LINK)
 bin/policy_default_ingress.o: policy_default_ingress.ll | bin
 	$(LINK)

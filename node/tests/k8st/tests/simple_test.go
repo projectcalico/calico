@@ -40,12 +40,11 @@ func TestGracefulRestartMethodology(t *testing.T) {
 
 	restart := func(state *restartChurnState) {
 		utils.MustRun(t, "docker exec "+state.restartNode+" pkill bird")
-		err := utils.RetryUntilSuccess(t, 15*time.Second, func() error {
+		NewWithT(t).Eventually(func() error {
 			_, err := utils.Run(t, "docker exec "+state.restartNode+" pgrep bird",
 				utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 			return err
-		})
-		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "BIRD did not restart within 15s")
+		}, 15*time.Second, time.Second).Should(Succeed(), "BIRD did not restart within 15s")
 		time.Sleep(5 * time.Second)
 	}
 
@@ -64,10 +63,9 @@ func TestGracefulRestart(t *testing.T) {
 		utils.DeletePodAndWait(t, "calico-system", state.restartPodName, 2*time.Minute)
 
 		// Wait until a replacement calico-node pod has been created.
-		err := utils.RetryUntilSuccess(t, 15*time.Second, func() error {
+		NewWithT(t).Eventually(func() error {
 			return state.refreshRestartPodName(t)
-		})
-		NewWithT(t).Expect(err).NotTo(HaveOccurred(), "replacement calico-node pod did not appear within 15s")
+		}, 15*time.Second, time.Second).Should(Succeed(), "replacement calico-node pod did not appear within 15s")
 
 		// Wait until it is ready, before returning.
 		utils.WaitForPodReady(t, "calico-system", state.restartPodName, 2*time.Minute)

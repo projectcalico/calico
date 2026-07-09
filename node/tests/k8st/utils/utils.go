@@ -20,7 +20,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -163,59 +164,6 @@ func mergeRunOptions(opts []RunOptions) RunOptions {
 }
 
 // ----------------------------------------------------------------------------
-// Retry.
-
-// RetryUntilSuccess invokes fn until it returns nil or the timeout
-// elapses. It uses exponential backoff starting at 0.5s and capped at 10s,
-// mirroring utils.py:retry_until_success. The time taken by fn counts
-// toward the wall-clock deadline so the overall budget is predictable.
-//
-// Returns the last error from fn on timeout, or nil on success.
-func RetryUntilSuccess(t testing.TB, timeout time.Duration, fn func() error) error {
-	t.Helper()
-	if timeout <= 0 {
-		timeout = 90 * time.Second
-	}
-	start := time.Now()
-	deadline := start.Add(timeout)
-	backoff := 500 * time.Millisecond
-	const maxBackoff = 10 * time.Second
-	attempts := 0
-
-	var lastErr error
-	for {
-		attempts++
-		err := fn()
-		if err == nil {
-			elapsed := time.Since(start)
-			if elapsed > timeout/2 {
-				t.Logf("retry succeeded but used %s of %s budget (%d attempts)", elapsed, timeout, attempts)
-			}
-			return nil
-		}
-		lastErr = err
-		now := time.Now()
-		if !now.Before(deadline) {
-			return fmt.Errorf("retry did not succeed within %s (%d attempts): %w", timeout, attempts, lastErr)
-		}
-		remaining := deadline.Sub(now)
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		if sleep > maxBackoff {
-			sleep = maxBackoff
-		}
-		t.Logf("retry attempt %d hit error, sleeping %s (%s remaining): %v", attempts, sleep, remaining, err)
-		time.Sleep(sleep)
-		backoff = time.Duration(float64(backoff) * 1.5)
-		if backoff > maxBackoff {
-			backoff = maxBackoff
-		}
-	}
-}
-
-// ----------------------------------------------------------------------------
 // Kubernetes client + node discovery.
 
 var (
@@ -226,7 +174,7 @@ var (
 )
 
 // K8sClient returns a singleton clientset loaded from $KUBECONFIG (or the
-// default loading rules if unset). Mirrors test_base.py:k8s_client.
+// default loading rules if unset).
 func K8sClient(t testing.TB) *kubernetes.Clientset {
 	t.Helper()
 	initK8sClient(t)
@@ -264,7 +212,7 @@ func initK8sClient(t testing.TB) {
 
 // NodeInfo returns (nodes, IPv4s, IPv6s). The first entry is the control-plane
 // node; entries 1..3 are workers in their kubectl listing order. The IPv6
-// slice is filled from ipv6Map. Mirrors utils.py:node_info.
+// slice is filled from ipv6Map.
 func NodeInfo(t testing.TB) (nodes, ips, ip6s []string) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -308,8 +256,7 @@ func nodeAddress(n corev1.Node) string {
 	return n.Status.Addresses[0].Address
 }
 
-// CalicoNodePodName returns the calico-node pod scheduled on the given kind
-// node. Mirrors utils.py:calico_node_pod_name.
+// CalicoNodePodName returns the calico-node pod scheduled on the given kind node.
 func CalicoNodePodName(t testing.TB, nodeName string) string {
 	t.Helper()
 	pod, err := lookupCalicoNodePod(t, nodeName)
@@ -319,8 +266,7 @@ func CalicoNodePodName(t testing.TB, nodeName string) string {
 	return pod.Name
 }
 
-// ExecInCalicoNode runs the given command inside the calico-node pod
-// scheduled on nodeName. Mirrors utils.py:exec_in_calico_node.
+// ExecInCalicoNode runs the given command inside the calico-node pod scheduled on nodeName.
 func ExecInCalicoNode(t testing.TB, nodeName, command string, opts ...RunOptions) (string, error) {
 	t.Helper()
 	pod, err := lookupCalicoNodePod(t, nodeName)
@@ -377,9 +323,38 @@ func ExecInPod(t testing.TB, namespace, podName, command string, opts ...RunOpti
 
 func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions) (string, error) {
 	t.Helper()
+	// Match `kubectl exec -- <command>` after shell word splitting: the Python
+	// helper passed the command unquoted, so plain whitespace splitting is the
+	// semantic it relied on.
+	return streamInPod(t, pod, strings.Fields(command), "", opts...)
+}
+
+// ExecInPodStdin runs an explicit argv inside the named pod's first container,
+// feeding stdin to the remote process. Used for tools like scapy that read a
+// script from standard input — where the `kubectl exec -- <whitespace-split>`
+// semantics of ExecInPod cannot express the input.
+func ExecInPodStdin(t testing.TB, namespace, podName, stdin string, command []string, opts ...RunOptions) (string, error) {
+	t.Helper()
+	cs := K8sClient(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*1)
+	defer cancel()
+
+	pod, err := cs.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return streamInPod(t, pod, command, stdin, opts...)
+}
+
+// streamInPod runs command (already split into argv) inside the pod's first
+// container over a native SPDY exec session, optionally feeding stdin to the
+// remote process. It follows the same RunOptions semantics as Run.
+func streamInPod(t testing.TB, pod *corev1.Pod, command []string, stdin string, opts ...RunOptions) (string, error) {
+	t.Helper()
 	o := mergeRunOptions(opts)
 
-	t.Logf("[%s] exec in %s/%s: %s", time.Now().Format(time.RFC3339), pod.Namespace, pod.Name, command)
+	t.Logf("[%s] exec in %s/%s: %v", time.Now().Format(time.RFC3339), pod.Namespace, pod.Name, command)
 
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -405,12 +380,10 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: container,
-			// Match `kubectl exec -- <command>` after shell word
-			// splitting: the Python helper passed the command unquoted, so
-			// plain whitespace splitting is the semantic it relied on.
-			Command: strings.Fields(command),
-			Stdout:  true,
-			Stderr:  true,
+			Command:   command,
+			Stdin:     stdin != "",
+			Stdout:    true,
+			Stderr:    true,
 		}, scheme.ParameterCodec)
 
 	executor, err := remotecommand.NewSPDYExecutor(K8sRestConfig(t), "POST", req.URL())
@@ -418,11 +391,15 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 		return "", fmt.Errorf("building SPDY executor: %w", err)
 	}
 
+	streamOpts := remotecommand.StreamOptions{}
 	var stdout, stderr strings.Builder
-	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
-	})
+	streamOpts.Stdout = &stdout
+	streamOpts.Stderr = &stderr
+	if stdin != "" {
+		streamOpts.Stdin = strings.NewReader(stdin)
+	}
+
+	err = executor.StreamWithContext(ctx, streamOpts)
 	out := stdout.String()
 	errOut := stderr.String()
 	t.Logf("Out:\n%s", out)
@@ -433,7 +410,7 @@ func execInPod(t testing.TB, pod *corev1.Pod, command string, opts ...RunOptions
 			t.Logf("Failure output:\n%s\nerr:\n%s", out, errOut)
 		}
 		if !o.AllowFail {
-			return out, fmt.Errorf("exec %q in pod %s/%s failed: %w (stderr: %s)",
+			return out, fmt.Errorf("exec %v in pod %s/%s failed: %w (stderr: %s)",
 				command, pod.Namespace, pod.Name, err, errOut)
 		}
 		if o.ReturnErr {
@@ -602,8 +579,7 @@ func logCalicoNodeLogs(t testing.TB) {
 // ----------------------------------------------------------------------------
 // Pod-status assertions.
 
-// CheckPodStatus fails the test if any pod in the namespace is not in the
-// Running phase. Mirrors test_base.py:check_pod_status.
+// CheckPodStatus fails the test if any pod in the namespace is not in the Running phase.
 func CheckPodStatus(t testing.TB, namespace string) {
 	t.Helper()
 	cs := K8sClient(t)
@@ -678,7 +654,7 @@ func PodNames(t testing.TB, namespace, labelSelector, fieldSelector string) ([]s
 func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout time.Duration) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
@@ -697,10 +673,7 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("pods in %s did not become ready within %s: %v", namespace, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pods in %s did not become ready within %s", namespace, timeout)
 }
 
 // WaitForPodReady blocks until the named pod has a Ready condition of
@@ -708,7 +681,7 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		pod, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -717,10 +690,7 @@ func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration
 			return fmt.Errorf("pod %s/%s is not ready", namespace, name)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("pod %s/%s did not become ready within %s: %v", namespace, name, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pod %s/%s did not become ready within %s", namespace, name, timeout)
 }
 
 func podIsReady(pod *corev1.Pod) bool {
@@ -744,7 +714,7 @@ func DeletePodAndWait(t testing.TB, namespace, name string, timeout time.Duratio
 	if err != nil && !apierrors.IsNotFound(err) {
 		t.Fatalf("deleting pod %s/%s: %v", namespace, name, err)
 	}
-	err = RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		_, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -753,16 +723,5 @@ func DeletePodAndWait(t testing.TB, namespace, name string, timeout time.Duratio
 			return err
 		}
 		return fmt.Errorf("pod %s/%s still exists", namespace, name)
-	})
-	if err != nil {
-		t.Fatalf("pod %s/%s was not deleted within %s: %v", namespace, name, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pod %s/%s was not deleted within %s", namespace, name, timeout)
 }
-
-// ----------------------------------------------------------------------------
-// Errors.
-
-// ErrTimeout is returned by RetryUntilSuccess on deadline expiry. It's a
-// convenience for callers that want to distinguish timeouts from other
-// errors; RetryUntilSuccess wraps it via fmt.Errorf.
-var ErrTimeout = errors.New("retry timeout")

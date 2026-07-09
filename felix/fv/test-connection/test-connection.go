@@ -61,7 +61,7 @@ Options:
   --recvlen=<bytes>        Tell the other side to send this many additional bytes
   --stdin                  Read and send data from stdin
   --timeout=<seconds>      Exit after timeout if pong not received
-  --sleep=<seconds>        How long to sleep before seding another ping
+  --sleep=<seconds>        How long to sleep before sending another ping
   --send-rst               Close connection with TCP RST (SO_LINGER 0) instead of graceful FIN
 
 If connection is successful, test-connection exits successfully.

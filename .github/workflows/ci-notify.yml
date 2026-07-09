@@ -49,6 +49,11 @@ concurrency:
 permissions:
   pull-requests: read
   contents: read
+  # actions/cache/save needs write scope on the cache store, or it silently
+  # fails ("cache write denied: token has no writable scopes") and the dedup
+  # marker below is never persisted, letting every duplicate status event send
+  # its own DM.
+  actions: write
 
 jobs:
   notify:

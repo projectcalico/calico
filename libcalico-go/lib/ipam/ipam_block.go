@@ -25,10 +25,12 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 // windowsReservedHandle is the handle used to reserve addresses required for Windows
@@ -41,6 +43,15 @@ type allocationBlock struct {
 	*model.AllocationBlock
 }
 
+// blockFromBackend creates a new allocationBlock from a backend type, performing
+// garbage collection before returning,
+func blockFromBackend(config *IPAMConfig, b *model.AllocationBlock) allocationBlock {
+	block := allocationBlock{b}
+	block.garbageCollect(config.IPCooldownSeconds)
+	return block
+}
+
+// newBlock creates a new, empty block with the given host reservations in place.
 func newBlock(cidr cnet.IPNet, rsvdAttr *HostReservedAttr) allocationBlock {
 	ones, size := cidr.Mask.Size()
 	numAddresses := 1 << uint(size-ones)
@@ -258,15 +269,13 @@ func (b allocationBlock) inUseIPs() []string {
 // release tries to release addresses matching the release options, on success,
 // returns slice of IPs that were *skipped* due to not being allocated and a
 // map from handle ID to count of IPs released for that handle.
-func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
+func (b *allocationBlock) release(cfg *IPAMConfig, addresses []ReleaseOptions) ([]cnet.IP, map[string]int, error) {
 	// Store return values.
 	unallocated := []cnet.IP{}
 	countByHandle := map[string]int{}
 
 	// Used internally.
 	var ordinals []int
-	delRefCounts := map[int]int{}
-	attrsToDelete := []int{}
 
 	// De-duplicate addresses to ensure reference counting is correct
 	uniqueAddresses := make(map[string]ReleaseOptions)
@@ -303,8 +312,8 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		// Check if allocated.
 		log.Debugf("Checking if allocated: %v", b.Allocations)
 		attrIdx := b.Allocations[ordinal]
-		if attrIdx == nil {
-			log.Debugf("Asked to release address that was not allocated")
+		if attrIdx == nil || b.Attributes[*attrIdx].ReleasedAt != nil {
+			log.Debugf("Asked to release address that was not allocated or is in cooldown")
 			unallocated = append(unallocated, ip)
 			continue
 		}
@@ -331,14 +340,6 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 			}
 		}
 
-		// Increment reference counting for attributes.
-		cnt := 1
-		if cur, exists := delRefCounts[*attrIdx]; exists {
-			cnt = cur + 1
-		}
-		delRefCounts[*attrIdx] = cnt
-		log.Debugf("delRefCounts: %v", delRefCounts)
-
 		// Increment count of addresses by handle if a handle
 		// exists.
 		log.Debugf("Looking up attribute with index %d", *attrIdx)
@@ -348,77 +349,23 @@ func (b *allocationBlock) release(addresses []ReleaseOptions) ([]cnet.IP, map[st
 		}
 	}
 
-	// Handle cleaning up of attributes.  We do this by
-	// reference counting.  If we're deleting the last reference to
-	// a given attribute, then it needs to be cleaned up.
-	refCounts := b.attributeRefCounts()
-	log.Debugf("Cleaning up attributes, refCounts: %v", refCounts)
-	for idx, refs := range delRefCounts {
-		log.Debugf("Checking ref count index %d", idx)
-		if refCounts[idx] == refs {
-			attrsToDelete = append(attrsToDelete, idx)
-		}
-	}
-	if len(attrsToDelete) != 0 {
-		log.Debugf("Deleting attributes: %v", attrsToDelete)
-		b.deleteAttributes(attrsToDelete)
+	if len(ordinals) == 0 {
+		return unallocated, countByHandle, nil
 	}
 
-	// Release requested addresses.
+	releaseAttrIdx := b.addCooldownAttribute()
 	log.Debugf("Allocations: %v", b.Allocations)
-	log.Debugf("Releasing ordinals: %v", ordinals)
+	log.Debugf("Marking ordinals for cooldown: %v", ordinals)
 	for _, ordinal := range ordinals {
-		log.Debugf("Releasing ordinal %d", ordinal)
-		b.Allocations[ordinal] = nil
-		b.Unallocated = append(b.Unallocated, ordinal)
-		b.ClearSequenceNumberForOrdinal(ordinal)
+		b.Allocations[ordinal] = releaseAttrIdx
+		b.SetSequenceNumberForOrdinal(ordinal)
 	}
+
+	// Perform garbage collection immediately in case this or other IPs
+	// have completed their cooldown period.
+	b.garbageCollect(cfg.IPCooldownSeconds)
+
 	return unallocated, countByHandle, nil
-}
-
-func (b *allocationBlock) deleteAttributes(delIndexes []int) {
-	newIndexes := make([]*int, len(b.Attributes))
-	newAttrs := []model.AllocationAttribute{}
-	y := 0 // Next free slot in the new attributes list.
-	for x := range b.Attributes {
-		if !intInSlice(x, delIndexes) {
-			// Attribute at x is not being deleted.  Build a mapping
-			// of old attribute index (x) to new attribute index (y).
-			log.Debugf("%d in %v", x, delIndexes)
-			newIndex := y
-			newIndexes[x] = &newIndex
-			y += 1
-			newAttrs = append(newAttrs, b.Attributes[x])
-		}
-	}
-	b.Attributes = newAttrs
-
-	// Update attribute indexes for all allocations in this block.
-	for i := 0; i < b.NumAddresses(); i++ {
-		if b.Allocations[i] != nil {
-			// Get the new index that corresponds to the old index
-			// and update the allocation.
-			newIndex := newIndexes[*b.Allocations[i]]
-			b.Allocations[i] = newIndex
-		}
-	}
-}
-
-func (b allocationBlock) attributeRefCounts() map[int]int {
-	refCounts := map[int]int{}
-	for _, a := range b.Allocations {
-		if a == nil {
-			continue
-		}
-
-		if count, ok := refCounts[*a]; !ok {
-			// No entry for given attribute index.
-			refCounts[*a] = 1
-		} else {
-			refCounts[*a] = count + 1
-		}
-	}
-	return refCounts
 }
 
 func (b allocationBlock) attributeIndexesByHandle(handleID string) []int {
@@ -442,7 +389,7 @@ func sanitizeHandle(handleID string) string {
 //
 // If opts.SequenceNumber is set, and any affected allocations' sequence numbers
 // do not match, those allocations are not released.
-func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
+func (b *allocationBlock) releaseByHandle(cfg *IPAMConfig, opts ReleaseOptions) int {
 	handleID := opts.Handle
 	attrIndexes := b.attributeIndexesByHandle(handleID)
 	log.Debugf("Attribute indexes to release: %v", attrIndexes)
@@ -452,9 +399,10 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 		return 0
 	}
 
-	// There are addresses to release.
-	ordinals := []int{}
-	keepAttrs := make([]bool, len(b.Attributes))
+	// Look for all affected allocations, and redirect them to an Attributes entry containing only
+	// ReleasedAt, to indicate that they are in cooldown.
+	var releaseAttrIdx *int
+	var releaseCount int
 	var o int
 	for o = 0; o < b.NumAddresses(); o++ {
 		// Only check allocated ordinals.
@@ -466,28 +414,33 @@ func (b *allocationBlock) releaseByHandle(opts ReleaseOptions) int {
 		if intInSlice(attrIndex, attrIndexes) {
 			if opts.SequenceNumber == nil || *opts.SequenceNumber == b.GetSequenceNumberForOrdinal(o) {
 				// Release this ordinal.
-				ordinals = append(ordinals, o)
+				if releaseAttrIdx == nil {
+					releaseAttrIdx = b.addCooldownAttribute()
+				}
+				b.Allocations[o] = releaseAttrIdx
+				releaseCount++
 				continue
 			}
 		}
-		keepAttrs[attrIndex] = true
 	}
 
-	// Clean and reorder now-unused attributes.
-	deleteIndexes := make([]int, 0, len(attrIndexes))
-	for _, attrIndex := range attrIndexes {
-		if !keepAttrs[attrIndex] {
-			deleteIndexes = append(deleteIndexes, attrIndex)
-		}
-	}
-	b.deleteAttributes(deleteIndexes)
+	// Perform garbage collection immediately in case this or other IPs
+	// have completed their cooldown period.
+	b.garbageCollect(cfg.IPCooldownSeconds)
 
-	// Release the addresses.
-	for _, o := range ordinals {
-		b.Allocations[o] = nil
-		b.Unallocated = append(b.Unallocated, o)
-	}
-	return len(ordinals)
+	return releaseCount
+}
+
+// addCooldownAttribute adds a new attribute to the block containing a the
+// current time in ReleasedAt, and returns a pointer to its index for use in
+// b.Allocations.
+func (b *allocationBlock) addCooldownAttribute() *int {
+	now := v1.Now()
+	releaseAttrIdx := new(len(b.Attributes))
+	b.Attributes = append(b.Attributes, model.AllocationAttribute{
+		ReleasedAt: &now,
+	})
+	return releaseAttrIdx
 }
 
 func (b allocationBlock) ipsByHandle(handleID string) []cnet.IP {
@@ -518,6 +471,13 @@ func (b allocationBlock) allocationAttributesForIP(ip cnet.IP) (*model.Allocatio
 	}
 
 	attr := b.Attributes[*attrIndex]
+	if attr.ReleasedAt != nil {
+		// This block has probably just been garbage collected in
+		// `newBlock`, so we can conservatively assume the block is
+		// stil in cooldown.
+		log.Debugf("IP %s is currently in cooldown", ip)
+		return nil, cerrors.ErrorIPInCooldown{IP: ip.String()}
+	}
 	handle := attr.HandleID
 	if handle != nil {
 		// The handle in the allocation may be malformed, so requires sanitation
@@ -667,4 +627,69 @@ func verifyExpectedOwner(currentAttrs map[string]string, expectedOwner *Attribut
 		Err:        fmt.Errorf("cannot set %s: expected pod=%s namespace=%s but found pod=%s namespace=%s", field, expectedOwner.Name, expectedOwner.Namespace, currentPod, currentNamespace),
 		Identifier: ip.String(),
 	}
+}
+
+// clone returns a copy of this block that can be modified without affecting
+// the original.
+func (b allocationBlock) clone() *allocationBlock {
+	return &allocationBlock{b.AllocationBlock.Clone()}
+}
+
+// garbageCollect normalizes the block, including marking ordinals as Unallocated
+// if their ReleasedAt property is far enough in the past. Returns true if the
+// block was changed.
+func (b *allocationBlock) garbageCollect(ipCooldownSeconds int) bool {
+	// First, look for any allocations that were released at least minIPReclaimSeconds ago.
+	changed := false
+	usedAttrs := set.New[int]()
+	// Determine the time for comparison of ReleasedAt.
+	deallocIfReleasedBefore := v1.NewTime(v1.Now().Add(time.Second * time.Duration(-ipCooldownSeconds)))
+	for o := range b.NumAddresses() {
+		if b.Allocations[o] == nil {
+			continue
+		}
+		attr := &b.Attributes[*b.Allocations[o]]
+		canDealloc := attr.ReleasedAt != nil
+		if canDealloc && ipCooldownSeconds >= 0 {
+			canDealloc = attr.ReleasedAt.Before(&deallocIfReleasedBefore)
+		}
+		if canDealloc {
+			log.Debugf("Deallocating ordinal %d", o)
+			// Actually deallocate the ordinal; the attribute will be cleaned
+			// up below, if it is now unused. Note that this is the only place
+			// where ordinals are placed on the Unallocated list.
+			b.Allocations[o] = nil
+			b.Unallocated = append(b.Unallocated, o)
+			b.ClearSequenceNumberForOrdinal(o)
+			changed = true
+		} else {
+			usedAttrs.Add(*b.Allocations[o])
+		}
+	}
+
+	// Eliminate any now-unreferenced attributes.
+	newIndexes := make([]*int, len(b.Attributes))
+	newAttrs := []model.AllocationAttribute{}
+	y := 0 // Next free slot in the new attributes list.
+	for x := range b.Attributes {
+		if usedAttrs.Contains(x) {
+			// Attribute at x is not being deleted.  Build a mapping
+			// of old attribute index (x) to new attribute index (y).
+			newIndexes[x] = new(y)
+			y += 1
+			newAttrs = append(newAttrs, b.Attributes[x])
+		}
+	}
+	if len(newAttrs) != len(b.Attributes) {
+		b.Attributes = newAttrs
+		// Rewrite attribute indexes for all allocations in this block.
+		for i := 0; i < b.NumAddresses(); i++ {
+			if b.Allocations[i] != nil {
+				b.Allocations[i] = newIndexes[*b.Allocations[i]]
+			}
+		}
+		changed = true
+	}
+
+	return changed
 }

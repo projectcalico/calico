@@ -143,6 +143,13 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
+# bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
+# Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
+# that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
+# can run it without the go-build container.
+bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ ./hack/perf/cmd/send-perf-results"
+
 CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
@@ -232,6 +239,7 @@ push-chart: bin/helm
 # using a local kind cluster.
 ###############################################################################
 E2E_PROCS ?= 4
+E2E_TIMEOUT ?= 90m
 E2E_TEST_CONFIG ?= e2e/config/kind.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
@@ -270,7 +278,7 @@ e2e-test-clusternetworkpolicy:
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:

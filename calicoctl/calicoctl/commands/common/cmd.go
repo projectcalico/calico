@@ -264,6 +264,11 @@ func (c *Collector) execWriteToFile(logPrefix string, cmd Cmd) {
 	}
 	logCtx := log.WithField("cmdID", logPrefix)
 
+	if len(strings.Fields(cmd.CmdStr)) == 0 {
+		fmt.Printf("%s No command to execute\n", logPrefix)
+		return
+	}
+
 	dir := filepath.Dir(cmd.FilePath)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		fmt.Printf("%s Error creating directory for %v: %v\n", logPrefix, cmd.FilePath, err)

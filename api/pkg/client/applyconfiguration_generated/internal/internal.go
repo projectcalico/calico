@@ -36,6 +36,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: handle_id
       type:
         scalar: string
+    - name: releasedAt
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: secondary
       type:
         map:
@@ -1671,6 +1674,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
+    - name: ipCooldownSeconds
+      type:
+        scalar: numeric
     - name: kubeVirtVMAddressPersistence
       type:
         scalar: string

@@ -869,6 +869,156 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		})
 		rs.ExpectParseError("zzzzz", "xxxxx")
 	})
+
+	It("should forward New()'s Option arguments so WithWatchRetryTimeout takes effect", func() {
+		// Regression coverage: New() delegates to NewMultiClient, and the options
+		// variadic must be forwarded — otherwise a caller of New() who passes
+		// WithWatchRetryTimeout silently gets the default (10-minute) timeout and
+		// the syncer never signals SyncFailed on sustained connectivity loss.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 500*time.Millisecond, 500*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester(
+			[]watchersyncer.ResourceType{r1},
+			watchersyncer.WithWatchRetryTimeout(50*time.Millisecond),
+		)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		// Age lastSuccessfulConnTime past the (short) retry timeout so the next
+		// List failure hits the sustained-disconnect branch rather than being
+		// absorbed as a transient hiccup.
+		time.Sleep(100 * time.Millisecond)
+		rs.clientListResponse(r1, genError)
+
+		// With options forwarded, watchRetryTimeout is 50ms and SyncFailed fires
+		// on the first List failure (time.Since already > 50ms). Without
+		// forwarding, watchRetryTimeout stays at the 10-minute default and this
+		// ExpectConnErrors would time out.
+		rs.ExpectConnErrors([]error{genError})
+	})
+
+	It("should dispatch each resource to the client named by its ClientID", func() {
+		// Two backend clients, each responsible for a distinct resource type via
+		// ClientID. Reaching InSync proves NewMultiClient wired each resource's
+		// watcherCache to the correct client: if either client had received a
+		// resource it wasn't set up for, fakeClient.List / fakeClient.Watch would
+		// have panicked.
+		rc1 := r1
+		rc1.ClientID = "clientA"
+		rc2 := r2
+		rc2.ClientID = "clientB"
+
+		rs := newStartedMultiClientTester([]string{"clientA", "clientB"}, []watchersyncer.ResourceType{rc1, rc2})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(rc1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.clientListResponse(rc2, emptyList)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Unblock the two Watch calls so subsequent tests aren't racing with
+		// leftover goroutines from this one. fakeClient.Watch has no context
+		// select, so watcherSyncer.Stop() would hang here.
+		rs.clientWatchResponse(rc1, notSupported)
+		rs.clientWatchResponse(rc2, notSupported)
+	})
+
+	It("should skip resources whose ClientID has no matching client", func() {
+		// rMissing's ClientID is not in the client map. NewMultiClient must skip
+		// it entirely: no watcherCache should be created, and InSync depends only
+		// on rMatch completing its List. If a phantom cache for rMissing were
+		// created (e.g. against the wrong client), InSync would never fire
+		// because that cache would sit forever waiting on a List response.
+		rMatch := r1
+		rMatch.ClientID = "clientA"
+		rMissing := r2
+		rMissing.ClientID = "clientB" // no matching client below
+
+		rs := newStartedMultiClientTester([]string{"clientA"}, []watchersyncer.ResourceType{rMatch, rMissing})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(rMatch, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// Unblock the Watch call so subsequent tests aren't racing with a
+		// leftover goroutine from this one.
+		rs.clientWatchResponse(rMatch, notSupported)
+	})
+
+	It("should refresh lastSuccessfulConnTime on WatchBookmark events (watch-event refresh regression test)", func() {
+		// Bookmark is the primary steady-state watch event: it arrives
+		// periodically from the API server even when the underlying resources
+		// are idle, so a syncer's watchRetryTimeout should be reset by
+		// bookmarks alone. If the `case api.WatchBookmark:` handler stops
+		// updating lastSuccessfulConnTime, a syncer receiving steady bookmarks
+		// still fires SyncFailed as soon as watchRetryTimeout elapses from its
+		// initial List — a false disconnect while the connection is healthy.
+		//
+		// The test drives an initial InSync, waits until we are close to the
+		// watchRetryTimeout window, sends a WatchBookmark, then forces the
+		// syncer through a full retry cycle culminating in a failing List.
+		// With the refresh line present, the failing List sees a fresh
+		// lastSuccessfulConnTime and does NOT signal a disconnect. Without it,
+		// the List sees time.Since > watchRetryTimeout and fires SyncFailed —
+		// ExpectConnErrors then fails.
+		//
+		// This test does not exercise the sibling refresh points under
+		// WatchAdded/Modified, WatchDeleted, or WatchError-ResourceExpired.
+		// The full-removal regression that motivated this test (all four
+		// lines stripped together) is caught by this test alone.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 50*time.Millisecond, 100*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester(
+			[]watchersyncer.ResourceType{r1},
+			watchersyncer.WithWatchRetryTimeout(500*time.Millisecond),
+		)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "rev-init"})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		// Wait until we are close to the watchRetryTimeout threshold. From this
+		// point on, a failing List would immediately fire SyncFailed unless a
+		// watch event has refreshed lastSuccessfulConnTime in the meantime.
+		time.Sleep(400 * time.Millisecond)
+
+		// Send a bookmark — this is the refresh event under test. In the
+		// current implementation, the WatchBookmark handler in
+		// loopReadingFromWatcher sets lastSuccessfulConnTime = time.Now().
+		rs.sendEvent(r1, api.WatchEvent{Type: api.WatchBookmark, New: &model.KVPair{Revision: "rev-bookmark"}})
+
+		// Give the syncer a moment to process the bookmark, then force it out
+		// of loopReadingFromWatcher via a generic WatchError (which does NOT
+		// refresh the timer). The syncer then drives through MaxErrorsPerRevision
+		// Watch failures, which flips performFullResync=true, and finally the
+		// syncer calls List, which the test fails.
+		time.Sleep(50 * time.Millisecond)
+		rs.sendEvent(r1, api.WatchEvent{Type: api.WatchError, Error: genError})
+		for range watchersyncer.MaxErrorsPerRevision {
+			rs.clientWatchResponse(r1, genError)
+		}
+		rs.clientListResponse(r1, genError)
+
+		// Wait on a deterministic signal that the failing List has landed: the
+		// bookmark handler set currentWatchRevision = "rev-bookmark", so the
+		// re-List uses that revision, and the fake records it in
+		// getLatestListRevision immediately before returning the queued error.
+		// Once that's observed, the syncer's time.Since check has fired (or is
+		// about to fire) and ExpectConnErrors's Consistently window will catch
+		// any resulting SyncFailed. A fixed sleep here would risk
+		// false-negative passes on slower runners that hadn't reached the
+		// failing List within the sleep window.
+		Eventually(rs.fc.getLatestListRevision, 3*time.Second, 10*time.Millisecond).Should(Equal("rev-bookmark"))
+
+		// If bookmark refresh works, time.Since(lastSuccessfulConnTime) is only
+		// a few hundred ms at this point — under the 500ms watchRetryTimeout —
+		// so no SyncFailed is signalled. If the refresh line were missing,
+		// time.Since would be ~1s and SyncFailed would fire. ExpectConnErrors
+		// uses reflect.DeepEqual (via gomega.Equal); pass nil rather than an
+		// empty slice so that comparison against the unmodified slice matches.
+		rs.ExpectConnErrors(nil)
+	})
 })
 
 var (
@@ -1012,19 +1162,68 @@ func modifiedEvent(key model.Key) api.WatchEvent {
 
 // Create a new watcherSyncerTester - this creates and starts a WatcherSyncer with
 // client and sync consumer interfaces implemented and controlled by the test.
-func newStartedWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
-	rst := newWatcherSyncerTester(l)
+func newStartedWatcherSyncerTester(l []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
+	rst := newWatcherSyncerTester(l, opts...)
 	rst.watcherSyncer.Start()
 	return rst
 }
 
-func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester {
-	// Create the required watchers.  This hs methods that we use to drive
-	// responses.
+func newWatcherSyncerTester(l []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
+	// Single-client case: one fakeClient serving every resource, ClientID left
+	// at the zero value on every ResourceType.
+	fc := newFakeClientFor(l)
+	st := testutils.NewSyncerTester()
+	return &watcherSyncerTester{
+		SyncerTester:  st,
+		fc:            fc,
+		fcs:           map[string]*fakeClient{"": fc},
+		watcherSyncer: watchersyncer.New(fc, l, st, opts...),
+	}
+}
+
+// newStartedMultiClientTester constructs a tester backed by multiple fakeClients,
+// one per entry in clientIDs. Each entry in resources is dispatched by its
+// ClientID field to the matching fakeClient; resources whose ClientID has no
+// matching entry in clientIDs are still passed to NewMultiClient (which skips
+// them, exercising the skip-when-missing-client path).
+func newStartedMultiClientTester(clientIDs []string, resources []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
+	rst := newMultiClientTester(clientIDs, resources, opts...)
+	rst.watcherSyncer.Start()
+	return rst
+}
+
+func newMultiClientTester(clientIDs []string, resources []watchersyncer.ResourceType, opts ...watchersyncer.Option) *watcherSyncerTester {
+	// Group resources by ClientID and build a fakeClient per requested ID that
+	// serves only the resources dispatched to it. Resources whose ClientID has
+	// no matching entry in clientIDs get no fakeClient — the syncer will skip
+	// them.
+	resourcesByID := map[string][]watchersyncer.ResourceType{}
+	for _, r := range resources {
+		resourcesByID[r.ClientID] = append(resourcesByID[r.ClientID], r)
+	}
+	fcs := map[string]*fakeClient{}
+	clients := map[string]api.Client{}
+	for _, id := range clientIDs {
+		fc := newFakeClientFor(resourcesByID[id])
+		fcs[id] = fc
+		clients[id] = fc
+	}
+	st := testutils.NewSyncerTester()
+	return &watcherSyncerTester{
+		SyncerTester:  st,
+		fcs:           fcs,
+		watcherSyncer: watchersyncer.NewMultiClient(clients, resources, st, opts...),
+	}
+}
+
+// newFakeClientFor returns a fakeClient prepared to serve the given resource
+// types and only those. If the syncer accidentally routes a request to a
+// client that wasn't prepared for that resource, fakeClient.List /
+// fakeClient.Watch will panic on the missing map entry — the test fails
+// loudly rather than silently mis-dispatching.
+func newFakeClientFor(resources []watchersyncer.ResourceType) *fakeClient {
 	lws := map[string]*listWatchSource{}
-	for _, r := range l {
-		// We create a watcher for each resource type.  We'll store these off the
-		// default enumeration path for that resource.
+	for _, r := range resources {
 		name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
 		lws[name] = &listWatchSource{
 			name:            name,
@@ -1034,31 +1233,29 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 			results:         make(chan api.WatchEvent, 200),
 		}
 	}
-
-	fc := &fakeClient{
-		lws: lws,
-	}
-
-	// Create the syncer tester.
-	st := testutils.NewSyncerTester()
-	rst := &watcherSyncerTester{
-		SyncerTester:  st,
-		fc:            fc,
-		watcherSyncer: watchersyncer.New(fc, l, st),
-		lws:           lws,
-	}
-	return rst
+	return &fakeClient{lws: lws}
 }
 
 // watcherSyncerTester is used to create, start and validate a watcherSyncer.  It
 // contains a number of useful methods used for asserting current state.
 //
-// This helper extends the function of the testutils SyncerTester.
+// This helper extends the function of the testutils SyncerTester and supports
+// both single-client and multi-client syncers. In the single-client case,
+// fcs[""] and fc point at the same fakeClient. In the multi-client case,
+// fcs is keyed by ClientID and fc is nil.
 type watcherSyncerTester struct {
 	*testutils.SyncerTester
 	fc            *fakeClient
-	lws           map[string]*listWatchSource
+	fcs           map[string]*fakeClient
 	watcherSyncer api.Syncer
+}
+
+// lwsFor returns the listWatchSource that answers for r on its dispatched
+// fakeClient. Panics if there is no fakeClient for r.ClientID, which for
+// tests means the caller forgot to include that ID in clientIDs.
+func (rst *watcherSyncerTester) lwsFor(r watchersyncer.ResourceType) *listWatchSource {
+	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+	return rst.fcs[r.ClientID].lws[name]
 }
 
 // Call to test that all of the client and watcher events have been processed.
@@ -1066,10 +1263,12 @@ type watcherSyncerTester struct {
 // than the watcherSyncer.
 func (rst *watcherSyncerTester) expectAllEventsHandled() {
 	log.Infof("Expecting all events to have been handled")
-	for _, l := range rst.lws {
-		ExpectWithOffset(1, l.listCallResults).To(HaveLen(0), "pending list results to be processed")
-		ExpectWithOffset(1, l.stopEvents).To(HaveLen(0), "pending stop events to be processed")
-		ExpectWithOffset(1, l.results).To(HaveLen(0), "pending watch results to be processed")
+	for _, fc := range rst.fcs {
+		for _, l := range fc.lws {
+			ExpectWithOffset(1, l.listCallResults).To(HaveLen(0), "pending list results to be processed")
+			ExpectWithOffset(1, l.stopEvents).To(HaveLen(0), "pending stop events to be processed")
+			ExpectWithOffset(1, l.results).To(HaveLen(0), "pending watch results to be processed")
+		}
 	}
 }
 
@@ -1078,11 +1277,13 @@ func (rst *watcherSyncerTester) expectAllEventsHandled() {
 // are better.
 func (rst *watcherSyncerTester) allEventsHandled() bool {
 	eventsHandled := true
-	for _, l := range rst.lws {
-		eventsHandled = eventsHandled && (len(l.listCallResults) == 0)
-		eventsHandled = eventsHandled && (len(l.watchCallError) == 0)
-		eventsHandled = eventsHandled && (len(l.stopEvents) == 0)
-		eventsHandled = eventsHandled && (len(l.results) == 0)
+	for _, fc := range rst.fcs {
+		for _, l := range fc.lws {
+			eventsHandled = eventsHandled && (len(l.listCallResults) == 0)
+			eventsHandled = eventsHandled && (len(l.watchCallError) == 0)
+			eventsHandled = eventsHandled && (len(l.stopEvents) == 0)
+			eventsHandled = eventsHandled && (len(l.results) == 0)
+		}
 	}
 	return eventsHandled
 }
@@ -1090,6 +1291,7 @@ func (rst *watcherSyncerTester) allEventsHandled() bool {
 // Call to send an event via a particular watcher.
 func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event api.WatchEvent) {
 	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+	lws := rst.lwsFor(r)
 	log.WithField("Name", name).Infof("Sending event")
 
 	// The test framework uses a single results channel for each resource, so to send the
@@ -1097,7 +1299,7 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 	// terminating (so we know exactly which mock watcher invocation the result will be sent
 	// from).
 	log.Info("Waiting for previous watcher to terminate (if any)")
-	rst.lws[name].termWg.Wait()
+	lws.termWg.Wait()
 	log.Info("Previous watcher terminated (if any)")
 
 	if event.Type == api.WatchError {
@@ -1105,14 +1307,14 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 		// watcher as part of the creation of the new one.  Increment the init wait group
 		// in the watcher which will be decremented once the old one has fully terminated.
 		log.WithField("Name", name).Info("Watcher error will trigger restart - increment termination count")
-		rst.lws[name].termWg.Add(1)
+		lws.termWg.Add(1)
 	}
 
 	log.WithFields(log.Fields{
 		"name":  name,
 		"event": event,
 	}).Info("Sending event")
-	rst.lws[name].results <- event
+	lws.results <- event
 
 	if event.Type == api.WatchError {
 		// Finally, since this is a terminating event then we expect a corresponding Stop()
@@ -1126,13 +1328,14 @@ func (rst *watcherSyncerTester) sendEvent(r watchersyncer.ResourceType, event ap
 // Call to verify that stop has been invoked on the watcher.
 func (rst *watcherSyncerTester) expectStop(r watchersyncer.ResourceType) {
 	name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
+	lws := rst.lwsFor(r)
 	log.WithField("Name", name).Infof("Expecting Stop")
 	EventuallyWithOffset(1, func() bool {
-		return len(rst.lws[name].stopEvents) > 0
+		return len(lws.stopEvents) > 0
 	}).Should(BeTrue())
 
 	// Pull the stop event to acknowledge it.
-	<-rst.lws[name].stopEvents
+	<-lws.stopEvents
 }
 
 // Call to specify the response of the client List invocation.  The List call will block
@@ -1146,7 +1349,7 @@ func (rst *watcherSyncerTester) clientListResponse(r watchersyncer.ResourceType,
 	}).Info("Setting client List response")
 	switch response.(type) {
 	case error, *model.KVPairList:
-		rst.lws[name].listCallResults <- response
+		rst.lwsFor(r).listCallResults <- response
 	default:
 		panic("Error in test, wrong type specified")
 	}
@@ -1163,7 +1366,7 @@ func (rst *watcherSyncerTester) clientWatchResponse(r watchersyncer.ResourceType
 	}).Info("Setting client Watch response")
 
 	// Send the required response.
-	rst.lws[name].watchCallError <- err
+	rst.lwsFor(r).watchCallError <- err
 }
 
 // fakeClient implements the api.Client interface.  We mock this out so that we can control

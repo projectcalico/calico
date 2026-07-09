@@ -13343,9 +13343,10 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                          Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                          Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                         enum:
                                           - install-cni
+                                          - cni-plugins
                                           - hostpath-init
                                           - flexvol-driver
                                           - ebpf-bootstrap
@@ -16148,6 +16149,22 @@ spec:
                         * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
                         * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                         * Otherwise, this field defaults to "/etc/cni/net.d".
+                      type: string
+                    installMode:
+                      description: |-
+                        InstallMode controls which CNI plugin binaries the operator installs onto each node
+                        when CNI.Type is Calico.
+                        * All (default): the operator runs a cni-plugins init container that stages upstream
+                          CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                          volume, and the install-cni init container copies them onto the host alongside
+                          Calico's own binaries.
+                        * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                          installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                          certain managed node images).
+                        Default: All
+                      enum:
+                        - All
+                        - CalicoOnly
                       type: string
                     ipam:
                       description: |-
@@ -22697,9 +22714,10 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                              Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                              Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                             enum:
                                               - install-cni
+                                              - cni-plugins
                                               - hostpath-init
                                               - flexvol-driver
                                               - ebpf-bootstrap
@@ -25548,6 +25566,22 @@ spec:
                             * For KubernetesProvider GKE, this field defaults to "/etc/cni/net.d".
                             * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                             * Otherwise, this field defaults to "/etc/cni/net.d".
+                          type: string
+                        installMode:
+                          description: |-
+                            InstallMode controls which CNI plugin binaries the operator installs onto each node
+                            when CNI.Type is Calico.
+                            * All (default): the operator runs a cni-plugins init container that stages upstream
+                              CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                              volume, and the install-cni init container copies them onto the host alongside
+                              Calico's own binaries.
+                            * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                              installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                              certain managed node images).
+                            Default: All
+                          enum:
+                            - All
+                            - CalicoOnly
                           type: string
                         ipam:
                           description: |-
@@ -31582,6 +31616,18 @@ spec:
                           type: object
                       type: object
                   type: object
+                waypointLogging:
+                  description: |-
+                    WaypointLogging controls whether L7 logging is enabled on every Gateway
+                    using the istio-waypoint GatewayClass. When Enabled (the default), the
+                    operator injects an l7-collector sidecar into each waypoint pod via
+                    class-level defaults. When Disabled, no sidecar is injected and the
+                    associated EnvoyFilters are not created. Allowed values are Enabled or
+                    Disabled.
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 ztunnel:
                   description:
                     ZTunnelDaemonset defines the resource requirements for
@@ -34912,7 +34958,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -35212,7 +35257,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36112,7 +36156,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36361,7 +36404,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36428,7 +36470,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36771,7 +36812,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36843,7 +36883,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -38023,7 +38062,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -38341,7 +38380,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39643,7 +39681,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39702,7 +39739,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39829,7 +39865,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39891,6 +39926,13 @@ spec:
                         type: object
                       handle_id:
                         description: HandleID is the primary identifier for the allocation.
+                        type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
                         type: string
                       secondary:
                         additionalProperties:
@@ -39965,7 +40007,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39996,6 +40037,14 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                ipCooldownSeconds:
+                  description: |-
+                    IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  maximum: 1200
+                  minimum: 0
+                  type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
@@ -40043,7 +40092,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40102,7 +40150,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40362,7 +40409,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40419,7 +40465,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40912,7 +40957,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -42165,7 +42209,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -42222,7 +42265,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -43534,7 +43576,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -44066,7 +44107,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -45330,7 +45370,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
