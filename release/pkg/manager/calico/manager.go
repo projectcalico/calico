@@ -422,7 +422,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, r.releaseBranchPrefix)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
-			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+			errStack = errors.Join(errStack, fmt.Errorf("calico checkout is not on a release branch"))
 		}
 	}
 	dirty, err := utils.GitIsDirty(r.repoRoot)
