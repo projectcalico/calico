@@ -386,38 +386,30 @@ func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
 
-	// timerC is unbuffered and its only reader is the dataplane main loop, so if the timer
-	// fires while the main loop is busy, the goroutine below parks in the send.  Without a way
-	// to abort that send, an already-fired timer could deliver its pop late, after the FSM has
-	// left TimeWait - and if a re-migration has put the FSM back into TimeWait by then,
-	// OnTimerPop would misattribute the stale pop to the new episode and cut its TimeWait
-	// short, reverting the workload's route to normal priority before routing has converged.
-	//
-	// stopC alone is not enough to close that hole: if the goroutine reaches its select after
-	// stopC is closed and the main loop is back at its own select, both cases are ready and Go
-	// chooses between them at random.  The guarantee comes from stopElevatedRoutingTimer()
-	// waiting on timerWG: while the main loop is blocked in that Wait() it cannot be receiving
-	// from timerC, so the send case cannot fire and the goroutine must take the stop case.
 	if f.timerStopC != nil {
-		// Shouldn't happen: the FSM never enters TimeWait twice without leaving it in
+		// This shouldn't happen: the FSM never enters TimeWait twice without leaving it in
 		// between.  But an overwritten stop channel would leave the previous goroutine
 		// unstoppable and wedge a later Wait(), so stop the old one properly rather than
 		// leak it.
 		f.logCtx.Warn("Elevated routing timer already running; stopping it before restart")
 		f.stopElevatedRoutingTimer()
 	}
+
+	// Deliver the pop from a goroutine whose send stopElevatedRoutingTimer() can
+	// cancel and reap, so that a stale pop can never be delivered after TimeWait
+	// is exited and misattributed to a later TimeWait episode (see OnTimerPop).
 	stopC := make(chan struct{})
 	f.timerStopC = stopC
 	f.timerWG.Add(1)
 	go func() {
 		defer f.timerWG.Done()
-		timer := time.NewTimer(f.monitor.convergenceTime)
-		defer timer.Stop()
+		fireC := time.After(f.monitor.convergenceTime)
+
 		// The send case is disabled (nil channel) until the timer fires.
 		var popC chan<- types.WorkloadEndpointID
 		for {
 			select {
-			case <-timer.C:
+			case <-fireC:
 				popC = f.monitor.timerC
 			case popC <- id:
 				return
@@ -432,10 +424,11 @@ func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
 	if f.timerStopC != nil {
 		f.logCtx.Debug("Stopping elevated routing timer")
 		close(f.timerStopC)
-		// Wait for the timer goroutine to exit.  This runs on the dataplane main loop - the
-		// sole reader of timerC - so during the Wait() there can be no receiver for the
-		// goroutine's send case, forcing it to take the stop case.  After this returns, no
-		// pop from this TimeWait episode can ever be delivered.
+
+		// Must wait for the goroutine to exit, to stop a just-cancelled timer from
+		// delivering a stale pop: with both stopC and a pop receiver ready, select
+		// picks at random.  Waiting here is what closes that race - we run on the
+		// main loop, timerC's only reader, so no receiver exists until we return.
 		f.timerWG.Wait()
 		f.timerStopC = nil
 	}
