@@ -140,7 +140,12 @@ The generic machinery is `libcalico-go/lib/backend/watchersyncer`
 — it runs one `watchercache` per resource type (list + watch
 against the backend client, in the style of a Kubernetes
 reflector) and merges the streams, computing the overall
-`SyncStatus`. The per-purpose syncers in
+`SyncStatus`. The `watchercache`'s per-key revision map is where
+`UpdateType`s are minted: `KVNew` vs `KVUpdated` by whether it
+already announced the key, same-revision events swallowed, and
+`KVDeleted` emitted only for keys it previously announced — so a
+downstream consumer never receives a deletion with no matching
+`KVNew` earlier in the stream (per connection). The per-purpose syncers in
 `libcalico-go/lib/backend/syncersv1/` compose it with a resource
 list and a set of `updateprocessors` that convert v3 resources
 into the v1 key/value model the consumers use:
