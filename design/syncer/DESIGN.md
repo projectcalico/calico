@@ -15,9 +15,9 @@ the backend datastore. A syncer connects to the datastore
 (Kubernetes API server or etcd), downloads the current state of a
 set of resources, and then watches for changes — delivering both
 phases to its consumer through one callback interface. It is
-deliberately a lowest-common-denominator API: it was designed so
-the same consumer code works against either backend, and its
-guarantees are only those that every backend can honour.
+deliberately lowest-common-denominator: the same consumer code
+works against either backend, so its guarantees are only those
+every backend can honour.
 
 The API is cross-component: it is defined in
 `libcalico-go/lib/backend/api`, implemented by the syncers in
@@ -141,11 +141,11 @@ The generic machinery is `libcalico-go/lib/backend/watchersyncer`
 against the backend client, in the style of a Kubernetes
 reflector) and merges the streams, computing the overall
 `SyncStatus`. The `watchercache`'s per-key revision map is where
-`UpdateType`s are minted: `KVNew` vs `KVUpdated` by whether it
-already announced the key, same-revision events swallowed, and
-`KVDeleted` emitted only for keys it previously announced — so a
-downstream consumer never receives a deletion with no matching
-`KVNew` earlier in the stream (per connection). The per-purpose syncers in
+`UpdateType`s are minted: `KVNew` vs `KVUpdated` by whether the
+key was already announced, same-revision events swallowed, and
+`KVDeleted` only for previously-announced keys — a consumer never
+sees a deletion without an earlier `KVNew` (per connection). The
+per-purpose syncers in
 `libcalico-go/lib/backend/syncersv1/` compose it with a resource
 list and a set of `updateprocessors` that convert v3 resources
 into the v1 key/value model the consumers use:

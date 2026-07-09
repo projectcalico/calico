@@ -71,7 +71,9 @@ syncer → SyncerCallbacksDecoupler → ValidationFilter
 - `calc.ValidationFilter` validates each value and **nils out
   invalid ones** (treating them as deletions) rather than
   dropping batches or passing garbage on. One bad resource in
-  the datastore must not take out every Felix.
+  the datastore must not take out every Felix. (Felix runs an
+  equivalent `ValidationFilter` in `felix/calc`, so the
+  direct-datastore path behaves the same.)
 - `calc.NodeCounter` (felix pipeline only) counts Node resources
   in passing; the connection governor uses it (below).
 
@@ -97,9 +99,9 @@ requested in its handshake.
 
 The obvious cache — a big map guarded by a mutex — fails at
 scale: sending (or copying) a 500k-entry snapshot to a new client
-while holding the lock starves the writer. Instead, the design
-comment on `snapcache.Cache` is the canonical statement of the
-scheme:
+while holding the lock starves the writer. The design comment on
+`snapcache.Cache` is the canonical statement of the scheme used
+instead:
 
 - The cache's single main goroutine applies updates to a
   **copy-on-write B-tree** whose entries are already-serialized
@@ -134,13 +136,13 @@ sees is still a valid syncer stream:
 - No-op updates (same value, different revision) are dropped;
   this is where the kubelet-heartbeat firehose dies.
 - Deletions are forwarded even when the tree doesn't hold the
-  key. Update types are computed upstream (the `watchersyncer`'s
+  key. Update types are minted upstream (the `watchersyncer`'s
   per-key cache) against the **raw** view; the tree holds the
   **validated** view, from which `ValidationFilter`'s nil-ing of
-  an invalid value silently drops the key. A real deletion can
-  therefore arrive for a tree-absent key, and downstream
-  `New`/`Deleted` refcounts (Felix's stats collector) only stay
-  balanced if it is passed through.
+  an invalid value drops the key. A real deletion can therefore
+  arrive for a tree-absent key, and downstream `New`/`Deleted`
+  refcounts (Felix's stats collector) only stay balanced if it is
+  passed through.
 - `InSync` is only attached to the **last** crumb of a batch —
   a mid-batch crumb doesn't yet reflect everything the syncer
   told us, and claiming in-sync early would trigger premature
@@ -208,8 +210,7 @@ sequencing):
   snappy-compressed gob stream; every client that arrives while
   that snapshot is "active" replays the same bytes
   (`multireadbuf` lets readers stream while the writer is still
-  appending, so the first client isn't idle until completion).
-  Once written, the snapshot stays active for
+  appending). Once written, the snapshot stays active for
   `BinarySnapshotTimeout` (default 1s) *and* until a newer crumb
   exists — no point regenerating identical bytes. The herd cost
   collapses to one serialization plus N byte-copies.
