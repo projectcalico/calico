@@ -23,10 +23,10 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // ipipManager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
@@ -50,7 +50,7 @@ type ipipManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func newIPIPManager(
@@ -59,7 +59,7 @@ func newIPIPManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newIPIPManagerWithShims(
@@ -79,7 +79,7 @@ func newIPIPManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *ipipManager {
 

@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
+	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -1890,13 +1890,13 @@ func (c *client) keyUpdated(key string) {
 
 func (c *client) updateLogLevel() {
 	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
-		logutils.SetLevel(envLevel)
+		config.SetLevel(envLevel)
 	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
-		logutils.SetLevel(nodeLevel)
+		config.SetLevel(nodeLevel)
 	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
-		logutils.SetLevel(globalLogLevel)
+		config.SetLevel(globalLogLevel)
 	} else {
-		logutils.SetLevel("info")
+		config.SetLevel("info")
 	}
 }
 
