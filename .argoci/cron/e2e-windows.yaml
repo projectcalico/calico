@@ -6,6 +6,7 @@ schedule: 10 21 * * 5
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export CREATE_WINDOWS_NODES="${CREATE_WINDOWS_NODES:-true}"
   export E2E_PROCS="${E2E_PROCS:-1}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-windows.yml}"
