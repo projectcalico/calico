@@ -1,0 +1,214 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-vpp-
+schedule: 0 16 * * 1,3,5
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export BGP_STATUS="${BGP_STATUS:-Enabled}"
+  export CNI_PLUGIN="${CNI_PLUGIN:-Calico}"
+  export DATAPLANE="${DATAPLANE:-CalicoVPP}"
+  export ENABLE_CLOUD_PROVIDER="${ENABLE_CLOUD_PROVIDER:-false}"
+  export ENABLE_EXTERNAL_NODE="${ENABLE_EXTERNAL_NODE:-true}"
+  export ENCAPSULATION_TYPE="${ENCAPSULATION_TYPE:-IPIP}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-vpp.yml}"
+  export GS_BUCKET="${GS_BUCKET:-vpp-results}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
+  export K8S_E2E_DOCKER_EXTRA_FLAGS="${K8S_E2E_DOCKER_EXTRA_FLAGS:--e CLIENT_TYPE=k8s}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev)}"
+  export K8S_VERSION="${K8S_VERSION:-stable-1}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export RELEASE_STREAM="${RELEASE_STREAM:-master}"
+  export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  export VPP_VERSION="${VPP_VERSION:-master}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: k8s-e2e-st-v3-28-regression-test
+    services:
+      - docker
+    matrix:
+      - name: gcp-kubeadm-calico-vpp-nohuge-yaml-v3-28-v3-28-0
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-nohuge.yaml
+          - name: RELEASE_STREAM
+            value: v3.28
+          - name: VPP_VERSION
+            value: v3.28.0
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-kadm
+    services:
+      - docker
+    matrix:
+      - name: gcp-kubeadm-calico-vpp-nohuge-yaml
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-nohuge.yaml
+      - name: aws-kubeadm-calico-vpp-nohuge-yaml
+        env:
+          - name: PROVISIONER
+            value: aws-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-nohuge.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-kadm-huge
+    services:
+      - docker
+    env:
+      - name: ENABLE_HUGEPAGES
+        value: "true"
+    matrix:
+      - name: gcp-kubeadm-calico-vpp-dpdk-yaml
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-dpdk.yaml
+      - name: aws-kubeadm-calico-vpp-dpdk-yaml
+        env:
+          - name: PROVISIONER
+            value: aws-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-dpdk.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-kadm-vx-huge
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: ENABLE_HUGEPAGES
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+    matrix:
+      - name: gcp-kubeadm-calico-vpp-dpdk-yaml
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-dpdk.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-kadm-wg-huge
+    services:
+      - docker
+    env:
+      - name: ENABLE_HUGEPAGES
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+    matrix:
+      - name: gcp-kubeadm-calico-vpp-dpdk-yaml
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-dpdk.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-eks
+    services:
+      - docker
+    env:
+      - name: FAILSAFE_443
+        value: "true"
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: calico-calico-vpp-eks-yaml
+        env:
+          - name: EKS_CNI
+            value: calico
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-eks.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-eks-dpdk
+    services:
+      - docker
+    env:
+      - name: ENABLE_HUGEPAGES
+        value: "true"
+      - name: FAILSAFE_443
+        value: "true"
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: calico-calico-vpp-eks-dpdk-yaml
+        env:
+          - name: EKS_CNI
+            value: calico
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-eks-dpdk.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-e2e-st-vpp-kadm-ipsec-huge
+    services:
+      - docker
+    env:
+      - name: ENABLE_HUGEPAGES
+        value: "true"
+      - name: ENABLE_VPP_IPSEC
+        value: "true"
+    matrix:
+      - name: aws-kubeadm-calico-vpp-dpdk-yaml
+        env:
+          - name: PROVISIONER
+            value: aws-kubeadm
+          - name: VPP_MANIFEST_FILE
+            value: calico-vpp-dpdk.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: vpp-openshift
+    services:
+      - docker
+    env:
+      - name: AWS_INSTANCE_TYPE
+        value: m5.xlarge
+    matrix:
+      - name: aws-openshift
+        env:
+          - name: PROVISIONER
+            value: aws-openshift
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: iptables-openshift
+    services:
+      - docker
+    env:
+      - name: AWS_INSTANCE_TYPE
+        value: m5.xlarge
+      - name: DATAPLANE
+        value: CalicoIptables
+    matrix:
+      - name: aws-openshift
+        env:
+          - name: PROVISIONER
+            value: aws-openshift
+    commands: |
+      .argoci/scripts/body_standard.sh
