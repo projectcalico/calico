@@ -1,0 +1,755 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-bpf-
+schedule: 10 21 * * 2
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export DATAPLANE="${DATAPLANE:-CalicoBPF}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: arm64-smoke-tests-kubeadm-arm64
+    services:
+      - docker
+    env:
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: GOOGLE_MACHINE_TYPE
+        value: t2a-standard-2
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: STERN_CHECK
+        value: DISABLED
+    matrix:
+      - name: ubuntu-2204-lts-arm64
+        env:
+          - name: CLUSTER_IMAGE
+            value: ubuntu-2204-lts-arm64
+      - name: rocky-linux-9-arm64
+        env:
+          - name: CLUSTER_IMAGE
+            value: rocky-linux-9-arm64
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: arm64-smoke-tests-aks-arm64
+    services:
+      - docker
+    env:
+      - name: AZ_VM_SIZE
+        value: Standard_D4plds_v5
+      - name: INSTALLER
+        value: operator
+      - name: PROVISIONER
+        value: azr-aks
+      - name: STERN_CHECK
+        value: DISABLED
+    matrix:
+      - name: stable-1-azure-
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+          - name: AZ_NETWORK_PLUGIN
+            value: azure
+          - name: CLUSTER_MODE
+            value: ""
+      - name: stable-1-none-
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+          - name: AZ_NETWORK_PLUGIN
+            value: none
+          - name: CLUSTER_MODE
+            value: ""
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-encap
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    matrix:
+      - name: "true"
+        env:
+          - name: USE_VXLAN
+            value: "true"
+      - name: "false"
+        env:
+          - name: USE_VXLAN
+            value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: BPF_NETWORK_BOOTSTRAP
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CLUSTER_ROUTING_MODE
+        value: Felix
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IP_FAMILY
+        value: dual
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+      - name: KUBE_PROXY_MANAGEMENT
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: "true"
+        env:
+          - name: ENABLE_WIREGUARD
+            value: "true"
+      - name: "false"
+        env:
+          - name: ENABLE_WIREGUARD
+            value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-talos-no-encap-dsr
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_BPF_DSR
+        value: "true"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: PROVISIONER
+        value: aws-talos
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-gcp-bpf-dp-dsr
+    services:
+      - docker
+    env:
+      - name: BPF_NETWORK_BOOTSTRAP
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_BPF_DSR
+        value: "true"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_IP_FORWARDING
+        value: "true"
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: KUBE_PROXY_MANAGEMENT
+        value: Enabled
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2204-lts
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_NODE_LOCAL_DNS_CACHE
+        value: "true"
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    matrix:
+      - name: "true"
+        env:
+          - name: USE_VXLAN
+            value: "true"
+      - name: "false"
+        env:
+          - name: USE_VXLAN
+            value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aks-w-aks-cni
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+    matrix:
+      - name: azr-aks
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aks-w-calico-cni
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: none
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-bpf-aks-w-aks-cni-overlay
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: NETWORK_PLUGIN_MODE
+        value: overlay
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-kops-rhel8-2
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ami-02f147dfb8be58a10
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: aws-kops
+      - name: USE_VENDORED_CNI
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-lb-bpf
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: EKS_CNI
+        value: calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: ipip
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: IPIP
+      - name: vxlan
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: VXLAN
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-lb-iptables
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: EKS_CNI
+        value: calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: ipip
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: IPIP
+      - name: vxlan
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: VXLAN
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-eks-w-aws-cni
+    services:
+      - docker
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: NUM_ADDON_PODS
+        value: "45"
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: aws
+        env:
+          - name: EKS_CNI
+            value: aws
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-eks-w-calico-cni
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: calico
+        env:
+          - name: EKS_CNI
+            value: calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-bpf-eks-aws-cni-lb
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+      - name: NUM_ADDON_PODS
+        value: "45"
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: aws
+        env:
+          - name: EKS_CNI
+            value: aws
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-aws-kubeadm-dual-stack
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: ENCAPSULATION_TYPE_V6
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 192.168.0.0/16
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise)
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: NAT_OUTGOING_V6
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kubeadm
+    matrix:
+      - name: dual-calicobpf
+        env:
+          - name: IP_FAMILY
+            value: dual
+          - name: DATAPLANE
+            value: CalicoBPF
+      - name: dual-calicoiptables
+        env:
+          - name: IP_FAMILY
+            value: dual
+          - name: DATAPLANE
+            value: CalicoIptables
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-kops-w-calico-cni-ipv6
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Disabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE_V6
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: ""
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: NAT_OUTGOING_V6
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kops
+      - name: USE_VENDORED_CNI
+        value: "false"
+    matrix:
+      - name: calicobpf-ipv6
+        env:
+          - name: DATAPLANE
+            value: CalicoBPF
+          - name: IP_FAMILY
+            value: ipv6
+      - name: calicoiptables-ipv6
+        env:
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: IP_FAMILY
+            value: ipv6
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-run-matrix-kops-w-calico-cni-ipv4
+    services:
+      - docker
+    env:
+      - name: BGP_STATUS
+        value: Disabled
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env EKS_CNI
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kops
+      - name: USE_VENDORED_CNI
+        value: "false"
+    matrix:
+      - name: calicobpf-ipv4
+        env:
+          - name: DATAPLANE
+            value: CalicoBPF
+          - name: IP_FAMILY
+            value: ipv4
+      - name: calicoiptables-ipv4
+        env:
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: IP_FAMILY
+            value: ipv4
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-mini-scale-runs
+    services:
+      - docker
+    env:
+      - name: NUM_INFRA_NODES
+        value: "3"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: SCALE_TEST_TTFP50_THRESHOLD
+        value: "0.006"
+      - name: SCALE_TEST_TTFP99_THRESHOLD
+        value: "0.6"
+      - name: TEST_TYPE
+        value: scale-test
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: 9k-mtu-runs-aws-bpf-9k-mtu
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env NETWORK_MTU
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      - name: NETWORK_MTU
+        value: "9001"
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: none
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: None
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: 9k-mtu-runs-aws-iptables-9k-mtu
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env NETWORK_MTU
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP|Feature:Maglev)
+      - name: NETWORK_MTU
+        value: "9001"
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: none
+        env:
+          - name: ENCAPSULATION_TYPE
+            value: None
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: bpf-mode-switch
+    services:
+      - docker
+    env:
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: NETWORK_PLUGIN_MODE
+        value: overlay
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: usage-reporting-with-bpf
+    services:
+      - docker
+    env:
+      - name: CLUSTER_NODES
+        value: "1"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_USAGE
+        value: "true"
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: TEST_TYPE
+        value: usage-reporting
+      - name: USAGE_REPORTING_COUNTRY
+        value: US
+      - name: USE_HASH_RELEASE
+        value: "false"
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: kubevirt-e2e-tests
+    services:
+      - docker
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp-kubevirt.yaml
+      - name: K8S_VERSION
+        value: stable-1.35
+      - name: NUM_KUBEVIRT_VMS
+        value: "2"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh

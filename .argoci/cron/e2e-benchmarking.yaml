@@ -1,0 +1,88 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-benchmarking-
+schedule: 0 21 * * 0
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export BENCHMARKER_IMAGE="${BENCHMARKER_IMAGE:-gcr.io/unique-caldron-775/banzai-tests/benchmark:master}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-benchmarking.yml}"
+  export GOOGLE_NETWORK="${GOOGLE_NETWORK:-semaphore-autotest}"
+  export GOOGLE_PROJECT="${GOOGLE_PROJECT:-unique-caldron-775}"
+  export KOPS_AWS_DNS_ZONE="${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}"
+  export KOPS_STATE_STORE_NAME="${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}"
+  export OPENSHIFT_BASE_DOMAIN="${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export PRODUCT="${PRODUCT:-calico}"
+  export RANCHER_DNS_NAME="${RANCHER_DNS_NAME:-rancher.ci.gcp.eng.tigera.net}"
+  export SEMAPHORE_ARTIFACT_EXPIRY="${SEMAPHORE_ARTIFACT_EXPIRY:-1w}"
+  export STO_RELEASE="${STO_RELEASE:-v0.16.0}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: benchmarks
+    services:
+      - docker
+    env:
+      - name: AWS_NODE_INSTANCE_TYPE
+        value: m5.large
+      - name: BENCHMARKER_TEST_CONFIGS
+        value: |
+          '[{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"iptables"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"iptables"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"none","dataplane":"bpf"},{"testtype":"sto","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"},{"testtype":"qperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"},{"testtype":"iperf","numpolicies":[10,100,1000,10000],"encap":"vxlan","dataplane":"bpf"}]'
+      - name: BENCHMARKS
+        value: benchmarker
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable
+      - name: NUM_ADDON_PODS
+        value: "300"
+      - name: NUM_INFRA_NODES
+        value: "3"
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: TEST_TYPE
+        value: benchmark
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: calico
+        env:
+          - name: PRODUCT
+            value: calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: tiger-bench
+    services:
+      - docker
+    env:
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: TEST_TYPE
+        value: tiger-bench
+      - name: TIGER_BENCH_VERSION
+        value: main
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: calico
+        env:
+          - name: PRODUCT
+            value: calico
+    commands: |
+      .argoci/scripts/body_standard.sh
