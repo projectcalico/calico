@@ -22,6 +22,10 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
+# added to the argoci store (see aws-openshift:check-prereqs). Staged into the
+# bz profile below.
+createLocalSecret "redhat-pull-secret.txt" "${HOME}/secrets/redhat-pull-secret.txt" || true
 
 # GCP auth for provisioning + docker registry auth (ported from Semaphore prologue
 # lines 122-123 / 166; our first port dropped these, assuming ArgoCI provided them).
@@ -91,7 +95,10 @@ export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
 export GOOGLE_REGIONS=("us-central1" "us-west1")
 export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
-export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
+# --project is required: without it gcloud uses the runner's default project
+# (tigera-cc-dev on ArgoCI, where the SA can't list zones) instead of the e2e
+# project, and GOOGLE_ZONE fails to resolve for every unpinned gcp job.
+export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGLE_PROJECT}" --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
@@ -171,6 +178,12 @@ if [[ -f "${HOME}/.docker/config.json" ]]; then
   echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
 else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+fi
+# aws-openshift:check-prereqs expects the Red Hat pull secret at this path.
+if [[ -f "${HOME}/secrets/redhat-pull-secret.txt" ]]; then
+  cp "${HOME}/secrets/redhat-pull-secret.txt" "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
+  chmod 0600 "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
+  echo "[INFO] staged redhat-pull-secret.txt into ${BZ_LOCAL_DIR}/config"
 fi
 
 echo "[INFO] exiting prologue (PROVISIONER=${PROVISIONER} RELEASE_STREAM=${RELEASE_STREAM} CLUSTER_NAME=${CLUSTER_NAME})"
