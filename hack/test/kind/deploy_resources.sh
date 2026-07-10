@@ -198,6 +198,14 @@ done
 echo "Helm values files: ${VALUES_FILE} ${EXTRA_VALUES_FILES:-}"
 ${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
 
+# Wait for calico-node to be Ready before deploying anything else: until it is,
+# nodes stay NotReady (unschedulable) and CNI ADD fails, so add-on pods can't
+# get a sandbox. In particular this keeps the metallb rollout-status wait below
+# from racing the dataplane bring-up and timing out -- the BPF dataplane takes
+# longer to come up than that rollout timeout allows.
+echo "Wait for calico-node to be Ready before deploying add-ons"
+wait_pod_ready -l k8s-app=calico-node -n calico-system
+
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
