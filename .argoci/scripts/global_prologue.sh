@@ -141,10 +141,32 @@ if ! command -v bz >/dev/null 2>&1; then
   : "${BZ_REPO:?BZ_REPO not set (expected from banzai-secrets)}"
   : "${GITHUB_ACCESS_TOKEN:?GITHUB_ACCESS_TOKEN not set (expected from banzai-secrets)}"
   [[ -n "${BZ_VERSION:-}" ]] && BZ_RELEASE="tags/${BZ_VERSION}" || BZ_RELEASE="latest"
-  BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-  echo "[INFO] bz asset id=${BZ_ASSET_ID}"
-  wget -q --auth-no-challenge --header='Accept:application/octet-stream' "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz"
-  chmod +x "${BZ_GLOBAL_BIN}/bz"
+  # GitHub rate-limits (esp. the secondary/concurrent limit) when the whole
+  # pipeline fans out ~50 pods at once. A 403 returns a JSON error body, not a
+  # curl error, so plain `curl -s` (no -f) let it through and `jq '.assets[]'`
+  # hit "Cannot iterate over null" -> empty asset id -> bz never installed and
+  # the job died pre-provision. Retry with backoff + per-pod jitter, fail curl
+  # on HTTP errors, validate the asset id is numeric and the binary is sane.
+  bz_ok=""
+  for attempt in $(seq 1 8); do
+    api=$(curl -fsS --retry 3 --retry-all-errors \
+            -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" 2>/dev/null || true)
+    BZ_ASSET_ID=$(printf '%s' "${api}" | jq -r 'if (type=="object" and (.assets|type)=="array") then (.assets[]|select(.name|test("^bz.*linux-amd64"))|.id) else empty end' 2>/dev/null | head -1)
+    if [[ "${BZ_ASSET_ID}" =~ ^[0-9]+$ ]] \
+       && wget -q --tries=3 --waitretry=5 --auth-no-challenge --header='Accept:application/octet-stream' \
+            "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz" \
+       && [[ $(stat -c%s "${BZ_GLOBAL_BIN}/bz" 2>/dev/null || echo 0) -gt 1000000 ]]; then
+      chmod +x "${BZ_GLOBAL_BIN}/bz"
+      echo "[INFO] bz installed (asset id=${BZ_ASSET_ID}, attempt ${attempt})"
+      bz_ok=1; break
+    fi
+    sleep_s=$(( attempt * 5 + RANDOM % 10 ))
+    echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}'); retrying in ${sleep_s}s"
+    sleep "${sleep_s}"
+  done
+  [[ -n "${bz_ok}" ]] || { echo "[ERROR] failed to install bz from ${BZ_REPO} after 8 attempts (GitHub rate limit?)"; exit 1; }
 fi
 echo "[INFO] bz resolved at $(command -v bz || echo '<none>')"
 
