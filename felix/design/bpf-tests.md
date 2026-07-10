@@ -71,6 +71,27 @@ differences — a change can pass `make build-bpf` (compilation)
 and still fail the verifier on a variant the developer didn't
 exercise. This test is the verifier gate every BPF PR has to pass.
 
+### Verifier cost: `TestVerifierStats`
+
+`TestVerifierStats` loads the same object set (both tests share
+`allProductionObjectFiles` so they cannot drift) and, per program,
+records `verified_insns` (verifier instructions processed),
+`xlated_insns` (post-verifier image), and `jited_bytes` (JITed
+image — the icache measure). It prints a table sorted by
+`verified_insns` and writes a stable-schema JSON report to
+`felix/report/bpf-verifier-stats.json` (uname, per-object and
+grand totals, per-program counts; keys and slices sorted for clean
+diffs).
+
+The test is **informational**: no committed baseline, no
+threshold — only load success is asserted. `verified_insns`
+requires kernel ≥5.16 (the `bpf_prog_info.verified_insns` field);
+on older kernels it reads 0, so the test tolerates zeros and never
+asserts on counts. Counts are not comparable across kernels or
+compiler versions — compare like-for-like on one host. It backs
+the BPF-modernization metric: shrink verifier cost and image size
+while every object stays loadable.
+
 ### Review notes for this section
 
 - A bug in BPF C is testable in the harness: the program is

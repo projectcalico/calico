@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"net"
 	"path"
+	"sort"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -41,22 +42,10 @@ const (
 	bpfFuncTraceVprintk = 177
 )
 
-func TestPrecompiledBinariesAreLoadable(t *testing.T) {
-	RegisterTestingT(t)
-
-	bpffs, err := utils.MaybeMountBPFfs()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(bpffs).To(Equal("/sys/fs/bpf"))
-
-	testObject := func(file string) {
-		obj, err := libbpf.OpenObject(file)
-		defer func() { _ = obj.Close() }()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to open object %s", file))
-		err = obj.Load()
-		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to load object %s", file))
-	}
-
-	// all unique objects
+// allProductionObjectFiles returns the base filenames of every BPF object that
+// ships in the product, deduplicated and sorted. TestPrecompiledBinariesAreLoadable
+// and TestVerifierStats both enumerate over it so their object sets cannot drift.
+func allProductionObjectFiles() []string {
 	objects := make(map[string]struct{})
 
 	for _, at := range hook.ListAttachTypes() {
@@ -75,12 +64,34 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 	objects["conntrack_cleanup_no_log_v6.o"] = struct{}{}
 	for _, logLevel := range []string{"debug", "no_log"} {
 		for _, ipv := range []string{"v46", "v4", "v6"} {
-			filename := "connect_balancer_" + logLevel + "_" + ipv + ".o"
-			objects[filename] = struct{}{}
+			objects["connect_balancer_"+logLevel+"_"+ipv+".o"] = struct{}{}
 		}
 	}
 
+	files := make([]string, 0, len(objects))
 	for obj := range objects {
+		files = append(files, obj)
+	}
+	sort.Strings(files)
+	return files
+}
+
+func TestPrecompiledBinariesAreLoadable(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpffs, err := utils.MaybeMountBPFfs()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(bpffs).To(Equal("/sys/fs/bpf"))
+
+	testObject := func(file string) {
+		obj, err := libbpf.OpenObject(file)
+		defer func() { _ = obj.Close() }()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to open object %s", file))
+		err = obj.Load()
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to load object %s", file))
+	}
+
+	for _, obj := range allProductionObjectFiles() {
 		log.Debugf("Object %s", obj)
 		t.Run(obj, func(t *testing.T) {
 			RegisterTestingT(t)

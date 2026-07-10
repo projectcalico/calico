@@ -217,6 +217,38 @@ func (p *Program) Name() string {
 	return C.GoString(name)
 }
 
+// FD returns the file descriptor of the program. Only valid after the
+// containing object has been loaded; returns a negative value otherwise.
+func (p *Program) FD() int {
+	return int(C.bpf_program__fd(p.bpfProg))
+}
+
+// ProgInfo is a subset of the kernel's bpf_prog_info for a loaded program.
+// VerifiedInsns is the number of instructions the verifier processed; it
+// requires kernel >=5.16 and reads 0 on older kernels. XlatedProgLen and
+// JitedProgLen are the post-verifier and JITed image sizes in bytes.
+type ProgInfo struct {
+	ID            uint32
+	VerifiedInsns uint32
+	XlatedProgLen uint32
+	JitedProgLen  uint32
+}
+
+// GetProgInfo queries the kernel for information about a loaded program given
+// its file descriptor (see Program.FD).
+func GetProgInfo(fd int) (ProgInfo, error) {
+	info, err := C.bpf_get_prog_info(C.int(fd))
+	if err != nil {
+		return ProgInfo{}, fmt.Errorf("error getting program info: %w", err)
+	}
+	return ProgInfo{
+		ID:            uint32(info.id),
+		VerifiedInsns: uint32(info.verified_insns),
+		XlatedProgLen: uint32(info.xlated_prog_len),
+		JitedProgLen:  uint32(info.jited_prog_len),
+	}, nil
+}
+
 func (o *Obj) ProgramFD(secname string) (int, error) {
 	cSecName := C.CString(secname)
 	defer C.free(unsafe.Pointer(cSecName))

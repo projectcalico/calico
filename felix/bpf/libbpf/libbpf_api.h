@@ -101,6 +101,13 @@ void bpf_get_prog_name(uint prog_id, char *prog_name) {
 	close(prog_fd);
 }
 
+struct bpf_prog_info bpf_get_prog_info(int prog_fd) {
+	struct bpf_prog_info info = {};
+	__u32 len = sizeof(info);
+	set_errno(bpf_prog_get_info_by_fd(prog_fd, &info, &len));
+	return info;
+}
+
 struct bpf_link *bpf_link_open(char *path) {
 	struct bpf_link *link = bpf_link__open(path);
 	int err = libbpf_get_error(link);
