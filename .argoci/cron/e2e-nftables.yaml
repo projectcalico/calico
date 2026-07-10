@@ -6,6 +6,7 @@ schedule: 10 21 * * 1
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export DATAPLANE="${DATAPLANE:-CalicoNftables}"
   export ENABLE_AUTOHEP="${ENABLE_AUTOHEP:-true}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-nftables.yml}"
@@ -74,6 +75,13 @@ steps:
     env:
       - name: CLUSTER_ROUTING_MODE
         value: Felix
+      # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
+      # exist only in us-central1; pin region/zone (the load-spread randomisation
+      # in the prologue can't apply to region-fixed jobs). See arm64-wg.
+      - name: GOOGLE_REGION
+        value: us-central1
+      - name: GOOGLE_ZONE
+        value: us-central1-a
       - name: K8S_VERSION
         value: stable
       - name: PROVISIONER
@@ -180,6 +188,13 @@ steps:
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/gcp-kubevirt.yaml
+      # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
+      # exist only in us-central1; pin region/zone (the load-spread randomisation
+      # in the prologue can't apply to region-fixed jobs). See arm64-wg.
+      - name: GOOGLE_REGION
+        value: us-central1
+      - name: GOOGLE_ZONE
+        value: us-central1-a
       - name: K8S_VERSION
         value: stable-1.35
       - name: NUM_KUBEVIRT_VMS
