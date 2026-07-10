@@ -79,9 +79,19 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
   # golang image lacks, so client-go fails before any tests run. The aws-eks
   # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
+  # It also needs AWS creds in the container (else it exits 1 and
+  # SynchronizedBeforeSuite fails). Mount ~/.aws (written by the prologue) and point
+  # the SDK at it via env -- container runs as an arbitrary UID.
   auth_mount=()
+  aws_cred_env=()
   if [[ -x "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator" ]]; then
     auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
+    if [[ -d "${HOME}/.aws" ]]; then
+      auth_mount+=(-v "${HOME}/.aws:/aws-config:ro")
+      aws_cred_env=(-e AWS_SHARED_CREDENTIALS_FILE=/aws-config/credentials
+                    -e AWS_CONFIG_FILE=/aws-config/config
+                    -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}")
+    fi
   fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
@@ -95,6 +105,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e PRODUCT=${PRODUCT:-calico} \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
+    "${aws_cred_env[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
