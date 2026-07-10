@@ -95,7 +95,10 @@ export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
 export GOOGLE_REGIONS=("us-central1" "us-west1")
 export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
-export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
+# --project is required: without it gcloud uses the runner's default project
+# (tigera-cc-dev on ArgoCI, where the SA can't list zones) instead of the e2e
+# project, and GOOGLE_ZONE fails to resolve for every unpinned gcp job.
+export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGLE_PROJECT}" --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
