@@ -316,6 +316,11 @@ func TestCheckRPMSigOutput(t *testing.T) {
 		"nokey verbose":         {out: "pkg.rpm:\n    Header V4 RSA/SHA256 Signature, key ID abcd1234: NOKEY", wantErr: true},
 		"empty output":          {out: "", wantErr: true},
 		"whitespace only":       {out: "   \n\t ", wantErr: true},
+		// The file name mentions "signature"/"NOKEY"/"NOT OK" but the actual
+		// result does not — the token-based parse must not be fooled by it.
+		"unsigned file named signature": {out: "my-signature.rpm: digests OK", wantErr: true},
+		"signed file named signature":   {out: "my-signature.rpm: digests signatures OK", wantErr: false},
+		"nokey in file name only":       {out: "nokey-not-ok.rpm: digests signatures OK", wantErr: false},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
