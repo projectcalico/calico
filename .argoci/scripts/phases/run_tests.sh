@@ -1,18 +1,12 @@
 #!/usr/bin/env bash
 # run_tests.sh - acquire an e2e binary and run it, or defer to bz tests.
 #
-# Selection (automatic):
-#   - E2E_TEST_CONFIG set → structured label-based selection via `make e2e-run`.
-#     The e2e binary is acquired first: built from local source when
-#     RUN_LOCAL_TESTS is set (per-PR CI / GCP e2e block), otherwise downloaded
-#     from the hashrelease (scheduled CI).
-#   - Else → `bz tests`, which honours K8S_E2E_FLAGS (regex --ginkgo.focus/skip,
-#     read from the environment) for regex-selected e2e jobs, and also runs the
-#     non-e2e test types (benchmarks, certification, etc.).
-#
-# `make e2e-run` has no --ginkgo.focus, so K8S_E2E_FLAGS is inert there; regex
-# selection must go through `bz tests` (matches the Semaphore flannel-migration
-# body, which runs `K8S_E2E_FLAGS=... bz tests`).
+# Selection (automatic, matches Semaphore):
+#   - TEST_TYPE == k8s-e2e → run the monorepo e2e binary via `make e2e-run`.
+#     The binary is acquired first: built from local source when RUN_LOCAL_TESTS
+#     is set (per-PR CI), otherwise downloaded from the hashrelease (scheduled
+#     CI). E2E_TEST_CONFIG selects specs and may be empty (default config).
+#   - Else (non-e2e test types: benchmarks, certification, etc.) → `bz tests`.
 #
 # Required env:
 #   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
@@ -34,7 +28,7 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test
   popd || exit
-elif [[ "${TEST_TYPE}" == "k8s-e2e" && -n "${E2E_TEST_CONFIG:-}" ]]; then
+elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
   HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
@@ -48,10 +42,10 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" && -n "${E2E_TEST_CONFIG:-}" ]]; then
 fi
 
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
-# e2e-run locates the binary itself). Take the structured path only when a
-# k8s-e2e binary was acquired above AND E2E_TEST_CONFIG selects specs; regex
-# (K8S_E2E_FLAGS) and non-e2e jobs fall through to bz tests below.
-if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
+# e2e-run locates the binary itself). Take the structured path whenever a
+# k8s-e2e binary was acquired above; non-e2e test types fall through to bz
+# tests below. E2E_TEST_CONFIG may be empty (selects the default config).
+if [[ -n "${E2E_BINARY:-}" ]]; then
   echo "[INFO] starting e2e tests..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
@@ -82,6 +76,24 @@ if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   # the container, and we prepend that to PATH inside the bash -c below.
   make kubectl
 
+  # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
+  # golang image lacks, so client-go fails before any tests run. The aws-eks
+  # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
+  # It also needs AWS creds in the container (else it exits 1 and
+  # SynchronizedBeforeSuite fails). Mount ~/.aws (written by the prologue) and point
+  # the SDK at it via env -- container runs as an arbitrary UID.
+  auth_mount=()
+  aws_cred_env=()
+  if [[ -x "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator" ]]; then
+    auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
+    if [[ -d "${HOME}/.aws" ]]; then
+      auth_mount+=(-v "${HOME}/.aws:/aws-config:ro")
+      aws_cred_env=(-e AWS_SHARED_CREDENTIALS_FILE=/aws-config/credentials
+                    -e AWS_CONFIG_FILE=/aws-config/config
+                    -e "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}")
+    fi
+  fi
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -92,6 +104,8 @@ if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+    "${auth_mount[@]}" \
+    "${aws_cred_env[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
@@ -115,8 +129,7 @@ if [[ -n "${E2E_BINARY:-}" && -n "${E2E_TEST_CONFIG:-}" ]]; then
   # Propagate the original test exit code.
   exit ${e2e_rc}
 else
-  # Regex-selected e2e (K8S_E2E_FLAGS) or non-e2e test types -- defer to bz,
-  # which reads K8S_E2E_FLAGS from the environment.
+  # Non-e2e test types (benchmarks, certification, etc.) -- defer to bz.
   echo "[INFO] starting bz testing (K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   bz tests ${VERBOSE} |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
 fi
