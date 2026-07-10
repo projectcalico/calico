@@ -620,7 +620,7 @@ steps:
       - name: AWS_K8S_CNI_VERSION
         value: NA
       - name: CNI_PLUGIN
-        value: aws
+        value: AmazonVPC
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: INSTALLER
@@ -642,7 +642,7 @@ steps:
       - name: AWS_K8S_CNI_VERSION
         value: NA
       - name: CNI_PLUGIN
-        value: calico
+        value: Calico
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: INSTALLER
