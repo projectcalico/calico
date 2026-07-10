@@ -26,7 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -126,9 +126,10 @@ var _ = ginkgo.AfterSuite(func() {
 	fmt.Println("")
 	for _, family := range metricFamilies {
 		if strings.HasPrefix(*family.Name, "k8sfv") {
-			out, err := proto.Marshal(family)
-			panicIfError(err)
-			fmt.Println(string(out))
+			// Text format, not proto.Marshal(): this goes to the CI log for
+			// humans to read (and raw wire-format bytes in the job output
+			// can hang the Semaphore agent's output scanning).
+			fmt.Println(prototext.Format(family))
 		}
 	}
 })
