@@ -157,6 +157,44 @@ var _ = infrastructure.DatastoreDescribe(
 					tgt.family, extL2.Name, tgt.ip)
 			}
 		})
+
+		// A node bringing up a proxied IPv6 runs Duplicate Address Detection: it
+		// sends a Neighbor Solicitation from the unspecified source (::) to the
+		// address's solicited-node multicast group. Felix must answer it (to
+		// ff02::1 with the Solicited flag clear) so the node sees the address is
+		// taken and backs off; otherwise two hosts end up using the pod IP.
+		It("defends a proxied pod IPv6 against a Duplicate Address Detection probe", func() {
+			w := workload.New(tc.Felixes[0], "wl-pod", "default", podV4, "8080", "tcp",
+				workload.WithIPv6Address(podV6))
+			Expect(w.Start(infra)).To(Succeed())
+			w.ConfigureInInfra(infra)
+
+			// Wait until the pod IPv6 is actually answered, so we know Felix's NDP
+			// listener is up and has joined its solicited-node group.
+			Eventually(func() *connectivity.Result {
+				return extL2.CanConnectTo(podV6, "8080", "tcp")
+			}, "30s", "2s").ShouldNot(BeNil(), "proxy NDP not up yet for %s", podV6)
+
+			v6Net, err := felixSubnet(tc.Felixes[0], true)
+			Expect(err).NotTo(HaveOccurred())
+			ones, _ := v6Net.Mask.Size()
+
+			// Ensure DAD is active on the client, then have it tentatively claim
+			// the pod's IPv6. Its kernel sends the DAD probe; if Felix defends the
+			// address, DAD fails and it is flagged "dadfailed".
+			extL2.Exec("sysctl", "-w", "net.ipv6.conf.eth0.accept_dad=1")
+			extL2.Exec("sysctl", "-w", "net.ipv6.conf.eth0.dad_transmits=1")
+			_, err = extL2.ExecOutput("ip", "-6", "addr", "add",
+				fmt.Sprintf("%s/%d", podV6, ones), "dev", "eth0")
+			Expect(err).NotTo(HaveOccurred(), "adding tentative %s on %s", podV6, extL2.Name)
+
+			Eventually(func() (string, error) {
+				return extL2.ExecOutput("ip", "-6", "-o", "addr", "show", "dev", "eth0")
+			}, "20s", "1s").Should(And(
+				ContainSubstring(podV6),
+				ContainSubstring("dadfailed"),
+			), "Felix did not defend %s against DAD (address not flagged dadfailed)", podV6)
+		})
 	},
 )
 
