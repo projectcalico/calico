@@ -126,9 +126,7 @@ var _ = ginkgo.AfterSuite(func() {
 	fmt.Println("")
 	for _, family := range metricFamilies {
 		if strings.HasPrefix(*family.Name, "k8sfv") {
-			// Text format, not proto.Marshal(): this goes to the CI log for
-			// humans to read (and raw wire-format bytes in the job output
-			// can hang the Semaphore agent's output scanning).
+			// Note, using prototext (not proto) to get human-readable encoding for the log.
 			fmt.Println(prototext.Format(family))
 		}
 	}
