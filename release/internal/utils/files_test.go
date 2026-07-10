@@ -583,6 +583,53 @@ func TestMatchExtensions(t *testing.T) {
 	}
 }
 
+func TestMatchMultiple(t *testing.T) {
+	rpm := MatchExtensions(".rpm")
+	debuginfo, err := MatchRegexp(`.*debuginfo.*`)
+	if err != nil {
+		t.Fatalf("MatchRegexp failed: %v", err)
+	}
+
+	t.Run("requires every include to match", func(t *testing.T) {
+		match := MatchMultiple(rpm, debuginfo)
+		cases := map[string]bool{
+			"foo-debuginfo-1.2.3.rpm": true,
+			"foo-1.2.3.rpm":           false, // right ext, no debuginfo
+			"foo-debuginfo-1.2.3.deb": false, // debuginfo, wrong ext
+			"foo-1.2.3.deb":           false, // neither
+		}
+		for relPath, want := range cases {
+			if got := match("", "", relPath); got != want {
+				t.Errorf("match(%q) = %v, want %v", relPath, got, want)
+			}
+		}
+	})
+
+	t.Run("with no includes matches everything", func(t *testing.T) {
+		match := MatchMultiple()
+		for _, relPath := range []string{"anything.rpm", "sub/whatever", ""} {
+			if !match("", "", relPath) {
+				t.Errorf("match(%q) = false, want true", relPath)
+			}
+		}
+	})
+}
+
+func TestMatchInverse(t *testing.T) {
+	match := MatchInverse(MatchExtensions(".rpm"))
+	cases := map[string]bool{
+		"foo-1.2.3.rpm": false,
+		"foo-1.2.3.deb": true,
+		"notes.txt":     true,
+		"README":        true,
+	}
+	for relPath, want := range cases {
+		if got := match("", "", relPath); got != want {
+			t.Errorf("match(%q) = %v, want %v", relPath, got, want)
+		}
+	}
+}
+
 // writeTree writes the given relPath -> contents map under root, creating
 // intermediate directories as needed.
 func writeTree(t *testing.T, root string, files map[string]string) {
