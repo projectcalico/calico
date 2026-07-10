@@ -81,7 +81,7 @@ grep_args+=( "-e" "${pattern:1}" )
 # Semaphore agent's command-completion marker detection, hanging the job.
 function sanitize()
 {
-  stdbuf -oL tr -d '\000-\010\013\014\016-\032\034-\037\177'
+  LC_ALL=C stdbuf -oL tr -d '\000-\010\013\014\016-\032\034-\037\177'
 }
 
 tail --pid $pid -n 1000000 -F "$log_file" | {
