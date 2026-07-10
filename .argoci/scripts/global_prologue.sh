@@ -31,9 +31,52 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS}" ]]; then
 else
   echo "[WARN] GOOGLE_APPLICATION_CREDENTIALS missing: ${GOOGLE_APPLICATION_CREDENTIALS}"
 fi
+# Azure auth for azr-* provisioners (ported from Semaphore prologue L146-150).
+# Creds come from banzai-secrets via envFrom (AZ_SP_ID/AZ_SP_PASSWORD/AZ_TENANT_ID/
+# AZ_SUBSCRIPTION_ID); bz's azure path needs an active `az` session, so log in the
+# service principal. Gated on azr-* so non-azure jobs skip the network call.
+if [[ "${PROVISIONER:-}" == azr-* ]]; then
+  if command -v az >/dev/null 2>&1 && [[ -n "${AZ_SP_ID:-}" ]]; then
+    az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" >/dev/null \
+      && az account set --subscription "${AZ_SUBSCRIPTION_ID}" \
+      && echo "[INFO] az login OK (subscription ${AZ_SUBSCRIPTION_ID})" \
+      || echo "[WARN] az login failed; azr-* provisioning will fail"
+  else
+    echo "[WARN] azr-* provisioner but az CLI or AZ_SP_ID missing; azure auth skipped"
+  fi
+fi
+
 export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
 if [[ -f "${HOME}/.keys/marvin" ]]; then eval "$(ssh-agent -s)" >/dev/null 2>&1 || true; ssh-add "${HOME}/.keys/marvin" 2>/dev/null || true; fi
+
+# AWS auth for aws-* provisioners (EKS, aws-openshift, aws-talos). banzai-secrets
+# ships the AWS creds as the `credentials` key — its value is a full
+# ~/.aws/credentials ini blob ([default]\naws_access_key_id=...). It arrives via
+# envFrom as $credentials, but the AWS SDK reads the FILE, so materialise it.
+# Fall back to standard AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env if present.
+mkdir -p "${HOME}/.aws"
+if [[ -n "${credentials:-}" ]]; then
+  printf '%s\n' "${credentials}" > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from banzai-secrets 'credentials' key"
+elif [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  {
+    echo "[default]"
+    echo "aws_access_key_id=${AWS_ACCESS_KEY_ID}"
+    echo "aws_secret_access_key=${AWS_SECRET_ACCESS_KEY}"
+    [[ -n "${AWS_SESSION_TOKEN:-}" ]] && echo "aws_session_token=${AWS_SESSION_TOKEN}"
+  } > "${HOME}/.aws/credentials"
+  chmod 0600 "${HOME}/.aws/credentials"
+  echo "[INFO] wrote ~/.aws/credentials from AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env"
+else
+  echo "[WARN] no AWS creds in banzai-secrets ('credentials' or AWS_ACCESS_KEY_ID); aws-* provisioners will fail"
+fi
+
+# `bz init` installs the gobz binary via `gh`, which needs GH_TOKEN (not the
+# GITHUB_ACCESS_TOKEN name banzai-secrets provides) — alias it so go-backed
+# provisioners are available.
+export GH_TOKEN="${GH_TOKEN:-${GITHUB_ACCESS_TOKEN:-}}"
 
 git config --global user.name "${GITHUB_USER_NAME:-marvin-tigera}"
 git config --global user.email "${GITHUB_USER_EMAIL:-marvin@tigera.io}"
@@ -43,6 +86,11 @@ RANDOM_TOKEN1=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 5 || true)
 
 echo "[INFO] exporting default env vars..."
 export PRODUCT=${PRODUCT:-calico}
+# bz tags aws-eks / aws-openshift clusters with `createdBy: ${USER}`; the ArgoCI
+# runner leaves USER unset, so the tag renders empty and CloudFormation rejects
+# it (tag value must be non-empty). Attribution only — cloud-custodian reaps on
+# cluster name (bz-${PRODUCT}-*), not createdBy, so this doesn't affect cleanup.
+export USER="${USER:-argoci}"
 export PROVISIONER=${PROVISIONER:-gcp-kubeadm}
 export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-CalicoIptables}
@@ -109,6 +157,22 @@ if ! python3 -c 'import yaml' 2>/dev/null; then
   python3 -m pip install --quiet pyyaml 2>/dev/null \
     || python3 -m pip install --quiet --break-system-packages pyyaml 2>/dev/null \
     || echo "[WARN] could not install pyyaml; bz destroy for local-kind may fail"
+fi
+
+# --- Ensure python3.10-venv for bz's provisioner venv. bz builds the venv with
+# python3.10, but the runner image ships only python3.7/3.8-venv, so venv creation
+# fails ("No such file: .local/venv/include"; "apt install python3.10-venv").
+# Guard on python3.10 specifically — the default `python3` is 3.7 and *has*
+# ensurepip, so guarding on it would skip this and let bz hit the gap later (and
+# race apt → dpkg lock). Install up front so bz's venv-create finds it present.
+# Stopgap until the runner image adds it (cc-utils/argoci-images); remove once that
+# lands. (Separate, image-level: a py3.7 venv missing certifi cacert also breaks
+# some gcp-kubeadm pip steps — tracked for the image fix, not band-aided here.) ---
+if command -v python3.10 >/dev/null 2>&1 && ! python3.10 -c 'import ensurepip' 2>/dev/null; then
+  echo "[INFO] installing python3.10-venv (runner image lacks it)..."
+  sudo apt-get update -qq 2>/dev/null || true
+  sudo apt-get install -y python3.10-venv 2>/dev/null \
+    || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
 fi
 
 echo "[INFO] initialising bz profile..."
