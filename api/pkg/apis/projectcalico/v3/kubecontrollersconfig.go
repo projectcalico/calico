@@ -185,6 +185,9 @@ type Template struct {
 	// Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
 
+	// Annotations adds the specified annotations to the generated AutoHostEndpoint.
+	Annotations map[string]string `json:"annotations,omitempty"`
+
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
 }

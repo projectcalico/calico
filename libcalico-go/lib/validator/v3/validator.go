@@ -249,6 +249,7 @@ func init() {
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
+	registerStructValidator(validate, validateTemplate, api.Template{})
 	registerStructValidator(validate, validateRouteTableIDRange, api.RouteTableIDRange{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
 	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
@@ -481,6 +482,11 @@ func validateLabels(fl validator.FieldLevel) bool {
 		}
 	}
 	return true
+}
+
+func validateTemplate(structLevel validator.StructLevel) {
+	template := structLevel.Current().Interface().(api.Template)
+	validateObjectMetaAnnotations(structLevel, template.Annotations)
 }
 
 func validateProtocol(structLevel validator.StructLevel) {
