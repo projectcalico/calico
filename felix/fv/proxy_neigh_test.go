@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/gomega"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
-	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/utils"
@@ -150,9 +149,9 @@ var _ = infrastructure.DatastoreDescribe(
 				{"IPv6 (NDP)", podV6},
 			} {
 				By(fmt.Sprintf("Connecting from %s to %s pod IP %s", extL2.Name, tgt.family, tgt.ip))
-				Eventually(func() *connectivity.Result {
-					return extL2.CanConnectTo(tgt.ip, "8080", "tcp")
-				}, "30s", "2s").ShouldNot(BeNil(),
+				Eventually(func() bool {
+					return extL2.CanConnectTo(tgt.ip, "8080", "tcp").HasConnectivity()
+				}, "30s", "2s").Should(BeTrue(),
 					"no %s connectivity from %s to pod IP %s — Felix did not answer for it",
 					tgt.family, extL2.Name, tgt.ip)
 			}
@@ -171,9 +170,9 @@ var _ = infrastructure.DatastoreDescribe(
 
 			// Wait until the pod IPv6 is actually answered, so we know Felix's NDP
 			// listener is up and has joined its solicited-node group.
-			Eventually(func() *connectivity.Result {
-				return extL2.CanConnectTo(podV6, "8080", "tcp")
-			}, "30s", "2s").ShouldNot(BeNil(), "proxy NDP not up yet for %s", podV6)
+			Eventually(func() bool {
+				return extL2.CanConnectTo(podV6, "8080", "tcp").HasConnectivity()
+			}, "30s", "2s").Should(BeTrue(), "proxy NDP not up yet for %s", podV6)
 
 			v6Net, err := felixSubnet(tc.Felixes[0], true)
 			Expect(err).NotTo(HaveOccurred())
