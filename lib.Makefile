@@ -1116,6 +1116,18 @@ docker-compress:
 escapefs = $(subst :,---,$(subst /,___,$(1)))
 unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 
+# check-image-arch fails the build if any image in CHECK_IMAGES does not
+# actually contain a CHECK_ARCH binary: it compares both the image config's
+# architecture and the ELF machine of the entrypoint binary against CHECK_ARCH.
+# This guards against multi-arch builds that advertise an arch but ship a
+# wrong-arch binary, which fails at runtime with "exec ...: Exec format error"
+# (https://github.com/projectcalico/calico/issues/13183). The binary is
+# inspected, never executed, so it is safe for distroless / scratch images.
+# Usage: $(MAKE) check-image-arch CHECK_ARCH=<arch> CHECK_IMAGES="<img> ..."
+.PHONY: check-image-arch
+check-image-arch:
+	$(REPO_ROOT)/hack/check-image-arch.sh $(CHECK_ARCH) $(CHECK_IMAGES)
+
 # retag-build-images-with-registries retags the build / arch images specified by BUILD_IMAGES and VALIDARCHES with
 # the registries specified by DEV_REGISTRIES. The end tagged images are of the format
 # $(REGISTRY)/$(BUILD_IMAGES):<tag>-$(ARCH).
