@@ -112,6 +112,7 @@ sub-image-%:
 
 .PHONY: image
 image: $(BUILD_IMAGES)
+	$(MAKE) check-image-arch CHECK_ARCH=$(ARCH) CHECK_IMAGES="$(addsuffix :latest-$(ARCH),$(BUILD_IMAGES))"
 
 # Producer image carrying the patched nftables + libnftnl RPMs that the
 # install-cni image installs in its almalinux build stage. Tag is
