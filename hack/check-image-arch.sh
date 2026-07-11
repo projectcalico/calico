@@ -24,7 +24,8 @@
 # (see https://github.com/projectcalico/calico/issues/13183).
 #
 # The binary is inspected, never executed, so this is safe for distroless and
-# scratch-based images. Exits non-zero if any image mismatches.
+# scratch-based images. Exits non-zero if any image has a wrong-arch binary or
+# cannot be verified (no entrypoint/command, or a non-ELF entrypoint).
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -72,16 +73,21 @@ for img in "$@"; do
 		continue
 	fi
 
-	entrypoint=$(docker inspect --format '{{if .Config.Entrypoint}}{{index .Config.Entrypoint 0}}{{end}}' "$img")
+	# The binary to check is the entrypoint, falling back to the command. As a
+	# build gate, an image we were asked to check but cannot verify is a failure,
+	# not a pass -- otherwise a wrong-arch image could slip through unchecked.
+	entrypoint=$(docker inspect --format '{{if .Config.Entrypoint}}{{index .Config.Entrypoint 0}}{{else if .Config.Cmd}}{{index .Config.Cmd 0}}{{end}}' "$img")
 	if [ -z "$entrypoint" ]; then
-		echo "SKIP  $img  (no entrypoint to inspect)"
+		echo "FAIL  $img  (no entrypoint or command to inspect; cannot verify arch)"
+		rc=1
 		continue
 	fi
 
 	cid=$(docker create "$img")
 	tmp=$(mktemp)
 	if ! docker cp "$cid:$entrypoint" "$tmp" 2>/dev/null; then
-		echo "SKIP  $img  (entrypoint $entrypoint is not a copyable file)"
+		echo "FAIL  $img  (entrypoint $entrypoint is not a copyable file; cannot verify arch)"
+		rc=1
 		docker rm "$cid" >/dev/null
 		rm -f "$tmp"
 		continue
@@ -92,7 +98,8 @@ for img in "$@"; do
 	rm -f "$tmp"
 
 	if [ "$bin_arch" = notelf ]; then
-		echo "SKIP  $img  (entrypoint $entrypoint is not an ELF binary)"
+		echo "FAIL  $img  (entrypoint $entrypoint is not an ELF binary; cannot verify arch)"
+		rc=1
 		continue
 	fi
 

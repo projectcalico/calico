@@ -25,6 +25,12 @@ set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="${SCRIPT_DIR}/check-image-arch.sh"
+
+if ! command -v docker >/dev/null 2>&1; then
+	echo "docker not available; skipping check-image-arch tests"
+	exit 0
+fi
+
 WORK="$(mktemp -d)"
 IMAGES=()
 trap 'docker rmi -f "${IMAGES[@]}" >/dev/null 2>&1 || true; rm -rf "${WORK}"' EXIT
@@ -75,13 +81,29 @@ build_image() {
 	IMAGES+=("${tag}")
 }
 
+# build_unverifiable_image TAG DOCKERFILE_BODY -- an arm64 image the checker
+# cannot verify (non-ELF entrypoint, or no entrypoint/command at all).
+build_unverifiable_image() {
+	local tag="$1" body="$2"
+	echo "not an elf binary" >"${WORK}/entry"
+	printf '%b' "${body}" >"${WORK}/Dockerfile"
+	docker build -q --platform=linux/arm64 -t "${tag}" "${WORK}" >/dev/null
+	IMAGES+=("${tag}")
+}
+
 build_image check-image-arch-test:wrong 62  # amd64 binary in an arm64 image
 build_image check-image-arch-test:right 183 # arm64 binary in an arm64 image
+build_unverifiable_image check-image-arch-test:nonelf 'FROM scratch\nCOPY entry /entry\nENTRYPOINT ["/entry"]\n'
+build_unverifiable_image check-image-arch-test:noentry 'FROM scratch\nCOPY entry /entry\n'
 
 assert_exit 1 "arm64 image with an amd64 binary is rejected" \
 	-- "${CHECK}" arm64 check-image-arch-test:wrong
 assert_exit 0 "arm64 image with an arm64 binary is accepted" \
 	-- "${CHECK}" arm64 check-image-arch-test:right
+assert_exit 1 "non-ELF entrypoint is rejected (cannot be verified)" \
+	-- "${CHECK}" arm64 check-image-arch-test:nonelf
+assert_exit 1 "image with no entrypoint or command is rejected" \
+	-- "${CHECK}" arm64 check-image-arch-test:noentry
 
 echo "----"
 echo "PASS=${PASS} FAIL=${FAIL}"
