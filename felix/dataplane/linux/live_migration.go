@@ -241,7 +241,8 @@ type liveMigrationFSM struct {
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
 	migrationUID string
-	timer        *time.Timer
+	timerStopC   chan struct{}
+	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
 	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
@@ -384,16 +385,52 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
-	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		f.monitor.timerC <- id
-	})
+
+	if f.timerStopC != nil {
+		// This shouldn't happen: the FSM never enters TimeWait twice without leaving it in
+		// between.  But an overwritten stop channel would leave the previous goroutine
+		// unstoppable and wedge a later Wait(), so stop the old one properly rather than
+		// leak it.
+		f.logCtx.Warn("Elevated routing timer already running; stopping it before restart")
+		f.stopElevatedRoutingTimer()
+	}
+
+	// Deliver the pop from a goroutine whose send stopElevatedRoutingTimer() can
+	// cancel and reap, so that a stale pop can never be delivered after TimeWait
+	// is exited and misattributed to a later TimeWait episode (see OnTimerPop).
+	stopC := make(chan struct{})
+	f.timerStopC = stopC
+	f.timerWG.Add(1)
+	go func() {
+		defer f.timerWG.Done()
+		fireC := time.After(f.monitor.convergenceTime)
+
+		// The send case is disabled (nil channel) until the timer fires.
+		var popC chan<- types.WorkloadEndpointID
+		for {
+			select {
+			case <-fireC:
+				popC = f.monitor.timerC
+			case popC <- id:
+				return
+			case <-stopC:
+				return
+			}
+		}
+	}()
 }
 
 func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
-	if f.timer != nil {
+	if f.timerStopC != nil {
 		f.logCtx.Debug("Stopping elevated routing timer")
-		f.timer.Stop()
-		f.timer = nil
+		close(f.timerStopC)
+
+		// Must wait for the goroutine to exit, to stop a just-cancelled timer from
+		// delivering a stale pop: with both stopC and a pop receiver ready, select
+		// picks at random.  Waiting here is what closes that race - we run on the
+		// main loop, timerC's only reader, so no receiver exists until we return.
+		f.timerWG.Wait()
+		f.timerStopC = nil
 	}
 }
 
@@ -403,10 +440,10 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputGARPDetected)
 }
 
-// OnTimerPop is called by the main loop when a timer fires for a workload.
-// The timer may fire just before stopElevatedRoutingTimer() is called, so we
-// guard against stale deliveries by checking the FSM still exists and is in
-// TimeWait before driving it.
+// OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
+// prevented at source: stopElevatedRoutingTimer() waits for the timer goroutine to exit before
+// returning, so a pop that does get through here was sent by a timer that had not been stopped.
+// The state check here is kept as cheap defence in depth.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
 	if !exists || fsm.currentState != liveMigrationStateTimeWait {
