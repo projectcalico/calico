@@ -4182,6 +4182,16 @@ func init() {
 				InterfaceCIDRs: []string{"not a real cidr"},
 			}, false,
 		),
+		Entry("should allow valid template annotations, including values not valid as label values",
+			api.Template{
+				Annotations: map[string]string{"projectcalico.org/note": "any value, including spaces & symbols!"},
+			}, true,
+		),
+		Entry("should reject template annotations with an invalid key",
+			api.Template{
+				Annotations: map[string]string{"not a valid key": "value"},
+			}, false,
+		),
 
 		// BGP Communities validation in BGPConfigurationSpec
 		Entry("should not accept community when PrefixAdvertisement is empty", &api.BGPConfiguration{

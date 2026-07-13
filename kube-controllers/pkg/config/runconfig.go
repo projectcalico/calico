@@ -96,6 +96,7 @@ type AutoHostEndpointTemplate struct {
 	InterfaceCIDRs   []string
 	InterfacePattern string
 	Labels           map[string]string
+	Annotations      map[string]string
 	NodeSelector     string
 }
 
@@ -471,6 +472,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					InterfacePattern: template.InterfacePattern,
 					NodeSelector:     template.NodeSelector,
 					Labels:           template.Labels,
+					Annotations:      template.Annotations,
 				}
 
 				templates = append(templates, rcTemplate)
@@ -508,6 +510,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					InterfacePattern: rcTemplate.InterfacePattern,
 					NodeSelector:     rcTemplate.NodeSelector,
 					Labels:           rcTemplate.Labels,
+					Annotations:      rcTemplate.Annotations,
 				}
 
 				templates = append(templates, scTemplate)
