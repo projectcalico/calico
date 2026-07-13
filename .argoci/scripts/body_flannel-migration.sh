@@ -24,7 +24,7 @@ if [ "${USE_HASH_RELEASE}" == "true" ]; then
   echo "[INFO] Using hash release for flannel migration"
   LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
-  DOCS_URL=$(curl --retry 9 --retry-all-errors -sS ${LATEST_HASHREL})
+  DOCS_URL=$(curl --retry 9 --retry-all-errors -fsS ${LATEST_HASHREL})
   echo "Using $DOCS_URL for hash release base url"
 else
   if [[ "${RELEASE_STREAM}" == "master" ]]; then
