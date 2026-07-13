@@ -189,6 +189,16 @@ if command -v python3.10 >/dev/null 2>&1 && ! python3.10 -c 'import ensurepip' 2
     || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
 fi
 
+# Windows jobs' check-prereqs runs puttygen (Windows SSH-key conversion); the
+# runner image lacks putty-tools (Semaphore's agent shipped it). Only needed when
+# provisioning Windows nodes. Stopgap until the runner image adds it (argoci-images).
+if [[ "${CREATE_WINDOWS_NODES:-false}" == "true" ]] && ! command -v puttygen >/dev/null 2>&1; then
+  echo "[INFO] installing putty-tools (runner image lacks puttygen; needed by windows:check-prereqs)..."
+  sudo apt-get update -qq 2>/dev/null || true
+  sudo apt-get install -y putty-tools 2>/dev/null \
+    || echo "[WARN] could not install putty-tools; windows check-prereqs may fail"
+fi
+
 echo "[INFO] initialising bz profile..."
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true
