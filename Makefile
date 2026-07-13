@@ -152,10 +152,6 @@ bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
 
 CHART_DESTINATION ?= ./bin
 
-chart-test:
-	$(info $(GIT_VERSION))
-	$(info $(GIT_VERSION:v%=%))
-
 # Build helm charts.
 chart: $(CHART_DESTINATION)/tigera-operator-$(GIT_VERSION).tgz \
 			 $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz \
