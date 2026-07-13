@@ -162,9 +162,13 @@ if ! command -v bz >/dev/null 2>&1; then
       echo "[INFO] bz installed (asset id=${BZ_ASSET_ID}, attempt ${attempt})"
       bz_ok=1; break
     fi
-    sleep_s=$(( attempt * 5 + RANDOM % 10 ))
-    echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}'); retrying in ${sleep_s}s"
-    sleep "${sleep_s}"
+    if [[ ${attempt} -lt 8 ]]; then
+      sleep_s=$(( attempt * 5 + RANDOM % 10 ))
+      echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}'); retrying in ${sleep_s}s"
+      sleep "${sleep_s}"
+    else
+      echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}')"
+    fi
   done
   [[ -n "${bz_ok}" ]] || { echo "[ERROR] failed to install bz from ${BZ_REPO} after 8 attempts (GitHub rate limit?)"; exit 1; }
 fi
@@ -213,8 +217,7 @@ else
 fi
 # aws-openshift:check-prereqs expects the Red Hat pull secret at this path.
 if [[ -f "${HOME}/secrets/redhat-pull-secret.txt" ]]; then
-  cp "${HOME}/secrets/redhat-pull-secret.txt" "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
-  chmod 0600 "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
+  install -m 0600 "${HOME}/secrets/redhat-pull-secret.txt" "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
   echo "[INFO] staged redhat-pull-secret.txt into ${BZ_LOCAL_DIR}/config"
 fi
 
