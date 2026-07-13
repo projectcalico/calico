@@ -22,6 +22,10 @@ sleep $((RANDOM % 60))
 createLocalSecret "marvin" "${HOME}/.keys/marvin" || true
 createLocalSecret "banzai-google-service-account.json" "${HOME}/secrets/banzai-google-service-account.json" || true
 createLocalSecret "docker_cfg.json" "${HOME}/.docker/config.json" || true
+# Red Hat pull secret for aws-openshift provisioning; no-op until the secret is
+# added to the argoci store (see aws-openshift:check-prereqs). Staged into the
+# bz profile below.
+createLocalSecret "redhat-pull-secret.txt" "${HOME}/secrets/redhat-pull-secret.txt" || true
 
 # GCP auth for provisioning + docker registry auth (ported from Semaphore prologue
 # lines 122-123 / 166; our first port dropped these, assuming ArgoCI provided them).
@@ -91,7 +95,10 @@ export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
 export GOOGLE_REGIONS=("us-central1" "us-west1")
 export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
-export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
+# --project is required: without it gcloud uses the runner's default project
+# (tigera-cc-dev on ArgoCI, where the SA can't list zones) instead of the e2e
+# project, and GOOGLE_ZONE fails to resolve for every unpinned gcp job.
+export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGLE_PROJECT}" --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
 export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
@@ -134,10 +141,36 @@ if ! command -v bz >/dev/null 2>&1; then
   : "${BZ_REPO:?BZ_REPO not set (expected from banzai-secrets)}"
   : "${GITHUB_ACCESS_TOKEN:?GITHUB_ACCESS_TOKEN not set (expected from banzai-secrets)}"
   [[ -n "${BZ_VERSION:-}" ]] && BZ_RELEASE="tags/${BZ_VERSION}" || BZ_RELEASE="latest"
-  BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-  echo "[INFO] bz asset id=${BZ_ASSET_ID}"
-  wget -q --auth-no-challenge --header='Accept:application/octet-stream' "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz"
-  chmod +x "${BZ_GLOBAL_BIN}/bz"
+  # GitHub rate-limits (esp. the secondary/concurrent limit) when the whole
+  # pipeline fans out ~50 pods at once. A 403 returns a JSON error body, not a
+  # curl error, so plain `curl -s` (no -f) let it through and `jq '.assets[]'`
+  # hit "Cannot iterate over null" -> empty asset id -> bz never installed and
+  # the job died pre-provision. Retry with backoff + per-pod jitter, fail curl
+  # on HTTP errors, validate the asset id is numeric and the binary is sane.
+  bz_ok=""
+  for attempt in $(seq 1 8); do
+    api=$(curl -fsS --retry 3 --retry-all-errors \
+            -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE}" 2>/dev/null || true)
+    BZ_ASSET_ID=$(printf '%s' "${api}" | jq -r 'if (type=="object" and (.assets|type)=="array") then (.assets[]|select(.name|test("^bz.*linux-amd64"))|.id) else empty end' 2>/dev/null | head -1)
+    if [[ "${BZ_ASSET_ID}" =~ ^[0-9]+$ ]] \
+       && wget -q --tries=3 --waitretry=5 --auth-no-challenge --header='Accept:application/octet-stream' \
+            "https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}" -O "${BZ_GLOBAL_BIN}/bz" \
+       && [[ $(stat -c%s "${BZ_GLOBAL_BIN}/bz" 2>/dev/null || echo 0) -gt 1000000 ]]; then
+      chmod +x "${BZ_GLOBAL_BIN}/bz"
+      echo "[INFO] bz installed (asset id=${BZ_ASSET_ID}, attempt ${attempt})"
+      bz_ok=1; break
+    fi
+    if [[ ${attempt} -lt 8 ]]; then
+      sleep_s=$(( attempt * 5 + RANDOM % 10 ))
+      echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}'); retrying in ${sleep_s}s"
+      sleep "${sleep_s}"
+    else
+      echo "[WARN] bz install attempt ${attempt}/8 failed (asset_id='${BZ_ASSET_ID:-}')"
+    fi
+  done
+  [[ -n "${bz_ok}" ]] || { echo "[ERROR] failed to install bz from ${BZ_REPO} after 8 attempts (GitHub rate limit?)"; exit 1; }
 fi
 echo "[INFO] bz resolved at $(command -v bz || echo '<none>')"
 
@@ -160,6 +193,16 @@ if command -v python3.10 >/dev/null 2>&1 && ! python3.10 -c 'import ensurepip' 2
     || echo "[WARN] could not install python3.10-venv; bz venv creation may fail"
 fi
 
+# Windows jobs' check-prereqs runs puttygen (Windows SSH-key conversion); the
+# runner image lacks putty-tools (Semaphore's agent shipped it). Only needed when
+# provisioning Windows nodes. Stopgap until the runner image adds it (argoci-images).
+if [[ "${CREATE_WINDOWS_NODES:-false}" == "true" ]] && ! command -v puttygen >/dev/null 2>&1; then
+  echo "[INFO] installing putty-tools (runner image lacks puttygen; needed by windows:check-prereqs)..."
+  sudo apt-get update -qq 2>/dev/null || true
+  sudo apt-get install -y putty-tools 2>/dev/null \
+    || echo "[WARN] could not install putty-tools; windows check-prereqs may fail"
+fi
+
 echo "[INFO] initialising bz profile..."
 ( cd "${HOME}" && bz init profile -n "${BZ_PROFILE_NAME}" --skip-prompt --secretsPath "${HOME}/secrets" ) \
   |& tee "${BZ_LOGS_DIR}/initialize.log" || true
@@ -171,6 +214,11 @@ if [[ -f "${HOME}/.docker/config.json" ]]; then
   echo "[INFO] staged docker_auth.json into ${BZ_LOCAL_DIR}/config"
 else
   echo "[WARN] ${HOME}/.docker/config.json missing; docker_auth not staged"
+fi
+# aws-openshift:check-prereqs expects the Red Hat pull secret at this path.
+if [[ -f "${HOME}/secrets/redhat-pull-secret.txt" ]]; then
+  install -m 0600 "${HOME}/secrets/redhat-pull-secret.txt" "${BZ_LOCAL_DIR}/config/redhat-pull-secret.txt"
+  echo "[INFO] staged redhat-pull-secret.txt into ${BZ_LOCAL_DIR}/config"
 fi
 
 echo "[INFO] exiting prologue (PROVISIONER=${PROVISIONER} RELEASE_STREAM=${RELEASE_STREAM} CLUSTER_NAME=${CLUSTER_NAME})"
