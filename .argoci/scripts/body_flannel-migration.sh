@@ -24,7 +24,7 @@ if [ "${USE_HASH_RELEASE}" == "true" ]; then
   echo "[INFO] Using hash release for flannel migration"
   LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
-  DOCS_URL=$(curl --retry 9 --retry-all-errors -sS ${LATEST_HASHREL})
+  DOCS_URL=$(curl --retry 9 --retry-all-errors -fsS ${LATEST_HASHREL})
   echo "Using $DOCS_URL for hash release base url"
 else
   if [[ "${RELEASE_STREAM}" == "master" ]]; then
@@ -109,7 +109,7 @@ spec:
 EOF
 
 # Update flannel.yaml to use the podCIDR that CRC sets up.
-wget -O flannel.yaml "$DOWNLEVEL_MANIFEST"
+wget --tries=3 --waitretry=5 -O flannel.yaml "$DOWNLEVEL_MANIFEST"
 sed -i "s?10.244.0.0/16?192.168.0.0/16?g" ./flannel.yaml
 kubectl apply -f - < ./flannel.yaml
 sleep 30 # wait for flannel to come up
@@ -121,7 +121,7 @@ K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' \
 
 kubectl delete -n kube-system ds cni-installer || true  # remove the CNI installer daemonset
 kubectl apply -f "$DOCS_URL/$CALICO_MANIFEST"
-wget -O calico-migration.yaml "$DOCS_URL/$MIGRATION_MANIFEST"
+wget --tries=3 --waitretry=5 -O calico-migration.yaml "$DOCS_URL/$MIGRATION_MANIFEST"
 kubectl apply -f - < ./calico-migration.yaml
 sleep 5  # make sure the job has started before we check its status
 kubectl -n kube-system get jobs flannel-migration
