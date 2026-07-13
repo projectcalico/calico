@@ -61,7 +61,11 @@ func IsCloudBuild() bool {
 type Options struct {
 	// Cloud indicates that this operator is running as a Calico Cloud install. It is true when the
 	// cloud-operator-config ConfigMap is present or the relevant cloud env vars are set.
-	Cloud           bool
+	Cloud bool
+	// ElasticExternal is parsed from cloud-operator-config for cloud's own startup verify (see verify).
+	// It is NOT the operator's external-ES gate: controllers read that from ControllerOptions.ElasticExternal,
+	// which main.go sources solely from operator-bootstrap-config via discovery.UseExternalElastic. Cloud
+	// provisions ELASTIC_EXTERNAL into both configmaps so the two stay consistent.
 	ElasticExternal bool
 	ESMigration     bool
 }

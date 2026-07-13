@@ -548,11 +548,16 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		ShutdownContext:     ctx,
 		K8sClientset:        clientset,
 		MultiTenant:         multiTenant,
-		ElasticExternal:     discovery.UseExternalElastic(bootConfig) || cloudOpts.ElasticExternal,
-		Cloud:               cloudOpts.Cloud,
-		ESMigration:         cloudOpts.ESMigration,
-		UseV3CRDs:           v3CRDs,
-		APIDiscovery:        apiDiscovery,
+		// External-ES is a single knob, sourced only from the operator bootstrap configmap
+		// (operator-bootstrap-config) via discovery.UseExternalElastic. Calico Cloud provisions
+		// ELASTIC_EXTERNAL there too (in addition to its own cloud-operator-config, which cloud.Load
+		// still reads for its startup verify), so cloud and enterprise share one downstream knob
+		// rather than the previous two-source OR.
+		ElasticExternal: discovery.UseExternalElastic(bootConfig),
+		Cloud:           cloudOpts.Cloud,
+		ESMigration:     cloudOpts.ESMigration,
+		UseV3CRDs:       v3CRDs,
+		APIDiscovery:    apiDiscovery,
 	}
 
 	// Before we start any controllers, make sure our options are valid.
