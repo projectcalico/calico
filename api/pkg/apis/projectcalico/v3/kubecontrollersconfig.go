@@ -155,7 +155,7 @@ type AutoHostEndpointConfig struct {
 
 	// Templates contains definition for creating AutoHostEndpoints
 	// +listType=atomic
-	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
+	Templates []Template `json:"templates,omitempty" validate:"omitempty,dive"`
 }
 
 // DefaultHostEndpointMode controls whether a default host endpoint is created for each node.

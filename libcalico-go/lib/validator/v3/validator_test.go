@@ -4192,6 +4192,29 @@ func init() {
 				Annotations: map[string]string{"not a valid key": "value"},
 			}, false,
 		),
+		// Templates are nested in a slice on AutoHostEndpointConfig; verify that
+		// per-template validation is actually reached (i.e. the slice dives).
+		Entry("should accept a nested template with valid annotations",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{Annotations: map[string]string{"projectcalico.org/note": "ok"}}},
+				}},
+			}}, true,
+		),
+		Entry("should reject a nested template with an invalid annotation key",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{Annotations: map[string]string{"not a valid key": "value"}}},
+				}},
+			}}, false,
+		),
+		Entry("should reject a nested template with an invalid generateName",
+			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{
+				Node: &api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{
+					Templates: []api.Template{{GenerateName: "test$set"}},
+				}},
+			}}, false,
+		),
 
 		// BGP Communities validation in BGPConfigurationSpec
 		Entry("should not accept community when PrefixAdvertisement is empty", &api.BGPConfiguration{
