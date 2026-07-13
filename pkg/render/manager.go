@@ -366,7 +366,7 @@ func (c *managerComponent) managerDeployment() *appsv1.Deployment {
 		initContainers = append(initContainers, c.cfg.VoltronLinseedKeyPair.InitContainer(ManagerNamespace, securitycontext.NewNonRootContext()))
 	}
 
-	managerPodContainers := []corev1.Container{c.managerUIAPIsContainer(), c.decorateCloudVoltronContainer(c.voltronContainer())}
+	managerPodContainers := []corev1.Container{c.decorateCloudUIAPIsContainer(c.managerUIAPIsContainer()), c.decorateCloudVoltronContainer(c.voltronContainer())}
 	if c.cfg.Tenant == nil {
 		managerPodContainers = append(managerPodContainers, c.dashboardContainer(), c.managerContainer())
 	}

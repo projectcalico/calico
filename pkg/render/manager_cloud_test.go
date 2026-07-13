@@ -80,6 +80,12 @@ var _ = Describe("Tigera Secure Cloud Manager rendering tests", func() {
 			))
 		})
 
+		It("should disable Kibana login on the ui-apis container for all cloud (TSLA-11182)", func() {
+			// Even for a single-tenant cluster (where upstream leaves login enabled), cloud disables it.
+			uiAPIs := template.Containers[0]
+			Expect(uiAPIs.Env).Should(ContainElement(corev1.EnvVar{Name: "ELASTIC_KIBANA_DISABLED", Value: "true"}))
+		})
+
 		It("should have default env vars overwritten by configmap override", func() {
 			Expect(voltron.Env).ShouldNot(ContainElements(
 				corev1.EnvVar{Name: "VOLTRON_K8S_CLIENT_QPS", Value: "20"},

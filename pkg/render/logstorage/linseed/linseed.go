@@ -472,8 +472,14 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 			corev1.EnvVar{Name: "LINSEED_METRICS_KEY", Value: l.cfg.KeyPair.VolumeMountKeyFilePath()},
 		)
 
-		if l.cfg.Tenant != nil && l.cfg.ExternalElastic {
-			// Overwrite policy activity index name until we create the tenant CR on all environments.
+		if l.cfg.Tenant.SingleTenant() && l.cfg.ExternalElastic {
+			// Single-tenant external-ES clusters have an artificial Tenant CR, so index base names aren't
+			// carried via Tenant.Spec.Indices (that only happens for multi-tenant clusters). Policy
+			// activity is a brand new index, so these clusters have no existing policy activity data
+			// under the default calico_policy_activity name. Pin it to the multi-tenant "standard"
+			// name now so that when these clusters are consolidated into multi-tenant, the data
+			// already lives in the target index and needs no migration. Multi-tenant clusters skip
+			// this and rely on Tenant.Spec.Indices (which resolves free vs. standard from the data plan).
 			envVars = append(envVars, corev1.EnvVar{Name: "ELASTIC_POLICY_ACTIVITY_BASE_INDEX_NAME", Value: "calico_policy_activity_standard"})
 		}
 	}

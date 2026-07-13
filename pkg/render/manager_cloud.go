@@ -35,6 +35,25 @@ type ManagerCloudResources struct {
 	ManagerExtraEnv map[string]string
 }
 
+// decorateCloudUIAPIsContainer applies Calico Cloud-only overrides to the ui-apis container.
+// TSLA-11182: Calico Cloud deprecates normal-user Kibana login, so the ui-apis Kibana login endpoint
+// is disabled for all Calico Cloud deployments (upstream only disables it for multi-tenant). Kibana
+// itself remains deployed for administrator use via the elastic superuser. Keeping this as a
+// cloud-gated decorator rather than editing the shared managerUIAPIsContainer keeps the enterprise
+// behavior (disable only for multi-tenant) unchanged.
+func (c *managerComponent) decorateCloudUIAPIsContainer(container corev1.Container) corev1.Container {
+	if !c.cfg.Cloud {
+		return container
+	}
+	const kibanaDisabledEnv = "ELASTIC_KIBANA_DISABLED"
+	if i := slices.IndexFunc(container.Env, func(env corev1.EnvVar) bool { return env.Name == kibanaDisabledEnv }); i != -1 {
+		container.Env[i].Value = "true"
+	} else {
+		container.Env = append(container.Env, corev1.EnvVar{Name: kibanaDisabledEnv, Value: "true"})
+	}
+	return container
+}
+
 func (c *managerComponent) decorateCloudVoltronContainer(container corev1.Container) corev1.Container {
 	if !c.cfg.Cloud {
 		return container

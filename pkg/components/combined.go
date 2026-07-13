@@ -30,3 +30,13 @@ func CombinedCalicoImage(installation *operatorv1.InstallationSpec) Component {
 	}
 	return ComponentCalico
 }
+
+// CalicoCloudImage returns the tesla-compiled variant of the combined calico image. It is the same
+// image repository as ComponentTigeraCalico (so ImageSet digests still resolve by that name),
+// published under a tesla- tag. It carries the Calico Cloud behavior for the components that need it
+// — currently only kube-controllers, the sole component with tesla-gated code. See TSLA-11580.
+func CalicoCloudImage() Component {
+	c := ComponentTigeraCalico
+	c.Version = "tesla-" + c.Version
+	return c
+}

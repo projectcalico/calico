@@ -334,7 +334,14 @@ func (c *kubeControllersComponent) ResolveImages(is *operatorv1.ImageSet) error 
 	path := c.cfg.Installation.ImagePath
 	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	if c.cfg.Cloud {
+		// Calico Cloud runs kube-controllers from the tesla-compiled variant of the combined image,
+		// which carries the Cloud behavior the enterprise mono image lacks. It is the same binary,
+		// so the container command and health probes below are unchanged. See TSLA-11580.
+		c.calicoImage, err = components.GetReference(components.CalicoCloudImage(), reg, path, prefix, is)
+	} else {
+		c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	}
 	if err != nil {
 		return err
 	}

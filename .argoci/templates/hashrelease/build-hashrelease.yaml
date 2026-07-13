@@ -62,6 +62,10 @@ spec:
             value: "{{workflow.parameters.hashReleaseURL}}"
           - name: CLOUD_REGISTRY
             value: gcr.io/unique-caldron-775/cnx/
+          # Point enterprise images at the cloud registry (not the quay.io default) so the
+          # hashrelease operator can pull them — otherwise ImagePullBackOff.
+          - name: ENTERPRISE_REGISTRY
+            value: gcr.io/unique-caldron-775/cnx/
           - name: DEBUG
             value: "true"
         volumeMounts:
