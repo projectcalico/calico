@@ -92,6 +92,21 @@ func (p *Program) Name() string {
 	panic("LIBBPF syscall stub")
 }
 
+func (p *Program) FD() int {
+	panic("LIBBPF syscall stub")
+}
+
+type ProgInfo struct {
+	ID            uint32
+	VerifiedInsns uint32
+	XlatedProgLen uint32
+	JitedProgLen  uint32
+}
+
+func GetProgInfo(fd int) (ProgInfo, error) {
+	panic("LIBBPF syscall stub")
+}
+
 func QueryClassifier(ifindex, handle, pref int, ingress bool) (int, error) {
 	panic("LIBBPF syscall stub")
 }
