@@ -4,6 +4,9 @@ version: condensed
 generateName: e2e-iptables-
 schedule: 10 23 * * 4
 globalPrologue: |
+    cd "${CI_HOME}/${CI_GIT_DIR}"
+    export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+    export ARGO_WORKFLOW_UID="{{workflow.uid}}"
     export DATAPLANE="${DATAPLANE:-CalicoIptables}"
     export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
     export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
