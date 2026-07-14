@@ -291,22 +291,27 @@ func runOpenStackMigrations(ctx context.Context, cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to build Calico datastore client")
 	}
-	defer func() {
-		_ = calicoClient.Close()
-	}()
 
 	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
 	migrator, doneC := networkpolicy.NewOneShotMigratorController(ctx, calicoClient, dataFeed)
 
 	stop := make(chan struct{})
-	defer close(stop)
 	go migrator.Run(stop)
 	dataFeed.Start()
 
+	interrupted := false
 	select {
 	case <-doneC:
 		logrus.Info("All OpenStack datastore migrations are complete")
 	case <-ctx.Done():
+		interrupted = true
+	}
+
+	// Clean up explicitly rather than with defers: Fatal below exits
+	// immediately and would skip any deferred cleanup.
+	close(stop)
+	_ = calicoClient.Close()
+	if interrupted {
 		logrus.Fatal("Interrupted before datastore migrations completed")
 	}
 }
