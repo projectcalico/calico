@@ -581,7 +581,11 @@ deny:
 	rc = TC_ACT_SHOT;
 
 allow:
-	if (CALI_LOG_LEVEL_INFO >= CALI_LOG_LEVEL_INFO || PROFILING) {
+	if (CALI_F_VXLAN && CALI_F_TO_HOST && rc != TC_ACT_SHOT) {
+		bpf_skb_change_type(ctx->skb, PACKET_HOST);
+	}
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
 
 		if (PROFILING) {
@@ -595,9 +599,6 @@ allow:
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
 					ctx->state->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
-			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
-				bpf_skb_change_type(ctx->skb, PACKET_HOST);
-			}
 			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
 					rc, prog_end_time-state->prog_start_time);
 		}
