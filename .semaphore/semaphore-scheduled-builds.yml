@@ -863,6 +863,21 @@ blocks:
               values: ["operator"]
             - env_var: DATAPLANE
               values: ["CalicoBPF"]
+  - name: "E2E images"
+    run:
+      when: >-
+        true or change_in(['/metadata.mk', '/lib.Makefile', '/e2e/images/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      jobs:
+        - name: "E2E images: rapidclient CI"
+          commands:
+            - .semaphore/run-and-monitor rapidclient-ci.log make -C e2e/images/rapidclient ci
   - name: E2E script & pipeline validations
     run:
       when: >-
