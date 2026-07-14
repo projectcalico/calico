@@ -30,6 +30,6 @@ func init() {
 func TestWindataplane(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/felix_dataplane_windows_suite.xml"
+	testutils.RegisterJUnitReporter("felix_dataplane_windows_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/dataplane/windows", suiteConfig, reporterConfig)
 }

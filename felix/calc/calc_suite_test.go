@@ -30,6 +30,6 @@ func init() {
 func TestCalculationGraph(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_calc_suite.xml"
+	testutils.RegisterJUnitReporter("felix_calc_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/calc", suiteConfig, reporterConfig)
 }
