@@ -9,12 +9,15 @@ TAG_NAME ?= $(shell git branch --show-current)
 
 # Architectures the published manifest list must cover. arm64 is required: the
 # packet-size server runs on arm64 clusters (e.g. azr-aks ARM), and an amd64-only
-# image is exactly the bug this image replaces.
-ARCHES ?= amd64 arm64
+# image is exactly the bug this image replaces. Assigned with := (not ?=) because
+# lib.Makefile, included above, already sets ARCHES to its four-arch default, so
+# ?= would be a no-op and publish would build ppc64le/s390x too. Still overridable
+# on the command line.
+ARCHES := amd64 arm64
 
 IMAGE = $(QUAY_REGISTRY)/rapidclient
 
-.PHONY: build image publish clean test
+.PHONY: build image publish clean ut fv st ci
 
 build: bin/rapidclient-$(ARCH)
 
@@ -26,8 +29,17 @@ bin/rapidclient-%: $(filter-out %_test.go,$(wildcard *.go))
 	$(DOCKER_RUN) -e CGO_ENABLED=0 -e GOARCH=$* $(CALICO_BUILD) \
 		go build -o $@ -ldflags "-s -w" .
 
-test:
+# ut is the repo-wide unit-test convention; lib.Makefile's `test: ut fv st`
+# aggregates it. This image has no fv/st layer, so those are no-ops (defining them
+# is what makes `make test` work rather than erroring on a missing `ut`/`fv`/`st`).
+ut:
 	$(DOCKER_RUN) $(CALICO_BUILD) go test ./...
+
+fv st:
+	@:
+
+# ci is the CI entrypoint (see .semaphore/.../20-e2e-images.yml).
+ci: ut
 
 # image builds a local, single-arch image for development (buildx --load cannot
 # load a multi-platform build). TARGETARCH drives the Dockerfile's binary COPY.
