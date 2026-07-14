@@ -675,6 +675,8 @@ func mergeEnabledControllers(envVars map[string]string, status *v3.KubeControlle
 				}
 			case "flannelmigration":
 				log.WithField(EnvEnabledControllers, v).Fatal("cannot run flannelmigration with other controllers")
+			case "openstackmigrations":
+				log.WithField(EnvEnabledControllers, v).Fatal("cannot run openstackmigrations with other controllers")
 			default:
 				log.Fatalf("Invalid controller '%s' provided.", controllerType)
 			}
