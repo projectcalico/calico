@@ -115,11 +115,20 @@ func run(parentCtx context.Context, cliCfg Config) {
 	// and then exits.  No Kubernetes cluster exists in that context, so this mode
 	// branches off before anything that assumes one.
 	if v, ok := os.LookupEnv(config.EnvEnabledControllers); ok {
+		soloRequested := false
+		otherTokens := false
 		for t := range strings.SplitSeq(v, ",") {
-			if strings.TrimSpace(t) != "openstackmigrations" {
-				continue
+			switch strings.TrimSpace(t) {
+			case "openstackmigrations":
+				soloRequested = true
+			case "":
+				// Ignore empty entries.
+			default:
+				otherTokens = true
 			}
-			if strings.Trim(v, " ,") != "openstackmigrations" {
+		}
+		if soloRequested {
+			if otherTokens {
 				logrus.WithField(config.EnvEnabledControllers, v).Fatal("openstackmigrations must be the only enabled controller")
 			}
 			runOpenStackMigrations(parentCtx, cfg)
