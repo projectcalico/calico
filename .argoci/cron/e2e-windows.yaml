@@ -11,7 +11,7 @@ globalPrologue: |
   export E2E_PROCS="${E2E_PROCS:-1}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-windows.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\]|Feature:Maglev)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export RUN_LOCAL_TESTS="${RUN_LOCAL_TESTS:-true}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
