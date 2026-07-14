@@ -2,317 +2,149 @@
 
 ## Goal
 
-Turn the existing single-purpose `rapidclient` e2e image into a **multi-mode Go
-binary** dispatched by a `MODE` env var, and **port the `k8s-e2e-dataplane-server`**
-(currently a Flask + socat image in `tigera/k8s-e2e/images/flask`) into it as a
-new `server` mode.
+`rapidclient` is a multi-mode Go binary for e2e tests, dispatched by a `MODE`
+environment variable. It hosts two modes:
 
-Primary motivations:
+- `client` — a minimal HTTP client that forces source-port reuse (used by the
+  maglev consistent-hashing tests).
+- `server` — the datapath test server (HTTP length/echo endpoints + UDP echo)
+  used by the `Packet Size Verification` suite.
 
-1. **Fix the arm64 gap.** `calico/k8s-e2e-dataplane-server:stable` is published
-   **amd64-only** (verified: single-arch manifest). On arm64 clusters (azr-aks
-   ARM lane) the server container runs the amd64 binary and crashes instantly
-   (exitCode 255), so every `Packet Size Verification` spec fails — chronic for
-   6+ weeks. An in-repo Go binary built via Calico's `buildx` gets arm64 for free.
-2. **Remove an external dependency.** The packet-size server source lives outside
-   the monorepo (`tigera/k8s-e2e`) and is pinned to a floating `:stable` tag,
-   which is how the arm64 regression went unnoticed. Bringing it in-repo puts it
-   under the same review/build/multi-arch guarantees as other code.
-3. **Establish a reusable pattern.** A mode-dispatched utility image lets future
-   e2e helpers be added as new modes instead of new external images.
+The image is built as a **multi-arch manifest list** (`amd64` + `arm64`) and
+published to `quay.io/tigeradev/rapidclient`.
+
+Motivations:
+
+1. **arm64 coverage.** The `server` mode replaces the external
+   `calico/k8s-e2e-dataplane-server:stable` image, which is published amd64-only.
+   On arm64 clusters (e.g. the azr-aks ARM lane) the amd64 server binary crashes
+   on start (exitCode 255) and every `Packet Size Verification` spec fails. An
+   in-repo Go binary built via Calico's `buildx` is multi-arch by construction.
+2. **No external dependency.** The datapath server source lives in-repo rather
+   than in `tigera/k8s-e2e` behind a floating `:stable` tag, so it is covered by
+   the same review/build/multi-arch guarantees as the rest of the code.
+3. **A reusable pattern.** Mode dispatch lets future e2e helpers be added as new
+   modes of one image instead of new external images.
 
 ## Non-goals
 
 - Re-implementing third-party upstream test images (agnhost, test-webserver,
-  iperf3, socat, netshoot). Those stay as upstream references in `images.go`;
+  iperf3, socat, netshoot). They remain upstream references in `images.go`;
   they are already multi-arch and not Calico-owned.
-- Changing the `Packet Size Verification` test logic or what it asserts. This is
-  a like-for-like server replacement; the suite must pass unchanged on amd64 and
-  newly pass on arm64.
-- Changing the client (maglev) invocation. The `docker run … -url … -port …`
-  call in `maglev.go` keeps working verbatim (only its image ref changes, via
+- Altering `Packet Size Verification` test logic or assertions. `server` mode is
+  a like-for-like replacement of the flask server.
+- Altering the maglev client invocation. The `docker run … -url … -port …` call
+  in `maglev.go` is unchanged except for its image ref (now via
   `RapidClientImage()`).
-- Pinning image tags to immutable **digests**. This PR does select a per-PR tag
-  for CI (`RAPIDCLIENT_TAG`; see the side-load section) so the test runs against
-  the PR-built image, but digest-pinning the published image is separate future
-  hardening, not in scope here.
-- Deleting anything in `tigera/k8s-e2e`. We stop *referencing* the flask image;
-  retiring it there is a separate follow-up.
+- Digest-pinning the published image. CI runs against a per-lane tag loaded onto
+  the nodes (see *Image delivery to test nodes*); pinning the published `:latest`
+  to an immutable digest is separate future hardening.
+- Deleting `tigera/k8s-e2e/images/flask`. This binary stops *referencing* the
+  flask image; retiring it there is a follow-up.
 
-## Approach
+## Design
 
-### Dispatch (decided: default-client + `MODE=server`)
+### Mode dispatch
 
-`main.go` reads the `MODE` env var and dispatches through a **mode registry**:
+`main.go` reads `MODE` and dispatches through a small registry:
 
-- `MODE` unset/empty → **`client`** mode (backward-compatible default; preserves
-  the existing flag interface and the `maglev.go` invocation with zero change).
-- `MODE=server` → `server` mode (the ported dataplane server), injected by the
-  packet_size pod customizer.
-- Unknown `MODE` → exit non-zero with a clear error listing registered modes.
+- `MODE` unset/empty → `client` (backward-compatible default; the maglev
+  invocation and the old flag interface work unchanged).
+- `MODE=server` → `server`, set by the packet-size pod customizer.
+- Unknown `MODE` → exit non-zero with an error listing the registered modes.
 
-Each mode owns its **own `flag.FlagSet`** parsed from `os.Args[1:]`, so modes
-have independent flag/arg surfaces. This is the "general multi-tool framework"
-shape (decided), kept minimal: a registry + interface now, only `client` and
-`server` implemented. Adding a mode later = one `registerMode` call in an
-`init()`.
-
-### Package layout (`e2e/images/rapidclient/`, name kept)
-
-```
-main.go        # dispatch: read MODE (default "client"), look up mode, run
-mode.go        # Mode interface + registry (registerMode / lookupMode / modeNames)
-client.go      # client mode: today's rapidclient logic, registered via init()
-server.go      # server mode: HTTP /length//post// + UDP echo, registered via init()
-server_test.go # unit tests for server endpoints + UDP echo
-Dockerfile     # unchanged (FROM scratch; ENTRYPOINT ["/rapidclient"])
-Makefile       # CHANGED: multi-arch buildx manifest push (amd64 + arm64)
-README.md      # updated to document modes
-```
-
-Image name, dir name, quay repo (`quay.io/tigeradev/rapidclient`), CI push job,
-and the `change_in('/e2e/images/rapidclient/*.go')` trigger all stay as-is.
-
-### `images.go` change
-
-Both the client (maglev) and the server (packet-size) use the **same** image, so
-the two former constants (`RapidClient`, `PacketSizeServer`) are replaced by one
-env-aware helper. It composes the ref from `RAPIDCLIENT_TAG` and reports whether
-the image was side-loaded onto the nodes (see the side-load section below):
-
-```go
-const rapidClientRepo = "quay.io/tigeradev/rapidclient"
-
-// RapidClientImage returns the image ref and whether it was side-loaded.
-func RapidClientImage() (ref string, preloaded bool) {
-    if tag := os.Getenv("RAPIDCLIENT_TAG"); tag != "" {
-        return rapidClientRepo + ":" + tag, true   // PR CI: pinned, imported onto nodes
-    }
-    return rapidClientRepo + ":latest", false       // other providers / local: published image
-}
-```
-
-The consumers are `packet_size.go` (server pod) and `maglev.go` (client on the
-external node). The doc comment carries the client/server mode contract and a
-pointer to `e2e/images/rapidclient/server.go` (replacing the old
-`// Source: tigera/k8s-e2e/images/flask.`).
-
-### `packet_size.go` change
-
-`withPacketSizeServer` currently swaps the image, nils args, and sets the
-readiness path to `/length/1`. Add the mode env:
-
-```go
-func withPacketSizeServer(pod *v1.Pod) {
-    image, preloaded := images.RapidClientImage()
-    for i := range pod.Spec.Containers {
-        pod.Spec.Containers[i].Image = image
-        pod.Spec.Containers[i].Args  = nil
-        if preloaded {
-            // Side-loaded onto the node (PR CI) — pin to the loaded copy and fail
-            // loudly if it's absent rather than pulling a stale published image.
-            pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
-        }
-        pod.Spec.Containers[i].Env   = append(pod.Spec.Containers[i].Env,
-            v1.EnvVar{Name: "MODE", Value: "server"})
-        if rp := pod.Spec.Containers[i].ReadinessProbe; rp != nil && rp.HTTPGet != nil {
-            rp.HTTPGet.Path = "/length/1"
-        }
-    }
-}
-```
-
-`PORT` is left unset → server defaults to 5000 (matches `packetServerPort` and
-the container port already in the base conncheck server pod).
-
-### PR-image side-load (`RAPIDCLIENT_TAG` + `load_images.sh`)
-
-**Problem.** The packet-size test must run against the `rapidclient` image built
-*from the PR under test* — but calico deliberately withholds registry push
-credentials from PR builds (fork PRs are untrusted;
-`.semaphore/…/blocks/10-prerequisites.yml`). So the PR-built image can't be
-pushed to quay, and a floating `:latest` reference would silently run the
-*pre-existing* published image (old single-mode client) — the server pod exits 1
-and every spec times out. This is the exact failure this section prevents.
-
-**Mechanism (no registry push).** On the local-binary **gcp-kubeadm** PR path,
-build the image locally and import it straight into the nodes' runtimes:
-
-- New phase `.semaphore/end-to-end/scripts/phases/load_images.sh`, sourced from
-  `body_standard.sh` after `configure.sh`, before `run_tests.sh`. It:
-  1. builds `quay.io/tigeradev/rapidclient:$TAG` from PR source (`TAG` =
-     `pr-$SEMAPHORE_GIT_PR_NUMBER`, or `e2e-<sha>` off-PR) — no push;
-  2. `docker save`s it once, then `ssh 'sudo ctr -n k8s.io images import'` onto
-     every worker node's containerd and `ssh 'sudo docker load'` onto the
-     external node (maglev runs the image via `docker run`);
-  3. exports `RAPIDCLIENT_TAG=$TAG` and forwards it into the e2e container via
-     `K8S_E2E_DOCKER_EXTRA_FLAGS` (`--env RAPIDCLIENT_TAG`), which `run_tests.sh`
-     already passes to its `docker run` → read by `RapidClientImage()`.
-- `RapidClientImage()` returns `preloaded=true` when `RAPIDCLIENT_TAG` is set, and
-  `withPacketSizeServer` then sets `ImagePullPolicy: Never` — a missing/failed
-  load fails loudly instead of masking with a stale registry pull.
-
-**Scope & fallback.** Node enumeration relies on the gcp-kubeadm CRC terraform
-outputs (`terraform_output.json`) + `master_ssh_key`, which don't exist on other
-providers. So the phase no-ops unless `RUN_LOCAL_TESTS` *and*
-`PROVISIONER=gcp-kubeadm`; every other run (other providers, scheduled hashrelease
-runs, local dev) leaves `RAPIDCLIENT_TAG` unset and uses the published `:latest`
-with default pull policy — unchanged behaviour. The phase fails loudly
-(`set -eo pipefail`, inherited) on any build/import error rather than letting a
-later `ErrImageNeverPull` surface mid-test.
-
-### Multi-arch build (the actual bug fix)
-
-**Current state** (verbatim, so the diff is unambiguous).
-`e2e/images/rapidclient/Makefile`:
-
-```makefile
-include ../../../metadata.mk
-PACKAGE_NAME=github.com/projectcalico/calico/e2e/images/rapidclient
-include ../../../lib.Makefile
-QUAY_REGISTRY ?= quay.io/tigeradev
-TAG_NAME ?= $(shell git branch --show-current)
-
-bin/rapidclient: main.go
-	mkdir -p bin
-	$(DOCKER_RUN) -e CGO_ENABLED=0 $(CALICO_BUILD) go build -o $@ -ldflags "-s -w" .
-
-image: bin/rapidclient
-	docker buildx build --load --platform=linux/$(ARCH) --pull \
-		--build-arg BINARY_PATH=bin/rapidclient -f Dockerfile \
-		-t $(QUAY_REGISTRY)/rapidclient:$(TAG_NAME) .
-
-publish: image
-	docker push $(QUAY_REGISTRY)/rapidclient:$(TAG_NAME)
-	@if [ "$(TAG_NAME)" = "master" ]; then \
-		docker tag  ...:$(TAG_NAME) ...:latest; docker push ...:latest; fi
-```
-
-`Dockerfile`: `FROM scratch` / `COPY ${BINARY_PATH} /rapidclient` /
-`ENTRYPOINT ["/rapidclient"]`. CGO is already disabled, so the binary is static
-and `FROM scratch` is correct — no Dockerfile change needed for the binary
-itself (only inputs change).
-
-CI: `.semaphore/push-images/e2e-test.yml` already logs into quay
-(`quay-tigeradev-hashrelease` secret) in its prologue and runs
-`make -C e2e publish-test-images CONFIRM=true` (which calls this Makefile's
-`publish`). Triggered by `change_in('/e2e/images/rapidclient/*.go')` in
-`.semaphore/semaphore.yml`. **Authentication and the publish job already exist** —
-we are not adding CI wiring, only changing the Makefile to emit a manifest list.
-
-**The defect:** `image` uses `--load --platform=linux/$(ARCH)` (default
-`ARCH=amd64`) — a single-arch image loaded locally, so the published tag is
-amd64-only. That is the arm64 bug.
-
-**Change** — build both arch binaries and push one **manifest list**:
-
-```makefile
-ARCHES = amd64 arm64
-
-bin/rapidclient-%:
-	mkdir -p bin
-	$(DOCKER_RUN) -e CGO_ENABLED=0 -e GOARCH=$* $(CALICO_BUILD) \
-		go build -o $@ -ldflags "-s -w" .
-
-# Dockerfile takes BINARY_PATH; buildx selects the right per-arch binary via
-# TARGETARCH. Build all platforms in one manifest and --push (cannot --load a
-# multi-platform build).
-publish: $(addprefix bin/rapidclient-,$(ARCHES))
-	docker buildx build --platform=$(subst $(space),$(comma),$(addprefix linux/,$(ARCHES))) \
-		--push --pull -f Dockerfile \
-		-t $(QUAY_REGISTRY)/rapidclient:$(TAG_NAME) .
-	@if [ "$(TAG_NAME)" = "master" ]; then \
-		docker buildx imagetools create -t $(QUAY_REGISTRY)/rapidclient:latest \
-			$(QUAY_REGISTRY)/rapidclient:$(TAG_NAME); fi
-```
-
-The `Dockerfile` gains a `TARGETARCH` arg so buildx copies the matching binary:
-`ARG TARGETARCH` / `COPY bin/rapidclient-${TARGETARCH} /rapidclient`. (Confirm
-the exact lib.Makefile multi-arch idiom during implementation — Calico already
-has `ARCHES`/manifest helpers in `lib.Makefile`; prefer reusing them over the
-hand-rolled `subst` above if a helper exists.)
-
-**Regression guard:** after publish, assert the tag is a manifest list with both
-platforms — `docker buildx imagetools inspect $(QUAY_REGISTRY)/rapidclient:$(TAG_NAME)`
-must list `linux/amd64` and `linux/arm64`; fail the target otherwise. This is the
-specific check that stops a silent regression to single-arch.
-
-This Makefile change is what resolves the arm64 failure; everything else just
-makes the server available to build in the first place.
-
-## Interfaces / data shapes
-
-### Mode registry (`mode.go`)
+Each mode owns its own `flag.FlagSet` parsed from `os.Args[1:]`, so modes have
+independent flag/arg surfaces. The framework is deliberately minimal — a registry
+plus a `Mode` interface, with only `client` and `server` implemented. A new mode
+is one `registerMode` call in an `init()`.
 
 ```go
 type Mode interface {
     Name() string
-    // Run parses its own flags from args and executes. Returns an error;
-    // main() maps non-nil to a non-zero exit.
+    // Run parses its own flags from args and executes. main() maps a non-nil
+    // return to a non-zero exit.
     Run(args []string) error
 }
 
-func registerMode(m Mode)          // called from each mode's init()
+func registerMode(m Mode)
 func lookupMode(name string) (Mode, bool)
-func modeNames() []string          // for the unknown-mode error message
+func modeNames() []string   // for the unknown-mode error
 ```
 
-`main()`:
 ```go
+// main()
 mode := os.Getenv("MODE")
-if mode == "" { mode = "client" }   // back-compat default
+if mode == "" { mode = "client" }
 m, ok := lookupMode(mode)
 if !ok { fatalf("unknown MODE %q; known modes: %v", mode, modeNames()) }
 if err := m.Run(os.Args[1:]); err != nil { log.Fatal(err) }
 ```
 
-### `client` mode (`client.go`) — behaviour preserved exactly
+### Package layout
 
-Flags (unchanged): `-url` (required), `-port` (default 12345), `-timeout`
-(30s), `-v`. Single GET from a fixed source port with `SO_REUSEADDR` and
-keep-alives disabled; prints the response body. Identical to today's `main.go`.
-
-The only consumer is `maglev.go:594`, which runs it on an **external node**:
-
-```go
-rapidClient, _ := images.RapidClientImage()
-cmd := fmt.Sprintf("sudo docker run --rm --net=host %s -url http://%s/shell?cmd=hostname -port %d",
-    rapidClient, ep, m.maglevConfig.SourcePort)
+```
+main.go        # dispatch: read MODE (default "client"), look up mode, run
+mode.go        # Mode interface + registry (registerMode / lookupMode / modeNames)
+client.go      # client mode, registered via init()
+server.go      # server mode: HTTP /length//post/ + UDP echo, registered via init()
+server_test.go # unit tests for server endpoints + UDP echo
+Dockerfile     # FROM scratch; TARGETARCH selects the per-arch binary
+Makefile       # multi-arch manifest build/publish + ut/ci
+README.md      # documents the modes
 ```
 
-`MODE` is unset here → defaults to `client` → flags parse exactly as today. The
-**invocation is unchanged**; the only edit is the image ref, now via
-`RapidClientImage()` (so the external node's side-loaded `RAPIDCLIENT_TAG` copy is
-used on PR CI, else the published `:latest`). (Note: the `/shell?cmd=hostname` URL
-is an endpoint on the *maglev backend* being load-balanced, not on our `server`
-mode — client mode is a generic HTTP GET tool and is agnostic to it.)
+The image name, directory, quay repo, and the `change_in('/e2e/images/rapidclient/*.go')`
+CI trigger are unchanged.
 
-### `server` mode (`server.go`) — ported contract
+### One image, two modes (`images.go`)
 
-Listens on `PORT` (env, default 5000). TCP HTTP and UDP echo on the **same port
-number**. Port comes from `PORT` env only — the `-p=`/`--port=` CLI override the
-old flask `runme.sh` accepted is **intentionally not replicated** (no consumer
-passes it; `withPacketSizeServer` sets `Args = nil`). This is the single
-deliberate functional difference from the python version.
+Both consumers use the same image, so a single env-aware helper composes the ref
+and reports whether the image was loaded onto the nodes (see *Image delivery*):
 
-**Dual-stack (decided, no fallback):** bind each listener to the unspecified
-address so Linux serves both IPv4 and v4-mapped IPv6 from one socket, matching
-flask's `host="::"`:
-- HTTP: `net.Listen("tcp", ":"+port)` then `http.Serve`.
-- UDP: `net.ListenPacket("udp", ":"+port)`.
+```go
+const rapidClientRepo = "quay.io/tigeradev/rapidclient"
 
-On Linux these bind dual-stack by default (`IPV6_V6ONLY=0`), which is all the
-test needs (it connects via IPv4 pod IP / ClusterIP / NodePort, and IPv6 in
-dual-stack configs). We do **not** implement a two-socket fallback unless a
-concrete CI failure proves the single socket insufficient — keeping the
-implementation deterministic. If that ever happens, the fix is two listeners
-(`0.0.0.0` + `[::]` with `IPV6_V6ONLY=1`); recorded here so the option isn't
-re-litigated.
+// RapidClientImage returns the image ref and whether it was pre-loaded onto the
+// test nodes (RAPIDCLIENT_TAG set by a CI lane) rather than pulled from quay.
+func RapidClientImage() (ref string, preloaded bool) {
+    if tag := os.Getenv("RAPIDCLIENT_TAG"); tag != "" {
+        return rapidClientRepo + ":" + tag, true
+    }
+    return rapidClientRepo + ":latest", false
+}
+```
 
-**Invalid `PORT`:** non-numeric or out-of-range (`<1` or `>65535`) → log and
-exit non-zero immediately (visible pod `Failed`, not a silent hang).
+Consumers:
 
-HTTP endpoints (must match what `packet_size.go` drives):
+- `packet_size.go` — `withPacketSizeServer` sets the server pod's image, clears
+  `Args`, adds `MODE=server`, and sets the readiness path to `/length/1`. When
+  `preloaded`, it sets `ImagePullPolicy: Never` so a missing/failed load fails
+  loudly instead of masking with a stale published image. `PORT` is left unset,
+  so the server defaults to 5000 (matching the base conncheck server pod's
+  container port).
+- `maglev.go` — runs `client` mode on the external node via
+  `sudo docker run … -url … -port …`. `MODE` is unset, so it defaults to `client`
+  and the flags parse as before; only the image ref changes.
+
+### `server` mode contract
+
+Listens on `PORT` (env, default 5000), serving TCP HTTP and UDP echo on the
+**same port number**. `PORT` is the only port knob — the `-p=`/`--port=` CLI
+override the old flask wrapper accepted is intentionally not replicated (no
+consumer passes it; `withPacketSizeServer` clears `Args`). A non-numeric or
+out-of-range `PORT` logs and exits non-zero immediately (visible pod `Failed`,
+not a silent hang).
+
+**Dual-stack (single socket).** Each listener binds the unspecified address
+(`net.Listen("tcp", ":"+port)`, `net.ListenPacket("udp", ":"+port)`). On Linux
+this serves both IPv4 and v4-mapped IPv6 from one socket (`IPV6_V6ONLY=0`),
+matching flask's `host="::"`, which is all the suite needs (it connects via IPv4
+pod IP / ClusterIP / NodePort, plus IPv6 in dual-stack configs). There is
+deliberately no two-socket fallback; if a concrete CI failure ever proves one
+socket insufficient, the fix is two listeners (`0.0.0.0` + `[::]` with
+`IPV6_V6ONLY=1`).
+
+HTTP endpoints (must satisfy what `packet_size.go` drives):
 
 | Route | Method | Response | Status |
 |---|---|---|---|
@@ -320,144 +152,138 @@ HTTP endpoints (must match what `packet_size.go` drives):
 | `/length/{N}` | GET | exactly **N whitespace-free bytes** (N≥1) | 200 |
 | `/length/{N}` | GET | empty body when `N==0` | 200 |
 | `/length/{N}` | GET | `N` non-integer or `<0` | 400 |
-| `/post` | POST | the request body's byte count, as a decimal string | 200 |
-| `/post` | GET | static help string (parity with flask) | 200 |
-| anything else | any | not-found | 404 |
+| `/post` | POST | received body's byte count, as a decimal string | 200 |
+| `/post` | GET | static help string (flask parity) | 200 |
+| anything else | any | not found | 404 |
 
-**`/length/{N}` body — pinned charset.** Emit N bytes by repeating the fixed
-36-byte alphabet `abcdefghijklmnopqrstuvwxyz0123456789` and truncating to N. This
-alphabet is **whitespace-free**, so the test's `len(strings.TrimSpace(body))`
-equals N. Content is otherwise irrelevant (the suite asserts only length —
-verified in `packet_size.go`), but the charset is pinned so the unit test is
-exact and a future content-sensitive test would be a deliberate change, not an
-accident. Write all N bytes in the response and set `Content-Length` (no chunked
-framing surprises); `http.Server` is concurrent by default — no extra handling.
+- **`/length/{N}` charset.** N bytes are emitted by repeating the fixed 36-byte
+  alphabet `abcdefghijklmnopqrstuvwxyz0123456789` and truncating. It is
+  whitespace-free, so the suite's `len(strings.TrimSpace(body)) == N` holds. The
+  full N bytes are written with `Content-Length` set (no chunked framing). Pinning
+  the charset keeps the unit test exact and makes any future content-sensitive
+  test a deliberate change.
+- **`/post`.** The body is streamed with `io.Copy(io.Discard, r.Body)` and the
+  count returned via `strconv.FormatInt`, so a 10 000-byte body is never buffered
+  and the reported count is the exact bytes received.
+- **UDP echo.** A single read→write loop: `n, addr, _ := pc.ReadFrom(buf)` then
+  `pc.WriteTo(buf[:n], addr)`, echoing exactly the `n` bytes read from a
+  65535-byte buffer (full UDP payload space; test payloads are `< MTU`). One
+  goroutine is correct for any number of peers — each datagram is echoed to its
+  own source `addr`, replies leave from the bound port (what NodePort/ClusterIP
+  conntrack keys on), and the reused buffer is race-free because one goroutine
+  reads then writes sequentially. `fork`-style per-peer parallelism (as in socat)
+  is unnecessary for echo correctness.
+  - *Concurrency caveat (documented at `serveUDP`):* the suite fires probes
+    serially and wraps the UDP check in `Eventually`. If it is ever parallelised,
+    a single goroutine can drain `SO_RCVBUF` slower than a concurrent burst
+    arrives and silently drop datagrams. The remedy then is
+    `SetReadBuffer(...)` plus goroutine-per-datagram echo that **copies `buf[:n]`
+    first** (the shared buffer is reused on the next `ReadFrom`).
 
-**`/post` — count, don't buffer.** Stream the body with
-`n, _ := io.Copy(io.Discard, r.Body)` and return `strconv.FormatInt(n, 10)`.
-This avoids holding the (up to 10000-byte) body in memory and reports the exact
-received byte count (equivalent to flask's `request.content_length` for the
-curl-set Content-Length the test uses).
+Readiness/liveness, port, and `restartPolicy: Never` are inherited from the base
+conncheck server pod; the customizer overrides only image, args, the `MODE=server`
+env, and the readiness path.
 
-**UDP echo.** Loop: `n, addr, _ := pc.ReadFrom(buf)`, then
-`pc.WriteTo(buf[:n], addr)` — echo exactly the `n` bytes read (never the whole
-buffer). Use a 65535-byte `buf` (full UDP payload space; test payloads are
-`< MTU`, so never truncated; flask used socat `-b 10000`). Datagrams larger than
-the buffer would be truncated by the kernel — out of range for this test, noted
-as the cap.
+### `client` mode contract
 
-A single read→write goroutine is used instead of socat's `fork` (per-peer
-handler). This is **correct for any number of peers** — each datagram is echoed
-to its own source `addr`, and the reused `buf` is race-free because one goroutine
-reads then writes it sequentially. The only thing `fork` adds is parallelism
-across simultaneous senders, which doesn't affect echo correctness or the
-reply source port (both reply from the bound port, the thing NodePort/ClusterIP
-conntrack keys on).
+Flags: `-url` (required), `-port` (default 12345), `-timeout` (30s), `-v`. It
+performs a single GET from a fixed source port with `SO_REUSEADDR` and keep-alives
+disabled, and prints the response body. The only consumer is `maglev.go`, which
+runs it on the external node; `MODE` is unset there so `client` is selected. The
+`/shell?cmd=hostname` URL in that invocation is an endpoint on the maglev backend
+being load-balanced, not on `server` mode — `client` is a generic HTTP GET tool.
 
-**Caveat if `packet_size` is ever made concurrent** (a likely future speedup —
-the suite currently fires probes serially): a single goroutine drains
-`SO_RCVBUF` slower than parallel handlers, so a concurrent burst can overflow the
-kernel receive buffer and *silently drop* datagrams → missing echoes. Today this
-is harmless because the test is serial and wraps the UDP check in
-`Eventually(30s, 1s)`, which retries transient loss. If you parallelise the
-probes and see drops, harden the server with: (1)
-`pc.(*net.UDPConn).SetReadBuffer(...)` to absorb bursts, and (2) goroutine-per-
-datagram echo — **copying `buf[:n]` first**
-(`d := append([]byte(nil), buf[:n]...); go pc.WriteTo(d, addr)`), because the
-shared buffer is reused on the next `ReadFrom`; skipping the copy reintroduces a
-data race. This caveat is also recorded at `serveUDP` in `server.go`.
+### Multi-arch image build
 
-Readiness/liveness, port, and `restartPolicy: Never` are inherited unchanged
-from the base conncheck server pod; the customizer only overrides image, args,
-the `MODE=server` env, and the readiness path (`/length/1`). No probe-timing
-changes.
+`Dockerfile` is `FROM scratch` with `ARG TARGETARCH` /
+`COPY bin/rapidclient-${TARGETARCH} /rapidclient`, so one Dockerfile produces
+every platform. Per-arch static binaries are built with `CGO_ENABLED=0` and
+`GOARCH=$*` (clean cross-compilation, correct for `FROM scratch`).
 
-### Test assertions this server must satisfy (from `packet_size.go`)
+- `ARCHES := amd64 arm64` — assigned unconditionally because `lib.Makefile`
+  already sets a four-arch default; `?=` would leave `publish` building
+  `ppc64le`/`s390x` too. amd64-only is the bug this image fixes.
+- `publish` builds all `ARCHES` into a single manifest list and `--push`es it
+  (a multi-platform build cannot `--load`). A post-publish guard inspects the
+  pushed tag and fails unless it is a manifest list covering every arch in
+  `ARCHES` — this is what stops a silent regression to single-arch. On `master`
+  the tag is retagged to `:latest` via `buildx imagetools create`.
+- `image` builds a single-arch image locally (`--load`) for development.
+- Unit tests run via `ut` (repo convention; `lib.Makefile`'s `test: ut fv st`
+  aggregates it, and `fv`/`st` are no-ops for this image) and `ci`. They execute
+  in CI through the dedicated **"E2E images"** Semaphore block
+  (`.semaphore/semaphore.yml.d/blocks/20-e2e-images.yml`).
 
-- **GET** (`packetTestViaConncheck`, ~line 295): `len(strings.TrimSpace(out)) == length`.
-  ⇒ The N-byte body **must contain no leading/trailing whitespace**, or TrimSpace
-  shortens it and the check fails. (This is exactly why the flask lorem corpus is
-  one whitespace-free run-on string.) The Go generator emits N bytes drawn from a
-  whitespace-free charset (e.g. repeating `a–z0–9`).
-- **POST** (~line 313): `strconv.Atoi(strings.TrimSpace(out)) == length`, where the
-  client posts `strings.Repeat("X", length)`. ⇒ return the byte count of the
-  received body. Use bytes actually read (robust) — equals Content-Length here.
-- **UDP** (~line 334): `strings.TrimSpace(out) == payload`, payload =
-  `generateUDPPayload(length)` (digits `0–9`, no whitespace). ⇒ pure echo.
+Publishing to quay is done by the existing `.semaphore/push-images/e2e-test.yml`
+job (authenticated via the `quay-tigeradev-hashrelease` secret), triggered by the
+`change_in('/e2e/images/rapidclient/*.go')` rule.
 
-Readiness: `/length/1` must 200 with a 1-byte body.
+### Image delivery to test nodes
+
+Fork PR builds have no registry push credential, so the image built *from the PR
+under test* cannot be pushed to quay for nodes to pull; a `:latest` reference
+would silently run the previously-published image. Each CI lane that exercises the
+image therefore builds it from PR source and loads it directly onto its nodes,
+pinning the exact tag via `RAPIDCLIENT_TAG` (pods use `ImagePullPolicy: Never`).
+
+- **gcp-kubeadm** (`.semaphore/end-to-end/scripts/phases/load_images.sh`): builds
+  `rapidclient:pr-<N>`, `docker save`s it once, `ctr -n k8s.io images import`s it
+  onto every worker node's containerd and `docker load`s it onto the external
+  node, then exports `RAPIDCLIENT_TAG` (forwarded into the e2e container via
+  `K8S_E2E_DOCKER_EXTRA_FLAGS`). Runs only when `RUN_LOCAL_TESTS` and
+  `PROVISIONER=gcp-kubeadm` (it depends on the CRC terraform outputs + SSH key);
+  otherwise it no-ops.
+- **kind** (`e2e-test-bpf`, the sig-calico BPF lane that runs packet-size): builds
+  `rapidclient:kind-e2e`, `kind load docker-image`s it into the kind nodes, and
+  `docker load`s it into the external node's inner docker daemon (a `dind`
+  container). `RAPIDCLIENT_TAG=kind-e2e` is exported by the root `Makefile` so the
+  ginkgo process inherits it. The non-BPF `e2e-test` lane (`kind.yaml` focus
+  `Conformance && sig-calico`) does not run packet-size, and the CNP lane uses a
+  separate test binary, so only `e2e-test-bpf` is wired.
+
+When `RAPIDCLIENT_TAG` is unset — other providers, scheduled hashrelease runs,
+local dev — `RapidClientImage()` reports `preloaded=false` and the published
+`:latest` is used with the default pull policy.
 
 ## Edge cases & failure modes
 
-- **Whitespace in `/length` output** → breaks GET length assertion. Mitigation:
-  whitespace-free charset; unit test asserts `len(TrimSpace(body)) == N` for
-  several N including 1, 10, MTU-ish, 10000.
-- **`/length/0` or non-integer `{N}`** → flask would `int("abc")` 500. Match by
-  returning 400 on parse failure; `N=0` returns empty body (200). Document; tests
-  never send these but be defensive.
-- **Large GET (10000 bytes)** → must not be truncated by any default write
-  limits; stream/write fully.
-- **UDP datagram larger than read buffer** → would truncate the echo and fail the
-  equality check. 65535 buffer covers all test sizes; document the cap.
-- **Dual-stack binding** → on some kernels `[::]` won't accept IPv4 unless
-  `IPV6_V6ONLY=0`. Go's `net.Listen("tcp", ":5000")` already binds dual-stack via
-  IPv4-mapped addresses on Linux; verify both UDP and TCP accept v4 and v6. If a
-  single dual-stack socket is unreliable, fall back to two listeners (`0.0.0.0`
-  and `[::]`). Decide during implementation; note in README.
-- **Port already in use / bind failure** → log and exit non-zero promptly so the
-  pod goes `Failed` visibly (current behaviour) rather than hanging.
-- **`MODE=server` but stray args present** → server mode ignores all args (does
-  not fatal). The flask wrapper parsed a `-p=`/`--port=` arg; that override is
-  intentionally dropped (see the server-mode section) — `PORT` env is the only
-  port knob.
-- **Multi-arch manifest regression** → add a guard/check that the published image
-  is a manifest list with both `amd64` and `arm64` (e.g. assert in the Makefile
-  publish step or a CI check) so this can't silently regress to single-arch again.
+- **Whitespace in `/length` output** breaks the GET length assertion. Mitigated by
+  the whitespace-free charset; the unit test asserts `len(TrimSpace(body)) == N`
+  for N ∈ {1, 10, 1400, 10000}.
+- **`/length/0` or non-integer `{N}`.** `N==0` returns an empty 200; a parse
+  failure returns 400 (flask would 500). The suite never sends these; the server
+  is defensive.
+- **Large GET (10 000 bytes)** is written in full — no default write-limit
+  truncation.
+- **UDP datagram larger than the 65535-byte buffer** would truncate the echo.
+  Out of range for the suite; documented as the cap.
+- **Bind failure / port in use** logs and exits non-zero so the pod goes `Failed`
+  visibly rather than hanging.
+- **`MODE=server` with stray args** is tolerated (server mode ignores args); the
+  dropped `-p=`/`--port=` override is by design.
+- **Manifest-list regression** is caught by the post-publish guard asserting the
+  tag covers every arch in `ARCHES`.
+- **Missing node load with `RAPIDCLIENT_TAG` set** surfaces immediately as
+  `ErrImageNeverPull` (pods use `PullNever`) rather than a silent stale pull.
 
 ## Testing
 
-- **Unit (`server_test.go`)**, vanilla `go test` (no Ginkgo — new package):
-  - `GET /length/{N}` returns N bytes with `len(TrimSpace(body)) == N` for
-    N ∈ {1, 10, 1400, 10000}.
-  - `POST /post` with a body of K `X`s returns `"K"`.
-  - UDP echo returns the exact datagram for a digit payload.
-  - unknown `MODE` → error; empty `MODE` → client selected (dispatch test).
-- **Integration**: the existing `Packet Size Verification` suite is the real
-  proof. Must stay green on amd64 (gcp-kubeadm/aws-kubeadm) and newly pass on
-  arm64 (azr-aks ARM). No new e2e test needed; the change is covered by an
-  existing suite that currently fails on arm64.
+- **Unit (`server_test.go`, plain `go test`):** `GET /length/{N}` returns N bytes
+  with `len(TrimSpace(body)) == N` for N ∈ {1, 10, 1400, 10000}; `POST /post` with
+  K `X`s returns `"K"`; UDP echo returns the exact datagram; dispatch tests cover
+  unknown `MODE` (error) and empty `MODE` (client selected). Run in CI via the
+  "E2E images" block.
+- **Integration:** the existing `Packet Size Verification` suite is the real
+  proof — it must stay green on amd64 (gcp-kubeadm / aws-kubeadm, kind BPF) and
+  newly pass on arm64 (azr-aks ARM). No new e2e test is added.
 
-## Migration / rollout
+## Rollout & follow-ups
 
-1. Land the multi-mode binary + multi-arch Makefile; CI publishes
-   `quay.io/tigeradev/rapidclient` as a manifest list.
-2. Switch the customizer to `RapidClientImage()` + `MODE=server` and add the
-   `load_images.sh` side-load, in the **same PR** (so the suite runs the PR-built
-   server atomically, without a registry push).
-3. Verify packet_size on an arm64 azr-aks run goes green; confirm amd64 unaffected.
-4. Follow-up (separate): drop the flask image from `tigera/k8s-e2e`.
-
-## Explicitly out of scope (matching the disposable-test-server scope)
-
-The flask server had none of these and the replacement intentionally doesn't add
-them: TLS/HTTPS, request-body size limits (POST is streamed, not buffered — no
-OOM risk), graceful shutdown / signal handling (pod is killed, `restartPolicy:
-Never`), metrics/structured logging beyond startup + fatal logs, and rate
-limiting/concurrency caps (`http.Server`'s default per-connection goroutines are
-sufficient). If a future need arises it's a deliberate extension, not a gap here.
-
-## Follow-ups (deliberately not in this change)
-
-1. **Digest-pin the published image.** PR CI now runs against a per-PR tag
-   side-loaded onto the nodes (`RAPIDCLIENT_TAG`), but non-gcp-kubeadm and
-   scheduled runs still consume the floating published `:latest`. Pinning that
-   published image to an immutable digest with a documented bump process is
-   worthwhile hardening, but **deferred** — the side-load + multi-arch publish fix
-   the reported bug. Tracked as a separate change.
-2. **Retire the flask image.** Once this lands and packet_size is green on arm64,
-   drop `images/flask` from `tigera/k8s-e2e` (it will be unreferenced).
-
-(Resolved during review and folded into the body: dual-stack binding decision;
-`/length` charset pinned; multi-arch Makefile/CI mechanics made concrete;
-`maglev.go` invocation quoted to verify "zero change". Doc home: this file,
-`e2e/images/rapidclient/DESIGN.md`.)
+- The multi-mode binary, multi-arch publish, `RapidClientImage()` switch, and the
+  per-lane image loads land together so the packet-size suite runs against the
+  PR-built server atomically, without a registry push.
+- **Follow-up — retire the flask image.** Once packet-size is green on arm64, drop
+  `images/flask` from `tigera/k8s-e2e` (it becomes unreferenced).
+- **Follow-up — digest-pin the published image.** Non-gcp-kubeadm and scheduled
+  runs still consume the floating published `:latest`; pinning it to an immutable
+  digest with a documented bump process is worthwhile hardening.
