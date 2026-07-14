@@ -995,7 +995,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				"log level to off (ftrace is disabled, debug logging cannot work).")
 		}
 		// Make every BPF program loaded from here on drop its trace-printk code
-		// paths at load time (via the .rodata.cali_flags no_trace_printk flag),
+		// paths at load time (via the .rodata.prog_flags no_trace_printk flag),
 		// so their load does not spam the kernel log under confidentiality
 		// lockdown. Must be set before any program is loaded.
 		bpf.SetNoTracePrintk(kernelLockdownConfidentiality)
