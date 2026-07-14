@@ -52,10 +52,13 @@ build-all: $(addprefix bin/k8s/e2e-linux-,$(addsuffix .test,$(VALIDARCHES)))
 ###############################################################################
 # test images
 ###############################################################################
+# test-images builds a local single-arch image for development (kind etc.).
 test-images:
 	$(MAKE) -C images/rapidclient image
 
-publish-test-images: test-images
+# publish does its own multi-arch buildx build+push, so it must NOT depend on the
+# single-arch test-images target (that build would be wasted work).
+publish-test-images:
 	$(MAKE) -C images/rapidclient publish
 
 clean:
