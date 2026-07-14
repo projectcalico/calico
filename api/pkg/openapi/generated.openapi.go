@@ -7833,6 +7833,22 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 							},
 						},
 					},
+					"annotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Annotations adds the specified annotations to the generated AutoHostEndpoint.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NodeSelector allows the AutoHostEndpoint to be created only for specific nodes",
