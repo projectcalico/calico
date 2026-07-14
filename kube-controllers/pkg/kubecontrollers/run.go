@@ -114,12 +114,17 @@ func run(parentCtx context.Context, cliCfg Config) {
 	// not run kube-controllers as a service.  It performs any needed migrations
 	// and then exits.  No Kubernetes cluster exists in that context, so this mode
 	// branches off before anything that assumes one.
-	if v, ok := os.LookupEnv(config.EnvEnabledControllers); ok && strings.Contains(v, "openstackmigrations") {
-		if strings.Trim(v, " ,") != "openstackmigrations" {
-			logrus.WithField(config.EnvEnabledControllers, v).Fatal("openstackmigrations must be the only enabled controller")
+	if v, ok := os.LookupEnv(config.EnvEnabledControllers); ok {
+		for t := range strings.SplitSeq(v, ",") {
+			if strings.TrimSpace(t) != "openstackmigrations" {
+				continue
+			}
+			if strings.Trim(v, " ,") != "openstackmigrations" {
+				logrus.WithField(config.EnvEnabledControllers, v).Fatal("openstackmigrations must be the only enabled controller")
+			}
+			runOpenStackMigrations(parentCtx, cfg)
+			return
 		}
-		runOpenStackMigrations(parentCtx, cfg)
-		return
 	}
 
 	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
@@ -269,6 +274,15 @@ func run(parentCtx context.Context, cliCfg Config) {
 func runOpenStackMigrations(ctx context.Context, cfg *config.Config) {
 	logrus.Info("Running one-shot datastore migrations for an OpenStack cluster")
 
+	// This mode exists for clusters with no kube-controllers deployment; a
+	// Kubernetes-datastore cluster runs these migrations automatically via its
+	// in-cluster kube-controllers, so refuse anything but etcdv3 to catch
+	// misconfiguration early.
+	if cfg.DatastoreType != utils.Etcdv3 {
+		logrus.WithField("DATASTORE_TYPE", cfg.DatastoreType).Fatal(
+			"openstackmigrations mode requires DATASTORE_TYPE=etcdv3")
+	}
+
 	apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to load Calico datastore client config")
@@ -277,6 +291,9 @@ func runOpenStackMigrations(ctx context.Context, cfg *config.Config) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to build Calico datastore client")
 	}
+	defer func() {
+		_ = calicoClient.Close()
+	}()
 
 	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
 	migrator, doneC := networkpolicy.NewOneShotMigratorController(ctx, calicoClient, dataFeed)
