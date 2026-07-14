@@ -685,9 +685,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when source endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when source endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when source endpoint is marked for deletion")
 			})
 		})
 
@@ -718,9 +721,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when destination endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when destination endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when destination endpoint is marked for deletion")
 			})
 		})
 
@@ -751,9 +757,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when remote source endpoint is marked for deletion")
 			})
 		})
 
@@ -1072,6 +1081,53 @@ var outCtEntryWithDNAT = nfnetlink.CtEntry{
 	ProtoInfo:        nfnetlink.CtProtoInfo{State: nfnl.TCP_CONNTRACK_ESTABLISHED},
 }
 
+// ctCounters collects Data's four conntrack counters into one comparable
+// value so that tests can poll for all of them at once.
+type ctCounters struct {
+	Packets        counter.Counter
+	Bytes          counter.Counter
+	PacketsReverse counter.Counter
+	BytesReverse   counter.Counter
+}
+
+func countersOfCtEntry(e nfnetlink.CtEntry) ctCounters {
+	return ctCounters{
+		Packets:        *counter.New(e.OriginalCounters.Packets),
+		Bytes:          *counter.New(e.OriginalCounters.Bytes),
+		PacketsReverse: *counter.New(e.ReplyCounters.Packets),
+		BytesReverse:   *counter.New(e.ReplyCounters.Bytes),
+	}
+}
+
+func countersOfData(c *collector, t tuple.Tuple) func() (ctCounters, error) {
+	return func() (ctCounters, error) {
+		data, ok := c.epStats[t]
+		if !ok {
+			return ctCounters{}, fmt.Errorf("no epStats entry for tuple %v", &t)
+		}
+		return ctCounters{
+			Packets:        data.ConntrackPacketsCounter(),
+			Bytes:          data.ConntrackBytesCounter(),
+			PacketsReverse: data.ConntrackPacketsCounterReverse(),
+			BytesReverse:   data.ConntrackBytesCounterReverse(),
+		}, nil
+	}
+}
+
+// eventuallyExpectCtStats waits until the epStats entry for t exists and its
+// conntrack counters match those of e, then returns the entry.
+//
+// The collector applies conntrack updates on its own goroutine: it inserts
+// the epStats entry first and fills in the NAT fields and counters
+// afterwards.  Asserting on those fields immediately after the entry appears
+// is therefore racy; the counters are written last, so once they match, the
+// whole update has been applied.
+func eventuallyExpectCtStats(c *collector, t tuple.Tuple, e nfnetlink.CtEntry) *Data {
+	GinkgoHelper()
+	Eventually(countersOfData(c, t), "2s", "100ms").Should(Equal(countersOfCtEntry(e)))
+	return c.epStats[t]
+}
+
 var _ = Describe("Conntrack Datasource", func() {
 	var c *collector
 	var ciReaderSenderChan chan []clttypes.ConntrackInfo
@@ -1131,13 +1187,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 		})
 		It("should handle destination becoming non-local by removing entry on next conntrack update for reported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
@@ -1210,8 +1260,8 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
+			Eventually(func() calc.EndpointData { return data.DstEp }, "2s", "100ms").ShouldNot(Equal(oldDest))
 			Expect(data.SrcEp).To(Equal(oldSrc))
-			Expect(data.DstEp).NotTo(Equal(oldDest))
 		})
 		It("should handle destination becoming non-local by removing entry on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirIngress, ingressPktAllow[ingressPktAllowNflogTuple])
@@ -1304,13 +1354,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(outCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(outCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(outCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(outCtEntry.ReplyCounters.Bytes)))
+			data := eventuallyExpectCtStats(c, *t, outCtEntry)
 
 			// Not SNAT'd so natOutgoingPort should not be set.
 			Expect(data.NatOutgoingPort).Should(Equal(0))
@@ -1321,8 +1365,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntryWithSNAT, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
+			data := eventuallyExpectCtStats(c, *t, outCtEntryWithSNAT)
 
 			Expect(data.NatOutgoingPort).Should(Equal(nodeSrcPort))
 		})
@@ -1332,8 +1375,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntrySNATToServiceToSelf, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
+			data := eventuallyExpectCtStats(c, *t, outCtEntrySNATToServiceToSelf)
 
 			Expect(data.NatOutgoingPort).Should(Equal(0))
 		})
@@ -1408,7 +1450,7 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			Expect(data.SrcEp).NotTo(Equal(oldSrc))
+			Eventually(func() calc.EndpointData { return data.SrcEp }, "2s", "100ms").ShouldNot(Equal(oldSrc))
 			Expect(data.DstEp).To(Equal(oldDest))
 		})
 		It("should handle source becoming non-local by removing entry on next packetinfo update for reported flow", func() {
@@ -1502,13 +1544,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t1))
-
-			data := c.epStats[*t1]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(localCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(localCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(localCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(localCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t1, localCtEntry)
 		})
 	})
 	Describe("Test local destination with DNAT", func() {
@@ -1518,25 +1554,14 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryWithDNAT, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryWithDNAT.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryWithDNAT.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryWithDNAT.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryWithDNAT.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryWithDNAT)
 		})
 	})
 	Describe("Test local source to local destination with DNAT", func() {
 		It("should create a single entry with 'local' connection direction and with correct tuple extracted", func() {
 			t1 := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey((Equal(*t1))))
-			data := c.epStats[*t1]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(localCtEntryWithDNAT.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(localCtEntryWithDNAT.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(localCtEntryWithDNAT.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(localCtEntryWithDNAT.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t1, localCtEntryWithDNAT)
 		})
 	})
 
@@ -1545,12 +1570,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 
 			By("handling a conntrack update with updated counters")
 			inCtEntryUpdatedCounters := inCtEntry
@@ -1559,16 +1579,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Packets)))
-
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryUpdatedCounters)
 
 			By("handling a conntrack update with TCP CLOSE_WAIT")
 			inCtEntryStateCloseWait := inCtEntryUpdatedCounters
@@ -1576,16 +1587,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounterReverse()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Packets)))
-
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryStateCloseWait)
 
 			By("handling an nflog update for destination matching on policy - all policy info is now gathered",
 				func() {
@@ -1605,17 +1607,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			data := c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 
 			By("handling a conntrack update with updated counters")
 			inCtEntryUpdatedCounters := inCtEntry
@@ -1624,17 +1616,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Packets)))
-			data = c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryUpdatedCounters)
 
 			By("handling a conntrack update with TCP CLOSE_WAIT")
 			inCtEntryStateCloseWait := inCtEntryUpdatedCounters
@@ -1642,16 +1624,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounterReverse()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Packets)))
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryStateCloseWait)
 
 			By("handling a conntrack update with TCP TIME_WAIT")
 			inCtEntryStateTimeWait := inCtEntry
@@ -1701,11 +1674,10 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple (w/ DNAT)")
 			t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
+			data := eventuallyExpectCtStats(c, *t, localCtEntryWithDNAT)
 
 			// Flagging as expired will attempt to expire the data when NFLOGs and service info are gathered.
 			By("flagging the data as expired")
-			data := c.epStats[*t]
 			data.Expired = true
 			Expect(data.IsDNAT).Should(BeTrue())
 
