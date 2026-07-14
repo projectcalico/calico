@@ -648,6 +648,19 @@ func (c *CTLBGlobalData) Set(m *Map) error {
 	return err
 }
 
+// SetProgFlags writes the per-object load-time feature flags into the
+// program's .rodata.prog_flags section before load (see struct
+// prog_flags in globals.h).
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
+	var noTrace C.uint8_t
+	if noTracePrintk {
+		noTrace = 1
+	}
+	_, err := C.bpf_set_prog_flags(m.bpfMap, noTrace)
+
+	return err
+}
+
 func (x *XDPGlobalData) Set(m *Map) error {
 	cName := C.CString(x.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
