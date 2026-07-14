@@ -44,8 +44,7 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 // RPM versions, we're using backwards-compatible RPM signatures.
 func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	if len(rpmFiles) == 0 {
-		logrus.Warn("called with zero filenames, exiting")
-		return nil
+		return fmt.Errorf("list of RPM files to sign is empty")
 	}
 	filteredRpmFiles, err := FilterRegularFiles(rpmFiles)
 	if err != nil {
@@ -106,24 +105,56 @@ func CheckRPMSig(rpmFile string) error {
 // prints "pkg.rpm: digests OK" with a zero exit status — there is no signature
 // to verify. Since the point of this check is to confirm packages are signed,
 // the absence of a verified signature must also be treated as a failure.
+//
+// The result markers are matched as whitespace-separated tokens in the status
+// portion of each line (everything after the "<filename>:" prefix) rather than
+// as substrings of the whole line. This keeps a file name that happens to
+// contain "signature", "NOKEY" or "NOT OK" from being mistaken for a check
+// result — status tokens never contain a colon, so the last colon reliably
+// separates the file name from the results.
 func checkRPMSigOutput(rpmOut string) error {
-	if len(strings.Fields(rpmOut)) == 0 {
-		return fmt.Errorf("rpmkeys --checksig returned no output")
+	var sawStatus, sawSignature bool
+	for _, line := range strings.Split(rpmOut, "\n") {
+		status := line
+		if i := strings.LastIndex(line, ":"); i >= 0 {
+			status = line[i+1:]
+		}
+		tokens := strings.Fields(status)
+		if len(tokens) == 0 {
+			continue
+		}
+		sawStatus = true
+		for i, tok := range tokens {
+			switch strings.ToUpper(tok) {
+			case "NOKEY":
+				return fmt.Errorf("RPM signature/digest check failed: %s", rpmOut)
+			case "OK":
+				if i > 0 && strings.EqualFold(tokens[i-1], "NOT") {
+					return fmt.Errorf("RPM signature/digest check failed: %s", rpmOut)
+				}
+			case "SIGNATURE", "SIGNATURES":
+				sawSignature = true
+			}
+		}
 	}
-	if strings.Contains(rpmOut, "NOT OK") || strings.Contains(rpmOut, "NOKEY") {
-		return fmt.Errorf("RPM signature/digest check failed: %s", rpmOut)
+	if !sawStatus {
+		return fmt.Errorf("rpmkeys --checksig returned no output")
 	}
 	// Having ruled out the failure markers above, a verified signature shows up
 	// as a "signature"/"signatures" token in the OK line; its absence means the
 	// package's digests were fine but nothing was actually signed.
-	if !strings.Contains(strings.ToLower(rpmOut), "signature") {
+	if !sawSignature {
 		return fmt.Errorf("RPM signature not verified, package may be unsigned: %s", rpmOut)
 	}
 	return nil
 }
 
-// CheckRPMSigs takes a list of RPM file names/paths and runs
+// CheckRPMSigs takes a list of RPM file names/paths and runs CheckRPMSig on each,
+// returning the Join of any errors encountered (if any)
 func CheckRPMSigs(rpmFiles []string) error {
+	if len(rpmFiles) == 0 {
+		return fmt.Errorf("list of RPM files to check signatures on is empty")
+	}
 	logrus.Infof("Checking files for RPM signatures")
 	var errs []error
 	for _, rpmFile := range rpmFiles {

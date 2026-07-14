@@ -188,6 +188,36 @@ func MatchExtensions(exts ...string) IncludeFunc {
 	}
 }
 
+// MatchMultiple returns an IncludeFunc that matches a file only when every one
+// of the given IncludeFuncs matches it (logical AND). For example,
+//
+//	MatchMultiple(MatchExtensions(".rpm"), reMatch)
+//
+// matches files that both have a ".rpm" extension and satisfy reMatch. With no
+// arguments the returned function matches every file.
+func MatchMultiple(includes ...IncludeFunc) IncludeFunc {
+	return func(srcDir, dstDir, relPath string) bool {
+		for _, include := range includes {
+			if !include(srcDir, dstDir, relPath) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// MatchInverse returns an IncludeFunc that matches a file only when the given
+// IncludeFunc does not (logical NOT). For example,
+//
+//	MatchInverse(MatchExtensions(".rpm"))
+//
+// matches every file that does not have a ".rpm" extension.
+func MatchInverse(include IncludeFunc) IncludeFunc {
+	return func(srcDir, dstDir, relPath string) bool {
+		return !include(srcDir, dstDir, relPath)
+	}
+}
+
 // LinkOrCopyFile creates a hard link at dst pointing to src, falling back to
 // copying the file contents if the link cannot be created (e.g. src and dst
 // are on different filesystems, or the filesystem does not support hard
@@ -285,11 +315,13 @@ func CheckBinary(binaryName, neededFor string) error {
 // accessible (i.e. the lstat() call succeeded).
 func FilterRegularFiles(filePathList []string) ([]string, error) {
 	var filteredFilesList []string
+	var filterErrors []error
 	for _, filePath := range filePathList {
 		fileStat, err := os.Lstat(filePath)
 		if err != nil {
 			logrus.WithError(err).Warn("failed to lstat file")
-			return []string{}, fmt.Errorf("unable to lstat %s: %w", filePath, err)
+			filterErrors = append(filterErrors, fmt.Errorf("unable to lstat %s: %w", filePath, err))
+			continue
 		}
 
 		if fileStat.Mode().Type().IsRegular() {
@@ -297,6 +329,9 @@ func FilterRegularFiles(filePathList []string) ([]string, error) {
 			continue
 		}
 		logrus.Debugf("removing file path %s as it is not a regular file", filePath)
+	}
+	if err := errors.Join(filterErrors...); err != nil {
+		return []string{}, fmt.Errorf("caught errors while attempting to validate files: %w", err)
 	}
 	return filteredFilesList, nil
 }
