@@ -109,6 +109,24 @@ func run(parentCtx context.Context, cliCfg Config) {
 	}
 	logrus.SetLevel(logLevel)
 
+	// ENABLED_CONTROLLERS=openstackmigrations runs kube-controllers as a one-shot
+	// datastore migration tool for OpenStack (etcd datastore) clusters, which do
+	// not run kube-controllers as a service.  It performs any needed migrations
+	// and then exits.  No Kubernetes cluster exists in that context, so this mode
+	// branches off before anything that assumes one.
+	if v, ok := os.LookupEnv(config.EnvEnabledControllers); ok {
+		for t := range strings.SplitSeq(v, ",") {
+			if strings.TrimSpace(t) != "openstackmigrations" {
+				continue
+			}
+			if strings.Trim(v, " ,") != "openstackmigrations" {
+				logrus.WithField(config.EnvEnabledControllers, v).Fatal("openstackmigrations must be the only enabled controller")
+			}
+			runOpenStackMigrations(parentCtx, cfg)
+			return
+		}
+	}
+
 	k8sClientset, libcalicoClient, calicoClient, k8sconfig, err := getClients(cfg.Kubeconfig)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to start")
@@ -223,6 +241,79 @@ func run(parentCtx context.Context, cliCfg Config) {
 	cancel()
 
 	os.Exit(cmdwrapper.RestartReturnCode)
+}
+
+// runOpenStackMigrations runs the datastore migrations that an OpenStack (etcd
+// datastore) cluster needs after a Calico upgrade, as a one-shot foreground
+// operation: it performs any needed migrations and then returns, giving a zero
+// exit status.  Invoke it with, for example:
+//
+//	docker run --rm --net=host \
+//	    -e DATASTORE_TYPE=etcdv3 \
+//	    -e ETCD_ENDPOINTS=http://127.0.0.1:2379 \
+//	    -e ENABLED_CONTROLLERS=openstackmigrations \
+//	    calico/calico:<version> component kube-controllers
+//
+// It must only be run once ALL Calico components in the cluster (Felix on every
+// compute node, and networking-calico on every Neutron server) are upgraded to a
+// version that understands the migrated data.  Unlike the in-cluster policy name
+// migrator, this mode has no Kubernetes API from which to verify that
+// precondition, so it is the operator's responsibility.
+//
+// Compared with normal kube-controllers operation this mode deliberately skips:
+// Kubernetes client construction (there is no Kubernetes cluster); datastore
+// EnsureInitialized (networking-calico owns datastore initialization for
+// OpenStack); the KubeControllersConfiguration resource (nothing here is
+// configurable through it, and we shouldn't leave one behind in the datastore);
+// the etcd compactor (networking-calico drives etcd compaction); and the health
+// endpoints (the outcome of a one-shot run is its exit status and logs).
+//
+// Currently the only migration is the policy name migration (see
+// NewOneShotMigratorController).  Any future migrations needed in the OpenStack
+// context should be added here.
+func runOpenStackMigrations(ctx context.Context, cfg *config.Config) {
+	logrus.Info("Running one-shot datastore migrations for an OpenStack cluster")
+
+	// This mode exists for clusters with no kube-controllers deployment; a
+	// Kubernetes-datastore cluster runs these migrations automatically via its
+	// in-cluster kube-controllers, so refuse anything but etcdv3 to catch
+	// misconfiguration early.
+	if cfg.DatastoreType != utils.Etcdv3 {
+		logrus.WithField("DATASTORE_TYPE", cfg.DatastoreType).Fatal(
+			"openstackmigrations mode requires DATASTORE_TYPE=etcdv3")
+	}
+
+	apiCfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to load Calico datastore client config")
+	}
+	calicoClient, err := client.New(*apiCfg)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to build Calico datastore client")
+	}
+
+	dataFeed := utils.NewDataFeed(calicoClient, cfg.DatastoreType)
+	migrator, doneC := networkpolicy.NewOneShotMigratorController(ctx, calicoClient, dataFeed)
+
+	stop := make(chan struct{})
+	go migrator.Run(stop)
+	dataFeed.Start()
+
+	interrupted := false
+	select {
+	case <-doneC:
+		logrus.Info("All OpenStack datastore migrations are complete")
+	case <-ctx.Done():
+		interrupted = true
+	}
+
+	// Clean up explicitly rather than with defers: Fatal below exits
+	// immediately and would skip any deferred cleanup.
+	close(stop)
+	_ = calicoClient.Close()
+	if interrupted {
+		logrus.Fatal("Interrupted before datastore migrations completed")
+	}
 }
 
 func runHealthChecks(ctx context.Context, s *status.Status, ha *health.HealthAggregator, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {

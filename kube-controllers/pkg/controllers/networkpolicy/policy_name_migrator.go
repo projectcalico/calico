@@ -40,10 +40,6 @@ import (
 //     a. Create a new policy entry in the datastore with the correct v3 name.
 //     b. Delete the old policy entry with the v1 name.
 func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli clientv3.Interface, feed *utils.DataFeed) controller.Controller {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
 	// Read the namespace from the service account file to determine the namespace we're running in.
 	namespace, err := os.ReadFile(winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/namespace"))
 	if err != nil {
@@ -51,21 +47,48 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		namespace = []byte("calico-system")
 	}
 
+	c := newPolicyMigrator(ctx, cli, feed)
+	c.cs = cs
+	c.namespace = string(namespace)
+	c.skipRollout = os.Getenv("FV_TEST") == "true"
+	return c
+}
+
+// NewOneShotMigratorController creates a policy name migrator for use outside a
+// Kubernetes cluster - specifically, for one-shot invocation against the etcd
+// datastore of an OpenStack cluster, which has no kube-controllers deployment to
+// run the migration automatically.  Differences from NewMigratorController:
+//
+//   - No Kubernetes client is needed, and the calico-node rollout wait is
+//     skipped.  The equivalent precondition - every Calico component in the
+//     cluster already upgraded to a version that understands the new policy
+//     names - must be ensured by the operator instead.
+//   - The returned channel is closed once the datastore is fully in sync and no
+//     migration work remains, so that the caller can treat the migration as a
+//     one-shot operation and exit.
+func NewOneShotMigratorController(ctx context.Context, cli clientv3.Interface, feed *utils.DataFeed) (controller.Controller, <-chan struct{}) {
+	c := newPolicyMigrator(ctx, cli, feed)
+	c.skipRollout = true
+	c.doneC = make(chan struct{})
+	return c, c.doneC
+}
+
+func newPolicyMigrator(ctx context.Context, cli clientv3.Interface, feed *utils.DataFeed) *policyMigrator {
+	type accessor interface {
+		Backend() bapi.Client
+	}
+
 	c := &policyMigrator{
 		ctx:           ctx,
 		cli:           cli,
-		cs:            cs,
 		bc:            cli.(accessor).Backend(),
 		doWork:        make(chan struct{}, 1),
 		pendingWork:   set.New[model.ResourceKey](),
 		kvps:          make(map[model.ResourceKey]*model.KVPair),
 		updates:       make(chan bapi.Update, utils.BatchUpdateSize),
 		statusUpdates: make(chan bapi.SyncStatus),
-		namespace:     string(namespace),
-		skipRollout:   os.Getenv("FV_TEST") == "true",
 	}
 	c.RegisterWith(feed)
-
 	return c
 }
 
@@ -88,8 +111,19 @@ type policyMigrator struct {
 	// Configuration.
 	namespace string
 
-	// For FV testing - allows skipping the calico-node rollout wait.
+	// Allows skipping the calico-node rollout wait; set for FV testing, and in
+	// one-shot mode (where there is no Kubernetes API to check and the operator
+	// is responsible for the everything-upgraded precondition).
 	skipRollout bool
+
+	// One-shot mode (see NewOneShotMigratorController): doneC is closed once the
+	// datastore is in sync and no migration work remains.  nil in normal
+	// long-running operation.
+	doneC         chan struct{}
+	doneSignalled bool
+
+	// Count of successfully migrated policies, for the completion log.
+	migratedCount int
 }
 
 func (c *policyMigrator) RegisterWith(f *utils.DataFeed) {
@@ -169,8 +203,27 @@ func (c *policyMigrator) run(stop chan struct{}) {
 			if err != nil {
 				logrus.Errorf("Error processing updates: %v", err)
 			}
+			c.maybeSignalDone()
 		}
 	}
+}
+
+// maybeSignalDone closes doneC, in one-shot mode, once the initial sync has
+// completed and there is no work left: nothing pending, and no updates queued
+// that might yet produce pending work.  Failed migrations stay in pendingWork
+// (and are retried on the periodic kick), so completion is only signalled when
+// every needed migration has actually succeeded.
+func (c *policyMigrator) maybeSignalDone() {
+	if c.doneC == nil || c.doneSignalled {
+		return
+	}
+	if !c.initialSyncCompleted || c.pendingWork.Len() > 0 || len(c.updates) > 0 {
+		return
+	}
+	logrus.WithField("migratedCount", c.migratedCount).Info(
+		"Policy name migration complete; no further work pending")
+	c.doneSignalled = true
+	close(c.doneC)
 }
 
 // processUpdates processes incoming updates from the syncer and updates internal state.
@@ -279,6 +332,7 @@ func (c *policyMigrator) processPendingWork() error {
 			"oldName":   k.Name,
 			"kind":      p.GetObjectKind().GroupVersionKind().Kind,
 		}).Info("Successfully migrated storage name for policy")
+		c.migratedCount++
 		c.pendingWork.Discard(key)
 	}
 	return nil
