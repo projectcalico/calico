@@ -3,6 +3,7 @@ package networkpolicy
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -49,7 +50,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 
 	c := newPolicyMigrator(ctx, cli, feed)
 	c.cs = cs
-	c.namespace = string(namespace)
+	c.namespace = strings.TrimSpace(string(namespace))
 	c.skipRollout = os.Getenv("FV_TEST") == "true"
 	return c
 }

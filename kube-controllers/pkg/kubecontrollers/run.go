@@ -308,9 +308,14 @@ func runOpenStackMigrations(ctx context.Context, cfg *config.Config) {
 	}
 
 	// Clean up explicitly rather than with defers: Fatal below exits
-	// immediately and would skip any deferred cleanup.
-	close(stop)
+	// immediately and would skip any deferred cleanup.  Close the client while
+	// the migrator is still running, so that any syncer status transition the
+	// close provokes is still drained rather than blocking the syncer
+	// goroutine; then stop the migrator.  (Perfect tidiness isn't attainable
+	// here - the DataFeed has no stop mechanism - but the process exits
+	// immediately after this in any case.)
 	_ = calicoClient.Close()
+	close(stop)
 	if interrupted {
 		logrus.Fatal("Interrupted before datastore migrations completed")
 	}
