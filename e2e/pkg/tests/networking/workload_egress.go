@@ -87,6 +87,8 @@ var _ = describe.CalicoDescribe(
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
 			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"workload egress tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:2]
 			nodeIPs = allIPs[:2]
 			logrus.Infof("Nodes: %v IPs: %v", nodeNames, nodeIPs)

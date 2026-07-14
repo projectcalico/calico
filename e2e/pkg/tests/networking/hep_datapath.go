@@ -216,8 +216,11 @@ var _ = describe.CalicoDescribe(
 
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
+			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"HEP datapath tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:2]
-			nodeIPs = nodesInfo.GetIPv4s()[:2]
+			nodeIPs = allIPs[:2]
 			calicoNames = nodesInfo.GetCalicoNames()[:2]
 			logrus.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
 

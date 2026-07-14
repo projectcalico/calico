@@ -148,7 +148,9 @@ func GetNodesInfo(f *framework.Framework, nodes *corev1.NodeList, masterOK bool)
 func AwaitReadySchedulableNodesInfo(f *framework.Framework, minCount int, masterOK bool) NodesInfoGetter {
 	var info NodesInfoGetter
 	gomega.EventuallyWithOffset(1, func(g gomega.Gomega) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Keep the per-attempt timeout well under the polling interval so a slow
+		// or erroring List doesn't eat the whole Eventually budget in one attempt.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		// Bound generously so we still clear minCount after any master node is
 		// filtered out.

@@ -284,6 +284,8 @@ var _ = describe.CalicoDescribe(
 			allNames := nodesInfo.GetNames()
 			allIPs := nodesInfo.GetIPv4s()
 			allTunnelIPs := nodesInfo.GetTunnelIPs()
+			Expect(len(allIPs)).To(BeNumerically(">=", 3),
+				"workload ingress tests require at least 3 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:3]
 			nodeIPs = allIPs[:3]
 			tunnelIPs = allTunnelIPs[:3]

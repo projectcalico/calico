@@ -112,6 +112,8 @@ var _ = describe.CalicoDescribe(
 			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			nodeNames := nodesInfo.GetNames()
 			nodeIPs := nodesInfo.GetIPv4s()
+			Expect(nodeIPs).NotTo(BeEmpty(),
+				"packet size tests require a node with an IPv4 address")
 
 			// Sample packet sizes densely around the cluster's effective pod MTU.
 			// The MTU is derived from the Installation status so the test tracks
