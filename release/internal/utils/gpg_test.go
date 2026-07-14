@@ -194,9 +194,9 @@ func TestGetGPGPubKey(t *testing.T) {
 	})
 }
 
-// TestSignRPMFilesNoFiles verifies SignRPMFiles rejects an empty or nil file
-// list with an error rather than shelling out to rpmsign (which would otherwise
-// fail with a confusing usage error). This needs no signing tooling, so it runs
+// TestSignRPMFilesNoFiles verifies SignRPMFiles reports an error for an empty or
+// nil file list rather than shelling out to rpmsign (which would otherwise fail
+// with a confusing usage error). This needs no signing tooling, so it runs
 // unconditionally, unlike the tests built on newSigningEnv.
 func TestSignRPMFilesNoFiles(t *testing.T) {
 	for name, files := range map[string][]string{
@@ -346,9 +346,9 @@ func TestCheckRPMSigs(t *testing.T) {
 		return rpm
 	}
 
-	t.Run("nil for no files", func(t *testing.T) {
-		if err := CheckRPMSigs(nil); err != nil {
-			t.Errorf("CheckRPMSigs(nil): unexpected error: %v", err)
+	t.Run("error for no files", func(t *testing.T) {
+		if err := CheckRPMSigs(nil); err == nil {
+			t.Error("CheckRPMSigs(nil): expected an error for an empty file list, got nil")
 		}
 	})
 

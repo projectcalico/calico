@@ -44,8 +44,7 @@ func GetGPGPubKey(gpgKeyID string) (string, error) {
 // RPM versions, we're using backwards-compatible RPM signatures.
 func SignRPMFiles(gpgKeyID string, rpmFiles []string) error {
 	if len(rpmFiles) == 0 {
-		logrus.Warn("called with zero filenames, exiting")
-		return fmt.Errorf("provided RPM files list is empty")
+		return fmt.Errorf("list of RPM files to sign is empty")
 	}
 	filteredRpmFiles, err := FilterRegularFiles(rpmFiles)
 	if err != nil {
@@ -153,6 +152,9 @@ func checkRPMSigOutput(rpmOut string) error {
 // CheckRPMSigs takes a list of RPM file names/paths and runs CheckRPMSig on each,
 // returning the Join of any errors encountered (if any)
 func CheckRPMSigs(rpmFiles []string) error {
+	if len(rpmFiles) == 0 {
+		return fmt.Errorf("list of RPM files to check signatures on is empty")
+	}
 	logrus.Infof("Checking files for RPM signatures")
 	var errs []error
 	for _, rpmFile := range rpmFiles {
