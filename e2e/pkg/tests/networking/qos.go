@@ -15,16 +15,13 @@
 package networking
 
 import (
-	"context"
 	"time"
-
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -47,16 +44,9 @@ var _ = describe.CalicoDescribe(
 		// limits via pod annotations and verify the actual throughput matches the
 		// configured limits within a tolerance.
 		It("should limit bandwidth with QoS annotations", func() {
-			ctx := context.Background()
-
 			By("Getting cluster node names")
-			nodeCtx, nodeCancel := context.WithTimeout(ctx, 30*time.Second)
-			defer nodeCancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(nodeCtx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			nodesInfo := utils.GetNodesInfo(f, nodes, true)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
 			nodeNames := nodesInfo.GetNames()
-			Expect(len(nodeNames)).To(BeNumerically(">=", 2), "QoS test requires at least 2 nodes")
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
@@ -162,16 +152,9 @@ var _ = describe.CalicoDescribe(
 
 		// Verifies that Calico's QoS packet rate annotations limit actual throughput.
 		It("should limit packet rate with QoS annotations", func() {
-			ctx := context.Background()
-
 			By("Getting cluster node names")
-			nodeCtx, nodeCancel := context.WithTimeout(ctx, 30*time.Second)
-			defer nodeCancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(nodeCtx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			nodesInfo := utils.GetNodesInfo(f, nodes, true)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, true)
 			nodeNames := nodesInfo.GetNames()
-			Expect(len(nodeNames)).To(BeNumerically(">=", 2), "QoS test requires at least 2 nodes")
 			serverNode := nodeNames[0]
 			clientNode := nodeNames[1]
 
