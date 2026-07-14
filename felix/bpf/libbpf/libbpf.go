@@ -648,6 +648,19 @@ func (c *CTLBGlobalData) Set(m *Map) error {
 	return err
 }
 
+// SetRodataFlags writes the per-object load-time feature flags into the
+// program's .rodata.cali_flags section before load (see struct
+// cali_rodata_flags in globals.h).
+func (m *Map) SetRodataFlags(noTracePrintk bool) error {
+	var noTrace C.uint8_t
+	if noTracePrintk {
+		noTrace = 1
+	}
+	_, err := C.bpf_set_rodata_flags(m.bpfMap, noTrace)
+
+	return err
+}
+
 func (x *XDPGlobalData) Set(m *Map) error {
 	cName := C.CString(x.IfaceName)
 	defer C.free(unsafe.Pointer(cName))
