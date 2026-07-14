@@ -57,7 +57,14 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   echo "[INFO] starting e2e tests (ginkgo, K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   # --junit-report writes report/junit.xml for the epilogue to publish. (v3.32's
   # Semaphore relied on bz for JUnit; the local-binary path emits it directly.)
-  # K8S_E2E_FLAGS holds multiple ginkgo args and is intentionally word-split.
+  #
+  # K8S_E2E_FLAGS and E2E_PROCS are passed as container env and expanded by the
+  # CONTAINER's shell (after it parses the bash -c script), NOT interpolated by
+  # the host into the script text. The flags contain unquoted regex parens
+  # (e.g. --ginkgo.focus=(\[sig-calico\]...)); baking them into the script would
+  # make the container shell re-parse them as syntax and die at parse time
+  # (breaks the windows suite). Hence the single-quoted bash -c and -e passing.
+  # K8S_E2E_FLAGS is intentionally unquoted inside so it word-splits into args.
   # Capture the exit code so the JUnit copy below runs even when tests fail.
   e2e_rc=0
   # shellcheck disable=SC2086
@@ -67,6 +74,8 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e "E2E_PROCS=${E2E_PROCS:-4}" \
+    -e K8S_E2E_FLAGS \
     -e CREATE_WINDOWS_NODES \
     -e FUNCTIONAL_AREA \
     -e INSTALLER \
@@ -84,12 +93,12 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
-    bash -c "export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:\$PATH && \
-      git config --global --add safe.directory '*' && \
+    bash -c 'export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:$PATH && \
+      git config --global --add safe.directory "*" && \
       mkdir -p report && \
-      go run github.com/onsi/ginkgo/v2/ginkgo -procs=${E2E_PROCS:-4} \
+      go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" \
         --junit-report=junit.xml --output-dir=report/ \
-        ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS}" \
+        ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS}' \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
