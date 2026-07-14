@@ -30,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -215,14 +214,8 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-			Expect(err).NotTo(HaveOccurred())
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
-			Expect(len(allNames)).To(BeNumerically(">=", 2),
-				"HEP datapath tests require at least 2 schedulable worker nodes, found %d", len(allNames))
 			nodeNames = allNames[:2]
 			nodeIPs = nodesInfo.GetIPv4s()[:2]
 			calicoNames = nodesInfo.GetCalicoNames()[:2]
