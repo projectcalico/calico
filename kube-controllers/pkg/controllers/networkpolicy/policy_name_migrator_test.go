@@ -17,6 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -338,6 +340,92 @@ var _ = Describe("policy name migration tests (etcd mode)", func() {
 		// Check that the correct key is still present.
 		kvp := expectFound(bcli, "mismatched", mismatchedNames.Namespace, v3.KindNetworkPolicy)
 		Expect(kvp.Value.(*v3.NetworkPolicy).Name).To(Equal("mismatched"))
+	})
+})
+
+// One-shot OpenStack mode: no Kubernetes apiserver exists at all.  The
+// kube-controllers container is invoked with
+// ENABLED_CONTROLLERS=openstackmigrations, and is expected to perform the
+// policy name migration and then exit cleanly of its own accord.
+var _ = Describe("one-shot policy name migration for OpenStack (etcd mode, no Kubernetes)", func() {
+	var (
+		etcd *containers.Container
+		cli  client.Interface
+		bcli bapi.Client
+	)
+
+	type accessor interface {
+		Backend() bapi.Client
+	}
+
+	BeforeEach(func() {
+		etcd = testutils.RunEtcd()
+		cli = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
+		bcli = cli.(accessor).Backend()
+	})
+
+	AfterEach(func() {
+		_ = cli.Close()
+		etcd.Stop()
+	})
+
+	It("should migrate legacy-named policies and then exit cleanly", func() {
+		// Seed a GlobalNetworkPolicy stored under its legacy tier-prefixed v1
+		// name, as written by Calico v3.29.4-v3.31.x tooling.  Note that such
+		// policies were typically stored with an empty Spec.Tier (the tier was
+		// implied by the name prefix), so deliberately don't set Tier here.
+		legacy := v3.NewGlobalNetworkPolicy()
+		legacy.Name = "mismatched"
+		legacy.Spec = v3.GlobalNetworkPolicySpec{
+			Selector: "all()",
+		}
+		_, err := bcli.Create(context.Background(), &model.KVPair{
+			Key: model.ResourceKey{
+				Kind: v3.KindGlobalNetworkPolicy,
+				Name: "default.mismatched", // Old generated name format including tier.
+			},
+			Value: legacy,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// And one whose stored name already matches, which must be left alone.
+		matching := v3.NewGlobalNetworkPolicy()
+		matching.Name = "matching"
+		matching.Spec = v3.GlobalNetworkPolicySpec{
+			Tier:     "default",
+			Selector: "all()",
+		}
+		_, err = bcli.Create(context.Background(), &model.KVPair{
+			Key: model.ResourceKey{
+				Kind: v3.KindGlobalNetworkPolicy,
+				Name: "matching",
+			},
+			Value: matching,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run the one-shot migration as an OpenStack operator would: etcd
+		// datastore only, no kubeconfig, no Kubernetes cluster.
+		oneshot := containers.Run("calico-kube-controllers-oneshot",
+			containers.RunOpts{AutoRemove: false},
+			"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcd.IP),
+			"-e", "DATASTORE_TYPE=etcdv3",
+			"-e", "ENABLED_CONTROLLERS=openstackmigrations",
+			"-e", "LOG_LEVEL=info",
+			os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
+		defer oneshot.Remove()
+
+		// It should complete the migration and exit 0 of its own accord.
+		oneshot.WaitNotRunning(60 * time.Second)
+		Expect(strings.TrimSpace(oneshot.DockerInspect("{{.State.ExitCode}}"))).To(Equal("0"))
+
+		// The legacy policy is now stored under its v3 name...
+		kvp := expectFound(bcli, "mismatched", "", v3.KindGlobalNetworkPolicy)
+		Expect(kvp.Value.(*v3.GlobalNetworkPolicy).Name).To(Equal("mismatched"))
+		expectNotFound(bcli, "default.mismatched", "", v3.KindGlobalNetworkPolicy)
+
+		// ...and the already-correct policy is untouched.
+		expectFound(bcli, "matching", "", v3.KindGlobalNetworkPolicy)
 	})
 })
 
