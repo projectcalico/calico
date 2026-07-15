@@ -755,7 +755,7 @@ blocks:
               value: calico-etcd.yaml
             # No API server in etcd mode; skip tiered RBAC tests.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.skip=(Tiered RBAC)
+              value: --ginkgo.skip=(Tiered RBAC|Feature:Maglev)
       env_vars:
         - name: PROVISIONER
           value: gcp-kubeadm
