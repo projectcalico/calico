@@ -218,8 +218,12 @@ $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES) &: $(shell find bpf-gpl -name '*.[ch]')
 	$(DOCKER_GO_BUILD) make -j$$(nproc) -C bpf-gpl ARCH=$(ARCH) all ut-objs map-objs
 	touch -c $@
 
+# This is the only bpf-gpl make that runs on the host rather than in the
+# go-build container.  Generating a stub source file needs no C auto-deps, so
+# skip the *.d includes; they bake the container's system-header paths and
+# would fail to regenerate on the host (see SKIP_DEP_INCLUDES in bpf-gpl/Makefile).
 bpf-gpl/%_map_stub.c: bpf-gpl/Makefile
-	$(MAKE) -C bpf-gpl $(@F)
+	$(MAKE) -C bpf-gpl SKIP_DEP_INCLUDES=1 $(@F)
 
 clean-bpf:
 	rm -rf bpf-gpl/*.d bpf-apache/*.d bin/bpf
