@@ -3733,10 +3733,10 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
-					"bpfOverlayIPOnDevice": {
+					"bpfOverlayHostSourceIP": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFOverlayIPOnDevice, if enabled (the default), Felix assigns an IP address to overlay tunnel devices (IPIP/VXLAN) in BPF mode and uses it as the encapsulation source IP.  When disabled, BPF programs use the node IP directly for encapsulation without requiring a separate tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel device IP.  Defaults to true to preserve the legacy behaviour for clusters upgraded from earlier releases; set to false to opt in to the streamlined no-tunnel-IP behaviour.  [Default: true]",
-							Type:        []string{"boolean"},
+							Description: "BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  \"TunnelAddress\" (the default) assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour of clusters upgraded from earlier releases.  \"HostAddress\" uses the node's own IP directly and does not assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: TunnelAddress]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

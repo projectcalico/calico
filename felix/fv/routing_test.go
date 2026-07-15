@@ -1153,7 +1153,7 @@ func createIPIPBaseTopologyOptions(
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	// Exercise the no-tunnel-IP path in BPF mode; the route-count assertions in this
 	// file are written for that mode.  Has no effect outside BPF mode.
-	topologyOptions.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "false"
+	topologyOptions.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "HostAddress"
 	topologyOptions.FelixDebugFilenameRegex = "ipip|route_mgr|route_table|l3_route_resolver|int_dataplane"
 	return topologyOptions
 }

@@ -29,19 +29,19 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 )
 
-// Standalone tests for BPFOverlayIPOnDevice — verifies that overlay connectivity works when the
-// tunnel device is assigned an IP address (the legacy behaviour).  The primary scenario is
-// host-networked traffic to/from remote tunneled workloads, which is where HOST_TUNNEL_IP and
-// the SNAT conflict resolution logic come into play.
-var _ = describeBPFOverlayIPOnDeviceTests("ipip")
-var _ = describeBPFOverlayIPOnDeviceTests("vxlan")
+// Standalone tests for BPFOverlayHostSourceIP=TunnelAddress — verifies that overlay connectivity
+// works when the tunnel device is assigned an IP address (the legacy behaviour).  The primary
+// scenario is host-networked traffic to/from remote tunneled workloads, which is where
+// HOST_TUNNEL_IP and the SNAT conflict resolution logic come into play.
+var _ = describeBPFOverlayTunnelAddrTests("ipip")
+var _ = describeBPFOverlayTunnelAddrTests("vxlan")
 
-func describeBPFOverlayIPOnDeviceTests(tunnel string) bool {
+func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 	if !BPFMode() {
 		return true
 	}
 
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF overlay IP on device (%s)", tunnel)
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF overlay host source IP tunnel address (%s)", tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 		const numNodes = 2
 		var (
@@ -80,7 +80,7 @@ func describeBPFOverlayIPOnDeviceTests(tunnel string) bool {
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancing"] = string(api.BPFConnectTimeLBEnabled)
 			options.ExtraEnvVars["FELIX_BPFHostNetworkedNATWithoutCTLB"] = string(api.BPFHostNetworkedNATDisabled)
 			options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
-			options.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "true"
+			options.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "TunnelAddress"
 
 			cc = &Checker{}
 			cc.Protocol = "tcp"

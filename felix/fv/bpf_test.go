@@ -443,9 +443,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.TriggerDelayedFelixStart = true
 			}
 			options.ExtraEnvVars["FELIX_BPFMapSizeConntrackScaling"] = "Disabled"
-			// Exercise the no-tunnel-IP-on-device path; the BPF route dump expectations
+			// Exercise the no-tunnel-IP path; the BPF route dump expectations
 			// and other assertions in describeBPFTests are written for that mode.
-			options.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "false"
+			options.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "HostAddress"
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFConntrackLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 			options.ExtraEnvVars["FELIX_BPFProfiling"] = "Enabled"
@@ -5391,11 +5391,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			BeforeEach(func() {
 				options.TestManagesBPF = true
 				// This context exercises the live iptables->BPF migration, i.e. the upgrade
-				// path. Upgrading clusters keep BPFOverlayIPOnDevice at its default (true) so
-				// the overlay device IP is preserved and pre-existing connections survive the
-				// switch. The no-IP path (false) is covered by the main matrix, and explicit
-				// legacy-mode connectivity by bpf_overlay_ip_test.go.
-				options.ExtraEnvVars["FELIX_BPFOverlayIPOnDevice"] = "true"
+				// path. Upgrading clusters keep BPFOverlayHostSourceIP at its default
+				// (TunnelAddress) so the overlay device IP is preserved and pre-existing
+				// connections survive the switch. The HostAddress path is covered by the main
+				// matrix, and explicit legacy-mode connectivity by bpf_overlay_ip_test.go.
+				options.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "TunnelAddress"
 				setupCluster()
 
 				// Default to Allow...

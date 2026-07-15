@@ -1739,9 +1739,9 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.BPFOverlayIPOnDevice != nil {
-		in, out := &in.BPFOverlayIPOnDevice, &out.BPFOverlayIPOnDevice
-		*out = new(bool)
+	if in.BPFOverlayHostSourceIP != nil {
+		in, out := &in.BPFOverlayHostSourceIP, &out.BPFOverlayHostSourceIP
+		*out = new(BPFOverlayHostSourceIPType)
 		**out = **in
 	}
 	if in.BPFDisableUnprivileged != nil {

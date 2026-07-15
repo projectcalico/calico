@@ -2299,23 +2299,24 @@ tunnel IPs).
 | Default value (YAML) | `262144` |
 | Notes | Required. | 
 
-### `BPFOverlayIPOnDevice` (config file) / `bpfOverlayIPOnDevice` (YAML)
+### `BPFOverlayHostSourceIP` (config file) / `bpfOverlayHostSourceIP` (YAML)
 
-If enabled (the default), Felix assigns an IP address to overlay tunnel devices
-(IPIP/VXLAN) in BPF mode and uses it as the encapsulation source IP. When disabled, BPF programs use
-the node IP directly for encapsulation without requiring a separate tunnel device IP. This option has
-no effect on WireGuard tunnels, which always use a tunnel device IP. Defaults to true to preserve the
-legacy behaviour for clusters upgraded from earlier releases; set to false to opt in to the streamlined
-no-tunnel-IP behaviour.
+Controls the source IP that Felix uses in BPF mode for host-networked
+(node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel. "TunnelAddress" (the default)
+assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+of clusters upgraded from earlier releases. "HostAddress" uses the node's own IP directly and does not
+assign a tunnel device IP. This option has no effect on WireGuard tunnels, which always use a tunnel
+device IP.
 
 | Detail |   |
 | --- | --- |
-| Environment variable | `FELIX_BPFOverlayIPOnDevice` |
-| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
-| Default value (above encoding) | `true` |
-| `FelixConfiguration` field | `bpfOverlayIPOnDevice` (YAML) `BPFOverlayIPOnDevice` (Go API) |
-| `FelixConfiguration` schema | Boolean. |
-| Default value (YAML) | `true` |
+| Environment variable | `FELIX_BPFOverlayHostSourceIP` |
+| Encoding (env var/config file) | One of: <code>HostAddress</code>, <code>TunnelAddress</code> |
+| Default value (above encoding) | `TunnelAddress` |
+| `FelixConfiguration` field | `bpfOverlayHostSourceIP` (YAML) `BPFOverlayHostSourceIP` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"HostAddress"</code>, <code>"TunnelAddress"</code>. |
+| Default value (YAML) | `TunnelAddress` |
+| Notes | Required. | 
 
 ### `BPFPSNATPorts` (config file) / `bpfPSNATPorts` (YAML)
 
