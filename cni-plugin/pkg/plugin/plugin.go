@@ -74,21 +74,9 @@ func testConnection() error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
-	// Create a new client.
-	calicoClient, err := utils.CreateClient(conf)
-	if err != nil {
+	// Create a client and check the datastore is ready.
+	if err := utils.CheckDatastoreReady(conf, testConnectionTimeout); err != nil {
 		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), testConnectionTimeout)
-	defer cancel()
-	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("error getting ClusterInformation: %v", err)
-	}
-	if !*ci.Spec.DatastoreReady {
-		logrus.Info("Upgrade may be in progress, ready flag is not set")
-		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
-		return errors.New("Calico is currently not ready to process requests")
 	}
 
 	// If we have a kubeconfig, test connection to the APIServer
@@ -728,6 +716,27 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 	return nil
 }
 
+// errPluginNotAvailable is the CNI spec 1.1 STATUS error code meaning the
+// plugin cannot service ADD requests right now. libcni defines no constant
+// for it (it only defines ErrTryAgainLater=11).
+const errPluginNotAvailable uint = 50
+
+// cmdStatus implements the CNI spec 1.1.0 STATUS verb: succeed (exit 0, no
+// output) if the plugin is ready to service ADD requests, i.e. the Calico
+// datastore is reachable and ready.
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return cnitypes.NewError(cnitypes.ErrDecodingFailure, "failed to load netconf", err.Error())
+	}
+	utils.ConfigureLogging(conf)
+
+	if err := utils.CheckDatastoreReady(conf, testConnectionTimeout); err != nil {
+		return cnitypes.NewError(errPluginNotAvailable, "Calico datastore is not ready", err.Error())
+	}
+	return nil
+}
+
 func Main(version string) {
 	// Set up logging formatting.
 	logutils.ConfigureFormatter("cni-plugin")
@@ -786,11 +795,12 @@ func Main(version string) {
 	}
 
 	funcs := skel.CNIFuncs{
-		Add:   cmdAdd,
-		Del:   cmdDel,
-		Check: cmdDummyCheck,
+		Add:    cmdAdd,
+		Del:    cmdDel,
+		Check:  cmdDummyCheck,
+		Status: cmdStatus,
 	}
 	skel.PluginMainFuncs(funcs,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0", "1.1.0"),
 		"Calico CNI plugin "+version)
 }

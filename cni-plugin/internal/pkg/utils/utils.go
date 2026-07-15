@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/DeRuina/timberjack"
 	"github.com/containernetworking/cni/pkg/skel"
@@ -636,6 +637,28 @@ func GetHandleID(netName, containerID, workload string) string {
 		"ContainerID": containerID,
 	}).Debug("Generated IPAM handle")
 	return handleID
+}
+
+// CheckDatastoreReady verifies that the Calico datastore is reachable and
+// ready to process requests. Used by the CNI STATUS verb and the -t
+// datastore-connection test.
+func CheckDatastoreReady(conf types.NetConf, timeout time.Duration) error {
+	calicoClient, err := CreateClient(conf)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting ClusterInformation: %v", err)
+	}
+	if !*ci.Spec.DatastoreReady {
+		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		//nolint:staticcheck // Ignore ST1005: error strings should not be capitalized
+		return errors.New("Calico is currently not ready to process requests")
+	}
+	return nil
 }
 
 func CreateClient(conf types.NetConf) (client.Interface, error) {
