@@ -23,6 +23,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
+
 func TestProxy(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
