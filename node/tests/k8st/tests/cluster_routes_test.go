@@ -17,8 +17,6 @@
 // pool, the route to a remote node's IPAM block must go out tunl0 and carry the
 // netlink protocol of whichever component owns in-cluster routing: Felix (proto
 // 80) when ProgramClusterRoutes is Enabled, otherwise BIRD (proto 12).
-//
-// Ported from the former e2e test e2e/pkg/tests/networking/cluster_routes.go.
 
 package k8stests
 
@@ -34,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -84,9 +83,9 @@ func TestClusterRouteOwnership(t *testing.T) {
 		},
 	}
 	g.Expect(cli.Create(ctx, pool)).To(Succeed(), "creating IPPool")
-	t.Cleanup(func() { deletePool(cli, pool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, pool.Name) })
 
-	nsName := "cluster-routes"
+	nsName := e2eutils.GenerateRandomName("cluster-routes")
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
 	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
@@ -110,7 +109,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 			fmt.Sprintf("curl --silent --show-error --max-time 5 http://%s/clientip", serverIP+":80"),
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		return err
-	}, "120s", "5s").Should(Succeed(),
+	}, "120s", "1s").Should(Succeed(),
 		"client pod could not reach server pod %s across the IPIP tunnel", serverIP)
 
 	// The client node's route to the server's block must be programmed by the

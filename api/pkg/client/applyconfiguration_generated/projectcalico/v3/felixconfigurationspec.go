@@ -254,7 +254,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// used for securing the /metrics endpoint. The private key must be valid and accessible by the calico-node process.
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *projectcalicov3.PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty"`
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
 	// allow incoming traffic to host endpoints on irrespective of the security policy. This is useful to avoid accidentally
@@ -358,7 +358,9 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// modes can use XDP. This is not recommended since it doesn't provide better performance than
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty"`
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	NFTablesMode *projectcalicov3.NFTablesMode `json:"nftablesMode,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`

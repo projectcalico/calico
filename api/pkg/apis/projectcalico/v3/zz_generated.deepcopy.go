@@ -37,6 +37,10 @@ func (in *AllocationAttribute) DeepCopyInto(out *AllocationAttribute) {
 			(*out)[key] = val
 		}
 	}
+	if in.ReleasedAt != nil {
+		in, out := &in.ReleasedAt, &out.ReleasedAt
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 
@@ -4062,6 +4066,13 @@ func (in *Template) DeepCopyInto(out *Template) {
 	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val

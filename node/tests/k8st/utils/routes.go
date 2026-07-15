@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 )
 
 // RouteProto identifies the netlink protocol that owns a kernel route. The
@@ -121,7 +124,7 @@ func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev stri
 	t.Helper()
 	t.Logf("Asserting routes for %q on node %s use dev=%q proto=%s",
 		dstSubstring, nodeName, expectedDev, expectedProto)
-	err := RetryUntilSuccess(t, 60*time.Second, func() error {
+	NewWithT(t).Eventually(func() error {
 		routes, err := GetNodeRoutes(t, nodeName, dstSubstring)
 		if err != nil {
 			return err
@@ -139,8 +142,5 @@ func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev stri
 		}
 		return fmt.Errorf("no route on node %s with dev=%q proto=%s found among %v",
 			nodeName, expectedDev, expectedProto, routes)
-	})
-	if err != nil {
-		t.Fatalf("route ownership assertion failed: %v", err)
-	}
+	}, 60*time.Second, time.Second).Should(Succeed(), "route ownership assertion failed")
 }

@@ -70,11 +70,11 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 }
 
 type policyMigrator struct {
-	ctx    context.Context
-	cli    clientv3.Interface
-	cs     kubernetes.Interface
-	bc     bapi.Client
-	status bapi.SyncStatus
+	ctx                  context.Context
+	cli                  clientv3.Interface
+	cs                   kubernetes.Interface
+	bc                   bapi.Client
+	initialSyncCompleted bool
 
 	// State
 	kvps        map[model.ResourceKey]*model.KVPair
@@ -151,7 +151,9 @@ func (c *policyMigrator) run(stop chan struct{}) {
 		case <-stop:
 			return
 		case status := <-c.statusUpdates:
-			c.status = status
+			if status == bapi.InSync && !c.initialSyncCompleted {
+				c.initialSyncCompleted = true
+			}
 			logrus.Infof("Syncer status updated: %s", status.String())
 			c.kick()
 		case updates := <-c.updates:
@@ -210,9 +212,9 @@ func (c *policyMigrator) processUpdates(update bapi.Update) {
 
 // processPendingWork processes policies that need migration.
 func (c *policyMigrator) processPendingWork() error {
-	// Wait for the syncer to be in sync.
-	if c.status != bapi.InSync {
-		logrus.Debug("Syncer not in sync yet, waiting...")
+	// Wait for the initial sync to complete before doing any work.
+	if !c.initialSyncCompleted {
+		logrus.Debug("Initial sync not yet complete, waiting...")
 		return nil
 	}
 

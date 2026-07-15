@@ -295,3 +295,90 @@ else
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
 EOF
+
+# Scan the Neutron server log for issues that should not appear in a
+# healthy run.  This is a guard against regressions of code-quality
+# fixes we have specifically landed in the Calico driver, plus a
+# generic check for ERROR-level entries and tracebacks from the
+# driver namespace.  Runs last so all the other tests have already
+# exercised the driver paths first.
+sudo -u stack -H -E bash <<'EOF'
+# Strict mode: the outer script's `set -ex` does not propagate into this
+# fresh bash invocation, so re-enable it here.  Without `-e`, a failure
+# of `mktemp` or `journalctl` itself (e.g. service rename, permission
+# change) would leave LOG empty, none of the greps below would match,
+# and the script would fall through to the final "PASSED" echo --
+# silently turning the check into a no-op.
+set -e
+# (deliberately *not* `pipefail`: the `grep | head -N` lines below would
+# SIGPIPE grep when head closes its end after N matches, which under
+# pipefail would abort the loop before all forbidden patterns have been
+# checked.)
+LOG=$(mktemp)
+trap 'rm -f "${LOG}"' EXIT
+sudo journalctl -u devstack@q-svc --no-pager > "${LOG}"
+# Defence-in-depth against a journalctl that exits 0 but emits nothing
+# (e.g. unit not found on a future devstack version): treat that as a
+# check failure rather than an implicit PASS.
+if [ ! -s "${LOG}" ]; then
+  echo "FAIL: q-svc journal capture produced no output"
+  exit 1
+fi
+
+# Patterns that should NEVER appear in a healthy run.  Each is
+# something we have specifically fixed in driver code; reappearance
+# is a regression we want to catch in CI.
+FORBIDDEN_PATTERNS=(
+  # CI-1895 / SQLAlchemy transaction hygiene -- the _txn_from_context
+  # migration and CONTEXT_*.using wraps around raw context.session
+  # queries removed these.  Reappearance means a code path is making
+  # ORM queries outside a transaction again.
+  "ORM session: SQL execution without transaction in progress"
+
+  # Fairy-GC race (PR 13015 root-cause fix + fairy_gc_diagnostics
+  # safety net).  Reappearance means a session is being leaked to GC
+  # again -- see
+  # networking_calico/plugins/ml2/drivers/calico/fairy_gc_diagnostics.py
+  # for the full diagnosis.
+  "Exception ignored in: <function _ConnectionRecord.checkout"
+  "_thread_yield"
+)
+
+bad=0
+for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+  if grep -F -q -- "${pattern}" "${LOG}"; then
+    echo "FAIL: forbidden pattern found in neutron-server log: ${pattern}"
+    grep -F -n -- "${pattern}" "${LOG}" | head -5
+    echo
+    bad=1
+  fi
+done
+
+# ERROR-level entries from any networking_calico module.  The
+# oslo_log format places the logger name after the level word, so
+# "ERROR networking_calico" matches our logger names without false-
+# positives from other modules that happen to mention us.
+if grep -E -q "ERROR networking_calico" "${LOG}"; then
+  echo "FAIL: ERROR-level entries from networking_calico:"
+  grep -E -n "ERROR networking_calico" "${LOG}" | head -20
+  echo
+  bad=1
+fi
+
+# Python tracebacks that mention networking_calico source files.
+# A traceback frame is rendered as: File "/path/to/file.py", line N
+if grep -E -q 'File ".*networking_calico' "${LOG}"; then
+  echo "FAIL: Python tracebacks referencing networking_calico:"
+  grep -E -B 5 -A 2 'File ".*networking_calico' "${LOG}" | head -80
+  echo
+  bad=1
+fi
+
+if [ ${bad} -ne 0 ]; then
+  echo "============================================================"
+  echo "Neutron server log check FAILED -- see above."
+  echo "============================================================"
+  exit 1
+fi
+echo "Neutron server log check PASSED."
+EOF

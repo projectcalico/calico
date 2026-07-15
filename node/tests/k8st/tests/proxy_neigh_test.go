@@ -50,6 +50,7 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -113,7 +114,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 	t.Logf("Test pool CIDRs (%s): workload=%s LB=%s", family, workloadCIDR, lbCIDR)
 
 	suffix := strings.ToLower(string(family))
-	nsName := "proxy-neigh-" + suffix
+	nsName := e2eutils.GenerateRandomName("proxy-neigh-" + suffix)
 
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
 	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
@@ -133,7 +134,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 	}
 	g.Expect(cli.Create(ctx, workloadPool)).To(Succeed(), "creating workload IPPool")
-	t.Cleanup(func() { deletePool(cli, workloadPool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, workloadPool.Name) })
 
 	lbPool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "proxy-neigh-lb-" + suffix},
@@ -146,7 +147,7 @@ func runFamily(t *testing.T, family corev1.IPFamily) {
 		},
 	}
 	g.Expect(cli.Create(ctx, lbPool)).To(Succeed(), "creating LoadBalancer IPPool")
-	t.Cleanup(func() { deletePool(cli, lbPool.Name) })
+	t.Cleanup(func() { deletePool(t, cli, lbPool.Name) })
 
 	// Turn on the feature under test, restoring the original value afterwards.
 	restore := setLocalSubnetL2Reachability(ctx, g, cli, v3.LocalSubnetL2ReachabilityPodsAndLoadBalancers)
@@ -229,7 +230,7 @@ func probe(g *WithT, peer *extL2Peer, ip string) {
 	g.Eventually(func() error {
 		_, err := peer.Curl(httpURL(ip))
 		return err
-	}, "60s", "2s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
+	}, "60s", "1s").Should(Succeed(), "HTTP request to %s never succeeded — Felix did not answer ARP/NDP for it", ip)
 }
 
 func httpURL(ip string) string {
@@ -257,12 +258,12 @@ func newClient(g *WithT) ctrlclient.Client {
 
 // deletePool best-effort removes an IPPool; runs during cleanup so it logs
 // rather than fails.
-func deletePool(cli ctrlclient.Client, name string) {
+func deletePool(t testing.TB, cli ctrlclient.Client, name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	pool := &v3.IPPool{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	if err := cli.Delete(ctx, pool); err != nil && !apierrors.IsNotFound(err) {
-		fmt.Printf("WARNING: failed to delete IPPool %s: %v\n", name, err)
+		t.Logf("WARNING: failed to delete IPPool %s: %v", name, err)
 	}
 }
 
@@ -298,7 +299,7 @@ func setLocalSubnetL2Reachability(ctx context.Context, g *WithT, cli ctrlclient.
 			}
 			cur.Spec.LocalSubnetL2Reachability = original
 			return cli.Update(rctx, cur)
-		}, "20s", "2s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
+		}, "20s", "1s").Should(Succeed(), "restoring original LocalSubnetL2Reachability")
 	}
 }
 
@@ -322,7 +323,7 @@ func waitForPodIP(ctx context.Context, g *WithT, cli ctrlclient.Client, pod *cor
 			}
 		}
 		return fmt.Errorf("pod %s has no %s IP yet", pod.Name, family)
-	}, "120s", "2s").Should(Succeed(), "server pod never got a %s IP", family)
+	}, "120s", "1s").Should(Succeed(), "server pod never got a %s IP", family)
 	return ip
 }
 
@@ -341,7 +342,7 @@ func waitForLBVIP(ctx context.Context, g *WithT, cli ctrlclient.Client, svc *cor
 		}
 		vip = ingress[0].IP
 		return nil
-	}, "120s", "2s").Should(Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
+	}, "120s", "1s").Should(Succeed(), "Calico did not allocate a VIP for service %s", svc.Name)
 	return vip
 }
 

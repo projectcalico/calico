@@ -474,7 +474,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if err != nil {
 		log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
 	}
-	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled)
+	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled, nil)
 
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -984,15 +984,27 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetIDAllocatorV4.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
 		}
 
+		// Under kernel lockdown=confidentiality ftrace is disabled at boot, so
+		// loading any BPF program that references bpf_trace_printk makes the
+		// kernel log "could not enable bpf_trace_printk events" on every load.
+		// The conntrack cleanup program carries the helper in its debug build,
+		// so downgrade it to the no-log build on such nodes (mirrors the
+		// endpoint manager forcing BPFLogLevel off).
+		kernelLockdownConfidentiality := bpf.KernelLockdownConfidentiality()
+		if kernelLockdownConfidentiality && strings.EqualFold(config.BPFConntrackLogLevel, "debug") {
+			log.Warn("Kernel lockdown=confidentiality detected: forcing BPF conntrack cleanup " +
+				"log level to off (ftrace is disabled, debug logging cannot work).")
+		}
+
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
+		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp, kernelLockdownConfidentiality)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
 			if config.RulesConfig.IstioAmbientModeEnabled {
 				ipSetIDAllocatorV6.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
 			}
-			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
+			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp, kernelLockdownConfidentiality)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -1546,14 +1558,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 }
 
 // useNftables determines whether to use nftables based on the FelixConfig setting and
-// kube-proxy mode.
-func useNftables(mode string, proxyEnabled bool) bool {
+// the detected kube-proxy mode. In Auto mode, hostNftablesSupported, if non-nil, is
+// consulted as a fallback when kube-proxy is not detected to be in nftables mode.
+// Only supply it on hosts that never run kube-proxy (hosts outside any cluster): a
+// cluster host must follow its kube-proxy so that the two use the same dataplane.
+func useNftables(mode string, proxyEnabled bool, hostNftablesSupported func() bool) bool {
 	use := false
 
 	switch mode {
 	case "Auto":
-		// Detect based on kube-proxy mode.
+		// Detect based on kube-proxy mode, falling back to the host's own
+		// nftables support where there is no kube-proxy to give that signal.
 		use = proxyEnabled
+		if !use && hostNftablesSupported != nil {
+			use = hostNftablesSupported()
+		}
 	case "Enabled":
 		use = true
 	}
@@ -3026,6 +3045,7 @@ func startBPFDataplaneComponents(
 	config *Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
+	kernelLockdownConfidentiality bool,
 ) (*bpfconntrack.Scanner, chan string) {
 	ipSetConfig := config.RulesConfig.IPSetConfigV4
 	ipSetEntry := bpfipsets.IPSetEntryFromBytes
@@ -3114,7 +3134,9 @@ func startBPFDataplaneComponents(
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
-	if config.BPFConntrackLogLevel == "debug" {
+	// The debug cleanup program references bpf_trace_printk; skip it under
+	// lockdown=confidentiality where that would spam the kernel log on load.
+	if strings.EqualFold(config.BPFConntrackLogLevel, "debug") && !kernelLockdownConfidentiality {
 		ctLogLevel = bpfconntrack.BPFLogLevelDebug
 	}
 
