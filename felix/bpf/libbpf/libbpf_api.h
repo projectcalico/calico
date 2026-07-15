@@ -360,6 +360,18 @@ void bpf_ct_cleanup_set_globals(
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
 }
 
+// bpf_set_prog_flags sets the per-object load-time feature flags in the
+// program's .rodata.prog_flags section (see struct prog_flags). Kept
+// separate from the main globals so it does not perturb their layout.
+void bpf_set_prog_flags(struct bpf_map *map, uint8_t no_trace_printk)
+{
+	struct prog_flags data = {
+		.no_trace_printk = no_trace_printk,
+	};
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
 int bpf_xdp_program_id(int ifIndex) {
 	__u32 prog_id = 0, flags = 0;
 	int err;

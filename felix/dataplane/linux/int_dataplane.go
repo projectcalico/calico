@@ -994,6 +994,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Warn("Kernel lockdown=confidentiality detected: forcing BPF conntrack cleanup " +
 				"log level to off (ftrace is disabled, debug logging cannot work).")
 		}
+		// Make every BPF program loaded from here on drop its trace-printk code
+		// paths at load time (via the .rodata.prog_flags no_trace_printk flag),
+		// so their load does not spam the kernel log under confidentiality
+		// lockdown. Must be set before any program is loaded.
+		bpf.SetNoTracePrintk(kernelLockdownConfidentiality)
 
 		// Start IPv4 BPF dataplane components
 		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp, kernelLockdownConfidentiality)
