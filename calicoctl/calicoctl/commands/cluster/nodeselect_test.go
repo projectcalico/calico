@@ -288,13 +288,14 @@ func TestDescribeComparisonChoice(t *testing.T) {
 
 func TestRoleScaffold(t *testing.T) {
 	RegisterTestingT(t)
-	// By-pod: one "Pod <ref>: " line per pod, no trailing newline.
+	trailer := "\n\n" + externalEndpointsPrompt
+	// By-pod: one "Pod <ref>: " line per pod, then the external-endpoints trailer.
 	Expect(roleScaffold(true, []string{"ns/p1", "ns/p2"}, nil)).
-		To(Equal("Pod ns/p1: \nPod ns/p2: "))
+		To(Equal("Pod ns/p1: \nPod ns/p2: " + trailer))
 	// By-node: one "Node <name>: " line per node.
-	Expect(roleScaffold(false, nil, []string{"n1"})).To(Equal("Node n1: "))
-	// Nothing selected yields an empty scaffold.
-	Expect(roleScaffold(true, nil, nil)).To(BeEmpty())
+	Expect(roleScaffold(false, nil, []string{"n1"})).To(Equal("Node n1: " + trailer))
+	// With nothing selected, only the external-endpoints trailer is shown.
+	Expect(roleScaffold(true, nil, nil)).To(Equal(externalEndpointsPrompt))
 }
 
 func TestNodesForPods(t *testing.T) {

@@ -236,7 +236,11 @@ func (m *seededTextArea) Focus() tea.Cmd {
 			m.seeded = true
 			lines := strings.Count(fresh, "\n") + 1
 			m.area.SetHeight(clampInt(lines+1, 6, 16))
-			m.area.MoveToEnd()
+			// Land the cursor at the end of the first line — just past the
+			// "Pod ns/name: " / "Node name: " prefix — so the operator types their
+			// first answer without having to navigate up from the trailer.
+			m.area.MoveToBegin()
+			m.area.CursorEnd()
 			m.writeValue()
 		}
 	}

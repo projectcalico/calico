@@ -90,7 +90,7 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 	var comparisonSel []string    // by-node manual comparison nodes
 	var comparisonPodSel []string // by-pod manual comparison pods
 	var problemStarted string     // "when did it start?" answer
-	var problemDetails string     // per-resource role description
+	var problemDetails string     // per-resource involvement description
 	confirm := true
 
 	// podNodeByRef maps each pod's "namespace/name" ref to the node hosting it,
@@ -286,20 +286,39 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 				Value(&problemStarted),
 		),
 
-		// 5. The role of each affected pod/node. The custom textarea seeds itself
-		// from the live selection the first time it's focused, so the operator just
-		// fills in each pre-listed resource — and back-nav still works.
+		// 5. What each affected pod/node does in the problem. "role" is avoided in
+		// the prompt: users read it as the Kubernetes node role (master/worker) and
+		// fill that in instead. A worked example pattern-matches better than prose
+		// for rushed / ESL users. The custom textarea seeds itself from the live
+		// selection the first time it's focused, so the operator just fills in each
+		// pre-listed resource — and back-nav still works.
+		//
+		// Split by path so each example mirrors the scaffold's real format
+		// ("Pod ns/name:" vs "Node name:"); only the group matching the chosen
+		// method is shown, and both bind the same value.
 		huh.NewGroup(
 			newSeededTextArea().
-				Title("What is the role of each pod/node in the problem?").
-				Description("Fill in the role of each item below. For a connectivity problem, say "+
-					"which pod is the source and which is the destination, and the traffic affected "+
-					"— e.g. \"TCP via service ns/example-service ClusterIP on port 8080\".").
+				Title("How is each pod involved in the problem?").
+				Description("Example — what each one does in the problem:\n"+
+					"  Pod ns/frontend-abc: source, can't reach the database\n"+
+					"  Pod ns/postgres-0:   destination, TCP on port 5432").
 				SeedFunc(func() string {
-					return roleScaffold(method == byPod, problemPodSel, problemNodeSel)
+					return roleScaffold(true, problemPodSel, problemNodeSel)
 				}).
 				Value(&problemDetails),
-		),
+		).WithHideFunc(func() bool { return method != byPod }),
+
+		huh.NewGroup(
+			newSeededTextArea().
+				Title("How is each node involved in the problem?").
+				Description("Example — what's wrong on each node:\n"+
+					"  Node worker-1: pods here can't reach pods on other nodes\n"+
+					"  Node worker-3: BGP peering keeps flapping").
+				SeedFunc(func() string {
+					return roleScaffold(false, problemPodSel, problemNodeSel)
+				}).
+				Value(&problemDetails),
+		).WithHideFunc(func() bool { return method != byNode }),
 
 		// 6. Confirm. The plan is the Confirm field's own description (rather than a
 		// separate Note) so the whole confirmation sits inside one bordered card.
@@ -355,20 +374,30 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 	}, confirm, nil
 }
 
-// roleScaffold builds the pre-populated body of the "role of each pod/node"
-// field: one "Pod ns/name: " (or "Node name: ") line per selected resource, for
-// the operator to complete. Returns "" when nothing is selected.
+// roleScaffold builds the pre-populated body of the "how is each pod/node
+// involved" field: one "Pod ns/name: " (or "Node name: ") line per selected
+// resource, for the operator to complete, followed by a trailer inviting them to
+// add off-cluster endpoints (an external DB, gateway, or client IP) that are part
+// of the problem but aren't in the cluster selection.
 func roleScaffold(byPod bool, pods, nodes []string) string {
 	prefix, items := "Node ", nodes
 	if byPod {
 		prefix, items = "Pod ", pods
 	}
-	lines := make([]string, 0, len(items))
+	lines := make([]string, 0, len(items)+2)
 	for _, it := range items {
 		lines = append(lines, prefix+it+": ")
 	}
+	if len(lines) > 0 {
+		lines = append(lines, "") // blank line between the items and the trailer
+	}
+	lines = append(lines, externalEndpointsPrompt)
 	return strings.Join(lines, "\n")
 }
+
+// externalEndpointsPrompt trails the scaffold, nudging the operator to name
+// off-cluster endpoints (external DB, gateway, client IP) involved in the problem.
+const externalEndpointsPrompt = `Please add any external nodes/IPs below, e.g. "203.0.113.10: external database":`
 
 // describeComparisonChoice renders the mini-confirmation shown above the
 // comparison-node choice: a recap of the problem nodes just selected, then the
