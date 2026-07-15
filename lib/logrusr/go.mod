@@ -7,6 +7,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 )
 
-require golang.org/x/sys v0.46.0 // indirect
+require golang.org/x/sys v0.47.0 // indirect
 
 replace github.com/projectcalico/calico/lib/std => ../std

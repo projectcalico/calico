@@ -315,12 +315,16 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.ExpectStatusUpdate(api.InSync)
 		// Expect MaxErrorsPerRevision unknown errors before triggering a re-list.
+		// The MaxErrorsPerRevision threshold is a strategy-change signal (re-List
+		// instead of continuing to retry the Watch), not a connectivity-loss signal,
+		// so no WaitForDatastore regression is expected — only the ResyncInProgress
+		// edge emitted at the top of the next resync iteration before the re-List.
 		for range watchersyncer.MaxErrorsPerRevision {
 			rs.clientWatchResponse(r1, genError)
 		}
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientListResponse(r1, emptyList)
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r1, nil)
 
 		By("Expecting the time for all events to be handled is within a sensible window")
@@ -365,9 +369,13 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				Error: dsError,
 			})
 		}
-		rs.ExpectStatusUnchanged()
+		// After 5 watch errors at the same revision (MaxErrorsPerRevision), r3 triggers
+		// a strategy-change to re-List, emitting ResyncInProgress at the top of its
+		// next resync iteration. With 3 caches, only r3 regresses, so the aggregate
+		// goes from InSync to ResyncInProgress (mixed status amongst caches).
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientListResponse(r3, emptyList)
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r3, nil)
 		rs.ExpectStatusUnchanged()
 
@@ -580,7 +588,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// Need to use a too-old error to trigger re-List.
 		rs.clientWatchResponse(r1, caliTooOldRV)
 		time.Sleep(watchersyncer.WatchPollInterval)
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 
 		By("returning a sync list with one entry removed and a new one added")
 		rs.clientListResponse(r1, &model.KVPairList{
@@ -592,7 +600,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			},
 		})
 
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.InSync)
 
 		rs.clientWatchResponse(r1, nil)
 
@@ -636,7 +644,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: caliTooOldRV,
 		})
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientListResponse(r1, &model.KVPairList{
 			Revision: "12347",
 			KVPairs: []*model.KVPair{
@@ -644,7 +652,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				eventL1Modified4_2.New,
 			},
 		})
-		rs.ExpectStatusUnchanged()
+		rs.ExpectStatusUpdate(api.InSync)
 
 		By("Expecting mod, delete, mod updates")
 		rs.ExpectUpdates([]api.Update{
@@ -868,6 +876,134 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			},
 		})
 		rs.ExpectParseError("zzzzz", "xxxxx")
+	})
+
+	It("should emit WaitForDatastore on sustained connection loss and recover through ResyncInProgress to InSync", func() {
+		// Drive the producer through a full InSync → WaitForDatastore → ResyncInProgress → InSync
+		// cycle. This exercises the markDisconnected path that fires only after
+		// time.Since(lastSuccessfulConnTime) > watchRetryTimeout — i.e., the
+		// sustained-connectivity-loss branch of the producer.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 50*time.Millisecond, 200*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1}, watchersyncer.WithWatchRetryTimeout(100*time.Millisecond))
+
+		// Bring the syncer up to InSync.
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "12345"})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		// Age lastSuccessfulConnTime past watchRetryTimeout so a later List failure
+		// will fire the sustained-disconnect branch.
+		time.Sleep(150 * time.Millisecond)
+
+		// Force a full re-resync via MaxErrorsPerRevision generic Watch errors —
+		// none of the paths hit here refresh lastSuccessfulConnTime, so the timer
+		// stays aged. The first sendEvent kicks us out of loopReadingFromWatcher
+		// (incrementing errorCountAtCurrentRev to 1); the subsequent
+		// clientWatchResponse errors then accumulate in
+		// maybeResyncAndCreateWatcher's watch-creation retry loop until the counter
+		// hits MaxErrorsPerRevision and flips performFullResync=true. A single
+		// caliTooOldRV WatchError would be shorter, but the ResourceExpired branch
+		// refreshes lastSuccessfulConnTime and would defeat the aging window.
+		rs.sendEvent(r1, api.WatchEvent{Type: api.WatchError, Error: genError})
+		for range watchersyncer.MaxErrorsPerRevision - 1 {
+			rs.clientWatchResponse(r1, genError)
+		}
+
+		// First post-MaxErr resync iteration: top-of-loop emits ResyncInProgress
+		// (connected is still true at this moment), then the List fails with a
+		// non-NotFound error and the watchRetryTimeout-guarded branch calls
+		// markDisconnected.
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.clientListResponse(r1, genError)
+
+		// Second resync iteration: top-of-loop emits WaitForDatastore (connected is
+		// now false). Provide another List error to keep the cache in the disconnect
+		// state long enough to be observed.
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, genError)
+
+		// Recover: provide a successful List. The cache will emit ResyncInProgress
+		// (from the WaitForDatastore → ResyncInProgress injection inside the
+		// List-success path) and then InSync from finishResync.
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "12346"})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+	})
+
+	It("should stay sticky-InSync while in listTriggeredPolling state (no spurious ResyncInProgress on subsequent polling iterations)", func() {
+		// Drive the cache into the polling-from-list state by returning an empty list
+		// with a zero/empty revision, then verify that subsequent polling iterations
+		// do NOT emit a regression edge (sticky-InSync property).
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 50*time.Millisecond, 100*time.Millisecond)
+
+		rs := newStartedWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+
+		// Initial sync via empty-list-zero-revision. The cache emits InSync from
+		// finishResync, then enters listTriggeredPolling mode.
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "0"})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		// On the next polling iteration, the top-of-loop status emit must be
+		// suppressed (sticky-InSync). Provide another empty-list-zero-revision and
+		// assert the status doesn't regress to ResyncInProgress.
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "0"})
+		rs.ExpectStatusUnchanged()
+
+		// Verify across one more polling iteration.
+		rs.clientListResponse(r1, &model.KVPairList{Revision: "0"})
+		rs.ExpectStatusUnchanged()
+	})
+
+	It("should never emit OnUpdates while published status is WaitForDatastore", func() {
+		// The watcherCache producer transitions to ResyncInProgress before any KV
+		// emission, so consumers never see OnUpdates while we're published as
+		// WaitForDatastore. This test exercises a WaitForDatastore → ResyncInProgress
+		// recovery and asserts that ordering on the observed callback timeline.
+		defer setWatchIntervals(watchersyncer.MinResyncInterval, watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
+		setWatchIntervals(50*time.Millisecond, 50*time.Millisecond, 200*time.Millisecond)
+
+		recorder, rs := newOrderedRecordingTester([]watchersyncer.ResourceType{r1})
+		rs.watcherSyncer.Start()
+
+		// Unblock the initial WaitForDatastore emission (SyncerTester blocks each
+		// status callback until ExpectStatusUpdate is called).
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		// Drive an initial sync with several KVs in the List response so the cache
+		// will emit OnUpdates batches that the consumer must see strictly after
+		// ResyncInProgress.
+		ev1 := addEvent(l1Key1)
+		ev2 := addEvent(l1Key2)
+		ev3 := addEvent(l1Key3)
+		rs.clientListResponse(r1, &model.KVPairList{
+			Revision: "rev1",
+			KVPairs:  []*model.KVPair{ev1.New, ev2.New, ev3.New},
+		})
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+		rs.ExpectUpdates([]api.Update{
+			{KVPair: *ev1.New, UpdateType: api.UpdateTypeKVNew},
+			{KVPair: *ev2.New, UpdateType: api.UpdateTypeKVNew},
+			{KVPair: *ev3.New, UpdateType: api.UpdateTypeKVNew},
+		}, true)
+
+		// Assert the invariant: no OnUpdates were observed at a time when the
+		// last-received status was WaitForDatastore.
+		for _, e := range recorder.snapshot() {
+			if e.kind == "updates" {
+				ExpectWithOffset(0, e.statusAtTime).ToNot(Equal(api.WaitForDatastore),
+					"invariant violated: OnUpdates received while published status was WaitForDatastore")
+			}
+		}
 	})
 
 	It("should forward New()'s Option arguments so WithWatchRetryTimeout takes effect", func() {
@@ -1612,4 +1748,63 @@ func (w *watcher) run(results <-chan api.WatchEvent) {
 			return
 		}
 	}
+}
+
+// orderedCallbackEvent is a single observation in an orderedCallbackRecorder's
+// timeline. For OnUpdates events, statusAtTime captures the most-recently-
+// observed status at the moment OnUpdates was called.
+type orderedCallbackEvent struct {
+	kind         string // "status" or "updates"
+	statusAtTime api.SyncStatus
+}
+
+// orderedCallbackRecorder wraps an api.SyncerCallbacks and records each
+// callback invocation in an ordered timeline. Used to assert producer-side
+// ordering invariants (in particular: no OnUpdates while published status is
+// WaitForDatastore).
+type orderedCallbackRecorder struct {
+	mu       sync.Mutex
+	forward  api.SyncerCallbacks
+	events   []orderedCallbackEvent
+	curState api.SyncStatus
+}
+
+func (r *orderedCallbackRecorder) OnStatusUpdated(s api.SyncStatus) {
+	r.mu.Lock()
+	r.curState = s
+	r.events = append(r.events, orderedCallbackEvent{kind: "status", statusAtTime: s})
+	r.mu.Unlock()
+	r.forward.OnStatusUpdated(s)
+}
+
+func (r *orderedCallbackRecorder) OnUpdates(updates []api.Update) {
+	r.mu.Lock()
+	r.events = append(r.events, orderedCallbackEvent{kind: "updates", statusAtTime: r.curState})
+	r.mu.Unlock()
+	r.forward.OnUpdates(updates)
+}
+
+func (r *orderedCallbackRecorder) snapshot() []orderedCallbackEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]orderedCallbackEvent, len(r.events))
+	copy(out, r.events)
+	return out
+}
+
+// newOrderedRecordingTester returns a watcherSyncerTester whose syncer is wired
+// to an orderedCallbackRecorder that forwards to the SyncerTester. The returned
+// recorder can be used after the test scenario completes to assert ordering
+// invariants over the observed callback timeline.
+func newOrderedRecordingTester(l []watchersyncer.ResourceType) (*orderedCallbackRecorder, *watcherSyncerTester) {
+	fc := newFakeClientFor(l)
+	st := testutils.NewSyncerTester()
+	recorder := &orderedCallbackRecorder{forward: st}
+	rst := &watcherSyncerTester{
+		SyncerTester:  st,
+		fc:            fc,
+		fcs:           map[string]*fakeClient{"": fc},
+		watcherSyncer: watchersyncer.NewMultiClient(map[string]api.Client{"": fc}, l, recorder),
+	}
+	return recorder, rst
 }

@@ -569,19 +569,18 @@ func TestLiveMigrationGARPChannel(t *testing.T) {
 	})
 }
 
-// garpSenderBlocked reports whether some goroutine is currently parked in
-// detectGARP's report-detection send.  Lets the regression test below wait
-// deterministically for the sender to be blocked reporting on garpC before
-// the Target-exit update is processed.  The goroutine state is "select" for
-// the select-based send (which stopGARPDetection can abort) and "chan send"
-// for a plain send (the pre-fix code); we match both so the test observes the
-// blocked sender either way and then proves whether the Target-exit path can
-// get past it.  detectGARP's only other park point - waiting for a packet -
-// shows as "chan receive", so these two states are unambiguous.
-func garpSenderBlocked() bool {
-	// Grow the buffer until the full goroutine dump fits: runtime.Stack
-	// truncates (n == len(buf)) when the buffer is too small, which could
-	// hide the detectGARP goroutine and time out the Eventually below.
+// senderParkedIn reports whether some goroutine whose stack mentions fnSubstring is currently
+// parked in a channel send.  Lets the regression tests below wait deterministically for a sender to
+// be blocked delivering to the monitor's (unbuffered, main-loop-read) channels.  The goroutine
+// state is "select" for a select-based send (which can be aborted via a stop channel) and "chan
+// send" for a plain send (the pre-fix code); we match both so a test observes the blocked sender
+// either way and then proves whether the code under test can get past it.  The senders' only other
+// park points - e.g. detectGARP waiting for a packet - show as "chan receive", so these two states
+// are unambiguous.
+func senderParkedIn(fnSubstring string) bool {
+	// Grow the buffer until the full goroutine dump fits: runtime.Stack truncates (n ==
+	// len(buf)) when the buffer is too small, which could hide the target goroutine and time
+	// out the caller's Eventually.
 	buf := make([]byte, 1<<20)
 	n := runtime.Stack(buf, true)
 	for n == len(buf) {
@@ -589,7 +588,7 @@ func garpSenderBlocked() bool {
 		n = runtime.Stack(buf, true)
 	}
 	for _, gr := range strings.Split(string(buf[:n]), "\n\n") {
-		if !strings.Contains(gr, "detectGARP") {
+		if !strings.Contains(gr, fnSubstring) {
 			continue
 		}
 		if strings.Contains(gr, "[select]") || strings.Contains(gr, "[chan send]") {
@@ -597,6 +596,18 @@ func garpSenderBlocked() bool {
 		}
 	}
 	return false
+}
+
+// garpSenderBlocked reports whether some goroutine is currently parked in detectGARP's
+// report-detection send.
+func garpSenderBlocked() bool {
+	return senderParkedIn("detectGARP")
+}
+
+// timerSenderBlocked reports whether some elevated-routing-timer goroutine is currently parked
+// in its select - either waiting for the timer to fire or sending its pop on timerC.
+func timerSenderBlocked() bool {
+	return senderParkedIn("startElevatedRoutingTimer")
 }
 
 // TestGARPRaceWithTargetExit is a regression test for a dataplane main-loop
@@ -697,6 +708,92 @@ func TestGARPRaceWithTargetExit(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestTimerPopRaceWithTimeWaitExit is a regression test for stale timer-pop misattribution.
+// Scenario: the FSM is in TimeWait and its elevated-routing timer fires while the main loop is
+// busy, so the pop parks on the unbuffered timerC.  Before the main loop drains it, the same batch
+// re-migrates the workload: a SOURCE update exits TimeWait (discarding the FSM) and a subsequent
+// TARGET -> NO_ROLE sequence enters TimeWait again with a fresh timer.  When the parked episode-1
+// pop is finally drained, OnTimerPop's state check ("FSM exists and is in TimeWait") cannot tell it
+// from a genuine pop for the new episode, so it would cut the new TimeWait short - reverting the
+// workload's route to normal priority before routing has converged.
+//
+// stopElevatedRoutingTimer must therefore abort a parked pop via the timer's stop channel when
+// TimeWait is exited, so a stale pop can never be delivered.  The test simulates the main loop by
+// calling OnUpdate directly, with nothing reading timerC (just as the real main loop cannot read
+// timerC while it is processing a batch).
+func TestTimerPopRaceWithTimeWaitExit(t *testing.T) {
+	g := NewWithT(t)
+	// Short convergence so episode 1's timer fires promptly.
+	m := newTestMonitor(10 * time.Millisecond)
+
+	// Episode 1: drive to TimeWait via the missed-GARP path; the timer fires
+	// and its pop parks on timerC.  The timer goroutine parks in a select both
+	// before and after the timer fires, so also wait out several convergence
+	// times to make it overwhelmingly likely the fired-pop-parked-in-send
+	// interleaving from the field scenario is the one we exercise; the exit
+	// path below must reap the goroutine in either interleaving regardless.
+	start := time.Now()
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+	drainUpdates(m)
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+	drainUpdates(m)
+	g.Eventually(func() bool {
+		return time.Since(start) > 50*time.Millisecond && timerSenderBlocked()
+	}, time.Second, time.Millisecond).Should(BeTrue())
+
+	// Hold a reference to the episode-1 FSM: the TimeWait exit below discards it
+	// from the monitor's map, but we need it to verify its goroutine is reaped.
+	fsm1 := m.fsms[wepID1]
+	g.Expect(fsm1).NotTo(BeNil())
+
+	// Exit TimeWait while the pop is parked, as the main loop would when processing a
+	// re-migration batch.  This must abort the parked pop.
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_SOURCE))
+	drainUpdates(m)
+
+	// stopElevatedRoutingTimer waits for the timer goroutine to exit before returning, so by
+	// the time the exit update has been processed the goroutine must already be gone -
+	// synchronously, not eventually.  Verify via the FSM's own WaitGroup (a global stack scan
+	// would be polluted by TimeWait timer goroutines leaked by other tests in this package).
+	reaped := make(chan struct{})
+	go func() {
+		fsm1.timerWG.Wait()
+		close(reaped)
+	}()
+	select {
+	case <-reaped:
+	case <-time.After(time.Second):
+		t.Fatal("timer goroutine still running after the TimeWait-exiting update returned")
+	}
+	g.Expect(fsm1.timerStopC).To(BeNil(), "stopElevatedRoutingTimer should have cleared timerStopC")
+
+	// Episode 2: re-enter TimeWait with a convergence time long enough that its own timer
+	// cannot fire during the test, so any pop delivered below can only be the stale one from
+	// episode 1.
+	m.convergenceTime = time.Hour
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_TARGET))
+	drainUpdates(m)
+	m.OnUpdate(wepUpdate(wepID1, proto.LiveMigrationRole_NO_ROLE))
+	drainUpdates(m)
+	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+
+	// Drain timerC as the main loop would.  The stale episode-1 pop must not arrive; if it did,
+	// OnTimerPop would misattribute it to episode 2 and end its TimeWait prematurely.
+	select {
+	case id := <-m.timerC:
+		m.OnTimerPop(id)
+		t.Fatalf("stale timer pop delivered and misattributed; FSM state now %v",
+			m.fsms[wepID1])
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no delivery.
+	}
+	g.Expect(m.fsms[wepID1].currentState).To(Equal(liveMigrationStateTimeWait))
+
+	// Reap episode 2's timer goroutine rather than leak it into the rest of the
+	// test binary.
+	m.OnUpdate(wepRemove(wepID1))
 }
 
 // --- Section 6: GARP/RARP packet matching ---

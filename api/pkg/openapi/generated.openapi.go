@@ -3694,7 +3694,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesMode configures nftables support in Felix. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Description: "NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the nftables dataplane if kube-proxy is detected to be running in nftables mode. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},
@@ -7820,6 +7820,22 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					"labels": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"annotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Annotations adds the specified annotations to the generated AutoHostEndpoint.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,

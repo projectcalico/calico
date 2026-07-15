@@ -190,7 +190,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
-			conn, _, err := ndp.Listen(ifi, ndp.Unspecified)
+			conn, _, err := ndp.Listen(ifi, ndp.LinkLocal)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -808,10 +808,13 @@ func (l *ifaceListener) runNDPListener() {
 		// If the NS source is the unspecified address (::), this is a
 		// Duplicate Address Detection probe (RFC 4862). We can't unicast
 		// back to ::, so reply to the all-nodes multicast address and
-		// clear the Solicited flag (RFC 4861 §4.4).
+		// clear the Solicited flag (RFC 4861 §4.4). The socket tags the
+		// source with the interface zone (e.g. ::%eth0) and
+		// netip.Addr.IsUnspecified is zone-sensitive, so strip the zone
+		// before the test.
 		dst := srcAddr
 		solicited := true
-		if !srcAddr.IsValid() || srcAddr.IsUnspecified() {
+		if src := srcAddr.WithZone(""); !src.IsValid() || src.IsUnspecified() {
 			dst = netip.MustParseAddr(ipv6AllNodesMulticast)
 			solicited = false
 		}

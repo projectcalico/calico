@@ -12,11 +12,16 @@ echo "[INFO] starting global_epilogue"
 # bz diags/destroy must run from the profile dir (== BZ_HOME).
 cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 
-CI_EXIT_CODE=${CI_EXIT_CODE:-0}
+# The handler wraps the step body in an EXIT trap that exposes the body's exit
+# status as CI_STEP_EXIT_CODE (set in both the container and VM paths); plain
+# CI_EXIT_CODE is never set for container steps, so reading it here defaulted
+# every failure to 0 and skipped the diags capture below. Read the handler's
+# variable, falling back to CI_EXIT_CODE then 0.
+CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
 
 # Capture diags on failure (or always for cert runs).
-if [[ "${CI_EXIT_CODE}" != "0" ]]; then
+if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true

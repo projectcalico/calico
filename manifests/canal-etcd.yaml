@@ -451,7 +451,7 @@ spec:
         - name: install-cni
           image: quay.io/calico/calico:master
           imagePullPolicy: IfNotPresent
-          args: ["cni", "install"]
+          args: ["component", "cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.

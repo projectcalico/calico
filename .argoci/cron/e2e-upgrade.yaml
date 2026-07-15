@@ -1,0 +1,137 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-upgrade-
+schedule: 10 21 * * 3
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export CALICOCTL_INSTALL_TYPE="${CALICOCTL_INSTALL_TYPE:-container}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-upgrade.yml}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export PRODUCT="${PRODUCT:-calico}"
+  export RELEASE_STREAM="${RELEASE_STREAM:-v3.29}"
+  export TEST_TYPE="${TEST_TYPE:-k8s-e2e}"
+  export UPLEVEL_PRE_RELEASE="${UPLEVEL_PRE_RELEASE:-true}"
+  export UPLEVEL_PRODUCT="${UPLEVEL_PRODUCT:-calico}"
+  export USE_HASH_RELEASE="${USE_HASH_RELEASE:-false}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: calico-tests-aks-byo-cni-w-azurelinux
+    services:
+      - docker
+    env:
+      - name: AZ_NETWORK_PLUGIN
+        value: none
+      - name: CLUSTER_IMAGE
+        value: AzureLinux
+      - name: PROVISIONER
+        value: azr-aks
+    matrix:
+      - name: stable-2-operator-calicoiptables
+        env:
+          - name: K8S_VERSION
+            value: stable-2
+          - name: INSTALLER
+            value: operator
+          - name: DATAPLANE
+            value: CalicoIptables
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-tests-eks
+    services:
+      - docker
+    env:
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)
+      - name: PROVISIONER
+        value: aws-eks
+    matrix:
+      - name: stable-1-calico-manual-calicobpf
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+          - name: EKS_CNI
+            value: calico
+          - name: INSTALLER
+            value: manual
+          - name: DATAPLANE
+            value: CalicoBPF
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-tests-kubeadm-iptables
+    services:
+      - docker
+    matrix:
+      - name: aws-kubeadm-stable-3-operator-calicoiptables
+        env:
+          - name: PROVISIONER
+            value: aws-kubeadm
+          - name: K8S_VERSION
+            value: stable-3
+          - name: INSTALLER
+            value: operator
+          - name: DATAPLANE
+            value: CalicoIptables
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-tests-kubeadm-bpf
+    services:
+      - docker
+    matrix:
+      - name: gcp-kubeadm-stable-operator-calicobpf
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: K8S_VERSION
+            value: stable
+          - name: INSTALLER
+            value: operator
+          - name: DATAPLANE
+            value: CalicoBPF
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-tests-rke2
+    services:
+      - docker
+    env:
+      - name: PROVISIONER
+        value: gcp-rke2
+    matrix:
+      - name: -stable-2-operator-calicoiptables
+        env:
+          - name: RKE_NETWORKING
+            value: ""
+          - name: K8S_VERSION
+            value: stable-2
+          - name: INSTALLER
+            value: operator
+          - name: DATAPLANE
+            value: CalicoIptables
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-tests-openshift
+    services:
+      - docker
+    env:
+      - name: PROVISIONER
+        value: aws-openshift
+    matrix:
+      - name: 4-19-20-calicoiptables-operator
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.19.20
+          - name: DATAPLANE
+            value: CalicoIptables
+          - name: INSTALLER
+            value: operator
+    commands: |
+      .argoci/scripts/body_standard.sh

@@ -358,7 +358,9 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// modes can use XDP. This is not recommended since it doesn't provide better performance than
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty"`
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	NFTablesMode *projectcalicov3.NFTablesMode `json:"nftablesMode,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`

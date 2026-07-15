@@ -2465,7 +2465,7 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, affinityCfg)
+		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv6Pools, 6, affinityCfg)
 		if err != nil {
 			log.Errorf("Error ensure IPv6 block: %v", err)
 			return nil, nil, err

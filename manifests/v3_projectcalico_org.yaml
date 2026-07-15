@@ -38100,9 +38100,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -40837,6 +40838,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -41066,6 +41074,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the

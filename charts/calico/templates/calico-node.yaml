@@ -95,7 +95,7 @@ spec:
         - name: install-cni
           image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
           imagePullPolicy: {{.Values.imagePullPolicy}}
-          args: ["cni", "install"]
+          args: ["component", "cni", "install"]
           envFrom:
             - configMapRef:
                 # Allow KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT to be overridden for eBPF mode.

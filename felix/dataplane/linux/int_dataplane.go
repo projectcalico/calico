@@ -473,7 +473,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if err != nil {
 		log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
 	}
-	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled)
+	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled, nil)
 
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -1557,14 +1557,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 }
 
 // useNftables determines whether to use nftables based on the FelixConfig setting and
-// kube-proxy mode.
-func useNftables(mode string, proxyEnabled bool) bool {
+// the detected kube-proxy mode. In Auto mode, hostNftablesSupported, if non-nil, is
+// consulted as a fallback when kube-proxy is not detected to be in nftables mode.
+// Only supply it on hosts that never run kube-proxy (hosts outside any cluster): a
+// cluster host must follow its kube-proxy so that the two use the same dataplane.
+func useNftables(mode string, proxyEnabled bool, hostNftablesSupported func() bool) bool {
 	use := false
 
 	switch mode {
 	case "Auto":
-		// Detect based on kube-proxy mode.
+		// Detect based on kube-proxy mode, falling back to the host's own
+		// nftables support where there is no kube-proxy to give that signal.
 		use = proxyEnabled
+		if !use && hostNftablesSupported != nil {
+			use = hostNftablesSupported()
+		}
 	case "Enabled":
 		use = true
 	}
