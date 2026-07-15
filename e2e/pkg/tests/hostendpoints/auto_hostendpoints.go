@@ -370,6 +370,11 @@ func WaitForAutoHEPs(client ctrlclient.Client, expect bool) {
 	} else {
 		logrus.Info("Waiting for the host endpoints to be deleted")
 	}
+	// Toggling this config restarts kube-controllers (in-container re-exec), and only
+	// after it comes back up and resyncs does the node controller create/delete the
+	// host endpoints. This wait covers that whole restart+reconcile, not just the HEP
+	// write, so budget generously: on a busy cluster it can exceed a minute even when
+	// kube-controllers is healthy.
 	EventuallyWithOffset(1, func() error {
 		heps := &v3.HostEndpointList{}
 		err := client.List(context.Background(), heps)
@@ -383,7 +388,7 @@ func WaitForAutoHEPs(client ctrlclient.Client, expect bool) {
 			return fmt.Errorf("expected no host endpoints, but found %d", len(heps.Items))
 		}
 		return nil
-	}, 1*time.Minute, 2*time.Second).Should(BeNil())
+	}, 2*time.Minute, 2*time.Second).Should(BeNil())
 }
 
 // expectAutoHostEndpoint asserts that a specified node has the correct auto
