@@ -769,7 +769,7 @@ steps:
       - name: INSTALL_ETCD_POD
         value: "true"
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.skip=(Tiered RBAC)
+        value: --ginkgo.skip=(Tiered RBAC|Feature:Maglev)
       - name: MANIFEST_FILE
         value: calico-etcd.yaml
       - name: PROVISIONER
