@@ -1743,6 +1743,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFOverlayHostSourceIP != nil {
+		in, out := &in.BPFOverlayHostSourceIP, &out.BPFOverlayHostSourceIP
+		*out = new(BPFOverlayHostSourceIPType)
+		**out = **in
+	}
 	if in.BPFDisableUnprivileged != nil {
 		in, out := &in.BPFDisableUnprivileged, &out.BPFDisableUnprivileged
 		*out = new(bool)

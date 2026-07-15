@@ -3741,6 +3741,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfOverlayHostSourceIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  \"TunnelAddress\" (the default) assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour of clusters upgraded from earlier releases.  \"HostAddress\" uses the node's own IP directly and does not assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: TunnelAddress]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfDisableUnprivileged": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and cannot insert their own BPF programs to interfere with Calico's. [Default: true]",

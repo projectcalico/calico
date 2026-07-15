@@ -2300,6 +2300,25 @@ tunnel IPs).
 | Default value (YAML) | `262144` |
 | Notes | Required. | 
 
+### `BPFOverlayHostSourceIP` (config file) / `bpfOverlayHostSourceIP` (YAML)
+
+Controls the source IP that Felix uses in BPF mode for host-networked
+(node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel. "TunnelAddress" (the default)
+assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+of clusters upgraded from earlier releases. "HostAddress" uses the node's own IP directly and does not
+assign a tunnel device IP. This option has no effect on WireGuard tunnels, which always use a tunnel
+device IP.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFOverlayHostSourceIP` |
+| Encoding (env var/config file) | One of: <code>HostAddress</code>, <code>TunnelAddress</code> |
+| Default value (above encoding) | `TunnelAddress` |
+| `FelixConfiguration` field | `bpfOverlayHostSourceIP` (YAML) `BPFOverlayHostSourceIP` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"HostAddress"</code>, <code>"TunnelAddress"</code>. |
+| Default value (YAML) | `TunnelAddress` |
+| Notes | Required. | 
+
 ### `BPFPSNATPorts` (config file) / `bpfPSNATPorts` (YAML)
 
 Sets the range from which we randomly pick a port if there is a source port
