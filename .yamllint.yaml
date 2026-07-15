@@ -13,6 +13,9 @@ rules:
     require-starting-space: false
     min-spaces-from-content: 1
   comments-indentation: disable
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
 
 ignore:
   # template files are not valid yaml
@@ -25,3 +28,4 @@ ignore:
   - pod2daemon/node-driver-registrar/
   - whisker/node_modules/
   - felix/bpf-gpl/libbpf/
+  - third_party/*/
