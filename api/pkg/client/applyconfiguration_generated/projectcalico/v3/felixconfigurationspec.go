@@ -184,6 +184,15 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	VXLANMTUV6 *int `json:"vxlanMTUV6,omitempty"`
 	// VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]
 	VXLANPort *int `json:"vxlanPort,omitempty"`
+	// VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+	// device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+	// VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+	// If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+	VXLANSrcPortMin *int `json:"vxlanSrcPortMin,omitempty"`
+	// VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+	VXLANSrcPortMax *int `json:"vxlanSrcPortMax,omitempty"`
 	// VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
 	// in use on your system. [Default: 4096]
 	VXLANVNI *int `json:"vxlanVNI,omitempty"`
@@ -1077,6 +1086,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithVXLANMTUV6(value int) *Fe
 // If called multiple times, the VXLANPort field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithVXLANPort(value int) *FelixConfigurationSpecApplyConfiguration {
 	b.VXLANPort = &value
+	return b
+}
+
+// WithVXLANSrcPortMin sets the VXLANSrcPortMin field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the VXLANSrcPortMin field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithVXLANSrcPortMin(value int) *FelixConfigurationSpecApplyConfiguration {
+	b.VXLANSrcPortMin = &value
+	return b
+}
+
+// WithVXLANSrcPortMax sets the VXLANSrcPortMax field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the VXLANSrcPortMax field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithVXLANSrcPortMax(value int) *FelixConfigurationSpecApplyConfiguration {
+	b.VXLANSrcPortMax = &value
 	return b
 }
 
