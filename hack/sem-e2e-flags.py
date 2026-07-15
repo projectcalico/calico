@@ -29,11 +29,11 @@ from the pipeline global config. This tool applies that precedence for you, so
 you can read a job's real focus/skip without hand-tracing parent scopes.
 
 Usage:
-  semaphore-block-flags.py PIPELINE.yml                    # list every job
-  semaphore-block-flags.py PIPELINE.yml -b "Block name"    # jobs in one block
-  semaphore-block-flags.py PIPELINE.yml -b "Block" -j "Job name"
-  semaphore-block-flags.py PIPELINE.yml --var SOME_ENV_VAR # resolve another var
-  semaphore-block-flags.py PIPELINE.yml --json             # machine-readable
+  sem-e2e-flags.py PIPELINE.yml                    # list every job
+  sem-e2e-flags.py PIPELINE.yml -b "Block name"    # jobs in one block
+  sem-e2e-flags.py PIPELINE.yml -b "Block" -j "Job name"
+  sem-e2e-flags.py PIPELINE.yml --var SOME_ENV_VAR # resolve another var
+  sem-e2e-flags.py PIPELINE.yml --json             # machine-readable
 
 The pipeline argument is a single Semaphore YAML file (one pipeline per file).
 """
@@ -143,17 +143,17 @@ it resolves K8S_E2E_FLAGS and splits out --ginkgo.focus / --ginkgo.skip; use
 _EPILOG = """\
 examples:
   # List every job in the pipeline with the scope its value comes from
-  semaphore-block-flags.py .semaphore/semaphore.yml
+  sem-e2e-flags.py .semaphore/semaphore.yml
 
   # Show all jobs in one block
-  semaphore-block-flags.py .semaphore/end-to-end/pipelines/bpf.yml -b "BPF run matrix"
+  sem-e2e-flags.py .semaphore/end-to-end/pipelines/bpf.yml -b "BPF run matrix"
 
   # Show one job's resolved focus/skip
-  semaphore-block-flags.py .semaphore/end-to-end/pipelines/bpf.yml \\
+  sem-e2e-flags.py .semaphore/end-to-end/pipelines/bpf.yml \\
       -b "BPF run matrix" -j "AWS single subnet, dual IP-family"
 
   # Resolve a different variable, as JSON
-  semaphore-block-flags.py .semaphore/semaphore.yml --var PROVISIONER --json
+  sem-e2e-flags.py .semaphore/semaphore.yml --var PROVISIONER --json
 
 notes:
   - Quote block/job names; they contain spaces and parentheses.
