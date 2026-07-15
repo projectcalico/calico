@@ -3391,6 +3391,23 @@ spec:
                     "VXLANPort is the UDP port number to use for VXLAN traffic.
                     [Default: 4789]"
                   type: integer
+                vxlanSrcPortMax:
+                  description: |-
+                    VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
+                vxlanSrcPortMin:
+                  description: |-
+                    VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+                    VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+                    device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+                    VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+                    If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+                  maximum: 65535
+                  minimum: 0
+                  type: integer
                 vxlanVNI:
                   description: |-
                     VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is

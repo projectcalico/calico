@@ -2577,7 +2577,7 @@ MTU of the host's interfaces.
 
 ### `VXLANPort` (config file) / `vxlanPort` (YAML)
 
-The UDP destination port number to use for VXLAN traffic.
+The UDP port number to use for VXLAN traffic.
 
 | Detail |   |
 | --- | --- |
