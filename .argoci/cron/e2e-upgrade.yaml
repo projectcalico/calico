@@ -9,7 +9,7 @@ globalPrologue: |
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export CALICOCTL_INSTALL_TYPE="${CALICOCTL_INSTALL_TYPE:-container}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-upgrade.yml}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:Maglev)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export PRODUCT="${PRODUCT:-calico}"
   export RELEASE_STREAM="${RELEASE_STREAM:-v3.29}"
@@ -51,7 +51,7 @@ steps:
       - docker
     env:
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1)
+        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1|Feature:Maglev)
       - name: PROVISIONER
         value: aws-eks
     matrix:
