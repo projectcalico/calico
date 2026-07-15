@@ -404,3 +404,40 @@ func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8
 		return nil, fmt.Errorf("invalid IP version")
 	}
 }
+
+func cleanUpVXLANDevice(deviceName string) {
+	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	logrus.Debug("Checking if we need to clean up the VXLAN device")
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName(deviceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				logrus.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			logrus.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			logrus.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
+	if errFound {
+		logrus.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
+	}
+}
