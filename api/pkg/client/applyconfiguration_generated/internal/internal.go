@@ -963,6 +963,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfMapSizeRoute
       type:
         scalar: numeric
+    - name: bpfOverlayHostSourceIP
+      type:
+        scalar: string
     - name: bpfPSNATPorts
       type:
         namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port

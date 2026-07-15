@@ -2466,6 +2466,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
