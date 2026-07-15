@@ -86,12 +86,9 @@ func reportPath(filename string) (path string, err error) {
 		return "", err
 	}
 	component := strings.Split(rel, string(filepath.Separator))[0]
-	switch component {
-	case "..":
-		return "", fmt.Errorf("working directory %s is outside repo root %s", cwd, root)
-	case ".":
+	if component == "." {
+		// Working directory is the repo root itself.
 		return filepath.Join(root, "report", filename), nil
-	default:
-		return filepath.Join(root, component, "report", filename), nil
 	}
+	return filepath.Join(root, component, "report", filename), nil
 }
