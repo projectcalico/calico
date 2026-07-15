@@ -43,7 +43,9 @@ on:
 # dedup marker" below — so concurrent duplicate events race to create the
 # same ref and exactly one wins. No concurrency group is needed: the claim
 # is atomic on GitHub's side, so runs don't need to be serialized to avoid
-# a double-send race.
+# a double-send race. Markers only matter for the duplicate-event burst
+# (minutes), so each run opportunistically prunes markers older than 2 days
+# — see "Prune stale dedup markers" — keeping refs/ci-notify/* bounded.
 
 permissions:
   pull-requests: read
@@ -308,3 +310,34 @@ jobs:
         if: steps.claim.outputs.claimed == 'true' && steps.send.outputs.sent != 'true'
         continue-on-error: true
         run: gh api "repos/$REPO/git/refs/ci-notify/${SHA}-${STATE}" --method DELETE
+
+      # Housekeeping: markers are dead weight once the duplicate-event burst
+      # (minutes) has passed, so prune any older than 2 days here rather than
+      # in a separate scheduled workflow — keeps the whole mechanism in this
+      # file and refs/ci-notify/* from growing without bound. Age proxy is
+      # the committer date of the ref's target commit (the marker is created
+      # moments after that commit's CI finishes). Best-effort throughout: a
+      # failed prune must never fail the notifier, and a missed one just
+      # waits for the next run. Duplicate runs may race to delete the same
+      # ref — the loser's 422 is swallowed.
+      - name: Prune stale dedup markers
+        if: steps.claim.outcome == 'success'
+        continue-on-error: true
+        run: |
+          CUTOFF=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$REPO/git/matching-refs/ci-notify/" --paginate \
+            --jq '.[] | "\(.ref) \(.object.sha)"' \
+          | while read -r REF OBJ; do
+              # Never prune this run's own marker: a push can carry an old
+              # committer date (e.g. an untouched branch pushed late), and
+              # deleting our own marker would re-open the dedup window while
+              # duplicate events are still arriving.
+              [[ "$REF" == "refs/ci-notify/${SHA}-${STATE}" ]] && continue
+              DATE=$(gh api "repos/$REPO/commits/$OBJ" --jq .commit.committer.date) || continue
+              # ISO-8601 UTC sorts lexicographically, so '<' compares times.
+              if [[ "$DATE" < "$CUTOFF" ]]; then
+                gh api "repos/$REPO/git/$REF" --method DELETE \
+                  && echo "pruned $REF (target committed $DATE)" \
+                  || echo "::notice::could not prune $REF"
+              fi
+            done
