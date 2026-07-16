@@ -185,26 +185,50 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 	// A pod with no restarts gets only the current-log and describe commands.
 	steady := &apiv1.Pod{}
 	steady.Name = "calico-typha-0"
-	steady.Status.ContainerStatuses = []apiv1.ContainerStatus{{RestartCount: 0}}
+	steady.Status.ContainerStatuses = []apiv1.ContainerStatus{{Name: "calico-typha", RestartCount: 0}}
 	cmds := diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-system", steady)
 	Expect(cmdStrs(cmds)).NotTo(ContainElement(ContainSubstring("--previous")))
 
 	// A pod whose container has restarted picks up an extra previous-log
-	// command alongside the usual current-log + describe.
+	// command, scoped to that specific container (not --all-containers), so a
+	// crashed container's logs survive even when sibling containers have no
+	// previous incarnation.
 	restarted := &apiv1.Pod{}
 	restarted.Name = "calico-apiserver-0"
-	restarted.Status.ContainerStatuses = []apiv1.ContainerStatus{{RestartCount: 2}}
+	restarted.Status.ContainerStatuses = []apiv1.ContainerStatus{
+		{Name: "calico-apiserver", RestartCount: 2},
+		{Name: "calico-apiserver-sidecar", RestartCount: 0},
+	}
 	cmds = diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-apiserver", restarted)
-	Expect(cmdStrs(cmds)).To(ContainElement(ContainSubstring("kubectl logs --previous")))
+	prev := filterStrs(cmdStrs(cmds), "--previous")
+	// Only the restarted container is fetched, and it is scoped with -c.
+	Expect(prev).To(HaveLen(1))
+	Expect(prev[0]).To(ContainSubstring("kubectl logs --previous"))
+	Expect(prev[0]).To(ContainSubstring("-c calico-apiserver"))
+	Expect(prev[0]).NotTo(ContainSubstring("--all-containers"))
 
-	// An init container that previously terminated also flips the flag.
+	// An init container that previously terminated also gets its previous logs.
 	initTerminated := &apiv1.Pod{}
 	initTerminated.Name = "calico-node-xyz"
 	initTerminated.Status.InitContainerStatuses = []apiv1.ContainerStatus{{
+		Name:                 "install-cni",
 		LastTerminationState: apiv1.ContainerState{Terminated: &apiv1.ContainerStateTerminated{ExitCode: 1}},
 	}}
 	cmds = diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-system", initTerminated)
-	Expect(cmdStrs(cmds)).To(ContainElement(ContainSubstring("kubectl logs --previous")))
+	Expect(cmdStrs(cmds)).To(ContainElement(And(
+		ContainSubstring("kubectl logs --previous"),
+		ContainSubstring("-c install-cni"),
+	)))
+}
+
+func filterStrs(strs []string, substr string) []string {
+	var out []string
+	for _, s := range strs {
+		if strings.Contains(s, substr) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func cmdStrs(cmds []common.Cmd) []string {
