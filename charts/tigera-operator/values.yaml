@@ -91,6 +91,9 @@ goldmane:
 whisker:
   enabled: true
 
+# Fresh installs always create this resource to establish Helm ownership.
+# On upgrades, enabled opts legacy releases into Helm management; resources
+# already owned by the release continue to be managed regardless of this value.
 defaultFelixConfiguration:
   enabled: false
 

@@ -10,9 +10,45 @@ import (
 	"github.com/gruntwork-io/terratest/modules/helm"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 )
 
 func TestTigeraOperatorHelmChart(t *testing.T) {
+	t.Run("default Felix configuration", func(t *testing.T) {
+		RegisterTestingT(t)
+
+		t.Run("is rendered with an empty spec by default", func(t *testing.T) {
+			g := NewWithT(t)
+			var felixConfiguration apiv3.FelixConfiguration
+			err := renderChartResource(t, &helm.Options{}, "templates/crs/configmap-felixconfiguration-templates.yaml", &felixConfiguration)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(felixConfiguration.Name).To(Equal("default"))
+			g.Expect(felixConfiguration.Spec).To(Equal(apiv3.FelixConfigurationSpec{}))
+		})
+
+		t.Run("is not rendered on upgrade by default", func(t *testing.T) {
+			g := NewWithT(t)
+			var felixConfiguration apiv3.FelixConfiguration
+			err := renderChartResource(t, &helm.Options{}, "templates/crs/configmap-felixconfiguration-templates.yaml", &felixConfiguration, "--is-upgrade")
+			g.Expect(err).To(HaveOccurred())
+		})
+
+		t.Run("preserves explicitly disabled usage reporting on opt-in upgrade", func(t *testing.T) {
+			g := NewWithT(t)
+			opts := &helm.Options{
+				SetValues: map[string]string{
+					"defaultFelixConfiguration.enabled":               "true",
+					"defaultFelixConfiguration.usageReportingEnabled": "false",
+				},
+			}
+			var felixConfiguration apiv3.FelixConfiguration
+			err := renderChartResource(t, opts, "templates/crs/configmap-felixconfiguration-templates.yaml", &felixConfiguration, "--is-upgrade")
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(felixConfiguration.Spec.UsageReportingEnabled).To(HaveValue(BeFalse()))
+		})
+	})
+
 	t.Run("image pull secrets", func(t *testing.T) {
 		t.Run("using toplevel config field", func(t *testing.T) {
 			opts := &helm.Options{
@@ -101,11 +137,11 @@ func TestTigeraOperatorHelmChart(t *testing.T) {
 	})
 }
 
-func renderChartResource(t *testing.T, options *helm.Options, templatePath string, into any) error {
+func renderChartResource(t *testing.T, options *helm.Options, templatePath string, into any, extraHelmArgs ...string) error {
 	helmChartPath, err := filepath.Abs("../tigera-operator")
 	Expect(err).ToNot(HaveOccurred())
 
-	output, err := helm.RenderTemplateE(t, options, helmChartPath, "tigera-operator", []string{templatePath})
+	output, err := helm.RenderTemplateE(t, options, helmChartPath, "tigera-operator", []string{templatePath}, extraHelmArgs...)
 	if err != nil {
 		return err
 	}

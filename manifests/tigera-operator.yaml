@@ -801,3 +801,11 @@ spec:
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
+---
+# Source: tigera-operator/templates/crs/configmap-felixconfiguration-templates.yaml
+kind: FelixConfiguration
+apiVersion: crd.projectcalico.org/v1
+metadata:
+  name: default
+spec:
+  {}
