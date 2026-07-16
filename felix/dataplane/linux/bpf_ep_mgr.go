@@ -296,8 +296,13 @@ type bpfEndpointManager struct {
 
 	dirtyIfaceNames set.Set[string]
 
-	logFilters              map[string]string
-	bpfLogLevel             string
+	logFilters  map[string]string
+	bpfLogLevel string
+	// bpfNoTracePrintk selects the trace-printk-free preamble variants; set
+	// when the kernel is running with lockdown=confidentiality (ftrace
+	// disabled), where loading a preamble that references bpf_trace_printk
+	// spams the kernel log on every attach.
+	bpfNoTracePrintk        bool
 	hostname                string
 	fibLookupEnabled        bool
 	dataIfaceRegex          *regexp.Regexp
@@ -459,6 +464,21 @@ func NewBPFEndpointManager(
 		livenessCallback = func() {}
 	}
 
+	// Under kernel lockdown=confidentiality, ftrace is disabled at boot, so any
+	// BPF program that references bpf_trace_printk makes the kernel log "could
+	// not enable bpf_trace_printk events" on every load. Load the
+	// trace-printk-free preamble variants, and drop debug logging (which cannot
+	// work anyway) so the debug programs — which carry the helper — are not
+	// loaded either.
+	bpfLogLevel := strings.ToLower(config.BPFLogLevel)
+	bpfNoTracePrintk := bpf.KernelLockdownConfidentiality()
+	if bpfNoTracePrintk && bpfLogLevel == "debug" {
+		logrus.Warn("Kernel lockdown=confidentiality detected: BPF debug logging and the " +
+			"policy Log action are unavailable on this node (ftrace is disabled); " +
+			"forcing BPFLogLevel to off.")
+		bpfLogLevel = "off"
+	}
+
 	m := &bpfEndpointManager{
 		initUnknownIfaces:       set.New[string](),
 		dp:                      dp,
@@ -472,7 +492,8 @@ func NewBPFEndpointManager(
 		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
-		bpfLogLevel:             config.BPFLogLevel,
+		bpfLogLevel:             bpfLogLevel,
+		bpfNoTracePrintk:        bpfNoTracePrintk,
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		fibLookupEnabled:        fibLookupEnabled,
@@ -1859,10 +1880,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			IfIndex:  ifIndex,
-			Hook:     hook.XDP,
-			Iface:    iface,
-			LogLevel: m.bpfLogLevel,
+			IfIndex:       ifIndex,
+			Hook:          hook.XDP,
+			Iface:         iface,
+			LogLevel:      m.bpfLogLevel,
+			NoTracePrintk: m.bpfNoTracePrintk,
 		},
 		Modes: m.xdpModes,
 	}
@@ -3102,7 +3124,8 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			Iface: ifaceName,
+			Iface:         ifaceName,
+			NoTracePrintk: m.bpfNoTracePrintk,
 		},
 	}
 
