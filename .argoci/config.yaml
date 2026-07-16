@@ -1,0 +1,6 @@
+# ArgoCI config: scheduled e2e only. Suites are CronWorkflows in
+# .argoci/cron/*.yaml, registered on merge to the default branch. No per-PR
+# workflow (empty `workflows`, no `ciFile`). Required to onboard the repo —
+# without it the handler treats ArgoCI as not set up and skips cron registration.
+version: v2
+workflows: []
