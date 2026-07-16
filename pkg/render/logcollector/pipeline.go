@@ -255,12 +255,43 @@ func (c *fluentBitComponent) linseedTags() []string {
 		if in.tag == "ids.events" || in.tag == "compliance.reports" {
 			continue
 		}
+		if c.cloudSuppressesFromLinseed(in.tag) {
+			continue
+		}
 		tags = append(tags, in.tag)
 	}
 	if c.cfg.NonClusterHost != nil && c.osType == rmeta.OSTypeLinux {
-		tags = append(tags, "non_cluster_flows", "non_cluster_dns", "non_cluster_policy_activity")
+		for _, tag := range []string{"non_cluster_flows", "non_cluster_dns", "non_cluster_policy_activity"} {
+			if c.cloudSuppressesFromLinseed(tag) {
+				continue
+			}
+			tags = append(tags, tag)
+		}
 	}
 	return tags
+}
+
+// cloudSuppressesFromLinseed reports whether a Calico Cloud install omits a
+// tag's Linseed output, preserving the fluentd-era cloud/enterprise feature
+// split: cloud never stores DNS, EE/kube audit or BGP logs, and stores flow
+// logs only for multi-tenant management clusters. Non-cluster host variants of
+// those log types are suppressed alongside their base tag. (Formerly the
+// fluentd DISABLE_ES_{DNS,AUDIT_EE,AUDIT_KUBE,BGP,FLOW}_LOG env vars; the
+// DISABLE_ES_* toggles died with the fluentd ES output, so the equivalent is
+// simply not wiring the Linseed output for these tags.) Enterprise (Cloud
+// false) ships every tag as before.
+func (c *fluentBitComponent) cloudSuppressesFromLinseed(tag string) bool {
+	if !c.cfg.Cloud {
+		return false
+	}
+	switch tag {
+	case "dns", "non_cluster_dns", "audit.tsee", "audit.kube", "bird", "bird6":
+		return true
+	case "flows", "non_cluster_flows":
+		return !c.cfg.Tenant.MultiTenant()
+	default:
+		return false
+	}
 }
 
 // linseedBulkURI maps a tag to its Linseed bulk-ingestion URI. Voltron-relayed

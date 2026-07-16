@@ -662,6 +662,7 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 		UseSyslogCertificate:   useSyslogCertificate,
 		Tenant:                 tenant,
 		ExternalElastic:        r.opts.ElasticExternal,
+		Cloud:                  r.opts.Cloud,
 		EKSLogForwarderKeyPair: eksLogForwarderKeyPair,
 		NonClusterHost:         nonclusterhost,
 		LicenseExpired:         licenseExpired,

@@ -161,6 +161,11 @@ type FluentBitConfiguration struct {
 	Tenant          *operatorv1.Tenant
 	ExternalElastic bool
 
+	// Cloud indicates fluent-bit is being rendered for a Calico Cloud install. When true, cloud's
+	// reduced log feature set is applied (see cloudSuppressesFromLinseed); false leaves
+	// enterprise behavior unchanged.
+	Cloud bool
+
 	// Whether to use User provided certificate or not.
 	UseSyslogCertificate bool
 
