@@ -109,7 +109,7 @@ func Load(ctx context.Context, cs kubernetes.Interface) (Options, error) {
 
 	esMigration, err := parseBoolFromEnvOrConfigMap("ELASTIC_MIGRATION", cmData)
 	if err != nil {
-		setupLog.Info("error in parsing ELASTIC_MIGRATION: %v. Defaulting to false", err)
+		setupLog.Info("error parsing ELASTIC_MIGRATION; defaulting to false", "error", err)
 		esMigration = false
 	}
 
