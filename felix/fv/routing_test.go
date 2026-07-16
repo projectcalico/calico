@@ -194,6 +194,50 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 					}
 				})
 
+				It("should clean up the IPIP tunnel address when IPIP is disabled", func() {
+					// With IPIP enabled, Felix programs the node's tunnel address onto the
+					// tunl0 device.  Wait for that to happen on every node before we disable
+					// IPIP.
+					for _, felix := range felixes {
+						Expect(felix.ExpectedIPIPTunnelAddr).NotTo(BeEmpty(),
+							"test precondition: every node should have an IPIP tunnel address")
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").Should(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
+							"IPIP tunnel address should be programmed onto tunl0 while IPIP is enabled")
+					}
+
+					// Disable IPIP by switching the IP pool to IPIPMode Never.  We
+					// deliberately leave FelixConfiguration.IPIPEnabled unset so that IPIP is
+					// only *implicitly* disabled (no IPIP pools, no explicit override): that
+					// is the condition under which Felix strips its addresses off tunl0 (see
+					// cleanUpIPIPAddrs in int_dataplane.go).  Changing the pool's encap mode
+					// makes Felix restart, and the cleanup runs on the next start.
+					pool, err := client.IPPools().Get(context.Background(), infrastructure.DefaultIPPoolName, options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					pool.Spec.IPIPMode = api.IPIPModeNever
+					_, err = client.IPPools().Update(context.Background(), pool, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+
+					for _, felix := range felixes {
+						// Felix should strip the tunnel address off tunl0...
+						Eventually(func() string {
+							out, _ := felix.ExecOutput("ip", "addr", "show", dataplanedefs.IPIPIfaceName)
+							return out
+						}, "60s", "500ms").ShouldNot(ContainSubstring(felix.ExpectedIPIPTunnelAddr),
+							"IPIP tunnel address should be removed from tunl0 once IPIP is disabled")
+
+						// ...but, unlike VXLAN (which deletes vxlan.calico entirely), it should
+						// leave the kernel-owned tunl0 device in place.
+						Consistently(func() error {
+							_, err := felix.ExecOutput("ip", "link", "show", dataplanedefs.IPIPIfaceName)
+							return err
+						}, "5s", "500ms").ShouldNot(HaveOccurred(),
+							"tunl0 device should not be deleted when IPIP is disabled, only its address removed")
+					}
+				})
+
 				Context("external nodes configured", func() {
 					var externalClient *containers.Container
 
