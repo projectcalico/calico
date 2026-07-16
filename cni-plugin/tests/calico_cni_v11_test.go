@@ -30,7 +30,7 @@ import (
 // Tests for the CNI spec v1.1.0 verbs (STATUS, GC). These pin their own
 // "cniVersion": "1.1.0" rather than using the suite-wide CNI_SPEC_VERSION,
 // since the new verbs are only valid at 1.1.0.
-var _ = Describe("CNI spec v1.1 STATUS", func() {
+var _ = Describe("CNI spec v1.1 verbs", func() {
 	BeforeEach(func() {
 		// Wipes the datastore and seeds ClusterInformation with
 		// datastoreReady=true, which STATUS requires.
@@ -57,6 +57,23 @@ var _ = Describe("CNI spec v1.1 STATUS", func() {
 	It("returns success for calico-ipam when the datastore is ready", func() {
 		exitCode, stdout := testutils.RunCNIVerb("calico-ipam", "STATUS", netconf, nil)
 		Expect(exitCode).To(Equal(0), "STATUS failed: %s", string(stdout))
+	})
+
+	It("accepts GC requests (stub: no cleanup performed)", func() {
+		gcConf := strings.Replace(netconf, `"ipam"`,
+			`"cni.dev/valid-attachments": [{"containerID": "gc-test-container", "ifname": "eth0"}], "ipam"`, 1)
+		exitCode, stdout := testutils.RunCNIVerb("calico", "GC", gcConf, nil)
+		Expect(exitCode).To(Equal(0), "GC failed: %s", string(stdout))
+		// GC success must produce no result on stdout.
+		Expect(strings.TrimSpace(string(stdout))).To(BeEmpty())
+	})
+
+	It("accepts CHECK requests (stub: no verification) with empty stdout", func() {
+		exitCode, stdout := testutils.RunCNIVerb("calico", "CHECK", netconf,
+			[]string{"CNI_CONTAINERID=check-test-container"})
+		Expect(exitCode).To(Equal(0), "CHECK failed: %s", string(stdout))
+		// CHECK success must produce no output on stdout.
+		Expect(strings.TrimSpace(string(stdout))).To(BeEmpty())
 	})
 
 	It("returns CNI error code 50 when the datastore is unreachable", func() {

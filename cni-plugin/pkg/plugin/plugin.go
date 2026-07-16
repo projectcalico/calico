@@ -711,8 +711,28 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	return
 }
 
+// cmdDummyCheck is a stub CHECK (CNI spec >= 0.4.0): it accepts the request
+// without verifying anything, reporting every attachment as healthy. Note
+// that CHECK must produce no stdout on success.
+// TODO(#12965): replace with real verification of the attachment against
+// prevResult (WEP exists, IPAM handle still holds the prevResult IPs).
 func cmdDummyCheck(args *skel.CmdArgs) (err error) {
-	fmt.Println("OK")
+	logrus.Debug("CNI CHECK (stub): reporting attachment as healthy")
+	return nil
+}
+
+// cmdDummyGc is a stub GC (CNI spec 1.1.0): it accepts the request but does
+// not clean anything up. Stale IPAM allocations are still reclaimed by the
+// kube-controllers IPAM GC (see design/ipam/ipam-gc.md).
+// TODO(#12965): implement node-local release of stale IPAM handles based on
+// the runtime's cni.dev/valid-attachments list.
+func cmdDummyGc(args *skel.CmdArgs) (err error) {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return cnitypes.NewError(cnitypes.ErrDecodingFailure, "failed to load netconf", err.Error())
+	}
+	utils.ConfigureLogging(conf)
+	logrus.WithField("network", conf.Name).Info("CNI GC (stub): no cleanup performed")
 	return nil
 }
 
@@ -799,6 +819,7 @@ func Main(version string) {
 		Del:    cmdDel,
 		Check:  cmdDummyCheck,
 		Status: cmdStatus,
+		GC:     cmdDummyGc,
 	}
 	skel.PluginMainFuncs(funcs,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0", "1.1.0"),
