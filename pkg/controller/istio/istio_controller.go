@@ -91,13 +91,19 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("istio-controller failed to create periodic reconcile watch: %w", err)
 	}
 
-	// The waypoint pull-secrets controller replicates the Installation pull
-	// secret into namespaces that contain istio-waypoint Gateways, so waypoint
-	// pods can pull the Istio proxy image from a private registry (the
-	// imagePullSecrets reference injected via istiod's global config is
-	// namespace-scoped and the secret must exist in the user namespace).
+	// The waypoint controller reconciles the per-Gateway state the Istio
+	// feature needs beyond istiod's own rendering. It replicates the
+	// Installation pull secret into namespaces that contain istio-waypoint
+	// Gateways, so waypoint pods can pull the Istio proxy image from a private
+	// registry (the imagePullSecrets reference injected via istiod's global
+	// config is namespace-scoped and the secret must exist in the user
+	// namespace). It also deletes the per-class resource sets that istiod
+	// strands when a Gateway's spec.gatewayClassName changes: istiod only
+	// applies the set for the current class and never deletes the previous
+	// class's set, and owner-reference GC only fires when the Gateway itself
+	// is deleted.
 	if err := waypoint.Add(mgr, opts); err != nil {
-		return fmt.Errorf("failed to add waypoint pull secrets controller: %w", err)
+		return fmt.Errorf("failed to add waypoint controller: %w", err)
 	}
 
 	return nil

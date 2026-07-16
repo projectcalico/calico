@@ -36,12 +36,12 @@ import (
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 )
 
-var _ = Describe("Waypoint pull secrets controller tests", func() {
+var _ = Describe("Waypoint controller pull secret tests", func() {
 	var (
 		cli          client.Client
 		scheme       *runtime.Scheme
 		ctx          context.Context
-		r            *ReconcileWaypointSecrets
+		r            *ReconcileWaypoint
 		installation *operatorv1.Installation
 		istioCR      *operatorv1.Istio
 	)
@@ -61,7 +61,7 @@ var _ = Describe("Waypoint pull secrets controller tests", func() {
 		gatewayWatchReady := &utils.ReadyFlag{}
 		gatewayWatchReady.MarkAsReady()
 
-		r = &ReconcileWaypointSecrets{
+		r = &ReconcileWaypoint{
 			Client:            cli,
 			scheme:            scheme,
 			gatewayWatchReady: gatewayWatchReady,
