@@ -195,6 +195,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 
 				It("should clean up the IPIP tunnel address when IPIP is disabled", func() {
+					if BPFMode() {
+						// This topology forces FELIX_BPFOverlayHostSourceIP=HostAddress, under
+						// which the BPF dataplane deliberately does not program an IP onto tunl0
+						// (it handles encap/decap and source IP selection itself).  There is
+						// therefore no tunnel address to program or to clean up, so the premise
+						// of this test does not apply.
+						Skip("BPF mode with BPFOverlayHostSourceIP=HostAddress does not put an IP on tunl0")
+					}
+
 					// With IPIP enabled, Felix programs the node's tunnel address onto the
 					// tunl0 device.  Wait for that to happen on every node before we disable
 					// IPIP.
