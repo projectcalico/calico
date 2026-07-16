@@ -718,30 +718,38 @@ func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace st
 			SymLink:  fmt.Sprintf("%s/%s/%s.txt", linkDir, namespace, pod.Name),
 		},
 	}
-	// If any container has restarted, also grab the previous incarnation's
-	// logs — those are usually the ones that explain the restart.
-	if hasPreviousLogs(pod) {
+	// For each container that has restarted, also grab the previous
+	// incarnation's logs — those are usually the ones that explain the
+	// restart. We collect them per-container rather than with a single
+	// --all-containers invocation: `kubectl logs --previous --all-containers`
+	// fails outright if any one container in the pod has no previous
+	// incarnation, which would lose the crashed container's logs — exactly
+	// the ones we came for. Requesting only the containers that actually have
+	// a prior incarnation, one command each, sidesteps that.
+	for _, container := range containersWithPreviousLogs(pod) {
 		cmds = append(cmds, common.Cmd{
-			Info:     fmt.Sprintf("Collect previous logs for pod %s", pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
-			FilePath: fmt.Sprintf("%s/%s.previous.log", namespaceDir, pod.Name),
-			SymLink:  fmt.Sprintf("%s/%s/%s.previous.log", linkDir, namespace, pod.Name),
+			Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
+			FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
+			SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
 		})
 	}
 	return cmds
 }
 
-// hasPreviousLogs reports whether any container in the pod has a prior
-// incarnation worth fetching logs from.
-func hasPreviousLogs(pod *apiv1.Pod) bool {
+// containersWithPreviousLogs returns the names of the pod's containers (both
+// regular and init) that have a prior incarnation worth fetching logs from,
+// i.e. the container has restarted or has a previously terminated state.
+func containersWithPreviousLogs(pod *apiv1.Pod) []string {
 	statuses := append([]apiv1.ContainerStatus{}, pod.Status.ContainerStatuses...)
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	var names []string
 	for _, cs := range statuses {
 		if cs.RestartCount > 0 || cs.LastTerminationState.Terminated != nil {
-			return true
+			names = append(names, cs.Name)
 		}
 	}
-	return false
+	return names
 }
 
 // bpfJSONCmd builds a diagnostic command that dumps calico-bpf state as JSON,
