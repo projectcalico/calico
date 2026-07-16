@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -196,11 +196,6 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 
 				It("should clean up the IPIP tunnel address when IPIP is disabled", func() {
 					if BPFMode() {
-						// This topology forces FELIX_BPFOverlayHostSourceIP=HostAddress, under
-						// which the BPF dataplane deliberately does not program an IP onto tunl0
-						// (it handles encap/decap and source IP selection itself).  There is
-						// therefore no tunnel address to program or to clean up, so the premise
-						// of this test does not apply.
 						Skip("BPF mode with BPFOverlayHostSourceIP=HostAddress does not put an IP on tunl0")
 					}
 
