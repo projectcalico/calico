@@ -294,8 +294,8 @@ var _ = describe.CalicoDescribe(
 					pod.Annotations["qos.projectcalico.org/ingressMaxConnections"] = strconv.Itoa(maxConns)
 					ctr := &pod.Spec.Containers[0]
 					ctr.Image = images.Netshoot
-					ctr.Args = nil
-					ctr.Command = []string{"socat", listenAddr, "EXEC:sleep 3600"}
+					ctr.Command = []string{"socat"}
+					ctr.Args = []string{listenAddr, "EXEC:sleep 3600"}
 					ctr.ReadinessProbe = nil
 				}),
 			)
