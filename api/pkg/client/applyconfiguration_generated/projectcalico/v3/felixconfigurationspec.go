@@ -381,6 +381,13 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	NftablesMarkMask *int64 `json:"nftablesMarkMask,omitempty"`
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty"`
+	// BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+	// (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+	// assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+	// of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+	// assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+	// device IP.  [Default: TunnelAddress]
+	BPFOverlayHostSourceIP *projectcalicov3.BPFOverlayHostSourceIPType `json:"bpfOverlayHostSourceIP,omitempty"`
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and
 	// cannot insert their own BPF programs to interfere with Calico's. [Default: true]
@@ -1578,6 +1585,14 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithNftablesMarkMask(value in
 // If called multiple times, the BPFEnabled field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFEnabled(value bool) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFEnabled = &value
+	return b
+}
+
+// WithBPFOverlayHostSourceIP sets the BPFOverlayHostSourceIP field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BPFOverlayHostSourceIP field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithBPFOverlayHostSourceIP(value projectcalicov3.BPFOverlayHostSourceIPType) *FelixConfigurationSpecApplyConfiguration {
+	b.BPFOverlayHostSourceIP = &value
 	return b
 }
 
