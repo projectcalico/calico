@@ -1206,6 +1206,30 @@ var _ = Describe("IP sets dataplane", func() {
 				apply()
 				Expect(dataplane.NumListNamesCalls).To(Equal(1))
 			})
+
+			It("should subsume a mid-drain background resync into an escalated full resync", func() {
+				// Corrupt both sets and start a background resync; the first
+				// apply repairs only one set, leaving the other mid-queue.
+				dataplane.IPSetMembers[v4MainIPSetName].Add("10.0.0.99")
+				dataplane.IPSetMembers[v4MainIPSetName2].Add("10.0.0.99")
+				ipsets.QueueResync()
+				apply()
+				Expect(reschedRequested).To(BeTrue(), "one set should still be queued")
+
+				// Escalate to a full resync via persistent update failures.
+				dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, (MaxRetryAttempt/2)+1)
+				ipsets.AddMembers(ipSetID, []string{"10.0.0.3"})
+				apply()
+
+				// The full resync clears the queue and re-checks everything at
+				// "must" priority, so the still-queued corruption is repaired
+				// within the same apply and nothing is left queued.
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName:  {"10.0.0.1", "10.0.0.3"},
+					v4MainIPSetName2: {"10.0.0.2"},
+				})
+				Expect(reschedRequested).To(BeFalse(), "full resync should leave the queue drained")
+			})
 		})
 
 		Describe("after creating an IP set", func() {

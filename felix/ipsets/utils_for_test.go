@@ -770,7 +770,7 @@ func (c *listCmd) main() {
 		if c.Stderr != nil {
 			_, _ = c.Stderr.Write([]byte("ipset v7.11: The set with the given name does not exist"))
 		}
-		result = &exec.ExitError{}
+		result = errors.New("exit status 1")
 		return
 	}
 	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]

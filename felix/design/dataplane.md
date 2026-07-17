@@ -517,7 +517,12 @@ kernel constraints behind them:
   desired set found missing from the name listing is repaired in the
   *same* apply — its dataplane view is cleared so the normal
   create-path recreates it — rather than being queued for a wasted
-  per-set list.
+  per-set list. On nodes with many sets the queue may never fully
+  drain between refreshes; re-adds keep an entry's queue position, so
+  the sweep degrades into a continuous rolling scan and a given set's
+  contents are re-checked roughly once per *sweep* time, which can
+  exceed `IpsetsRefreshInterval`. That is the intended trade-off, not
+  a pacing bug.
 
 **The cross-layer invariant: never reference an IP set before it is
 programmed.** This is enforced jointly by the calc graph and the

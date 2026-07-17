@@ -529,8 +529,9 @@ func (s *IPSets) beginBackgroundResync() error {
 }
 
 // drainResyncQueue re-lists queued IP sets.  The must tier is drained fully;
-// the background tier is drained until the shared time budget runs out, but
-// always makes at least one set of progress.  A failure to re-list a *desired*
+// the background tier is drained until the shared time budget runs out, making
+// at least one set of progress per ApplyUpdates call (a retry attempt may find
+// the budget already spent and skip background work).  A failure to re-list a *desired*
 // set is aggregated into the returned error and the set is re-queued at "must"
 // so the retry loop re-checks it before writing; failures for undesired sets
 // are logged only, since their recreation or deletion is already queued.
