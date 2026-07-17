@@ -781,6 +781,14 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 }
 
 func (r *DefaultRuleRenderer) appendConntrackRules(rules []generictables.Rule, allowAction generictables.Action) []generictables.Rule {
+	if r.LogConnectionTransitions {
+		// The connection matched a Log rule and this is the first response packet seen;
+		// log the state transition (and clear the bit) before the conntrack rules below
+		// accept the packet.  The ctstate match is required: same-direction packets (e.g.
+		// a retransmitted SYN) still carry the connmark bit but are ctstate NEW, and must
+		// not be logged as a response.
+		rules = append(rules, r.connStateLogRule())
+	}
 	// Allow return packets for established connections.
 	if allowAction != (r.Allow()) {
 		// If we've been asked to return instead of accept the packet immediately,
