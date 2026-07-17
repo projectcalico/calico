@@ -154,6 +154,21 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	LogActionRateLimit *string `json:"logActionRateLimit,omitempty"`
 	// LogActionRateLimitBurst sets the rate limit burst of hitting a Log action when LogActionRateLimit is enabled.
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
+	// LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+	// first observed response for each connection that matched a policy rule with a Log action.
+	// When set to FirstResponseAfterLog, each such connection gets one follow-up log:
+	// "<prefix>-est" when the first reply packet is seen, "<prefix>-rst" when the response is a
+	// TCP RST (connection refused), or "<prefix>-icmp-err" when the response is a related ICMP
+	// error (e.g. port unreachable), where <prefix> is LogConnectionTransitionsPrefix. A
+	// connection with no follow-up log never received a response. Enabling this consumes one bit
+	// from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]
+	LogConnectionTransitions *projectcalicov3.LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty"`
+	// LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+	// LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+	// is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+	// rules that emit these logs are shared by all policies, so per-policy values cannot be
+	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
+	LogConnectionTransitionsPrefix *string `json:"logConnectionTransitionsPrefix,omitempty"`
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath *string `json:"logFilePath,omitempty"`
 	// LogSeverityFile is the log severity above which logs are sent to the log file. [Default: Info]
@@ -1007,6 +1022,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithLogActionRateLimit(value 
 // If called multiple times, the LogActionRateLimitBurst field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithLogActionRateLimitBurst(value int) *FelixConfigurationSpecApplyConfiguration {
 	b.LogActionRateLimitBurst = &value
+	return b
+}
+
+// WithLogConnectionTransitions sets the LogConnectionTransitions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LogConnectionTransitions field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLogConnectionTransitions(value projectcalicov3.LogConnectionTransitionsMode) *FelixConfigurationSpecApplyConfiguration {
+	b.LogConnectionTransitions = &value
+	return b
+}
+
+// WithLogConnectionTransitionsPrefix sets the LogConnectionTransitionsPrefix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LogConnectionTransitionsPrefix field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithLogConnectionTransitionsPrefix(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.LogConnectionTransitionsPrefix = &value
 	return b
 }
 
