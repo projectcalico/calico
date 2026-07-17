@@ -97,6 +97,9 @@ func init() {
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Version: %v", version.VERSION))
+	if cloud.IsCloudBuild() {
+		log.Info("Variant: Calico Cloud")
+	}
 	log.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
 }
@@ -153,6 +156,9 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		fmt.Println("Operator:", version.VERSION)
 		fmt.Println("Calico:", components.CalicoRelease)
 		fmt.Println("Enterprise:", components.EnterpriseRelease)
+		if cloud.IsCloudBuild() {
+			fmt.Println("Variant: Calico Cloud")
+		}
 		os.Exit(0)
 	}
 

@@ -22,20 +22,24 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/tigera/operator/hack/release/internal/versions"
 )
 
+// defaultRegistry and defaultImage are the publish defaults for the active build variant. They are
+// resolved by the setup package at its init() (before this package's vars initialize), so both
+// these vars and the flag defaults that capture them (see flags.go) get the correct enterprise or
+// cloud values with no later fix-up.
 var (
-	defaultRegistry = quayRegistry
-	defaultImage    = operatorImage
+	defaultRegistry = setup.DefaultRegistry
+	defaultImage    = setup.DefaultImage
 )
 
 const (
 	dockerHub    = "docker.io"
 	quayRegistry = "quay.io"
 
-	mainRepo      = "tigera/operator"
-	operatorImage = "tigera/operator"
+	mainRepo = "tigera/operator"
 
 	releaseFormat           = `^v\d+\.\d+\.\d+$`
 	enterpriseReleaseFormat = `^v\d+\.\d+\.\d+(-\d+\.\d+)?$`
@@ -78,10 +82,6 @@ func addRepoInfoToCtx(ctx context.Context, repo string) (context.Context, error)
 	ctx = context.WithValue(ctx, githubRepoCtxKey, parts[1])
 	return ctx, nil
 }
-
-// isValidReleaseVersion validates the operator release version format.
-// It defaults to standard release format (vX.Y.Z) but can be overridden if a different format is needed.
-var isValidReleaseVersion = isReleaseVersionFormat
 
 // isReleaseVersionFormat checks if the version in the format vX.Y.Z.
 func isReleaseVersionFormat(version string) (bool, error) {

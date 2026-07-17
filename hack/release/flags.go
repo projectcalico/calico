@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 
@@ -81,7 +82,8 @@ var (
 		Category: githubFlagCategory,
 		Usage:    "Create a GitHub release",
 		Sources:  cli.EnvVars("CREATE_GITHUB_RELEASE"),
-		Value:    true,
+		// Enterprise defaults to true; the cloud variant defaults it off (see setup package).
+		Value: setup.CreateGitHubReleaseDefault,
 		Action: func(ctx context.Context, c *cli.Command, b bool) error {
 			if b && c.String(githubTokenFlag.Name) == "" {
 				return fmt.Errorf("github-token is required to create GitHub releases")
@@ -129,7 +131,7 @@ var (
 				// No need to validate version for hashrelease
 				return nil
 			}
-			if valid, err := isValidReleaseVersion(s); err != nil {
+			if valid, err := setup.IsValidReleaseVersion(s); err != nil {
 				return fmt.Errorf("error validating version format: %w", err)
 			} else if !valid {
 				return fmt.Errorf("version %q is not a valid release version", s)

@@ -207,14 +207,3 @@ promotions:
   - name: Clear Cache
     # Never auto promote this, this is only to give an easy way for people to clear the cache.
     pipeline_file: clear_cache.yml
-  # Calico Cloud promotions (additive — the enterprise promotions above are unchanged). These push
-  # the operator-cloud image to GCR alongside the enterprise quay push, and run only on cloud
-  # conditions. The cloud pipelines build amd64-only via VARIANT=cloud.
-  - name: Push Cloud Images
-    pipeline_file: push_images_cloud.yml
-    auto_promote:
-      when: "(branch =~ 'master|staging|release-.*') AND (result = 'passed')"
-  - name: Release Cloud
-    pipeline_file: release_cloud.yml
-    auto_promote:
-      when: "result = 'passed' AND tag =~ '^cloud-v'"

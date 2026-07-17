@@ -87,6 +87,19 @@ By default, it creates a draft release.
      make release-publish VERSION=vA.B.C DRAFT_GITHUB_RELEASE=false
      ```
 
+### Calico Cloud variant
+
+Run any release target with `VARIANT=cloud` to build the Calico Cloud operator instead of the
+enterprise one, e.g. `make release-tag VARIANT=cloud RELEASE_TAG=vA.B.C-cloud`. It is the same
+binary and the same targets — only a few defaults change (publish to `gcr.io/tigera-tesla/operator-cloud`,
+a `-cloud`-suffixed version, no GitHub release). Those variant-dependent defaults are resolved at
+startup in `internal/setup`; see that package's doc comment for how and why.
+
+In CI this runs automatically off the same tag as enterprise: pushing a `vA.B.C` release tag builds
+both the enterprise image and, from the same commit with `VARIANT=cloud`, the `vA.B.C-cloud` image —
+they are parallel jobs in the same `Release` block (see `.semaphore/release.yml`). There are no
+separate cloud release tags or pipelines.
+
 ### Build and publish a hashrelease
 
 This is similar to [building and publishing a release](#build-and-publish-a-release), it uses the `release build` and `release publish` commands.

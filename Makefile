@@ -160,6 +160,10 @@ BUILD_IMAGE?=tigera/operator
 BUILD_DIR?=build/_output
 BINDIR?=$(BUILD_DIR)/bin
 
+# Name of the built operator binary. The Calico Cloud variant suffixes it with -cloud
+# (see VARIANT=cloud below) so the cloud artifact is easy to tell apart from the enterprise one.
+BINARY_NAME?=operator
+
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
@@ -185,6 +189,7 @@ PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(P
 CLOUD_LDFLAGS=
 ifeq ($(VARIANT),cloud)
 BUILD_IMAGE:=tigera-tesla/operator-cloud
+BINARY_NAME:=operator-cloud
 IMAGE_REGISTRY:=gcr.io
 PUSH_IMAGE_PREFIXES:=gcr.io/
 EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
@@ -291,24 +296,25 @@ $(HELM_BUILDARCH_VERSIONED_BINARY): | $(HACK_BIN)
 	@chmod a+x $(HELM_BUILDARCH_VERSIONED_BINARY)
 
 
-build: $(BINDIR)/operator-$(ARCH)
-$(BINDIR)/operator-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
+build: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
+$(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	mkdir -p $(BINDIR)
 	$(CONTAINERIZED) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
-	go build -buildvcs=false -v -o $(BINDIR)/operator-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
+	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-	$(CONTAINERIZED) $(CALICO_BUILD) sh -c 'strings $(BINDIR)/operator-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
+	$(CONTAINERIZED) $(CALICO_BUILD) sh -c 'strings $(BINDIR)/$(BINARY_NAME)-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endif
 
 .PHONY: image
 image: build $(BUILD_IMAGE)
 
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): $(BINDIR)/operator-$(ARCH)
+$(BUILD_IMAGE)-$(ARCH): $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	docker buildx build --load --platform=linux/$(ARCH) --pull \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		--build-arg CALICO_BASE=$(CALICO_BASE) \
+		--build-arg BINARY_NAME=$(BINARY_NAME) \
 		-t $(BUILD_IMAGE):latest-$(ARCH) \
 		-f build/Dockerfile .
 ifeq ($(ARCH),amd64)
@@ -530,8 +536,9 @@ release-tag: var-require-all-RELEASE_TAG-GITHUB_TOKEN
 	REPO=$(REPO) $(MAKE) release-publish VERSION=$(RELEASE_TAG)
 
 # Calico Cloud releases reuse release-tag with VARIANT=cloud, e.g.
-# `make release-tag VARIANT=cloud RELEASE_TAG=cloud-vX.Y.Z-N`. The release tool applies cloud
-# behavior (GCR/tesla image, cloud-v* format, no GitHub release) at runtime based on VARIANT.
+# `make release-tag VARIANT=cloud RELEASE_TAG=vX.Y.Z-cloud`. The release tool applies cloud
+# behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at runtime
+# based on VARIANT. Cloud tags are the regular operator version with a -cloud suffix.
 
 ## Generate release notes for the specified VERSION.
 release-notes: hack/bin/release var-require-all-VERSION-GITHUB_TOKEN
@@ -587,8 +594,8 @@ hack/bin/release: $(shell find ./hack/release -type f)
 
 # Calico Cloud releases use the same release binary and targets with VARIANT=cloud, e.g.
 # `make release VARIANT=cloud` / `make release-tag VARIANT=cloud`. The release tool activates its
-# cloud behavior (GCR/tesla image, cloud-vX.Y.Z version format, hashrelease support) at runtime when
-# VARIANT=cloud; no separate binary or build tag is required.
+# cloud behavior (GCR/operator-cloud image, vX.Y.Z-cloud version format, no GitHub release) at
+# runtime when VARIANT=cloud; no separate binary or build tag is required.
 
 hack/release/ut:
 	mkdir -p report/release
@@ -974,14 +981,14 @@ test-crds: test-enterprise-crds test-calico-crds
 # TODO: Improve this testing by comparing the individual source files
 # with the yaml printed out, this will need to be a yaml diff since the
 # fields won't necessarily be in the same order or indentation.
-test-calico-crds: $(BINDIR)/operator-$(ARCH)
-	$(BINDIR)/operator-$(ARCH) --print-calico-crds all >/dev/null 2>&1
+test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
+	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-calico-crds all >/dev/null 2>&1
 
 # TODO: Improve this testing by comparing the individual source files
 # with the yaml printed out, this will need to be a yaml diff since the
 # fields won't necessarily be in the same order or indentation.
-test-enterprise-crds: $(BINDIR)/operator-$(ARCH)
-	$(BINDIR)/operator-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
+test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
+	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
 
 # Always install the git hooks to prevent potentially problematic commits.
 hooks_installed:=$(shell ./install-git-hooks)

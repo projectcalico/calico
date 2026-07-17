@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 
@@ -69,7 +70,7 @@ var checkVersionFormat = func(ctx context.Context, c *cli.Command) (context.Cont
 		return ctx, nil
 	}
 	checkLog.Debug("Checking version format")
-	if isRelease, err := isValidReleaseVersion(version); err != nil {
+	if isRelease, err := setup.IsValidReleaseVersion(version); err != nil {
 		return ctx, fmt.Errorf("checking version format: %w", err)
 	} else if !isRelease {
 		return ctx, fmt.Errorf("provided version %q is not a valid release version. \n"+
