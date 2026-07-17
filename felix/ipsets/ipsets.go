@@ -42,7 +42,7 @@ const (
 	// sets during a background (periodic) resync in a single ApplyUpdates call.
 	// Listing a set is a fork/exec per set, so a fleet of sets is re-checked a
 	// batch at a time across successive apply loops rather than stalling one.
-	BackgroundResyncTimeBudget = 10 * time.Millisecond
+	BackgroundResyncTimeBudget = 100 * time.Millisecond
 )
 
 // ErrIPSetNotFound is returned by runIPSetList when the kernel reports that the
