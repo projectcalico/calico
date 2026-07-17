@@ -53,6 +53,8 @@ const (
 	ChainFailsafeIn  = ChainNamePrefix + "failsafe-in"
 	ChainFailsafeOut = ChainNamePrefix + "failsafe-out"
 
+	ChainConnStateLog = ChainNamePrefix + "log-conn"
+
 	ChainNATPrerouting  = ChainNamePrefix + "PREROUTING"
 	ChainNATPostrouting = ChainNamePrefix + "POSTROUTING"
 	ChainNATOutput      = ChainNamePrefix + "OUTPUT"
@@ -445,6 +447,13 @@ type Config struct {
 	LogActionRateLimit      string
 	LogActionRateLimitBurst int
 
+	LogConnectionStateTransitions bool
+	// ConnStateLogMark is the connmark bit used when LogConnectionStateTransitions is
+	// enabled; it means "connection matched a Log rule but no response has been seen yet".
+	// Deliberately not named Mark* so that validate()'s reflection scan doesn't require it
+	// when the feature is disabled (it is only allocated when enabled).
+	ConnStateLogMark uint32
+
 	EndpointToHostAction string
 	FilterAllowAction    string
 	MangleAllowAction    string
@@ -510,6 +519,17 @@ func (c *Config) validate() {
 	if found == 0 {
 		// Check the reflection found something we were expecting.
 		log.Panic("Didn't find any MarkXXX fields.")
+	}
+
+	// ConnStateLogMark is only allocated when the feature is enabled so it is checked
+	// explicitly rather than via the Mark* reflection scan above.
+	if c.LogConnectionStateTransitions {
+		if c.ConnStateLogMark == 0 {
+			log.Panic("ConnStateLogMark not set but LogConnectionStateTransitions is enabled.")
+		}
+		if usedBits&c.ConnStateLogMark > 0 {
+			log.Panic("ConnStateLogMark overlapped with another mark field's bits.")
+		}
 	}
 }
 

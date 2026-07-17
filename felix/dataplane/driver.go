@@ -148,6 +148,24 @@ func StartDataplaneDriver(
 				}).Panic("Not enough mark bits available.")
 		}
 
+		// The connection state log bit is stored in the connmark so it must be a subset of
+		// the packet mark mask (the packet mark is commonly saved to/restored from the
+		// connmark).  Only allocate it when the feature is enabled so we don't shrink the
+		// endpoint mark block otherwise.
+		var markConnStateLog uint32
+		logConnectionStateTransitions := configParams.LogConnectionStateTransitions && !configParams.BPFEnabled
+		if logConnectionStateTransitions {
+			log.Info("Connection state transition logging enabled, allocating a mark bit")
+			markConnStateLog, _ = markBitsManager.NextSingleBitMark()
+			if markConnStateLog == 0 {
+				log.WithFields(
+					log.Fields{
+						"Name":     "felix-iptables",
+						"MarkMask": allowedMarkBits,
+					}).Panic("Failed to allocate a mark bit for connection state transition logging, not enough mark bits available.")
+			}
+		}
+
 		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		if kubeIPVSSupportEnabled {
@@ -170,6 +188,7 @@ func StartDataplaneDriver(
 				"scratch1Mark":        markScratch1,
 				"endpointMark":        markEndpointMark,
 				"endpointMarkNonCali": markEndpointNonCaliEndpoint,
+				"connStateLogMark":    markConnStateLog,
 			}).Info("Calculated iptables mark bits")
 
 		// Create a routing table manager. There are certain components that should take specific indices in the range
@@ -290,6 +309,9 @@ func StartDataplaneDriver(
 				LogPrefix:               configParams.LogPrefix,
 				LogActionRateLimit:      configParams.LogActionRateLimit,
 				LogActionRateLimitBurst: configParams.LogActionRateLimitBurst,
+
+				LogConnectionStateTransitions: logConnectionStateTransitions,
+				ConnStateLogMark:              markConnStateLog,
 
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),

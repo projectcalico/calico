@@ -169,6 +169,75 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 					)).To(Equal(expected))
 				})
 
+				It("should render a workload endpoint with connection state transition logging", func() {
+					cfg := rrConfigNormalMangleReturn
+					cfg.LogConnectionStateTransitions = true
+					cfg.ConnStateLogMark = 0x10000
+					connStateRenderer := NewRenderer(cfg, false)
+
+					toWlOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+					)
+					toWlRules := newRuleBuilder(toWlOpts...).build()
+					fromWlOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withEgress(),
+					)
+					fromWlRules := newRuleBuilder(fromWlOpts...).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-tw-cali1234",
+							Rules: toWlRules,
+						},
+						{
+							Name:  "cali-fw-cali1234",
+							Rules: fromWlRules,
+						},
+						{
+							Name:  "cali-sm-cali1234",
+							Rules: setEndpointMarkRules(0xd400, 0xff00),
+						},
+					})
+					actual := connStateRenderer.WorkloadEndpointToIptablesChains(
+						"cali1234", epMarkMapper,
+						true,
+						nil,
+						nil,
+						nil,
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
+				})
+
+				It("should render host endpoint mangle chains with pre-DNAT policies and connection state transition logging", func() {
+					cfg := rrConfigNormalMangleReturn
+					cfg.LogConnectionStateTransitions = true
+					cfg.ConnStateLogMark = 0x10000
+					connStateRenderer := NewRenderer(cfg, false)
+
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withPolicies(gnpC),
+						forHostEndpoint(),
+						withPreDNATPolicies(),
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
+					expected := []*generictables.Chain{
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+					}
+					actual := connStateRenderer.HostEndpointToMangleIngressChains(
+						"eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name:            "default",
+							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
+						}}),
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
+				})
+
 				It("should render a disabled workload endpoint", func() {
 					opts := append(commonRuleBuilderOpts,
 						withDisabledEndpoint(),
@@ -1479,6 +1548,12 @@ func withDisabledEndpoint() ruleBuilderOpt {
 	}
 }
 
+func withConnStateLog(mark uint32) ruleBuilderOpt {
+	return func(r *ruleBuilder) {
+		r.connStateLogMark = mark
+	}
+}
+
 func withDropActionOverride(action string) ruleBuilderOpt {
 	return func(r *ruleBuilder) {
 		r.dropActionOverride = action
@@ -1526,6 +1601,8 @@ type ruleBuilder struct {
 	flowLogsEnabled bool
 
 	dropActionOverride string
+
+	connStateLogMark uint32
 }
 
 func newRuleBuilder(opts ...ruleBuilderOpt) *ruleBuilder {
@@ -1599,6 +1676,15 @@ func (b *ruleBuilder) build() []generictables.Rule {
 
 func (b *ruleBuilder) conntrackRules() []generictables.Rule {
 	var rules []generictables.Rule
+
+	if b.connStateLogMark != 0 {
+		rules = append(rules, generictables.Rule{
+			Match: Match().
+				ConnMarkMatchesWithMask(b.connStateLogMark, b.connStateLogMark).
+				ConntrackState("RELATED,ESTABLISHED"),
+			Action: JumpAction{Target: "cali-log-conn"},
+		})
+	}
 
 	// For PreDNAT policies.
 	if b.forHostEndpoint && b.forPreDNAT {

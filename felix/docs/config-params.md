@@ -414,6 +414,25 @@ Sets the rate limit burst of hitting a Log action when LogActionRateLimit is ena
 | `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (YAML) | `5` |
 
+### `LogConnectionStateTransitions` (config file) / `logConnectionStateTransitions` (YAML)
+
+Enables an additional kernel log recording the first observed
+response for each connection that matched a policy rule with a Log action: "<prefix>-est" when
+the first reply packet is seen, "<prefix>-rst" when the response is a TCP RST (connection
+refused), or "<prefix>-icmp-err" when the response is a related ICMP error (e.g. port
+unreachable), where <prefix> is LogPrefix with any %-specifiers removed. A connection with no
+follow-up log never received a response. Enabling this consumes one bit from the
+Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogConnectionStateTransitions` |
+| Encoding (env var/config file) | Boolean: <code>true</code>, <code>1</code>, <code>yes</code>, <code>y</code>, <code>t</code> accepted as True; <code>false</code>, <code>0</code>, <code>no</code>, <code>n</code>, <code>f</code> accepted (case insensitively) as False. |
+| Default value (above encoding) | `false` |
+| `FelixConfiguration` field | `logConnectionStateTransitions` (YAML) `LogConnectionStateTransitions` (Go API) |
+| `FelixConfiguration` schema | Boolean. |
+| Default value (YAML) | `false` |
+
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
 Controls which source code files have their Debug log output included in the logs.
