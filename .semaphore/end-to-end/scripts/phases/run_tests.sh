@@ -88,7 +88,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # legacy `bz tests` runner did. Harmless (`|| true`) on clusters with no such
   # taint. Run on the host (API is reachable here; install used it).
   for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
-    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" 2>/dev/null || true
+    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" || true
   done
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
