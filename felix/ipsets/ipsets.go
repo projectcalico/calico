@@ -501,6 +501,9 @@ func (s *IPSets) beginFullResync() error {
 		s.resyncQueue.Add(name, resyncPriMust)
 	}
 	s.sweepIPSetsMissingFromDataplane(listed)
+	// The full resync subsumes any pending background resync: we just did the
+	// listing and sweep, and every set is queued at "must".
+	s.bgResyncRequested = false
 	return nil
 }
 
@@ -872,6 +875,9 @@ func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error
 		return err
 	}
 	if err != nil {
+		// Match on ipset's userspace error message (stable for many years).
+		// If it ever changes we fall back to returning the raw error, which
+		// degrades to the ListFailed/recreate path rather than misbehaving.
 		if strings.Contains(stderr.String(), "The set with the given name does not exist") {
 			logCxt.WithError(err).Debugf("IP set does not exist for '%v'.", cmdStr)
 			return ErrIPSetNotFound

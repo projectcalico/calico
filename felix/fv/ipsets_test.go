@@ -127,13 +127,6 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ Tests for IPset rendering", [
 
 var _ = infrastructure.DatastoreDescribe("_IPSets_ periodic resync repairs dataplane drift",
 	[]apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
-		if NFTMode() || BPFMode() {
-			// The incremental periodic resync being exercised here belongs to
-			// the legacy (iptables) ipsets driver.  nftables has its own resync
-			// path and the BPF dataplane doesn't program these IP sets.
-			return
-		}
-
 		// A short refresh interval so the periodic resync fires promptly; the
 		// assertions below still allow many multiples of it to avoid flakes.
 		const refreshInterval = 5 * time.Second
@@ -152,6 +145,13 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ periodic resync repairs datap
 		)
 
 		BeforeEach(func() {
+			if NFTMode() || BPFMode() {
+				// The incremental periodic resync being exercised here belongs
+				// to the legacy (iptables) ipsets driver.  nftables has its own
+				// resync path and the BPF dataplane doesn't program these IP
+				// sets.
+				Skip("legacy (iptables) ipsets driver only")
+			}
 			topologyOptions := infrastructure.DefaultTopologyOptions()
 			topologyOptions.FelixLogSeverity = "Info"
 			topologyOptions.EnableIPv6 = false
@@ -166,6 +166,10 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ periodic resync repairs datap
 		})
 
 		AfterEach(func() {
+			if infra == nil {
+				// Skipped before the topology started.
+				return
+			}
 			w.Stop()
 			tc.Stop()
 			infra.Stop()
@@ -222,10 +226,11 @@ var _ = infrastructure.DatastoreDescribe("_IPSets_ periodic resync repairs datap
 			// the other (Felix should re-add its members).  We deliberately do
 			// not destroy a set: an in-use set can't be destroyed, and the
 			// whole-set-missing path is covered by the unit tests.
+			// Exec fails the test if the commands themselves fail; we don't
+			// assert on the corrupted sizes because the refresh timer may
+			// repair them before we could read them back.
 			felix.Exec("ipset", "add", setA, bogusMember)
 			felix.Exec("ipset", "flush", setB)
-			Expect(felix.IPSetSizes()[setA]).To(Equal(setASize+1), "corruption of set A should have landed")
-			Expect(felix.IPSetSizes()[setB]).To(Equal(0), "flush of set B should have landed")
 
 			By("Waiting for the periodic resync to repair both sets")
 			Eventually(func() map[string]int {
