@@ -148,6 +148,33 @@ func StartDataplaneDriver(
 				}).Panic("Not enough mark bits available.")
 		}
 
+		// The connection transition log bit lives in the connmark (not the packet mark) so
+		// that it persists for the lifetime of the connection: a policy Log rule sets it,
+		// and the first response packet tests and clears it.  We still reserve the bit from
+		// the packet-mark space: Felix itself never copies the packet mark to the connmark,
+		// but a user's own "-j CONNMARK --save-mark" rule would, and may exist
+		// unconditionally in their ruleset.  Because Calico owns the packet-mark bits in
+		// the mark mask and never sets this one on a packet, such a save can at worst
+		// clear a pending-log bit (losing one log), never set it spuriously.  Allocating
+		// from the shared manager also guarantees the bit cannot collide with any other
+		// Calico mark use.  Only allocate it when the feature is enabled so we don't
+		// shrink the endpoint mark block otherwise.
+		var markConnStateLog uint32
+		logConnectionTransitions := configParams.LogConnectionTransitions == string(apiv3.LogConnectionTransitionsFirstResponseAfterLog)
+		if logConnectionTransitions && configParams.BPFEnabled {
+			log.Warn("LogConnectionTransitions is not supported in eBPF mode, ignoring it.")
+			logConnectionTransitions = false
+		}
+		if logConnectionTransitions {
+			log.Info("Connection transition logging enabled, allocating a mark bit")
+			var err error
+			markConnStateLog, err = markBitsManager.NextSingleBitMark()
+			if err != nil {
+				log.WithError(err).WithField("MarkMask", allowedMarkBits).Panic(
+					"Failed to allocate a mark bit for connection transition logging, not enough mark bits available.")
+			}
+		}
+
 		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		if kubeIPVSSupportEnabled {
@@ -170,6 +197,7 @@ func StartDataplaneDriver(
 				"scratch1Mark":        markScratch1,
 				"endpointMark":        markEndpointMark,
 				"endpointMarkNonCali": markEndpointNonCaliEndpoint,
+				"connStateLogMark":    markConnStateLog,
 			}).Info("Calculated iptables mark bits")
 
 		// Create a routing table manager. There are certain components that should take specific indices in the range
@@ -290,6 +318,10 @@ func StartDataplaneDriver(
 				LogPrefix:               configParams.LogPrefix,
 				LogActionRateLimit:      configParams.LogActionRateLimit,
 				LogActionRateLimitBurst: configParams.LogActionRateLimitBurst,
+
+				LogConnectionTransitions:       logConnectionTransitions,
+				LogConnectionTransitionsPrefix: configParams.LogConnectionTransitionsPrefix,
+				MarkConnStateLog:               markConnStateLog,
 
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),

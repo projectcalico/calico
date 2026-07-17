@@ -181,6 +181,14 @@ const (
 	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
 )
 
+// +kubebuilder:validation:Enum=Disabled;FirstResponseAfterLog
+type LogConnectionTransitionsMode string
+
+const (
+	LogConnectionTransitionsDisabled              LogConnectionTransitionsMode = "Disabled"
+	LogConnectionTransitionsFirstResponseAfterLog LogConnectionTransitionsMode = "FirstResponseAfterLog"
+)
+
 // +kubebuilder:validation:Enum=RequireAndVerifyClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;NoClientCert
 type PrometheusMetricsClientAuthType string
 
@@ -398,6 +406,28 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=9999
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
+
+	// LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+	// first observed response for each connection that matched a policy rule with a Log action.
+	// When set to FirstResponseAfterLog, each such connection gets one follow-up log, prefixed
+	// with LogConnectionTransitionsPrefix plus a suffix identifying the transition: "-est" when
+	// the first reply packet is seen, "-rst" when the response is a TCP RST (connection refused),
+	// or "-icmp-err" when the response is a related ICMP error (e.g. port unreachable). The log
+	// body is the standard kernel packet log of the response packet, so the flow is identified by
+	// its 5-tuple and can be correlated with the original policy Log line (with source and
+	// destination swapped). A connection with no follow-up log never received a response.
+	// Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in
+	// eBPF mode. [Default: Disabled]
+	// +optional
+	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
+
+	// LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+	// LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+	// is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+	// rules that emit these logs are shared by all policies, so per-policy values cannot be
+	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
+	// +optional
+	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
