@@ -15,6 +15,8 @@
 package calc
 
 import (
+	"reflect"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
@@ -116,12 +118,20 @@ func (h *DataplanePassthru) processKindNode(key model.ResourceKey, update api.Up
 	node, _ := update.Value.(*internalapi.Node)
 	logrus.WithField("update", update).Debug("Passing-through Node update")
 
-	// An explicitly-empty BGP spec (`BGP: &NodeBGPSpec{}`) is treated as if the
-	// Node had been deleted — there is no useful metadata to pass through. A nil
-	// BGP, by contrast, leaves the Node entry alive (with empty IPs) since other
-	// Node info such as labels may still be relevant.
+	// A BGP spec that is entirely zero (`BGP: &NodeBGPSpec{}`) is treated as if
+	// the Node had been deleted — there is no useful metadata to pass through.
+	// We compare against the zero value rather than checking
+	// IPv4Address/IPv6Address/ASNumber individually: a spec whose only populated
+	// field is a tunnel address (e.g. IPv4IPIPTunnelAddr, which IPAM assigns even
+	// on clusters that have no BGP node IP, such as GKE) is NOT empty and must
+	// not be dropped here — doing so skips the InternalIP fallback below and
+	// starves the dataplane of the host IP. This mirrors the same
+	// reflect.DeepEqual emptiness test libcalico's K8sNodeToCalico uses to decide
+	// whether Spec.BGP is populated at all. A nil BGP, by contrast, leaves the
+	// Node entry alive (with empty IPs) since other Node info such as labels may
+	// still be relevant.
 	bgpSpec := node.Spec.BGP
-	if bgpSpec != nil && bgpSpec.IPv4Address == "" && bgpSpec.IPv6Address == "" && bgpSpec.ASNumber == nil {
+	if bgpSpec != nil && reflect.DeepEqual(*bgpSpec, internalapi.NodeBGPSpec{}) {
 		delete(h.nodeInfo, hostname)
 		if before != nil {
 			h.callbacks.OnHostMetadataRemove(hostname)
