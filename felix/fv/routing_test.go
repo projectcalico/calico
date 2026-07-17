@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -195,6 +195,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ cluster routing using Felix
 				})
 
 				It("should clean up the IPIP tunnel address when IPIP is disabled", func() {
+					if BPFMode() {
+						Skip("BPF mode with BPFOverlayHostSourceIP=HostAddress does not put an IP on tunl0")
+					}
+
 					// With IPIP enabled, Felix programs the node's tunnel address onto the
 					// tunl0 device.  Wait for that to happen on every node before we disable
 					// IPIP.
