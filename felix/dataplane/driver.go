@@ -148,6 +148,26 @@ func StartDataplaneDriver(
 				}).Panic("Not enough mark bits available.")
 		}
 
+		// The connection transition log bit is stored in the connmark so it must be a subset
+		// of the packet mark mask (the packet mark is commonly saved to/restored from the
+		// connmark).  Only allocate it when the feature is enabled so we don't shrink the
+		// endpoint mark block otherwise.
+		var markConnStateLog uint32
+		logConnectionTransitions := configParams.LogConnectionTransitions == string(apiv3.LogConnectionTransitionsFirstResponseAfterLog)
+		if logConnectionTransitions && configParams.BPFEnabled {
+			log.Warn("LogConnectionTransitions is not supported in eBPF mode, ignoring it.")
+			logConnectionTransitions = false
+		}
+		if logConnectionTransitions {
+			log.Info("Connection transition logging enabled, allocating a mark bit")
+			var err error
+			markConnStateLog, err = markBitsManager.NextSingleBitMark()
+			if err != nil {
+				log.WithError(err).WithField("MarkMask", allowedMarkBits).Panic(
+					"Failed to allocate a mark bit for connection transition logging, not enough mark bits available.")
+			}
+		}
+
 		// Mark bits for endpoint mark. Currently Felix takes the rest bits from mask available for use.
 		markEndpointMark, allocated := markBitsManager.NextBlockBitsMark(markBitsManager.AvailableMarkBitCount())
 		if kubeIPVSSupportEnabled {
@@ -170,6 +190,7 @@ func StartDataplaneDriver(
 				"scratch1Mark":        markScratch1,
 				"endpointMark":        markEndpointMark,
 				"endpointMarkNonCali": markEndpointNonCaliEndpoint,
+				"connStateLogMark":    markConnStateLog,
 			}).Info("Calculated iptables mark bits")
 
 		// Create a routing table manager. There are certain components that should take specific indices in the range
@@ -290,6 +311,10 @@ func StartDataplaneDriver(
 				LogPrefix:               configParams.LogPrefix,
 				LogActionRateLimit:      configParams.LogActionRateLimit,
 				LogActionRateLimitBurst: configParams.LogActionRateLimitBurst,
+
+				LogConnectionTransitions:       logConnectionTransitions,
+				LogConnectionTransitionsPrefix: configParams.LogConnectionTransitionsPrefix,
+				ConnStateLogMark:               markConnStateLog,
 
 				EndpointToHostAction: configParams.DefaultEndpointToHostAction,
 				FilterAllowAction:    configParams.FilterAllowAction(),
