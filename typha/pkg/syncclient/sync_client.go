@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -79,6 +80,13 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// PreferredCompressionAlgorithmOrder overrides the set of compression
+	// algorithms advertised to the server.  The server makes the final choice
+	// based on its own preference order.  Nil means advertise all supported
+	// algorithms; an empty (non-nil) slice disables compression.  Intended
+	// for tests that need to pin the negotiated algorithm.
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -167,9 +175,23 @@ type SyncerClient struct {
 	connR      io.Reader
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
+	zstdReader *zstd.Decoder
+
+	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
+	// server selected for the current connection ("" if uncompressed).
+	negotiatedCompression atomic.Value
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+}
+
+// NegotiatedCompressionAlgorithm returns the compression algorithm the server
+// selected for the current connection, or "" if the stream is uncompressed
+// (or compression has not been negotiated yet).  Safe to call from any
+// goroutine; intended for tests and diagnostics.
+func (s *SyncerClient) NegotiatedCompressionAlgorithm() syncproto.CompressionAlgorithm {
+	alg, _ := s.negotiatedCompression.Load().(syncproto.CompressionAlgorithm)
+	return alg
 }
 
 type RestartAwareCallbacks interface {
@@ -416,6 +438,12 @@ func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Ent
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
 	defer connFinished.Done()
 	defer cancelFn()
+	defer func() {
+		if s.zstdReader != nil {
+			s.zstdReader.Close()
+			s.zstdReader = nil
+		}
+	}()
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
@@ -424,12 +452,16 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
 	s.decoder = gob.NewDecoder(s.connR)
+	s.negotiatedCompression.Store(syncproto.CompressionAlgorithm(""))
 
 	ourSyncerType := s.options.SyncerType
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
-	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy}
+	compAlgs := s.options.PreferredCompressionAlgorithmOrder
+	if compAlgs == nil {
+		compAlgs = []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
@@ -553,12 +585,35 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 	switch msg.CompressionAlgorithm {
 	case syncproto.CompressionSnappy:
 		logCxt.Info("Server selected snappy compression.")
+		// Snappy's reader is synchronous (no background goroutine or
+		// read-ahead buffering), so it's safe to create a new reader on
+		// each decoder restart without losing data from the connection.
 		r := snappy.NewReader(s.connR)
 		s.decoder = gob.NewDecoder(r)
+	case syncproto.CompressionZstd:
+		logCxt.Info("Server selected zstd compression.")
+		if s.zstdReader == nil {
+			r, err := zstd.NewReader(s.connR, zstd.WithDecoderConcurrency(1))
+			if err != nil {
+				logCxt.WithError(err).Error("Failed to create zstd reader")
+				return err
+			}
+			s.zstdReader = r
+		}
+		// Reuse the existing zstd reader across decoder restarts.  It may
+		// hold input that it read ahead from the connection, and it decodes
+		// consecutive zstd frames as one continuous stream, so no bytes are
+		// lost at the frame boundary.  We only need a new gob decoder since
+		// the server restarted its gob encoder.
+		s.decoder = gob.NewDecoder(s.zstdReader)
 	case "":
 		logCxt.Info("Server selected no compression.")
 		s.decoder = gob.NewDecoder(s.connR)
+	default:
+		logCxt.WithField("algorithm", msg.CompressionAlgorithm).Error("Server selected unknown compression algorithm")
+		return fmt.Errorf("unknown compression algorithm: %q", msg.CompressionAlgorithm)
 	}
+	s.negotiatedCompression.Store(msg.CompressionAlgorithm)
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
 		syncproto.MsgACK{},

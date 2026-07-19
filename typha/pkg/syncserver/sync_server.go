@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -112,7 +113,10 @@ const (
 	defaultDropInterval               = 1 * time.Second
 	defaultShutdownTimeout            = 300 * time.Second
 	defaultMaxConns                   = math.MaxInt32
-	PortRandom                        = -1
+	// Prefer zstd: it compresses the sync data to roughly half the size
+	// that snappy manages.  Snappy is the fallback for older clients.
+	defaultCompressionAlgorithmOrder = "zstd,snappy"
+	PortRandom                       = -1
 )
 
 type Server struct {
@@ -167,6 +171,8 @@ type Config struct {
 	ClientCN                       string
 	ClientURISAN                   string
 	WriteBufferSize                int
+
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
@@ -302,6 +308,36 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting Port.")
 		c.Port = syncproto.DefaultPort
 	}
+	if len(c.PreferredCompressionAlgorithmOrder) == 0 {
+		log.WithFields(log.Fields{
+			"value":   c.PreferredCompressionAlgorithmOrder,
+			"default": defaultCompressionAlgorithmOrder,
+		}).Info("Defaulting PreferredCompressionAlgorithmOrder.")
+		c.PreferredCompressionAlgorithmOrder = c.parseCompressionOrder(defaultCompressionAlgorithmOrder)
+	}
+	// Drop unknown algorithms and duplicates so that the rest of the server
+	// can assume the order contains only valid, unique entries.
+	c.PreferredCompressionAlgorithmOrder = sanitizeCompressionOrder(c.PreferredCompressionAlgorithmOrder)
+}
+
+// sanitizeCompressionOrder returns the given compression algorithm order with
+// unknown algorithms and duplicates removed.
+func sanitizeCompressionOrder(order []syncproto.CompressionAlgorithm) []syncproto.CompressionAlgorithm {
+	var result []syncproto.CompressionAlgorithm
+	seen := map[syncproto.CompressionAlgorithm]bool{}
+	for _, alg := range order {
+		switch alg {
+		case syncproto.CompressionSnappy, syncproto.CompressionZstd:
+			if !seen[alg] {
+				seen[alg] = true
+				result = append(result, alg)
+			}
+		default:
+			log.WithField("algorithm", alg).Warn(
+				"Ignoring unknown compression algorithm in PreferredCompressionAlgorithmOrder.")
+		}
+	}
+	return result
 }
 
 func (c *Config) ListenPort() int {
@@ -314,6 +350,23 @@ func (c *Config) ListenPort() int {
 func (c *Config) requiringTLS() bool {
 	// True if any of the TLS parameters are set.  This must match config.Config.requiringTLS().
 	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
+}
+
+func (c *Config) parseCompressionOrder(s string) []syncproto.CompressionAlgorithm {
+	var order []syncproto.CompressionAlgorithm
+	parts := strings.SplitSeq(s, ",")
+	for part := range parts {
+		alg := strings.ToLower(strings.TrimSpace(part))
+		switch alg {
+		case "snappy":
+			order = append(order, syncproto.CompressionSnappy)
+		case "zstd":
+			order = append(order, syncproto.CompressionZstd)
+		default:
+			log.WithField("algorithm", alg).Warn("ignoring unknown compression algorithm")
+		}
+	}
+	return order
 }
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
@@ -331,10 +384,23 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 		perSyncerConnMetrics: map[syncproto.SyncerType]perSyncerConnMetrics{},
 	}
 
-	s.binSnapCaches[syncproto.CompressionSnappy] = map[syncproto.SyncerType]snapshotCache{}
+	// Only create snapshot caches for algorithms that are in the server's
+	// preferred compression order, avoiding unnecessary allocations for
+	// unused algorithms.  ApplyDefaults has already removed unknown
+	// algorithms and duplicates from the order.
+	for _, alg := range config.PreferredCompressionAlgorithmOrder {
+		s.binSnapCaches[alg] = map[syncproto.SyncerType]snapshotCache{}
+	}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
-		s.binSnapCaches[syncproto.CompressionSnappy][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+		for _, alg := range config.PreferredCompressionAlgorithmOrder {
+			switch alg {
+			case syncproto.CompressionSnappy:
+				s.binSnapCaches[alg][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+			case syncproto.CompressionZstd:
+				s.binSnapCaches[alg][st] = NewZstdSnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+			}
+		}
 	}
 
 	// Register that we will report liveness.
@@ -724,6 +790,7 @@ type connection struct {
 	currentWriteDeadline time.Time
 	encoder              *gob.Encoder
 	flushWriter          func() error
+	compressCloser       io.Closer // tracks the active compression writer for cleanup
 	readC                chan any
 
 	logCxt                       *log.Entry
@@ -754,6 +821,13 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 		}
 		// Wait for the background threads to shut down.
 		h.shutDownWG.Wait()
+		// Now that no other goroutine can be writing, close the compression
+		// writer (if any) to release its resources.  The connection is
+		// already closed, so nothing reaches the client.
+		if h.compressCloser != nil {
+			_ = h.compressCloser.Close()
+			h.compressCloser = nil
+		}
 		gaugeNumConnections.Dec()
 		h.logCxt.Info("Client connection shut down.")
 		finishedWG.Done()
@@ -787,7 +861,18 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 		if len(reasonsToRestart) > 0 {
 			// We have a reason to restart the encoding...
 			h.logCxt.WithField("reasons", reasonsToRestart).Info("Restarting encoding.")
-			err = h.restartEncodingIfSupported(strings.Join(reasonsToRestart, ";"))
+			if binSnapCache != nil {
+				// Binary snapshot will follow: send MsgDecoderRestart and wait
+				// for ACK, but don't create a compressed encoder yet -- the
+				// snapshot is sent as raw bytes directly to the connection,
+				// bypassing the encoder.  The real encoder is created after
+				// the snapshot.
+				err = h.sendDecoderRestartAndWaitForAck(strings.Join(reasonsToRestart, ";"))
+			} else {
+				// No binary snapshot: create the compressed encoder now so
+				// the streamed snapshot goes through it.
+				err = h.restartEncodingIfSupported(strings.Join(reasonsToRestart, ";"))
+			}
 			if err != nil {
 				log.WithError(err).Info("Failed to restart encoding after handshake, tearing down connection.")
 				return
@@ -806,7 +891,9 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			return
 		}
 
-		// The canned snapshot ends with a MsgDecoderRestart, so we just need to wait for the ACK.
+		// The canned snapshot ends with a MsgDecoderRestart, so we just need
+		// to wait for the ACK and then create the compressed encoder for
+		// subsequent delta updates.
 		err = h.waitForAckAndRestartEncoder()
 		if err != nil {
 			log.WithError(err).Info("Failed to restart encoding after snapshot, tearing down connection.")
@@ -992,15 +1079,19 @@ func (h *connection) doHandshake() error {
 	}
 	h.cache = desiredSyncerCache
 
+	clientSupportedCompressionAlgorithms := make(map[syncproto.CompressionAlgorithm]bool, len(hello.SupportedCompressionAlgorithms))
 	for _, alg := range hello.SupportedCompressionAlgorithms {
-		switch alg {
-		case syncproto.CompressionSnappy:
-			h.chosenCompression = syncproto.CompressionSnappy
+		clientSupportedCompressionAlgorithms[alg] = true
+	}
+	for _, alg := range h.config.PreferredCompressionAlgorithmOrder {
+		if clientSupportedCompressionAlgorithms[alg] {
+			h.chosenCompression = alg
+			break
 		}
 	}
 	h.clientSupportsDecoderRestart = hello.SupportsDecoderRestart
 	if h.chosenCompression != "" && !hello.SupportsDecoderRestart {
-		log.WithError(err).Warning("Client signalled compression but no support for decoder restart")
+		h.logCxt.Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
 	}
 
@@ -1033,6 +1124,17 @@ func (h *connection) restartEncodingIfSupported(message string) error {
 		return nil
 	}
 
+	if err := h.sendDecoderRestartAndWaitForAck(message); err != nil {
+		return err
+	}
+	return h.restartEncoder()
+}
+
+// sendDecoderRestartAndWaitForAck signals the client to restart its decoder
+// (possibly with compression enabled) and waits for the ACK, but does NOT
+// create a new encoder.  Use this when a binary snapshot will follow
+// immediately (the snapshot bypasses the encoder).
+func (h *connection) sendDecoderRestartAndWaitForAck(message string) error {
 	// Signal for the client to restart its decoder (possibly) with compression enabled.
 	err := h.sendMsg(syncproto.MsgDecoderRestart{
 		Message:              message,
@@ -1043,15 +1145,11 @@ func (h *connection) restartEncodingIfSupported(message string) error {
 		return err
 	}
 
-	err = h.waitForAckAndRestartEncoder()
-	return err
+	return h.waitForAck()
 }
 
-func (h *connection) waitForAckAndRestartEncoder() error {
-	// Wait until the client ACKs.  This avoids sending compressed data that
-	// might get misinterpreted by the gob decoder.  We use the pong timeout
-	// here because it has a very similar purpose; we sent something, and
-	// we're waiting for the response.
+// waitForAck waits for a MsgACK from the client.
+func (h *connection) waitForAck() error {
 	msg, err := h.waitForMessage(h.logCxt, h.config.PongTimeout)
 	if err != nil {
 		h.logCxt.WithError(err).Warn("Failed to read client ACK.")
@@ -1063,16 +1161,55 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 		return ErrUnexpectedClientMsg
 	}
 	h.logCxt.WithField("msg", ack).Info("Received ACK message from client.")
+	return nil
+}
 
-	// Upgrade to compressed connection if required.
+func (h *connection) waitForAckAndRestartEncoder() error {
+	if err := h.waitForAck(); err != nil {
+		return err
+	}
+	return h.restartEncoder()
+}
+
+// restartEncoder creates a new encoder on the connection, optionally wrapping
+// it with a compression writer based on h.chosenCompression.
+func (h *connection) restartEncoder() error {
+	// Close any previous compression writer before creating a new one.
+	if h.compressCloser != nil {
+		_ = h.compressCloser.Close()
+		h.compressCloser = nil
+	}
+
 	bw := bufio.NewWriter(h.connW)
 	switch h.chosenCompression {
 	case syncproto.CompressionSnappy:
 		w := snappy.NewBufferedWriter(bw)
+		h.compressCloser = w
 		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
 		h.flushWriter = func() error {
-			err := w.Flush()
-			if err != nil {
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			return bw.Flush()
+		}
+	case syncproto.CompressionZstd:
+		// Bound per-connection resource usage: delta updates are written in
+		// small, frequently-flushed batches, so one encoder goroutine and a
+		// modest window are plenty.  The library defaults (GOMAXPROCS
+		// goroutines and an 8MiB window per Writer) add up quickly when the
+		// server has many connections.
+		w, err := zstd.NewWriter(bw,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithEncoderConcurrency(1),
+			zstd.WithWindowSize(1<<20),
+		)
+		if err != nil {
+			return err
+		}
+		h.compressCloser = w
+		h.encoder = gob.NewEncoder(w)
+		h.flushWriter = func() error {
+			if err := w.Flush(); err != nil {
 				return err
 			}
 			return bw.Flush()
