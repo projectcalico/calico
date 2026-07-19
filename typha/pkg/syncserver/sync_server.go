@@ -105,16 +105,18 @@ const (
 	// MsgACK, MsgDecoderRestart) are small; 1 MiB is far more than any legitimate
 	// message requires but safely caps memory usage against malformed or
 	// malicious input.
-	maxInboundMessageBytes           int64 = 1 << 20
-	defaultBatchingAgeThreshold            = 100 * time.Millisecond
-	defaultPingInterval                    = 10 * time.Second
-	defaultWriteTimeout                    = 120 * time.Second
-	defaultHandshakeTimeout                = 10 * time.Second
-	defaultDropInterval                    = 1 * time.Second
-	defaultShutdownTimeout                 = 300 * time.Second
-	defaultMaxConns                        = math.MaxInt32
-	defaultCompressionAlgorithmOrder       = "snappy,zstd"
-	PortRandom                             = -1
+	maxInboundMessageBytes      int64 = 1 << 20
+	defaultBatchingAgeThreshold       = 100 * time.Millisecond
+	defaultPingInterval               = 10 * time.Second
+	defaultWriteTimeout               = 120 * time.Second
+	defaultHandshakeTimeout           = 10 * time.Second
+	defaultDropInterval               = 1 * time.Second
+	defaultShutdownTimeout            = 300 * time.Second
+	defaultMaxConns                   = math.MaxInt32
+	// Prefer zstd: it compresses the sync data to roughly half the size
+	// that snappy manages.  Snappy is the fallback for older clients.
+	defaultCompressionAlgorithmOrder = "zstd,snappy"
+	PortRandom                       = -1
 )
 
 type Server struct {
@@ -313,6 +315,29 @@ func (c *Config) ApplyDefaults() {
 		}).Info("Defaulting PreferredCompressionAlgorithmOrder.")
 		c.PreferredCompressionAlgorithmOrder = c.parseCompressionOrder(defaultCompressionAlgorithmOrder)
 	}
+	// Drop unknown algorithms and duplicates so that the rest of the server
+	// can assume the order contains only valid, unique entries.
+	c.PreferredCompressionAlgorithmOrder = sanitizeCompressionOrder(c.PreferredCompressionAlgorithmOrder)
+}
+
+// sanitizeCompressionOrder returns the given compression algorithm order with
+// unknown algorithms and duplicates removed.
+func sanitizeCompressionOrder(order []syncproto.CompressionAlgorithm) []syncproto.CompressionAlgorithm {
+	var result []syncproto.CompressionAlgorithm
+	seen := map[syncproto.CompressionAlgorithm]bool{}
+	for _, alg := range order {
+		switch alg {
+		case syncproto.CompressionSnappy, syncproto.CompressionZstd:
+			if !seen[alg] {
+				seen[alg] = true
+				result = append(result, alg)
+			}
+		default:
+			log.WithField("algorithm", alg).Warn(
+				"Ignoring unknown compression algorithm in PreferredCompressionAlgorithmOrder.")
+		}
+	}
+	return result
 }
 
 func (c *Config) ListenPort() int {
@@ -360,15 +385,11 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 	}
 
 	// Only create snapshot caches for algorithms that are in the server's
-	// preferred compression order, avoiding unnecessary allocations and
-	// Prometheus metric registrations for unused algorithms.
+	// preferred compression order, avoiding unnecessary allocations for
+	// unused algorithms.  ApplyDefaults has already removed unknown
+	// algorithms and duplicates from the order.
 	for _, alg := range config.PreferredCompressionAlgorithmOrder {
-		switch alg {
-		case syncproto.CompressionSnappy, syncproto.CompressionZstd:
-			s.binSnapCaches[alg] = map[syncproto.SyncerType]snapshotCache{}
-		default:
-			log.WithField("algorithm", alg).Warn("Ignoring unknown compression algorithm in PreferredCompressionAlgorithmOrder.")
-		}
+		s.binSnapCaches[alg] = map[syncproto.SyncerType]snapshotCache{}
 	}
 	for st, cache := range caches {
 		s.perSyncerConnMetrics[st] = makePerSyncerConnMetrics(st)
@@ -1172,7 +1193,16 @@ func (h *connection) restartEncoder() error {
 			return bw.Flush()
 		}
 	case syncproto.CompressionZstd:
-		w, err := zstd.NewWriter(bw, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		// Bound per-connection resource usage: delta updates are written in
+		// small, frequently-flushed batches, so one encoder goroutine and a
+		// modest window are plenty.  The library defaults (GOMAXPROCS
+		// goroutines and an 8MiB window per Writer) add up quickly when the
+		// server has many connections.
+		w, err := zstd.NewWriter(bw,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithEncoderConcurrency(1),
+			zstd.WithWindowSize(1<<20),
+		)
 		if err != nil {
 			return err
 		}
