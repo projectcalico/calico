@@ -242,7 +242,14 @@ type CompressionAlgorithm string
 
 const (
 	CompressionSnappy CompressionAlgorithm = "snappy"
+	CompressionZstd   CompressionAlgorithm = "zstd"
 )
+
+// AllCompressionAlgorithms lists all supported compression algorithms.
+var AllCompressionAlgorithms = []CompressionAlgorithm{
+	CompressionSnappy,
+	CompressionZstd,
+}
 
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
 // It includes a request to use a particular kind of syncer and tells the server what features are supported.
