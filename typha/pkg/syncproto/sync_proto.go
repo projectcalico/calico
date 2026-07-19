@@ -242,7 +242,14 @@ type CompressionAlgorithm string
 
 const (
 	CompressionSnappy CompressionAlgorithm = "snappy"
+	CompressionZstd   CompressionAlgorithm = "zstd"
 )
+
+// AllCompressionAlgorithms lists all supported compression algorithms.
+var AllCompressionAlgorithms = []CompressionAlgorithm{
+	CompressionSnappy,
+	CompressionZstd,
+}
 
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
 // It includes a request to use a particular kind of syncer and tells the server what features are supported.
@@ -255,7 +262,12 @@ type MsgClientHello struct {
 	// SyncerTypeFelix.
 	SyncerType SyncerType
 
-	SupportsDecoderRestart         bool
+	SupportsDecoderRestart bool
+
+	// SupportedCompressionAlgorithms is the set of algorithms the client can
+	// decode.  The server picks one (or none) using its own preference order
+	// and reports its choice in MsgDecoderRestart.  Requires
+	// SupportsDecoderRestart.
 	SupportedCompressionAlgorithms []CompressionAlgorithm
 
 	// SupportsModernPolicyKeys tells the server whether this client supports modern PolicyKey
