@@ -262,7 +262,12 @@ type MsgClientHello struct {
 	// SyncerTypeFelix.
 	SyncerType SyncerType
 
-	SupportsDecoderRestart         bool
+	SupportsDecoderRestart bool
+
+	// SupportedCompressionAlgorithms is the set of algorithms the client can
+	// decode.  The server picks one (or none) using its own preference order
+	// and reports its choice in MsgDecoderRestart.  Requires
+	// SupportsDecoderRestart.
 	SupportedCompressionAlgorithms []CompressionAlgorithm
 
 	// SupportsModernPolicyKeys tells the server whether this client supports modern PolicyKey

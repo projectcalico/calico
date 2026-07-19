@@ -1292,7 +1292,15 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				"test-host",
 				"test-info",
 				recorder,
-				nil,
+				&syncclient.Options{
+					// The kernel autotunes the receive buffer up to many MB, which
+					// can absorb the whole compressed backlog and prevent the
+					// backpressure this test relies on.  Pin it small, like the
+					// server's write buffer.
+					ReadBufferSize: 1024 * 256,
+					// Enable logging of every read since these tests depend on read and write timings.
+					DebugLogReads: true,
+				},
 			)
 			err = client.Start(clientCxt)
 			recorderCtx, recorderCancel := context.WithCancel(context.Background())
@@ -1510,6 +1518,10 @@ func getPerSyncerGauge(syncer syncproto.SyncerType, name string) (float64, error
 	return m.GetGauge().GetValue(), nil
 }
 
+// getPerSyncerMetric returns the first series of the named metric that has a
+// matching "syncer" label.  Beware: for metrics that also have a
+// "compression" label (the typha_snapshot* family), the choice of series is
+// arbitrary — don't assert on those without extending this helper.
 func getPerSyncerMetric(name string, syncer syncproto.SyncerType) (*io_prometheus_client.Metric, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
