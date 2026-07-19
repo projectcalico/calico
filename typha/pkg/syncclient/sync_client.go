@@ -80,6 +80,13 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// PreferredCompressionAlgorithmOrder overrides the set of compression
+	// algorithms advertised to the server.  The server makes the final choice
+	// based on its own preference order.  Nil means advertise all supported
+	// algorithms; an empty (non-nil) slice disables compression.  Intended
+	// for tests that need to pin the negotiated algorithm.
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -170,8 +177,21 @@ type SyncerClient struct {
 	decoder    *gob.Decoder
 	zstdReader *zstd.Decoder
 
+	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
+	// server selected for the current connection ("" if uncompressed).
+	negotiatedCompression atomic.Value
+
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+}
+
+// NegotiatedCompressionAlgorithm returns the compression algorithm the server
+// selected for the current connection, or "" if the stream is uncompressed
+// (or compression has not been negotiated yet).  Safe to call from any
+// goroutine; intended for tests and diagnostics.
+func (s *SyncerClient) NegotiatedCompressionAlgorithm() syncproto.CompressionAlgorithm {
+	alg, _ := s.negotiatedCompression.Load().(syncproto.CompressionAlgorithm)
+	return alg
 }
 
 type RestartAwareCallbacks interface {
@@ -432,12 +452,16 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
 	s.decoder = gob.NewDecoder(s.connR)
+	s.negotiatedCompression.Store(syncproto.CompressionAlgorithm(""))
 
 	ourSyncerType := s.options.SyncerType
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
-	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+	compAlgs := s.options.PreferredCompressionAlgorithmOrder
+	if compAlgs == nil {
+		compAlgs = []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
@@ -589,6 +613,7 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 		logCxt.WithField("algorithm", msg.CompressionAlgorithm).Error("Server selected unknown compression algorithm")
 		return fmt.Errorf("unknown compression algorithm: %q", msg.CompressionAlgorithm)
 	}
+	s.negotiatedCompression.Store(msg.CompressionAlgorithm)
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
 		syncproto.MsgACK{},
