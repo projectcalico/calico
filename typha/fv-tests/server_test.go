@@ -1292,7 +1292,15 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 				"test-host",
 				"test-info",
 				recorder,
-				nil,
+				&syncclient.Options{
+					// The kernel autotunes the receive buffer up to many MB, which
+					// can absorb the whole compressed backlog and prevent the
+					// backpressure this test relies on.  Pin it small, like the
+					// server's write buffer.
+					ReadBufferSize: 1024 * 256,
+					// Enable logging of every read since these tests depend on read and write timings.
+					DebugLogReads: true,
+				},
 			)
 			err = client.Start(clientCxt)
 			recorderCtx, recorderCancel := context.WithCancel(context.Background())
