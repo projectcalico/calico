@@ -50,6 +50,7 @@ require (
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/kelseyhightower/memkv v0.1.1
+	github.com/klauspost/compress v1.19.0
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 	github.com/mdlayher/arp v0.0.0-20260528070854-93566ba168e9
@@ -275,7 +276,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
