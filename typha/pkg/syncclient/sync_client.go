@@ -460,7 +460,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	}
 	compAlgs := s.options.PreferredCompressionAlgorithmOrder
 	if compAlgs == nil {
-		compAlgs = []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy, syncproto.CompressionZstd}
+		compAlgs = syncproto.AllCompressionAlgorithms
 	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
