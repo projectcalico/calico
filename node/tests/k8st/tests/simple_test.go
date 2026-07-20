@@ -149,6 +149,7 @@ func runRestartChurnTest(t *testing.T, numRepeats int, restartFn func(*restartCh
 //
 // Port of test_simple.py:TestAllRunning.test_calicosystem_pods_running.
 func TestCalicoSystemPodsRunning(t *testing.T) {
+	t.Parallel()
 	defer utils.CollectDiagsOnFailure(t)()
 	utils.CheckPodStatus(t, "calico-system")
 }
@@ -158,6 +159,7 @@ func TestCalicoSystemPodsRunning(t *testing.T) {
 //
 // Port of test_simple.py:TestAllRunning.test_default_pods_running.
 func TestDefaultPodsRunning(t *testing.T) {
+	t.Parallel()
 	defer utils.CollectDiagsOnFailure(t)()
 	utils.CheckPodStatus(t, "default")
 }
@@ -167,6 +169,7 @@ func TestDefaultPodsRunning(t *testing.T) {
 //
 // Port of test_simple.py:TestAllRunning.test_calico_monitoring_pods_running.
 func TestCalicoMonitoringPodsRunning(t *testing.T) {
+	t.Parallel()
 	defer utils.CollectDiagsOnFailure(t)()
 	utils.CheckPodStatus(t, "calico-monitoring")
 }
