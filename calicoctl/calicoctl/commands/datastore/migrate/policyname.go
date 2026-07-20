@@ -73,10 +73,7 @@ Description:
 		return err
 	}
 
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	ca, ok := c.(accessor)
+	ca, ok := c.(bapi.BackendAccessor)
 	if !ok {
 		return fmt.Errorf("configured client does not expose a datastore backend")
 	}

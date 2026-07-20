@@ -38,10 +38,6 @@ import (
 //     a. Create a new policy entry in the datastore with the correct v3 name.
 //     b. Delete the old policy entry with the v1 name.
 func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli clientv3.Interface, feed *utils.DataFeed) controller.Controller {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
 	// Read the namespace from the service account file to determine the namespace we're running in.
 	namespace, err := os.ReadFile(winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/namespace"))
 	if err != nil {
@@ -53,7 +49,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		ctx:           ctx,
 		cli:           cli,
 		cs:            cs,
-		bc:            cli.(accessor).Backend(),
+		bc:            cli.(bapi.BackendAccessor).Backend(),
 		doWork:        make(chan struct{}, 1),
 		pendingWork:   set.New[model.ResourceKey](),
 		kvps:          make(map[model.ResourceKey]*model.KVPair),
