@@ -325,10 +325,7 @@ Description:
 	ippoolClient := client.IPPools()
 
 	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := client.(accessor).Backend()
+	bc := client.(bapi.BackendAccessor).Backend()
 
 	passedIP := parsedArgs["--ip"]
 	showBlocks := parsedArgs["--show-blocks"].(bool)

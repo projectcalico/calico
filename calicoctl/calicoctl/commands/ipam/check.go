@@ -94,10 +94,7 @@ Description:
 	}
 
 	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := client.(accessor).Backend()
+	bc := client.(bapi.BackendAccessor).Backend()
 
 	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
 	// Otherwise, we need to build one ourselves.
