@@ -13,6 +13,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -306,15 +307,15 @@ var _ = Describe("RouteGenerator", func() {
 		It("keeps advertising while any slice still has a ready local endpoint", func() {
 			// Slice B's local endpoint goes not-ready, but slice A still has a ready
 			// local endpoint, so the route must remain advertised.
-			sliceB.Endpoints[0].Conditions.Ready = new(false)
+			sliceB.Endpoints[0].Conditions.Ready = ptr.To(false)
 			Expect(rg.epIndexer.Add(sliceB)).NotTo(HaveOccurred())
 			rg.onEPUpdate(nil, sliceB)
 			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
 		})
 
 		It("withdraws once no slice has a ready local endpoint", func() {
-			sliceA.Endpoints[0].Conditions.Ready = new(false)
-			sliceB.Endpoints[0].Conditions.Ready = new(false)
+			sliceA.Endpoints[0].Conditions.Ready = ptr.To(false)
+			sliceB.Endpoints[0].Conditions.Ready = ptr.To(false)
 			Expect(rg.epIndexer.Add(sliceA)).NotTo(HaveOccurred())
 			Expect(rg.epIndexer.Add(sliceB)).NotTo(HaveOccurred())
 			rg.onEPUpdate(nil, sliceB)
@@ -1310,7 +1311,7 @@ var _ = Describe("Endpoint readiness gating for BGP advertisement", func() {
 			ep := epSlice(discoveryv1.Endpoint{
 				Addresses:  []string{"10.0.0.2"},
 				NodeName:   &rg.nodeName,
-				Conditions: discoveryv1.EndpointConditions{Ready: new(false)},
+				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)},
 			})
 			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
 		})
@@ -1319,7 +1320,7 @@ var _ = Describe("Endpoint readiness gating for BGP advertisement", func() {
 			ep := epSlice(discoveryv1.Endpoint{
 				Addresses:  []string{"10.0.0.2"},
 				NodeName:   &rg.nodeName,
-				Conditions: discoveryv1.EndpointConditions{Ready: new(true)},
+				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
 			})
 			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
 		})
@@ -1336,16 +1337,16 @@ var _ = Describe("Endpoint readiness gating for BGP advertisement", func() {
 		It("does not advertise when the local endpoint is not ready even though a remote endpoint is ready", func() {
 			otherNode := "other-node"
 			ep := epSlice(
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, NodeName: &otherNode, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, NodeName: &otherNode, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
 			)
 			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
 		})
 
 		It("advertises when the node has a ready local endpoint alongside a not-ready one", func() {
 			ep := epSlice(
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.4"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.4"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}},
 			)
 			Expect(rg.advertiseThisService(svcLocal(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
 		})
@@ -1356,16 +1357,16 @@ var _ = Describe("Endpoint readiness gating for BGP advertisement", func() {
 
 		It("does not advertise when all endpoints are not ready", func() {
 			ep := epSlice(
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, NodeName: &rg.nodeName, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
 			)
 			Expect(rg.advertiseThisService(svcCluster(), []*discoveryv1.EndpointSlice{ep})).To(BeFalse())
 		})
 
 		It("advertises when at least one endpoint is ready", func() {
 			ep := epSlice(
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: new(false)}},
-				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: new(true)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.2"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(false)}},
+				discoveryv1.Endpoint{Addresses: []string{"10.0.0.3"}, Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}},
 			)
 			Expect(rg.advertiseThisService(svcCluster(), []*discoveryv1.EndpointSlice{ep})).To(BeTrue())
 		})
