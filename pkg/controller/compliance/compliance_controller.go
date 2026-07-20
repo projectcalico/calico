@@ -361,19 +361,6 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 		r.status.SetDegraded(operatorv1.ResourceNotReady, "Linseed certificate is not available yet, waiting until it becomes available", nil, reqLogger)
 		return reconcile.Result{}, nil
 	}
-	bundleMaker := certificateManager.CreateTrustedBundle(managerInternalTLSSecret, linseedCertificate)
-	trustedBundle := bundleMaker.(certificatemanagement.TrustedBundleRO)
-	if r.opts.MultiTenant {
-		// For multi-tenant systems, we load the pre-created bundle for this tenant instead of using the one we built here.
-		// Multi-tenant compliance need the bundle variant that includes system root certificates, in order to verify external auth providers.
-		trustedBundle, err = certificateManager.LoadMultiTenantTrustedBundleWithRootCertificates(ctx, r.client, helper.InstallNamespace())
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting trusted bundle", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-		bundleMaker = nil
-	}
-
 	// Get the key pairs for each component, generating them as needed.
 	type complianceKeyPair struct {
 		SecretName string
@@ -419,12 +406,24 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 		return reconcile.Result{}, nil
 	}
 
-	// Calico Cloud: update the trusted bundle with system root certificates on management clusters,
-	// as they may be needed by compliance-server when the OIDC provider is external.
-	// TODO: we should do this closer to instantiation of the trustedBundle but can't because that code
-	// is shared with upstream; in Cloud we need access to the authenticationCR.
-	if r.opts.Cloud && managementCluster != nil && authenticationCR != nil && authenticationCR.Spec.OIDC != nil &&
-		authenticationCR.Spec.OIDC.Type == operatorv1.OIDCTypeTigera && !r.opts.MultiTenant {
+	// Build the trusted bundle now that the authenticationCR is known, so we can pick the right
+	// variant in one place. Default is the standard bundle; multi-tenant loads the per-tenant bundle
+	// with root certs; Calico Cloud management clusters use the system-root variant so
+	// compliance-server can verify an external OIDC provider. The bundle is not used until lower in
+	// the function, so building it here (rather than earlier) is safe.
+	bundleMaker := certificateManager.CreateTrustedBundle(managerInternalTLSSecret, linseedCertificate)
+	trustedBundle := bundleMaker.(certificatemanagement.TrustedBundleRO)
+	if r.opts.MultiTenant {
+		// For multi-tenant systems, we load the pre-created bundle for this tenant instead of using the one we built here.
+		// Multi-tenant compliance need the bundle variant that includes system root certificates, in order to verify external auth providers.
+		trustedBundle, err = certificateManager.LoadMultiTenantTrustedBundleWithRootCertificates(ctx, r.client, helper.InstallNamespace())
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting trusted bundle", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		bundleMaker = nil
+	} else if r.opts.Cloud && managementCluster != nil && authenticationCR != nil && authenticationCR.Spec.OIDC != nil &&
+		authenticationCR.Spec.OIDC.Type == operatorv1.OIDCTypeTigera {
 		bundleMaker, err = certificateManager.CreateTrustedBundleWithSystemRootCertificates(managerInternalTLSSecret, linseedCertificate)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceCreateError, "failed to create trusted bundle with system root certs", err, reqLogger)
