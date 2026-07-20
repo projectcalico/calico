@@ -17,6 +17,7 @@ package ipsets
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -37,7 +38,17 @@ import (
 const (
 	MaxIPSetDeletionsPerIteration = 1
 	MaxRetryAttempt               = 10
+	// BackgroundResyncTimeBudget caps the wall-clock time spent re-listing IP
+	// sets during a background (periodic) resync in a single ApplyUpdates call.
+	// Listing a set is a fork/exec per set, so a fleet of sets is re-checked a
+	// batch at a time across successive apply loops rather than stalling one.
+	BackgroundResyncTimeBudget = 100 * time.Millisecond
 )
+
+// ErrIPSetNotFound is returned by runIPSetList when the kernel reports that the
+// set does not exist.  During a resync this is an expected, recoverable state
+// (the set was deleted out from under us), not a failure.
+var ErrIPSetNotFound = errors.New("IP set not found in dataplane")
 
 type dataplaneMetadata struct {
 	Type         IPSetType
@@ -75,14 +86,23 @@ type IPSets struct {
 	nextTempIPSetIdx       uint
 	ipSetsWithDirtyMembers set.Set[string]
 
-	ipSetsRequiringResync set.Typed[string]
-	fullResyncRequired    bool
+	// resyncQueue holds the names of IP sets whose contents we need to
+	// re-check against the dataplane, split into a "must" tier (drained before
+	// we trust the dataplane) and a "background" tier (drained a time-boxed
+	// batch per apply).  fullResyncRequired, set at start of day and on
+	// persistent update failures, forces a from-scratch resync of everything.
+	resyncQueue        *resyncQueue
+	bgResyncRequested  bool
+	fullResyncRequired bool
 
 	// Factory for command objects; shimmed for UT mocking.
 	newCmd cmdFactory
 
 	// Shim for time.Sleep()
 	sleep func(time.Duration)
+
+	// Shim for time.Now(), used to time-box the background resync drain.
+	timeNow func() time.Time
 
 	gaugeNumIpsets prometheus.Gauge
 
@@ -111,6 +131,7 @@ func NewIPSets(ipVersionConfig *IPVersionConfig, recorder logutils.OpRecorder) *
 		recorder,
 		newRealCmd,
 		time.Sleep,
+		time.Now,
 	)
 }
 
@@ -120,6 +141,7 @@ func NewIPSetsWithShims(
 	recorder logutils.OpRecorder,
 	cmdFactory cmdFactory,
 	sleep func(time.Duration),
+	timeNow func() time.Time,
 ) *IPSets {
 	familyStr := string(ipVersionConfig.Family)
 	return &IPSets{
@@ -137,11 +159,12 @@ func NewIPSetsWithShims(
 		mainSetNameToMembers: map[string]*deltatracker.SetDeltaTracker[IPSetMember]{},
 
 		ipSetsWithDirtyMembers: set.New[string](),
-		ipSetsRequiringResync:  set.New[string](),
+		resyncQueue:            newResyncQueue(),
 		fullResyncRequired:     true,
 
-		newCmd: cmdFactory,
-		sleep:  sleep,
+		newCmd:  cmdFactory,
+		sleep:   sleep,
+		timeNow: timeNow,
 
 		gaugeNumIpsets: gaugeVecNumCalicoIpsets.WithLabelValues(familyStr),
 
@@ -279,11 +302,15 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 	s.updateDirtiness(setName)
 }
 
-// QueueResync forces a resync with the dataplane on the next ApplyUpdates() call.
+// QueueResync requests a resync with the dataplane.  The resync is satisfied
+// incrementally, spread over the next several ApplyUpdates() calls: the set
+// names are listed and any sets that vanished or appeared unexpectedly are
+// reconciled immediately, then the contents of the surviving sets are
+// re-checked a time-boxed batch at a time.  This differs from the start-of-day
+// and error-triggered resyncs, which run in full before we trust the dataplane.
 func (s *IPSets) QueueResync() {
 	s.logCxt.Debug("Asked to resync with the dataplane on next update.")
-	s.fullResyncRequired = true
-	s.ipSetsRequiringResync.Clear()
+	s.bgResyncRequested = true
 }
 
 func (s *IPSets) GetIPFamily() IPFamily {
@@ -352,19 +379,27 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		retryDelay *= 2
 	}
 
+	// Background resync work is time-boxed by a single budget shared across all
+	// retry attempts of this call, so that retries don't burn extra background
+	// work on top of the fresh work each ApplyUpdates is expected to do.
+	bgBudget := BackgroundResyncTimeBudget
+
 	var resyncErr, updateErr error
 	for attempt := range MaxRetryAttempt {
 		if attempt > 0 {
 			s.logCxt.Info("Retrying after an ipsets update failure...")
 		}
 		treatFailureAsTransient := attempt < MaxRetryAttempt/2
-		if s.fullResyncRequired || s.ipSetsRequiringResync.Len() > 0 {
+		if s.fullResyncRequired || s.bgResyncRequested || s.resyncQueue.Len() > 0 {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing ipsets with dataplane.")
-			s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
+			s.logCxt.WithFields(log.Fields{
+				"full":     s.fullResyncRequired,
+				"bg":       bgBudget,
+				"queueLen": s.resyncQueue.Len(),
+			}).Debug("Resyncing ipsets with dataplane.")
 
-			if resyncErr = s.tryResync(); resyncErr != nil {
+			if resyncErr = s.tryResync(&bgBudget); resyncErr != nil {
 				s.logCxt.WithError(resyncErr).Warning("Failed to resync with dataplane")
 
 				// After a few attempts, most likely, we are dealing with a persistent failure.
@@ -394,7 +429,7 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 				// Persistent failures, try a full resync.
 				s.logCxt.WithError(updateErr).WithField("attempt", attempt).Warning(
 					"Persistently failed to update IP sets. Will do full resync.")
-				s.QueueResync()
+				s.fullResyncRequired = true
 			}
 			countNumIPSetErrors.Inc()
 		}
@@ -415,9 +450,13 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 	gaugeNumTotalIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
 }
 
-// tryResync attempts to bring our state into sync with the dataplane.  It scans the contents of the
-// IP sets in the dataplane and queues up updates to any IP sets that are out-of-sync.
-func (s *IPSets) tryResync() (err error) {
+// tryResync brings our state into sync with the dataplane.  A full resync
+// (start of day, or after a persistent update failure) re-lists everything and
+// drains it synchronously; a background resync lists the names, repairs any
+// that vanished or appeared unexpectedly, then re-checks the surviving sets'
+// contents a time-boxed batch at a time.  bgBudget is the remaining background
+// time budget for the enclosing ApplyUpdates call and is decremented in place.
+func (s *IPSets) tryResync(bgBudget *time.Duration) (err error) {
 	// Log the time spent as we exit the function.
 	resyncStart := time.Now()
 	defer func() {
@@ -426,99 +465,162 @@ func (s *IPSets) tryResync() (err error) {
 			"ipSetsWithDirtyMembers":   s.ipSetsWithDirtyMembers.Len(),
 			"ipSetsToCreateOrRecreate": s.setNameToProgrammedMetadata.PendingUpdates().Len(),
 			"ipSetsToDelete":           s.setNameToProgrammedMetadata.PendingDeletions().Len(),
+			"resyncQueueLength":        s.resyncQueue.Len(),
 		}).Debug("Finished IPSets resync")
 	}()
 
-	// Figure out if debug logging is enabled so we can disable some expensive-to-calculate logs
-	// in the tight loop below if they're not going to be emitted.  This speeds up the loop
-	// by a factor of 3-4x!
-	debug := log.GetLevel() >= log.DebugLevel
-
-	// Clear out the dataplane metadata for any IP sets that we're about to
-	// resync.  We'll then repopulate it as we go.  If we don't see the IP set
-	// then it won't get repopulated, which will trigger it to be re-created
-	// later.
-	if s.fullResyncRequired {
-		s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
-	} else {
-		for name := range s.ipSetsRequiringResync.All() {
-			s.setNameToProgrammedMetadata.Dataplane().Delete(name)
+	switch {
+	case s.fullResyncRequired:
+		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-v", s.IPVersionConfig.Family.Version()))
+		if err = s.beginFullResync(); err != nil {
+			return err
 		}
+	case s.bgResyncRequested:
+		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-bg-start-v", s.IPVersionConfig.Family.Version()))
+		if err = s.beginBackgroundResync(); err != nil {
+			return err
+		}
+	default:
+		// No new resync requested; we're just draining the queue from a
+		// previous one over successive apply loops.
+		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-bg-v", s.IPVersionConfig.Family.Version()))
 	}
 
-	// Even if we're doing a partial resync, we still list all IP set names.
-	// this is because resyncIPSet() should only be called with IP sets that
-	// are known to exist.
-	ipSets, err := s.CalicoIPSets()
+	return s.drainResyncQueue(bgBudget)
+}
+
+// beginFullResync discards our whole view of the dataplane and re-lists it from
+// scratch, queueing every owned set at "must" priority so drainResyncQueue
+// re-checks all of them before we trust the dataplane.
+func (s *IPSets) beginFullResync() error {
+	s.logCxt.Debug("Doing full resync of IP sets.")
+	s.resyncQueue.Clear()
+	s.setNameToProgrammedMetadata.Dataplane().DeleteAll()
+
+	listed, err := s.listCalicoIPSets()
 	if err != nil {
-		s.logCxt.WithError(err).Error("Failed to get the list of Calico ipsets")
-		return
+		return err
 	}
-	if debug {
-		s.logCxt.Debugf("List of calico ipsets: %v", ipSets)
+	for name := range listed.All() {
+		s.resyncQueue.Add(name, resyncPriMust)
 	}
+	s.sweepIPSetsMissingFromDataplane(listed)
+	// The full resync subsumes any pending background resync: we just did the
+	// listing and sweep, and every set is queued at "must".
+	s.bgResyncRequested = false
+	return nil
+}
 
-	ipSetPartOfSync := func(name string) bool {
-		return s.fullResyncRequired || s.ipSetsRequiringResync.Contains(name)
+// beginBackgroundResync lists the owned set names, immediately repairs any set
+// we expected but that is now missing (recreated in the same apply by
+// tryUpdates), and queues the surviving sets at "background" priority for their
+// contents to be re-checked over subsequent apply loops.
+func (s *IPSets) beginBackgroundResync() error {
+	s.logCxt.Debug("Doing background resync of IP sets.")
+	listed, err := s.listCalicoIPSets()
+	if err != nil {
+		// Keep bgResyncRequested set so we retry the listing next time.
+		return err
 	}
+	s.sweepIPSetsMissingFromDataplane(listed)
+	for name := range listed.All() {
+		// Add keeps an existing "must" position, so a set promoted by an
+		// earlier failure is still re-checked ahead of the background batch.
+		s.resyncQueue.Add(name, resyncPriBackground)
+	}
+	s.bgResyncRequested = false
+	return nil
+}
 
+// drainResyncQueue re-lists queued IP sets.  The must tier is drained fully;
+// the background tier is drained until the shared time budget runs out, making
+// at least one set of progress per ApplyUpdates call (a retry attempt may find
+// the budget already spent and skip background work).  A failure to re-list a *desired*
+// set is aggregated into the returned error and the set is re-queued at "must"
+// so the retry loop re-checks it before writing; failures for undesired sets
+// are logged only, since their recreation or deletion is already queued.
+func (s *IPSets) drainResyncQueue(bgBudget *time.Duration) error {
 	var failedIPSets []string
-	for _, name := range ipSets {
-		if !ipSetPartOfSync(name) {
-			// Skipping this IP set on this pass.
-			continue
-		}
-		if debug {
-			s.logCxt.Debugf("Parsing IP set %v.", name)
-		}
-		if err = s.resyncIPSet(name); err != nil {
-			// Ignore failures of IP sets not in desired state, as those will be cleaned up later.
+	resync := func(name string) {
+		if err := s.resyncIPSet(name); err != nil {
 			if _, desired := s.setNameToProgrammedMetadata.Desired().Get(name); desired {
 				failedIPSets = append(failedIPSets, name)
+				s.resyncQueue.Add(name, resyncPriMust)
 				s.logCxt.WithError(err).WithField("name", name).
 					Warn("Failed to parse required Calico-owned ipset that is needed, will try recreating it.")
 			} else {
 				s.logCxt.WithError(err).WithField("name", name).
 					Warn("Failed to parse Calico-owned ipset that is no longer needed, will queue it for deletion.")
 			}
-		} else {
-			// Successful resync of this IP set, clear any pending partial resync.
-			s.ipSetsRequiringResync.Discard(name)
+		}
+	}
+
+	for name := range s.resyncQueue.PopAllMust() {
+		resync(name)
+	}
+
+	// A pending full resync will re-list everything anyway, so don't spend the
+	// budget on background work that it would redo.
+	if !s.fullResyncRequired {
+		lastTime := s.timeNow()
+		for *bgBudget > 0 {
+			name, ok := s.resyncQueue.PopBackground()
+			if !ok {
+				break
+			}
+			resync(name)
+			now := s.timeNow()
+			*bgBudget -= now.Sub(lastTime)
+			lastTime = now
 		}
 	}
 
 	if len(failedIPSets) > 0 {
 		return fmt.Errorf("failed to parse IPSets %v", strings.Join(failedIPSets, ","))
 	}
+	return nil
+}
 
-	// Mark any IP sets that we didn't see as empty.
-	for name, members := range s.mainSetNameToMembers {
-		if !ipSetPartOfSync(name) {
-			// Skipping this IP set on this pass.
-			continue
-		}
-		if _, ok := s.setNameToProgrammedMetadata.Dataplane().Get(name); ok {
-			// In the dataplane, we should have updated its members above.
-			continue
-		}
-		if _, ok := s.setNameToAllMetadata[name]; !ok {
-			// Defensive: this IP set is not in the dataplane, and it's not
-			// one we are tracking, clean up its member tracker.
-			log.WithField("name", name).Warn(
-				"Cleaning up leaked(?) IP set member tracker.")
-			delete(s.mainSetNameToMembers, name)
-			continue
-		}
-		// We're tracking this IP set, but we didn't find it in the dataplane;
-		// reset the members set to empty.
-		members.Dataplane().DeleteAll()
+// sweepIPSetsMissingFromDataplane reconciles every set we are tracking that is
+// absent from the given listing of live set names, repairing it in place so
+// that tryUpdates recreates a desired set in the same apply.
+func (s *IPSets) sweepIPSetsMissingFromDataplane(listed set.Set[string]) {
+	candidates := set.New[string]()
+	for name := range s.mainSetNameToMembers {
+		candidates.Add(name)
 	}
+	s.setNameToProgrammedMetadata.Dataplane().Iter(func(name string, _ dataplaneMetadata) {
+		candidates.Add(name)
+	})
+	s.setNameToProgrammedMetadata.Desired().Iter(func(name string, _ dataplaneMetadata) {
+		candidates.Add(name)
+	})
+	for name := range candidates.All() {
+		if listed.Contains(name) {
+			continue
+		}
+		s.onIPSetMissingFromDataplane(name)
+	}
+}
 
-	// At this point, the partial resync set can only contain IP sets that
-	// don't exist in the dataplane, and we just handled those above.
-	s.ipSetsRequiringResync.Clear()
-
-	return
+// onIPSetMissingFromDataplane records that a set we were tracking is not in the
+// dataplane: it drops our dataplane view (so a desired set becomes a pending
+// create) and cancels any queued resync of it.
+func (s *IPSets) onIPSetMissingFromDataplane(name string) {
+	s.setNameToProgrammedMetadata.Dataplane().Delete(name)
+	if members, ok := s.mainSetNameToMembers[name]; ok {
+		if _, tracked := s.setNameToAllMetadata[name]; !tracked {
+			// Defensive: not one we're tracking, clean up its member tracker.
+			s.logCxt.WithField("name", name).Warn("Cleaning up leaked(?) IP set member tracker.")
+			delete(s.mainSetNameToMembers, name)
+		} else {
+			// We're tracking this IP set, but it's gone from the dataplane;
+			// reset the members set to empty so it gets recreated.
+			members.Dataplane().DeleteAll()
+		}
+	}
+	s.updateDirtiness(name)
+	s.resyncQueue.Remove(name)
 }
 
 func (s *IPSets) CalicoIPSets() ([]string, error) {
@@ -548,6 +650,18 @@ func (s *IPSets) CalicoIPSets() ([]string, error) {
 		return nil, err
 	}
 	return ipSets, nil
+}
+
+// listCalicoIPSets returns the set of owned IP set names currently in the
+// dataplane.  It wraps CalicoIPSets for the resync paths that need set-membership
+// lookups.
+func (s *IPSets) listCalicoIPSets() (set.Set[string], error) {
+	names, err := s.CalicoIPSets()
+	if err != nil {
+		s.logCxt.WithError(err).Error("Failed to get the list of Calico ipsets")
+		return nil, err
+	}
+	return set.FromArray(names), nil
 }
 
 func (s *IPSets) resyncIPSet(ipSetName string) error {
@@ -697,6 +811,13 @@ func (s *IPSets) resyncIPSet(ipSetName string) error {
 		}
 		return scanner.Err()
 	})
+	if errors.Is(err, ErrIPSetNotFound) {
+		// The set was deleted out from under us (e.g. between listing the
+		// names and getting here).  Repair our view directly rather than
+		// recording metadata for a set that doesn't exist.
+		s.onIPSetMissingFromDataplane(ipSetName)
+		return nil
+	}
 	if err != nil {
 		// This can occur if we have version skew with the version of IP set
 		// used to create the IP set. Mark the metadata as invalid in order
@@ -748,6 +869,13 @@ func (s *IPSets) runIPSetList(arg string, parsingFunc func(*bufio.Scanner) error
 		return err
 	}
 	if err != nil {
+		// Match on ipset's userspace error message (stable for many years).
+		// If it ever changes we fall back to returning the raw error, which
+		// degrades to the ListFailed/recreate path rather than misbehaving.
+		if strings.Contains(stderr.String(), "The set with the given name does not exist") {
+			logCxt.WithError(err).Debugf("IP set does not exist for '%v'.", cmdStr)
+			return ErrIPSetNotFound
+		}
 		logCxt.WithError(err).Errorf("Bad return code from '%v'.", cmdStr)
 		return err
 	}
@@ -863,7 +991,7 @@ func (s *IPSets) tryUpdates(dirtyIPSets []string, listener UpdateListener) (err 
 			"input":      s.restoreInCopy.String(),
 		}).Warning("Failed to complete ipset restore, IP sets may be out-of-sync.")
 		for _, setName := range touchedIPSets {
-			s.ipSetsRequiringResync.Add(setName)
+			s.resyncQueue.Add(setName, resyncPriMust)
 		}
 		return fmt.Errorf("failed to write one or more IP set: %v", err)
 	}
@@ -1060,6 +1188,7 @@ func (s *IPSets) ApplyDeletions() bool {
 			return deltatracker.IterActionNoOp
 		}
 		numDeletions++
+		s.resyncQueue.Remove(setName)
 		if _, ok := s.setNameToAllMetadata[setName]; !ok {
 			// IP set is not just filtered out, clean up the members cache.
 			logCxt.Debug("IP set now gone from dataplane, removing from members tracker.")
@@ -1079,6 +1208,11 @@ func (s *IPSets) ApplyDeletions() bool {
 	s.gaugeNumIpsets.Set(float64(s.setNameToProgrammedMetadata.Dataplane().Len()))
 
 	// Determine if we need to be rescheduled.
+	if s.resyncQueue.Len() > 0 {
+		// The background resync still has sets to re-check.  Ask to be
+		// rescheduled so the reschedule timer paces the queue drain.
+		return true
+	}
 	numDeletionsPending := s.setNameToProgrammedMetadata.PendingDeletions().Len()
 	if numDeletions == 0 {
 		// We had nothing to delete, or we only encountered errors, don't
@@ -1113,6 +1247,7 @@ func (s *IPSets) tryTempIPSetDeletions() {
 			return deltatracker.IterActionNoOp
 		}
 		numDeletions++
+		s.resyncQueue.Remove(setName)
 		return deltatracker.IterActionUpdateDataplane
 	})
 }
