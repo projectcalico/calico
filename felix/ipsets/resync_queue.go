@@ -14,7 +14,11 @@
 
 package ipsets
 
-import "container/list"
+import (
+	"container/list"
+	"iter"
+	"slices"
+)
 
 // resyncPri is the priority of a queued resync.  Higher-valued priorities are
 // drained first; the ordering matters for promotion (see resyncQueue.Add).
@@ -93,6 +97,19 @@ func (q *resyncQueue) PopMust() (string, bool) {
 
 func (q *resyncQueue) PopBackground() (string, bool) {
 	return q.pop(q.background)
+}
+
+// PopAllMust pops all the "must" items and returns an iterator over them.
+func (q *resyncQueue) PopAllMust() iter.Seq[string] {
+	var names []string
+	for {
+		name, ok := q.PopMust()
+		if !ok {
+			break
+		}
+		names = append(names, name)
+	}
+	return slices.Values(names)
 }
 
 func (q *resyncQueue) pop(l *list.List) (string, bool) {
