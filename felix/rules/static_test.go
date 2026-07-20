@@ -1079,10 +1079,18 @@ var _ = Describe("Static", func() {
 								{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 								{
 									Match: iptables.Match().
+										ProtocolNum(ProtoUDP).
 										OutInterface(dataplanedefs.IPIPIfaceName).
 										NotSrcAddrType(generictables.AddrTypeLocal, true).
 										SrcAddrType(generictables.AddrTypeLocal, false),
 									Action: iptables.MasqAction{ToPorts: "4790-65535"},
+								},
+								{
+									Match: iptables.Match().
+										OutInterface(dataplanedefs.IPIPIfaceName).
+										NotSrcAddrType(generictables.AddrTypeLocal, true).
+										SrcAddrType(generictables.AddrTypeLocal, false),
+									Action: iptables.MasqAction{},
 								},
 							},
 						},
@@ -1168,7 +1176,23 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
 											OutInterface(dataplanedefs.IPIPIfaceName).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
+											OutInterface(dataplanedefs.IPIPIfaceName).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{},
+									},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV4).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{ToPorts: "4790-65535"},
@@ -1178,7 +1202,7 @@ var _ = Describe("Static", func() {
 											OutInterface(dataplanedefs.VXLANIfaceNameV4).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
-										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+										Action: iptables.MasqAction{},
 									},
 								},
 							},
@@ -1190,9 +1214,13 @@ var _ = Describe("Static", func() {
 							conf.VXLANPort = 60000
 						})
 
-						It("IPv4: Should masquerade to the wider range below the VXLAN port", func() {
+						It("IPv4: Should masquerade UDP to the wider range below the VXLAN port", func() {
 							chains := rr.StaticNATPostroutingChains(4)
-							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+							// Rules[2] is the UDP masquerade for the IPIP tunnel; it carries the
+							// port range that excludes the custom VXLAN port. Rules[3] is the
+							// catch-all masquerade for other protocols, with no port range.
+							Expect(chains[0].Rules[2].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{}))
 						})
 					})
 				})
@@ -1274,10 +1302,18 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
 											OutInterface(dataplanedefs.VXLANIfaceNameV6).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
+											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{},
 									},
 								},
 							},
