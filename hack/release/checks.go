@@ -55,7 +55,13 @@ var checkVersionMatchesGitVersion = func(ctx context.Context, c *cli.Command) (c
 	}
 	checkLog.WithField("git-version", gitVer).Debug("Checking version matches git version")
 	checkLog.Info("Using versions")
-	if version != gitVer {
+	// Calico Cloud releases carry a -cloud suffix on the version/image (e.g. v1.44.0-cloud) but ride
+	// the enterprise git tag (v1.44.0), so match against the base version without the suffix.
+	gitMatch := version
+	if setup.IsCloud {
+		gitMatch = strings.TrimSuffix(version, "-cloud")
+	}
+	if gitMatch != gitVer {
 		return ctx, fmt.Errorf("provided version %q does not match git version %q. This is required for releases. \n"+
 			"If building a hashrelease, use either the --%s flag or set environment variable %s=true", version, gitVer, hashreleaseFlag.Name, hashreleaseFlagEnvVar)
 	}

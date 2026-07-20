@@ -655,9 +655,8 @@ gen-files: manifests generate
 
 OS_VERSIONS?=config/calico_versions.yml
 EE_VERSIONS?=config/enterprise_versions.yml
-CLOUD_VERSIONS?=config/cloud_versions.yml
 
-.PHONY: gen-versions gen-versions-calico gen-versions-enterprise gen-versions-cloud
+.PHONY: gen-versions gen-versions-calico gen-versions-enterprise
 
 gen-versions: gen-versions-calico gen-versions-enterprise
 
@@ -666,14 +665,6 @@ gen-versions-calico: $(BINDIR)/gen-versions update-calico-crds
 
 gen-versions-enterprise: $(BINDIR)/gen-versions update-enterprise-crds
 	$(BINDIR)/gen-versions -ee-versions=$(EE_VERSIONS) > pkg/components/enterprise.go
-
-# gen-versions-cloud regenerates pkg/components/cloud.go from config/cloud_versions.yml. It is a
-# Calico Cloud concern and is intentionally NOT part of the default `gen-versions` aggregate, so the
-# enterprise build's generated output is unchanged. The cloud release pipeline invokes this target.
-# Unlike the calico/enterprise targets, it does not fetch CRDs (cloud relies on the upstream operator
-# repo for CRD updates).
-gen-versions-cloud: $(BINDIR)/gen-versions
-	$(BINDIR)/gen-versions -cloud-versions=$(CLOUD_VERSIONS) > pkg/components/cloud.go
 
 $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
 	mkdir -p $(BINDIR)

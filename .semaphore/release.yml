@@ -42,8 +42,8 @@ global_job_config:
 blocks:
   # Enterprise and cloud releases run as two parallel jobs in this block (jobs in a block always run
   # in parallel). Both build the same commit off the same vX.Y.Z tag; the cloud job just adds
-  # VARIANT=cloud and a -cloud version suffix, publishing to GCR instead of quay. The shared prologue
-  # authenticates to both registries so either job can push.
+  # VARIANT=cloud, publishing to GCR instead of quay. Each job authenticates only to the registry it
+  # pushes to (quay vs GCR).
   - name: Release
     run:
       when: "tag =~ '^v'"
@@ -54,13 +54,11 @@ blocks:
         - name: google-service-account-for-gcr
       prologue:
         commands:
-          - docker login -u="$QUAY_USERNAME" -p="$QUAY_TOKEN" quay.io;
-          - gcloud auth activate-service-account --key-file=/home/semaphore/secrets/secret.google-service-account-key.json
-          - docker login -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Publish Release
           commands:
+            - docker login -u="$QUAY_USERNAME" -p="$QUAY_TOKEN" quay.io
             - make release-tag RELEASE_TAG=${SEMAPHORE_GIT_TAG_NAME}
           env_vars:
             - name: CONFIRM
@@ -68,6 +66,8 @@ blocks:
         - name: Publish Cloud Release
           # Same commit as the enterprise job; -cloud suffix marks the cloud image/version.
           commands:
+            - gcloud auth activate-service-account --key-file=/home/semaphore/secrets/secret.google-service-account-key.json
+            - docker login -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
             - make release-tag VARIANT=cloud RELEASE_TAG=${SEMAPHORE_GIT_TAG_NAME}-cloud
           env_vars:
             - name: CONFIRM
