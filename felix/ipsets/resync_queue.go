@@ -14,7 +14,10 @@
 
 package ipsets
 
-import "container/list"
+import (
+	"container/list"
+	"iter"
+)
 
 // resyncPri is the priority of a queued resync.  Higher-valued priorities are
 // drained first; the ordering matters for promotion (see resyncQueue.Add).
@@ -93,6 +96,29 @@ func (q *resyncQueue) PopMust() (string, bool) {
 
 func (q *resyncQueue) PopBackground() (string, bool) {
 	return q.pop(q.background)
+}
+
+// AllMust returns an iterator over the IP set names currently queued at "must"
+// priority, removing them from the queue.  The names are snapshotted when
+// AllMust is called, so a name re-added at "must" during iteration (for
+// example a failed resync re-queueing itself) is left for the next pass rather
+// than revisited in this one, which would risk an unbounded loop.
+func (q *resyncQueue) AllMust() iter.Seq[string] {
+	var names []string
+	for {
+		name, ok := q.PopMust()
+		if !ok {
+			break
+		}
+		names = append(names, name)
+	}
+	return func(yield func(string) bool) {
+		for _, name := range names {
+			if !yield(name) {
+				return
+			}
+		}
+	}
 }
 
 func (q *resyncQueue) pop(l *list.List) (string, bool) {

@@ -393,7 +393,11 @@ func (s *IPSets) ApplyUpdates(listener UpdateListener) {
 		if s.fullResyncRequired || s.bgResyncRequested || s.resyncQueue.Len() > 0 {
 			// Compare our in-memory state against the dataplane and queue up
 			// modifications to fix any inconsistencies.
-			s.logCxt.Debug("Resyncing ipsets with dataplane.")
+			s.logCxt.WithFields(log.Fields{
+				"full":     s.fullResyncRequired,
+				"bg":       bgBudget,
+				"queueLen": s.resyncQueue.Len(),
+			}).Debug("Resyncing ipsets with dataplane.")
 
 			if resyncErr = s.tryResync(&bgBudget); resyncErr != nil {
 				s.logCxt.WithError(resyncErr).Warning("Failed to resync with dataplane")
@@ -472,14 +476,14 @@ func (s *IPSets) tryResync(bgBudget *time.Duration) (err error) {
 			return err
 		}
 	case s.bgResyncRequested:
-		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-partial-v", s.IPVersionConfig.Family.Version()))
+		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-bg-start-v", s.IPVersionConfig.Family.Version()))
 		if err = s.beginBackgroundResync(); err != nil {
 			return err
 		}
 	default:
 		// No new resync requested; we're just draining the queue from a
 		// previous one over successive apply loops.
-		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-partial-v", s.IPVersionConfig.Family.Version()))
+		s.opReporter.RecordOperation(fmt.Sprint("resync-ipsets-bg-v", s.IPVersionConfig.Family.Version()))
 	}
 
 	return s.drainResyncQueue(bgBudget)
@@ -551,18 +555,7 @@ func (s *IPSets) drainResyncQueue(bgBudget *time.Duration) error {
 		}
 	}
 
-	// Snapshot the must tier before resyncing: a failed desired set is
-	// re-queued at "must" for the next ApplyUpdates attempt, so we must not
-	// re-pop it within this pass.
-	var mustNames []string
-	for {
-		name, ok := s.resyncQueue.PopMust()
-		if !ok {
-			break
-		}
-		mustNames = append(mustNames, name)
-	}
-	for _, name := range mustNames {
+	for name := range s.resyncQueue.AllMust() {
 		resync(name)
 	}
 
