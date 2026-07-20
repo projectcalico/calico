@@ -118,6 +118,7 @@ local:hack/cmd/deps
 local:hack/cmd/format-go-file
 local:hack/cmd/gomodder
 local:hack/cmd/ipam-hammer
+local:hack/cmd/rhcert
 local:hack/perf/cmd/send-perf-results
 local:hack/test/spider
 local:lib/std/uniquelabels
