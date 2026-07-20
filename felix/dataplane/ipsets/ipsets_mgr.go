@@ -30,6 +30,11 @@ type IPSetsDataplane interface {
 	GetIPFamily() ipsets.IPFamily
 	GetTypeOf(setID string) (ipsets.IPSetType, error)
 	GetDesiredMembers(setID string) (set.Set[string], error)
+	// QueueResync requests a resync with the dataplane to catch drift Felix
+	// wasn't told about.  An implementation may satisfy it incrementally over
+	// subsequent ApplyUpdates calls, using the ApplyDeletions reschedule signal
+	// to ask for more loops; the resync need not complete within a single
+	// ApplyUpdates.
 	QueueResync()
 	ApplyUpdates(listener UpdateListener)
 	ApplyDeletions() (reschedule bool)
